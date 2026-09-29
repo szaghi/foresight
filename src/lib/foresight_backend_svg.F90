@@ -27,6 +27,8 @@ type, extends(backend_object) :: backend_svg
    integer(I4P)                  :: unit = -1_I4P !< Output unit.
    character(len=:), allocatable :: file          !< Final output file.
    character(len=:), allocatable :: tmp_file      !< File being written.
+   real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
+   character(len=:), allocatable :: caps          !< Error bar caps of the current plot area, pixel overlay.
    contains
       ! deferred bindings
       procedure, pass(self) :: begin_page
@@ -43,6 +45,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
+      procedure, pass(self) :: data_bars
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
       procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
@@ -188,15 +191,24 @@ contains
    real(R8P),          intent(in)    :: width  !< Width [px].
    real(R8P),          intent(in)    :: height !< Height [px].
 
+   self%area = [x, y, width, height]
+   self%caps = ''
    call self%put('<svg class="fs-plot" x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
                  '" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">')
    endsubroutine begin_plot_area
 
    subroutine end_plot_area(self)
-   !< Close the plot area.
+   !< Close the plot area, then write the error bar caps overlay (pixel space, clipped to the plot area): caps keep
+   !< their pixel length under zoom, the interactive viewer regenerates them from the bars.
    class(backend_svg), intent(inout) :: self !< Device.
 
    call self%put('</svg>')
+   if (len(self%caps) == 0) return
+   call self%put('<svg class="fs-caps" x="'//px(self%area(1))//'" y="'//px(self%area(2))//'" width="'// &
+                 px(self%area(3))//'" height="'//px(self%area(4))//'" viewBox="0 0 '//px(self%area(3))//' '// &
+                 px(self%area(4))//'" overflow="hidden">')
+   call self%put(self%caps//'</svg>')
+   self%caps = ''
    endsubroutine end_plot_area
 
    subroutine data_polyline(self, x, y, color, line_width, dasharray)
@@ -228,6 +240,57 @@ contains
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', 'h0')
    call self%put('"/>')
    endsubroutine data_dots
+
+   subroutine data_bars(self, x1, y1, x2, y2, color, line_width, cap, vertical)
+   !< Error bars [unit square] as one path of `Mx1,y1Lx2,y2` segments, classed `fs-ybars`/`fs-xbars` with the cap length
+   !< in `data-cap`; caps are queued for the pixel overlay written by `end_plot_area`.
+   class(backend_svg), intent(inout) :: self       !< Device.
+   real(R8P),          intent(in)    :: x1(:)      !< Bar start abscissae.
+   real(R8P),          intent(in)    :: y1(:)      !< Bar start ordinates.
+   real(R8P),          intent(in)    :: x2(:)      !< Bar end abscissae.
+   real(R8P),          intent(in)    :: y2(:)      !< Bar end ordinates.
+   character(len=*),   intent(in)    :: color      !< Stroke color.
+   real(R8P),          intent(in)    :: line_width !< Stroke width [px].
+   real(R8P),          intent(in)    :: cap        !< Cap length [px].
+   logical,            intent(in)    :: vertical   !< Vertical bars (horizontal caps), else horizontal.
+   character(len=:), allocatable     :: kind       !< Bar class.
+   real(R8P)                         :: h          !< Half cap length [px].
+   real(R8P)                         :: p(2)       !< Bar end in the overlay [px].
+   integer(I4P)                      :: i          !< Counter.
+   integer(I4P)                      :: e          !< End counter.
+
+   if (size(x1) == 0) return
+   kind = merge('fs-ybars', 'fs-xbars', vertical)
+   write(self%unit, '(A)', advance='no') '<path class="'//kind//'" data-cap="'//px(cap)//'" fill="none" stroke="'// &
+                                         color//'" stroke-width="'//px(line_width)// &
+                                         '" vector-effect="non-scaling-stroke" d="'
+   do i = 1_I4P, size(x1, kind=I4P)
+      if (i > 1_I4P) then
+         if (modulo(i - 1_I4P, PAIRS_PER_LINE / 2_I4P) == 0_I4P) write(self%unit, '(A)') ''
+      endif
+      write(self%unit, '(A)', advance='no') 'M'//fixed(x1(i), UNIT_DECIMALS)//','// &
+                                            fixed(1.0_R8P - y1(i), UNIT_DECIMALS)//'L'//fixed(x2(i), UNIT_DECIMALS)// &
+                                            ','//fixed(1.0_R8P - y2(i), UNIT_DECIMALS)
+   enddo
+   call self%put('"/>')
+   h = 0.5_R8P * cap
+   do i = 1_I4P, size(x1, kind=I4P)
+      do e = 1_I4P, 2_I4P
+         if (e == 1_I4P) then
+            p = [x1(i) * self%area(3), (1.0_R8P - y1(i)) * self%area(4)]
+         else
+            p = [x2(i) * self%area(3), (1.0_R8P - y2(i)) * self%area(4)]
+         endif
+         if (vertical) then
+            self%caps = self%caps//'<line x1="'//px(p(1) - h)//'" y1="'//px(p(2))//'" x2="'//px(p(1) + h)// &
+                        '" y2="'//px(p(2))//'" stroke="'//color//'" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+         else
+            self%caps = self%caps//'<line x1="'//px(p(1))//'" y1="'//px(p(2) - h)//'" x2="'//px(p(1))// &
+                        '" y2="'//px(p(2) + h)//'" stroke="'//color//'" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+         endif
+      enddo
+   enddo
+   endsubroutine data_bars
 
    ! building blocks for extending devices
    subroutine close_file(self)

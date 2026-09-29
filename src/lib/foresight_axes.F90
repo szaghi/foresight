@@ -22,6 +22,7 @@ real(R8P),        parameter :: GAP           = 6.0_R8P   !< Gap between border, 
 real(R8P),        parameter :: CHAR_WIDTH    = 0.55_R8P  !< Mean glyph advance [font size] (Arial digits: 0.556).
 real(R8P),        parameter :: LINE_HEIGHT   = 1.25_R8P  !< Text line height [font size].
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
+real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
 character(len=*), parameter :: GRID_COLOR    = '#a0a0a0' !< Grid line color.
 character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array.
@@ -48,8 +49,11 @@ type :: axes_object
 endtype axes_object
 
 contains
-   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps)
+   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
+   !<
+   !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
+   !< `xyerrorbars`.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -59,6 +63,10 @@ contains
    real(R8P),          intent(in), optional :: lw     !< Line width [px].
    integer(I4P),       intent(in), optional :: dt     !< Dash type, 1..5.
    real(R8P),          intent(in), optional :: ps     !< Point size scale factor.
+   real(R8P),          intent(in), optional :: xlow(:)  !< Horizontal error bar starts.
+   real(R8P),          intent(in), optional :: xhigh(:) !< Horizontal error bar ends.
+   real(R8P),          intent(in), optional :: ylow(:)  !< Vertical error bar starts.
+   real(R8P),          intent(in), optional :: yhigh(:) !< Vertical error bar ends.
    type(series_object)                      :: series !< New series.
 
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
@@ -73,6 +81,18 @@ contains
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt
    if (present(ps)) series%style%pointsize = ps
+   if (series%style%draws_xbars()) then
+      if (.not. (present(xlow) .and. present(xhigh))) error stop 'foresight: plot: x error bars need xlow and xhigh'
+      if (size(xlow) /= size(x) .or. size(xhigh) /= size(x)) error stop 'foresight: plot: xlow/xhigh sizes differ from x'
+      series%xlow = xlow
+      series%xhigh = xhigh
+   endif
+   if (series%style%draws_ybars()) then
+      if (.not. (present(ylow) .and. present(yhigh))) error stop 'foresight: plot: y error bars need ylow and yhigh'
+      if (size(ylow) /= size(y) .or. size(yhigh) /= size(y)) error stop 'foresight: plot: ylow/yhigh sizes differ from y'
+      series%ylow = ylow
+      series%yhigh = yhigh
+   endif
    self%series = [self%series, series]
    endsubroutine add_series
 
@@ -201,6 +221,12 @@ contains
       if (self%series(s)%style%draws_lines()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
+      if (self%series(s)%style%draws_ybars()) &
+         call backend%polyline([0.5_R8P * (xs(1) + xs(2)), 0.5_R8P * (xs(1) + xs(2))], &
+                               [yc - 0.4_R8P * font_size, yc + 0.4_R8P * font_size], self%series(s)%style%color, &
+                               self%series(s)%style%linewidth, '')
+      if (self%series(s)%style%draws_xbars()) &
+         call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, '')
       if (self%series(s)%style%draws_points()) &
          call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], self%series(s)%style%color, &
                            self%series(s)%style%point_diameter())
@@ -247,9 +273,36 @@ contains
             i1 = i2 + 1_I4P
          enddo
       endif
+      if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, self%yaxis, .true.)
+      if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) &
          call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter())
    endassociate
+   contains
+      subroutine draw_bars(low, high, axis, vertical)
+      !< Error bars of the placeable points whose both ends are placeable on `axis`.
+      real(R8P),         intent(in) :: low(:)   !< Bar starts.
+      real(R8P),         intent(in) :: high(:)  !< Bar ends.
+      type(axis_object), intent(in) :: axis     !< Axis of the bars.
+      logical,           intent(in) :: vertical !< Vertical bars.
+      logical, allocatable          :: ok(:)    !< Drawn bars.
+      real(R8P), allocatable        :: a(:)     !< Unit bar starts.
+      real(R8P), allocatable        :: b(:)     !< Unit bar ends.
+
+      ok = valid .and. axis%accepts(low) .and. axis%accepts(high)
+      if (.not. any(ok)) return
+      a = axis%to_unit(pack(low, ok))
+      b = axis%to_unit(pack(high, ok))
+      associate(series => self%series(s))
+         if (vertical) then
+            call backend%data_bars(pack(u, ok), a, pack(u, ok), b, series%style%color, series%style%linewidth, &
+                                   CAP_LENGTH, .true.)
+         else
+            call backend%data_bars(a, pack(v, ok), b, pack(v, ok), series%style%color, series%style%linewidth, &
+                                   CAP_LENGTH, .false.)
+         endif
+      endassociate
+      endsubroutine draw_bars
    endsubroutine draw_series
 
    pure function has_title(self) result(has)

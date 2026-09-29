@@ -45,6 +45,7 @@ type, abstract :: backend_object
       procedure(finish_interface),          pass(self), deferred :: end_plot_area   !< Close the plot area.
       procedure(lines_interface),           pass(self), deferred :: data_polyline   !< Polyline [unit square].
       procedure(dots_interface),            pass(self), deferred :: data_dots       !< Round dots [unit square].
+      procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
 endtype backend_object
 
 abstract interface
@@ -102,6 +103,20 @@ abstract interface
    real(R8P),             intent(in)    :: line_width !< Stroke width [px].
    character(len=*),      intent(in)    :: dasharray  !< SVG dash array, empty for solid.
    endsubroutine lines_interface
+
+   subroutine bars_interface(self, x1, y1, x2, y2, color, line_width, cap, vertical)
+   !< Error bars from (`x1`, `y1`) to (`x2`, `y2`) [unit square], with end caps `cap` px long across the bar.
+   import :: backend_object, R8P
+   class(backend_object), intent(inout) :: self       !< Device.
+   real(R8P),             intent(in)    :: x1(:)      !< Bar start abscissae.
+   real(R8P),             intent(in)    :: y1(:)      !< Bar start ordinates.
+   real(R8P),             intent(in)    :: x2(:)      !< Bar end abscissae.
+   real(R8P),             intent(in)    :: y2(:)      !< Bar end ordinates.
+   character(len=*),      intent(in)    :: color      !< Stroke color.
+   real(R8P),             intent(in)    :: line_width !< Stroke width [px].
+   real(R8P),             intent(in)    :: cap        !< Cap length [px].
+   logical,               intent(in)    :: vertical   !< Vertical bars (horizontal caps), else horizontal.
+   endsubroutine bars_interface
 
    subroutine dots_interface(self, x, y, color, diameter)
    !< Filled round dots centred on the points (`x`, `y`).

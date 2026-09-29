@@ -1,0 +1,125 @@
+!< foresight multiplot, error bars and dumb terminal test: byte-exact references and error reporting.
+program foresight_multiplot_test
+!< foresight multiplot, error bars and dumb terminal test: byte-exact references and error reporting.
+!<
+!< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference files.
+use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
+use foresight, only : I4P, R8P, script_object
+
+implicit none
+character(len=*), parameter   :: data_file = 'foresight_multiplot_test.dat' !< Test data file.
+character(len=*), parameter   :: golden    = 'src/tests/golden/'            !< Reference files directory.
+type(script_object)           :: interpreter                                !< Interpreter.
+character(len=:), allocatable :: iomsg                                      !< Error message.
+character(len=:), allocatable :: multiplot                                  !< Multiplot script body.
+character(len=8)              :: update_flag                                !< FORESIGHT_UPDATE_GOLDEN value.
+logical                       :: update                                     !< Rewrite the references.
+integer(I4P)                  :: iostat                                     !< Status.
+integer(I4P)                  :: unit                                       !< File unit.
+integer(I4P)                  :: i                                          !< Counter.
+logical                       :: test_passed(7)                             !< Per-check outcome.
+
+call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
+update = trim(update_flag) == '1'
+test_passed = .false.
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '# iteration  residual  cd  dcd'
+do i = 1, 12
+   write(unit, '(I0,3(1X,ES24.16E3))') i, 10.0_R8P**(-0.3_R8P * i), 1.0_R8P + 0.1_R8P / real(i, R8P), 0.02_R8P * i
+enddo
+close(unit)
+
+! two panels: settings carry over, the lazy advance keeps panel 1 untouched by the settings of panel 2
+multiplot = "set multiplot layout 1,2 title 'Monitor'"//new_line('a')// &
+            "set title 'residual'; set logscale y"//new_line('a')// &
+            "plot '"//data_file//"' u 1:2 w l t 'res'"//new_line('a')// &
+            "set title 'drag'; unset logscale y"//new_line('a')// &
+            "plot '"//data_file//"' u 1:3:4 w yerrorbars t 'cd'"//new_line('a')// &
+            "unset multiplot"//new_line('a')
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal svg size 700,350; set output 'foresight_multiplot_test.svg'"//new_line('a')// &
+                          multiplot, iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(1) = iostat == 0_I4P .and. check('multiplot.svg', 'foresight_multiplot_test.svg')
+
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal html size 700,350; set output 'foresight_multiplot_test.html'"// &
+                          new_line('a')//multiplot, iostat, iomsg)
+test_passed(2) = iostat == 0_I4P .and. check('multiplot.html', 'foresight_multiplot_test.html')
+
+! dumb terminal to a text file; an expression in using is still an error
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal dumb size 60,20; set output 'foresight_multiplot_test.txt'"//new_line('a')// &
+                          "set title 'dumb'; set key"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:($3) notitle", iostat, iomsg)
+test_passed(3) = iostat /= 0_I4P
+call interpreter%run_text("plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:3:4 w yerr notitle", iostat, iomsg)
+test_passed(4) = iostat == 0_I4P .and. check('dumb.txt', 'foresight_multiplot_test.txt')
+
+! dumb terminal defaults to standard output
+call interpreter%init('x.html')
+call interpreter%execute('set terminal dumb', iostat, iomsg)
+test_passed(5) = interpreter%output == '-'
+
+! errors: full layout, error bar columns
+call interpreter%init('x.svg')
+call interpreter%run_text("set multiplot layout 1,1"//new_line('a')//"plot '"//data_file//"'"//new_line('a')// &
+                          "plot '"//data_file//"'", iostat, iomsg)
+test_passed(6) = iostat /= 0_I4P .and. index(iomsg, 'multiplot: the layout is full') > 0
+call interpreter%init('x.svg')
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w yerrorbars", iostat, iomsg)
+test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'needs using x:y:delta') > 0
+
+open(newunit=unit, file=data_file)
+close(unit, status='delete')
+! the full-layout case rendered its first panel before failing
+open(newunit=unit, file='x.svg')
+close(unit, status='delete')
+write(output_unit, '(A,7L2)') 'foresight multiplot checks:', test_passed
+write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
+if (.not. all(test_passed)) error stop 1
+
+contains
+   function check(name, output) result(passed)
+   !< Compare `output` with the reference `name` (or rewrite it in update mode); remove `output` when matching.
+   character(len=*), intent(in)  :: name     !< Reference file name.
+   character(len=*), intent(in)  :: output   !< Rendered file.
+   logical                       :: passed   !< Rendering matches the reference.
+   character(len=:), allocatable :: produced !< Rendered content.
+   logical                       :: exists   !< Reference exists.
+   integer(I4P)                  :: u        !< File unit.
+
+   produced = read_text(output)
+   if (update) then
+      open(newunit=u, file=golden//name, access='stream', form='unformatted', action='write', status='replace')
+      write(u) produced
+      close(u)
+      write(output_unit, '(A)') 'updated '//golden//name
+      passed = .true.
+   else
+      inquire(file=golden//name, exist=exists)
+      passed = .false.
+      if (exists) passed = produced == read_text(golden//name)
+      if (.not. passed) write(error_unit, '(A)') output//' differs from '//golden//name// &
+                                                 ' (FORESIGHT_UPDATE_GOLDEN=1 rewrites it)'
+   endif
+   if (passed) then
+      open(newunit=u, file=output)
+      close(u, status='delete')
+   endif
+   endfunction check
+
+   function read_text(file) result(text)
+   !< Whole content of `file`.
+   character(len=*), intent(in)  :: file  !< File name.
+   character(len=:), allocatable :: text  !< Content.
+   integer(I4P)                  :: u     !< File unit.
+   integer(I4P)                  :: bytes !< File size [bytes].
+
+   open(newunit=u, file=file, access='stream', form='unformatted', action='read', status='old')
+   inquire(unit=u, size=bytes)
+   allocate(character(len=bytes) :: text)
+   read(u) text
+   close(u)
+   endfunction read_text
+endprogram foresight_multiplot_test

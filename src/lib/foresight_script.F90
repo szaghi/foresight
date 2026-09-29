@@ -7,8 +7,11 @@ module foresight_script
 !< - `set|unset title|xlabel|ylabel ["text"]`, `set xrange|yrange [min:max]` (`*` or empty autoscales an end),
 !<   `set|unset logscale [x|y|xy]`, `set|unset grid`, `set|unset key`, `set output "file"`,
 !<   `set terminal svg|html [size W,H] [refresh SECONDS]`;
-!< - `plot 'file' [using [X:]Y] [index N] [every N] [with lines|points|linespoints] [title "t"|notitle]
-!<   [lc [rgb] "color"|N] [lw W] [dt N] [ps S], ...` (`''` repeats the previous file); `replot [items]`.
+!< - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
+!< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
+!< - `plot 'file' [using [X:]Y[:...]] [index N] [every N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
+!<   [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
+!<   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`.
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
@@ -24,6 +27,8 @@ implicit none
 private
 public :: script_object
 
+real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
+
 type :: script_object
    !< Script interpreter state.
    type(figure_object)             :: figure                   !< Figure being built.
@@ -33,6 +38,9 @@ type :: script_object
    character(len=:), allocatable   :: last_plot                !< Items of the last plot, for `replot`.
    type(token_object), allocatable :: data_files(:)            !< Data files read, for watching.
    integer(I4P)                    :: live_refresh = 0_I4P     !< HTML reload period applied when none is set [s].
+   logical                         :: multiplot = .false.      !< Inside `set multiplot`.
+   logical                         :: advance_pending = .false. !< A multiplot panel was plotted: the next command
+                                                                !< opens the next panel.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -54,6 +62,8 @@ contains
    call self%figure%init
    self%output = output
    self%output_set = .false.
+   self%multiplot = .false.
+   self%advance_pending = .false.
    self%previous_file = ''
    self%last_plot = ''
    if (allocated(self%data_files)) deallocate(self%data_files)
@@ -172,6 +182,18 @@ contains
       return
    endif
    command = tokens(1)%text
+   ! in a multiplot, the first command after a plot opens the next panel (the multiplot options excepted)
+   if (self%advance_pending .and. (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P) .or. &
+                                   keyword(command, 'plot', 1_I4P))) then
+      if (.not. is_multiplot_option(tokens)) then
+         if (self%figure%current >= size(self%figure%panels, kind=I4P)) then
+            call fail('multiplot: the layout is full', iostat, iomsg)
+            return
+         endif
+         call self%figure%next_panel
+         self%advance_pending = .false.
+      endif
+   endif
    if (keyword(command, 'set', 2_I4P)) then
       call self%set_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'unset', 3_I4P)) then
@@ -212,8 +234,19 @@ contains
    integer(I4P),     allocatable                :: dt        !< Item dash type, unallocated for default.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
-   integer(I4P)                                 :: ux        !< Abscissa column, -1 for default.
-   integer(I4P)                                 :: uy        !< Ordinate column, -1 for default.
+   real(R8P),        allocatable                :: c3(:)     !< Third column.
+   real(R8P),        allocatable                :: c4(:)     !< Fourth column.
+   real(R8P),        allocatable                :: c5(:)     !< Fifth column.
+   real(R8P),        allocatable                :: c6(:)     !< Sixth column.
+   real(R8P),        allocatable                :: xlow(:)   !< Horizontal error bar starts.
+   real(R8P),        allocatable                :: xhigh(:)  !< Horizontal error bar ends.
+   real(R8P),        allocatable                :: ylow(:)   !< Vertical error bar starts.
+   real(R8P),        allocatable                :: yhigh(:)  !< Vertical error bar ends.
+   integer(I4P),     allocatable                :: cols(:)   !< `using` columns, unallocated for default.
+   integer(I4P)                                 :: ux        !< Default abscissa column.
+   integer(I4P)                                 :: uy        !< Default ordinate column.
+   integer(I4P)                                 :: nbar      !< Error bar columns.
+   integer(I4P)                                 :: c         !< Column counter.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every     !< Point stride.
    integer(I4P)                                 :: number    !< Integer argument.
@@ -248,8 +281,7 @@ contains
       endif
       self%previous_file = file
       ! modifiers
-      ux = -1_I4P
-      uy = -1_I4P
+      if (allocated(cols)) deallocate(cols)
       set_index = -1_I4P
       every = 1_I4P
       with = 'lines'
@@ -269,7 +301,7 @@ contains
          endif
          if (keyword(word, 'using', 1_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-            call parse_using(word, ux, uy, iostat, iomsg)
+            call parse_using(word, cols, iostat, iomsg)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'index', 1_I4P)) then
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
@@ -280,13 +312,13 @@ contains
                return
             endif
          elseif (keyword(word, 'with', 1_I4P)) then
-            if (.not. next_word(tokens, i, with, iostat, iomsg)) return
-            select case (with)
-            case ('l', 'lines', 'p', 'points', 'lp', 'linespoints')
-            case default
-               call fail('plot: unsupported style "'//with//'" (supported: lines, points, linespoints)', iostat, iomsg)
+            if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+            with = canonical_style(word)
+            if (len(with) == 0) then
+               call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
+                         'xerrorbars, xyerrorbars)', iostat, iomsg)
                return
-            endselect
+            endif
          elseif (keyword(word, 'title', 1_I4P)) then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -340,14 +372,86 @@ contains
          loaded = file
          call self%register_file(file)
       endif
-      if (ux < 0_I4P .and. uy < 0_I4P) call data%default_using(ux, uy)
-      if (.not. has_title) title = '"'//file//'" using '//int_str(int(ux, I8P))//':'//int_str(int(uy, I8P))
-      call data%columns(ux, uy, set_index, every, x, y)
+      ! columns: gnuplot defaults are 1:2 (0:1 for one column), 1:2:3 for x/y error bars, 1:2:3:4 for xy error bars
+      if (.not. allocated(cols)) then
+         select case (with)
+         case ('yerrorbars', 'xerrorbars')
+            cols = [1_I4P, 2_I4P, 3_I4P]
+         case ('xyerrorbars')
+            cols = [1_I4P, 2_I4P, 3_I4P, 4_I4P]
+         case default
+            call data%default_using(ux, uy)
+            cols = [ux, uy]
+         endselect
+      elseif (size(cols) == 1) then
+         cols = [0_I4P, cols(1)]
+      endif
+      nbar = size(cols, kind=I4P) - 2_I4P
+      select case (with)
+      case ('yerrorbars', 'xerrorbars')
+         if (nbar /= 1_I4P .and. nbar /= 2_I4P) then
+            call fail('plot: '//with//' needs using x:y:delta or x:y:low:high', iostat, iomsg)
+            return
+         endif
+      case ('xyerrorbars')
+         if (nbar /= 2_I4P .and. nbar /= 4_I4P) then
+            call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
+            return
+         endif
+      case default
+         if (nbar /= 0_I4P) then
+            call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
+            return
+         endif
+      endselect
+      if (.not. has_title) then
+         title = '"'//file//'" using '//int_str(int(cols(1), I8P))
+         do c = 2_I4P, size(cols, kind=I4P)
+            title = title//':'//int_str(int(cols(c), I8P))
+         enddo
+      endif
+      call data%columns(cols(1), cols(2), set_index, every, x, y)
+      if (nbar >= 1_I4P) call data%columns(cols(3), cols(min(4, size(cols))), set_index, every, c3, c4)
+      if (nbar >= 4_I4P) call data%columns(cols(5), cols(6), set_index, every, c5, c6)
+      if (allocated(xlow)) deallocate(xlow, xhigh)
+      if (allocated(ylow)) deallocate(ylow, yhigh)
+      select case (with)
+      case ('yerrorbars')
+         if (nbar == 1_I4P) then
+            ylow = y - c3
+            yhigh = y + c3
+         else
+            ylow = c3
+            yhigh = c4
+         endif
+      case ('xerrorbars')
+         if (nbar == 1_I4P) then
+            xlow = x - c3
+            xhigh = x + c3
+         else
+            xlow = c3
+            xhigh = c4
+         endif
+      case ('xyerrorbars')
+         if (nbar == 2_I4P) then
+            xlow = x - c3
+            xhigh = x + c3
+            ylow = y - c4
+            yhigh = y + c4
+         else
+            xlow = c3
+            xhigh = c4
+            ylow = c5
+            yhigh = c6
+         endif
+      endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
-      call self%figure%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps)
+      call self%figure%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
+                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh)
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
+   if (self%multiplot) self%advance_pending = .true.
    call self%save_output(iostat, iomsg)
    endsubroutine plot_command
 
@@ -374,12 +478,15 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
-   select case (extension(self%output))
-   case ('svg', 'html', 'htm')
-   case default
-      call fail('unsupported output "'//self%output//'" (supported: .svg, .html)', iostat, iomsg)
-      return
-   endselect
+   if (self%output /= '-') then
+      select case (extension(self%output))
+      case ('svg', 'html', 'htm', 'txt')
+      case default
+         call fail('unsupported output "'//self%output//'" (supported: .svg, .html, .txt, -)', iostat, iomsg)
+         return
+      endselect
+   endif
+   self%figure%clear_screen = self%live_refresh > 0_I4P
    refresh = self%figure%refresh
    if (refresh == 0_I4P) call self%figure%set_refresh(self%live_refresh)
    call self%figure%save(self%output)
@@ -398,6 +505,8 @@ contains
    integer(I4P)                                 :: width     !< Terminal width.
    integer(I4P)                                 :: height    !< Terminal height.
    integer(I4P)                                 :: seconds   !< Refresh period.
+   integer(I4P)                                 :: rows      !< Multiplot rows.
+   integer(I4P)                                 :: cols      !< Multiplot columns.
 
    iostat = 0_I4P
    iomsg = ''
@@ -416,11 +525,13 @@ contains
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_ylabel(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
-      call set_range(self%figure%axes%xaxis%min_fixed, self%figure%axes%xaxis%min_user, &
-                     self%figure%axes%xaxis%max_fixed, self%figure%axes%xaxis%max_user)
+      associate(axis => self%figure%panels(self%figure%current)%xaxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
-      call set_range(self%figure%axes%yaxis%min_fixed, self%figure%axes%yaxis%min_user, &
-                     self%figure%axes%yaxis%max_fixed, self%figure%axes%yaxis%max_user)
+      associate(axis => self%figure%panels(self%figure%current)%yaxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_logscale(text)
@@ -440,13 +551,18 @@ contains
       self%output_set = .true.
    elseif (keyword(option, 'terminal', 2_I4P)) then
       if (size(tokens) < 2) then
-         call fail('set terminal: svg or html expected', iostat, iomsg)
+         call fail('set terminal: svg, html or dumb expected', iostat, iomsg)
          return
       endif
       select case (tokens(2)%text)
       case ('svg', 'html')
+      case ('dumb')
+         ! gnuplot dumb default size, in characters
+         self%figure%width = 79.0_R8P * DUMB_CELL(1) * self%figure%font_size
+         self%figure%height = 24.0_R8P * DUMB_CELL(2) * self%figure%font_size
       case default
-         call fail('set terminal: unsupported terminal "'//tokens(2)%text//'" (supported: svg, html)', iostat, iomsg)
+         call fail('set terminal: unsupported terminal "'//tokens(2)%text//'" (supported: svg, html, dumb)', &
+                   iostat, iomsg)
          return
       endselect
       i = 3_I4P
@@ -467,8 +583,14 @@ contains
                call fail('set terminal: size must be positive', iostat, iomsg)
                return
             endif
-            self%figure%width = real(width, R8P)
-            self%figure%height = real(height, R8P)
+            if (tokens(2)%text == 'dumb') then
+               ! characters to the virtual pixels of the text device
+               self%figure%width = real(width, R8P) * DUMB_CELL(1) * self%figure%font_size
+               self%figure%height = real(height, R8P) * DUMB_CELL(2) * self%figure%font_size
+            else
+               self%figure%width = real(width, R8P)
+               self%figure%height = real(height, R8P)
+            endif
          elseif (keyword(tokens(i)%text, 'refresh', 3_I4P)) then
             if (.not. next_integer(tokens, i, seconds, iostat, iomsg)) return
             call self%figure%set_refresh(seconds)
@@ -479,7 +601,57 @@ contains
          i = i + 1_I4P
       enddo
       ! the terminal decides the format of the default output, never of one set explicitly
-      if (.not. self%output_set) self%output = change_extension(self%output, tokens(2)%text)
+      if (.not. self%output_set) then
+         if (tokens(2)%text == 'dumb') then
+            self%output = '-'
+         elseif (self%output == '-') then
+            self%output = 'foresight.'//tokens(2)%text
+         else
+            self%output = change_extension(self%output, tokens(2)%text)
+         endif
+      endif
+   elseif (keyword(option, 'multiplot', 5_I4P)) then
+      rows = 0_I4P
+      cols = 0_I4P
+      text = ''
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         if (keyword(tokens(i)%text, 'layout', 3_I4P)) then
+            if (.not. next_integer(tokens, i, rows, iostat, iomsg)) return
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set multiplot: layout ROWS,COLS expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind /= TOKEN_COMMA) then
+               call fail('set multiplot: layout ROWS,COLS expected', iostat, iomsg)
+               return
+            endif
+            if (.not. next_integer(tokens, i, cols, iostat, iomsg)) return
+         elseif (keyword(tokens(i)%text, 'title', 1_I4P)) then
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set multiplot: title needs a quoted string', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind /= TOKEN_STRING) then
+               call fail('set multiplot: title needs a quoted string', iostat, iomsg)
+               return
+            endif
+            text = tokens(i)%text
+         else
+            call fail('set multiplot: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+      enddo
+      if (rows < 1_I4P .or. cols < 1_I4P) then
+         call fail('set multiplot: layout ROWS,COLS with positive values is required', iostat, iomsg)
+         return
+      endif
+      call self%figure%set_multiplot(rows, cols, text)
+      self%multiplot = .true.
+      self%advance_pending = .false.
    else
       call fail('unsupported option "set '//option//'"', iostat, iomsg)
    endif
@@ -548,7 +720,11 @@ contains
       return
    endif
    if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
-   if (keyword(option, 'title', 3_I4P)) then
+   if (keyword(option, 'multiplot', 5_I4P)) then
+      call self%figure%unset_multiplot
+      self%multiplot = .false.
+      self%advance_pending = .false.
+   elseif (keyword(option, 'title', 3_I4P)) then
       call self%figure%set_title('')
    elseif (keyword(option, 'xlabel', 2_I4P)) then
       call self%figure%set_xlabel('')
@@ -607,6 +783,29 @@ contains
    endif
    endfunction axes_argument
 
+   pure function canonical_style(word) result(style)
+   !< Full gnuplot style name of `word` (full or abbreviated), empty if unsupported.
+   character(len=*), intent(in)  :: word  !< Style word.
+   character(len=:), allocatable :: style !< Full style name.
+
+   select case (word)
+   case ('l', 'lines')
+      style = 'lines'
+   case ('p', 'points')
+      style = 'points'
+   case ('lp', 'linespoints')
+      style = 'linespoints'
+   case ('yerr', 'yerrorbars')
+      style = 'yerrorbars'
+   case ('xerr', 'xerrorbars')
+      style = 'xerrorbars'
+   case ('xyerr', 'xyerrorbars')
+      style = 'xyerrorbars'
+   case default
+      style = ''
+   endselect
+   endfunction canonical_style
+
    pure function change_extension(file, ext) result(renamed)
    !< `file` with its extension replaced by `ext` (appended if none).
    character(len=*), intent(in)  :: file    !< File name.
@@ -639,6 +838,15 @@ contains
       if (ext(i:i) >= 'A' .and. ext(i:i) <= 'Z') ext(i:i) = achar(iachar(ext(i:i)) + 32)
    enddo
    endfunction extension
+
+   pure function is_multiplot_option(tokens) result(is)
+   !< Whether the statement is `set|unset multiplot ...`.
+   type(token_object), intent(in) :: tokens(:) !< Statement tokens.
+   logical                        :: is        !< It is.
+
+   is = .false.
+   if (size(tokens) >= 2) is = keyword(tokens(2)%text, 'multiplot', 5_I4P)
+   endfunction is_multiplot_option
 
    pure subroutine fail(message, iostat, iomsg)
    !< Set an error.
@@ -739,34 +947,43 @@ contains
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
 
-   subroutine parse_using(spec, ux, uy, iostat, iomsg)
-   !< `using` specification: `Y` or `X:Y` column numbers (0 is the point number); expressions are errors.
-   character(len=*),              intent(in)  :: spec   !< Specification.
-   integer(I4P),                  intent(out) :: ux     !< Abscissa column.
-   integer(I4P),                  intent(out) :: uy     !< Ordinate column.
-   integer(I4P),                  intent(out) :: iostat !< 0 on success.
-   character(len=:), allocatable, intent(out) :: iomsg  !< Error message.
-   integer(I4P)                               :: colon  !< Separator position.
+   subroutine parse_using(spec, cols, iostat, iomsg)
+   !< `using` specification: 1 to 6 colon separated column numbers (0 is the point number); expressions are errors.
+   character(len=*),              intent(in)  :: spec    !< Specification.
+   integer(I4P),     allocatable, intent(out) :: cols(:) !< Columns.
+   integer(I4P),                  intent(out) :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg   !< Error message.
+   integer(I4P)                               :: start   !< Field start.
+   integer(I4P)                               :: colon   !< Field end.
+   integer(I4P)                               :: c       !< Column.
 
    iostat = 0_I4P
    iomsg = ''
-   ux = -1_I4P
-   uy = -1_I4P
+   allocate(cols(0))
    if (verify(spec, '0123456789:') > 0) then
       call fail('using: only column numbers are supported, not "'//spec//'" (no expressions)', iostat, iomsg)
       return
    endif
-   colon = index(spec, ':', kind=I4P)
-   if (colon == 0_I4P) then
-      read(spec, *, iostat=iostat) uy
-      ux = 0_I4P
-   elseif (index(spec(colon + 1_I4P:), ':') > 0 .or. colon == 1_I4P .or. colon == len(spec)) then
-      iostat = 1_I4P
-   else
-      read(spec(1:colon - 1_I4P), *, iostat=iostat) ux
-      if (iostat == 0_I4P) read(spec(colon + 1_I4P:), *, iostat=iostat) uy
-   endif
-   if (iostat /= 0_I4P) call fail('using: "'//spec//'" is not X:Y or Y', iostat, iomsg)
+   start = 1_I4P
+   do
+      colon = index(spec(start:), ':', kind=I4P)
+      if (colon == 0_I4P) then
+         colon = len(spec, kind=I4P) + 1_I4P
+      else
+         colon = start + colon - 1_I4P
+      endif
+      if (colon == start) then
+         iostat = 1_I4P
+         exit
+      endif
+      read(spec(start:colon - 1_I4P), *, iostat=iostat) c
+      if (iostat /= 0_I4P) exit
+      cols = [cols, c]
+      if (colon > len(spec)) exit
+      start = colon + 1_I4P
+   enddo
+   if (iostat == 0_I4P .and. (size(cols) < 1 .or. size(cols) > 6)) iostat = 1_I4P
+   if (iostat /= 0_I4P) call fail('using: "'//spec//'" is not 1 to 6 column numbers separated by ":"', iostat, iomsg)
    endsubroutine parse_using
 
    function string_argument(tokens, text, iostat, iomsg) result(ok)

@@ -9,11 +9,14 @@ private
 public :: default_color
 public :: style_object
 public :: style_with
-public :: WITH_LINES, WITH_LINESPOINTS, WITH_POINTS
+public :: WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS
 
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
 integer(I4P), parameter :: WITH_POINTS      = 2_I4P !< gnuplot `with points`.
 integer(I4P), parameter :: WITH_LINESPOINTS = 3_I4P !< gnuplot `with linespoints`.
+integer(I4P), parameter :: WITH_YERRORBARS  = 4_I4P !< gnuplot `with yerrorbars`.
+integer(I4P), parameter :: WITH_XERRORBARS  = 5_I4P !< gnuplot `with xerrorbars`.
+integer(I4P), parameter :: WITH_XYERRORBARS = 6_I4P !< gnuplot `with xyerrorbars`.
 
 character(len=7), parameter :: PALETTE(8) = ['#9400d3', '#009e73', '#56b4e9', '#e69f00', &
                                              '#f0e442', '#0072b2', '#e51e10', '#000000'] !< gnuplot 5 line colors.
@@ -28,6 +31,8 @@ type :: style_object
    real(R8P)                     :: pointsize = 1.0_R8P    !< Point size scale factor.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
+      procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
+      procedure, pass(self) :: draws_ybars    !< Whether vertical error bars are drawn.
       procedure, pass(self) :: draws_lines    !< Whether lines are drawn.
       procedure, pass(self) :: draws_points   !< Whether points are drawn.
       procedure, pass(self) :: point_diameter !< Point diameter [px].
@@ -43,7 +48,7 @@ contains
    endfunction default_color
 
    function style_with(name) result(with)
-   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (`l`, `p`, `lp`).
+   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (`l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`).
    character(len=*), intent(in) :: name !< gnuplot style keyword.
    integer(I4P)                 :: with !< Plotting style code.
 
@@ -54,8 +59,15 @@ contains
       with = WITH_POINTS
    case ('lp', 'linespoints')
       with = WITH_LINESPOINTS
+   case ('yerr', 'yerrorbars')
+      with = WITH_YERRORBARS
+   case ('xerr', 'xerrorbars')
+      with = WITH_XERRORBARS
+   case ('xyerr', 'xyerrorbars')
+      with = WITH_XYERRORBARS
    case default
-      error stop 'foresight: unsupported plotting style "'//trim(name)//'" (supported: lines, points, linespoints)'
+      error stop 'foresight: unsupported plotting style "'//trim(name)// &
+                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars)'
    endselect
    endfunction style_with
 
@@ -95,7 +107,7 @@ contains
    class(style_object), intent(in) :: self  !< Style.
    logical                         :: lines !< Lines are drawn.
 
-   lines = self%with /= WITH_POINTS
+   lines = self%with == WITH_LINES .or. self%with == WITH_LINESPOINTS
    endfunction draws_lines
 
    elemental function draws_points(self) result(points)
@@ -105,6 +117,22 @@ contains
 
    points = self%with /= WITH_LINES
    endfunction draws_points
+
+   elemental function draws_xbars(self) result(bars)
+   !< Whether the style draws horizontal error bars.
+   class(style_object), intent(in) :: self !< Style.
+   logical                         :: bars !< Bars are drawn.
+
+   bars = self%with == WITH_XERRORBARS .or. self%with == WITH_XYERRORBARS
+   endfunction draws_xbars
+
+   elemental function draws_ybars(self) result(bars)
+   !< Whether the style draws vertical error bars.
+   class(style_object), intent(in) :: self !< Style.
+   logical                         :: bars !< Bars are drawn.
+
+   bars = self%with == WITH_YERRORBARS .or. self%with == WITH_XYERRORBARS
+   endfunction draws_ybars
 
    elemental function point_diameter(self) result(diameter)
    !< Point diameter [px].

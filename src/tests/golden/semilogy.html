@@ -403,10 +403,11 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 
   // ---- plot panel ----
 
-  function Panel(svg, group) {
+  function Panel(svg, group, index) {
     var area = numbers(group.getAttribute("data-area"));
     var logs = numbers(group.getAttribute("data-log"));
     this.svg = svg;
+    this.suffix = index > 0 ? String(index) : "";
     this.left = area[0];
     this.right = area[1];
     this.top = area[2];
@@ -419,9 +420,27 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     this.gridGroup = group.querySelector(".fs-grid");
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
-    this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML];
+    this.caps = group.querySelector(".fs-caps");
+    this.bars = readBars(group);
+    this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
+      this.caps ? this.caps.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
+  }
+
+  // error bars of the plot area: segments in viewBox coordinates (unit square, y downward)
+  function readBars(group) {
+    var bars = [], pattern = /M([^,]+),([^L]+)L([^,]+),([^M]+)/g;
+    group.querySelectorAll(".fs-ybars, .fs-xbars").forEach(function (path) {
+      var d = path.getAttribute("d").replace(/\s+/g, ""), m;
+      var style = {vertical: path.getAttribute("class") === "fs-ybars",
+        cap: Number(path.getAttribute("data-cap")), color: path.getAttribute("stroke"),
+        width: path.getAttribute("stroke-width")};
+      while ((m = pattern.exec(d)) !== null) {
+        bars.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
+      }
+    });
+    return bars;
   }
 
   Panel.prototype.isHome = function () {
@@ -456,9 +475,31 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       this.gridGroup.innerHTML = this.original[0];
       this.xticks.innerHTML = this.original[1];
       this.yticks.innerHTML = this.original[2];
+      if (this.caps) this.caps.innerHTML = this.original[3];
     } else {
       this.drawTicks();
+      this.drawCaps();
     }
+  };
+
+  // error bar caps keep their pixel length: recomputed in the pixel overlay for the current view
+  Panel.prototype.drawCaps = function () {
+    var self = this, v = this.view;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.caps) return;
+    clear(this.caps);
+    this.bars.forEach(function (bar) {
+      var half = bar.style.cap / 2;
+      bar.ends.forEach(function (end) {
+        var x = (end[0] - v.u0) / (v.u1 - v.u0) * w;
+        var y = (end[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
+        if (bar.style.vertical) {
+          line(self.caps, x - half, y, x + half, y, bar.style.color, bar.style.width);
+        } else {
+          line(self.caps, x, y - half, x, y + half, bar.style.color, bar.style.width);
+        }
+      });
+    });
   };
 
   // regenerate ticks, tick labels and grid for the current view (mirror of draw_frame/draw_grid)
@@ -518,13 +559,19 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     this.saveState();
   };
 
-  // zoom and grid persist in the URL hash as data values, so a reload with new data keeps the view
-  Panel.prototype.saveState = function () {
-    var v = this.view, state = "g=" + (this.grid ? 1 : 0);
+  // zoom and grid persist in the URL hash as data values, so a reload with new data keeps the view;
+  // keys are g, x, y for the first panel, g1, x1, y1 for the second, and so on
+  Panel.prototype.state = function () {
+    var v = this.view, n = this.suffix, items = ["g" + n + "=" + (this.grid ? 1 : 0)];
     if (!this.isHome()) {
-      state += "&x=" + [this.x.toData(v.u0), this.x.toData(v.u1)].join(",");
-      state += "&y=" + [this.y.toData(v.v0), this.y.toData(v.v1)].join(",");
+      items.push("x" + n + "=" + [this.x.toData(v.u0), this.x.toData(v.u1)].join(","));
+      items.push("y" + n + "=" + [this.y.toData(v.v0), this.y.toData(v.v1)].join(","));
     }
+    return items;
+  };
+
+  Panel.prototype.saveState = function () {
+    var state = [].concat.apply([], panels.map(function (p) { return p.state(); })).join("&");
     try {
       history.replaceState(null, "", "#" + state);
     } catch (e) {
@@ -534,15 +581,15 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
   };
 
   Panel.prototype.loadState = function () {
-    var state = {}, x, y, view;
+    var state = {}, x, y, view, n = this.suffix;
     location.hash.slice(1).split("&").forEach(function (item) {
       var pair = item.split("=");
       if (pair.length === 2) state[pair[0]] = pair[1];
     });
-    if (state.g === "0" || state.g === "1") this.grid = state.g === "1";
-    if (state.x && state.y) {
-      x = state.x.split(",").map(Number);
-      y = state.y.split(",").map(Number);
+    if (state["g" + n] === "0" || state["g" + n] === "1") this.grid = state["g" + n] === "1";
+    if (state["x" + n] && state["y" + n]) {
+      x = state["x" + n].split(",").map(Number);
+      y = state["y" + n].split(",").map(Number);
       view = {u0: this.x.toUnit(x[0]), u1: this.x.toUnit(x[1]),
         v0: this.y.toUnit(y[0]), v1: this.y.toUnit(y[1])};
       if ([view.u0, view.u1, view.v0, view.v1].every(isFinite)) this.view = view;
@@ -552,11 +599,15 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 
   // ---- page: overlays and input handling ----
 
+  var panels = [];
+
   function start() {
     var svg = document.querySelector("svg");
-    var group = svg && svg.querySelector(".fs-axes");
-    if (!group) return;
-    var panel = new Panel(svg, group);
+    if (!svg || !svg.querySelector(".fs-axes")) return;
+    svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
+      panels.push(new Panel(svg, group, k));
+    });
+    var panel = panels[0];
     var height = Number(svg.getAttribute("height"));
     var refresh = Number(svg.getAttribute("data-refresh") || 0);
     var readout = element(svg, "text", {x: 4, y: height - 4, "font-size": 10, fill: "#555"});
@@ -572,9 +623,16 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       return p.matrixTransform(svg.getScreenCTM().inverse());
     }
 
+    // panel under the page point p, or null
+    function panelAt(p) {
+      for (var k = 0; k < panels.length; k++) if (panels[k].contains(p)) return panels[k];
+      return null;
+    }
+
     function showReadout(p) {
-      var c;
-      if (!panel.contains(p)) { readout.textContent = ""; return; }
+      var c, hit = panelAt(p);
+      if (!hit) { readout.textContent = ""; return; }
+      panel = hit;
       c = panel.unitAt(p);
       readout.textContent = "x = " + shortNumber(panel.x.toData(c.u)) +
         "   y = " + shortNumber(panel.y.toData(c.v));
@@ -583,14 +641,16 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     svg.addEventListener("contextmenu", function (evt) { evt.preventDefault(); });
     svg.addEventListener("wheel", function (evt) {
       var p = point(evt), f;
-      if (!panel.contains(p)) return;
+      if (!panelAt(p)) return;
+      panel = panelAt(p);
       evt.preventDefault();
       f = evt.deltaY < 0 ? 1 / ZOOM_FACTOR : ZOOM_FACTOR;
       panel.zoomAt(p, evt.ctrlKey ? 1 : f, evt.shiftKey ? 1 : f);
     }, {passive: false});
     svg.addEventListener("mousedown", function (evt) {
       var p = point(evt);
-      if (!panel.contains(p)) return;
+      if (!panelAt(p)) return;
+      panel = panelAt(p);
       evt.preventDefault();
       drag = {button: evt.button, start: p, view: panel.view};
     });
@@ -631,7 +691,7 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       }
     });
 
-    panel.loadState();
+    panels.forEach(function (p) { p.loadState(); });
     if (refresh > 0) {
       (function reload() {
         setTimeout(function () { if (drag) reload(); else location.reload(); }, refresh * 1000);

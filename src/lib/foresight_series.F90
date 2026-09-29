@@ -13,6 +13,10 @@ type :: series_object
    !< Data series.
    real(R8P), allocatable        :: x(:)  !< Abscissae.
    real(R8P), allocatable        :: y(:)  !< Ordinates.
+   real(R8P), allocatable        :: xlow(:)  !< Horizontal error bar starts, allocated for x error bars.
+   real(R8P), allocatable        :: xhigh(:) !< Horizontal error bar ends, allocated for x error bars.
+   real(R8P), allocatable        :: ylow(:)  !< Vertical error bar starts, allocated for y error bars.
+   real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
    character(len=:), allocatable :: title !< Key title, empty for none.
    type(style_object)            :: style !< Drawing style.
    contains
@@ -35,7 +39,7 @@ contains
    !< Widen the extent (`xmin`, `xmax`, `ymin`, `ymax`) to the placeable points of the series.
    !<
    !< With `xwindow` only the points whose abscissa lies inside it count: gnuplot autoscales y on the points inside the
-   !< x range only.
+   !< x range only. Error bar ends placeable on their axis widen the extent too, as in gnuplot.
    class(series_object), intent(in)           :: self       !< Series.
    type(axis_object),    intent(in)           :: xaxis      !< Horizontal axis.
    type(axis_object),    intent(in)           :: yaxis      !< Vertical axis.
@@ -61,5 +65,23 @@ contains
    xmax = max(xmax, maxval(self%x, mask=mask))
    ymin = min(ymin, minval(self%y, mask=mask))
    ymax = max(ymax, maxval(self%y, mask=mask))
+   if (allocated(self%xlow)) call widen(self%xlow, xaxis, xmin, xmax)
+   if (allocated(self%xhigh)) call widen(self%xhigh, xaxis, xmin, xmax)
+   if (allocated(self%ylow)) call widen(self%ylow, yaxis, ymin, ymax)
+   if (allocated(self%yhigh)) call widen(self%yhigh, yaxis, ymin, ymax)
+   contains
+      pure subroutine widen(ends, axis, lo, hi)
+      !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points.
+      real(R8P),         intent(in)    :: ends(:) !< Bar ends.
+      type(axis_object), intent(in)    :: axis    !< Axis of the bar ends.
+      real(R8P),         intent(inout) :: lo      !< Extent start.
+      real(R8P),         intent(inout) :: hi      !< Extent end.
+      logical, allocatable             :: ok(:)   !< Counted placeable ends.
+
+      ok = mask .and. axis%accepts(ends)
+      if (.not. any(ok)) return
+      lo = min(lo, minval(ends, mask=ok))
+      hi = max(hi, maxval(ends, mask=ok))
+      endsubroutine widen
    endsubroutine extent
 endmodule foresight_series
