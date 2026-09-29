@@ -26,6 +26,10 @@ type :: axes_view
    logical   :: ylog      = .false.  !< Log y axis.
    logical   :: grid      = .false.  !< Grid shown.
    real(R8P) :: font_size = 12.0_R8P !< Font size [px].
+   character(len=:), allocatable :: xtics   !< x tick positions for the viewer (`tics_object%attribute`), empty for auto.
+   character(len=:), allocatable :: ytics   !< y tick positions for the viewer, empty for auto.
+   character(len=:), allocatable :: xformat !< x tick label format, empty for the default.
+   character(len=:), allocatable :: yformat !< y tick label format, empty for the default.
 endtype axes_view
 
 type, abstract :: backend_object

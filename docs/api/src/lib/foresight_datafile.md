@@ -8,7 +8,8 @@ title: foresight_datafile
 
  Format, as gnuplot's default: whitespace separated numeric columns; `#` starts a comment; one blank line ends a
  block (plotted lines are broken there), two blank lines end a dataset (selected by `index`, 0-based); cells that
- are `?`, `NaN` or not numbers are missing values (gaps). Pseudo-column 0 is the point number within the dataset.
+ are `?`, `NaN` or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of each
+ dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
 
  Values are stored flattened, rows by offsets, with capacities doubled on growth: a large monitoring log costs one
  real per value plus three integers per row.
@@ -149,8 +150,11 @@ flowchart TD
 
 ### table
 
-Values of the `using` `fields` on the rows of dataset `index` (all if negative), one row every `every` in each
- block: `values(point, field)`.
+Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
+ `values(point, field)`.
+
+ `every` is gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, an end negative for
+ none. Points are numbered within their block, blocks within their dataset, from 0.
 
  A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells,
  rows too short for a column and undefined expressions give NaN values (gaps).
@@ -166,7 +170,7 @@ subroutine table(self, fields, index, every, values)
 | `self` | class([datafile_object](/api/src/lib/foresight_datafile#datafile-object)) | in |  | Data. |
 | `fields` | type([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | `using` fields. |
 | `index` | integer(kind=I4P) | in |  | Dataset, 0-based; negative for all. |
-| `every` | integer(kind=I4P) | in |  | Point stride within each block. |
+| `every` | integer(kind=I4P) | in |  | gnuplot `every` fields. |
 | `values` | real(kind=R8P) | out | allocatable | Points. |
 
 **Call graph**

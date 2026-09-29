@@ -14,11 +14,13 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_object
+use foresight_axes, only : axes_object, key_position
 use foresight_backend, only : backend_object
 use foresight_backend_dumb, only : backend_dumb
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
+use foresight_format, only : format_check, real_str
+use foresight_ticks, only : tics_object, TICS_AUTO, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
@@ -47,6 +49,7 @@ type :: figure_object
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
+      procedure, pass(self) :: set_format      !< gnuplot `set format`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
@@ -55,10 +58,14 @@ type :: figure_object
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
+      procedure, pass(self) :: set_xtics       !< gnuplot `set xtics`.
       procedure, pass(self) :: set_ylabel      !< gnuplot `set ylabel`.
       procedure, pass(self) :: set_yrange      !< gnuplot `set yrange`.
+      procedure, pass(self) :: set_ytics       !< gnuplot `set ytics`.
       procedure, pass(self) :: unset_logscale  !< gnuplot `unset logscale`.
       procedure, pass(self) :: unset_multiplot !< gnuplot `unset multiplot`.
+      procedure, pass(self) :: unset_xtics     !< gnuplot `unset xtics`.
+      procedure, pass(self) :: unset_ytics     !< gnuplot `unset ytics`.
       procedure, pass(self), private :: ensure_panels !< Allocate the single default panel if needed.
       procedure, pass(self), private :: render        !< Render on a device.
 endtype figure_object
@@ -166,6 +173,31 @@ contains
    endselect
    endsubroutine save
 
+   subroutine set_format(self, format, axes)
+   !< Tick label `format` of the `axes` named by the letters `x`, `y` (both when absent), as gnuplot `set format`: text
+   !< with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
+   !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
+   class(figure_object), intent(inout)        :: self    !< Figure.
+   character(len=*),     intent(in)           :: format  !< Label format.
+   character(len=*),     intent(in), optional :: axes    !< Axes letters, e.g. `y` or `xy`.
+   character(len=:), allocatable              :: message !< Format problem.
+
+   if (len(format) > 0) then
+      message = format_check(format)
+      if (len(message) > 0) error stop 'foresight: set_format: '//message
+   endif
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. present(axes)) then
+         panel%xaxis%tics%format = format
+         panel%yaxis%tics%format = format
+      else
+         if (index(axes, 'x') > 0) panel%xaxis%tics%format = format
+         if (index(axes, 'y') > 0) panel%yaxis%tics%format = format
+      endif
+   endassociate
+   endsubroutine set_format
+
    subroutine set_grid(self, on)
    !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not.
    class(figure_object), intent(inout)        :: self !< Figure.
@@ -176,14 +208,25 @@ contains
    if (present(on)) self%panels(self%current)%grid = on
    endsubroutine set_grid
 
-   subroutine set_key(self, on)
-   !< Draw the key (`on` absent or true), as gnuplot `set key`, or not.
-   class(figure_object), intent(inout)        :: self !< Figure.
-   logical,              intent(in), optional :: on   !< Key on.
+   subroutine set_key(self, on, position, box)
+   !< Draw the key (`on` absent or true), as gnuplot `set key`, or not; `position` takes gnuplot's words, e.g.
+   !< `'bottom left'` or `'center'` (inside the plot area, top right by default); `box` draws a box around it.
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   logical,              intent(in), optional :: on       !< Key on.
+   character(len=*),     intent(in), optional :: position !< Position words: left, right, center, top, bottom.
+   logical,              intent(in), optional :: box      !< Box around the key.
+   character(len=:), allocatable              :: bad      !< Unknown position word.
 
    call self%ensure_panels
-   self%panels(self%current)%key = .true.
-   if (present(on)) self%panels(self%current)%key = on
+   associate(panel => self%panels(self%current))
+      panel%key = .true.
+      if (present(on)) panel%key = on
+      if (present(position)) then
+         call key_position(position, panel%key_h, panel%key_v, bad)
+         if (len(bad) > 0) error stop 'foresight: set_key: unknown position "'//bad//'"'
+      endif
+      if (present(box)) panel%key_box = box
+   endassociate
    endsubroutine set_key
 
    subroutine set_logscale(self, axes)
@@ -267,6 +310,18 @@ contains
    call self%panels(self%current)%xaxis%set_range(min=min, max=max)
    endsubroutine set_xrange
 
+   subroutine set_xtics(self, step, start, end)
+   !< x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
+   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in), optional :: step  !< Tick step, a factor on log axes.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+
+   call self%ensure_panels
+   call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end)
+   endsubroutine set_xtics
+
    subroutine set_ylabel(self, label)
    !< Set the y axis label of the current panel, empty for none.
    class(figure_object), intent(inout) :: self  !< Figure.
@@ -285,6 +340,18 @@ contains
    call self%ensure_panels
    call self%panels(self%current)%yaxis%set_range(min=min, max=max)
    endsubroutine set_yrange
+
+   subroutine set_ytics(self, step, start, end)
+   !< y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
+   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in), optional :: step  !< Tick step, a factor on log axes.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+
+   call self%ensure_panels
+   call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end)
+   endsubroutine set_ytics
 
    subroutine unset_logscale(self, axes)
    !< Linear scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
@@ -319,6 +386,22 @@ contains
    self%current = 1_I4P
    self%title = ''
    endsubroutine unset_multiplot
+
+   subroutine unset_xtics(self)
+   !< No x ticks, tick labels nor grid lines, as gnuplot `unset xtics`; autoscaled ends are then not extended.
+   class(figure_object), intent(inout) :: self !< Figure.
+
+   call self%ensure_panels
+   self%panels(self%current)%xaxis%tics%mode = TICS_NONE
+   endsubroutine unset_xtics
+
+   subroutine unset_ytics(self)
+   !< No y ticks, tick labels nor grid lines, as gnuplot `unset ytics`; autoscaled ends are then not extended.
+   class(figure_object), intent(inout) :: self !< Figure.
+
+   call self%ensure_panels
+   self%panels(self%current)%yaxis%tics%mode = TICS_NONE
+   endsubroutine unset_ytics
 
    ! private procedures
    subroutine ensure_panels(self)
@@ -379,4 +462,28 @@ contains
       if (ext(i:i) >= 'A' .and. ext(i:i) <= 'Z') ext(i:i) = achar(iachar(ext(i:i)) + 32)
    enddo
    endfunction extension
+
+   subroutine set_tics(tics, caller, step, start, end)
+   !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop.
+   type(tics_object),   intent(inout)        :: tics    !< Axis tick settings.
+   character(len=*),    intent(in)           :: caller  !< Procedure name, for messages.
+   real(R8P),           intent(in), optional :: step    !< Tick step.
+   real(R8P),           intent(in), optional :: start   !< First tick.
+   real(R8P),           intent(in), optional :: end     !< Last tick.
+   character(len=:), allocatable             :: first   !< Start text.
+   character(len=:), allocatable             :: last    !< End text.
+   character(len=:), allocatable             :: message !< Problem.
+
+   if (.not. present(step)) then
+      if (present(start) .or. present(end)) error stop 'foresight: '//caller//': start and end need a step'
+      tics%mode = TICS_AUTO
+      return
+   endif
+   first = ''
+   last = ''
+   if (present(start)) first = real_str(start)
+   if (present(end)) last = real_str(end)
+   call tics%set_fixed(real_str(step), first, last, message)
+   if (len(message) > 0) error stop 'foresight: '//caller//': '//message
+   endsubroutine set_tics
 endmodule foresight_figure

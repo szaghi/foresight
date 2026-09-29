@@ -3,7 +3,8 @@ module foresight_axes
 !< foresight_axes, a plot panel: two axes, the plotted series, the key and the decorations.
 !<
 !< Layout follows gnuplot defaults: full border with inward ticks mirrored on the opposite side, tick labels outside
-!< bottom and left, key at the top right inside the plot area with right-aligned titles and the samples on their right.
+!< bottom and left, key inside the plot area (top right by default) with right-aligned titles and the samples on their
+!< right.
 !< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
@@ -14,6 +15,7 @@ use penf, only : I4P, R8P
 implicit none
 private
 public :: axes_object
+public :: key_position
 
 real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
 real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [px].
@@ -34,6 +36,9 @@ type :: axes_object
    character(len=:), allocatable    :: title          !< Panel title, empty for none.
    logical                          :: grid = .false. !< Draw grid lines at the major ticks.
    logical                          :: key  = .true.  !< Draw the key.
+   character(len=6)                 :: key_h = 'right' !< Key horizontal position: left, center, right.
+   character(len=6)                 :: key_v = 'top'   !< Key vertical position: top, center, bottom.
+   logical                          :: key_box = .false. !< Draw a box around the key.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: render                      !< Render the panel.
@@ -119,6 +124,12 @@ contains
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
+   view%xtics = self%xaxis%tics%attribute()
+   view%ytics = self%yaxis%tics%attribute()
+   view%xformat = ''
+   view%yformat = ''
+   if (self%xaxis%tics%has_format()) view%xformat = self%xaxis%tics%format
+   if (self%yaxis%tics%has_format()) view%yformat = self%yaxis%tics%format
    call backend%begin_axes(view)
    ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
    call backend%begin_group('fs-grid', visible=self%grid)
@@ -201,22 +212,55 @@ contains
    endsubroutine draw_grid
 
    subroutine draw_key(self, backend, area, font_size)
-   !< Draw the key at the top right of the plot area: right-aligned titles, style samples on their right.
+   !< Draw the key inside the plot area at its position: right-aligned titles, style samples on their right.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    real(R8P)                            :: xs(2)     !< Sample abscissae [px].
    real(R8P)                            :: yc        !< Row centre ordinate [px].
+   real(R8P)                            :: width     !< Key width: widest title, gap, sample [px].
+   real(R8P)                            :: height    !< Key height [px].
+   real(R8P)                            :: top       !< Key top [px].
+   integer(I4P)                         :: rows      !< Key rows.
    integer(I4P)                         :: row       !< Key row.
    integer(I4P)                         :: s         !< Series counter.
 
-   xs = [area(2) - PAD - SAMPLE_LENGTH * font_size, area(2) - PAD]
+   width = 0.0_R8P
+   rows = 0_I4P
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (len(self%series(s)%title) == 0) cycle
+      rows = rows + 1_I4P
+      width = max(width, backend%text_width(self%series(s)%title, '', font_size))
+   enddo
+   if (rows == 0_I4P) return
+   ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
+   width = width + font_size + GAP + SAMPLE_LENGTH * font_size
+   height = real(rows, R8P) * LINE_HEIGHT * font_size
+   select case (trim(self%key_h))
+   case ('left')
+      xs(2) = area(1) + PAD + width
+   case ('center')
+      xs(2) = 0.5_R8P * (area(1) + area(2) + width)
+   case default
+      xs(2) = area(2) - PAD
+   endselect
+   xs(1) = xs(2) - SAMPLE_LENGTH * font_size
+   select case (trim(self%key_v))
+   case ('bottom')
+      top = area(4) - GAP - height
+   case ('center')
+      top = 0.5_R8P * (area(3) + area(4) - height)
+   case default
+      top = area(3) + GAP
+   endselect
+   if (self%key_box) call backend%rect(xs(2) - width - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
+                                       FRAME_COLOR, 'none', 1.0_R8P)
    row = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
       if (len(self%series(s)%title) == 0) cycle
       row = row + 1_I4P
-      yc = area(3) + GAP + (real(row, R8P) - 0.5_R8P) * LINE_HEIGHT * font_size
+      yc = top + (real(row, R8P) - 0.5_R8P) * LINE_HEIGHT * font_size
       if (self%series(s)%style%draws_lines()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
@@ -387,4 +431,57 @@ contains
          backend%text_width(self%yaxis%ticks(t)%label, self%yaxis%ticks(t)%sup, font_size))
    enddo
    endfunction ytick_labels_width
+
+   pure subroutine key_position(words, horizontal, vertical, bad)
+   !< Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,
+   !< `bottom`, and `center`, which centres the direction not given yet by `words` (both if none, as gnuplot).
+   character(len=*),              intent(in)    :: words      !< Blank separated words.
+   character(len=6),              intent(inout) :: horizontal !< Horizontal position.
+   character(len=6),              intent(inout) :: vertical   !< Vertical position.
+   character(len=:), allocatable, intent(out)   :: bad        !< First word not a position, empty if none.
+   character(len=:), allocatable                :: word       !< Current word.
+   integer(I4P)                                 :: start      !< Word start.
+   integer(I4P)                                 :: finish     !< Word end.
+   logical                                      :: h_set      !< Horizontal position given.
+   logical                                      :: v_set      !< Vertical position given.
+
+   bad = ''
+   h_set = .false.
+   v_set = .false.
+   start = 1_I4P
+   do while (start <= len(words))
+      if (words(start:start) == ' ') then
+         start = start + 1_I4P
+         cycle
+      endif
+      finish = index(words(start:), ' ', kind=I4P)
+      if (finish == 0_I4P) then
+         finish = len(words, kind=I4P)
+      else
+         finish = start + finish - 2_I4P
+      endif
+      word = words(start:finish)
+      start = finish + 1_I4P
+      select case (word)
+      case ('left', 'right')
+         horizontal = word
+         h_set = .true.
+      case ('top', 'bottom')
+         vertical = word
+         v_set = .true.
+      case ('center')
+         if (h_set .and. .not. v_set) then
+            vertical = 'center'
+         elseif (v_set .and. .not. h_set) then
+            horizontal = 'center'
+         else
+            horizontal = 'center'
+            vertical = 'center'
+         endif
+      case default
+         bad = word
+         return
+      endselect
+   enddo
+   endsubroutine key_position
 endmodule foresight_axes

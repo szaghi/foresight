@@ -33,7 +33,11 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)` | `set title`, `set xlabel`, `set ylabel` |
 | `set_xrange([min], [max])`, `set_yrange([min], [max])` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale` |
-| `set_grid([on])`, `set_key([on])` | `set grid`, `unset key` |
+| `set_grid([on])` | `set grid`, `unset grid` |
+| `set_key([on], [position], [box])` | `set key bottom left box`, `unset key` |
+| `set_xtics([step], [start], [end])`, `set_ytics(...)` | `set xtics START,STEP,END`; automatic without `step` |
+| `unset_xtics()`, `unset_ytics()` | `unset xtics` |
+| `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default |
 | `set_multiplot(rows, cols, [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot layout` |
 | `set_refresh(seconds)` | reload period of the HTML page |
 

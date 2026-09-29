@@ -9,18 +9,23 @@ module foresight_script
 !<   `set terminal svg|html [size W,H] [refresh SECONDS]`;
 !< - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
-!< - `plot 'file' [using [X:]Y[:...]] [index N] [every N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
+!< - `set xtics|ytics [auto|STEP|START,STEP[,END]]`, `unset xtics|ytics`, `set format [x|y|xy] ["fmt"]`,
+!<   `unset format`, `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
+!<   `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
+!< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
 !<   [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
 !<   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`;
-!<   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression).
+!<   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression);
+!<   `ls N`, `lt N` in an item apply a line style, a palette color.
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
-use foresight_format, only : int_str
+use foresight_format, only : format_check, int_str
 use foresight_style, only : default_color
+use foresight_ticks, only : tics_object, TICS_AUTO
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -30,6 +35,15 @@ private
 public :: script_object
 
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
+
+type :: line_style_object
+   !< Line properties: a `set style line`, or the options of a plot item; unallocated means the default.
+   integer(I4P)                  :: id = 0_I4P !< Style number.
+   character(len=:), allocatable :: lc         !< Color.
+   real(R8P),        allocatable :: lw         !< Line width.
+   integer(I4P),     allocatable :: dt         !< Dash type.
+   real(R8P),        allocatable :: ps         !< Point size.
+endtype line_style_object
 
 type :: script_object
    !< Script interpreter state.
@@ -43,6 +57,8 @@ type :: script_object
    logical                         :: multiplot = .false.      !< Inside `set multiplot`.
    logical                         :: advance_pending = .false. !< A multiplot panel was plotted: the next command
                                                                 !< opens the next panel.
+   character(len=:), allocatable   :: data_style               !< Default plot style, `set style data`.
+   type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -70,6 +86,9 @@ contains
    self%last_plot = ''
    if (allocated(self%data_files)) deallocate(self%data_files)
    allocate(self%data_files(0))
+   self%data_style = 'lines'
+   if (allocated(self%line_styles)) deallocate(self%line_styles)
+   allocate(self%line_styles(0))
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -234,10 +253,7 @@ contains
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
    character(len=:), allocatable                :: with      !< Item style.
-   character(len=:), allocatable                :: lc        !< Item color, unallocated for default.
-   real(R8P),        allocatable                :: lw        !< Item line width, unallocated for default.
-   real(R8P),        allocatable                :: ps        !< Item point size, unallocated for default.
-   integer(I4P),     allocatable                :: dt        !< Item dash type, unallocated for default.
+   type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
    real(R8P),        allocatable                :: values(:,:) !< Values of the `using` fields.
@@ -251,7 +267,7 @@ contains
    integer(I4P)                                 :: uy        !< Default ordinate column.
    integer(I4P)                                 :: nbar      !< Error bar columns.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
-   integer(I4P)                                 :: every     !< Point stride.
+   integer(I4P)                                 :: every(6)  !< `every` fields.
    integer(I4P)                                 :: number    !< Integer argument.
    integer(I4P)                                 :: i         !< Token counter.
    logical                                      :: has_title !< Title given (or notitle).
@@ -289,14 +305,11 @@ contains
       if (allocated(fields)) deallocate(fields)
       spec = ''
       set_index = -1_I4P
-      every = 1_I4P
-      with = 'lines'
+      every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+      with = self%data_style
       has_title = .false.
       title = ''
-      if (allocated(lc)) deallocate(lc)
-      if (allocated(lw)) deallocate(lw)
-      if (allocated(ps)) deallocate(ps)
-      if (allocated(dt)) deallocate(dt)
+      line = line_style_object()
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
          if (tokens(i)%kind == TOKEN_COMMA) exit
@@ -313,11 +326,9 @@ contains
          elseif (keyword(word, 'index', 1_I4P)) then
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
          elseif (keyword(word, 'every', 2_I4P)) then
-            if (.not. next_integer(tokens, i, every, iostat, iomsg)) return
-            if (every < 1_I4P) then
-               call fail('plot: every needs a positive stride', iostat, iomsg)
-               return
-            endif
+            if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+            call parse_every(word, every, iostat, iomsg)
+            if (iostat /= 0_I4P) return
          elseif (keyword(word, 'with', 1_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             with = canonical_style(word)
@@ -341,31 +352,14 @@ contains
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
             has_title = .true.
-         elseif (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P)) then
-            i = i + 1_I4P
-            if (i <= size(tokens, kind=I4P)) then
-               if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'rgbcolor', 3_I4P)) i = i + 1_I4P
-            endif
-            if (i > size(tokens, kind=I4P)) then
-               call fail('plot: lc needs a color', iostat, iomsg)
+         elseif (word == 'ls' .or. keyword(word, 'linestyle', 5_I4P)) then
+            if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
+            call apply_line_style(self%line_styles, number, line)
+         elseif (is_line_option(word)) then
+            if (.not. line_option(tokens, i, line, iostat, iomsg)) then
+               iomsg = 'plot: '//iomsg
                return
             endif
-            if (tokens(i)%kind == TOKEN_STRING) then
-               lc = tokens(i)%text
-            else
-               i = i - 1_I4P
-               if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
-               lc = default_color(number)
-            endif
-         elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
-            allocate(lw)
-            if (.not. next_real(tokens, i, lw, iostat, iomsg)) return
-         elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
-            allocate(dt)
-            if (.not. next_integer(tokens, i, dt, iostat, iomsg)) return
-         elseif (word == 'ps' .or. keyword(word, 'pointsize', 6_I4P)) then
-            allocate(ps)
-            if (.not. next_real(tokens, i, ps, iostat, iomsg)) return
          else
             call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -453,7 +447,7 @@ contains
          endif
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
-      call self%figure%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
+      call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh)
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
@@ -546,8 +540,7 @@ contains
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
       call self%figure%set_grid(.true.)
    elseif (keyword(option, 'key', 1_I4P)) then
-      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
-      call self%figure%set_key(.true.)
+      call key_option
    elseif (keyword(option, 'output', 2_I4P)) then
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) then
@@ -617,6 +610,14 @@ contains
             self%output = change_extension(self%output, tokens(2)%text)
          endif
       endif
+   elseif (keyword(option, 'style', 2_I4P)) then
+      call style_option
+   elseif (keyword(option, 'xtics', 3_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%xaxis%tics)
+   elseif (keyword(option, 'ytics', 3_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%yaxis%tics)
+   elseif (keyword(option, 'format', 3_I4P)) then
+      call format_option
    elseif (keyword(option, 'multiplot', 5_I4P)) then
       rows = 0_I4P
       cols = 0_I4P
@@ -703,6 +704,156 @@ contains
       fixed = .true.
       value = v
       endsubroutine range_end
+      subroutine key_option
+      !< `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [inside]`.
+      character(len=:), allocatable :: words !< Position words.
+      logical                       :: on    !< Key on.
+      logical, allocatable          :: box   !< Box, unallocated if not given.
+
+      on = .true.
+      words = ''
+      do i = 2_I4P, size(tokens, kind=I4P)
+         select case (tokens(i)%text)
+         case ('on')
+            on = .true.
+         case ('off')
+            on = .false.
+         case ('box')
+            box = .true.
+         case ('nobox')
+            box = .false.
+         case ('inside', 'ins')
+         case ('left', 'right', 'center', 'top', 'bottom')
+            words = words//' '//tokens(i)%text
+         case default
+            call fail('set key: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, center, '// &
+                      'top, bottom, box, nobox, inside)', iostat, iomsg)
+            return
+         endselect
+      enddo
+      call self%figure%set_key(on, position=words, box=box)
+      endsubroutine key_option
+
+      subroutine tics_option(tics)
+      !< `set xtics|ytics [auto|autofreq|STEP|START,STEP|START,STEP,END]`.
+      type(tics_object), intent(inout) :: tics    !< Axis tick settings.
+      character(len=:), allocatable    :: message !< Problem.
+      logical                          :: ok      !< Well formed.
+      integer(I4P)                     :: n       !< Tokens after the option.
+
+      n = size(tokens, kind=I4P) - 1_I4P
+      if (n == 0_I4P) then
+         tics%mode = TICS_AUTO
+         return
+      endif
+      ok = mod(n, 2_I4P) == 1_I4P .and. n <= 5_I4P
+      if (ok) ok = all(tokens(2:n + 1:2)%kind == TOKEN_WORD)
+      if (ok .and. n > 1_I4P) ok = all(tokens(3:n + 1:2)%kind == TOKEN_COMMA)
+      if (.not. ok) then
+         call fail('set '//option//': supported forms are STEP, START,STEP, START,STEP,END and auto', iostat, iomsg)
+         return
+      endif
+      select case (n)
+      case (1_I4P)
+         if (keyword(tokens(2)%text, 'autofreq', 4_I4P)) then
+            tics%mode = TICS_AUTO
+            return
+         endif
+         call tics%set_fixed(tokens(2)%text, '', '', message)
+      case (3_I4P)
+         call tics%set_fixed(tokens(4)%text, tokens(2)%text, '', message)
+      case default
+         call tics%set_fixed(tokens(4)%text, tokens(2)%text, tokens(6)%text, message)
+      endselect
+      if (len(message) > 0) call fail('set '//option//': '//message, iostat, iomsg)
+      endsubroutine tics_option
+
+      subroutine format_option
+      !< `set format [x|y|xy] ["format"]`: no format restores the default labels.
+      character(len=:), allocatable :: axes    !< Axes letters.
+      character(len=:), allocatable :: format  !< Label format.
+      character(len=:), allocatable :: message !< Problem.
+
+      axes = 'xy'
+      format = ''
+      i = 2_I4P
+      if (i <= size(tokens, kind=I4P)) then
+         if (tokens(i)%kind == TOKEN_WORD) then
+            axes = tokens(i)%text
+            if (axes /= 'x' .and. axes /= 'y' .and. axes /= 'xy') then
+               call fail('set format: axes must be x, y or xy, not "'//axes//'"', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+         endif
+      endif
+      if (i <= size(tokens, kind=I4P)) then
+         if (tokens(i)%kind /= TOKEN_STRING .or. i < size(tokens, kind=I4P)) then
+            call fail('set format: a single quoted format is expected', iostat, iomsg)
+            return
+         endif
+         format = tokens(i)%text
+         if (len(format) > 0) then
+            message = format_check(format)
+            if (len(message) > 0) then
+               call fail('set format: '//message, iostat, iomsg)
+               return
+            endif
+         endif
+      endif
+      call self%figure%set_format(format, axes)
+      endsubroutine format_option
+
+      subroutine style_option
+      !< `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
+      type(line_style_object) :: style !< New line style.
+      character(len=:), allocatable :: with !< Style name.
+      integer(I4P) :: s !< Counter.
+
+      if (size(tokens) >= 2) then
+         if (keyword(tokens(2)%text, 'data', 1_I4P)) then
+            if (size(tokens) /= 3) then
+               call fail('set style data: one style is expected', iostat, iomsg)
+               return
+            endif
+            with = canonical_style(tokens(3)%text)
+            if (len(with) == 0) then
+               call fail('set style data: unsupported style "'//tokens(3)%text//'"', iostat, iomsg)
+               return
+            endif
+            self%data_style = with
+            return
+         elseif (keyword(tokens(2)%text, 'line', 1_I4P)) then
+            i = 2_I4P
+            if (.not. next_integer(tokens, i, style%id, iostat, iomsg)) return
+            if (style%id < 1_I4P) then
+               call fail('set style line: the style number must be positive', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            do while (i <= size(tokens, kind=I4P))
+               if (.not. is_line_option(tokens(i)%text)) then
+                  call fail('set style line: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
+                  return
+               endif
+               if (.not. line_option(tokens, i, style, iostat, iomsg)) then
+                  iomsg = 'set style line: '//iomsg
+                  return
+               endif
+               i = i + 1_I4P
+            enddo
+            do s = 1_I4P, size(self%line_styles, kind=I4P)
+               if (self%line_styles(s)%id == style%id) then
+                  self%line_styles(s) = style
+                  return
+               endif
+            enddo
+            self%line_styles = [self%line_styles, style]
+            return
+         endif
+      endif
+      call fail('set style: only "data STYLE" and "line N ..." are supported', iostat, iomsg)
+      endsubroutine style_option
    endsubroutine set_command
 
    subroutine unset_command(self, tokens, iostat, iomsg)
@@ -741,6 +892,12 @@ contains
       call self%figure%set_grid(.false.)
    elseif (keyword(option, 'key', 1_I4P)) then
       call self%figure%set_key(.false.)
+   elseif (keyword(option, 'xtics', 3_I4P)) then
+      call self%figure%unset_xtics
+   elseif (keyword(option, 'ytics', 3_I4P)) then
+      call self%figure%unset_ytics
+   elseif (keyword(option, 'format', 3_I4P)) then
+      call self%figure%set_format('')
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif
@@ -1026,6 +1183,117 @@ contains
       yes = k == len(text, kind=I4P)
       endfunction is_parenthesized
    endsubroutine parse_using
+
+   pure subroutine apply_line_style(styles, id, line)
+   !< Apply the line style `id` to `line`: its defined properties; an undefined style is the linetype `id`, as gnuplot.
+   type(line_style_object), intent(in)    :: styles(:) !< Defined styles.
+   integer(I4P),            intent(in)    :: id        !< Style number.
+   type(line_style_object), intent(inout) :: line      !< Line properties.
+   integer(I4P)                           :: s         !< Counter.
+
+   do s = 1_I4P, size(styles, kind=I4P)
+      if (styles(s)%id /= id) cycle
+      if (allocated(styles(s)%lc)) line%lc = styles(s)%lc
+      if (allocated(styles(s)%lw)) line%lw = styles(s)%lw
+      if (allocated(styles(s)%dt)) line%dt = styles(s)%dt
+      if (allocated(styles(s)%ps)) line%ps = styles(s)%ps
+      return
+   enddo
+   line%lc = default_color(id)
+   endsubroutine apply_line_style
+
+   pure function is_line_option(word) result(is)
+   !< Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps` or their long forms.
+   character(len=*), intent(in) :: word !< Option word.
+   logical                      :: is   !< Line property.
+
+   is = word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. keyword(word, 'linetype', 5_I4P) &
+        .or. word == 'lw' .or. keyword(word, 'linewidth', 5_I4P) .or. word == 'dt' .or. keyword(word, 'dashtype', 5_I4P) &
+        .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P)
+   endfunction is_line_option
+
+   function line_option(tokens, i, line, iostat, iomsg) result(ok)
+   !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
+   !< `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens.
+   integer(I4P),                  intent(inout) :: i         !< Token counter.
+   type(line_style_object),       intent(inout) :: line      !< Line properties.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Success.
+   character(len=:), allocatable                :: word      !< Property word.
+   integer(I4P)                                 :: number    !< Integer value.
+   real(R8P)                                    :: value     !< Real value.
+
+   word = tokens(i)%text
+   iostat = 0_I4P
+   iomsg = ''
+   ok = .true.
+   if (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P)) then
+      i = i + 1_I4P
+      if (i <= size(tokens, kind=I4P)) then
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'rgbcolor', 3_I4P)) i = i + 1_I4P
+      endif
+      if (i > size(tokens, kind=I4P)) then
+         call fail('lc needs a color', iostat, iomsg)
+         ok = .false.
+      elseif (tokens(i)%kind == TOKEN_STRING) then
+         line%lc = tokens(i)%text
+      else
+         i = i - 1_I4P
+         ok = next_integer(tokens, i, number, iostat, iomsg)
+         if (ok) line%lc = default_color(number)
+      endif
+   elseif (word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) then
+      ok = next_integer(tokens, i, number, iostat, iomsg)
+      if (ok) line%lc = default_color(number)
+   elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
+      ok = next_real(tokens, i, value, iostat, iomsg)
+      if (ok) line%lw = value
+   elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
+      ok = next_integer(tokens, i, number, iostat, iomsg)
+      if (ok) line%dt = number
+   else
+      ok = next_real(tokens, i, value, iostat, iomsg)
+      if (ok) line%ps = value
+   endif
+   endfunction line_option
+
+   subroutine parse_every(spec, every, iostat, iomsg)
+   !< gnuplot `every point_incr:block_incr:start_point:start_block:end_point:end_block`; empty or missing fields keep
+   !< their defaults (1, 1, 0, 0, no end, no end).
+   character(len=*),              intent(in)  :: spec     !< Specification.
+   integer(I4P),                  intent(out) :: every(6) !< Fields, ends -1 for none.
+   integer(I4P),                  intent(out) :: iostat   !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg    !< Error message.
+   integer(I4P)                               :: start    !< Field start.
+   integer(I4P)                               :: colon    !< Field end.
+   integer(I4P)                               :: f        !< Field counter.
+   logical                                    :: ok       !< Field valid.
+
+   iostat = 0_I4P
+   iomsg = ''
+   every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+   ok = verify(spec, '0123456789:') == 0
+   start = 1_I4P
+   f = 0_I4P
+   do while (ok .and. start <= len(spec) + 1)
+      f = f + 1_I4P
+      colon = index(spec(start:), ':', kind=I4P)
+      if (colon == 0_I4P) then
+         colon = len(spec, kind=I4P) + 1_I4P
+      else
+         colon = start + colon - 1_I4P
+      endif
+      ok = f <= 6_I4P .and. colon - start < 10_I4P
+      if (ok .and. colon > start) read(spec(start:colon - 1_I4P), *) every(f)
+      start = colon + 1_I4P
+   enddo
+   if (ok) ok = every(1) > 0_I4P .and. every(2) > 0_I4P
+   if (.not. ok) call fail('plot: every needs up to 6 non-negative integers separated by ":", positive increments '// &
+                           '(point_incr:block_incr:start_point:start_block:end_point:end_block), not "'//spec//'"', &
+                           iostat, iomsg)
+   endsubroutine parse_every
 
    pure function plain_columns(columns) result(fields)
    !< `using` fields of plain columns.

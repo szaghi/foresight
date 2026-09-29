@@ -34,7 +34,11 @@ that did what it says.
 | **xr**ange / **yr**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | — |
 | **log**scale [`x`\|`y`\|`xy`] [`10`] | base-10 log axes (default both) | linear axes |
 | **gr**id | grid at major ticks | no grid |
-| **k**ey | show the key | hide the key |
+| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] | show the key, inside the plot area (top right by default), see [below](#key) | hide the key |
+| **xti**cs / **yti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] | tick positions, see [below](#ticks-and-label-formats) | no ticks, labels nor grid lines |
+| **for**mat [`x`\|`y`\|`xy`] [`"format"`] | tick label format, see [below](#ticks-and-label-formats) | default labels |
+| **st**yle **d**ata `STYLE` | style of items without `with` | — |
+| **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] | text output, 79 x 24 by default, on the standard output | — |
@@ -52,11 +56,12 @@ plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitl
 | `'file'` | data file; `''` repeats the previous one |
 | **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
-| **ev**ery `N` | one point every `N` in each block |
+| **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)` |
-| `lc` [**rgb**] `"color"` / `lc N` | color, or the `N`-th palette color |
+| `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the `N`-th palette color |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
+| `ls N` | line style `N` of `set style line`; the options after it override it |
 
 `using` defaults as gnuplot: `1:2`, or `0:1` for single-column files; `1:2:3` for `yerrorbars` and `xerrorbars`,
 `1:2:3:4` for `xyerrorbars`. Error bar layouts:
@@ -102,6 +107,49 @@ Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an
 stops the plot. Not supported: user variables and functions, string columns (`column("name")`, `stringcolumn`),
 bitwise operators, the pseudo-columns -1 and -2.
 
+## Ticks and label formats
+
+```gnuplot
+set xtics 0.5            # a tick every 0.5
+set xtics 0,5,30         # from 0 to 30 every 5
+set ytics 10             # on a log axis the step is a factor: 1, 10, 100, ...
+unset xtics              # no ticks, no labels, no grid lines
+set format y "%.1e"      # 1.0e-03
+set format x "%g s"      # 0.5 s
+set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
+```
+
+As in gnuplot, an autoscaled end extends outward to a multiple of the step, unless it lies below `START` or beyond
+`END`; after `unset xtics` it does not extend at all. Log axes always extend to whole decades.
+
+The formats are C printf's for one number: `%[flags][width][.precision]` with the conversions `f`, `e`, `E`, `g`,
+`G` and gnuplot's `h`, flags `-`, `+`, space, `0`, and `%%` for `%`. The value formatted is the exact decimal of the
+tick, so `set xtics 0.1` never shows `0.30000000000000004`, and a rounding tie goes to the even digit, as printf does
+(`0.125` with `%.2f` is `0.12`).
+
+Both settings follow the zoom in the HTML page: the viewer places and formats the ticks by the same rules.
+
+## Key
+
+```gnuplot
+set key bottom left box
+set key center           # centred both ways
+set key top center       # top, centred horizontally
+```
+
+Position words apply in order; `center` centres the direction not named yet, as in gnuplot. The key stays inside
+the plot area, titles right-aligned with their sample on the right.
+
+## Styles
+
+```gnuplot
+set style data linespoints
+set style line 1 lc rgb '#e51e10' lw 2 dt 2
+plot 'run.dat' u 1:2 ls 1 t 'residual', '' u 1:3 lt 3 t 'momentum'
+```
+
+`ls N` of an undefined style uses the palette color `N`, as gnuplot's linetype.
+
 ## Multiplot
 
 ```gnuplot
@@ -119,5 +167,7 @@ panel is an error.
 
 ## Not supported
 
-Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, `set format`, `set xtics`, `set style`,
-`every` with more than a stride, log bases other than 10, key placement options, manual multiplot `origin`/`size`.
+Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, log bases other than 10, manual multiplot
+`origin`/`size`; in `set xtics`, explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `nomirror`,
+`rotate`, `out` options; in `set format`, the `%s`, `%L`, `%T` conversions; the key `outside` the plot area;
+point types (`pt`).

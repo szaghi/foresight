@@ -24,7 +24,7 @@ See [Data Files](data-files) for the format and for what happens when a line is 
 foresight --watch residuals.gp
 ```
 
-The script is run once, then the sizes of the script and of its data files are polled every second; on any change the
+The script is run once, then the script and its data files are polled every second; on any change the
 script runs again and rewrites `residuals.html`. The page reloads itself at the same period and **keeps your zoom**,
 because the view is stored in its URL as data values, not as screen positions. Rewrites are atomic (a temporary file
 renamed over the page), so a reload never catches half a page.
@@ -43,5 +43,9 @@ no X forwarding, no port to open.
 ## Robustness
 
 - An error in one cycle — a data file briefly missing, a script saved with a typo — is reported and watching goes on.
-- Change detection compares file sizes: right for append-only logs, blind to a rewrite that keeps the size exactly.
+- Change detection compares each file's size and a hash of its content — all of it up to 1 MiB, the first and last
+  64 KiB beyond. Appends, a restarted job rewriting its log, an edit of the script that keeps its length
+  (`lw 2` → `lw 3`) are all caught; only a same-size change in the middle of a file larger than 1 MiB is missed, which
+  an append-only log never does. File modification times are not used: standard Fortran cannot read them, and their
+  resolution is seconds on some filesystems (network shares, WSL).
 - `--max-cycles N` stops after `N` polls, for scripted use.

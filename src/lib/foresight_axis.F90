@@ -6,7 +6,7 @@ module foresight_axis
 !< (`min > max` reverses the axis); an unset end is autoscaled to the data and extended outward to the tick grid.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use penf, only : R8P
-use foresight_ticks, only : linear_ticks, log_ticks, tick_object
+use foresight_ticks, only : linear_ticks, log_ticks, tick_object, tics_object
 
 implicit none
 private
@@ -22,6 +22,7 @@ type :: axis_object
    real(R8P)                      :: max_user  = 0.0_R8P    !< User value at the axis end.
    real(R8P)                      :: lo        = -10.0_R8P  !< Effective value at the axis start, set by `setup`.
    real(R8P)                      :: hi        = 10.0_R8P   !< Effective value at the axis end, set by `setup`.
+   type(tics_object)              :: tics                   !< User tick settings: fixed step, none, label format.
    type(tick_object), allocatable :: ticks(:)               !< Ticks, set by `setup`.
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
@@ -103,9 +104,9 @@ contains
       endif
    endif
    if (self%log) then
-      call log_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks)
+      call log_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
    else
-      call linear_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks)
+      call linear_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
    endif
    self%lo = lo
    self%hi = hi

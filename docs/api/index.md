@@ -18,6 +18,7 @@ Auto-generated from Fortran source doc comments using [FORMAL](https://github.co
 - [foresight_datafile](/api/src/lib/foresight_datafile)
 - [foresight_expression](/api/src/lib/foresight_expression)
 - [foresight_figure](/api/src/lib/foresight_figure)
+- [foresight_fingerprint](/api/src/lib/foresight_fingerprint)
 - [foresight_format](/api/src/lib/foresight_format)
 - [foresight_script](/api/src/lib/foresight_script)
 - [foresight_series](/api/src/lib/foresight_series)

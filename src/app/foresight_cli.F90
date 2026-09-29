@@ -3,16 +3,16 @@ program foresight_cli
 !< foresight command line tool: gnuplot-like scripts rendered to SVG/HTML.
 !<
 !< `foresight [-e COMMANDS] [-o OUTPUT] [-w [SECONDS]] [SCRIPT]` runs `COMMANDS` then `SCRIPT`. With `--watch` the run
-!< is repeated whenever the script or a data file it plotted changes size (append-only logs of a running job), the
+!< is repeated whenever the script or a data file it plotted changes (size or content, see foresight_fingerprint), the
 !< HTML output reloading itself in the browser; errors in a cycle are reported and watching goes on.
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : I4P, I8P, R8P, script_object, sleep_ms
+use foresight, only : file_fingerprint, I4P, I8P, R8P, script_object, sleep_ms
 
 implicit none
 character(len=:), allocatable :: script      !< Script file, empty for none.
 character(len=:), allocatable :: commands    !< Commands of `-e`, run first.
 character(len=:), allocatable :: output      !< Default output.
-integer(I8P),     allocatable :: sizes(:)    !< Watched file sizes.
+integer(I8P),     allocatable :: prints(:,:) !< Watched file fingerprints.
 type(script_object)           :: interpreter !< Interpreter.
 real(R8P)                     :: period      !< Watch period [s], 0 for no watch.
 integer(I4P)                  :: max_cycles  !< Watch polls before stopping, negative for forever.
@@ -25,15 +25,15 @@ if (period <= 0.0_R8P) then
    if (status /= 0_I4P) stop 1, quiet=.true.
    stop
 endif
-sizes = watched_sizes()
+prints = fingerprints()
 write(output_unit, '(A)') 'foresight: watching, Ctrl-C to stop'
 cycle_count = 0_I4P
 do while (max_cycles < 0_I4P .or. cycle_count < max_cycles)
    call sleep_ms(int(period * 1000.0_R8P, I8P))
    cycle_count = cycle_count + 1_I4P
-   if (all_equal(sizes, watched_sizes())) cycle
+   if (all_equal(prints, fingerprints())) cycle
    status = run()
-   sizes = watched_sizes()
+   prints = fingerprints()
 enddo
 
 contains
@@ -114,37 +114,25 @@ contains
    endif
    endfunction run
 
-   function watched_sizes() result(bytes)
-   !< Sizes of the script and of the data files read in the last run; -1 for a missing file.
-   integer(I8P), allocatable :: bytes(:) !< File sizes.
-   integer(I4P)              :: f        !< Counter.
+   function fingerprints() result(prints)
+   !< Fingerprints of the script and of the data files read in the last run, one per column.
+   integer(I8P), allocatable :: prints(:,:) !< Fingerprints.
+   integer(I4P)              :: f           !< Counter.
 
-   allocate(bytes(size(interpreter%data_files) + 1))
-   bytes(1) = file_size(script)
+   allocate(prints(2, size(interpreter%data_files) + 1))
+   prints(:, 1) = file_fingerprint(script)
    do f = 1_I4P, size(interpreter%data_files, kind=I4P)
-      bytes(f + 1_I4P) = file_size(interpreter%data_files(f)%text)
+      prints(:, f + 1_I4P) = file_fingerprint(interpreter%data_files(f)%text)
    enddo
-   endfunction watched_sizes
-
-   function file_size(file) result(bytes)
-   !< Size of `file` [bytes], -1 if missing or unnamed.
-   character(len=*), intent(in) :: file   !< File name.
-   integer(I8P)                 :: bytes  !< Size.
-   logical                      :: exists !< File exists.
-
-   bytes = -1_I8P
-   if (len(file) == 0) return
-   inquire(file=file, exist=exists)
-   if (exists) inquire(file=file, size=bytes)
-   endfunction file_size
+   endfunction fingerprints
 
    pure function all_equal(a, b) result(equal)
-   !< Whether two size lists are identical.
-   integer(I8P), intent(in) :: a(:)  !< First list.
-   integer(I8P), intent(in) :: b(:)  !< Second list.
-   logical                  :: equal !< Identical.
+   !< Whether two fingerprint lists are identical.
+   integer(I8P), intent(in) :: a(:,:) !< First list.
+   integer(I8P), intent(in) :: b(:,:) !< Second list.
+   logical                  :: equal  !< Identical.
 
-   equal = size(a) == size(b)
+   equal = size(a, 2) == size(b, 2)
    if (equal) equal = all(a == b)
    endfunction all_equal
 

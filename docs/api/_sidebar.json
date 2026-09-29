@@ -44,6 +44,10 @@
         "link": "/api/src/lib/foresight_figure"
       },
       {
+        "text": "foresight_fingerprint",
+        "link": "/api/src/lib/foresight_fingerprint"
+      },
+      {
         "text": "foresight_format",
         "link": "/api/src/lib/foresight_format"
       },

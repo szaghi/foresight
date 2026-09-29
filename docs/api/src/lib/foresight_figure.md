@@ -30,6 +30,8 @@ graph LR
   foresight_figure["foresight_figure"] --> foresight_backend_dumb["foresight_backend_dumb"]
   foresight_figure["foresight_figure"] --> foresight_backend_html["foresight_backend_html"]
   foresight_figure["foresight_figure"] --> foresight_backend_svg["foresight_backend_svg"]
+  foresight_figure["foresight_figure"] --> foresight_format["foresight_format"]
+  foresight_figure["foresight_figure"] --> foresight_ticks["foresight_ticks"]
 ```
 
 ## Contents
@@ -40,6 +42,7 @@ graph LR
 - [next_panel](#next-panel)
 - [plot](#plot)
 - [save](#save)
+- [set_format](#set-format)
 - [set_grid](#set-grid)
 - [set_key](#set-key)
 - [set_logscale](#set-logscale)
@@ -48,12 +51,17 @@ graph LR
 - [set_title](#set-title)
 - [set_xlabel](#set-xlabel)
 - [set_xrange](#set-xrange)
+- [set_xtics](#set-xtics)
 - [set_ylabel](#set-ylabel)
 - [set_yrange](#set-yrange)
+- [set_ytics](#set-ytics)
 - [unset_logscale](#unset-logscale)
 - [unset_multiplot](#unset-multiplot)
+- [unset_xtics](#unset-xtics)
+- [unset_ytics](#unset-ytics)
 - [ensure_panels](#ensure-panels)
 - [render](#render)
+- [set_tics](#set-tics)
 - [extension](#extension)
 
 ## Variables
@@ -94,6 +102,7 @@ Figure.
 | `next_panel` | pass(self) | Move to the next multiplot panel, carrying the settings over. |
 | `plot` | pass(self) | gnuplot `plot`, one series per call. |
 | `save` | pass(self) | Render to a file; the format follows the extension. |
+| `set_format` | pass(self) | gnuplot `set format`. |
 | `set_grid` | pass(self) | gnuplot `set grid` / `unset grid`. |
 | `set_key` | pass(self) | gnuplot `set key` / `unset key`. |
 | `set_logscale` | pass(self) | gnuplot `set logscale`. |
@@ -102,10 +111,14 @@ Figure.
 | `set_title` | pass(self) | gnuplot `set title`. |
 | `set_xlabel` | pass(self) | gnuplot `set xlabel`. |
 | `set_xrange` | pass(self) | gnuplot `set xrange`. |
+| `set_xtics` | pass(self) | gnuplot `set xtics`. |
 | `set_ylabel` | pass(self) | gnuplot `set ylabel`. |
 | `set_yrange` | pass(self) | gnuplot `set yrange`. |
+| `set_ytics` | pass(self) | gnuplot `set ytics`. |
 | `unset_logscale` | pass(self) | gnuplot `unset logscale`. |
 | `unset_multiplot` | pass(self) | gnuplot `unset multiplot`. |
+| `unset_xtics` | pass(self) | gnuplot `unset xtics`. |
+| `unset_ytics` | pass(self) | gnuplot `unset ytics`. |
 | `ensure_panels` | pass(self) | Allocate the single default panel if needed. |
 | `render` | pass(self) | Render on a device. |
 
@@ -247,6 +260,34 @@ flowchart TD
   style save fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_format
+
+Tick label `format` of the `axes` named by the letters `x`, `y` (both when absent), as gnuplot `set format`: text
+ with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
+ superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
+
+```fortran
+subroutine set_format(self, format, axes)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `format` | character(len=*) | in |  | Label format. |
+| `axes` | character(len=*) | in | optional | Axes letters, e.g. `y` or `xy`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  unset_command["unset_command"] --> set_format["set_format"]
+  set_format["set_format"] --> ensure_panels["ensure_panels"]
+  set_format["set_format"] --> format_check["format_check"]
+  style set_format fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### set_grid
 
 Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not.
@@ -274,10 +315,11 @@ flowchart TD
 
 ### set_key
 
-Draw the key (`on` absent or true), as gnuplot `set key`, or not.
+Draw the key (`on` absent or true), as gnuplot `set key`, or not; `position` takes gnuplot's words, e.g.
+ `'bottom left'` or `'center'` (inside the plot area, top right by default); `box` draws a box around it.
 
 ```fortran
-subroutine set_key(self, on)
+subroutine set_key(self, on, position, box)
 ```
 
 **Arguments**
@@ -286,14 +328,16 @@ subroutine set_key(self, on)
 |------|------|--------|------------|-------------|
 | `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
 | `on` | logical | in | optional | Key on. |
+| `position` | character(len=*) | in | optional | Position words: left, right, center, top, bottom. |
+| `box` | logical | in | optional | Box around the key. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  set_command["set_command"] --> set_key["set_key"]
   unset_command["unset_command"] --> set_key["set_key"]
   set_key["set_key"] --> ensure_panels["ensure_panels"]
+  set_key["set_key"] --> key_position["key_position"]
   style set_key fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -451,6 +495,33 @@ flowchart TD
   style set_xrange fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_xtics
+
+x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
+ without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+
+```fortran
+subroutine set_xtics(self, step, start, end)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `step` | real(kind=R8P) | in | optional | Tick step, a factor on log axes. |
+| `start` | real(kind=R8P) | in | optional | First tick. |
+| `end` | real(kind=R8P) | in | optional | Last tick. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_xtics["set_xtics"] --> ensure_panels["ensure_panels"]
+  set_xtics["set_xtics"] --> set_tics["set_tics"]
+  style set_xtics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### set_ylabel
 
 Set the y axis label of the current panel, empty for none.
@@ -501,6 +572,33 @@ flowchart TD
   style set_yrange fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_ytics
+
+y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
+ without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+
+```fortran
+subroutine set_ytics(self, step, start, end)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `step` | real(kind=R8P) | in | optional | Tick step, a factor on log axes. |
+| `start` | real(kind=R8P) | in | optional | First tick. |
+| `end` | real(kind=R8P) | in | optional | Last tick. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_ytics["set_ytics"] --> ensure_panels["ensure_panels"]
+  set_ytics["set_ytics"] --> set_tics["set_tics"]
+  style set_ytics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### unset_logscale
 
 Linear scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
@@ -548,6 +646,52 @@ flowchart TD
   style unset_multiplot fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### unset_xtics
+
+No x ticks, tick labels nor grid lines, as gnuplot `unset xtics`; autoscaled ends are then not extended.
+
+```fortran
+subroutine unset_xtics(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  unset_command["unset_command"] --> unset_xtics["unset_xtics"]
+  unset_xtics["unset_xtics"] --> ensure_panels["ensure_panels"]
+  style unset_xtics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### unset_ytics
+
+No y ticks, tick labels nor grid lines, as gnuplot `unset ytics`; autoscaled ends are then not extended.
+
+```fortran
+subroutine unset_ytics(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  unset_command["unset_command"] --> unset_ytics["unset_ytics"]
+  unset_ytics["unset_ytics"] --> ensure_panels["ensure_panels"]
+  style unset_ytics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ensure_panels
 
 Allocate the single default panel of a fresh figure.
@@ -571,6 +715,7 @@ flowchart TD
   next_panel["next_panel"] --> ensure_panels["ensure_panels"]
   plot["plot"] --> ensure_panels["ensure_panels"]
   save["save"] --> ensure_panels["ensure_panels"]
+  set_format["set_format"] --> ensure_panels["ensure_panels"]
   set_grid["set_grid"] --> ensure_panels["ensure_panels"]
   set_key["set_key"] --> ensure_panels["ensure_panels"]
   set_logscale["set_logscale"] --> ensure_panels["ensure_panels"]
@@ -578,10 +723,14 @@ flowchart TD
   set_title["set_title"] --> ensure_panels["ensure_panels"]
   set_xlabel["set_xlabel"] --> ensure_panels["ensure_panels"]
   set_xrange["set_xrange"] --> ensure_panels["ensure_panels"]
+  set_xtics["set_xtics"] --> ensure_panels["ensure_panels"]
   set_ylabel["set_ylabel"] --> ensure_panels["ensure_panels"]
   set_yrange["set_yrange"] --> ensure_panels["ensure_panels"]
+  set_ytics["set_ytics"] --> ensure_panels["ensure_panels"]
   unset_logscale["unset_logscale"] --> ensure_panels["ensure_panels"]
   unset_multiplot["unset_multiplot"] --> ensure_panels["ensure_panels"]
+  unset_xtics["unset_xtics"] --> ensure_panels["ensure_panels"]
+  unset_ytics["unset_ytics"] --> ensure_panels["ensure_panels"]
   style ensure_panels fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -614,6 +763,35 @@ flowchart TD
   render["render"] --> render["render"]
   render["render"] --> text["text"]
   style render fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_tics
+
+Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop.
+
+```fortran
+subroutine set_tics(tics, caller, step, start, end)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `tics` | type([tics_object](/api/src/lib/foresight_ticks#tics-object)) | inout |  | Axis tick settings. |
+| `caller` | character(len=*) | in |  | Procedure name, for messages. |
+| `step` | real(kind=R8P) | in | optional | Tick step. |
+| `start` | real(kind=R8P) | in | optional | First tick. |
+| `end` | real(kind=R8P) | in | optional | Last tick. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_xtics["set_xtics"] --> set_tics["set_tics"]
+  set_ytics["set_ytics"] --> set_tics["set_tics"]
+  set_tics["set_tics"] --> real_str["real_str"]
+  set_tics["set_tics"] --> set_fixed["set_fixed"]
+  style set_tics fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions

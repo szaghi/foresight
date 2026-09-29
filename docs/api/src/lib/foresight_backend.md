@@ -39,6 +39,10 @@ Geometry and axis ranges of a plot panel.
 | `ylog` | logical |  | Log y axis. |
 | `grid` | logical |  | Grid shown. |
 | `font_size` | real(kind=R8P) |  | Font size [px]. |
+| `xtics` | character(len=:) | allocatable | x tick positions for the viewer (`tics_object%attribute`), empty for auto. |
+| `ytics` | character(len=:) | allocatable | y tick positions for the viewer, empty for auto. |
+| `xformat` | character(len=:) | allocatable | x tick label format, empty for the default. |
+| `yformat` | character(len=:) | allocatable | y tick label format, empty for the default. |
 
 ### backend_object
 

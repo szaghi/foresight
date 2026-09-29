@@ -46,6 +46,7 @@ Plot axis.
 | `max_user` | real(kind=R8P) |  | User value at the axis end. |
 | `lo` | real(kind=R8P) |  | Effective value at the axis start, set by `setup`. |
 | `hi` | real(kind=R8P) |  | Effective value at the axis end, set by `setup`. |
+| `tics` | type([tics_object](/api/src/lib/foresight_ticks#tics-object)) |  | User tick settings: fixed step, none, label format. |
 | `ticks` | type([tick_object](/api/src/lib/foresight_ticks#tick-object)) | allocatable | Ticks, set by `setup`. |
 
 #### Type-Bound Procedures

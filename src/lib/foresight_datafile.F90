@@ -4,7 +4,8 @@ module foresight_datafile
 !<
 !< Format, as gnuplot's default: whitespace separated numeric columns; `#` starts a comment; one blank line ends a
 !< block (plotted lines are broken there), two blank lines end a dataset (selected by `index`, 0-based); cells that
-!< are `?`, `NaN` or not numbers are missing values (gaps). Pseudo-column 0 is the point number within the dataset.
+!< are `?`, `NaN` or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of each
+!< dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
 !<
 !< Values are stored flattened, rows by offsets, with capacities doubled on growth: a large monitoring log costs one
 !< real per value plus three integers per row.
@@ -179,21 +180,24 @@ contains
 
    call fields(1)%set_column(ux)
    call fields(2)%set_column(uy)
-   call self%table(fields, index, every, values)
+   call self%table(fields, index, [every, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P], values)
    x = values(:, 1)
    y = values(:, 2)
    endsubroutine columns
 
    subroutine table(self, fields, index, every, values)
-   !< Values of the `using` `fields` on the rows of dataset `index` (all if negative), one row every `every` in each
-   !< block: `values(point, field)`.
+   !< Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
+   !< `values(point, field)`.
+   !<
+   !< `every` is gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, an end negative for
+   !< none. Points are numbered within their block, blocks within their dataset, from 0.
    !<
    !< A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells,
    !< rows too short for a column and undefined expressions give NaN values (gaps).
    class(datafile_object),  intent(in)  :: self        !< Data.
    type(expression_object), intent(in)  :: fields(:)   !< `using` fields.
    integer(I4P),            intent(in)  :: index       !< Dataset, 0-based; negative for all.
-   integer(I4P),            intent(in)  :: every       !< Point stride within each block.
+   integer(I4P),            intent(in)  :: every(6)    !< gnuplot `every` fields.
    real(R8P), allocatable,  intent(out) :: values(:,:) !< Points.
 
    allocate(values(count_points(), size(fields)))
@@ -203,17 +207,17 @@ contains
       !< Number of points, breaks included.
       integer(I4P) :: total    !< Points.
       integer(I4P) :: r        !< Row counter.
-      integer(I4P) :: in_set   !< Point number within the dataset.
       integer(I4P) :: in_block !< Point number within the block.
+      integer(I4P) :: in_set_block !< Block number within the dataset.
       integer(I4P) :: last_blk !< Block of the last selected point.
 
       total = 0_I4P
-      in_set = -1_I4P
       in_block = -1_I4P
+      in_set_block = -1_I4P
       last_blk = -1_I4P
       do r = 1_I4P, self%nrows
-         call advance(r, in_set, in_block)
-         if (.not. selected(r, in_block)) cycle
+         call advance(r, in_block, in_set_block)
+         if (.not. selected(r, in_block, in_set_block)) cycle
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) total = total + 1_I4P
          last_blk = self%block(r)
          total = total + 1_I4P
@@ -225,52 +229,77 @@ contains
       integer(I4P) :: r        !< Row counter.
       integer(I4P) :: k        !< Point counter.
       integer(I4P) :: f        !< Field counter.
-      integer(I4P) :: in_set   !< Point number within the dataset.
       integer(I4P) :: in_block !< Point number within the block.
+      integer(I4P) :: in_set_block !< Block number within the dataset.
       integer(I4P) :: last_blk !< Block of the last selected point.
+      integer(I4P) :: picked   !< Selected point number within the dataset: gnuplot's column 0.
+      integer(I4P) :: set      !< Dataset of the last selected point.
 
       k = 0_I4P
-      in_set = -1_I4P
       in_block = -1_I4P
+      in_set_block = -1_I4P
       last_blk = -1_I4P
+      picked = -1_I4P
+      set = -1_I4P
       do r = 1_I4P, self%nrows
-         call advance(r, in_set, in_block)
-         if (.not. selected(r, in_block)) cycle
+         call advance(r, in_block, in_set_block)
+         if (.not. selected(r, in_block, in_set_block)) cycle
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) then
             k = k + 1_I4P
             values(k, :) = ieee_value(1.0_R8P, ieee_quiet_nan)
          endif
          last_blk = self%block(r)
+         if (self%dataset(r) /= set) picked = -1_I4P
+         set = self%dataset(r)
+         picked = picked + 1_I4P
          k = k + 1_I4P
          do f = 1_I4P, size(fields, kind=I4P)
-            values(k, f) = fields(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), in_set)
+            values(k, f) = fields(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), picked)
          enddo
       enddo
       endsubroutine store_points
 
-      pure subroutine advance(r, in_set, in_block)
-      !< Update the point numbers within dataset and block for row `r`.
-      integer(I4P), intent(in)    :: r        !< Row.
-      integer(I4P), intent(inout) :: in_set   !< Point number within the dataset.
-      integer(I4P), intent(inout) :: in_block !< Point number within the block.
+      pure subroutine advance(r, in_block, in_set_block)
+      !< Update the point number within the block and the block number within the dataset for row `r`.
+      integer(I4P), intent(in)    :: r            !< Row.
+      integer(I4P), intent(inout) :: in_block     !< Point number within the block.
+      integer(I4P), intent(inout) :: in_set_block !< Block number within the dataset.
 
-      if (r > 1_I4P) then
-         if (self%dataset(r) /= self%dataset(r - 1_I4P)) in_set = -1_I4P
-         if (self%block(r) /= self%block(r - 1_I4P)) in_block = -1_I4P
+      if (r == 1_I4P) then
+         in_set_block = 0_I4P
+      elseif (self%dataset(r) /= self%dataset(r - 1_I4P)) then
+         in_block = -1_I4P
+         in_set_block = 0_I4P
+      elseif (self%block(r) /= self%block(r - 1_I4P)) then
+         in_block = -1_I4P
+         in_set_block = in_set_block + 1_I4P
       endif
-      in_set = in_set + 1_I4P
       in_block = in_block + 1_I4P
       endsubroutine advance
 
-      pure function selected(r, in_block) result(yes)
-      !< Whether row `r` belongs to the selected dataset and stride.
-      integer(I4P), intent(in) :: r        !< Row.
-      integer(I4P), intent(in) :: in_block !< Point number within the block.
-      logical                  :: yes      !< Row selected.
+      pure function selected(r, in_block, in_set_block) result(yes)
+      !< Whether row `r` belongs to the selected dataset and to the `every` selection.
+      integer(I4P), intent(in) :: r            !< Row.
+      integer(I4P), intent(in) :: in_block     !< Point number within the block.
+      integer(I4P), intent(in) :: in_set_block !< Block number within the dataset.
+      logical                  :: yes          !< Row selected.
 
-      yes = modulo(in_block, max(1_I4P, every)) == 0_I4P
+      yes = in_loop(in_block, every(3), every(1), every(5)) .and. in_loop(in_set_block, every(4), every(2), every(6))
       if (index >= 0_I4P) yes = yes .and. self%dataset(r) == index
       endfunction selected
+
+      pure function in_loop(k, first, increment, last) result(yes)
+      !< Whether `k` is visited by the loop `first, last, increment` (no end if `last` is negative).
+      integer(I4P), intent(in) :: k         !< Number.
+      integer(I4P), intent(in) :: first     !< Loop start.
+      integer(I4P), intent(in) :: increment !< Loop increment.
+      integer(I4P), intent(in) :: last      !< Loop end, negative for none.
+      logical                  :: yes       !< Visited.
+
+      yes = k >= first
+      if (yes) yes = modulo(k - first, max(1_I4P, increment)) == 0_I4P
+      if (yes .and. last >= 0_I4P) yes = k <= last
+      endfunction in_loop
    endsubroutine table
 
    ! private procedures

@@ -92,7 +92,8 @@ function default_color(index) result(color)
 ```mermaid
 flowchart TD
   add_series["add_series"] --> default_color["default_color"]
-  plot_command["plot_command"] --> default_color["default_color"]
+  apply_line_style["apply_line_style"] --> default_color["default_color"]
+  line_option["line_option"] --> default_color["default_color"]
   style default_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

@@ -28,8 +28,8 @@ title: Data Files
 | Two blank lines | end a dataset, selected with `index N` (0-based) |
 | `?`, `NaN`, non-numbers | missing values: gaps in the plot |
 | Short rows | the missing columns are missing values |
-| Column 0 | the point number within the dataset, from 0 |
-| `every N` | one point every `N`, counted within each block |
+| Column 0 | the number of the point among those plotted in its dataset, from 0 (after `every`, as gnuplot) |
+| `every I:J:K:L:M:N` | points `K` to `M` every `I` of each block, blocks `L` to `N` every `J` of each dataset, from 0 |
 
 Values are stored flattened with capacities doubled on growth: a large log costs about one `real(R8P)` per value.
 

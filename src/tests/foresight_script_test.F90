@@ -14,6 +14,8 @@ character(len=*), parameter   :: data_file = 'foresight_script_test.dat'   !< Te
 character(len=*), parameter   :: output    = 'foresight_script_test.svg'   !< Rendered file.
 character(len=*), parameter   :: golden    = 'src/tests/golden/script.svg' !< Reference file.
 character(len=*), parameter   :: scratch   = 'foresight_script_test_expressions.svg' !< Expression plots.
+character(len=*), parameter   :: options   = 'foresight_script_test_options.svg'     !< Options plot.
+character(len=*), parameter   :: options_golden = 'src/tests/golden/options.svg'    !< Options reference.
 type(script_object)           :: interpreter                               !< Interpreter.
 character(len=:), allocatable :: iomsg                                     !< Error message.
 character(len=:), allocatable :: script                                    !< Script text.
@@ -21,7 +23,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(12)                           !< Per-check outcome.
+logical                       :: test_passed(20)                           !< Per-check outcome.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -44,7 +46,7 @@ call interpreter%init('foresight_script_test.html')
 call interpreter%run_text(script, iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(1) = iostat == 0_I4P .and. size(interpreter%data_files) == 1
-test_passed(2) = matches_golden()
+test_passed(2) = matches_golden(output, golden)
 
 ! replot re-reads and re-renders
 open(newunit=unit, file=output)
@@ -97,19 +99,49 @@ test_passed(12) = iostat /= 0_I4P .and. index(iomsg, 'using: unexpected ")" at c
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! key placement and box, data and line styles, full every, fixed ticks, label format
+script = "set terminal svg size 500,350; set output '"//options//"'"//new_line('a')// &
+         "set key bottom left box; set style data linespoints"//new_line('a')// &
+         "set style line 1 lc rgb '#e51e10' lw 2 dt 2"//new_line('a')// &
+         "set xtics 0,5,30; set logscale y; set format y '%.0e'"//new_line('a')// &
+         "plot '"//data_file//"' every 2::1 u 1:2 t 'odd rows' ls 1, '' u 1:3 w l lt 3 t 'momentum'"
+call interpreter%init('x.html')
+call interpreter%run_text(script, iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(13) = iostat == 0_I4P .and. matches_golden(options, options_golden)
+test_passed(14) = size(interpreter%figure%panels(1)%series(1)%x) == 15
+
+! option errors name the option
+call interpreter%run_text('set xtics 1,', iostat, iomsg)
+test_passed(15) = iostat /= 0_I4P .and. index(iomsg, 'set xtics: supported forms') > 0
+call interpreter%run_text("set format z '%g'", iostat, iomsg)
+test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be x, y or xy') > 0
+call interpreter%run_text("set format y '%d'", iostat, iomsg)
+test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
+call interpreter%run_text('set key outside', iostat, iomsg)
+test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "outside"') > 0
+call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
+test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
+call interpreter%run_text('set style line 1 pt 7', iostat, iomsg)
+test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pt"') > 0
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
+   open(newunit=unit, file=options)
+   close(unit, status='delete')
 endif
-write(output_unit, '(A,12L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,20L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
-   function matches_golden() result(passed)
+   function matches_golden(output, golden) result(passed)
    !< Compare the rendered file with the reference, or rewrite the reference in update mode.
+   character(len=*), intent(in)  :: output   !< Rendered file.
+   character(len=*), intent(in)  :: golden   !< Reference file.
    logical                       :: passed   !< Rendering matches the reference.
    character(len=:), allocatable :: produced !< Rendered content.
    logical                       :: exists   !< Reference exists.

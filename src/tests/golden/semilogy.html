@@ -241,13 +241,14 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 // foresight interactive viewer: gnuplot-like zoom, pan and hotkeys on a foresight SVG plot.
 //
 // The page is fully drawn by foresight; this script only changes the plot area viewBox and
-// regenerates ticks and grid. The tick rules mirror src/lib/foresight_ticks.F90 line by line:
-// keep them in sync.
+// regenerates ticks and grid. The tick rules mirror src/lib/foresight_ticks.F90 and the tick
+// formats src/lib/foresight_format.F90 line by line: keep them in sync.
 // Embedded into src/lib/foresight_viewer_js.F90 by scripts/embed_js.sh (lines <= 100 characters).
 (function () {
   "use strict";
 
   var TOL = 1e-9, TICK_SPACING = 50, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
+  var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
   var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
   var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
@@ -257,10 +258,13 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 
   // ---- tick rules (mirror of foresight_ticks.F90) ----
 
-  // x * 10**e with a single rounding for |e| <= 22 (exact powers of ten)
+  // x * 10**e with a single rounding for |e| <= 22 (exact powers of ten), beyond in steps of
+  // 1e22 (mirror of grid_value)
   function scale10(x, e) {
-    if (e >= 0) return e <= 22 ? x * POW10[e] : x * Math.pow(10, e);
-    return -e <= 22 ? x / POW10[-e] : x / Math.pow(10, -e);
+    var y = x, k = e;
+    while (k > 22) { y *= 1e22; k -= 22; }
+    while (k < -22) { y /= 1e22; k += 22; }
+    return k >= 0 ? y * POW10[k] : y / POW10[-k];
   }
 
   function modulo(a, b) { return ((a % b) + b) % b; }
@@ -291,6 +295,140 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     return magnitude >= SCI_HIGH || (magnitude > 0 && magnitude < SCI_LOW);
   }
 
+  // ---- user tick formats (mirror of foresight_format.F90) ----
+
+  // exact value of a decimal text as n * 10**e, no trailing zeros in n; null if malformed
+  function parseDecimal(text) {
+    var m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eEdD]([+-]?\d{1,4}))?$/.exec(text), digits, n, e;
+    if (!m || (m[2] + (m[3] || "")).length === 0) return null;
+    digits = (m[2] + (m[3] || "")).replace(/^0+(?=\d)/, "");
+    if (digits.length > 18) return null;
+    n = Number(digits);
+    e = Number(m[4] || 0) - (m[3] || "").length;
+    if (n === 0) e = 0;
+    while (n !== 0 && n % 10 === 0) { n /= 10; e += 1; }
+    return {n: m[1] === "-" ? -n : n, e: e};
+  }
+
+  // v rounded to 15 significant digits, as n * 10**e (mirror of decimal_of)
+  function decimalOf(v) {
+    var a = Math.abs(v), e, n;
+    if (v === 0) return {n: 0, e: 0};
+    e = Math.floor(Math.log10(a));
+    n = Math.round(scale10(a, 14 - e));
+    if (n < 1e14) { e -= 1; n = Math.round(scale10(a, 14 - e)); }
+    if (n >= 1e15) { n = Math.trunc(n / 10); e += 1; }
+    e -= 14;
+    while (n % 10 === 0) { n /= 10; e += 1; }
+    return {n: v < 0 ? -n : n, e: e};
+  }
+
+  // split a format around its one conversion; null if unsupported
+  function splitFormat(format) {
+    var f = {prefix: "", suffix: "", flags: "", width: 0, prec: -1, type: ""}, found = false;
+    var i = 0, m, re = /^%([-+ 0]*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGh])/;
+    while (i < format.length) {
+      if (format[i] !== "%") {
+        if (found) f.suffix += format[i]; else f.prefix += format[i];
+        i += 1;
+      } else if (format[i + 1] === "%") {
+        if (found) f.suffix += "%"; else f.prefix += "%";
+        i += 2;
+      } else {
+        m = re.exec(format.slice(i));
+        if (found || !m) return null;
+        found = true;
+        f.flags = m[1];
+        f.width = Number(m[2] || 0);
+        f.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
+        f.type = m[4];
+        i += m[0].length;
+      }
+    }
+    return found ? f : null;
+  }
+
+  // integer digits with the last drop ones removed, rounded half to even (mirror of round_digits)
+  function roundDigits(digits, drop) {
+    var work, tail, kept, up, k, a;
+    if (drop <= 0) return (digits + "0".repeat(-drop)).replace(/^0+(?=\d)/, "");
+    work = "0".repeat(Math.max(0, drop + 1 - digits.length)) + digits;
+    tail = work.slice(work.length - drop);
+    kept = work.slice(0, work.length - drop);
+    if (tail[0] !== "5") up = tail[0] > "5";
+    else if (/[1-9]/.test(tail.slice(1))) up = true;
+    else up = "13579".indexOf(kept[kept.length - 1]) >= 0;
+    if (up) {
+      a = kept.split("");
+      for (k = a.length - 1; k >= 0 && a[k] === "9"; k--) a[k] = "0";
+      if (k < 0) a.unshift("1"); else a[k] = String(Number(a[k]) + 1);
+      kept = a.join("");
+    }
+    return kept.replace(/^0+(?=\d)/, "");
+  }
+
+  function fixedDigits(digits, e, prec) {
+    var units = roundDigits(digits, -prec - e), text;
+    if (units.length <= prec) units = "0".repeat(prec - units.length + 1) + units;
+    text = units.slice(0, units.length - prec);
+    return prec > 0 ? text + "." + units.slice(units.length - prec) : text;
+  }
+
+  function expDigits(digits, e, prec) {
+    var kept, x;
+    if (/^0+$/.test(digits)) {
+      kept = "0".repeat(prec + 1);
+      x = 0;
+    } else {
+      x = digits.length - 1 + e;
+      kept = roundDigits(digits, digits.length - prec - 1);
+      if (kept.length > prec + 1) { kept = kept.slice(0, prec + 1); x += 1; }
+    }
+    return {mantissa: kept[0] + (prec > 0 ? "." + kept.slice(1) : ""), x: x};
+  }
+
+  function expText(letter, x) {
+    var d = String(Math.abs(x));
+    return letter + (x < 0 ? "-" : "+") + (d.length < 2 ? "0" + d : d);
+  }
+
+  function stripZeros(text) {
+    return text.indexOf(".") < 0 ? text : text.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  // printf-like format applied to the exact value n * 10**e (mirror of format_decimal)
+  function formatDecimal(format, n, e) {
+    var f = splitFormat(format), digits, body, sup = "", sign = "", r, p, pad;
+    if (!f) return {label: format, sup: ""};
+    digits = String(Math.abs(n));
+    if (f.type === "f") {
+      body = fixedDigits(digits, e, f.prec < 0 ? 6 : f.prec);
+    } else if (f.type === "e" || f.type === "E") {
+      r = expDigits(digits, e, f.prec < 0 ? 6 : f.prec);
+      body = r.mantissa + expText(f.type, r.x);
+    } else {
+      p = f.prec < 0 ? 6 : Math.max(1, f.prec);
+      r = expDigits(digits, e, p - 1);
+      if (r.x < p && r.x >= -4) {
+        body = stripZeros(fixedDigits(digits, e, p - 1 - r.x));
+      } else {
+        body = stripZeros(r.mantissa);
+        if (f.type === "h") { body += "x10"; sup = String(r.x); }
+        else body += expText(f.type === "G" ? "E" : "e", r.x);
+      }
+    }
+    if (n < 0) sign = "-";
+    else if (f.flags.indexOf("+") >= 0) sign = "+";
+    else if (f.flags.indexOf(" ") >= 0) sign = " ";
+    pad = f.width - sign.length - body.length;
+    if (pad > 0) {
+      if (f.flags.indexOf("-") >= 0) body += " ".repeat(pad);
+      else if (f.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
+      else sign = " ".repeat(pad) + sign;
+    }
+    return {label: f.prefix + sign + body + f.suffix, sup: sup};
+  }
+
   function formatLabel(n, e, sci) {
     if (!sci || n === 0) return {label: decimalStr(n, -e), sup: ""};
     var nn = Math.abs(n), ee = e, digits, label;
@@ -300,8 +438,104 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     return {label: (n < 0 ? "-" : "") + label + "x10", sup: String(ee + digits.length - 1)};
   }
 
+  // user tick settings from the panel attributes: {mode, start, step, end, format}
+  function readTics(positions, format) {
+    var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""}, p;
+    if (positions === "none") tics.mode = "none";
+    else if (positions) {
+      p = positions.split(" ");
+      tics.mode = "fixed";
+      tics.start = p[0] === "*" ? "" : p[0];
+      tics.step = p[1];
+      tics.end = p[2] === "*" ? "" : p[2];
+    }
+    return tics;
+  }
+
+  function tickLabel(n, e, sci, tics) {
+    return tics && tics.format ? formatDecimal(tics.format, n, e) : formatLabel(n, e, sci);
+  }
+
+  // mantissas of step, start, end at their smallest common exponent, each below 1e15; or null
+  function fixedValues(tics) {
+    var d = [parseDecimal(tics.step), tics.start ? parseDecimal(tics.start) : null,
+      tics.end ? parseDecimal(tics.end) : null], n = [], e, k, shift;
+    if (!d[1]) d[1] = {n: 0, e: d[0].e};
+    if (!d[2]) d[2] = {n: 0, e: d[0].e};
+    e = Math.min(d[0].e, d[1].e, d[2].e);
+    for (k = 0; k < 3; k++) {
+      shift = d[k].e - e;
+      if (shift > 15 || Math.abs(d[k].n) >= Math.pow(10, 15 - shift)) return null;
+      n.push(d[k].n * POW10[shift]);
+    }
+    return {n: n, e: e, hasStart: tics.start !== "", hasEnd: tics.end !== ""};
+  }
+
+  // ticks at start + k * step within [start, end] (mirror of fixed_linear_ticks, no extension)
+  function fixedLinearTicks(lo, hi, tics) {
+    var f = fixedValues(tics), ticks = [], step, offset, kmin, kmax, sci, k, t, v;
+    if (!f) return ticks;
+    step = scale10(f.n[0], f.e);
+    offset = f.n[1] / f.n[0];
+    if (Math.max(Math.abs(lo), Math.abs(hi)) / step + Math.abs(offset) > 1e15) return ticks;
+    kmin = Math.ceil(Math.min(lo, hi) / step - offset - TOL);
+    kmax = Math.floor(Math.max(lo, hi) / step - offset + TOL);
+    if (f.hasStart) kmin = Math.max(kmin, 0);
+    if (f.hasEnd) {
+      if (f.n[2] < f.n[1]) return ticks;
+      kmax = Math.min(kmax, Math.trunc((f.n[2] - f.n[1]) / f.n[0]));
+    }
+    if (kmax < kmin || kmax - kmin >= MAX_TICKS) return ticks;
+    sci = isScientific(Math.max(Math.abs(lo), Math.abs(hi)));
+    for (k = kmin; k <= kmax; k++) {
+      t = tickLabel(f.n[1] + k * f.n[0], f.e, sci, tics);
+      v = scale10(f.n[1] + k * f.n[0], f.e);
+      ticks.push({value: v, major: true, label: t.label, sup: t.sup});
+    }
+    return ticks;
+  }
+
+  // first * factor**k by |k| multiplications or divisions (mirror of power)
+  function power(first, factor, k) {
+    var v = first, j;
+    for (j = 0; j < Math.abs(k); j++) v = k > 0 ? v * factor : v / factor;
+    return v;
+  }
+
+  // ticks at start * step**k on a log axis (mirror of fixed_log_ticks)
+  function fixedLogTicks(lo, hi, tics) {
+    var f = fixedValues(tics), ticks = [], factor, first, last, lf, kmin, kmax, sci, k, v, d, t;
+    if (!f) return ticks;
+    factor = scale10(f.n[0], f.e);
+    first = f.hasStart ? scale10(f.n[1], f.e) : 1;
+    last = scale10(f.n[2], f.e);
+    if (factor <= 1 || first <= 0) return ticks;
+    lf = Math.log10(factor);
+    if (Math.max(Math.abs(Math.log10(lo)), Math.abs(Math.log10(hi)),
+      Math.abs(Math.log10(first))) / lf > MAX_POWER) return ticks;
+    kmin = Math.ceil((Math.log10(Math.min(lo, hi)) - Math.log10(first)) / lf - TOL);
+    kmax = Math.floor((Math.log10(Math.max(lo, hi)) - Math.log10(first)) / lf + TOL);
+    if (f.hasStart) kmin = Math.max(kmin, 0);
+    if (f.hasEnd) {
+      if (last <= 0) return ticks;
+      kmax = Math.min(kmax, Math.floor((Math.log10(last) - Math.log10(first)) / lf + TOL));
+    }
+    if (kmax < kmin || kmax - kmin >= MAX_TICKS) return ticks;
+    sci = isScientific(Math.max(lo, hi));
+    v = power(first, factor, kmin);
+    for (k = kmin; k <= kmax; k++) {
+      d = decimalOf(v);
+      t = tickLabel(d.n, d.e, sci, tics);
+      ticks.push({value: v, major: true, label: t.label, sup: t.sup});
+      v *= factor;
+    }
+    return ticks;
+  }
+
   // major ticks of a linear axis spanning [lo, hi] (either order) over npx pixels, no extension
-  function linearTicks(lo, hi, npx) {
+  function linearTicks(lo, hi, npx, tics) {
+    if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "fixed") return fixedLinearTicks(lo, hi, tics);
     var ns = niceStep(Math.abs(hi - lo) / Math.max(2, npx / TICK_SPACING));
     var step = scale10(ns.m, ns.e), ticks = [], k, t;
     var kmin = Math.ceil(Math.min(lo, hi) / step - TOL);
@@ -309,17 +543,19 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     if (kmax - kmin >= MAX_TICKS) return ticks;
     var sci = isScientific(Math.max(Math.abs(lo), Math.abs(hi)));
     for (k = kmin; k <= kmax; k++) {
-      t = formatLabel(k * ns.m, ns.e, sci);
+      t = tickLabel(k * ns.m, ns.e, sci, tics);
       ticks.push({value: scale10(k * ns.m, ns.e), major: true, label: t.label, sup: t.sup});
     }
     return ticks;
   }
 
   // ticks of a base-10 log axis spanning [lo, hi] (either order, > 0) over npx pixels
-  function logTicks(lo, hi, npx) {
+  function logTicks(lo, hi, npx, tics) {
+    if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "fixed") return fixedLogTicks(lo, hi, tics);
     var ta = Math.log10(Math.min(lo, hi)), tb = Math.log10(Math.max(lo, hi));
     var ns = niceStep((tb - ta) / Math.max(2, npx / TICK_SPACING));
-    var s = ns.e >= 0 ? ns.m * scale10(1, ns.e) : 1;
+    var s = ns.e >= 0 ? ns.m * scale10(1, ns.e) : 1, custom = !!(tics && tics.format);
     var kmin = Math.ceil(ta - TOL), kmax = Math.floor(tb + TOL), ticks = [], k, d, v, t;
     var nmajor = 0, plain;
     if (kmax - kmin >= MAX_TICKS) return ticks;
@@ -327,8 +563,9 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     plain = nmajor < 2;
     for (k = kmin; k <= kmax; k++) {
       if (modulo(k, s) !== 0) continue;
-      ticks.push({value: scale10(1, k), major: true,
-        label: plain ? decimalStr(1, -k) : "10", sup: plain ? "" : String(k)});
+      if (custom) t = formatDecimal(tics.format, 1, k);
+      else t = {label: plain ? decimalStr(1, -k) : "10", sup: plain ? "" : String(k)};
+      ticks.push({value: scale10(1, k), major: true, label: t.label, sup: t.sup});
     }
     if (s === 1 && tb - ta <= 10) {
       for (k = Math.floor(ta - TOL); k <= Math.floor(tb + TOL); k++) {
@@ -336,18 +573,21 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
           v = scale10(d, k);
           t = Math.log10(v);
           if (t < ta - TOL || t > tb + TOL) continue;
-          ticks.push({value: v, major: plain, label: plain ? decimalStr(d, -k) : "", sup: ""});
+          t = plain && custom ? formatDecimal(tics.format, d, k)
+            : {label: plain ? decimalStr(d, -k) : "", sup: ""};
+          ticks.push({value: v, major: plain, label: t.label, sup: t.sup});
         }
       }
     }
     if (ticks.filter(function (x) { return x.major; }).length < 2) {
-      ticks = linearTicks(lo, hi, npx).filter(function (x) { return x.value > 0; });
+      ticks = linearTicks(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
     }
     return ticks;
   }
 
   var core = {niceStep: niceStep, decimalStr: decimalStr, linearTicks: linearTicks,
-    logTicks: logTicks};
+    logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
+    decimalOf: decimalOf, readTics: readTics};
   if (typeof module === "object" && module.exports) {
     module.exports = core;
     return;
@@ -355,8 +595,9 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 
   // ---- axis mapping: unit coordinate [0, 1] <-> data value ----
 
-  function Axis(range, log) {
+  function Axis(range, log, tics) {
     this.log = log;
+    this.tics = tics;
     this.a = log ? Math.log10(range[0]) : range[0];
     this.b = log ? Math.log10(range[1]) : range[1];
   }
@@ -369,7 +610,7 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
   };
   Axis.prototype.ticks = function (u0, u1, npx) {
     var lo = this.toData(u0), hi = this.toData(u1);
-    return this.log ? logTicks(lo, hi, npx) : linearTicks(lo, hi, npx);
+    return this.log ? logTicks(lo, hi, npx, this.tics) : linearTicks(lo, hi, npx, this.tics);
   };
 
   // ---- SVG helpers ----
@@ -412,8 +653,10 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
     this.right = area[1];
     this.top = area[2];
     this.bottom = area[3];
-    this.x = new Axis(numbers(group.getAttribute("data-x")), logs[0] === 1);
-    this.y = new Axis(numbers(group.getAttribute("data-y")), logs[1] === 1);
+    this.x = new Axis(numbers(group.getAttribute("data-x")), logs[0] === 1,
+      readTics(group.getAttribute("data-xtics"), group.getAttribute("data-xformat")));
+    this.y = new Axis(numbers(group.getAttribute("data-y")), logs[1] === 1,
+      readTics(group.getAttribute("data-ytics"), group.getAttribute("data-yformat")));
     this.fontSize = Number(group.getAttribute("data-font-size"));
     this.grid = group.getAttribute("data-grid") === "1";
     this.plot = group.querySelector(".fs-plot");

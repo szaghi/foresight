@@ -189,6 +189,7 @@ subroutine begin_axes(self, view)
 ```mermaid
 flowchart TD
   render["render"] --> begin_axes["begin_axes"]
+  begin_axes["begin_axes"] --> attribute["attribute"]
   begin_axes["begin_axes"] --> flag["flag"]
   begin_axes["begin_axes"] --> put["put"]
   begin_axes["begin_axes"] --> px["px"]
@@ -295,6 +296,7 @@ subroutine rect(self, x, y, width, height, stroke, fill, line_width)
 ```mermaid
 flowchart TD
   draw_frame["draw_frame"] --> rect["rect"]
+  draw_key["draw_key"] --> rect["rect"]
   render["render"] --> rect["rect"]
   rect["rect"] --> put["put"]
   rect["rect"] --> px["px"]
@@ -724,6 +726,7 @@ function text_width(self, string, sup, font_size) result(width)
 
 ```mermaid
 flowchart TD
+  draw_key["draw_key"] --> text_width["text_width"]
   place_plot_area["place_plot_area"] --> text_width["text_width"]
   ytick_labels_width["ytick_labels_width"] --> text_width["text_width"]
   style text_width fill:#3e63dd,stroke:#99b,stroke-width:2px

@@ -38,8 +38,8 @@ without editing the script, or to plot without a script at all.
 
 ## Watch mode
 
-`--watch [SECONDS]` runs the script, then polls every `SECONDS` (default 1) the sizes of the script and of every data
-file it read; when one changes, it runs again from a fresh interpreter. HTML output reloads itself in the browser at
+`--watch [SECONDS]` runs the script, then polls every `SECONDS` (default 1) the script and every data file it read
+(size and content); when one changes, it runs again from a fresh interpreter. HTML output reloads itself in the browser at
 the poll period, keeping the zoom; text output on the standard output clears the screen and redraws. See
 [Live Monitoring](monitoring).
 

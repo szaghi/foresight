@@ -7,7 +7,8 @@ title: foresight_axes
 > foresight_axes, a plot panel: two axes, the plotted series, the key and the decorations.
 
  Layout follows gnuplot defaults: full border with inward ticks mirrored on the opposite side, tick labels outside
- bottom and left, key at the top right inside the plot area with right-aligned titles and the samples on their right.
+ bottom and left, key inside the plot area (top right by default) with right-aligned titles and the samples on their
+ right.
  Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 
 **Source**: `src/lib/foresight_axes.F90`
@@ -32,6 +33,7 @@ graph LR
 - [draw_key](#draw-key)
 - [draw_series](#draw-series)
 - [setup_axes](#setup-axes)
+- [key_position](#key-position)
 - [has_title](#has-title)
 - [place_plot_area](#place-plot-area)
 - [ytick_labels_width](#ytick-labels-width)
@@ -67,6 +69,9 @@ Plot panel.
 | `title` | character(len=:) | allocatable | Panel title, empty for none. |
 | `grid` | logical |  | Draw grid lines at the major ticks. |
 | `key` | logical |  | Draw the key. |
+| `key_h` | character(len=6) |  | Key horizontal position: left, center, right. |
+| `key_v` | character(len=6) |  | Key vertical position: top, center, bottom. |
+| `key_box` | logical |  | Draw a box around the key. |
 
 #### Type-Bound Procedures
 
@@ -152,6 +157,7 @@ subroutine render(self, backend, x0, y0, width, height, font_size)
 flowchart TD
   render["render"] --> render["render"]
   save["save"] --> render["render"]
+  render["render"] --> attribute["attribute"]
   render["render"] --> begin_axes["begin_axes"]
   render["render"] --> begin_group["begin_group"]
   render["render"] --> begin_plot_area["begin_plot_area"]
@@ -162,6 +168,7 @@ flowchart TD
   render["render"] --> end_axes["end_axes"]
   render["render"] --> end_group["end_group"]
   render["render"] --> end_plot_area["end_plot_area"]
+  render["render"] --> has_format["has_format"]
   render["render"] --> place_plot_area["place_plot_area"]
   render["render"] --> setup_axes["setup_axes"]
   style render fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -230,7 +237,7 @@ flowchart TD
 
 ### draw_key
 
-Draw the key at the top right of the plot area: right-aligned titles, style samples on their right.
+Draw the key inside the plot area at its position: right-aligned titles, style samples on their right.
 
 ```fortran
 subroutine draw_key(self, backend, area, font_size)
@@ -258,7 +265,9 @@ flowchart TD
   draw_key["draw_key"] --> draws_ybars["draws_ybars"]
   draw_key["draw_key"] --> point_diameter["point_diameter"]
   draw_key["draw_key"] --> polyline["polyline"]
+  draw_key["draw_key"] --> rect["rect"]
   draw_key["draw_key"] --> text["text"]
+  draw_key["draw_key"] --> text_width["text_width"]
   style draw_key fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -320,6 +329,34 @@ flowchart TD
   setup_axes["setup_axes"] --> extent["extent"]
   setup_axes["setup_axes"] --> setup["setup"]
   style setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### key_position
+
+Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,
+ `bottom`, and `center`, which centres the direction not given yet by `words` (both if none, as gnuplot).
+
+**Attributes**: pure
+
+```fortran
+subroutine key_position(words, horizontal, vertical, bad)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `words` | character(len=*) | in |  | Blank separated words. |
+| `horizontal` | character(len=6) | inout |  | Horizontal position. |
+| `vertical` | character(len=6) | inout |  | Vertical position. |
+| `bad` | character(len=:) | out | allocatable | First word not a position, empty if none. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_key["set_key"] --> key_position["key_position"]
+  style key_position fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions

@@ -82,12 +82,27 @@ contains
    subroutine begin_axes(self, view)
    !< Open a panel group carrying geometry and axis ranges as `data-*` attributes.
    class(backend_svg), intent(inout) :: self !< Device.
-   type(axes_view),    intent(in)    :: view !< Panel geometry and axis ranges.
+   type(axes_view),    intent(in)    :: view  !< Panel geometry and axis ranges.
+   character(len=:), allocatable     :: extra !< Tick settings attributes, only when set.
 
+   extra = attribute('data-xtics', view%xtics)//attribute('data-ytics', view%ytics)// &
+           attribute('data-xformat', view%xformat)//attribute('data-yformat', view%yformat)
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
                  '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'" data-log="'//flag(view%xlog)// &
-                 ' '//flag(view%ylog)//'" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)//'">')
+                 ' '//flag(view%ylog)//'" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)// &
+                 '"'//extra//'>')
+   contains
+      pure function attribute(name, value) result(text)
+      !< ` name="value"` (XML escaped), or nothing if `value` is unallocated or empty.
+      character(len=*),              intent(in) :: name  !< Attribute name.
+      character(len=:), allocatable, intent(in) :: value !< Attribute value.
+      character(len=:), allocatable             :: text  !< Attribute text.
+
+      text = ''
+      if (.not. allocated(value)) return
+      if (len(value) > 0) text = ' '//name//'="'//xml_escape(value)//'"'
+      endfunction attribute
    endsubroutine begin_axes
 
    subroutine end_axes(self)

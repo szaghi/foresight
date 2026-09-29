@@ -15,6 +15,7 @@ title: foresight
 ```mermaid
 graph LR
   foresight["foresight"] --> foresight_figure["foresight_figure"]
+  foresight["foresight"] --> foresight_fingerprint["foresight_fingerprint"]
   foresight["foresight"] --> foresight_script["foresight_script"]
   foresight["foresight"] --> foresight_sys["foresight_sys"]
 ```
