@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.1.0] — 2026-09-29
 ### Added
 - Initial foresight scaffold and static SVG plotting core
 
@@ -17,6 +17,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **script**: Add gnuplot expressions in using fields
 
 - **script**: Add tick settings, label formats, key placement and styles
+
+- **figure**: Add manual multiplot with set origin and set size
 
 
 ### Documentation
