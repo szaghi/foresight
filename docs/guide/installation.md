@@ -50,3 +50,22 @@ gfortran -I foresight/lib/mod my_program.f90 foresight/lib/libforesight.a -o my_
 
 and `use foresight` in the program: it re-exports the whole public API (`figure_object`, `script_object`) and the
 PENF kinds `I4P`, `I8P`, `R4P`, `R8P`.
+
+## As a FoBiS dependency
+
+Declare foresight and PENF, its only dependency at compile time, in the `fobos` of your project:
+
+```ini
+[dependencies]
+deps_dir  = src/third_party
+PENF      = https://github.com/szaghi/PENF
+foresight = https://github.com/szaghi/foresight
+```
+
+```bash
+fobis fetch     # clone the sources
+fobis build     # the foresight modules your program uses are compiled with it
+```
+
+With the default `use=sources` the foresight modules are compiled as part of your build. `use=fobos` does not work
+yet: FoBiS builds foresight with its own `fobos` but does not fetch foresight's dependencies inside it.
