@@ -1,0 +1,148 @@
+[project]
+name       = foresight
+version    = VERSION
+summary    = FORtran Easy Svg Interactive Gnuplot-like Html Tool
+repository = https://github.com/szaghi/foresight
+website    = https://szaghi.github.io/foresight
+email      = stefano.zaghi@gmail.com
+authors    = Stefano Zaghi
+
+[dependencies]
+deps_dir   = src/third_party
+PENF       = https://github.com/szaghi/PENF :: branch=master
+BeFoR64    = https://github.com/szaghi/BeFoR64 :: branch=master
+FACE       = https://github.com/szaghi/FACE :: branch=master
+StringiFor = https://github.com/szaghi/StringiFor :: branch=master
+
+[modes]
+modes = tests-gnu tests-gnu-debug
+        tests-intel tests-intel-debug
+        foresight-gnu foresight-intel
+        foresight-static-gnu foresight-static-intel
+
+[common-variables]
+$CSTATIC_GNU = -c -frealloc-lhs -std=f2018 -fall-intrinsics
+$CSTATIC_INT = -c -assume realloc_lhs -standard-semantics -std18
+$DEBUG_GNU   = -Og -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -fcheck=all -fmodule-private -ffree-line-length-132 -fimplicit-none -fbacktrace -fdump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
+$DEBUG_INT   = -O0 -check all -debug all -warn all -extend-source 132 -traceback
+$OPTIMIZE    = -O2
+$EXDIRS      = PENF/src/tests/ PENF/src/third_party/ PENF/scripts/ BeFoR64/src/tests/ BeFoR64/src/third_party/ BeFoR64/scripts/ FACE/src/tests/ FACE/src/third_party/ FACE/scripts/ StringiFor/src/tests/ StringiFor/src/third_party/ StringiFor/scripts/
+
+# main modes
+[tests-gnu]
+template  = template-static-gnu
+build_dir = exe
+src          = src/lib/ src/tests/
+
+[tests-gnu-debug]
+template  = template-static-gnu-debug
+build_dir = exe
+src          = src/lib/ src/tests/
+
+[tests-intel]
+template  = template-static-intel
+build_dir = exe
+src          = src/lib/ src/tests/
+
+[tests-intel-debug]
+template  = template-static-intel-debug
+build_dir = exe
+src          = src/lib/ src/tests/
+
+[foresight-gnu]
+template  = template-static-gnu
+build_dir = bin
+target    = src/app/foresight_cli.F90
+output    = foresight
+
+[foresight-intel]
+template  = template-static-intel
+build_dir = bin
+target    = src/app/foresight_cli.F90
+output    = foresight
+
+[foresight-static-gnu]
+template  = template-static-gnu
+build_dir = lib
+target    = src/lib/foresight.F90
+output    = libforesight.a
+mklib     = static
+
+[foresight-static-intel]
+template  = template-static-intel
+build_dir = lib
+target    = src/lib/foresight.F90
+output    = libforesight.a
+mklib     = static
+
+# templates
+[template-static-gnu]
+compiler        = gnu
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
+cflags          = $CSTATIC_GNU $OPTIMIZE
+lflags          = $OPTIMIZE
+cflags_heritage = True
+colors          = True
+quiet           = False
+log             = True
+jobs            = 10
+
+[template-static-gnu-debug]
+compiler        = gnu
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
+cflags          = $CSTATIC_GNU $DEBUG_GNU
+lflags          = $DEBUG_GNU
+cflags_heritage = True
+colors          = True
+quiet           = False
+log             = True
+jobs            = 10
+
+[template-static-intel]
+compiler        = intel_nextgen
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
+cflags          = $CSTATIC_INT $OPTIMIZE
+lflags          = $OPTIMIZE
+cflags_heritage = True
+colors          = True
+quiet           = False
+log             = True
+jobs            = 10
+
+[template-static-intel-debug]
+compiler        = intel_nextgen
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
+cflags          = $CSTATIC_INT $DEBUG_INT
+lflags          = $DEBUG_INT
+cflags_heritage = True
+colors          = True
+quiet           = False
+log             = True
+jobs            = 10
+
+# rules
+[rule-delexe]
+help = Delete exes and libs
+rule = rm -rf exe/ bin/ lib/
+
+[rule-clean]
+help   = Clean the project tree
+rule_1 = fobis rule --ex delexe
+rule_2 = rm -f *.gcov
+
+[rule-makecoverage]
+help   = Perform coverage analysis
+rule_1 = fobis build --mode tests-gnu-debug --coverage --force-compile
+rule_2 = bash scripts/run_tests.sh
+rule_3 = bash -c 'rm -f exe/obj/penf*.gcda exe/obj/befor64*.gcda exe/obj/face*.gcda exe/obj/stringifor*.gcda'
+rule_4 = ./scripts/compute-coverage.sh
+
+[rule-makecoverage-analysis]
+help   = Perform coverage analysis and saving reports in markdown
+rule_1 = fobis rule --ex makecoverage
+rule_2 = fobis rule --gcov-analyzer docs/guide/ --gcov-analyzer coverage-analysis
+rule_3 = bash -c 'rm -f *.gcov parsed.xml source.xml'
