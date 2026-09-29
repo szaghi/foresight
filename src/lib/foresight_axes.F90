@@ -6,7 +6,7 @@ module foresight_axes
 !< bottom and left, key at the top right inside the plot area with right-aligned titles and the samples on their right.
 !< Text extents are estimated from a mean glyph advance, since the viewer renders the glyphs.
 use foresight_axis, only : axis_object
-use foresight_backend, only : backend_object
+use foresight_backend, only : axes_view, backend_object
 use foresight_series, only : series_object
 use foresight_style, only : default_color, style_with
 use penf, only : I4P, R8P
@@ -86,6 +86,7 @@ contains
    real(R8P),             intent(in)    :: height    !< Box height [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    real(R8P)                            :: area(4)   !< Plot area: left, right, top, bottom [px].
+   type(axes_view)                      :: view      !< Panel geometry and ranges for the device.
    integer(I4P)                         :: s         !< Series counter.
 
    if (.not. allocated(self%series)) allocate(self%series(0))
@@ -97,7 +98,13 @@ contains
    call self%setup_axes(area)
    area = self%place_plot_area(x0, y0, width, height, font_size)
 
-   if (self%grid) call self%draw_grid(backend, area)
+   view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
+                    xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
+   call backend%begin_axes(view)
+   ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
+   call backend%begin_group('fs-grid', visible=self%grid)
+   call self%draw_grid(backend, area)
+   call backend%end_group
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
       call self%draw_series(backend, s)
@@ -105,6 +112,7 @@ contains
    call backend%end_plot_area
    call self%draw_frame(backend, area, x0, y0, font_size)
    if (self%key) call self%draw_key(backend, area, font_size)
+   call backend%end_axes
    endsubroutine render
 
    ! private procedures
@@ -122,6 +130,7 @@ contains
 
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
       call backend%rect(left, top, right - left, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+      call backend%begin_group('fs-xticks')
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
          length = merge(TICK_MAJOR, TICK_MINOR, self%xaxis%ticks(t)%major)
@@ -130,6 +139,8 @@ contains
          if (self%xaxis%ticks(t)%major) call backend%text(p, bottom + GAP + font_size, self%xaxis%ticks(t)%label, &
                                                           'middle', sup=self%xaxis%ticks(t)%sup)
       enddo
+      call backend%end_group
+      call backend%begin_group('fs-yticks')
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
          length = merge(TICK_MAJOR, TICK_MINOR, self%yaxis%ticks(t)%major)
@@ -138,6 +149,7 @@ contains
          if (self%yaxis%ticks(t)%major) call backend%text(left - GAP, p + 0.35_R8P * font_size, &
                                                           self%yaxis%ticks(t)%label, 'end', sup=self%yaxis%ticks(t)%sup)
       enddo
+      call backend%end_group
       if (self%xaxis%has_label()) call backend%text(0.5_R8P * (left + right), &
                                                     bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT) * font_size, &
                                                     self%xaxis%label, 'middle')

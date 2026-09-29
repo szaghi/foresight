@@ -11,7 +11,7 @@ real(R8P)                      :: lo              !< Axis start.
 real(R8P)                      :: hi              !< Axis end.
 integer(I8P)                   :: m               !< Step mantissa.
 integer(I4P)                   :: e               !< Step exponent.
-logical                        :: test_passed(12) !< Per-check outcome.
+logical                        :: test_passed(13) !< Per-check outcome.
 
 ! nice steps
 call nice_step(0.4_R8P, m, e)
@@ -60,7 +60,13 @@ call log_ticks(lo, hi, 400.0_R8P, .false., .false., ticks)
 test_passed(11) = count(ticks%major) == 7
 test_passed(12) = ticks(1)%label == '2' .and. ticks(7)%label == '8'
 
-write(output_unit, '(A,12L2)') 'foresight_ticks checks:', test_passed
+! log axis inside one decade, no multiple of the decade in range: linear ticks instead
+lo = 2.1_R8P
+hi = 2.3_R8P
+call log_ticks(lo, hi, 150.0_R8P, .false., .false., ticks)
+test_passed(13) = size(ticks) == 5 .and. ticks(1)%label == '2.1' .and. ticks(5)%label == '2.3'
+
+write(output_unit, '(A,13L2)') 'foresight_ticks checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 endprogram foresight_ticks_test

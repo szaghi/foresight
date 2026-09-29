@@ -13,6 +13,7 @@ private
 public :: decimal_str
 public :: fixed
 public :: int_str
+public :: real_str
 public :: xml_escape
 
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
@@ -70,6 +71,35 @@ contains
    str = decimal_str(nint(max(-FIXED_CLAMP, min(FIXED_CLAMP, v)) * 10.0_R8P**ndec, I8P), ndec)
    endfunction fixed
 
+   pure function real_str(v) result(str)
+   !< Finite `v` with 15 significant digits, as `d.ddde<exp>` (trailing zeros stripped) or `0`.
+   !<
+   !< Readable back by any language to within 1e-15 relative: used for metadata consumed by the interactive viewer.
+   real(R8P), intent(in)         :: v        !< Value.
+   character(len=:), allocatable :: str      !< Text.
+   character(len=:), allocatable :: digits   !< Significant digits.
+   integer(I8P)                  :: m        !< 15-digit mantissa.
+   integer(I4P)                  :: e        !< Decimal exponent.
+
+   if (v == 0.0_R8P) then
+      str = '0'
+      return
+   endif
+   e = floor(log10(abs(v)), I4P)
+   m = nint(scale10(abs(v), 14_I4P - e), I8P)
+   if (m < 10_I8P**14) then
+      e = e - 1_I4P
+      m = nint(scale10(abs(v), 14_I4P - e), I8P)
+   endif
+   if (m >= 10_I8P**15) then
+      m = m / 10_I8P
+      e = e + 1_I4P
+   endif
+   digits = decimal_str(m, 14_I4P)
+   str = digits//'e'//int_str(int(e, I8P))
+   if (v < 0.0_R8P) str = '-'//str
+   endfunction real_str
+
    pure function xml_escape(text) result(escaped)
    !< Escape the XML special characters `&`, `<`, `>` and `"`.
    character(len=*), intent(in)  :: text    !< Raw text.
@@ -92,4 +122,29 @@ contains
       endselect
    enddo
    endfunction xml_escape
+
+   ! private procedures
+   pure function scale10(x, e) result(y)
+   !< `x * 10**e`, in steps of at most 10**22 (exact powers of ten) to never overflow an intermediate.
+   real(R8P),    intent(in) :: x  !< Value.
+   integer(I4P), intent(in) :: e  !< Decimal exponent.
+   real(R8P)                :: y  !< Scaled value.
+   integer(I4P)             :: k  !< Remaining exponent.
+
+   y = x
+   k = e
+   do while (k > 22_I4P)
+      y = y * 1.0e22_R8P
+      k = k - 22_I4P
+   enddo
+   do while (k < -22_I4P)
+      y = y / 1.0e22_R8P
+      k = k + 22_I4P
+   enddo
+   if (k >= 0_I4P) then
+      y = y * 10.0_R8P**k
+   else
+      y = y / 10.0_R8P**(-k)
+   endif
+   endfunction scale10
 endmodule foresight_format

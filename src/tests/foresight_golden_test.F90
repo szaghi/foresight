@@ -12,14 +12,15 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(3)                   !< Per-figure outcome.
+logical                     :: test_passed(4)                   !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
-test_passed(1) = check('lines', figure_lines())
-test_passed(2) = check('semilogy', figure_semilogy())
-test_passed(3) = check('points_reversed', figure_points_reversed())
-write(output_unit, '(A,3L2)') 'foresight golden checks:', test_passed
+test_passed(1) = check('lines.svg', figure_lines())
+test_passed(2) = check('semilogy.svg', figure_semilogy())
+test_passed(3) = check('points_reversed.svg', figure_points_reversed())
+test_passed(4) = check('semilogy.html', figure_semilogy())
+write(output_unit, '(A,4L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -77,7 +78,7 @@ contains
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.
-   character(len=*),    intent(in)    :: name     !< Figure name.
+   character(len=*),    intent(in)    :: name     !< Reference file name, with the format extension.
    type(figure_object), intent(in)    :: fig      !< Figure.
    logical                            :: passed   !< Rendering matches the reference.
    type(figure_object)                :: figure   !< Figure being rendered (rendering updates its ticks).
@@ -87,8 +88,8 @@ contains
    logical                            :: exists   !< Reference exists.
    integer(I4P)                       :: unit     !< File unit.
 
-   output = 'foresight_golden_'//name//'.svg'
-   golden = GOLDEN_DIR//name//'.svg'
+   output = 'foresight_golden_'//name
+   golden = GOLDEN_DIR//name
    figure = fig
    call figure%save(output)
    produced = read_text(output)

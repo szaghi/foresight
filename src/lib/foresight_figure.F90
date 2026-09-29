@@ -15,6 +15,7 @@ module foresight_figure
 !<```
 use foresight_axes, only : axes_object
 use foresight_backend, only : backend_object
+use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use penf, only : I4P, R8P
 
@@ -27,6 +28,7 @@ type :: figure_object
    real(R8P)         :: width     = 600.0_R8P !< Page width [px], gnuplot svg terminal default.
    real(R8P)         :: height    = 480.0_R8P !< Page height [px], gnuplot svg terminal default.
    real(R8P)         :: font_size = 12.0_R8P  !< Font size [px].
+   integer(I4P)      :: refresh   = 0_I4P     !< HTML page reload period [s], 0 for none.
    type(axes_object) :: axes                  !< Plot panel.
    contains
       procedure, pass(self) :: init            !< Reset the figure, optionally resizing it.
@@ -35,6 +37,7 @@ type :: figure_object
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
+      procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
@@ -56,6 +59,7 @@ contains
    self%width = fresh%width
    self%height = fresh%height
    self%font_size = fresh%font_size
+   self%refresh = fresh%refresh
    self%axes = fresh%axes
    if (present(width)) self%width = real(width, R8P)
    if (present(height)) self%height = real(height, R8P)
@@ -78,16 +82,22 @@ contains
    endsubroutine plot
 
    subroutine save(self, file)
-   !< Render the figure to `file`; the format follows the extension (supported: `.svg`).
+   !< Render the figure to `file`; the format follows the extension: `.svg` static, `.html` interactive.
    class(figure_object), intent(inout) :: self !< Figure.
    character(len=*),     intent(in)    :: file !< Output file.
    type(backend_svg)                   :: svg  !< SVG device.
+   type(backend_html)                  :: html !< HTML device.
 
    select case (extension(file))
    case ('svg')
       call self%render(svg, file)
+   case ('html', 'htm')
+      html%title = ''
+      if (allocated(self%axes%title)) html%title = self%axes%title
+      html%refresh = self%refresh
+      call self%render(html, file)
    case default
-      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg)'
+      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html)'
    endselect
    endsubroutine save
 
@@ -122,6 +132,16 @@ contains
       self%axes%yaxis%log = .true.
    endif
    endsubroutine set_logscale
+
+   pure subroutine set_refresh(self, seconds)
+   !< Make the HTML page reload itself every `seconds` (0 disables): live view of a file rewritten by a running job.
+   !<
+   !< The zoom survives the reload, being kept in the page URL as data values.
+   class(figure_object), intent(inout) :: self    !< Figure.
+   integer(I4P),         intent(in)    :: seconds !< Reload period [s].
+
+   self%refresh = max(0_I4P, seconds)
+   endsubroutine set_refresh
 
    pure subroutine set_title(self, title)
    !< Set the title, empty for none.

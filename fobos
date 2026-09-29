@@ -146,3 +146,11 @@ help   = Perform coverage analysis and saving reports in markdown
 rule_1 = fobis rule --ex makecoverage
 rule_2 = fobis rule --gcov-analyzer docs/guide/ --gcov-analyzer coverage-analysis
 rule_3 = bash -c 'rm -f *.gcov parsed.xml source.xml'
+
+[rule-embed-js]
+help = Regenerate src/lib/foresight_viewer_js.F90 from src/js/viewer.js
+rule = bash scripts/embed_js.sh
+
+[rule-test-js]
+help = Test the viewer tick rules (needs node)
+rule = node src/js/viewer_test.js

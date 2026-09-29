@@ -3,10 +3,12 @@ module foresight_backend_svg
 !< foresight_backend_svg, SVG output device.
 !<
 !< The document is streamed to `<file>.tmp` and renamed over `<file>` when the page ends, so a viewer polling `<file>`
-!< never reads a partial document. The plot area is a nested `<svg>` whose `viewBox` is the unit square: data geometry
-!< lives in unit coordinates, and `vector-effect="non-scaling-stroke"` keeps its line widths in pixels.
-use foresight_backend, only : backend_object
-use foresight_format, only : fixed, xml_escape
+!< never reads a partial document. The plot area is a nested `<svg class="fs-plot">` whose `viewBox` is the unit square:
+!< data geometry lives in unit coordinates, and `vector-effect="non-scaling-stroke"` keeps its line widths in pixels.
+!< Panels are `<g class="fs-axes">` carrying their geometry and axis ranges as `data-*` attributes; decorations the
+!< interactive viewer regenerates are `<g class="fs-...">` groups.
+use foresight_backend, only : axes_view, backend_object
+use foresight_format, only : fixed, real_str, xml_escape
 use foresight_sys, only : rename_file
 use penf, only : I4P, R8P
 
@@ -26,8 +28,13 @@ type, extends(backend_object) :: backend_svg
    character(len=:), allocatable :: file          !< Final output file.
    character(len=:), allocatable :: tmp_file      !< File being written.
    contains
+      ! deferred bindings
       procedure, pass(self) :: begin_page
       procedure, pass(self) :: end_page
+      procedure, pass(self) :: begin_axes
+      procedure, pass(self) :: end_axes
+      procedure, pass(self) :: begin_group
+      procedure, pass(self) :: end_group
       procedure, pass(self) :: rect
       procedure, pass(self) :: polyline
       procedure, pass(self) :: dots
@@ -36,11 +43,17 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
-      procedure, pass(self), private :: put         !< Write a line.
+      ! building blocks for extending devices
+      procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
+      procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
+      procedure, pass(self) :: open_svg    !< Write the root `<svg>` start tag.
+      procedure, pass(self) :: output_unit !< Unit of the open stream.
+      procedure, pass(self) :: put         !< Write a line.
       procedure, pass(self), private :: write_pairs !< Write coordinate pairs.
 endtype backend_svg
 
 contains
+   ! deferred bindings
    subroutine begin_page(self, file, width, height, font_size)
    !< Open the output `file` with a page of `width` x `height` px and the default `font_size` [px].
    class(backend_svg), intent(inout) :: self      !< Device.
@@ -48,18 +61,10 @@ contains
    real(R8P),          intent(in)    :: width     !< Page width [px].
    real(R8P),          intent(in)    :: height    !< Page height [px].
    real(R8P),          intent(in)    :: font_size !< Default font size [px].
-   integer(I4P)                      :: iostat    !< I/O status.
-   character(len=256)                :: iomsg     !< I/O message.
 
-   self%file = file
-   self%tmp_file = file//'.tmp'
-   open(newunit=self%unit, file=self%tmp_file, access='stream', form='formatted', action='write', status='replace', &
-        iostat=iostat, iomsg=iomsg)
-   if (iostat /= 0_I4P) error stop 'foresight: cannot open "'//self%tmp_file//'": '//trim(iomsg)
+   call self%open_file(file)
    call self%put('<?xml version="1.0" encoding="UTF-8" standalone="no"?>')
-   call self%put('<svg xmlns="http://www.w3.org/2000/svg" width="'//px(width)//'" height="'//px(height)// &
-                 '" viewBox="0 0 '//px(width)//' '//px(height)//'" font-family="'//FONT_FAMILY// &
-                 '" font-size="'//px(font_size)//'">')
+   call self%open_svg(width, height, font_size)
    endsubroutine begin_page
 
    subroutine end_page(self)
@@ -67,10 +72,47 @@ contains
    class(backend_svg), intent(inout) :: self !< Device.
 
    call self%put('</svg>')
-   close(self%unit)
-   self%unit = -1_I4P
-   call rename_file(self%tmp_file, self%file)
+   call self%close_file
    endsubroutine end_page
+
+   subroutine begin_axes(self, view)
+   !< Open a panel group carrying geometry and axis ranges as `data-*` attributes.
+   class(backend_svg), intent(inout) :: self !< Device.
+   type(axes_view),    intent(in)    :: view !< Panel geometry and axis ranges.
+
+   call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
+                 ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
+                 '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'" data-log="'//flag(view%xlog)// &
+                 ' '//flag(view%ylog)//'" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)//'">')
+   endsubroutine begin_axes
+
+   subroutine end_axes(self)
+   !< Close the panel group.
+   class(backend_svg), intent(inout) :: self !< Device.
+
+   call self%put('</g>')
+   endsubroutine end_axes
+
+   subroutine begin_group(self, name, visible)
+   !< Open the group of class `name`; hidden with `display="none"` when `visible` is false.
+   class(backend_svg), intent(inout)        :: self    !< Device.
+   character(len=*),   intent(in)           :: name    !< Group name.
+   logical,            intent(in), optional :: visible !< Group shown.
+   character(len=:), allocatable            :: line    !< Output line.
+
+   line = '<g class="'//name//'"'
+   if (present(visible)) then
+      if (.not. visible) line = line//' display="none"'
+   endif
+   call self%put(line//'>')
+   endsubroutine begin_group
+
+   subroutine end_group(self)
+   !< Close the group.
+   class(backend_svg), intent(inout) :: self !< Device.
+
+   call self%put('</g>')
+   endsubroutine end_group
 
    subroutine rect(self, x, y, width, height, stroke, fill, line_width)
    !< Rectangle of top-left corner (`x`, `y`) [px].
@@ -146,7 +188,7 @@ contains
    real(R8P),          intent(in)    :: width  !< Width [px].
    real(R8P),          intent(in)    :: height !< Height [px].
 
-   call self%put('<svg x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
+   call self%put('<svg class="fs-plot" x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
                  '" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">')
    endsubroutine begin_plot_area
 
@@ -187,7 +229,54 @@ contains
    call self%put('"/>')
    endsubroutine data_dots
 
-   ! private procedures
+   ! building blocks for extending devices
+   subroutine close_file(self)
+   !< Close the stream and rename `<file>.tmp` over `<file>`.
+   class(backend_svg), intent(inout) :: self !< Device.
+
+   close(self%unit)
+   self%unit = -1_I4P
+   call rename_file(self%tmp_file, self%file)
+   endsubroutine close_file
+
+   subroutine open_file(self, file)
+   !< Open the output stream on `<file>.tmp`.
+   class(backend_svg), intent(inout) :: self   !< Device.
+   character(len=*),   intent(in)    :: file   !< Output file.
+   integer(I4P)                      :: iostat !< I/O status.
+   character(len=256)                :: iomsg  !< I/O message.
+
+   self%file = file
+   self%tmp_file = file//'.tmp'
+   open(newunit=self%unit, file=self%tmp_file, access='stream', form='formatted', action='write', status='replace', &
+        iostat=iostat, iomsg=iomsg)
+   if (iostat /= 0_I4P) error stop 'foresight: cannot open "'//self%tmp_file//'": '//trim(iomsg)
+   endsubroutine open_file
+
+   subroutine open_svg(self, width, height, font_size, attributes)
+   !< Write the root `<svg>` start tag, with optional extra `attributes` (a leading space included).
+   class(backend_svg), intent(inout)        :: self       !< Device.
+   real(R8P),          intent(in)           :: width      !< Page width [px].
+   real(R8P),          intent(in)           :: height     !< Page height [px].
+   real(R8P),          intent(in)           :: font_size  !< Default font size [px].
+   character(len=*),   intent(in), optional :: attributes !< Extra attributes.
+   character(len=:), allocatable            :: extra      !< Extra attributes or empty.
+
+   extra = ''
+   if (present(attributes)) extra = attributes
+   call self%put('<svg xmlns="http://www.w3.org/2000/svg" width="'//px(width)//'" height="'//px(height)// &
+                 '" viewBox="0 0 '//px(width)//' '//px(height)//'" font-family="'//FONT_FAMILY// &
+                 '" font-size="'//px(font_size)//'"'//extra//'>')
+   endsubroutine open_svg
+
+   pure function output_unit(self) result(unit)
+   !< Unit of the open output stream.
+   class(backend_svg), intent(in) :: self !< Device.
+   integer(I4P)                   :: unit !< Output unit.
+
+   unit = self%unit
+   endfunction output_unit
+
    subroutine put(self, line)
    !< Write a complete line.
    class(backend_svg), intent(inout) :: self !< Device.
@@ -196,6 +285,7 @@ contains
    write(self%unit, '(A)') line
    endsubroutine put
 
+   ! private procedures
    subroutine write_pairs(self, x, y, ndec, prefix, suffix)
    !< Write `prefix x,y suffix` for each point, space separated, `PAIRS_PER_LINE` per line, without final newline.
    class(backend_svg), intent(inout) :: self   !< Device.
@@ -218,14 +308,6 @@ contains
    enddo
    endsubroutine write_pairs
 
-   pure function px(v) result(str)
-   !< Pixel coordinate text.
-   real(R8P), intent(in)         :: v   !< Value [px].
-   character(len=:), allocatable :: str !< Text.
-
-   str = fixed(v, PX_DECIMALS)
-   endfunction px
-
    pure function dash_attribute(dasharray) result(attribute)
    !< ` stroke-dasharray="..."` attribute, empty for solid lines.
    character(len=*), intent(in)  :: dasharray !< SVG dash array.
@@ -234,4 +316,20 @@ contains
    attribute = ''
    if (len(dasharray) > 0) attribute = ' stroke-dasharray="'//dasharray//'"'
    endfunction dash_attribute
+
+   pure function flag(value) result(str)
+   !< `1` or `0`.
+   logical, intent(in)           :: value !< Flag.
+   character(len=:), allocatable :: str   !< Text.
+
+   str = merge('1', '0', value)
+   endfunction flag
+
+   pure function px(v) result(str)
+   !< Pixel coordinate text.
+   real(R8P), intent(in)         :: v   !< Value [px].
+   character(len=:), allocatable :: str !< Text.
+
+   str = fixed(v, PX_DECIMALS)
+   endfunction px
 endmodule foresight_backend_svg

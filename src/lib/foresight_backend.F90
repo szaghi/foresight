@@ -6,17 +6,37 @@ module foresight_backend
 !< primitives, valid between `begin_plot_area` and `end_plot_area`, take unit-square coordinates of the plot area
 !< (origin bottom-left, y upward, [0, 1] spanning the axis ranges) and are clipped to it. Keeping data in unit
 !< coordinates lets an interactive device zoom and pan by changing a single view transform.
+!<
+!< A panel is bracketed by `begin_axes`/`end_axes`, which hand the device the panel geometry and axis ranges, and its
+!< redrawable decorations (grid, ticks) by named `begin_group`/`end_group`: an interactive device regenerates them after
+!< a zoom, a static one just writes them.
 use penf, only : R8P
 
 implicit none
 private
+public :: axes_view
 public :: backend_object
+
+type :: axes_view
+   !< Geometry and axis ranges of a plot panel.
+   real(R8P) :: area(4)   = 0.0_R8P  !< Plot area: left, right, top, bottom [px].
+   real(R8P) :: x(2)      = 0.0_R8P  !< x axis values at the axis start and end.
+   real(R8P) :: y(2)      = 0.0_R8P  !< y axis values at the axis start and end.
+   logical   :: xlog      = .false.  !< Log x axis.
+   logical   :: ylog      = .false.  !< Log y axis.
+   logical   :: grid      = .false.  !< Grid shown.
+   real(R8P) :: font_size = 12.0_R8P !< Font size [px].
+endtype axes_view
 
 type, abstract :: backend_object
    !< Abstract output device.
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.
+      procedure(begin_axes_interface),      pass(self), deferred :: begin_axes      !< Open a plot panel.
+      procedure(finish_interface),          pass(self), deferred :: end_axes        !< Close the plot panel.
+      procedure(begin_group_interface),     pass(self), deferred :: begin_group     !< Open a named group.
+      procedure(finish_interface),          pass(self), deferred :: end_group       !< Close the group.
       procedure(rect_interface),            pass(self), deferred :: rect            !< Rectangle [px].
       procedure(lines_interface),           pass(self), deferred :: polyline        !< Polyline [px].
       procedure(dots_interface),            pass(self), deferred :: dots            !< Round dots [px].
@@ -39,10 +59,25 @@ abstract interface
    endsubroutine begin_page_interface
 
    subroutine finish_interface(self)
-   !< Close the current page or plot area.
+   !< Close the current page, panel, group or plot area.
    import :: backend_object
    class(backend_object), intent(inout) :: self !< Device.
    endsubroutine finish_interface
+
+   subroutine begin_axes_interface(self, view)
+   !< Open a plot panel described by `view`.
+   import :: axes_view, backend_object
+   class(backend_object), intent(inout) :: self !< Device.
+   type(axes_view),       intent(in)    :: view !< Panel geometry and axis ranges.
+   endsubroutine begin_axes_interface
+
+   subroutine begin_group_interface(self, name, visible)
+   !< Open the group `name` of redrawable decorations; `visible` false hides it (default true).
+   import :: backend_object
+   class(backend_object), intent(inout)        :: self    !< Device.
+   character(len=*),      intent(in)           :: name    !< Group name.
+   logical,               intent(in), optional :: visible !< Group shown.
+   endsubroutine begin_group_interface
 
    subroutine rect_interface(self, x, y, width, height, stroke, fill, line_width)
    !< Rectangle of top-left corner (`x`, `y`) [px]; `stroke` and `fill` are SVG colors or `none`.

@@ -29,6 +29,7 @@ real(R8P), parameter :: TOL          = 1.0e-9_R8P !< Tolerance on tick-grid memb
 real(R8P), parameter :: TICK_SPACING = 50.0_R8P   !< Target distance between major ticks [px].
 real(R8P), parameter :: SCI_HIGH     = 1.0e5_R8P  !< Labels switch to scientific notation from this magnitude...
 real(R8P), parameter :: SCI_LOW      = 1.0e-3_R8P !< ...or below this one.
+integer(I8P), parameter :: MAX_TICKS = 1000_I8P   !< Tick count cap: no ticks beyond it (degenerate or extreme zoom).
 
 contains
    pure subroutine nice_step(raw, m, e)
@@ -84,6 +85,10 @@ contains
    endif
    kmin = ceiling(min(lo, hi) / step - TOL, I8P)
    kmax = floor(max(lo, hi) / step + TOL, I8P)
+   if (kmax - kmin >= MAX_TICKS) then
+      allocate(ticks(0))
+      return
+   endif
    sci = is_scientific(max(abs(lo), abs(hi)))
    allocate(ticks(max(0_I8P, kmax - kmin + 1_I8P)))
    do k = kmin, kmax
@@ -96,7 +101,8 @@ contains
    !< Ticks of a base-10 log axis `npx` pixels long; autoscaled ends are extended outward to whole decades.
    !<
    !< Majors sit at decades (labelled `10` with the exponent as superscript), minors at 2..9 times a decade when the
-   !< axis spans at most 10 decades. With fewer than two decades in range the minors are labelled too, in plain decimals.
+   !< axis spans at most 10 decades. With fewer than two decades in range the minors are labelled too, in plain decimals;
+   !< if still fewer than two ticks are labelled (a range inside one decade), linear ticks are placed instead.
    real(R8P),                      intent(inout) :: lo        !< Value at the axis start, > 0.
    real(R8P),                      intent(inout) :: hi        !< Value at the axis end, > 0.
    real(R8P),                      intent(in)    :: npx       !< Axis length [px].
@@ -104,6 +110,9 @@ contains
    logical,                        intent(in)    :: extend_hi !< Extend `hi` outward to a decade.
    type(tick_object), allocatable, intent(out)   :: ticks(:)  !< Ticks, majors first.
    type(tick_object)                             :: tick      !< Tick being built.
+   type(tick_object), allocatable                :: linear(:) !< Fallback linear ticks.
+   real(R8P)                                     :: a         !< Range start copy for the fallback.
+   real(R8P)                                     :: b         !< Range end copy for the fallback.
    real(R8P)                                     :: ta        !< log10 of the lower value.
    real(R8P)                                     :: tb        !< log10 of the upper value.
    real(R8P)                                     :: t         !< log10 of a minor tick.
@@ -130,6 +139,10 @@ contains
    if (e >= 0_I4P) s = m * 10_I8P**e
    kmin = ceiling(ta - TOL, I8P)
    kmax = floor(tb + TOL, I8P)
+   if (kmax - kmin >= MAX_TICKS) then
+      allocate(ticks(0))
+      return
+   endif
    plain = count([(modulo(k, s) == 0_I8P, k = kmin, kmax)]) < 2
 
    allocate(ticks(0))
@@ -162,6 +175,12 @@ contains
             ticks = [ticks, tick]
          enddo
       enddo
+   endif
+   if (count(ticks%major) < 2) then
+      a = lo
+      b = hi
+      call linear_ticks(a, b, npx, .false., .false., linear)
+      ticks = pack(linear, linear%value > 0.0_R8P)
    endif
    endsubroutine log_ticks
 
