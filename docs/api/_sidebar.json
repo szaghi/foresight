@@ -1,0 +1,76 @@
+[
+  {
+    "text": "src/lib",
+    "collapsed": true,
+    "items": [
+      {
+        "text": "foresight",
+        "link": "/api/src/lib/foresight"
+      },
+      {
+        "text": "foresight_axes",
+        "link": "/api/src/lib/foresight_axes"
+      },
+      {
+        "text": "foresight_axis",
+        "link": "/api/src/lib/foresight_axis"
+      },
+      {
+        "text": "foresight_backend",
+        "link": "/api/src/lib/foresight_backend"
+      },
+      {
+        "text": "foresight_backend_dumb",
+        "link": "/api/src/lib/foresight_backend_dumb"
+      },
+      {
+        "text": "foresight_backend_html",
+        "link": "/api/src/lib/foresight_backend_html"
+      },
+      {
+        "text": "foresight_backend_svg",
+        "link": "/api/src/lib/foresight_backend_svg"
+      },
+      {
+        "text": "foresight_datafile",
+        "link": "/api/src/lib/foresight_datafile"
+      },
+      {
+        "text": "foresight_figure",
+        "link": "/api/src/lib/foresight_figure"
+      },
+      {
+        "text": "foresight_format",
+        "link": "/api/src/lib/foresight_format"
+      },
+      {
+        "text": "foresight_script",
+        "link": "/api/src/lib/foresight_script"
+      },
+      {
+        "text": "foresight_series",
+        "link": "/api/src/lib/foresight_series"
+      },
+      {
+        "text": "foresight_style",
+        "link": "/api/src/lib/foresight_style"
+      },
+      {
+        "text": "foresight_sys",
+        "link": "/api/src/lib/foresight_sys"
+      },
+      {
+        "text": "foresight_ticks",
+        "link": "/api/src/lib/foresight_ticks"
+      },
+      {
+        "text": "foresight_tokens",
+        "link": "/api/src/lib/foresight_tokens"
+      },
+      {
+        "text": "foresight_viewer_js",
+        "link": "/api/src/lib/foresight_viewer_js"
+      }
+    ]
+  }
+]

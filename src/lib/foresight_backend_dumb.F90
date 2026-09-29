@@ -54,6 +54,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
+      procedure, pass(self) :: text_width
       procedure, pass(self), private :: col          !< Column of an abscissa [px].
       procedure, pass(self), private :: row          !< Row of an ordinate [px].
       procedure, pass(self), private :: put          !< Set a cell.
@@ -316,23 +317,36 @@ contains
    enddo
    endsubroutine data_bars
 
+   pure function text_width(self, string, sup, font_size) result(width)
+   !< Width of `string` in cells [px]: superscripts take full cells after a `^`.
+   class(backend_dumb), intent(in) :: self      !< Device.
+   character(len=*),    intent(in) :: string    !< Text.
+   character(len=*),    intent(in) :: sup       !< Superscript.
+   real(R8P),           intent(in) :: font_size !< Font size [px].
+   real(R8P)                       :: width     !< Width [px].
+
+   width = CELL_WIDTH * font_size * real(len(string), R8P)
+   if (len(sup) > 0) width = width + CELL_WIDTH * font_size * real(len(sup) + 1, R8P)
+   endfunction text_width
+
    ! private procedures
    elemental function col(self, x) result(c)
-   !< Column of the abscissa `x` [px], clamped to the page.
+   !< Column of the cell containing the abscissa `x` [px], clamped to the page.
    class(backend_dumb), intent(in) :: self !< Device.
    real(R8P),           intent(in) :: x    !< Abscissa [px].
    integer(I4P)                    :: c    !< Column.
 
-   c = min(max(1_I4P, nint(x / self%cw, I4P) + 1_I4P), size(self%grid, 1, kind=I4P))
+   ! truncation, as for rows: frame and text map consistently, text below a border never lands on it
+   c = min(max(1_I4P, floor(x / self%cw, I4P) + 1_I4P), size(self%grid, 1, kind=I4P))
    endfunction col
 
    elemental function row(self, y) result(r)
-   !< Row of the ordinate `y` [px], clamped to the page.
+   !< Row of the cell containing the ordinate `y` [px], clamped to the page.
    class(backend_dumb), intent(in) :: self !< Device.
    real(R8P),           intent(in) :: y    !< Ordinate [px].
    integer(I4P)                    :: r    !< Row.
 
-   r = min(max(1_I4P, nint(y / self%ch, I4P) + 1_I4P), size(self%grid, 2, kind=I4P))
+   r = min(max(1_I4P, floor(y / self%ch, I4P) + 1_I4P), size(self%grid, 2, kind=I4P))
    endfunction row
 
    pure subroutine put(self, c, r, symbol)

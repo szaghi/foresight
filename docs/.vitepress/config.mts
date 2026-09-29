@@ -1,9 +1,12 @@
 import { withMermaid } from 'vitepress-plugin-mermaid'
+import apiSidebar from '../api/_sidebar.json'
 
 export default withMermaid({
-  title: '{{NAME}}',
-  description: '{{SUMMARY}}',
-  base: '/{{REPOSITORY_NAME}}/',
+  title: 'foresight',
+  description: 'FORtran Easy Svg Interactive Gnuplot-like Html Tool',
+  base: '/foresight/',
+  // ford.md is the formal project file, not a page
+  srcExclude: ['ford.md'],
 
   markdown: {
     math: true,
@@ -18,34 +21,82 @@ export default withMermaid({
 
   themeConfig: {
     nav: [
-      { text: 'Home',   link: '/' },
-      { text: 'Guide',  link: '/guide/' },
-      { text: 'GitHub', link: '{{REPOSITORY}}' },
+      { text: 'Home', link: '/' },
+      {
+        text: 'Guide',
+        items: [
+          { text: 'About',             link: '/guide/' },
+          { text: 'Quick Start',       link: '/guide/quickstart' },
+          { text: 'Fortran Library',   link: '/guide/library' },
+          { text: 'Command Line',      link: '/guide/cli' },
+          { text: 'gnuplot Subset',    link: '/guide/gnuplot-subset' },
+          { text: 'Live Monitoring',   link: '/guide/monitoring' },
+          { text: 'Changelog',         link: '/guide/changelog' },
+        ],
+      },
+      { text: 'Examples', link: '/guide/examples' },
+      { text: 'API', link: '/api/' },
+      { text: 'GitHub', link: 'https://github.com/szaghi/foresight' },
     ],
 
-    // Add your guide pages here.
     sidebar: {
       '/guide/': [
         {
           text: 'Introduction',
           items: [
-            { text: 'About',        link: '/guide/' },
+            { text: 'About',      link: '/guide/' },
+            { text: 'Features',   link: '/guide/features' },
+            { text: 'Comparison', link: '/guide/comparison' },
+          ],
+        },
+        {
+          text: 'Getting Started',
+          items: [
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Quick Start',  link: '/guide/quickstart' },
+            { text: 'Examples',     link: '/guide/examples' },
+          ],
+        },
+        {
+          text: 'User Guide',
+          items: [
+            { text: 'Fortran Library',    link: '/guide/library' },
+            { text: 'Command Line',       link: '/guide/cli' },
+            { text: 'gnuplot Subset',     link: '/guide/gnuplot-subset' },
+            { text: 'Data Files',         link: '/guide/data-files' },
+            { text: 'Interactive Viewer', link: '/guide/viewer' },
+            { text: 'Live Monitoring',    link: '/guide/monitoring' },
+            { text: 'Output Formats',     link: '/guide/output-formats' },
+          ],
+        },
+        {
+          text: 'Internals',
+          items: [
+            { text: 'Architecture', link: '/guide/architecture' },
           ],
         },
         {
           text: 'Project',
           items: [
-            { text: 'Contributing', link: '/guide/contributing' },
-            { text: 'Changelog',    link: '/guide/changelog' },
+            { text: 'API Reference', link: '/guide/api-reference' },
+            { text: 'Contributing',  link: '/guide/contributing' },
+            { text: 'Changelog',     link: '/guide/changelog' },
           ],
         },
+      ],
+      '/api/': [
+        {
+          text: 'API Reference',
+          items: [
+            { text: 'Overview', link: '/api/' },
+          ],
+        },
+        ...apiSidebar,
       ],
     },
 
     socialLinks: [
-      { icon: 'github', link: '{{REPOSITORY}}' },
+      { icon: 'github', link: 'https://github.com/szaghi/foresight' },
     ],
 
     search: {
@@ -54,7 +105,7 @@ export default withMermaid({
 
     footer: {
       message: 'Released under the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GPL v3 License</a>.',
-      copyright: 'Copyright © {{YEAR}} {{AUTHORS}}',
+      copyright: 'Copyright © 2026 Stefano Zaghi',
     },
   },
 

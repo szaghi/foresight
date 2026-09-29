@@ -4,7 +4,7 @@ module foresight_axes
 !<
 !< Layout follows gnuplot defaults: full border with inward ticks mirrored on the opposite side, tick labels outside
 !< bottom and left, key at the top right inside the plot area with right-aligned titles and the samples on their right.
-!< Text extents are estimated from a mean glyph advance, since the viewer renders the glyphs.
+!< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
 use foresight_series, only : series_object
@@ -19,7 +19,6 @@ real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
 real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [px].
 real(R8P),        parameter :: TICK_MINOR    = 3.0_R8P   !< Minor tick length [px].
 real(R8P),        parameter :: GAP           = 6.0_R8P   !< Gap between border, tick labels and axis labels [px].
-real(R8P),        parameter :: CHAR_WIDTH    = 0.55_R8P  !< Mean glyph advance [font size] (Arial digits: 0.556).
 real(R8P),        parameter :: LINE_HEIGHT   = 1.25_R8P  !< Text line height [font size].
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
 real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
@@ -114,9 +113,9 @@ contains
    area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, &
            y0 + 2.0_R8P * font_size, y0 + height - 4.0_R8P * font_size]
    call self%setup_axes(area)
-   area = self%place_plot_area(x0, y0, width, height, font_size)
+   area = self%place_plot_area(backend, x0, y0, width, height, font_size)
    call self%setup_axes(area)
-   area = self%place_plot_area(x0, y0, width, height, font_size)
+   area = self%place_plot_area(backend, x0, y0, width, height, font_size)
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
@@ -314,9 +313,10 @@ contains
    if (allocated(self%title)) has = len(self%title) > 0
    endfunction has_title
 
-   pure function place_plot_area(self, x0, y0, width, height, font_size) result(area)
-   !< Plot area left by the margins that tick labels, axis labels and title need.
-   class(axes_object), intent(in) :: self       !< Panel.
+   pure function place_plot_area(self, backend, x0, y0, width, height, font_size) result(area)
+   !< Plot area left by the margins that tick labels, axis labels and title need, measured by the device.
+   class(axes_object),    intent(in) :: self       !< Panel.
+   class(backend_object), intent(in) :: backend    !< Output device, for text widths.
    real(R8P),          intent(in) :: x0         !< Box left side [px].
    real(R8P),          intent(in) :: y0         !< Box top side [px].
    real(R8P),          intent(in) :: width      !< Box width [px].
@@ -326,13 +326,13 @@ contains
    real(R8P)                      :: margins(4) !< Left, right, top, bottom margins [px].
    integer(I4P)                   :: t          !< Tick counter.
 
-   margins(1) = PAD + self%ytick_labels_width(font_size) + GAP
+   margins(1) = PAD + self%ytick_labels_width(backend, font_size) + GAP
    if (self%yaxis%has_label()) margins(1) = margins(1) + LINE_HEIGHT * font_size + GAP
    ! the rightmost x tick label is centred on the border: half of it sticks out
    margins(2) = PAD
    do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
       if (self%xaxis%ticks(t)%major) margins(2) = max(margins(2), &
-         0.5_R8P * label_width(self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, font_size))
+         0.5_R8P * backend%text_width(self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, font_size))
    enddo
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
@@ -373,9 +373,10 @@ contains
    call self%yaxis%setup(ymin, ymax, found, area(4) - area(3))
    endsubroutine setup_axes
 
-   pure function ytick_labels_width(self, font_size) result(width)
-   !< Estimated width of the widest y tick label [px].
-   class(axes_object), intent(in) :: self      !< Panel.
+   pure function ytick_labels_width(self, backend, font_size) result(width)
+   !< Width of the widest y tick label [px], measured by the device.
+   class(axes_object),    intent(in) :: self      !< Panel.
+   class(backend_object), intent(in) :: backend   !< Output device, for text widths.
    real(R8P),          intent(in) :: font_size !< Font size [px].
    real(R8P)                      :: width     !< Width [px].
    integer(I4P)                   :: t         !< Tick counter.
@@ -383,17 +384,7 @@ contains
    width = 0.0_R8P
    do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
       if (self%yaxis%ticks(t)%major) width = max(width, &
-         label_width(self%yaxis%ticks(t)%label, self%yaxis%ticks(t)%sup, font_size))
+         backend%text_width(self%yaxis%ticks(t)%label, self%yaxis%ticks(t)%sup, font_size))
    enddo
    endfunction ytick_labels_width
-
-   pure function label_width(label, sup, font_size) result(width)
-   !< Estimated width of a label with its superscript [px].
-   character(len=*), intent(in) :: label     !< Label text.
-   character(len=*), intent(in) :: sup       !< Superscript.
-   real(R8P),        intent(in) :: font_size !< Font size [px].
-   real(R8P)                    :: width     !< Width [px].
-
-   width = CHAR_WIDTH * font_size * (real(len(label), R8P) + 0.75_R8P * real(len(sup), R8P))
-   endfunction label_width
 endmodule foresight_axes

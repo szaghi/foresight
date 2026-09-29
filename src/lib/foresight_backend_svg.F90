@@ -46,6 +46,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
+      procedure, pass(self) :: text_width
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
       procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
@@ -291,6 +292,18 @@ contains
       enddo
    enddo
    endsubroutine data_bars
+
+   pure function text_width(self, string, sup, font_size) result(width)
+   !< Estimated width of `string` with its superscript `sup` [px]: the viewer renders the glyphs, so a mean advance of
+   !< 0.55 font sizes (Arial digits: 0.556) is assumed, superscripts at 0.75 size.
+   class(backend_svg), intent(in) :: self      !< Device.
+   character(len=*),   intent(in) :: string    !< Text.
+   character(len=*),   intent(in) :: sup       !< Superscript.
+   real(R8P),          intent(in) :: font_size !< Font size [px].
+   real(R8P)                      :: width     !< Width [px].
+
+   width = 0.55_R8P * font_size * (real(len(string), R8P) + 0.75_R8P * real(len(sup), R8P))
+   endfunction text_width
 
    ! building blocks for extending devices
    subroutine close_file(self)

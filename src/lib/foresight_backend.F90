@@ -46,6 +46,7 @@ type, abstract :: backend_object
       procedure(lines_interface),           pass(self), deferred :: data_polyline   !< Polyline [unit square].
       procedure(dots_interface),            pass(self), deferred :: data_dots       !< Round dots [unit square].
       procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
+      procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
 endtype backend_object
 
 abstract interface
@@ -140,6 +141,16 @@ abstract interface
    real(R8P),             intent(in), optional :: rotate !< Rotation about the anchor point [deg, clockwise].
    endsubroutine text_interface
 
+   pure function text_width_interface(self, string, sup, font_size) result(width)
+   !< Width of `string` with its superscript `sup` [px], as the device renders it (estimated for vector formats).
+   import :: backend_object, R8P
+   class(backend_object), intent(in) :: self      !< Device.
+   character(len=*),      intent(in) :: string    !< Text.
+   character(len=*),      intent(in) :: sup       !< Superscript.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: width     !< Width [px].
+   endfunction text_width_interface
+
    subroutine begin_plot_area_interface(self, x, y, width, height)
    !< Open the clipped plot area of top-left corner (`x`, `y`) and size `width` x `height` [px].
    import :: backend_object, R8P
@@ -150,4 +161,5 @@ abstract interface
    real(R8P),             intent(in)    :: height !< Height [px].
    endsubroutine begin_plot_area_interface
 endinterface
+
 endmodule foresight_backend
