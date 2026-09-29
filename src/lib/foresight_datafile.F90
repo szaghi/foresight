@@ -10,6 +10,7 @@ module foresight_datafile
 !< real per value plus three integers per row.
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : iostat_end, iostat_eor
+use foresight_expression, only : expression_object
 use penf, only : I4P, R8P
 
 implicit none
@@ -29,6 +30,7 @@ type :: datafile_object
       procedure, pass(self) :: columns       !< Extract a (x, y) series.
       procedure, pass(self) :: default_using !< gnuplot default columns.
       procedure, pass(self) :: load          !< Read a file.
+      procedure, pass(self) :: table         !< Evaluate `using` fields.
 endtype datafile_object
 
 contains
@@ -165,20 +167,36 @@ contains
 
    subroutine columns(self, ux, uy, index, every, x, y)
    !< Series of columns (`ux`, `uy`) of dataset `index` (all if negative), one point every `every` in each block.
-   !<
-   !< A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells
-   !< and rows too short for a column give NaN values (gaps).
-   class(datafile_object), intent(in)  :: self  !< Data.
-   integer(I4P),           intent(in)  :: ux    !< Abscissa column, 0 for the point number.
-   integer(I4P),           intent(in)  :: uy    !< Ordinate column, 0 for the point number.
-   integer(I4P),           intent(in)  :: index !< Dataset, 0-based; negative for all.
-   integer(I4P),           intent(in)  :: every !< Point stride within each block.
-   real(R8P), allocatable, intent(out) :: x(:)  !< Abscissae.
-   real(R8P), allocatable, intent(out) :: y(:)  !< Ordinates.
-   integer(I4P)                        :: n     !< Number of points.
+   class(datafile_object), intent(in)  :: self      !< Data.
+   integer(I4P),           intent(in)  :: ux        !< Abscissa column, 0 for the point number.
+   integer(I4P),           intent(in)  :: uy        !< Ordinate column, 0 for the point number.
+   integer(I4P),           intent(in)  :: index     !< Dataset, 0-based; negative for all.
+   integer(I4P),           intent(in)  :: every     !< Point stride within each block.
+   real(R8P), allocatable, intent(out) :: x(:)      !< Abscissae.
+   real(R8P), allocatable, intent(out) :: y(:)      !< Ordinates.
+   type(expression_object)             :: fields(2) !< Plain columns.
+   real(R8P), allocatable              :: values(:,:) !< Points.
 
-   n = count_points()
-   allocate(x(n), y(n))
+   call fields(1)%set_column(ux)
+   call fields(2)%set_column(uy)
+   call self%table(fields, index, every, values)
+   x = values(:, 1)
+   y = values(:, 2)
+   endsubroutine columns
+
+   subroutine table(self, fields, index, every, values)
+   !< Values of the `using` `fields` on the rows of dataset `index` (all if negative), one row every `every` in each
+   !< block: `values(point, field)`.
+   !<
+   !< A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells,
+   !< rows too short for a column and undefined expressions give NaN values (gaps).
+   class(datafile_object),  intent(in)  :: self        !< Data.
+   type(expression_object), intent(in)  :: fields(:)   !< `using` fields.
+   integer(I4P),            intent(in)  :: index       !< Dataset, 0-based; negative for all.
+   integer(I4P),            intent(in)  :: every       !< Point stride within each block.
+   real(R8P), allocatable,  intent(out) :: values(:,:) !< Points.
+
+   allocate(values(count_points(), size(fields)))
    call store_points
    contains
       pure function count_points() result(total)
@@ -206,6 +224,7 @@ contains
       !< Store the points, NaN breaks between blocks.
       integer(I4P) :: r        !< Row counter.
       integer(I4P) :: k        !< Point counter.
+      integer(I4P) :: f        !< Field counter.
       integer(I4P) :: in_set   !< Point number within the dataset.
       integer(I4P) :: in_block !< Point number within the block.
       integer(I4P) :: last_blk !< Block of the last selected point.
@@ -219,13 +238,13 @@ contains
          if (.not. selected(r, in_block)) cycle
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) then
             k = k + 1_I4P
-            x(k) = ieee_value(1.0_R8P, ieee_quiet_nan)
-            y(k) = ieee_value(1.0_R8P, ieee_quiet_nan)
+            values(k, :) = ieee_value(1.0_R8P, ieee_quiet_nan)
          endif
          last_blk = self%block(r)
          k = k + 1_I4P
-         x(k) = cell(r, ux, in_set)
-         y(k) = cell(r, uy, in_set)
+         do f = 1_I4P, size(fields, kind=I4P)
+            values(k, f) = fields(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), in_set)
+         enddo
       enddo
       endsubroutine store_points
 
@@ -252,23 +271,7 @@ contains
       yes = modulo(in_block, max(1_I4P, every)) == 0_I4P
       if (index >= 0_I4P) yes = yes .and. self%dataset(r) == index
       endfunction selected
-
-      pure function cell(r, c, in_set) result(v)
-      !< Value of column `c` of row `r`; column 0 is the point number within the dataset.
-      integer(I4P), intent(in) :: r      !< Row.
-      integer(I4P), intent(in) :: c      !< Column.
-      integer(I4P), intent(in) :: in_set !< Point number within the dataset.
-      real(R8P)                :: v      !< Value.
-
-      if (c == 0_I4P) then
-         v = real(in_set, R8P)
-      elseif (c <= self%first(r + 1_I4P) - self%first(r)) then
-         v = self%values(self%first(r) + c - 1_I4P)
-      else
-         v = ieee_value(1.0_R8P, ieee_quiet_nan)
-      endif
-      endfunction cell
-   endsubroutine columns
+   endsubroutine table
 
    ! private procedures
    subroutine read_line(unit, line, eof, iostat)

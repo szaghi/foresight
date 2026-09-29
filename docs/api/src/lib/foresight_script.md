@@ -15,7 +15,8 @@ title: foresight_script
  - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
  - `plot 'file' [using [X:]Y[:...]] [index N] [every N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
    [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
-   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`.
+   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`;
+   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression).
 
  Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
  `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
@@ -27,6 +28,7 @@ title: foresight_script
 ```mermaid
 graph LR
   foresight_script["foresight_script"] --> foresight_datafile["foresight_datafile"]
+  foresight_script["foresight_script"] --> foresight_expression["foresight_expression"]
   foresight_script["foresight_script"] --> foresight_figure["foresight_figure"]
   foresight_script["foresight_script"] --> foresight_format["foresight_format"]
   foresight_script["foresight_script"] --> foresight_style["foresight_style"]
@@ -58,6 +60,7 @@ graph LR
 - [next_real](#next-real)
 - [next_word](#next-word)
 - [no_more](#no-more)
+- [plain_columns](#plain-columns)
 - [string_argument](#string-argument)
 - [to_number](#to-number)
 
@@ -236,20 +239,21 @@ flowchart TD
   execute["execute"] --> plot_command["plot_command"]
   plot_command["plot_command"] --> canonical_style["canonical_style"]
   plot_command["plot_command"] --> clear["clear"]
-  plot_command["plot_command"] --> columns["columns"]
   plot_command["plot_command"] --> default_color["default_color"]
   plot_command["plot_command"] --> default_using["default_using"]
   plot_command["plot_command"] --> fail["fail"]
-  plot_command["plot_command"] --> int_str["int_str"]
   plot_command["plot_command"] --> keyword["keyword"]
   plot_command["plot_command"] --> load["load"]
   plot_command["plot_command"] --> next_integer["next_integer"]
   plot_command["plot_command"] --> next_real["next_real"]
   plot_command["plot_command"] --> next_word["next_word"]
   plot_command["plot_command"] --> parse_using["parse_using"]
+  plot_command["plot_command"] --> plain_columns["plain_columns"]
   plot_command["plot_command"] --> plot["plot"]
   plot_command["plot_command"] --> register_file["register_file"]
   plot_command["plot_command"] --> save_output["save_output"]
+  plot_command["plot_command"] --> set_column["set_column"]
+  plot_command["plot_command"] --> table["table"]
   style plot_command fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -419,10 +423,11 @@ flowchart TD
 
 ### parse_using
 
-`using` specification: 1 to 6 colon separated column numbers (0 is the point number); expressions are errors.
+`using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a
+ parenthesized expression, as in gnuplot.
 
 ```fortran
-subroutine parse_using(spec, cols, iostat, iomsg)
+subroutine parse_using(spec, fields, iostat, iomsg)
 ```
 
 **Arguments**
@@ -430,7 +435,7 @@ subroutine parse_using(spec, cols, iostat, iomsg)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `spec` | character(len=*) | in |  | Specification. |
-| `cols` | integer(kind=I4P) | out | allocatable | Columns. |
+| `fields` | type([expression_object](/api/src/lib/foresight_expression#expression-object)) | out | allocatable | Fields. |
 | `iostat` | integer(kind=I4P) | out |  | 0 on success. |
 | `iomsg` | character(len=:) | out | allocatable | Error message. |
 
@@ -439,7 +444,10 @@ subroutine parse_using(spec, cols, iostat, iomsg)
 ```mermaid
 flowchart TD
   plot_command["plot_command"] --> parse_using["parse_using"]
+  parse_using["parse_using"] --> compile["compile"]
   parse_using["parse_using"] --> fail["fail"]
+  parse_using["parse_using"] --> is_parenthesized["is_parenthesized"]
+  parse_using["parse_using"] --> set_column["set_column"]
   style parse_using fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -759,6 +767,33 @@ flowchart TD
   unset_command["unset_command"] --> no_more["no_more"]
   no_more["no_more"] --> fail["fail"]
   style no_more fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### plain_columns
+
+`using` fields of plain columns.
+
+**Attributes**: pure
+
+**Returns**: type([expression_object](/api/src/lib/foresight_expression#expression-object))
+
+```fortran
+function plain_columns(columns) result(fields)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `columns` | integer(kind=I4P) | in |  | Columns. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  plot_command["plot_command"] --> plain_columns["plain_columns"]
+  plain_columns["plain_columns"] --> set_column["set_column"]
+  style plain_columns fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### string_argument

@@ -36,6 +36,10 @@
         "link": "/api/src/lib/foresight_datafile"
       },
       {
+        "text": "foresight_expression",
+        "link": "/api/src/lib/foresight_expression"
+      },
+      {
         "text": "foresight_figure",
         "link": "/api/src/lib/foresight_figure"
       },

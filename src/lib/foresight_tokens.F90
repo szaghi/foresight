@@ -4,7 +4,8 @@ module foresight_tokens
 !<
 !< A line is split into statements at `;` and cut at `#` (both outside quotes); a statement into tokens: words,
 !< quoted strings (single quotes literal, double quotes with `\"` and `\\` escapes, as gnuplot), commas and bracketed
-!< ranges `[a:b]`.
+!< ranges `[a:b]`. Inside parentheses a word goes on across blanks and commas: `($2 * 1e3)` and `atan2($2, $1)` are
+!< single words.
 use penf, only : I4P
 
 implicit none
@@ -23,6 +24,7 @@ type :: token_object
    !< Token.
    integer(I4P)                  :: kind = TOKEN_WORD !< Token kind.
    character(len=:), allocatable :: text              !< Token text.
+   character(len=1)              :: quote = ' '       !< Quote of a string token, blank for others.
 endtype token_object
 
 contains
@@ -85,6 +87,7 @@ contains
    integer(I4P)                                 :: i         !< Character counter.
    integer(I4P)                                 :: j         !< End of the token.
    integer(I4P)                                 :: n         !< Statement length.
+   integer(I4P)                                 :: depth     !< Parenthesis depth in a word.
 
    allocate(tokens(0))
    iostat = 0_I4P
@@ -97,6 +100,7 @@ contains
          i = i + 1_I4P
          cycle
       endif
+      token%quote = ' '
       select case (c)
       case (',')
          token%kind = TOKEN_COMMA
@@ -110,10 +114,12 @@ contains
             return
          endif
          token%kind = TOKEN_STRING
+         token%quote = c
          token%text = statement(i + 1_I4P:i + j - 1_I4P)
          i = i + j + 1_I4P
       case ('"')
          token%kind = TOKEN_STRING
+         token%quote = c
          token%text = ''
          i = i + 1_I4P
          do
@@ -140,9 +146,11 @@ contains
          i = i + j + 1_I4P
       case default
          j = i
+         depth = count_parentheses(c, 0_I4P)
          do while (j < n)
-            if (scan(statement(j + 1_I4P:j + 1_I4P), ' ,['//achar(9)) > 0) exit
+            if (depth == 0_I4P .and. scan(statement(j + 1_I4P:j + 1_I4P), ' ,['//achar(9)) > 0) exit
             j = j + 1_I4P
+            depth = count_parentheses(statement(j:j), depth)
          enddo
          token%kind = TOKEN_WORD
          token%text = statement(i:j)
@@ -150,5 +158,16 @@ contains
       endselect
       tokens = [tokens, token]
    enddo
+   contains
+      pure function count_parentheses(c, depth) result(new_depth)
+      !< Parenthesis depth after character `c`.
+      character(len=1), intent(in) :: c         !< Character.
+      integer(I4P),     intent(in) :: depth     !< Depth before.
+      integer(I4P)                 :: new_depth !< Depth after.
+
+      new_depth = depth
+      if (c == '(') new_depth = depth + 1_I4P
+      if (c == ')') new_depth = max(0_I4P, depth - 1_I4P)
+      endfunction count_parentheses
    endsubroutine tokenize
 endmodule foresight_tokens

@@ -47,11 +47,11 @@ call interpreter%run_text("set terminal html size 700,350; set output 'foresight
                           new_line('a')//multiplot, iostat, iomsg)
 test_passed(2) = iostat == 0_I4P .and. check('multiplot.html', 'foresight_multiplot_test.html')
 
-! dumb terminal to a text file; an expression in using is still an error
+! dumb terminal to a text file; an unparenthesized expression in using is an error
 call interpreter%init('x.html')
 call interpreter%run_text("set terminal dumb size 60,20; set output 'foresight_multiplot_test.txt'"//new_line('a')// &
                           "set title 'dumb'; set key"//new_line('a')// &
-                          "plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:($3) notitle", iostat, iomsg)
+                          "plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:$3 notitle", iostat, iomsg)
 test_passed(3) = iostat /= 0_I4P
 call interpreter%run_text("plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:3:4 w yerr notitle", iostat, iomsg)
 test_passed(4) = iostat == 0_I4P .and. check('dumb.txt', 'foresight_multiplot_test.txt')

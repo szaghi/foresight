@@ -50,11 +50,11 @@ plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitl
 | Modifier | Meaning |
 |---|---|
 | `'file'` | data file; `''` repeats the previous one |
-| **u**sing `SPEC` | column numbers separated by `:`, 0 is the point number: `Y`, `X:Y`, or the error bar layouts below |
+| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `N` | one point every `N` in each block |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
-| **t**itle `"text"` / **not**itle | key entry; default is `"file" using X:Y` |
+| **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)` |
 | `lc` [**rgb**] `"color"` / `lc N` | color, or the `N`-th palette color |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 
@@ -66,6 +66,41 @@ plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitl
 | `yerrorbars` | `x:y:dy` or `x:y:ylow:yhigh` |
 | `xerrorbars` | `x:y:dx` or `x:y:xlow:xhigh` |
 | `xyerrorbars` | `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh` |
+
+## Expressions in `using`
+
+A field in parentheses is an expression evaluated on each row, with gnuplot's semantics:
+
+```gnuplot
+plot 'run.dat' using ($1/3600):($2*1e3)             # hours, milli-units
+plot 'run.dat' using 1:($3 > 0 ? log10($3) : 1/0)   # 1/0 drops a point: a gap
+plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
+```
+
+| | |
+|---|---|
+| Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)` |
+| Operators, loosest first | `?:` · `\|\|` · `&&` · `==` `!=` · `<` `<=` `>` `>=` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` · `**` |
+| Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh` |
+| Constants | numbers (`2`, `1.5`, `.5`, `1e-3`), `pi` |
+
+The rules are gnuplot's, checked against gnuplot 6.0:
+
+- `**` is right associative and binds tighter than a unary minus: `-2**2` is -4, `2**3**2` is 512.
+- Integer constants stay integers: `1/2` is 0 and `-5/2` is -2, but `1/2.` is 0.5; an integer overflow gives a real.
+  Columns are reals, so `$2/2` is a real division. `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators
+  give integers.
+- `&&`, `||` and `?:` evaluate only the operand they need: `$2 > 0 && log($2) > 1` never takes the log of a
+  negative.
+- A missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the point undefined:
+  a gap in the line, as gnuplot's `1/0`.
+
+A field must be a column number or one parenthesized expression, as in gnuplot: `using 1:$2` and `using 1:2*3` are
+errors. Syntax errors point at the character: `using: unexpected ")" at character 6 of "($2 +)"`.
+
+Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
+stops the plot. Not supported: user variables and functions, string columns (`column("name")`, `stringcolumn`),
+bitwise operators, the pseudo-columns -1 and -2.
 
 ## Multiplot
 
@@ -84,5 +119,5 @@ panel is an error.
 
 ## Not supported
 
-Functions and expressions (`plot sin(x)`, `using ($1*2):2`), `splot`, `fit`, `set format`, `set xtics`, `set style`,
+Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, `set format`, `set xtics`, `set style`,
 `every` with more than a stride, log bases other than 10, key placement options, manual multiplot `origin`/`size`.

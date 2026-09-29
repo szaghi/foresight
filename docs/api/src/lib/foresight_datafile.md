@@ -19,6 +19,7 @@ title: foresight_datafile
 
 ```mermaid
 graph LR
+  foresight_datafile["foresight_datafile"] --> foresight_expression["foresight_expression"]
   foresight_datafile["foresight_datafile"] --> ieee_arithmetic["ieee_arithmetic"]
   foresight_datafile["foresight_datafile"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -29,6 +30,7 @@ graph LR
 - [load](#load)
 - [default_using](#default-using)
 - [columns](#columns)
+- [table](#table)
 - [read_line](#read-line)
 - [to_real](#to-real)
 
@@ -57,6 +59,7 @@ Data file content.
 | `columns` | pass(self) | Extract a (x, y) series. |
 | `default_using` | pass(self) | gnuplot default columns. |
 | `load` | pass(self) | Read a file. |
+| `table` | pass(self) | Evaluate `using` fields. |
 
 ## Subroutines
 
@@ -119,9 +122,6 @@ flowchart TD
 
 Series of columns (`ux`, `uy`) of dataset `index` (all if negative), one point every `every` in each block.
 
- A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells
- and rows too short for a column give NaN values (gaps).
-
 ```fortran
 subroutine columns(self, ux, uy, index, every, x, y)
 ```
@@ -142,10 +142,42 @@ subroutine columns(self, ux, uy, index, every, x, y)
 
 ```mermaid
 flowchart TD
-  plot_command["plot_command"] --> columns["columns"]
-  columns["columns"] --> count_points["count_points"]
-  columns["columns"] --> store_points["store_points"]
+  columns["columns"] --> set_column["set_column"]
+  columns["columns"] --> table["table"]
   style columns fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### table
+
+Values of the `using` `fields` on the rows of dataset `index` (all if negative), one row every `every` in each
+ block: `values(point, field)`.
+
+ A NaN point is inserted where a block or dataset changes, so that lines are broken as in gnuplot. Missing cells,
+ rows too short for a column and undefined expressions give NaN values (gaps).
+
+```fortran
+subroutine table(self, fields, index, every, values)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([datafile_object](/api/src/lib/foresight_datafile#datafile-object)) | in |  | Data. |
+| `fields` | type([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | `using` fields. |
+| `index` | integer(kind=I4P) | in |  | Dataset, 0-based; negative for all. |
+| `every` | integer(kind=I4P) | in |  | Point stride within each block. |
+| `values` | real(kind=R8P) | out | allocatable | Points. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  columns["columns"] --> table["table"]
+  plot_command["plot_command"] --> table["table"]
+  table["table"] --> count_points["count_points"]
+  table["table"] --> store_points["store_points"]
+  style table fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### read_line

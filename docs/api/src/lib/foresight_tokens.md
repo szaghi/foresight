@@ -8,7 +8,8 @@ title: foresight_tokens
 
  A line is split into statements at `;` and cut at `#` (both outside quotes); a statement into tokens: words,
  quoted strings (single quotes literal, double quotes with `\"` and `\\` escapes, as gnuplot), commas and bracketed
- ranges `[a:b]`.
+ ranges `[a:b]`. Inside parentheses a word goes on across blanks and commas: `($2 * 1e3)` and `atan2($2, $1)` are
+ single words.
 
 **Source**: `src/lib/foresight_tokens.F90`
 
@@ -39,6 +40,7 @@ Token.
 |------|------|------------|-------------|
 | `kind` | integer(kind=I4P) |  | Token kind. |
 | `text` | character(len=:) | allocatable | Token text. |
+| `quote` | character(len=1) |  | Quote of a string token, blank for others. |
 
 ## Subroutines
 
@@ -89,5 +91,6 @@ subroutine tokenize(statement, tokens, iostat, iomsg)
 ```mermaid
 flowchart TD
   execute["execute"] --> tokenize["tokenize"]
+  tokenize["tokenize"] --> count_parentheses["count_parentheses"]
   style tokenize fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

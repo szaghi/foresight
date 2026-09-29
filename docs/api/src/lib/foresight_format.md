@@ -56,7 +56,6 @@ flowchart TD
   decimal_str["decimal_str"] --> int_str["int_str"]
   format_label["format_label"] --> int_str["int_str"]
   log_ticks["log_ticks"] --> int_str["int_str"]
-  plot_command["plot_command"] --> int_str["int_str"]
   real_str["real_str"] --> int_str["int_str"]
   style int_str fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

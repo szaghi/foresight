@@ -9,6 +9,7 @@ flowchart TD
     CLI["foresight (CLI)<br/>arguments, --watch"] --> SCRIPT
     SCRIPT["foresight_script<br/>gnuplot subset interpreter"] --> TOKENS["foresight_tokens<br/>lexer"]
     SCRIPT --> DATA["foresight_datafile<br/>data files"]
+    DATA --> EXPR["foresight_expression<br/>using expressions"]
     SCRIPT --> FIG
     USER["your Fortran code"] --> FIG
     FIG["foresight_figure<br/>panels, gnuplot-like API"] --> AXES
@@ -23,8 +24,8 @@ flowchart TD
 
 ## Layers
 
-- **Interpreter** (`foresight_script`, `foresight_tokens`, `foresight_datafile`): turns gnuplot statements into calls
-  of the figure API. It lives in the library, so the command line tool is a thin shell and Fortran code can run
+- **Interpreter** (`foresight_script`, `foresight_tokens`, `foresight_datafile`, `foresight_expression`): turns gnuplot
+  statements into calls of the figure API. It lives in the library, so the command line tool is a thin shell and Fortran code can run
   scripts too. Errors are returned, not stopped on, which lets a watch loop survive a bad cycle.
 - **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`): panels,
   axes with gnuplot range semantics, series with their style.
@@ -33,6 +34,11 @@ flowchart TD
   page pixels for decorations, the unit square of the plot area for data.
 
 ## Design decisions
+
+**Expressions compiled once.** A `using` expression is parsed by recursive descent into stack code, once per plot
+item; each row then runs that code, without parsing again. Values carry gnuplot's integer or real type. Every
+floating point operation is checked before it runs (zero divisor, domain, overflow), because Fortran's `.and.`
+does not short-circuit. So evaluation never raises an IEEE exception, and the debug build, trapping them, proves it.
 
 **Data in the unit square.** Data are mapped to [0, 1] per axis (after the log transform) and drawn inside a clipped
 area. An interactive device zooms by changing one view transform; the text device rasterises the same coordinates.

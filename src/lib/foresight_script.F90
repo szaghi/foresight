@@ -11,11 +11,13 @@ module foresight_script
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
 !<   [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
-!<   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`.
+!<   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`;
+!<   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression).
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use foresight_datafile, only : datafile_object
+use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
 use foresight_format, only : int_str
 use foresight_style, only : default_color
@@ -224,6 +226,10 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(datafile_object)                        :: data      !< Current data file.
    character(len=:), allocatable                :: file      !< Item data file.
+   character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
+   character(len=:), allocatable                :: spec      !< `using` specification as written, empty if none.
+   character(len=:), allocatable                :: using     !< `using` keyword as written.
+   character(len=1)                             :: quote     !< Quote of the data file.
    character(len=:), allocatable                :: loaded    !< File in `data`.
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -234,19 +240,16 @@ contains
    integer(I4P),     allocatable                :: dt        !< Item dash type, unallocated for default.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
-   real(R8P),        allocatable                :: c3(:)     !< Third column.
-   real(R8P),        allocatable                :: c4(:)     !< Fourth column.
-   real(R8P),        allocatable                :: c5(:)     !< Fifth column.
-   real(R8P),        allocatable                :: c6(:)     !< Sixth column.
+   real(R8P),        allocatable                :: values(:,:) !< Values of the `using` fields.
    real(R8P),        allocatable                :: xlow(:)   !< Horizontal error bar starts.
    real(R8P),        allocatable                :: xhigh(:)  !< Horizontal error bar ends.
    real(R8P),        allocatable                :: ylow(:)   !< Vertical error bar starts.
    real(R8P),        allocatable                :: yhigh(:)  !< Vertical error bar ends.
-   integer(I4P),     allocatable                :: cols(:)   !< `using` columns, unallocated for default.
+   type(expression_object), allocatable         :: fields(:) !< `using` fields, unallocated for default.
+   type(expression_object)                      :: point     !< Point number field.
    integer(I4P)                                 :: ux        !< Default abscissa column.
    integer(I4P)                                 :: uy        !< Default ordinate column.
    integer(I4P)                                 :: nbar      !< Error bar columns.
-   integer(I4P)                                 :: c         !< Column counter.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every     !< Point stride.
    integer(I4P)                                 :: number    !< Integer argument.
@@ -274,6 +277,8 @@ contains
          return
       endif
       file = tokens(i)%text
+      written = file
+      quote = tokens(i)%quote
       if (len(file) == 0) file = self%previous_file
       if (len(file) == 0) then
          call fail('plot: '''' needs a previous data file', iostat, iomsg)
@@ -281,7 +286,8 @@ contains
       endif
       self%previous_file = file
       ! modifiers
-      if (allocated(cols)) deallocate(cols)
+      if (allocated(fields)) deallocate(fields)
+      spec = ''
       set_index = -1_I4P
       every = 1_I4P
       with = 'lines'
@@ -300,8 +306,9 @@ contains
             return
          endif
          if (keyword(word, 'using', 1_I4P)) then
-            if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-            call parse_using(word, cols, iostat, iomsg)
+            using = word
+            if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+            call parse_using(spec, fields, iostat, iomsg)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'index', 1_I4P)) then
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
@@ -373,20 +380,21 @@ contains
          call self%register_file(file)
       endif
       ! columns: gnuplot defaults are 1:2 (0:1 for one column), 1:2:3 for x/y error bars, 1:2:3:4 for xy error bars
-      if (.not. allocated(cols)) then
+      if (.not. allocated(fields)) then
          select case (with)
          case ('yerrorbars', 'xerrorbars')
-            cols = [1_I4P, 2_I4P, 3_I4P]
+            fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          case ('xyerrorbars')
-            cols = [1_I4P, 2_I4P, 3_I4P, 4_I4P]
+            fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
          case default
             call data%default_using(ux, uy)
-            cols = [ux, uy]
+            fields = plain_columns([ux, uy])
          endselect
-      elseif (size(cols) == 1) then
-         cols = [0_I4P, cols(1)]
+      elseif (size(fields) == 1) then
+         call point%set_column(0_I4P)
+         fields = [point, fields(1)]
       endif
-      nbar = size(cols, kind=I4P) - 2_I4P
+      nbar = size(fields, kind=I4P) - 2_I4P
       select case (with)
       case ('yerrorbars', 'xerrorbars')
          if (nbar /= 1_I4P .and. nbar /= 2_I4P) then
@@ -405,44 +413,43 @@ contains
          endif
       endselect
       if (.not. has_title) then
-         title = '"'//file//'" using '//int_str(int(cols(1), I8P))
-         do c = 2_I4P, size(cols, kind=I4P)
-            title = title//':'//int_str(int(cols(c), I8P))
-         enddo
+         ! gnuplot: the item as written, '' included
+         title = quote//written//quote
+         if (len(spec) > 0) title = title//' '//using//' '//spec
       endif
-      call data%columns(cols(1), cols(2), set_index, every, x, y)
-      if (nbar >= 1_I4P) call data%columns(cols(3), cols(min(4, size(cols))), set_index, every, c3, c4)
-      if (nbar >= 4_I4P) call data%columns(cols(5), cols(6), set_index, every, c5, c6)
+      call data%table(fields, set_index, every, values)
+      x = values(:, 1)
+      y = values(:, 2)
       if (allocated(xlow)) deallocate(xlow, xhigh)
       if (allocated(ylow)) deallocate(ylow, yhigh)
       select case (with)
       case ('yerrorbars')
          if (nbar == 1_I4P) then
-            ylow = y - c3
-            yhigh = y + c3
+            ylow = y - values(:, 3)
+            yhigh = y + values(:, 3)
          else
-            ylow = c3
-            yhigh = c4
+            ylow = values(:, 3)
+            yhigh = values(:, 4)
          endif
       case ('xerrorbars')
          if (nbar == 1_I4P) then
-            xlow = x - c3
-            xhigh = x + c3
+            xlow = x - values(:, 3)
+            xhigh = x + values(:, 3)
          else
-            xlow = c3
-            xhigh = c4
+            xlow = values(:, 3)
+            xhigh = values(:, 4)
          endif
       case ('xyerrorbars')
          if (nbar == 2_I4P) then
-            xlow = x - c3
-            xhigh = x + c3
-            ylow = y - c4
-            yhigh = y + c4
+            xlow = x - values(:, 3)
+            xhigh = x + values(:, 3)
+            ylow = y - values(:, 4)
+            yhigh = y + values(:, 4)
          else
-            xlow = c3
-            xhigh = c4
-            ylow = c5
-            yhigh = c6
+            xlow = values(:, 3)
+            xhigh = values(:, 4)
+            ylow = values(:, 5)
+            yhigh = values(:, 6)
          endif
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
@@ -947,44 +954,89 @@ contains
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
 
-   subroutine parse_using(spec, cols, iostat, iomsg)
-   !< `using` specification: 1 to 6 colon separated column numbers (0 is the point number); expressions are errors.
-   character(len=*),              intent(in)  :: spec    !< Specification.
-   integer(I4P),     allocatable, intent(out) :: cols(:) !< Columns.
-   integer(I4P),                  intent(out) :: iostat  !< 0 on success.
-   character(len=:), allocatable, intent(out) :: iomsg   !< Error message.
-   integer(I4P)                               :: start   !< Field start.
-   integer(I4P)                               :: colon   !< Field end.
-   integer(I4P)                               :: c       !< Column.
+   subroutine parse_using(spec, fields, iostat, iomsg)
+   !< `using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a
+   !< parenthesized expression, as in gnuplot.
+   character(len=*),                     intent(in)  :: spec      !< Specification.
+   type(expression_object), allocatable, intent(out) :: fields(:) !< Fields.
+   character(len=:), allocatable,        intent(out) :: iomsg     !< Error message.
+   integer(I4P),                         intent(out) :: iostat    !< 0 on success.
+   type(expression_object)                           :: field     !< Current field.
+   integer(I4P)                                      :: start     !< Field start.
+   integer(I4P)                                      :: finish    !< Field end.
+   integer(I4P)                                      :: depth     !< Parenthesis depth.
+   integer(I4P)                                      :: c         !< Column.
 
    iostat = 0_I4P
    iomsg = ''
-   allocate(cols(0))
-   if (verify(spec, '0123456789:') > 0) then
-      call fail('using: only column numbers are supported, not "'//spec//'" (no expressions)', iostat, iomsg)
-      return
-   endif
+   allocate(fields(0))
    start = 1_I4P
-   do
-      colon = index(spec(start:), ':', kind=I4P)
-      if (colon == 0_I4P) then
-         colon = len(spec, kind=I4P) + 1_I4P
-      else
-         colon = start + colon - 1_I4P
-      endif
-      if (colon == start) then
-         iostat = 1_I4P
-         exit
-      endif
-      read(spec(start:colon - 1_I4P), *, iostat=iostat) c
-      if (iostat /= 0_I4P) exit
-      cols = [cols, c]
-      if (colon > len(spec)) exit
-      start = colon + 1_I4P
+   do while (start <= len(spec) + 1)
+      ! the field ends at the first ':' outside parentheses (a ?: inside an expression is not a separator)
+      depth = 0_I4P
+      finish = start
+      do while (finish <= len(spec))
+         if (spec(finish:finish) == '(') depth = depth + 1_I4P
+         if (spec(finish:finish) == ')') depth = depth - 1_I4P
+         if (spec(finish:finish) == ':' .and. depth == 0_I4P) exit
+         finish = finish + 1_I4P
+      enddo
+      associate(text => spec(start:finish - 1_I4P))
+         if (len(text) > 0 .and. verify(text, '0123456789') == 0 .and. len(text) < 10) then
+            read(text, *) c
+            call field%set_column(c)
+         elseif (text(1:min(1, len(text))) == '(') then
+            ! compiled first, so that an unbalanced expression gets the precise syntax error
+            call field%compile(text, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'using: '//iomsg
+               return
+            endif
+            if (.not. is_parenthesized(text)) then
+               call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
+               return
+            endif
+         else
+            call fail('using: field "'//text//'" is neither a column number nor a parenthesized expression '// &
+                      '(write ($2*1e3), not $2*1e3)', iostat, iomsg)
+            return
+         endif
+      endassociate
+      fields = [fields, field]
+      start = finish + 1_I4P
    enddo
-   if (iostat == 0_I4P .and. (size(cols) < 1 .or. size(cols) > 6)) iostat = 1_I4P
-   if (iostat /= 0_I4P) call fail('using: "'//spec//'" is not 1 to 6 column numbers separated by ":"', iostat, iomsg)
+   if (size(fields) > 6) call fail('using: "'//spec//'" has more than 6 fields', iostat, iomsg)
+   contains
+      pure function is_parenthesized(text) result(yes)
+      !< Whether `text` is one parenthesized group: `(...)`, the first parenthesis closed by the last character.
+      character(len=*), intent(in) :: text  !< Field.
+      logical                      :: yes   !< Parenthesized.
+      integer(I4P)                 :: depth !< Parenthesis depth.
+      integer(I4P)                 :: k     !< Character counter.
+
+      yes = .false.
+      if (len(text) < 2) return
+      if (text(1:1) /= '(') return
+      depth = 0_I4P
+      do k = 1_I4P, len(text, kind=I4P)
+         if (text(k:k) == '(') depth = depth + 1_I4P
+         if (text(k:k) == ')') depth = depth - 1_I4P
+         if (depth == 0_I4P) exit
+      enddo
+      yes = k == len(text, kind=I4P)
+      endfunction is_parenthesized
    endsubroutine parse_using
+
+   pure function plain_columns(columns) result(fields)
+   !< `using` fields of plain columns.
+   integer(I4P),            intent(in) :: columns(:)             !< Columns.
+   type(expression_object)             :: fields(size(columns)) !< Fields.
+   integer(I4P)                        :: f                      !< Counter.
+
+   do f = 1_I4P, size(columns, kind=I4P)
+      call fields(f)%set_column(columns(f))
+   enddo
+   endfunction plain_columns
 
    function string_argument(tokens, text, iostat, iomsg) result(ok)
    !< Optional single quoted string after an option; absent means empty.

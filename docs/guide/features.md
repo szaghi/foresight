@@ -20,6 +20,8 @@ title: Features
 - Error bar ends widen the autoscale
 - Data files with comments, blocks (one blank line) and datasets (two blank lines), `using`, `index`, `every`,
   pseudo-column 0
+- Expressions in `using` with gnuplot's rules, integer division and `1/0` gaps included: `u 1:($2*1e3)`,
+  `u 1:($3 > 0 ? log10($3) : 1/0)`
 - A command subset with gnuplot abbreviations (`u 1:2 w lp t 'x'`), `''` for the previous file, `replot`,
   `set multiplot layout`
 
