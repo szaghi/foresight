@@ -31,6 +31,7 @@ type :: figure_object
    integer(I4P)      :: refresh   = 0_I4P     !< HTML page reload period [s], 0 for none.
    type(axes_object) :: axes                  !< Plot panel.
    contains
+      procedure, pass(self) :: clear           !< Remove all series, keeping the settings.
       procedure, pass(self) :: init            !< Reset the figure, optionally resizing it.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
@@ -48,6 +49,13 @@ type :: figure_object
 endtype figure_object
 
 contains
+   subroutine clear(self)
+   !< Remove all series, keeping every setting: a new gnuplot `plot` command replaces the previous one.
+   class(figure_object), intent(inout) :: self !< Figure.
+
+   if (allocated(self%axes%series)) deallocate(self%axes%series)
+   endsubroutine clear
+
    subroutine init(self, width, height, font_size)
    !< Reset the figure to gnuplot defaults, optionally resizing it.
    class(figure_object), intent(inout)        :: self      !< Figure.
