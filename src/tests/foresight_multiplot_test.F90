@@ -17,7 +17,7 @@ logical                       :: update                                     !< R
 integer(I4P)                  :: iostat                                     !< Status.
 integer(I4P)                  :: unit                                       !< File unit.
 integer(I4P)                  :: i                                          !< Counter.
-logical                       :: test_passed(7)                             !< Per-check outcome.
+logical                       :: test_passed(11)                            !< Per-check outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -70,12 +70,33 @@ call interpreter%init('x.svg')
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w yerrorbars", iostat, iomsg)
 test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'needs using x:y:delta') > 0
 
+! manual multiplot: a main plot and an inset in their origin/size boxes, below the title
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_multiplot_test_inset.svg'"// &
+                          new_line('a')//"set multiplot title 'inset'"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:3 w l t 'cd'"//new_line('a')// &
+                          "set origin 0.35,0.35; set size 0.55,0.5; unset key; set logscale y"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:2 w lp"//new_line('a')//"unset multiplot", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(8) = iostat == 0_I4P .and. check('inset.svg', 'foresight_multiplot_test_inset.svg')
+
+! origin and size: not with a layout, positive sizes, restored by the bare commands
+call interpreter%init('x.svg')
+call interpreter%run_text("set multiplot layout 1,2"//new_line('a')//"set origin 0.1,0.1", iostat, iomsg)
+test_passed(9) = iostat /= 0_I4P .and. index(iomsg, 'set origin: not supported with a multiplot layout') > 0
+call interpreter%init('x.svg')
+call interpreter%run_text("set size 0,1", iostat, iomsg)
+test_passed(10) = iostat /= 0_I4P .and. index(iomsg, 'the size must be positive') > 0
+call interpreter%run_text("set size 0.5,0.5; set origin 0.5,0.5; set size; set origin", iostat, iomsg)
+test_passed(11) = iostat == 0_I4P .and. all(interpreter%figure%panels(1)%size == 1.0_R8P) .and. &
+                  all(interpreter%figure%panels(1)%origin == 0.0_R8P)
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 ! the full-layout case rendered its first panel before failing
 open(newunit=unit, file='x.svg')
 close(unit, status='delete')
-write(output_unit, '(A,7L2)') 'foresight multiplot checks:', test_passed
+write(output_unit, '(A,11L2)') 'foresight multiplot checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

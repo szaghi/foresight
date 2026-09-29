@@ -13,6 +13,7 @@ title: foresight_script
    `set terminal svg|html [size W,H] [refresh SECONDS]`;
  - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
  - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
+   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
  - `set xtics|ytics [auto|STEP|START,STEP[,END]]`, `unset xtics|ytics`, `set format [x|y|xy] ["fmt"]`,
    `unset format`, `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
    `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
@@ -329,6 +330,7 @@ subroutine save_output(self, iostat, iomsg)
 ```mermaid
 flowchart TD
   plot_command["plot_command"] --> save_output["save_output"]
+  unset_command["unset_command"] --> save_output["save_output"]
   save_output["save_output"] --> extension["extension"]
   save_output["save_output"] --> fail["fail"]
   save_output["save_output"] --> set_refresh["set_refresh"]
@@ -365,6 +367,7 @@ flowchart TD
   set_command["set_command"] --> keyword["keyword"]
   set_command["set_command"] --> next_integer["next_integer"]
   set_command["set_command"] --> no_more["no_more"]
+  set_command["set_command"] --> pair_option["pair_option"]
   set_command["set_command"] --> set_grid["set_grid"]
   set_command["set_command"] --> set_logscale["set_logscale"]
   set_command["set_command"] --> set_multiplot["set_multiplot"]
@@ -405,6 +408,7 @@ flowchart TD
   unset_command["unset_command"] --> fail["fail"]
   unset_command["unset_command"] --> keyword["keyword"]
   unset_command["unset_command"] --> no_more["no_more"]
+  unset_command["unset_command"] --> save_output["save_output"]
   unset_command["unset_command"] --> set_format["set_format"]
   unset_command["unset_command"] --> set_grid["set_grid"]
   unset_command["unset_command"] --> set_key["set_key"]

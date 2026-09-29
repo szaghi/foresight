@@ -38,7 +38,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_xtics([step], [start], [end])`, `set_ytics(...)` | `set xtics START,STEP,END`; automatic without `step` |
 | `unset_xtics()`, `unset_ytics()` | `unset xtics` |
 | `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default |
-| `set_multiplot(rows, cols, [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot layout` |
+| `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
+| `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
 | `set_refresh(seconds)` | reload period of the HTML page |
 
 ### `plot` options
@@ -87,6 +88,19 @@ call fig%next_panel
 call fig%set_title('drag coefficient')
 call fig%unset_logscale('y')
 call fig%plot(it, cd)
+```
+
+Without `rows` and `cols`, `set_multiplot` starts a manual multiplot: each `next_panel` adds a panel, placed in the
+box of `set_origin` and `set_size` (page fractions from the bottom left, below the title), for insets:
+
+```fortran
+call fig%set_multiplot(title='Run monitor')
+call fig%plot(it, cd, title='cd')
+call fig%next_panel
+call fig%set_origin(0.35_R8P, 0.35_R8P)
+call fig%set_size(0.55_R8P, 0.5_R8P)
+call fig%set_logscale('y')
+call fig%plot(it, res)
 ```
 
 ### Output

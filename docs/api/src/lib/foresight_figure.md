@@ -47,7 +47,9 @@ graph LR
 - [set_key](#set-key)
 - [set_logscale](#set-logscale)
 - [set_multiplot](#set-multiplot)
+- [set_origin](#set-origin)
 - [set_refresh](#set-refresh)
+- [set_size](#set-size)
 - [set_title](#set-title)
 - [set_xlabel](#set-xlabel)
 - [set_xrange](#set-xrange)
@@ -90,6 +92,8 @@ Figure.
 | `rows` | integer(kind=I4P) |  | Panel grid rows. |
 | `cols` | integer(kind=I4P) |  | Panel grid columns. |
 | `current` | integer(kind=I4P) |  | Current panel, filled row by row. |
+| `layout` | logical |  | Multiplot grid: panels in cells, else in their |
+| `manual` | logical |  | Manual multiplot: panels added on demand. |
 | `title` | character(len=:) | allocatable | Multiplot title, empty for none. |
 | `panels` | type([axes_object](/api/src/lib/foresight_axes#axes-object)) | allocatable | Plot panels. |
 
@@ -107,7 +111,9 @@ Figure.
 | `set_key` | pass(self) | gnuplot `set key` / `unset key`. |
 | `set_logscale` | pass(self) | gnuplot `set logscale`. |
 | `set_multiplot` | pass(self) | gnuplot `set multiplot layout rows,cols title "..."`. |
+| `set_origin` | pass(self) | gnuplot `set origin`. |
 | `set_refresh` | pass(self) | HTML page reload period, for live monitoring. |
+| `set_size` | pass(self) | gnuplot `set size`. |
 | `set_title` | pass(self) | gnuplot `set title`. |
 | `set_xlabel` | pass(self) | gnuplot `set xlabel`. |
 | `set_xrange` | pass(self) | gnuplot `set xrange`. |
@@ -175,7 +181,8 @@ flowchart TD
 
 ### next_panel
 
-Move to the next panel of the multiplot grid; the settings of the current panel carry over, as in gnuplot.
+Move to the next panel of the multiplot: the next grid cell, or a new panel in a manual multiplot; the settings
+ of the current panel carry over, as in gnuplot.
 
 ```fortran
 subroutine next_panel(self)
@@ -368,7 +375,8 @@ flowchart TD
 ### set_multiplot
 
 Lay out a `rows` x `cols` grid of panels, filled row by row starting from the first; every panel starts from the
- settings of the current one, without its series.
+ settings of the current one, without its series. Without `rows` and `cols`, a manual multiplot: each panel lies
+ in its `set_origin`/`set_size` box, as gnuplot `set multiplot` without layout.
 
 ```fortran
 subroutine set_multiplot(self, rows, cols, title)
@@ -379,8 +387,8 @@ subroutine set_multiplot(self, rows, cols, title)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
-| `rows` | integer(kind=I4P) | in |  | Grid rows. |
-| `cols` | integer(kind=I4P) | in |  | Grid columns. |
+| `rows` | integer(kind=I4P) | in | optional | Grid rows. |
+| `cols` | integer(kind=I4P) | in | optional | Grid columns. |
 | `title` | character(len=*) | in | optional | Multiplot title. |
 
 **Call graph**
@@ -390,6 +398,31 @@ flowchart TD
   set_command["set_command"] --> set_multiplot["set_multiplot"]
   set_multiplot["set_multiplot"] --> ensure_panels["ensure_panels"]
   style set_multiplot fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_origin
+
+Bottom left corner of the plot as page fractions, as gnuplot `set origin x,y`: for a single plot and the panels
+ of a manual multiplot (not with a layout).
+
+```fortran
+subroutine set_origin(self, x, y)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `x` | real(kind=R8P) | in |  | Left side, page width fraction. |
+| `y` | real(kind=R8P) | in |  | Bottom side, page height fraction. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_origin["set_origin"] --> ensure_panels["ensure_panels"]
+  style set_origin fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_refresh
@@ -418,6 +451,31 @@ flowchart TD
   save_output["save_output"] --> set_refresh["set_refresh"]
   set_command["set_command"] --> set_refresh["set_refresh"]
   style set_refresh fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_size
+
+Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
+ multiplot (not with a layout).
+
+```fortran
+subroutine set_size(self, width, height)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `width` | real(kind=R8P) | in |  | Width, page width fraction, > 0. |
+| `height` | real(kind=R8P) | in |  | Height, page height fraction, > 0. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_size["set_size"] --> ensure_panels["ensure_panels"]
+  style set_size fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_title
@@ -720,6 +778,8 @@ flowchart TD
   set_key["set_key"] --> ensure_panels["ensure_panels"]
   set_logscale["set_logscale"] --> ensure_panels["ensure_panels"]
   set_multiplot["set_multiplot"] --> ensure_panels["ensure_panels"]
+  set_origin["set_origin"] --> ensure_panels["ensure_panels"]
+  set_size["set_size"] --> ensure_panels["ensure_panels"]
   set_title["set_title"] --> ensure_panels["ensure_panels"]
   set_xlabel["set_xlabel"] --> ensure_panels["ensure_panels"]
   set_xrange["set_xrange"] --> ensure_panels["ensure_panels"]
@@ -736,8 +796,8 @@ flowchart TD
 
 ### render
 
-Render the figure on `backend`, writing `file`: the multiplot title on top, panels in grid cells; in a multiplot
- the panels never plotted stay blank, as in gnuplot.
+Render the figure on `backend`, writing `file`: the multiplot title on top, panels in grid cells of a layout or
+ else in their `origin`/`size` boxes; in a multiplot the panels never plotted stay blank, as in gnuplot.
 
 ```fortran
 subroutine render(self, backend, file)

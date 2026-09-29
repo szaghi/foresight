@@ -9,6 +9,7 @@ module foresight_script
 !<   `set terminal svg|html [size W,H] [refresh SECONDS]`;
 !< - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
+!<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
 !< - `set xtics|ytics [auto|STEP|START,STEP[,END]]`, `unset xtics|ytics`, `set format [x|y|xy] ["fmt"]`,
 !<   `unset format`, `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
 !<   `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
@@ -207,7 +208,7 @@ contains
    if (self%advance_pending .and. (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P) .or. &
                                    keyword(command, 'plot', 1_I4P))) then
       if (.not. is_multiplot_option(tokens)) then
-         if (self%figure%current >= size(self%figure%panels, kind=I4P)) then
+         if (self%figure%layout .and. self%figure%current >= size(self%figure%panels, kind=I4P)) then
             call fail('multiplot: the layout is full', iostat, iomsg)
             return
          endif
@@ -453,6 +454,9 @@ contains
       i = i + 1_I4P
    enddo
    if (self%multiplot) self%advance_pending = .true.
+   ! a multiplot on the standard output is printed once, complete, at unset multiplot (as gnuplot); files are rewritten
+   ! at each plot, so that a watched page shows the panels done so far
+   if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    endsubroutine plot_command
 
@@ -618,6 +622,10 @@ contains
       call tics_option(self%figure%panels(self%figure%current)%yaxis%tics)
    elseif (keyword(option, 'format', 3_I4P)) then
       call format_option
+   elseif (keyword(option, 'origin', 2_I4P)) then
+      call pair_option([0.0_R8P, 0.0_R8P])
+   elseif (keyword(option, 'size', 2_I4P)) then
+      call pair_option([1.0_R8P, 1.0_R8P])
    elseif (keyword(option, 'multiplot', 5_I4P)) then
       rows = 0_I4P
       cols = 0_I4P
@@ -653,11 +661,23 @@ contains
          endif
          i = i + 1_I4P
       enddo
-      if (rows < 1_I4P .or. cols < 1_I4P) then
-         call fail('set multiplot: layout ROWS,COLS with positive values is required', iostat, iomsg)
-         return
+      if (rows == 0_I4P .and. cols == 0_I4P) then
+         ! no layout: manual multiplot, each panel in its set origin / set size box
+         call self%figure%set_multiplot(title=text)
+      else
+         if (rows < 1_I4P .or. cols < 1_I4P) then
+            call fail('set multiplot: layout ROWS,COLS needs positive values', iostat, iomsg)
+            return
+         endif
+         associate(panel => self%figure%panels(self%figure%current))
+            if (any(panel%origin /= 0.0_R8P) .or. any(panel%size /= 1.0_R8P)) then
+               call fail('set multiplot: a layout needs the default origin and size (set origin 0,0; set size 1,1)', &
+                         iostat, iomsg)
+               return
+            endif
+         endassociate
+         call self%figure%set_multiplot(rows, cols, text)
       endif
-      call self%figure%set_multiplot(rows, cols, text)
       self%multiplot = .true.
       self%advance_pending = .false.
    else
@@ -733,6 +753,38 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine pair_option(default)
+      !< `set origin [X,Y]` and `set size [W,H]`, page fractions; no values restore `default`.
+      real(R8P), intent(in) :: default(2) !< Default values.
+      real(R8P)             :: pair(2)    !< Values.
+
+      if (self%figure%layout) then
+         call fail('set '//option//': not supported with a multiplot layout', iostat, iomsg)
+         return
+      endif
+      pair = default
+      if (size(tokens) > 1) then
+         if (size(tokens) /= 4 .or. tokens(2)%kind /= TOKEN_WORD .or. tokens(3)%kind /= TOKEN_COMMA .or. &
+             tokens(4)%kind /= TOKEN_WORD) then
+            call fail('set '//option//': two numbers X,Y expected (ratio, square are not supported)', iostat, iomsg)
+            return
+         endif
+         if (.not. (to_number(tokens(2)%text, pair(1)) .and. to_number(tokens(4)%text, pair(2)))) then
+            call fail('set '//option//': two numbers X,Y expected', iostat, iomsg)
+            return
+         endif
+      endif
+      if (keyword(option, 'size', 2_I4P)) then
+         if (any(pair <= 0.0_R8P)) then
+            call fail('set size: the size must be positive', iostat, iomsg)
+            return
+         endif
+         call self%figure%set_size(pair(1), pair(2))
+      else
+         call self%figure%set_origin(pair(1), pair(2))
+      endif
+      endsubroutine pair_option
 
       subroutine tics_option(tics)
       !< `set xtics|ytics [auto|autofreq|STEP|START,STEP|START,STEP,END]`.
@@ -879,6 +931,10 @@ contains
    endif
    if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
    if (keyword(option, 'multiplot', 5_I4P)) then
+      if (self%multiplot .and. self%output == '-') then
+         call self%save_output(iostat, iomsg)
+         if (iostat /= 0_I4P) return
+      endif
       call self%figure%unset_multiplot
       self%multiplot = .false.
       self%advance_pending = .false.

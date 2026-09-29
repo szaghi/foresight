@@ -42,7 +42,9 @@ that did what it says.
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] | text output, 79 x 24 by default, on the standard output | — |
-| **multi**plot **lay**out `R,C` [**t**itle `"text"`] | grid of panels, see below | back to one panel |
+| **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
+| **or**igin [`X,Y`] | bottom left corner of the plot, page fractions (default `0,0`); not with a layout | — |
+| **si**ze [`W,H`] | plot size, page fractions (default `1,1`); not with a layout | — |
 
 ## `plot` items
 
@@ -165,9 +167,24 @@ Each `plot` fills the next panel with the settings in force. The advance happens
 `plot` after a plot, so settings written for the next panel never alter the one just plotted. A plot beyond the last
 panel is an error.
 
+Without `layout`, each panel lies in the box of its `set origin` and `set size`, fractions of the page below the
+multiplot title, from the bottom left as gnuplot. Panels may overlap: an inset.
+
+```gnuplot
+set multiplot title 'Run monitor'
+plot 'run.dat' u 1:3 w l t 'cd'
+set origin 0.35,0.35; set size 0.55,0.5; unset key; set logscale y
+plot 'run.dat' u 1:2 w lp
+unset multiplot
+```
+
+Panels are drawn in order, without a background: in the HTML page the mouse acts on the topmost panel under it.
+On the standard output (`set terminal dumb`), a multiplot is printed once, complete, at `unset multiplot`; files are
+rewritten at each plot, so that a watched page shows the panels done so far.
+
 ## Not supported
 
-Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, log bases other than 10, manual multiplot
-`origin`/`size`; in `set xtics`, explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `nomirror`,
+Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, log bases other than 10, `set size ratio` and
+`square`; in `set xtics`, explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `nomirror`,
 `rotate`, `out` options; in `set format`, the `%s`, `%L`, `%T` conversions; the key `outside` the plot area;
 point types (`pt`).

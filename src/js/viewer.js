@@ -628,7 +628,8 @@
 
     // panel under the page point p, or null
     function panelAt(p) {
-      for (var k = 0; k < panels.length; k++) if (panels[k].contains(p)) return panels[k];
+      // topmost first: a panel drawn later (an inset) lies over the earlier ones
+      for (var k = panels.length - 1; k >= 0; k--) if (panels[k].contains(p)) return panels[k];
       return null;
     }
 

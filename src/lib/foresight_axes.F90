@@ -39,6 +39,8 @@ type :: axes_object
    character(len=6)                 :: key_h = 'right' !< Key horizontal position: left, center, right.
    character(len=6)                 :: key_v = 'top'   !< Key vertical position: top, center, bottom.
    logical                          :: key_box = .false. !< Draw a box around the key.
+   real(R8P)                        :: origin(2) = [0.0_R8P, 0.0_R8P] !< Bottom left corner, page fraction (`set origin`).
+   real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: render                      !< Render the panel.

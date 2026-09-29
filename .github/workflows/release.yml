@@ -36,7 +36,8 @@ jobs:
           tag, path = sys.argv[1], sys.argv[2]
           with open(path) as f:
               content = f.read()
-          pattern = rf'(## \[{re.escape(tag)}\].*?)(?=\n## |\Z)'
+          # git-cliff writes the version without its v prefix: ## [0.1.0]
+          pattern = rf'(## \[v?{re.escape(tag.lstrip("v"))}\].*?)(?=\n## |\Z)'
           match = re.search(pattern, content, re.DOTALL)
           print(match.group(1).strip() if match else f"Release {tag}\n\nSee CHANGELOG.md for details.")
           PYEOF

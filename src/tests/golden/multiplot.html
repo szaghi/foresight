@@ -871,7 +871,8 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
 
     // panel under the page point p, or null
     function panelAt(p) {
-      for (var k = 0; k < panels.length; k++) if (panels[k].contains(p)) return panels[k];
+      // topmost first: a panel drawn later (an inset) lies over the earlier ones
+      for (var k = panels.length - 1; k >= 0; k--) if (panels[k].contains(p)) return panels[k];
       return null;
     }
 

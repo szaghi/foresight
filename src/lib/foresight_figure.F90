@@ -41,6 +41,9 @@ type :: figure_object
    integer(I4P)                   :: rows         = 1_I4P     !< Panel grid rows.
    integer(I4P)                   :: cols         = 1_I4P     !< Panel grid columns.
    integer(I4P)                   :: current      = 1_I4P     !< Current panel, filled row by row.
+   logical                        :: layout       = .false.   !< Multiplot grid: panels in cells, else in their
+                                                              !< `origin`/`size` boxes (single plot, manual multiplot).
+   logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
    contains
@@ -54,7 +57,9 @@ type :: figure_object
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
+      procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
+      procedure, pass(self) :: set_size        !< gnuplot `set size`.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
@@ -99,6 +104,8 @@ contains
    self%rows = fresh%rows
    self%cols = fresh%cols
    self%current = fresh%current
+   self%layout = fresh%layout
+   self%manual = fresh%manual
    self%title = ''
    if (allocated(self%panels)) deallocate(self%panels)
    call self%ensure_panels
@@ -108,14 +115,19 @@ contains
    endsubroutine init
 
    subroutine next_panel(self)
-   !< Move to the next panel of the multiplot grid; the settings of the current panel carry over, as in gnuplot.
+   !< Move to the next panel of the multiplot: the next grid cell, or a new panel in a manual multiplot; the settings
+   !< of the current panel carry over, as in gnuplot.
    class(figure_object), intent(inout) :: self     !< Figure.
    type(axes_object)                   :: settings !< Current panel without its series.
 
    call self%ensure_panels
-   if (self%current >= size(self%panels, kind=I4P)) error stop 'foresight: next_panel: the multiplot layout is full'
    settings = self%panels(self%current)
    if (allocated(settings%series)) deallocate(settings%series)
+   if (self%manual) then
+      self%panels = [self%panels, settings]
+   elseif (self%current >= size(self%panels, kind=I4P)) then
+      error stop 'foresight: next_panel: the multiplot layout is full'
+   endif
    self%current = self%current + 1_I4P
    self%panels(self%current) = settings
    endsubroutine next_panel
@@ -248,29 +260,54 @@ contains
 
    subroutine set_multiplot(self, rows, cols, title)
    !< Lay out a `rows` x `cols` grid of panels, filled row by row starting from the first; every panel starts from the
-   !< settings of the current one, without its series.
+   !< settings of the current one, without its series. Without `rows` and `cols`, a manual multiplot: each panel lies
+   !< in its `set_origin`/`set_size` box, as gnuplot `set multiplot` without layout.
    class(figure_object), intent(inout)        :: self     !< Figure.
-   integer(I4P),         intent(in)           :: rows     !< Grid rows.
-   integer(I4P),         intent(in)           :: cols     !< Grid columns.
+   integer(I4P),         intent(in), optional :: rows     !< Grid rows.
+   integer(I4P),         intent(in), optional :: cols     !< Grid columns.
    character(len=*),     intent(in), optional :: title    !< Multiplot title.
    type(axes_object)                          :: settings !< Current panel without its series.
    integer(I4P)                               :: p        !< Panel counter.
 
-   if (rows < 1_I4P .or. cols < 1_I4P) error stop 'foresight: set_multiplot: the layout needs positive rows and cols'
+   if (present(rows) .neqv. present(cols)) error stop 'foresight: set_multiplot: give both rows and cols, or neither'
    call self%ensure_panels
    settings = self%panels(self%current)
    if (allocated(settings%series)) deallocate(settings%series)
    deallocate(self%panels)
-   allocate(self%panels(rows * cols))
-   do p = 1_I4P, rows * cols
+   self%layout = present(rows)
+   self%manual = .not. present(rows)
+   self%rows = 1_I4P
+   self%cols = 1_I4P
+   if (self%layout) then
+      if (rows < 1_I4P .or. cols < 1_I4P) error stop 'foresight: set_multiplot: the layout needs positive rows and cols'
+      if (any(settings%origin /= 0.0_R8P) .or. any(settings%size /= 1.0_R8P)) &
+         error stop 'foresight: set_multiplot: a layout needs the default origin 0,0 and size 1,1'
+      self%rows = rows
+      self%cols = cols
+   endif
+   allocate(self%panels(self%rows * self%cols))
+   do p = 1_I4P, self%rows * self%cols
       self%panels(p) = settings
    enddo
-   self%rows = rows
-   self%cols = cols
    self%current = 1_I4P
    self%title = ''
    if (present(title)) self%title = title
    endsubroutine set_multiplot
+
+   subroutine set_origin(self, x, y)
+   !< Bottom left corner of the plot as page fractions, as gnuplot `set origin x,y`: for a single plot and the panels
+   !< of a manual multiplot (not with a layout).
+   class(figure_object), intent(inout) :: self !< Figure.
+   real(R8P),            intent(in)    :: x    !< Left side, page width fraction.
+   real(R8P),            intent(in)    :: y    !< Bottom side, page height fraction.
+
+   if (self%layout) error stop 'foresight: set_origin: not with a multiplot layout'
+   call self%ensure_panels
+   ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
+   associate(panel => self%panels(self%current))
+      panel%origin = [x, y]
+   endassociate
+   endsubroutine set_origin
 
    pure subroutine set_refresh(self, seconds)
    !< Make the HTML page reload itself every `seconds` (0 disables): live view of a file rewritten by a running job.
@@ -281,6 +318,21 @@ contains
 
    self%refresh = max(0_I4P, seconds)
    endsubroutine set_refresh
+
+   subroutine set_size(self, width, height)
+   !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
+   !< multiplot (not with a layout).
+   class(figure_object), intent(inout) :: self   !< Figure.
+   real(R8P),            intent(in)    :: width  !< Width, page width fraction, > 0.
+   real(R8P),            intent(in)    :: height !< Height, page height fraction, > 0.
+
+   if (self%layout) error stop 'foresight: set_size: not with a multiplot layout'
+   if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%size = [width, height]
+   endassociate
+   endsubroutine set_size
 
    subroutine set_title(self, title)
    !< Set the title of the current panel, empty for none.
@@ -384,6 +436,8 @@ contains
    self%rows = 1_I4P
    self%cols = 1_I4P
    self%current = 1_I4P
+   self%layout = .false.
+   self%manual = .false.
    self%title = ''
    endsubroutine unset_multiplot
 
@@ -417,8 +471,8 @@ contains
    endsubroutine ensure_panels
 
    subroutine render(self, backend, file)
-   !< Render the figure on `backend`, writing `file`: the multiplot title on top, panels in grid cells; in a multiplot
-   !< the panels never plotted stay blank, as in gnuplot.
+   !< Render the figure on `backend`, writing `file`: the multiplot title on top, panels in grid cells of a layout or
+   !< else in their `origin`/`size` boxes; in a multiplot the panels never plotted stay blank, as in gnuplot.
    class(figure_object),  intent(inout) :: self    !< Figure.
    class(backend_object), intent(inout) :: backend !< Output device.
    character(len=*),      intent(in)    :: file    !< Output file.
@@ -440,8 +494,15 @@ contains
          if (size(self%panels) > 1) then
             if (.not. allocated(panel%series)) cycle
          endif
-         call panel%render(backend, real(modulo(p - 1_I4P, self%cols), R8P) * cell(1), &
-                           top + real((p - 1_I4P) / self%cols, R8P) * cell(2), cell(1), cell(2), self%font_size)
+         if (self%layout) then
+            call panel%render(backend, real(modulo(p - 1_I4P, self%cols), R8P) * cell(1), &
+                              top + real((p - 1_I4P) / self%cols, R8P) * cell(2), cell(1), cell(2), self%font_size)
+         else
+            ! fractions from the bottom left of the page below the multiplot title, as gnuplot
+            call panel%render(backend, panel%origin(1) * self%width, &
+                              top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (self%height - top), &
+                              panel%size(1) * self%width, panel%size(2) * (self%height - top), self%font_size)
+         endif
       endassociate
    enddo
    call backend%end_page

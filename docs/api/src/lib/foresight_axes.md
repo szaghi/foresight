@@ -72,6 +72,8 @@ Plot panel.
 | `key_h` | character(len=6) |  | Key horizontal position: left, center, right. |
 | `key_v` | character(len=6) |  | Key vertical position: top, center, bottom. |
 | `key_box` | logical |  | Draw a box around the key. |
+| `origin` | real(kind=R8P) |  | Bottom left corner, page fraction (`set origin`). |
+| `size` | real(kind=R8P) |  | Width, height, page fraction (`set size`). |
 
 #### Type-Bound Procedures
 
