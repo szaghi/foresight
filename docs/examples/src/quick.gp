@@ -1,0 +1,1 @@
+#run ch4-e foresight -e "set logscale y" -e "plot 'run.dat' u 1:2 t 'continuity'" -o ch4-e.svg

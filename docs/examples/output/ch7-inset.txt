@@ -1,0 +1,2 @@
+$ foresight inset.gp
+foresight: ch7-inset.html

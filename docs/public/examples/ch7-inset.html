@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drag coefficient</title>
+<style>body{margin:0;background:#fff}svg{display:block;user-select:none}</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="Arial,Helvetica,sans-serif" font-size="12" data-refresh="0">
+<rect x="0" y="0" width="640" height="400" fill="white" stroke="none" stroke-width="0"/>
+<text x="320" y="22" text-anchor="middle">Drag coefficient</text>
+<g class="fs-axes" data-area="42.4 630 47 369" data-x="0 1.2e2" data-y="1.5e-1 5.5e-1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,369 42.4,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="91.37,369 91.37,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="140.33,369 140.33,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="189.3,369 189.3,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="238.27,369 238.27,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="287.23,369 287.23,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="336.2,369 336.2,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="385.17,369 385.17,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="434.13,369 434.13,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="483.1,369 483.1,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="532.07,369 532.07,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="581.03,369 581.03,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="630,369 630,47"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,369 630,369"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,328.75 630,328.75"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,288.5 630,288.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,248.25 630,248.25"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,208 630,208"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,167.75 630,167.75"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,127.5 630,127.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,87.25 630,87.25"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,47 630,47"/>
+</g>
+<svg class="fs-plot" x="42.4" y="47" width="587.6" height="322" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.008333,0.032828 0.016667,0.07981 0.025,0.138535 0.033333,0.206445 0.041667,0.280923 0.05,0.359365 0.058333,0.439258 0.066667,0.51824
+0.075,0.594155 0.083333,0.665102 0.091667,0.729467 0.1,0.78594 0.108333,0.83354 0.116667,0.871605 0.125,0.899798 0.133333,0.918085
+0.141667,0.92671 0.15,0.926175 0.158333,0.9172 0.166667,0.900685 0.175,0.877675 0.183333,0.849318 0.191667,0.816823 0.2,0.781423
+0.208333,0.74434 0.216667,0.706745 0.225,0.66974 0.233333,0.63432 0.241667,0.60136 0.25,0.571603 0.258333,0.545635 0.266667,0.523898
+0.275,0.50668 0.283333,0.49412 0.291667,0.48621 0.3,0.482818 0.308333,0.48369 0.316667,0.488478 0.325,0.49674 0.333333,0.50798
+0.341667,0.521653 0.35,0.537183 0.358333,0.553993 0.366667,0.57151 0.375,0.589188 0.383333,0.606515 0.391667,0.62303 0.4,0.638333
+0.408333,0.652083 0.416667,0.66401 0.425,0.673925 0.433333,0.681698 0.441667,0.687278 0.45,0.690673 0.458333,0.691958 0.466667,0.691258
+0.475,0.688748 0.483333,0.684633 0.491667,0.679155 0.5,0.672575"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.508333,0.66516 0.516667,0.657183 0.525,0.648913 0.533333,0.640608 0.541667,0.632497 0.55,0.624803 0.558333,0.617705 0.566667,0.611358
+0.575,0.605883 0.583333,0.601365 0.591667,0.597863 0.6,0.595395 0.608333,0.593948 0.616667,0.593488 0.625,0.593953 0.633333,0.595253
+0.641667,0.597293 0.65,0.599955 0.658333,0.60312 0.666667,0.606658 0.675,0.610438 0.683333,0.614338 0.691667,0.61824 0.7,0.622033
+0.708333,0.625615 0.716667,0.628905 0.725,0.631835 0.733333,0.634345 0.741667,0.636398 0.75,0.637973 0.758333,0.639063 0.766667,0.63967
+0.775,0.63982 0.783333,0.63954 0.791667,0.638873 0.8,0.637865 0.808333,0.636573 0.816667,0.635055 0.825,0.633368 0.833333,0.631578
+0.841667,0.629738 0.85,0.627908 0.858333,0.626135 0.866667,0.624468 0.875,0.622943 0.883333,0.621595 0.891667,0.620445 0.9,0.61951
+0.908333,0.618805 0.916667,0.618327 0.925,0.618073 0.933333,0.618035 0.941667,0.618195 0.95,0.618535 0.958333,0.61903 0.966667,0.619658
+0.975,0.620385 0.983333,0.621188 0.991667,0.622035 1,0.6229"/>
+</svg>
+<rect x="42.4" y="47" width="587.6" height="322" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,369 42.4,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,47 42.4,53"/>
+<text x="42.4" y="387" text-anchor="middle">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="91.37,369 91.37,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="91.37,47 91.37,53"/>
+<text x="91.37" y="387" text-anchor="middle">10</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="140.33,369 140.33,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="140.33,47 140.33,53"/>
+<text x="140.33" y="387" text-anchor="middle">20</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="189.3,369 189.3,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="189.3,47 189.3,53"/>
+<text x="189.3" y="387" text-anchor="middle">30</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="238.27,369 238.27,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="238.27,47 238.27,53"/>
+<text x="238.27" y="387" text-anchor="middle">40</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="287.23,369 287.23,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="287.23,47 287.23,53"/>
+<text x="287.23" y="387" text-anchor="middle">50</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="336.2,369 336.2,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="336.2,47 336.2,53"/>
+<text x="336.2" y="387" text-anchor="middle">60</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="385.17,369 385.17,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="385.17,47 385.17,53"/>
+<text x="385.17" y="387" text-anchor="middle">70</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="434.13,369 434.13,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="434.13,47 434.13,53"/>
+<text x="434.13" y="387" text-anchor="middle">80</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="483.1,369 483.1,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="483.1,47 483.1,53"/>
+<text x="483.1" y="387" text-anchor="middle">90</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="532.07,369 532.07,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="532.07,47 532.07,53"/>
+<text x="532.07" y="387" text-anchor="middle">100</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="581.03,369 581.03,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="581.03,47 581.03,53"/>
+<text x="581.03" y="387" text-anchor="middle">110</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,369 630,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,47 630,53"/>
+<text x="630" y="387" text-anchor="middle">120</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,369 48.4,369"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,369 624,369"/>
+<text x="36.4" y="373.2" text-anchor="end">0.15</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,328.75 48.4,328.75"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,328.75 624,328.75"/>
+<text x="36.4" y="332.95" text-anchor="end">0.2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,288.5 48.4,288.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,288.5 624,288.5"/>
+<text x="36.4" y="292.7" text-anchor="end">0.25</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,248.25 48.4,248.25"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,248.25 624,248.25"/>
+<text x="36.4" y="252.45" text-anchor="end">0.3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,208 48.4,208"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,208 624,208"/>
+<text x="36.4" y="212.2" text-anchor="end">0.35</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,167.75 48.4,167.75"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,167.75 624,167.75"/>
+<text x="36.4" y="171.95" text-anchor="end">0.4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,127.5 48.4,127.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,127.5 624,127.5"/>
+<text x="36.4" y="131.7" text-anchor="end">0.45</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,87.25 48.4,87.25"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,87.25 624,87.25"/>
+<text x="36.4" y="91.45" text-anchor="end">0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="42.4,47 48.4,47"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,47 624,47"/>
+<text x="36.4" y="51.2" text-anchor="end">0.55</text>
+</g>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="584,60.5 620,60.5"/>
+<text x="578" y="64.7" text-anchor="end">cd</text>
+</g>
+<g class="fs-axes" data-area="330.4 598 205.67 324.72" data-x="8e1 1.2e2" data-y="2.8e-1 3.2e-1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,324.72 330.4,205.67"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="397.3,324.72 397.3,205.67"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="464.2,324.72 464.2,205.67"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="531.1,324.72 531.1,205.67"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="598,324.72 598,205.67"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,324.72 598,324.72"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,294.96 598,294.96"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,265.2 598,265.2"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,235.43 598,235.43"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="330.4,205.67 598,205.67"/>
+</g>
+<svg class="fs-plot" x="330.4" y="205.67" width="267.6" height="119.05" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<path class="fs-ybars" data-cap="6" fill="none" stroke="#9400d3" stroke-width="1" vector-effect="non-scaling-stroke" d="M-1.975,-4.421725L-1.975,-6.421725M-1.925,-3.7873L-1.925,-4.942M-1.875,-2.493563L-1.875,-3.387988M-1.825,-0.97946L-1.825,-1.73539
+M-1.775,0.524883L-1.775,-0.141782M-1.725,1.846188L-1.725,1.243163M-1.675,2.86275L-1.675,2.30805M-1.625,3.506175L-1.625,2.989775
+M-1.575,3.759636L-1.575,3.274564M-1.525,3.651416L-1.525,3.192584M-1.475,3.244968L-1.475,2.808532M-1.425,2.62674L-1.425,2.209711
+M-1.375,1.8934L-1.375,1.4934M-1.325,1.13985L-1.325,0.75495M-1.275,0.449295L-1.275,0.077905M-1.225,-0.114045L-1.225,-0.473255
+M-1.175,-0.509122L-1.175,-0.857278M-1.125,-0.718869L-1.125,-1.056931M-1.075,-0.748701L-1.075,-1.077499M-1.025,-0.622472L-1.025,-0.942728
+M-0.975,-0.377301L-0.975,-0.689649M-0.925,-0.057576L-0.925,-0.362574M-0.875,0.290946L-0.875,-0.007196M-0.825,0.626165L-0.825,0.334435
+M-0.775,0.913682L-0.775,0.627968M-0.725,1.129278L-0.725,0.849222M-0.675,1.260136L-0.675,0.985415M-0.625,1.304415L-0.625,1.034735
+M-0.575,1.269928L-0.575,1.005022M-0.525,1.171739L-0.525,0.911361M-0.475,1.029637L-0.475,0.773563M-0.425,0.865113L-0.425,0.613137
+M-0.375,0.69901L-0.375,0.45094M-0.325,0.549219L-0.325,0.304881M-0.275,0.429211L-0.275,0.188439M-0.225,0.347303L-0.225,0.109947
+M-0.175,0.306516L-0.175,0.072434M-0.125,0.304995L-0.125,0.074055M-0.075,0.336886L-0.075,0.108965M-0.025,0.393709L-0.025,0.168691
+M0.025,0.465486L0.025,0.243264M0.075,0.542164L0.075,0.322636M0.125,0.614615L0.125,0.397685M0.175,0.675561L0.175,0.461139
+M0.225,0.719975L0.225,0.507975M0.275,0.745454L0.275,0.535797M0.325,0.751895L0.325,0.544505M0.375,0.741323L0.375,0.536127
+M0.425,0.71726L0.425,0.514191M0.475,0.684179L0.475,0.483171M0.525,0.646879L0.525,0.447871M0.575,0.609883L0.575,0.412817
+M0.625,0.577015L0.625,0.381835M0.675,0.551124L0.675,0.357776M0.725,0.533833L0.725,0.342267M0.775,0.525641L0.775,0.335809
+M0.825,0.526022L0.825,0.337878M0.875,0.533551L0.875,0.34705M0.925,0.5463L0.925,0.3614M0.975,0.56202L0.975,0.37868"/>
+<path class="fs-pts" data-pt="7" data-size="4.5" data-lw="1" data-color="#9400d3" fill="none" stroke="none" d="M-1.975,-5.421725 M-1.925,-4.36465 M-1.875,-2.940775 M-1.825,-1.357425 M-1.775,0.19155 M-1.725,1.544675 M-1.675,2.5854 M-1.625,3.247975
+M-1.575,3.5171 M-1.525,3.422 M-1.475,3.02675 M-1.425,2.418225 M-1.375,1.6934 M-1.325,0.9474 M-1.275,0.2636 M-1.225,-0.29365
+M-1.175,-0.6832 M-1.125,-0.8879 M-1.075,-0.9131 M-1.025,-0.7826 M-0.975,-0.533475 M-0.925,-0.210075 M-0.875,0.141875 M-0.825,0.4803
+M-0.775,0.770825 M-0.725,0.98925 M-0.675,1.122775 M-0.625,1.169575 M-0.575,1.137475 M-0.525,1.04155 M-0.475,0.9016 M-0.425,0.739125
+M-0.375,0.574975 M-0.325,0.42705 M-0.275,0.308825 M-0.225,0.228625 M-0.175,0.189475 M-0.125,0.189525 M-0.075,0.222925 M-0.025,0.2812
+M0.025,0.354375 M0.075,0.4324 M0.125,0.50615 M0.175,0.56835 M0.225,0.613975 M0.275,0.640625 M0.325,0.6482 M0.375,0.638725
+M0.425,0.615725 M0.475,0.583675 M0.525,0.547375 M0.575,0.51135 M0.625,0.479425 M0.675,0.45445 M0.725,0.43805 M0.775,0.430725
+M0.825,0.43195 M0.875,0.4403 M0.925,0.45385 M0.975,0.47035"/>
+</svg>
+<svg class="fs-caps" x="330.4" y="205.67" width="267.6" height="119.05" viewBox="0 0 267.6 119.05" overflow="hidden">
+<line x1="-531.51" y1="-526.41" x2="-525.51" y2="-526.41" stroke="#9400d3" stroke-width="1"/>
+<line x1="-531.51" y1="-764.51" x2="-525.51" y2="-764.51" stroke="#9400d3" stroke-width="1"/>
+<line x1="-518.13" y1="-450.88" x2="-512.13" y2="-450.88" stroke="#9400d3" stroke-width="1"/>
+<line x1="-518.13" y1="-588.35" x2="-512.13" y2="-588.35" stroke="#9400d3" stroke-width="1"/>
+<line x1="-504.75" y1="-296.86" x2="-498.75" y2="-296.86" stroke="#9400d3" stroke-width="1"/>
+<line x1="-504.75" y1="-403.34" x2="-498.75" y2="-403.34" stroke="#9400d3" stroke-width="1"/>
+<line x1="-491.37" y1="-116.6" x2="-485.37" y2="-116.6" stroke="#9400d3" stroke-width="1"/>
+<line x1="-491.37" y1="-206.6" x2="-485.37" y2="-206.6" stroke="#9400d3" stroke-width="1"/>
+<line x1="-477.99" y1="62.49" x2="-471.99" y2="62.49" stroke="#9400d3" stroke-width="1"/>
+<line x1="-477.99" y1="-16.88" x2="-471.99" y2="-16.88" stroke="#9400d3" stroke-width="1"/>
+<line x1="-464.61" y1="219.79" x2="-458.61" y2="219.79" stroke="#9400d3" stroke-width="1"/>
+<line x1="-464.61" y1="148" x2="-458.61" y2="148" stroke="#9400d3" stroke-width="1"/>
+<line x1="-451.23" y1="340.81" x2="-445.23" y2="340.81" stroke="#9400d3" stroke-width="1"/>
+<line x1="-451.23" y1="274.77" x2="-445.23" y2="274.77" stroke="#9400d3" stroke-width="1"/>
+<line x1="-437.85" y1="417.41" x2="-431.85" y2="417.41" stroke="#9400d3" stroke-width="1"/>
+<line x1="-437.85" y1="355.93" x2="-431.85" y2="355.93" stroke="#9400d3" stroke-width="1"/>
+<line x1="-424.47" y1="447.58" x2="-418.47" y2="447.58" stroke="#9400d3" stroke-width="1"/>
+<line x1="-424.47" y1="389.84" x2="-418.47" y2="389.84" stroke="#9400d3" stroke-width="1"/>
+<line x1="-411.09" y1="434.7" x2="-405.09" y2="434.7" stroke="#9400d3" stroke-width="1"/>
+<line x1="-411.09" y1="380.08" x2="-405.09" y2="380.08" stroke="#9400d3" stroke-width="1"/>
+<line x1="-397.71" y1="386.31" x2="-391.71" y2="386.31" stroke="#9400d3" stroke-width="1"/>
+<line x1="-397.71" y1="334.36" x2="-391.71" y2="334.36" stroke="#9400d3" stroke-width="1"/>
+<line x1="-384.33" y1="312.71" x2="-378.33" y2="312.71" stroke="#9400d3" stroke-width="1"/>
+<line x1="-384.33" y1="263.07" x2="-378.33" y2="263.07" stroke="#9400d3" stroke-width="1"/>
+<line x1="-370.95" y1="225.41" x2="-364.95" y2="225.41" stroke="#9400d3" stroke-width="1"/>
+<line x1="-370.95" y1="177.79" x2="-364.95" y2="177.79" stroke="#9400d3" stroke-width="1"/>
+<line x1="-357.57" y1="135.7" x2="-351.57" y2="135.7" stroke="#9400d3" stroke-width="1"/>
+<line x1="-357.57" y1="89.88" x2="-351.57" y2="89.88" stroke="#9400d3" stroke-width="1"/>
+<line x1="-344.19" y1="53.49" x2="-338.19" y2="53.49" stroke="#9400d3" stroke-width="1"/>
+<line x1="-344.19" y1="9.27" x2="-338.19" y2="9.27" stroke="#9400d3" stroke-width="1"/>
+<line x1="-330.81" y1="-13.58" x2="-324.81" y2="-13.58" stroke="#9400d3" stroke-width="1"/>
+<line x1="-330.81" y1="-56.34" x2="-324.81" y2="-56.34" stroke="#9400d3" stroke-width="1"/>
+<line x1="-317.43" y1="-60.61" x2="-311.43" y2="-60.61" stroke="#9400d3" stroke-width="1"/>
+<line x1="-317.43" y1="-102.06" x2="-311.43" y2="-102.06" stroke="#9400d3" stroke-width="1"/>
+<line x1="-304.05" y1="-85.58" x2="-298.05" y2="-85.58" stroke="#9400d3" stroke-width="1"/>
+<line x1="-304.05" y1="-125.83" x2="-298.05" y2="-125.83" stroke="#9400d3" stroke-width="1"/>
+<line x1="-290.67" y1="-89.13" x2="-284.67" y2="-89.13" stroke="#9400d3" stroke-width="1"/>
+<line x1="-290.67" y1="-128.28" x2="-284.67" y2="-128.28" stroke="#9400d3" stroke-width="1"/>
+<line x1="-277.29" y1="-74.11" x2="-271.29" y2="-74.11" stroke="#9400d3" stroke-width="1"/>
+<line x1="-277.29" y1="-112.23" x2="-271.29" y2="-112.23" stroke="#9400d3" stroke-width="1"/>
+<line x1="-263.91" y1="-44.92" x2="-257.91" y2="-44.92" stroke="#9400d3" stroke-width="1"/>
+<line x1="-263.91" y1="-82.1" x2="-257.91" y2="-82.1" stroke="#9400d3" stroke-width="1"/>
+<line x1="-250.53" y1="-6.85" x2="-244.53" y2="-6.85" stroke="#9400d3" stroke-width="1"/>
+<line x1="-250.53" y1="-43.16" x2="-244.53" y2="-43.16" stroke="#9400d3" stroke-width="1"/>
+<line x1="-237.15" y1="34.64" x2="-231.15" y2="34.64" stroke="#9400d3" stroke-width="1"/>
+<line x1="-237.15" y1="-0.86" x2="-231.15" y2="-0.86" stroke="#9400d3" stroke-width="1"/>
+<line x1="-223.77" y1="74.54" x2="-217.77" y2="74.54" stroke="#9400d3" stroke-width="1"/>
+<line x1="-223.77" y1="39.81" x2="-217.77" y2="39.81" stroke="#9400d3" stroke-width="1"/>
+<line x1="-210.39" y1="108.77" x2="-204.39" y2="108.77" stroke="#9400d3" stroke-width="1"/>
+<line x1="-210.39" y1="74.76" x2="-204.39" y2="74.76" stroke="#9400d3" stroke-width="1"/>
+<line x1="-197.01" y1="134.44" x2="-191.01" y2="134.44" stroke="#9400d3" stroke-width="1"/>
+<line x1="-197.01" y1="101.1" x2="-191.01" y2="101.1" stroke="#9400d3" stroke-width="1"/>
+<line x1="-183.63" y1="150.02" x2="-177.63" y2="150.02" stroke="#9400d3" stroke-width="1"/>
+<line x1="-183.63" y1="117.31" x2="-177.63" y2="117.31" stroke="#9400d3" stroke-width="1"/>
+<line x1="-170.25" y1="155.29" x2="-164.25" y2="155.29" stroke="#9400d3" stroke-width="1"/>
+<line x1="-170.25" y1="123.19" x2="-164.25" y2="123.19" stroke="#9400d3" stroke-width="1"/>
+<line x1="-156.87" y1="151.18" x2="-150.87" y2="151.18" stroke="#9400d3" stroke-width="1"/>
+<line x1="-156.87" y1="119.65" x2="-150.87" y2="119.65" stroke="#9400d3" stroke-width="1"/>
+<line x1="-143.49" y1="139.5" x2="-137.49" y2="139.5" stroke="#9400d3" stroke-width="1"/>
+<line x1="-143.49" y1="108.5" x2="-137.49" y2="108.5" stroke="#9400d3" stroke-width="1"/>
+<line x1="-130.11" y1="122.58" x2="-124.11" y2="122.58" stroke="#9400d3" stroke-width="1"/>
+<line x1="-130.11" y1="92.09" x2="-124.11" y2="92.09" stroke="#9400d3" stroke-width="1"/>
+<line x1="-116.73" y1="102.99" x2="-110.73" y2="102.99" stroke="#9400d3" stroke-width="1"/>
+<line x1="-116.73" y1="72.99" x2="-110.73" y2="72.99" stroke="#9400d3" stroke-width="1"/>
+<line x1="-103.35" y1="83.22" x2="-97.35" y2="83.22" stroke="#9400d3" stroke-width="1"/>
+<line x1="-103.35" y1="53.68" x2="-97.35" y2="53.68" stroke="#9400d3" stroke-width="1"/>
+<line x1="-89.97" y1="65.38" x2="-83.97" y2="65.38" stroke="#9400d3" stroke-width="1"/>
+<line x1="-89.97" y1="36.3" x2="-83.97" y2="36.3" stroke="#9400d3" stroke-width="1"/>
+<line x1="-76.59" y1="51.1" x2="-70.59" y2="51.1" stroke="#9400d3" stroke-width="1"/>
+<line x1="-76.59" y1="22.43" x2="-70.59" y2="22.43" stroke="#9400d3" stroke-width="1"/>
+<line x1="-63.21" y1="41.35" x2="-57.21" y2="41.35" stroke="#9400d3" stroke-width="1"/>
+<line x1="-63.21" y1="13.09" x2="-57.21" y2="13.09" stroke="#9400d3" stroke-width="1"/>
+<line x1="-49.83" y1="36.49" x2="-43.83" y2="36.49" stroke="#9400d3" stroke-width="1"/>
+<line x1="-49.83" y1="8.62" x2="-43.83" y2="8.62" stroke="#9400d3" stroke-width="1"/>
+<line x1="-36.45" y1="36.31" x2="-30.45" y2="36.31" stroke="#9400d3" stroke-width="1"/>
+<line x1="-36.45" y1="8.82" x2="-30.45" y2="8.82" stroke="#9400d3" stroke-width="1"/>
+<line x1="-23.07" y1="40.11" x2="-17.07" y2="40.11" stroke="#9400d3" stroke-width="1"/>
+<line x1="-23.07" y1="12.97" x2="-17.07" y2="12.97" stroke="#9400d3" stroke-width="1"/>
+<line x1="-9.69" y1="46.87" x2="-3.69" y2="46.87" stroke="#9400d3" stroke-width="1"/>
+<line x1="-9.69" y1="20.08" x2="-3.69" y2="20.08" stroke="#9400d3" stroke-width="1"/>
+<line x1="3.69" y1="55.42" x2="9.69" y2="55.42" stroke="#9400d3" stroke-width="1"/>
+<line x1="3.69" y1="28.96" x2="9.69" y2="28.96" stroke="#9400d3" stroke-width="1"/>
+<line x1="17.07" y1="64.54" x2="23.07" y2="64.54" stroke="#9400d3" stroke-width="1"/>
+<line x1="17.07" y1="38.41" x2="23.07" y2="38.41" stroke="#9400d3" stroke-width="1"/>
+<line x1="30.45" y1="73.17" x2="36.45" y2="73.17" stroke="#9400d3" stroke-width="1"/>
+<line x1="30.45" y1="47.34" x2="36.45" y2="47.34" stroke="#9400d3" stroke-width="1"/>
+<line x1="43.83" y1="80.43" x2="49.83" y2="80.43" stroke="#9400d3" stroke-width="1"/>
+<line x1="43.83" y1="54.9" x2="49.83" y2="54.9" stroke="#9400d3" stroke-width="1"/>
+<line x1="57.21" y1="85.71" x2="63.21" y2="85.71" stroke="#9400d3" stroke-width="1"/>
+<line x1="57.21" y1="60.47" x2="63.21" y2="60.47" stroke="#9400d3" stroke-width="1"/>
+<line x1="70.59" y1="88.75" x2="76.59" y2="88.75" stroke="#9400d3" stroke-width="1"/>
+<line x1="70.59" y1="63.79" x2="76.59" y2="63.79" stroke="#9400d3" stroke-width="1"/>
+<line x1="83.97" y1="89.51" x2="89.97" y2="89.51" stroke="#9400d3" stroke-width="1"/>
+<line x1="83.97" y1="64.82" x2="89.97" y2="64.82" stroke="#9400d3" stroke-width="1"/>
+<line x1="97.35" y1="88.25" x2="103.35" y2="88.25" stroke="#9400d3" stroke-width="1"/>
+<line x1="97.35" y1="63.83" x2="103.35" y2="63.83" stroke="#9400d3" stroke-width="1"/>
+<line x1="110.73" y1="85.39" x2="116.73" y2="85.39" stroke="#9400d3" stroke-width="1"/>
+<line x1="110.73" y1="61.21" x2="116.73" y2="61.21" stroke="#9400d3" stroke-width="1"/>
+<line x1="124.11" y1="81.45" x2="130.11" y2="81.45" stroke="#9400d3" stroke-width="1"/>
+<line x1="124.11" y1="57.52" x2="130.11" y2="57.52" stroke="#9400d3" stroke-width="1"/>
+<line x1="137.49" y1="77.01" x2="143.49" y2="77.01" stroke="#9400d3" stroke-width="1"/>
+<line x1="137.49" y1="53.32" x2="143.49" y2="53.32" stroke="#9400d3" stroke-width="1"/>
+<line x1="150.87" y1="72.61" x2="156.87" y2="72.61" stroke="#9400d3" stroke-width="1"/>
+<line x1="150.87" y1="49.15" x2="156.87" y2="49.15" stroke="#9400d3" stroke-width="1"/>
+<line x1="164.25" y1="68.69" x2="170.25" y2="68.69" stroke="#9400d3" stroke-width="1"/>
+<line x1="164.25" y1="45.46" x2="170.25" y2="45.46" stroke="#9400d3" stroke-width="1"/>
+<line x1="177.63" y1="65.61" x2="183.63" y2="65.61" stroke="#9400d3" stroke-width="1"/>
+<line x1="177.63" y1="42.59" x2="183.63" y2="42.59" stroke="#9400d3" stroke-width="1"/>
+<line x1="191.01" y1="63.55" x2="197.01" y2="63.55" stroke="#9400d3" stroke-width="1"/>
+<line x1="191.01" y1="40.75" x2="197.01" y2="40.75" stroke="#9400d3" stroke-width="1"/>
+<line x1="204.39" y1="62.58" x2="210.39" y2="62.58" stroke="#9400d3" stroke-width="1"/>
+<line x1="204.39" y1="39.98" x2="210.39" y2="39.98" stroke="#9400d3" stroke-width="1"/>
+<line x1="217.77" y1="62.62" x2="223.77" y2="62.62" stroke="#9400d3" stroke-width="1"/>
+<line x1="217.77" y1="40.22" x2="223.77" y2="40.22" stroke="#9400d3" stroke-width="1"/>
+<line x1="231.15" y1="63.52" x2="237.15" y2="63.52" stroke="#9400d3" stroke-width="1"/>
+<line x1="231.15" y1="41.32" x2="237.15" y2="41.32" stroke="#9400d3" stroke-width="1"/>
+<line x1="244.53" y1="65.04" x2="250.53" y2="65.04" stroke="#9400d3" stroke-width="1"/>
+<line x1="244.53" y1="43.02" x2="250.53" y2="43.02" stroke="#9400d3" stroke-width="1"/>
+<line x1="257.91" y1="66.91" x2="263.91" y2="66.91" stroke="#9400d3" stroke-width="1"/>
+<line x1="257.91" y1="45.08" x2="263.91" y2="45.08" stroke="#9400d3" stroke-width="1"/>
+</svg>
+<svg class="fs-marks" x="330.4" y="205.67" width="267.6" height="119.05" viewBox="0 0 267.6 119.05" overflow="hidden">
+<path fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M-530.76,-645.46A2.25,2.25 0 1 0 -526.26,-645.46A2.25,2.25 0 1 0 -530.76,-645.46ZM-517.38,-519.61A2.25,2.25 0 1 0 -512.88,-519.61A2.25,2.25 0 1 0 -517.38,-519.61ZM-504,-350.1A2.25,2.25 0 1 0 -499.5,-350.1A2.25,2.25 0 1 0 -504,-350.1ZM-490.62,-161.6A2.25,2.25 0 1 0 -486.12,-161.6A2.25,2.25 0 1 0 -490.62,-161.6ZM-477.24,22.8A2.25,2.25 0 1 0 -472.74,22.8A2.25,2.25 0 1 0 -477.24,22.8ZM-463.86,183.89A2.25,2.25 0 1 0 -459.36,183.89A2.25,2.25 0 1 0 -463.86,183.89ZM-450.48,307.79A2.25,2.25 0 1 0 -445.98,307.79A2.25,2.25 0 1 0 -450.48,307.79ZM-437.1,386.67A2.25,2.25 0 1 0 -432.6,386.67A2.25,2.25 0 1 0 -437.1,386.67ZM-423.72,418.71A2.25,2.25 0 1 0 -419.22,418.71A2.25,2.25 0 1 0 -423.72,418.71ZM-410.34,407.39A2.25,2.25 0 1 0 -405.84,407.39A2.25,2.25 0 1 0 -410.34,407.39ZM-396.96,360.33A2.25,2.25 0 1 0 -392.46,360.33A2.25,2.25 0 1 0 -396.96,360.33ZM-383.58,287.89A2.25,2.25 0 1 0 -379.08,287.89A2.25,2.25 0 1 0 -383.58,287.89ZM-370.2,201.6A2.25,2.25 0 1 0 -365.7,201.6A2.25,2.25 0 1 0 -370.2,201.6ZM-356.82,112.79A2.25,2.25 0 1 0 -352.32,112.79A2.25,2.25 0 1 0 -356.82,112.79ZM-343.44,31.38A2.25,2.25 0 1 0 -338.94,31.38A2.25,2.25 0 1 0 -343.44,31.38ZM-330.06,-34.96A2.25,2.25 0 1 0 -325.56,-34.96A2.25,2.25 0 1 0 -330.06,-34.96ZM-316.68,-81.33A2.25,2.25 0 1 0 -312.18,-81.33A2.25,2.25 0 1 0 -316.68,-81.33ZM-303.3,-105.7A2.25,2.25 0 1 0 -298.8,-105.7A2.25,2.25 0 1 0 -303.3,-105.7ZM-289.92,-108.7A2.25,2.25 0 1 0 -285.42,-108.7A2.25,2.25 0 1 0 -289.92,-108.7ZM-276.54,-93.17A2.25,2.25 0 1 0 -272.04,-93.17A2.25,2.25 0 1 0 -276.54,-93.17ZM-263.16,-63.51A2.25,2.25 0 1 0 -258.66,-63.51A2.25,2.25 0 1 0 -263.16,-63.51ZM-249.78,-25.01A2.25,2.25 0 1 0 -245.28,-25.01A2.25,2.25 0 1 0 -249.78,-25.01ZM-236.4,16.89A2.25,2.25 0 1 0 -231.9,16.89A2.25,2.25 0 1 0 -236.4,16.89ZM-223.02,57.18A2.25,2.25 0 1 0 -218.52,57.18A2.25,2.25 0 1 0 -223.02,57.18ZM-209.64,91.77A2.25,2.25 0 1 0 -205.14,91.77A2.25,2.25 0 1 0 -209.64,91.77ZM-196.26,117.77A2.25,2.25 0 1 0 -191.76,117.77A2.25,2.25 0 1 0 -196.26,117.77ZM-182.88,133.67A2.25,2.25 0 1 0 -178.38,133.67A2.25,2.25 0 1 0 -182.88,133.67ZM-169.5,139.24A2.25,2.25 0 1 0 -165,139.24A2.25,2.25 0 1 0 -169.5,139.24ZM-156.12,135.42A2.25,2.25 0 1 0 -151.62,135.42A2.25,2.25 0 1 0 -156.12,135.42ZM-142.74,124A2.25,2.25 0 1 0 -138.24,124A2.25,2.25 0 1 0 -142.74,124ZM-129.36,107.34A2.25,2.25 0 1 0 -124.86,107.34A2.25,2.25 0 1 0 -129.36,107.34ZM-115.98,87.99A2.25,2.25 0 1 0 -111.48,87.99A2.25,2.25 0 1 0 -115.98,87.99ZM-102.6,68.45A2.25,2.25 0 1 0 -98.1,68.45A2.25,2.25 0 1 0 -102.6,68.45ZM-89.22,50.84A2.25,2.25 0 1 0 -84.72,50.84A2.25,2.25 0 1 0 -89.22,50.84ZM-75.84,36.77A2.25,2.25 0 1 0 -71.34,36.77A2.25,2.25 0 1 0 -75.84,36.77ZM-62.46,27.22A2.25,2.25 0 1 0 -57.96,27.22A2.25,2.25 0 1 0 -62.46,27.22ZM-49.08,22.56A2.25,2.25 0 1 0 -44.58,22.56A2.25,2.25 0 1 0 -49.08,22.56ZM-35.7,22.56A2.25,2.25 0 1 0 -31.2,22.56A2.25,2.25 0 1 0 -35.7,22.56ZM-22.32,26.54A2.25,2.25 0 1 0 -17.82,26.54A2.25,2.25 0 1 0 -22.32,26.54ZM-8.94,33.48A2.25,2.25 0 1 0 -4.44,33.48A2.25,2.25 0 1 0 -8.94,33.48ZM4.44,42.19A2.25,2.25 0 1 0 8.94,42.19A2.25,2.25 0 1 0 4.44,42.19ZM17.82,51.48A2.25,2.25 0 1 0 22.32,51.48A2.25,2.25 0 1 0 17.82,51.48ZM31.2,60.26A2.25,2.25 0 1 0 35.7,60.26A2.25,2.25 0 1 0 31.2,60.26ZM44.58,67.66A2.25,2.25 0 1 0 49.08,67.66A2.25,2.25 0 1 0 44.58,67.66ZM57.96,73.09A2.25,2.25 0 1 0 62.46,73.09A2.25,2.25 0 1 0 57.96,73.09ZM71.34,76.27A2.25,2.25 0 1 0 75.84,76.27A2.25,2.25 0 1 0 71.34,76.27ZM84.72,77.17A2.25,2.25 0 1 0 89.22,77.17A2.25,2.25 0 1 0 84.72,77.17ZM98.1,76.04A2.25,2.25 0 1 0 102.6,76.04A2.25,2.25 0 1 0 98.1,76.04ZM111.48,73.3A2.25,2.25 0 1 0 115.98,73.3A2.25,2.25 0 1 0 111.48,73.3ZM124.86,69.49A2.25,2.25 0 1 0 129.36,69.49A2.25,2.25 0 1 0 124.86,69.49ZM138.24,65.16A2.25,2.25 0 1 0 142.74,65.16A2.25,2.25 0 1 0 138.24,65.16ZM151.62,60.88A2.25,2.25 0 1 0 156.12,60.88A2.25,2.25 0 1 0 151.62,60.88ZM165,57.08A2.25,2.25 0 1 0 169.5,57.08A2.25,2.25 0 1 0 165,57.08ZM178.38,54.1A2.25,2.25 0 1 0 182.88,54.1A2.25,2.25 0 1 0 178.38,54.1ZM191.76,52.15A2.25,2.25 0 1 0 196.26,52.15A2.25,2.25 0 1 0 191.76,52.15ZM205.14,51.28A2.25,2.25 0 1 0 209.64,51.28A2.25,2.25 0 1 0 205.14,51.28ZM218.52,51.42A2.25,2.25 0 1 0 223.02,51.42A2.25,2.25 0 1 0 218.52,51.42ZM231.9,52.42A2.25,2.25 0 1 0 236.4,52.42A2.25,2.25 0 1 0 231.9,52.42ZM245.28,54.03A2.25,2.25 0 1 0 249.78,54.03A2.25,2.25 0 1 0 245.28,54.03ZM258.66,56A2.25,2.25 0 1 0 263.16,56A2.25,2.25 0 1 0 258.66,56Z"/>
+</svg>
+<rect x="330.4" y="205.67" width="267.6" height="119.05" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,324.72 330.4,318.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,205.67 330.4,211.67"/>
+<text x="330.4" y="342.72" text-anchor="middle">80</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="397.3,324.72 397.3,318.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="397.3,205.67 397.3,211.67"/>
+<text x="397.3" y="342.72" text-anchor="middle">90</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="464.2,324.72 464.2,318.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="464.2,205.67 464.2,211.67"/>
+<text x="464.2" y="342.72" text-anchor="middle">100</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="531.1,324.72 531.1,318.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="531.1,205.67 531.1,211.67"/>
+<text x="531.1" y="342.72" text-anchor="middle">110</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,324.72 598,318.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,205.67 598,211.67"/>
+<text x="598" y="342.72" text-anchor="middle">120</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,324.72 336.4,324.72"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,324.72 592,324.72"/>
+<text x="324.4" y="328.92" text-anchor="end">0.28</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,294.96 336.4,294.96"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,294.96 592,294.96"/>
+<text x="324.4" y="299.16" text-anchor="end">0.29</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,265.2 336.4,265.2"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,265.2 592,265.2"/>
+<text x="324.4" y="269.4" text-anchor="end">0.3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,235.43 336.4,235.43"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,235.43 592,235.43"/>
+<text x="324.4" y="239.63" text-anchor="end">0.31</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="330.4,205.67 336.4,205.67"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="598,205.67 592,205.67"/>
+<text x="324.4" y="209.87" text-anchor="end">0.32</text>
+</g>
+</g>
+</svg>
+<script>
+// foresight interactive viewer: gnuplot-like zoom, pan and hotkeys on a foresight SVG plot.
+//
+// The page is fully drawn by foresight; this script only changes the plot area viewBox and
+// regenerates ticks and grid. The tick rules mirror src/lib/foresight_ticks.F90 and the tick
+// formats src/lib/foresight_format.F90 line by line: keep them in sync.
+// Embedded into src/lib/foresight_viewer_js.F90 by scripts/embed_js.sh (lines <= 100 characters).
+(function () {
+  "use strict";
+
+  var TOL = 1e-9, TICK_SPACING = 50, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
+  var MAX_POWER = 10000;
+  var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
+  var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
+  var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
+  var NS = "http://www.w3.org/2000/svg";
+  var POW10 = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14,
+    1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22];
+
+  // ---- tick rules (mirror of foresight_ticks.F90) ----
+
+  // x * 10**e with a single rounding for |e| <= 22 (exact powers of ten), beyond in steps of
+  // 1e22 (mirror of grid_value)
+  function scale10(x, e) {
+    var y = x, k = e;
+    while (k > 22) { y *= 1e22; k -= 22; }
+    while (k < -22) { y /= 1e22; k += 22; }
+    return k >= 0 ? y * POW10[k] : y / POW10[-k];
+  }
+
+  function modulo(a, b) { return ((a % b) + b) % b; }
+
+  function niceStep(raw) {
+    var e = Math.floor(Math.log10(raw)), f = scale10(raw, -e), m;
+    if (f < 1.5) m = 1;
+    else if (f < 3) m = 2;
+    else if (f < 7) m = 5;
+    else { m = 1; e += 1; }
+    return {m: m, e: e};
+  }
+
+  function decimalStr(n, ndec) {
+    if (n === 0) return "0";
+    var digits = String(Math.abs(n)), str, fraction;
+    if (ndec <= 0) {
+      str = digits + "0".repeat(-ndec);
+    } else {
+      if (digits.length <= ndec) digits = "0".repeat(ndec - digits.length + 1) + digits;
+      fraction = digits.slice(digits.length - ndec).replace(/0+$/, "");
+      str = digits.slice(0, digits.length - ndec) + (fraction ? "." + fraction : "");
+    }
+    return n < 0 ? "-" + str : str;
+  }
+
+  function isScientific(magnitude) {
+    return magnitude >= SCI_HIGH || (magnitude > 0 && magnitude < SCI_LOW);
+  }
+
+  // ---- user tick formats (mirror of foresight_format.F90) ----
+
+  // exact value of a decimal text as n * 10**e, no trailing zeros in n; null if malformed
+  function parseDecimal(text) {
+    var m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eEdD]([+-]?\d{1,4}))?$/.exec(text), digits, n, e;
+    if (!m || (m[2] + (m[3] || "")).length === 0) return null;
+    digits = (m[2] + (m[3] || "")).replace(/^0+(?=\d)/, "");
+    if (digits.length > 18) return null;
+    n = Number(digits);
+    e = Number(m[4] || 0) - (m[3] || "").length;
+    if (n === 0) e = 0;
+    while (n !== 0 && n % 10 === 0) { n /= 10; e += 1; }
+    return {n: m[1] === "-" ? -n : n, e: e};
+  }
+
+  // v rounded to 15 significant digits, as n * 10**e (mirror of decimal_of)
+  function decimalOf(v) {
+    var a = Math.abs(v), e, n;
+    if (v === 0) return {n: 0, e: 0};
+    e = Math.floor(Math.log10(a));
+    n = Math.round(scale10(a, 14 - e));
+    if (n < 1e14) { e -= 1; n = Math.round(scale10(a, 14 - e)); }
+    if (n >= 1e15) { n = Math.trunc(n / 10); e += 1; }
+    e -= 14;
+    while (n % 10 === 0) { n /= 10; e += 1; }
+    return {n: v < 0 ? -n : n, e: e};
+  }
+
+  // split a format around its one conversion; null if unsupported
+  function splitFormat(format) {
+    var f = {prefix: "", suffix: "", flags: "", width: 0, prec: -1, type: ""}, found = false;
+    var i = 0, m, re = /^%([-+ 0]*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGh])/;
+    while (i < format.length) {
+      if (format[i] !== "%") {
+        if (found) f.suffix += format[i]; else f.prefix += format[i];
+        i += 1;
+      } else if (format[i + 1] === "%") {
+        if (found) f.suffix += "%"; else f.prefix += "%";
+        i += 2;
+      } else {
+        m = re.exec(format.slice(i));
+        if (found || !m) return null;
+        found = true;
+        f.flags = m[1];
+        f.width = Number(m[2] || 0);
+        f.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
+        f.type = m[4];
+        i += m[0].length;
+      }
+    }
+    return found ? f : null;
+  }
+
+  // integer digits with the last drop ones removed, rounded half to even (mirror of round_digits)
+  function roundDigits(digits, drop) {
+    var work, tail, kept, up, k, a;
+    if (drop <= 0) return (digits + "0".repeat(-drop)).replace(/^0+(?=\d)/, "");
+    work = "0".repeat(Math.max(0, drop + 1 - digits.length)) + digits;
+    tail = work.slice(work.length - drop);
+    kept = work.slice(0, work.length - drop);
+    if (tail[0] !== "5") up = tail[0] > "5";
+    else if (/[1-9]/.test(tail.slice(1))) up = true;
+    else up = "13579".indexOf(kept[kept.length - 1]) >= 0;
+    if (up) {
+      a = kept.split("");
+      for (k = a.length - 1; k >= 0 && a[k] === "9"; k--) a[k] = "0";
+      if (k < 0) a.unshift("1"); else a[k] = String(Number(a[k]) + 1);
+      kept = a.join("");
+    }
+    return kept.replace(/^0+(?=\d)/, "");
+  }
+
+  function fixedDigits(digits, e, prec) {
+    var units = roundDigits(digits, -prec - e), text;
+    if (units.length <= prec) units = "0".repeat(prec - units.length + 1) + units;
+    text = units.slice(0, units.length - prec);
+    return prec > 0 ? text + "." + units.slice(units.length - prec) : text;
+  }
+
+  function expDigits(digits, e, prec) {
+    var kept, x;
+    if (/^0+$/.test(digits)) {
+      kept = "0".repeat(prec + 1);
+      x = 0;
+    } else {
+      x = digits.length - 1 + e;
+      kept = roundDigits(digits, digits.length - prec - 1);
+      if (kept.length > prec + 1) { kept = kept.slice(0, prec + 1); x += 1; }
+    }
+    return {mantissa: kept[0] + (prec > 0 ? "." + kept.slice(1) : ""), x: x};
+  }
+
+  function expText(letter, x) {
+    var d = String(Math.abs(x));
+    return letter + (x < 0 ? "-" : "+") + (d.length < 2 ? "0" + d : d);
+  }
+
+  function stripZeros(text) {
+    return text.indexOf(".") < 0 ? text : text.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  // printf-like format applied to the exact value n * 10**e (mirror of format_decimal)
+  function formatDecimal(format, n, e) {
+    var f = splitFormat(format), digits, body, sup = "", sign = "", r, p, pad;
+    if (!f) return {label: format, sup: ""};
+    digits = String(Math.abs(n));
+    if (f.type === "f") {
+      body = fixedDigits(digits, e, f.prec < 0 ? 6 : f.prec);
+    } else if (f.type === "e" || f.type === "E") {
+      r = expDigits(digits, e, f.prec < 0 ? 6 : f.prec);
+      body = r.mantissa + expText(f.type, r.x);
+    } else {
+      p = f.prec < 0 ? 6 : Math.max(1, f.prec);
+      r = expDigits(digits, e, p - 1);
+      if (r.x < p && r.x >= -4) {
+        body = stripZeros(fixedDigits(digits, e, p - 1 - r.x));
+      } else {
+        body = stripZeros(r.mantissa);
+        if (f.type === "h") { body += "x10"; sup = String(r.x); }
+        else body += expText(f.type === "G" ? "E" : "e", r.x);
+      }
+    }
+    if (n < 0) sign = "-";
+    else if (f.flags.indexOf("+") >= 0) sign = "+";
+    else if (f.flags.indexOf(" ") >= 0) sign = " ";
+    pad = f.width - sign.length - body.length;
+    if (pad > 0) {
+      if (f.flags.indexOf("-") >= 0) body += " ".repeat(pad);
+      else if (f.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
+      else sign = " ".repeat(pad) + sign;
+    }
+    return {label: f.prefix + sign + body + f.suffix, sup: sup};
+  }
+
+  function formatLabel(n, e, sci) {
+    if (!sci || n === 0) return {label: decimalStr(n, -e), sup: ""};
+    var nn = Math.abs(n), ee = e, digits, label;
+    while (nn % 10 === 0) { nn /= 10; ee += 1; }
+    digits = String(nn);
+    label = digits[0] + (digits.length > 1 ? "." + digits.slice(1) : "");
+    return {label: (n < 0 ? "-" : "") + label + "x10", sup: String(ee + digits.length - 1)};
+  }
+
+  // user tick settings from the panel attributes: {mode, start, step, end, format}
+  function readTics(positions, format) {
+    var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""}, p;
+    if (positions === "none") tics.mode = "none";
+    else if (positions) {
+      p = positions.split(" ");
+      tics.mode = "fixed";
+      tics.start = p[0] === "*" ? "" : p[0];
+      tics.step = p[1];
+      tics.end = p[2] === "*" ? "" : p[2];
+    }
+    return tics;
+  }
+
+  function tickLabel(n, e, sci, tics) {
+    return tics && tics.format ? formatDecimal(tics.format, n, e) : formatLabel(n, e, sci);
+  }
+
+  // mantissas of step, start, end at their smallest common exponent, each below 1e15; or null
+  function fixedValues(tics) {
+    var d = [parseDecimal(tics.step), tics.start ? parseDecimal(tics.start) : null,
+      tics.end ? parseDecimal(tics.end) : null], n = [], e, k, shift;
+    if (!d[1]) d[1] = {n: 0, e: d[0].e};
+    if (!d[2]) d[2] = {n: 0, e: d[0].e};
+    e = Math.min(d[0].e, d[1].e, d[2].e);
+    for (k = 0; k < 3; k++) {
+      shift = d[k].e - e;
+      if (shift > 15 || Math.abs(d[k].n) >= Math.pow(10, 15 - shift)) return null;
+      n.push(d[k].n * POW10[shift]);
+    }
+    return {n: n, e: e, hasStart: tics.start !== "", hasEnd: tics.end !== ""};
+  }
+
+  // ticks at start + k * step within [start, end] (mirror of fixed_linear_ticks, no extension)
+  function fixedLinearTicks(lo, hi, tics) {
+    var f = fixedValues(tics), ticks = [], step, offset, kmin, kmax, sci, k, t, v;
+    if (!f) return ticks;
+    step = scale10(f.n[0], f.e);
+    offset = f.n[1] / f.n[0];
+    if (Math.max(Math.abs(lo), Math.abs(hi)) / step + Math.abs(offset) > 1e15) return ticks;
+    kmin = Math.ceil(Math.min(lo, hi) / step - offset - TOL);
+    kmax = Math.floor(Math.max(lo, hi) / step - offset + TOL);
+    if (f.hasStart) kmin = Math.max(kmin, 0);
+    if (f.hasEnd) {
+      if (f.n[2] < f.n[1]) return ticks;
+      kmax = Math.min(kmax, Math.trunc((f.n[2] - f.n[1]) / f.n[0]));
+    }
+    if (kmax < kmin || kmax - kmin >= MAX_TICKS) return ticks;
+    sci = isScientific(Math.max(Math.abs(lo), Math.abs(hi)));
+    for (k = kmin; k <= kmax; k++) {
+      t = tickLabel(f.n[1] + k * f.n[0], f.e, sci, tics);
+      v = scale10(f.n[1] + k * f.n[0], f.e);
+      ticks.push({value: v, major: true, label: t.label, sup: t.sup});
+    }
+    return ticks;
+  }
+
+  // first * factor**k by |k| multiplications or divisions (mirror of power)
+  function power(first, factor, k) {
+    var v = first, j;
+    for (j = 0; j < Math.abs(k); j++) v = k > 0 ? v * factor : v / factor;
+    return v;
+  }
+
+  // ticks at start * step**k on a log axis (mirror of fixed_log_ticks)
+  function fixedLogTicks(lo, hi, tics) {
+    var f = fixedValues(tics), ticks = [], factor, first, last, lf, kmin, kmax, sci, k, v, d, t;
+    if (!f) return ticks;
+    factor = scale10(f.n[0], f.e);
+    first = f.hasStart ? scale10(f.n[1], f.e) : 1;
+    last = scale10(f.n[2], f.e);
+    if (factor <= 1 || first <= 0) return ticks;
+    lf = Math.log10(factor);
+    if (Math.max(Math.abs(Math.log10(lo)), Math.abs(Math.log10(hi)),
+      Math.abs(Math.log10(first))) / lf > MAX_POWER) return ticks;
+    kmin = Math.ceil((Math.log10(Math.min(lo, hi)) - Math.log10(first)) / lf - TOL);
+    kmax = Math.floor((Math.log10(Math.max(lo, hi)) - Math.log10(first)) / lf + TOL);
+    if (f.hasStart) kmin = Math.max(kmin, 0);
+    if (f.hasEnd) {
+      if (last <= 0) return ticks;
+      kmax = Math.min(kmax, Math.floor((Math.log10(last) - Math.log10(first)) / lf + TOL));
+    }
+    if (kmax < kmin || kmax - kmin >= MAX_TICKS) return ticks;
+    sci = isScientific(Math.max(lo, hi));
+    v = power(first, factor, kmin);
+    for (k = kmin; k <= kmax; k++) {
+      d = decimalOf(v);
+      t = tickLabel(d.n, d.e, sci, tics);
+      ticks.push({value: v, major: true, label: t.label, sup: t.sup});
+      v *= factor;
+    }
+    return ticks;
+  }
+
+  // major ticks of a linear axis spanning [lo, hi] (either order) over npx pixels, no extension
+  function linearTicks(lo, hi, npx, tics) {
+    if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "fixed") return fixedLinearTicks(lo, hi, tics);
+    var ns = niceStep(Math.abs(hi - lo) / Math.max(2, npx / TICK_SPACING));
+    var step = scale10(ns.m, ns.e), ticks = [], k, t;
+    var kmin = Math.ceil(Math.min(lo, hi) / step - TOL);
+    var kmax = Math.floor(Math.max(lo, hi) / step + TOL);
+    if (kmax - kmin >= MAX_TICKS) return ticks;
+    var sci = isScientific(Math.max(Math.abs(lo), Math.abs(hi)));
+    for (k = kmin; k <= kmax; k++) {
+      t = tickLabel(k * ns.m, ns.e, sci, tics);
+      ticks.push({value: scale10(k * ns.m, ns.e), major: true, label: t.label, sup: t.sup});
+    }
+    return ticks;
+  }
+
+  // ticks of a base-10 log axis spanning [lo, hi] (either order, > 0) over npx pixels
+  function logTicks(lo, hi, npx, tics) {
+    if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "fixed") return fixedLogTicks(lo, hi, tics);
+    var ta = Math.log10(Math.min(lo, hi)), tb = Math.log10(Math.max(lo, hi));
+    var ns = niceStep((tb - ta) / Math.max(2, npx / TICK_SPACING));
+    var s = ns.e >= 0 ? ns.m * scale10(1, ns.e) : 1, custom = !!(tics && tics.format);
+    var kmin = Math.ceil(ta - TOL), kmax = Math.floor(tb + TOL), ticks = [], k, d, v, t;
+    var nmajor = 0, plain;
+    if (kmax - kmin >= MAX_TICKS) return ticks;
+    for (k = kmin; k <= kmax; k++) if (modulo(k, s) === 0) nmajor++;
+    plain = nmajor < 2;
+    for (k = kmin; k <= kmax; k++) {
+      if (modulo(k, s) !== 0) continue;
+      if (custom) t = formatDecimal(tics.format, 1, k);
+      else t = {label: plain ? decimalStr(1, -k) : "10", sup: plain ? "" : String(k)};
+      ticks.push({value: scale10(1, k), major: true, label: t.label, sup: t.sup});
+    }
+    if (s === 1 && tb - ta <= 10) {
+      for (k = Math.floor(ta - TOL); k <= Math.floor(tb + TOL); k++) {
+        for (d = 2; d <= 9; d++) {
+          v = scale10(d, k);
+          t = Math.log10(v);
+          if (t < ta - TOL || t > tb + TOL) continue;
+          t = plain && custom ? formatDecimal(tics.format, d, k)
+            : {label: plain ? decimalStr(d, -k) : "", sup: ""};
+          ticks.push({value: v, major: plain, label: t.label, sup: t.sup});
+        }
+      }
+    }
+    if (ticks.filter(function (x) { return x.major; }).length < 2) {
+      ticks = linearTicks(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
+    }
+    return ticks;
+  }
+
+  var core = {niceStep: niceStep, decimalStr: decimalStr, linearTicks: linearTicks,
+    logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
+    decimalOf: decimalOf, readTics: readTics};
+  if (typeof module === "object" && module.exports) {
+    module.exports = core;
+    return;
+  }
+
+  // ---- axis mapping: unit coordinate [0, 1] <-> data value ----
+
+  function Axis(range, log, tics) {
+    this.log = log;
+    this.tics = tics;
+    this.a = log ? Math.log10(range[0]) : range[0];
+    this.b = log ? Math.log10(range[1]) : range[1];
+  }
+  Axis.prototype.toUnit = function (v) {
+    return ((this.log ? Math.log10(v) : v) - this.a) / (this.b - this.a);
+  };
+  Axis.prototype.toData = function (u) {
+    var t = this.a + u * (this.b - this.a);
+    return this.log ? Math.pow(10, t) : t;
+  };
+  Axis.prototype.ticks = function (u0, u1, npx) {
+    var lo = this.toData(u0), hi = this.toData(u1);
+    return this.log ? logTicks(lo, hi, npx, this.tics) : linearTicks(lo, hi, npx, this.tics);
+  };
+
+  // ---- SVG helpers ----
+
+  function numbers(text) { return text.split(" ").map(Number); }
+
+  function element(parent, name, attributes) {
+    var node = document.createElementNS(NS, name);
+    Object.keys(attributes).forEach(function (k) { node.setAttribute(k, attributes[k]); });
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function line(parent, x1, y1, x2, y2, color, width, dashes) {
+    var attributes = {x1: x1, y1: y1, x2: x2, y2: y2, stroke: color, "stroke-width": width};
+    if (dashes) attributes["stroke-dasharray"] = dashes;
+    return element(parent, "line", attributes);
+  }
+
+  function label(parent, x, y, tick, anchor) {
+    var node = element(parent, "text", {x: x, y: y, "text-anchor": anchor});
+    node.appendChild(document.createTextNode(tick.label));
+    if (tick.sup) {
+      element(node, "tspan", {dy: "-0.45em", "font-size": "0.75em"}).textContent = tick.sup;
+    }
+  }
+
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function shortNumber(v) { return String(Number(v.toPrecision(6))); }
+
+  // ---- plot panel ----
+
+  function Panel(svg, group, index) {
+    var area = numbers(group.getAttribute("data-area"));
+    var logs = numbers(group.getAttribute("data-log"));
+    var mirror = group.getAttribute("data-mirror");
+    this.svg = svg;
+    this.suffix = index > 0 ? String(index) : "";
+    this.left = area[0];
+    this.right = area[1];
+    this.top = area[2];
+    this.bottom = area[3];
+    this.x = new Axis(numbers(group.getAttribute("data-x")), logs[0] === 1,
+      readTics(group.getAttribute("data-xtics"), group.getAttribute("data-xformat")));
+    this.y = new Axis(numbers(group.getAttribute("data-y")), logs[1] === 1,
+      readTics(group.getAttribute("data-ytics"), group.getAttribute("data-yformat")));
+    // second y axis: only when drawn; its series share the unit view of the plot area
+    this.y2 = group.hasAttribute("data-y2") ? new Axis(numbers(group.getAttribute("data-y2")),
+      logs[2] === 1, readTics(group.getAttribute("data-y2tics"),
+        group.getAttribute("data-y2format"))) : null;
+    // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
+    this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
+    this.fontSize = Number(group.getAttribute("data-font-size"));
+    this.grid = group.getAttribute("data-grid") === "1";
+    this.plot = group.querySelector(".fs-plot");
+    this.gridGroup = group.querySelector(".fs-grid");
+    this.xticks = group.querySelector(".fs-xticks");
+    this.yticks = group.querySelector(".fs-yticks");
+    this.y2ticks = group.querySelector(".fs-y2ticks");
+    this.caps = group.querySelector(".fs-caps");
+    this.bars = readBars(group);
+    this.marks = group.querySelector(".fs-marks");
+    this.points = readPoints(group);
+    this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
+      this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : "",
+      this.marks ? this.marks.innerHTML : ""];
+    this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
+    this.history = [];
+  }
+
+  // error bars of the plot area: segments in viewBox coordinates (unit square, y downward)
+  function readBars(group) {
+    var bars = [], pattern = /M([^,]+),([^L]+)L([^,]+),([^M]+)/g;
+    group.querySelectorAll(".fs-ybars, .fs-xbars").forEach(function (path) {
+      var d = path.getAttribute("d").replace(/\s+/g, ""), m;
+      var style = {vertical: path.getAttribute("class") === "fs-ybars",
+        cap: Number(path.getAttribute("data-cap")), color: path.getAttribute("stroke"),
+        width: path.getAttribute("stroke-width")};
+      while ((m = pattern.exec(d)) !== null) {
+        bars.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
+      }
+    });
+    return bars;
+  }
+
+  // point type markers: centres in viewBox coordinates (unit square, y downward) and the marker
+  function readPoints(group) {
+    var points = [];
+    group.querySelectorAll(".fs-pts").forEach(function (path) {
+      var centres = path.getAttribute("d").replace(/\s+/g, "").split("M").filter(Boolean)
+        .map(function (pair) { return pair.split(",").map(Number); });
+      points.push({pt: Number(path.getAttribute("data-pt")),
+        size: Number(path.getAttribute("data-size")), lw: path.getAttribute("data-lw"),
+        color: path.getAttribute("data-color"), centres: centres});
+    });
+    return points;
+  }
+
+  function px(v) { return v.toFixed(2); }
+
+  // path of a marker of half width r centred on (x, y), gnuplot svg shapes (mirror of marker_path)
+  function markerPath(x, y, r, shape) {
+    var poly = function (xs, ys) {
+      return xs.map(function (a, k) {
+        return (k ? "L" : "M") + px(x + r * a) + "," + px(y + r * ys[k]);
+      }).join("") + "Z";
+    };
+    var circle = function (c) {
+      var arc = "A" + px(c) + "," + px(c) + " 0 1 0 ";
+      return "M" + px(x - c) + "," + px(y) + arc + px(x + c) + "," + px(y) + arc + px(x - c) + "," +
+        px(y) + "Z";
+    };
+    var plus = "M" + px(x - r) + "," + px(y) + "H" + px(x + r) + "M" + px(x) + "," + px(y - r) +
+      "V" + px(y + r);
+    var cross = "M" + px(x - r) + "," + px(y - r) + "L" + px(x + r) + "," + px(y + r) + "M" +
+      px(x + r) + "," + px(y - r) + "L" + px(x - r) + "," + px(y + r);
+    if (shape === 0) return circle(0.5);
+    if (shape === 1) return plus;
+    if (shape === 2) return cross;
+    if (shape === 3) return plus + cross;
+    if (shape <= 5) return poly([-1, 1, 1, -1], [-1, -1, 1, 1]);
+    if (shape <= 7) return circle(r);
+    if (shape <= 9) return poly([0, -1.33, 1.33], [-1.33, 0.67, 0.67]);
+    if (shape <= 11) return poly([0, -1.33, 1.33], [1.33, -0.67, -0.67]);
+    if (shape <= 13) return poly([0, 1.414, 0, -1.414], [-1.414, 0, 1.414, 0]);
+    return poly([0, 1.265, 0.782, -0.782, -1.265], [1.33, 0.411, -1.067, -1.067, 0.411]);
+  }
+
+  Panel.prototype.isHome = function () {
+    var v = this.view;
+    return v.u0 === 0 && v.u1 === 1 && v.v0 === 0 && v.v1 === 1;
+  };
+
+  Panel.prototype.contains = function (p) {
+    return p.x >= this.left && p.x <= this.right && p.y >= this.top && p.y <= this.bottom;
+  };
+
+  // page pixel -> current view unit coordinates
+  Panel.prototype.unitAt = function (p) {
+    var v = this.view;
+    return {u: v.u0 + (p.x - this.left) / (this.right - this.left) * (v.u1 - v.u0),
+      v: v.v0 + (this.bottom - p.y) / (this.bottom - this.top) * (v.v1 - v.v0)};
+  };
+
+  Panel.prototype.setView = function (view, record) {
+    if (!(view.u1 - view.u0 > 1e-12 && view.v1 - view.v0 > 1e-12)) return;
+    if (record) this.history.push(this.view);
+    this.view = view;
+    this.redraw();
+    this.saveState();
+  };
+
+  Panel.prototype.redraw = function () {
+    var v = this.view;
+    this.plot.setAttribute("viewBox", [v.u0, 1 - v.v1, v.u1 - v.u0, v.v1 - v.v0].join(" "));
+    this.gridGroup.setAttribute("display", this.grid ? "inline" : "none");
+    if (this.isHome()) {
+      this.gridGroup.innerHTML = this.original[0];
+      this.xticks.innerHTML = this.original[1];
+      this.yticks.innerHTML = this.original[2];
+      if (this.caps) this.caps.innerHTML = this.original[3];
+      if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
+      if (this.marks) this.marks.innerHTML = this.original[5];
+    } else {
+      this.drawTicks();
+      this.drawCaps();
+      this.drawMarks();
+    }
+  };
+
+  // point type markers keep their pixel shape: recomputed in the pixel overlay for the current view
+  Panel.prototype.drawMarks = function () {
+    var self = this, v = this.view;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.marks) return;
+    clear(this.marks);
+    this.points.forEach(function (p) {
+      var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
+      var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
+      p.centres.forEach(function (c) {
+        var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
+        if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
+      });
+      element(self.marks, "path", {fill: filled ? p.color : "none", stroke: p.color,
+        "stroke-width": p.lw, d: d.join("")});
+    });
+  };
+
+  // error bar caps keep their pixel length: recomputed in the pixel overlay for the current view
+  Panel.prototype.drawCaps = function () {
+    var self = this, v = this.view;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.caps) return;
+    clear(this.caps);
+    this.bars.forEach(function (bar) {
+      var half = bar.style.cap / 2;
+      bar.ends.forEach(function (end) {
+        var x = (end[0] - v.u0) / (v.u1 - v.u0) * w;
+        var y = (end[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
+        if (bar.style.vertical) {
+          line(self.caps, x - half, y, x + half, y, bar.style.color, bar.style.width);
+        } else {
+          line(self.caps, x, y - half, x, y + half, bar.style.color, bar.style.width);
+        }
+      });
+    });
+  };
+
+  // regenerate ticks, tick labels and grid for the current view (mirror of draw_frame/draw_grid)
+  Panel.prototype.drawTicks = function () {
+    var self = this, v = this.view, fs = this.fontSize;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    clear(this.gridGroup);
+    clear(this.xticks);
+    clear(this.yticks);
+    this.x.ticks(v.u0, v.u1, w).forEach(function (t) {
+      var p = self.left + (self.x.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
+      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      if (p < self.left - 0.5 || p > self.right + 0.5) return;
+      line(self.xticks, p, self.bottom, p, self.bottom - length, FRAME_COLOR, 1);
+      if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + length, FRAME_COLOR, 1);
+      if (!t.major) return;
+      label(self.xticks, p, self.bottom + GAP + fs, t, "middle");
+      line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
+    });
+    this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
+      var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
+      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
+      line(self.yticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
+      if (self.mirror[1]) line(self.yticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
+      if (!t.major) return;
+      label(self.yticks, self.left - GAP, p + 0.35 * fs, t, "end");
+      line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
+    });
+    if (!this.y2ticks) return;
+    clear(this.y2ticks);
+    this.y2.ticks(v.v0, v.v1, h).forEach(function (t) {
+      var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
+      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
+      line(self.y2ticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
+      if (self.mirror[2]) line(self.y2ticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
+      if (t.major) label(self.y2ticks, self.right + GAP, p + 0.35 * fs, t, "start");
+    });
+  };
+
+  // zoom by factors (fx, fy) about the page point p
+  Panel.prototype.zoomAt = function (p, fx, fy) {
+    var c = this.unitAt(p), v = this.view;
+    this.setView({u0: c.u + (v.u0 - c.u) * fx, u1: c.u + (v.u1 - c.u) * fx,
+      v0: c.v + (v.v0 - c.v) * fy, v1: c.v + (v.v1 - c.v) * fy}, false);
+  };
+
+  // zoom to the page-pixel box between points p and q
+  Panel.prototype.zoomBox = function (p, q) {
+    var a = this.unitAt(p), b = this.unitAt(q);
+    this.setView({u0: Math.min(a.u, b.u), u1: Math.max(a.u, b.u),
+      v0: Math.min(a.v, b.v), v1: Math.max(a.v, b.v)}, true);
+  };
+
+  Panel.prototype.unzoom = function () {
+    if (this.history.length) this.setView(this.history.pop(), false);
+  };
+
+  Panel.prototype.autoscale = function () {
+    if (!this.isHome()) this.setView({u0: 0, u1: 1, v0: 0, v1: 1}, true);
+  };
+
+  Panel.prototype.toggleGrid = function () {
+    this.grid = !this.grid;
+    this.redraw();
+    this.saveState();
+  };
+
+  // zoom and grid persist in the URL hash as data values, so a reload with new data keeps the view;
+  // keys are g, x, y for the first panel, g1, x1, y1 for the second, and so on
+  Panel.prototype.state = function () {
+    var v = this.view, n = this.suffix, items = ["g" + n + "=" + (this.grid ? 1 : 0)];
+    if (!this.isHome()) {
+      items.push("x" + n + "=" + [this.x.toData(v.u0), this.x.toData(v.u1)].join(","));
+      items.push("y" + n + "=" + [this.y.toData(v.v0), this.y.toData(v.v1)].join(","));
+    }
+    return items;
+  };
+
+  Panel.prototype.saveState = function () {
+    var state = [].concat.apply([], panels.map(function (p) { return p.state(); })).join("&");
+    try {
+      history.replaceState(null, "", "#" + state);
+    } catch (e) {
+      // file:// pages may refuse history updates: a fragment-only replace is always allowed
+      location.replace("#" + state);
+    }
+  };
+
+  Panel.prototype.loadState = function () {
+    var state = {}, x, y, view, n = this.suffix;
+    location.hash.slice(1).split("&").forEach(function (item) {
+      var pair = item.split("=");
+      if (pair.length === 2) state[pair[0]] = pair[1];
+    });
+    if (state["g" + n] === "0" || state["g" + n] === "1") this.grid = state["g" + n] === "1";
+    if (state["x" + n] && state["y" + n]) {
+      x = state["x" + n].split(",").map(Number);
+      y = state["y" + n].split(",").map(Number);
+      view = {u0: this.x.toUnit(x[0]), u1: this.x.toUnit(x[1]),
+        v0: this.y.toUnit(y[0]), v1: this.y.toUnit(y[1])};
+      if ([view.u0, view.u1, view.v0, view.v1].every(isFinite)) this.view = view;
+    }
+    this.redraw();
+  };
+
+  // ---- page: overlays and input handling ----
+
+  var panels = [];
+
+  function start() {
+    var svg = document.querySelector("svg");
+    if (!svg || !svg.querySelector(".fs-axes")) return;
+    svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
+      panels.push(new Panel(svg, group, k));
+    });
+    var panel = panels[0];
+    var height = Number(svg.getAttribute("height"));
+    var refresh = Number(svg.getAttribute("data-refresh") || 0);
+    var readout = element(svg, "text", {x: 4, y: height - 4, "font-size": 10, fill: "#555"});
+    var box = element(svg, "rect", {fill: "none", stroke: "#555", "stroke-dasharray": "3,3",
+      display: "none"});
+    var help = helpOverlay(svg);
+    var drag = null;
+
+    function point(evt) {
+      var p = svg.createSVGPoint();
+      p.x = evt.clientX;
+      p.y = evt.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    // panel under the page point p, or null
+    function panelAt(p) {
+      // topmost first: a panel drawn later (an inset) lies over the earlier ones
+      for (var k = panels.length - 1; k >= 0; k--) if (panels[k].contains(p)) return panels[k];
+      return null;
+    }
+
+    function showReadout(p) {
+      var c, hit = panelAt(p);
+      if (!hit) { readout.textContent = ""; return; }
+      panel = hit;
+      c = panel.unitAt(p);
+      readout.textContent = "x = " + shortNumber(panel.x.toData(c.u)) +
+        "   y = " + shortNumber(panel.y.toData(c.v)) +
+        (panel.y2 ? "   y2 = " + shortNumber(panel.y2.toData(c.v)) : "");
+    }
+
+    svg.addEventListener("contextmenu", function (evt) { evt.preventDefault(); });
+    svg.addEventListener("wheel", function (evt) {
+      var p = point(evt), f;
+      if (!panelAt(p)) return;
+      panel = panelAt(p);
+      evt.preventDefault();
+      f = evt.deltaY < 0 ? 1 / ZOOM_FACTOR : ZOOM_FACTOR;
+      panel.zoomAt(p, evt.ctrlKey ? 1 : f, evt.shiftKey ? 1 : f);
+    }, {passive: false});
+    svg.addEventListener("mousedown", function (evt) {
+      var p = point(evt);
+      if (!panelAt(p)) return;
+      panel = panelAt(p);
+      evt.preventDefault();
+      drag = {button: evt.button, start: p, view: panel.view};
+    });
+    window.addEventListener("mousemove", function (evt) {
+      var p = point(evt), v, du, dv;
+      showReadout(p);
+      if (!drag) return;
+      if (drag.button === 0) {
+        v = drag.view;
+        du = (p.x - drag.start.x) / (panel.right - panel.left) * (v.u1 - v.u0);
+        dv = (p.y - drag.start.y) / (panel.bottom - panel.top) * (v.v1 - v.v0);
+        panel.setView({u0: v.u0 - du, u1: v.u1 - du, v0: v.v0 + dv, v1: v.v1 + dv}, false);
+      } else if (drag.button === 2) {
+        box.setAttribute("x", Math.min(p.x, drag.start.x));
+        box.setAttribute("y", Math.min(p.y, drag.start.y));
+        box.setAttribute("width", Math.abs(p.x - drag.start.x));
+        box.setAttribute("height", Math.abs(p.y - drag.start.y));
+        box.setAttribute("display", "inline");
+      }
+    });
+    window.addEventListener("mouseup", function (evt) {
+      var p = point(evt);
+      if (drag && drag.button === 2) {
+        box.setAttribute("display", "none");
+        if (Math.abs(p.x - drag.start.x) >= MIN_BOX && Math.abs(p.y - drag.start.y) >= MIN_BOX) {
+          panel.zoomBox(drag.start, p);
+        }
+      }
+      drag = null;
+    });
+    document.addEventListener("keydown", function (evt) {
+      if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
+      if (evt.key === "u") panel.unzoom();
+      else if (evt.key === "a") panel.autoscale();
+      else if (evt.key === "g") panel.toggleGrid();
+      else if (evt.key === "h" || evt.key === "?") {
+        help.setAttribute("display", help.getAttribute("display") === "none" ? "inline" : "none");
+      }
+    });
+
+    panels.forEach(function (p) { p.loadState(); });
+    if (refresh > 0) {
+      (function reload() {
+        setTimeout(function () { if (drag) reload(); else location.reload(); }, refresh * 1000);
+      })();
+    }
+  }
+
+  function helpOverlay(svg) {
+    var lines = ["wheel: zoom (shift: x only, ctrl: y only)", "left drag: pan",
+      "right drag: zoom box", "u: undo zoom", "a: autoscale", "g: toggle grid",
+      "h: toggle this help"];
+    var group = element(svg, "g", {display: "none"});
+    element(group, "rect", {x: 20, y: 20, width: 260, height: 16 * lines.length + 12,
+      fill: "white", stroke: "#555", opacity: 0.95});
+    lines.forEach(function (text, i) {
+      element(group, "text", {x: 30, y: 38 + 16 * i, "font-size": 12}).textContent = text;
+    });
+    return group;
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

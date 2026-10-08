@@ -47,6 +47,20 @@ is welcome. The project follows a KISS (Keep It Simple and Stupid) philosophy.
   whitespace = fix,-indent-with-non-tab,trailing-space,cr-at-eol
 ```
 
+## Documentation examples
+
+Every snippet, output and plot of the tutorial and the cookbook comes from the sources in `docs/examples/src`: Fortran
+programs and gnuplot scripts with marker comments (`!run ID COMMAND` or `#run ID COMMAND` for a run shown in the
+pages, `!region NAME` ... `!endregion NAME` or `# region NAME` ... `# endregion NAME` for a part included on its own).
+
+```bash
+bash scripts/docs_examples.sh     # or: fobis rule --ex docs-examples
+```
+
+builds the library and the command line, runs every example, and regenerates `docs/examples/snippets`,
+`docs/examples/output` and the plots in `docs/public/examples`, which the pages embed live with `<Plot name="..."/>`.
+Commit the regenerated files with the change: the CI runs the script and fails if any of them differs.
+
 ## Commit style
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) so that `CHANGELOG.md` is generated automatically from the git log:

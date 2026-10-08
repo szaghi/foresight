@@ -27,3 +27,33 @@ jobs:
     - name: Run tests with coverage
       id: cov
       uses: ./.github/actions/run-coverage-analysis
+
+  docs-examples:
+    # the documentation examples are built and run, and their snippets, outputs and plots regenerated:
+    # the committed ones, embedded by the tutorial and the cookbook, must match what the code produces
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+
+    - name: Fetch dependencies
+      if: hashFiles('**/.deps_config.ini') != ''
+      run: FoBiS.py fetch
+
+    - name: Build and run the examples
+      run: bash scripts/docs_examples.sh
+
+    - name: Check the committed snippets, outputs and plots
+      run: |
+        git add --intent-to-add docs/examples docs/public/examples
+        git diff --exit-code -- docs/examples docs/public/examples || {
+          echo "::error::the documentation examples are out of date: run 'bash scripts/docs_examples.sh' and commit the result"
+          exit 1
+        }

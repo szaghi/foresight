@@ -1,0 +1,2 @@
+$ foresight residuals.gp
+foresight: ch4.html

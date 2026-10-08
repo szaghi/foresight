@@ -1,0 +1,2 @@
+$ foresight two_axes.gp
+foresight: ch6.html

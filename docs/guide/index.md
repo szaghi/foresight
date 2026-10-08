@@ -29,11 +29,13 @@ matplotlib), 3D or field visualisation (use ParaView through [VTKFortran](https:
 fitting and 3D plots (`fit`, `splot`). Anything outside the supported gnuplot subset is reported as an
 error naming the command, never silently ignored.
 
-## Status
+## Where to start
 
-All four planned milestones are in place: static SVG core, interactive HTML, command line with watch mode, multiplot,
-error bars and text output. The public API may still change before the first release; breaking changes are marked in
-the [changelog](changelog).
+1. [Install](install) the library and the command line.
+2. Follow the [tutorial](/manual/): one solver run, from a first plot to a live dashboard.
+3. Look up a task in the [cookbook](/manual/cookbook), a command or method in the [reference](features).
+
+Releases and their changes are in the [changelog](changelog).
 
 ## Authors
 

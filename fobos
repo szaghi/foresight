@@ -147,6 +147,10 @@ rule_1 = fobis rule --ex makecoverage
 rule_2 = fobis rule --gcov-analyzer docs/guide/ --gcov-analyzer coverage-analysis
 rule_3 = bash -c 'rm -f *.gcov parsed.xml source.xml'
 
+[rule-docs-examples]
+help = Build and run the documentation examples, regenerating their snippets, outputs and plots
+rule = bash scripts/docs_examples.sh
+
 [rule-embed-js]
 help = Regenerate src/lib/foresight_viewer_js.F90 from src/js/viewer.js
 rule = bash scripts/embed_js.sh

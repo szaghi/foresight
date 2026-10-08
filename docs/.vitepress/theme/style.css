@@ -1,0 +1,113 @@
+/* foresight docs: brand colours from the gnuplot palette foresight draws with (#9400d3, #009e73, #56b4e9). */
+:root {
+  --fs-purple: #9400d3;
+  --fs-green: #009e73;
+  --fs-blue: #56b4e9;
+  --vp-c-brand-1: #7a1fb0;
+  --vp-c-brand-2: #9400d3;
+  --vp-c-brand-3: #6a1b9a;
+  --vp-c-brand-soft: rgba(148, 0, 211, 0.12);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, var(--fs-purple) 10%, var(--fs-green) 55%, var(--fs-blue));
+  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(148, 0, 211, 0.35), rgba(0, 158, 115, 0.35));
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #c77dff;
+  --vp-c-brand-2: #b05cf0;
+  --vp-c-brand-3: #9400d3;
+  --vp-c-brand-soft: rgba(199, 125, 255, 0.16);
+}
+
+/* a live plot: the page foresight wrote, white as on paper in both themes */
+.fs-plot {
+  margin: 1.5rem auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+.dark .fs-plot {
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.45);
+}
+
+.fs-plot-canvas {
+  width: 100%;
+  overflow: hidden;
+}
+
+.fs-plot-canvas img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+/* drawn at the plot size, scaled down to the column by Plot.vue */
+.fs-plot-canvas iframe {
+  display: block;
+  border: 0;
+  margin: 0;
+  transform-origin: top left;
+}
+
+.fs-plot figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.fs-plot figcaption a {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.fs-plot-caption {
+  color: var(--vp-c-text-1);
+}
+
+.fs-plot kbd {
+  font-size: 0.75rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+}
+
+/* landing page sections below the hero */
+.fs-home {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 2rem 24px 1rem;
+}
+
+.fs-home h2 {
+  border-top: 0;
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+.fs-home .fs-lead {
+  text-align: center;
+  color: var(--vp-c-text-2);
+  max-width: 720px;
+  margin: 0.5rem auto 1.5rem;
+}
+
+.fs-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.fs-gallery .fs-plot {
+  margin: 0;
+}
