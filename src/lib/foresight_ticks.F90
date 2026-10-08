@@ -45,7 +45,9 @@ type :: tics_object
    logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
+      procedure, pass(self) :: enable     !< Turn the ticks on, keeping their positions.
       procedure, pass(self) :: has_format !< Whether a label format is set.
+      procedure, pass(self) :: set_auto   !< Automatic ticks, forgetting a fixed step.
       procedure, pass(self) :: set_fixed  !< Set fixed ticks, validated.
 endtype tics_object
 
@@ -80,6 +82,28 @@ contains
       if (len(t) == 0) t = '*'
       endfunction or_star
    endfunction attribute
+
+   pure subroutine enable(self)
+   !< Turn off ticks on again at their last positions, as gnuplot `set xtics` without positions: the fixed step if one
+   !< was set (and not reset by `set_auto`), else automatic. Ticks already on are unchanged.
+   class(tics_object), intent(inout) :: self !< Settings.
+
+   if (self%mode /= TICS_NONE) return
+   self%mode = TICS_AUTO
+   if (allocated(self%step)) then
+      if (len(self%step) > 0) self%mode = TICS_FIXED
+   endif
+   endsubroutine enable
+
+   pure subroutine set_auto(self)
+   !< Automatic ticks, as gnuplot `set xtics auto`: the fixed step is forgotten, so `enable` restores automatic ones.
+   class(tics_object), intent(inout) :: self !< Settings.
+
+   self%mode = TICS_AUTO
+   self%step = ''
+   self%start = ''
+   self%end = ''
+   endsubroutine set_auto
 
    pure function has_format(self) result(has)
    !< Whether a label format is set.

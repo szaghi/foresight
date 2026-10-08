@@ -162,6 +162,9 @@ set format x "%g s"      # 0.5 s
 set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
 ```
 
+As in gnuplot, `set xtics` without positions (alone, or with only `mirror`/`nomirror`) keeps the last ones and turns
+the ticks back on after `unset xtics`; `set xtics auto` returns to automatic ticks.
+
 As in gnuplot, an autoscaled end extends outward to a multiple of the step, unless it lies below `START` or beyond
 `END`; after `unset xtics` it does not extend at all. Log axes always extend to whole decades.
 

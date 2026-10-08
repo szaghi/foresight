@@ -20,7 +20,7 @@ use foresight_backend_dumb, only : backend_dumb
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
-use foresight_ticks, only : tics_object, TICS_AUTO, TICS_NONE
+use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
@@ -586,7 +586,8 @@ contains
 
    subroutine set_tics(tics, caller, step, start, end, mirror)
    !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop. `mirror` alone (no
-   !< step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on.
+   !< step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on at their last
+   !< positions.
    type(tics_object),   intent(inout)        :: tics    !< Axis tick settings.
    character(len=*),    intent(in)           :: caller  !< Procedure name, for messages.
    real(R8P),           intent(in), optional :: step    !< Tick step.
@@ -600,13 +601,13 @@ contains
    if (present(mirror)) then
       tics%mirror = mirror
       if (.not. (present(step) .or. present(start) .or. present(end))) then
-         if (tics%mode == TICS_NONE) tics%mode = TICS_AUTO
+         call tics%enable
          return
       endif
    endif
    if (.not. present(step)) then
       if (present(start) .or. present(end)) error stop 'foresight: '//caller//': start and end need a step'
-      tics%mode = TICS_AUTO
+      call tics%set_auto
       return
    endif
    first = ''

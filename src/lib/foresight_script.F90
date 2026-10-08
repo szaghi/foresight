@@ -30,9 +30,9 @@ use foresight_axes, only : axes_names
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
-use foresight_format, only : format_check, int_str
+use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_style, only : default_color
-use foresight_ticks, only : tics_object, TICS_AUTO, TICS_NONE
+use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -924,8 +924,8 @@ contains
       endsubroutine pair_option
 
       subroutine tics_option(tics)
-      !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: `mirror` or
-      !< `nomirror` alone keeps the positions, turning off ticks on (gnuplot).
+      !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
+      !< the last ones are kept, turning off ticks on (gnuplot); `auto` resets them.
       type(tics_object), intent(inout) :: tics    !< Axis tick settings.
       type(token_object), allocatable  :: args(:) !< Position tokens, mirror words removed.
       character(len=:), allocatable    :: message !< Problem.
@@ -945,12 +945,8 @@ contains
       enddo
       n = size(args, kind=I4P)
       if (n == 0_I4P) then
-         if (allocated(mirror)) then
-            tics%mirror = mirror
-            if (tics%mode == TICS_NONE) tics%mode = TICS_AUTO
-         else
-            tics%mode = TICS_AUTO
-         endif
+         if (allocated(mirror)) tics%mirror = mirror
+         call tics%enable
          return
       endif
       ok = mod(n, 2_I4P) == 1_I4P .and. n <= 5_I4P
@@ -965,7 +961,7 @@ contains
       select case (n)
       case (1_I4P)
          if (keyword(args(1)%text, 'autofreq', 4_I4P)) then
-            tics%mode = TICS_AUTO
+            call tics%set_auto
          else
             call tics%set_fixed(args(1)%text, '', '', message)
          endif
@@ -1643,16 +1639,14 @@ contains
    endfunction valid_axes
 
    function to_number(word, value) result(ok)
-   !< Parse a number.
+   !< Parse a number; false if malformed or beyond the real range.
    character(len=*), intent(in)  :: word   !< Text.
    real(R8P),        intent(out) :: value  !< Number.
    logical                       :: ok     !< Success.
-   integer(I4P)                  :: iostat !< Conversion status.
 
    value = 0.0_R8P
    ok = verify(word, '0123456789+-.eEdD') == 0 .and. scan(word, '0123456789') > 0
    if (.not. ok) return
-   read(word, *, iostat=iostat) value
-   ok = iostat == 0_I4P
+   call real_from_decimal(word, value, ok)
    endfunction to_number
 endmodule foresight_script

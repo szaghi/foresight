@@ -19,6 +19,7 @@ module foresight_expression
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
 !< IEEE invalid, division by zero or overflow exception.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
+use foresight_format, only : real_from_decimal
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -154,6 +155,7 @@ contains
       integer(I4P)                :: n       !< Text length.
       integer(I4P)                :: ios     !< Conversion status.
       logical                     :: is_real !< Number with a point or an exponent.
+      logical                     :: ok      !< Real conversion succeeded.
 
       if (iostat /= 0_I4P) return
       n = len(text, kind=I4P)
@@ -194,8 +196,11 @@ contains
             read(token, *, iostat=ios) number%i
             number%is_int = ios == 0_I4P
          endif
-         if (ios /= 0_I4P) read(token, *, iostat=ios) number%r
-         if (ios /= 0_I4P) call syntax('malformed number')
+         if (ios /= 0_I4P) then
+            ! the token is a well formed number: only an overflow fails
+            call real_from_decimal(token, number%r, ok)
+            if (.not. ok) call syntax('number out of range')
+         endif
       elseif (text(pos:pos) == '$') then
          kind = T_COLUMN
          pos = pos + 1_I4P

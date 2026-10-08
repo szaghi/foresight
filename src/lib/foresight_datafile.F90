@@ -4,8 +4,12 @@ module foresight_datafile
 !<
 !< Format, as gnuplot's default: whitespace separated numeric columns; `#` starts a comment; one blank line ends a
 !< block (plotted lines are broken there), two blank lines end a dataset (selected by `index`, 0-based); cells that
-!< are `?`, `NaN`, empty or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of each
-!< dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
+!< are `?`, `NaN`, `inf`, empty or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of
+!< each dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
+!<
+!< A cell is read as gnuplot does, by C `strtod`: its longest leading number counts and the rest is ignored (`3abc` is
+!< 3, `1.2.3` is 1.2, `1d3` is 1), hexadecimal included (`0x10` is 16, `0x1.8p1` is 3); a value beyond the real range
+!< is a gap.
 !<
 !< With a separator (gnuplot `set datafile separator`, e.g. `,` for CSV) every one of its characters ends a cell:
 !< two separators in a row leave an empty cell, a trailing one an empty last cell; blanks around a cell are ignored and
@@ -17,6 +21,7 @@ module foresight_datafile
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : iostat_end, iostat_eor
 use foresight_expression, only : expression_object
+use foresight_format, only : real_from_decimal
 use penf, only : I4P, R8P
 
 implicit none
@@ -383,14 +388,140 @@ contains
    endfunction cell_value
 
    function to_real(token) result(v)
-   !< Number in `token`; NaN if empty, missing (`?`) or not a number.
-   character(len=*), intent(in) :: token  !< Cell text.
-   real(R8P)                    :: v      !< Value.
-   integer(I4P)                 :: iostat !< Conversion status.
+   !< Value of the longest number at the start of `token`, as C `strtod`: `[+-]` then decimal `D[.D][e[+-]D]` or `.D...`,
+   !< or hexadecimal `0xH[.H][p[+-]D]`; NaN if there is none (empty, `?`, `NaN`, `inf`) or it is out of range.
+   character(len=*), intent(in) :: token !< Cell text.
+   real(R8P)                    :: v     !< Value.
+   integer(I4P)                 :: n     !< Token length.
+   integer(I4P)                 :: i     !< Character counter.
+   integer(I4P)                 :: last  !< End of the decimal mantissa.
+   integer(I4P)                 :: body  !< First character after the sign.
+   logical                      :: ok    !< Conversion succeeded.
 
    v = ieee_value(1.0_R8P, ieee_quiet_nan)
-   if (len(token) == 0 .or. verify(token, '0123456789+-.eEdD') > 0) return
-   read(token, *, iostat=iostat) v
-   if (iostat /= 0_I4P) v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   n = len(token, kind=I4P)
+   body = 1_I4P
+   if (n > 0_I4P) then
+      if (token(1:1) == '+' .or. token(1:1) == '-') body = 2_I4P
+   endif
+   if (body + 2_I4P <= n) then
+      if (token(body:body) == '0' .and. (token(body + 1_I4P:body + 1_I4P) == 'x' .or. &
+                                         token(body + 1_I4P:body + 1_I4P) == 'X')) then
+         if (hexadecimal(token(body + 2_I4P:), v)) then
+            if (token(1:1) == '-') v = -v
+            return
+         endif
+      endif
+   endif
+   ! decimal mantissa: digits, a point, digits; at least one digit
+   i = skip_digits(token, body)
+   if (i <= n) then
+      if (token(i:i) == '.') i = skip_digits(token, i + 1_I4P)
+   endif
+   last = i - 1_I4P
+   if (verify(token(body:last), '.') == 0) return
+   ! exponent, only if digits follow it
+   if (i < n) then
+      if (token(i:i) == 'e' .or. token(i:i) == 'E') then
+         i = i + 1_I4P
+         if (token(i:i) == '+' .or. token(i:i) == '-') i = i + 1_I4P
+         if (i <= n) then
+            if (scan(token(i:i), '0123456789') > 0) last = skip_digits(token, i) - 1_I4P
+         endif
+      endif
+   endif
+   call real_from_decimal(token(1:last), v, ok)
+   if (.not. ok) v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   contains
+      pure function skip_digits(text, from) result(next)
+      !< First position from `from` on that is not a decimal digit.
+      character(len=*), intent(in) :: text !< Text.
+      integer(I4P),     intent(in) :: from !< Start.
+      integer(I4P)                 :: next !< Position after the digits.
+
+      next = from
+      do while (next <= len(text))
+         if (scan(text(next:next), '0123456789') == 0) exit
+         next = next + 1_I4P
+      enddo
+      endfunction skip_digits
    endfunction to_real
+
+   function hexadecimal(text, v) result(found)
+   !< Value of the hexadecimal number at the start of `text` (after `0x`): digits, an optional point and digits, an
+   !< optional binary exponent `p[+-]D`; false if no digit follows the `0x`. Out of range is NaN, never an IEEE overflow.
+   character(len=*), intent(in)  :: text   !< Text after `0x`.
+   real(R8P),        intent(out) :: v      !< Value.
+   logical                       :: found  !< A hexadecimal digit was found.
+   character(len=*), parameter   :: HEX = '0123456789abcdef'
+   integer(I4P)                  :: i      !< Character counter.
+   integer(I4P)                  :: d      !< Digit value.
+   integer(I4P)                  :: shift  !< Binary exponent of the fraction digits.
+   integer(I4P)                  :: p      !< Binary exponent.
+   integer(I4P)                  :: ndig   !< Integer digits.
+   integer(I4P)                  :: sgn    !< Exponent sign.
+   logical                       :: point  !< After the point.
+
+   v = 0.0_R8P
+   found = .false.
+   shift = 0_I4P
+   ndig = 0_I4P
+   point = .false.
+   i = 1_I4P
+   do while (i <= len(text))
+      if (text(i:i) == '.' .and. .not. point) then
+         point = .true.
+      else
+         d = index(HEX, lower(text(i:i)), kind=I4P) - 1_I4P
+         if (d < 0_I4P) exit
+         found = .true.
+         ! digits beyond the precision cannot change the value: the integer ones only scale it
+         if (v < 2.0_R8P**60) then
+            v = 16.0_R8P * v + real(d, R8P)
+            if (point) shift = shift - 4_I4P
+         elseif (.not. point) then
+            ndig = ndig + 1_I4P
+         endif
+      endif
+      i = i + 1_I4P
+   enddo
+   if (.not. found) return
+   shift = shift + 4_I4P * ndig
+   ! binary exponent, only if digits follow it
+   if (i < len(text)) then
+      if (lower(text(i:i)) == 'p') then
+         sgn = 1_I4P
+         i = i + 1_I4P
+         if (text(i:i) == '+' .or. text(i:i) == '-') then
+            if (text(i:i) == '-') sgn = -1_I4P
+            i = i + 1_I4P
+         endif
+         p = 0_I4P
+         do while (i <= len(text))
+            if (scan(text(i:i), '0123456789') == 0) exit
+            ! clamped: far beyond any real exponent either way
+            p = min(100000_I4P, 10_I4P * p + iachar(text(i:i)) - iachar('0'))
+            i = i + 1_I4P
+         enddo
+         shift = shift + sgn * p
+      endif
+   endif
+   if (v == 0.0_R8P) return
+   if (exponent(v) + shift > maxexponent(v)) then
+      v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   elseif (exponent(v) + shift < minexponent(v) - digits(v)) then
+      v = 0.0_R8P
+   else
+      v = scale(v, shift)
+   endif
+   contains
+      pure function lower(c) result(l)
+      !< Lower case of the letter `c`.
+      character(len=1), intent(in) :: c !< Character.
+      character(len=1)             :: l !< Lower case.
+
+      l = c
+      if (c >= 'A' .and. c <= 'Z') l = achar(iachar(c) + 32)
+      endfunction lower
+   endfunction hexadecimal
 endmodule foresight_datafile

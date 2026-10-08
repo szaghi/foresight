@@ -3,7 +3,7 @@
 program foresight_datafile_test
 !< foresight_datafile test: gnuplot data file layout (comments, missing cells, blocks, datasets), column extraction and
 !< separated cells (CSV), the expected values probed on gnuplot 6.0.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_datafile, only : datafile_object
 use penf, only : I4P, R8P
@@ -18,7 +18,13 @@ integer(I4P)                  :: iostat                               !< Status.
 integer(I4P)                  :: ux                                   !< Default abscissa column.
 integer(I4P)                  :: uy                                   !< Default ordinate column.
 integer(I4P)                  :: unit                                 !< File unit.
-logical                       :: test_passed(14)                      !< Per-check outcome.
+character(len=8), parameter   :: cells(25) = [character(len=8) :: '3abc', '1e', '1e5x', '-', '+.', '.5.5', '1.2.3', &
+                                              '0x10', '1d3', 'inf', 'nan', '-inf', '1.5e+', '.e1', '2e-1q', '1E2', &
+                                              '-.5', 'e3', '1.e2', '1e999', '0x1.8p1', '-0X10', '1e-999', '0x', '0xg']
+                                                                      !< Cells probed on gnuplot 6.0.
+real(R8P)                     :: expected(25)                         !< Their values, NaN for gaps.
+logical                       :: test_passed(15)                      !< Per-check outcome.
+integer(I4P)                  :: k                                    !< Counter.
 
 ! dataset 0: blocks {0,1,2} and {3,4}; dataset 1: {0,1}; a comment line and a missing cell
 open(newunit=unit, file=file, action='write', status='replace')
@@ -111,10 +117,45 @@ close(unit)
 call data%load(file, iostat, iomsg)
 test_passed(14) = iostat == 0_I4P .and. data%nvalues == 3_I4P .and. ieee_is_nan(data%values(1)) .and. &
                   data%values(3) == 2.0_R8P
+
+! a cell is its longest leading number, as C strtod (gnuplot 6.0): hexadecimal included, out of range a gap, and
+! `1e999` raising no IEEE overflow in the debug build
+expected = [3.0_R8P, 1.0_R8P, 1.0e5_R8P, nan(), nan(), 0.5_R8P, 1.2_R8P, 16.0_R8P, 1.0_R8P, nan(), nan(), nan(), &
+            1.5_R8P, nan(), 0.2_R8P, 100.0_R8P, -0.5_R8P, nan(), 100.0_R8P, nan(), 3.0_R8P, -16.0_R8P, 0.0_R8P, &
+            0.0_R8P, 0.0_R8P]
+open(newunit=unit, file=file, action='write', status='replace')
+do k = 1, size(cells)
+   write(unit, '(I0,1X,A)') k, trim(cells(k))
+enddo
+close(unit)
+call data%load(file, iostat, iomsg)
+call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
+test_passed(15) = iostat == 0_I4P .and. size(y) == size(cells)
+if (test_passed(15)) then
+   do k = 1, size(cells)
+      if (ieee_is_nan(expected(k)) .neqv. ieee_is_nan(y(k))) then
+         test_passed(15) = .false.
+      elseif (.not. ieee_is_nan(expected(k))) then
+         if (y(k) /= expected(k)) test_passed(15) = .false.
+      endif
+      if (.not. test_passed(15)) then
+         write(output_unit, '(A)') 'cell "'//trim(cells(k))//'" misread'
+         exit
+      endif
+   enddo
+endif
 open(newunit=unit, file=file)
 close(unit, status='delete')
 
-write(output_unit, '(A,14L2)') 'foresight_datafile checks:', test_passed
+write(output_unit, '(A,15L2)') 'foresight_datafile checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
+
+contains
+   function nan() result(v)
+   !< Quiet NaN: a gap.
+   real(R8P) :: v !< NaN.
+
+   v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   endfunction nan
 endprogram foresight_datafile_test

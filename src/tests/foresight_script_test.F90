@@ -27,7 +27,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(35)                           !< Per-check outcome.
+logical                       :: test_passed(37)                           !< Per-check outcome.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -220,6 +220,22 @@ test_passed(34) = iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2 expect
 call interpreter%run_text("plot '"//data_file//"' axes x2y1", iostat, iomsg)
 test_passed(35) = iostat /= 0_I4P .and. index(iomsg, 'axes x1y1 or x1y2 expected, found "x2y1"') > 0
 
+! set xtics without positions keeps the last ones, also after unset xtics; auto forgets them (gnuplot 6.0)
+call interpreter%init('x.html')
+associate(tics => interpreter%figure%panels(1)%xaxis%tics)
+   call interpreter%run_text('set xtics 5; set xtics', iostat, iomsg)
+   test_passed(36) = tics%attribute() == '* 5 *'
+   call interpreter%run_text('unset xtics; set xtics', iostat, iomsg)
+   test_passed(36) = test_passed(36) .and. tics%attribute() == '* 5 *'
+   call interpreter%run_text('set xtics auto; unset xtics; set xtics', iostat, iomsg)
+   test_passed(36) = test_passed(36) .and. tics%attribute() == ''
+   call interpreter%run_text('set xtics 0,2,10; unset xtics; set xtics nomirror', iostat, iomsg)
+   test_passed(36) = test_passed(36) .and. tics%attribute() == '0 2 10' .and. .not. tics%mirror
+endassociate
+! a number beyond the real range is an error, not an IEEE overflow
+call interpreter%run_text('set xrange [1e999:1]', iostat, iomsg)
+test_passed(37) = iostat /= 0_I4P .and. index(iomsg, '"1e999" is not a number') > 0
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -232,7 +248,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,35L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,37L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

@@ -26,7 +26,8 @@ title: Data Files
 | `#` | starts a comment anywhere on a line; comment-only lines are neither data nor separators |
 | One blank line | ends a block: plotted lines are broken there |
 | Two blank lines | end a dataset, selected with `index N` (0-based) |
-| `?`, `NaN`, non-numbers | missing values: gaps in the plot |
+| `?`, `NaN`, `inf`, non-numbers | missing values: gaps in the plot |
+| Numbers | read as gnuplot (C `strtod`): the longest leading number counts, `3abc` is 3, `1.2.3` is 1.2, `1d3` is 1; hexadecimal too, `0x10` is 16; beyond the real range, a gap |
 | `"quoted cell"` | one cell, blanks included; not a number |
 | Short rows | the missing columns are missing values |
 | Column 0 | the number of the point among those plotted in its dataset, from 0 (after `every`, as gnuplot) |

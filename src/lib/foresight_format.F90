@@ -10,6 +10,12 @@ module foresight_format
 !< User tick formats (gnuplot `set format`, a printf subset) are applied the same way, to the exact decimal value of a
 !< tick: `format_decimal` works on digit strings and rounds half to even, so the interactive viewer, which mirrors it,
 !< prints identical labels.
+!<
+!< Text to real goes through `real_from_decimal`, which never raises an IEEE overflow: a debug build trapping overflows
+!< would otherwise stop on a data cell such as `1e999`, inside the C library conversion.
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use, intrinsic :: ieee_exceptions, only : ieee_get_flag, ieee_get_halting_mode, ieee_overflow, ieee_set_flag, &
+                                         ieee_set_halting_mode
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -21,12 +27,51 @@ public :: format_check
 public :: format_decimal
 public :: int_str
 public :: parse_decimal
+public :: real_from_decimal
 public :: real_str
 public :: xml_escape
 
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
 
 contains
+   subroutine real_from_decimal(text, value, ok)
+   !< Value of the decimal number `text` (Fortran list-directed syntax, e.g. `-1.5e-3`); `ok` false if it is malformed or
+   !< beyond the real range, never raising an IEEE overflow.
+   !<
+   !< Only a text whose exponent and length could reach the overflow range is read with the overflow halting off (and
+   !< the overflow flag restored): the common case stays a plain read.
+   character(len=*), intent(in)  :: text     !< Decimal text.
+   real(R8P),        intent(out) :: value    !< Value.
+   logical,          intent(out) :: ok       !< Well formed and finite.
+   integer(I4P)                  :: ios      !< Conversion status.
+   integer(I4P)                  :: e        !< Exponent marker position.
+   integer(I4P)                  :: digits   !< Exponent digits, nonzero ones from the first.
+   logical                       :: halting  !< Overflow halting on.
+   logical                       :: flagged  !< Overflow flag before the read.
+
+   value = 0.0_R8P
+   ! the decimal magnitude is at most the text length plus the exponent: bounded by the exponent digits
+   e = scan(text, 'eEdD', back=.true., kind=I4P)
+   digits = 0_I4P
+   if (e > 0_I4P) then
+      digits = verify(text(e + 1_I4P:), '+-0', kind=I4P)
+      if (digits > 0_I4P) digits = len(text, kind=I4P) - e - digits + 1_I4P
+   endif
+   if (digits <= 2_I4P .and. len(text) < 200) then
+      read(text, *, iostat=ios) value
+   else
+      call ieee_get_halting_mode(ieee_overflow, halting)
+      call ieee_get_flag(ieee_overflow, flagged)
+      if (halting) call ieee_set_halting_mode(ieee_overflow, .false.)
+      read(text, *, iostat=ios) value
+      call ieee_set_flag(ieee_overflow, flagged)
+      if (halting) call ieee_set_halting_mode(ieee_overflow, .true.)
+   endif
+   ok = ios == 0_I4P
+   if (ok) ok = ieee_is_finite(value)
+   if (.not. ok) value = 0.0_R8P
+   endsubroutine real_from_decimal
+
    pure function int_str(n) result(str)
    !< Integer to minimal-width decimal string.
    integer(I8P), intent(in)      :: n      !< Integer.
