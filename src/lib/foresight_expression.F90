@@ -1,9 +1,10 @@
-!< foresight_expression, arithmetic expressions of gnuplot `using` fields.
+!< foresight_expression, arithmetic expressions of gnuplot `using` fields and plotted functions.
 module foresight_expression
-!< foresight_expression, arithmetic expressions of gnuplot `using` fields.
+!< foresight_expression, arithmetic expressions of gnuplot `using` fields and plotted functions.
 !<
 !< An expression such as `($2*1e3)` or `($3 > 0 ? log10($3) : 1/0)` is compiled once into stack code and evaluated on
-!< each data row. The semantics are gnuplot's:
+!< each data row; compiled with a dummy variable, `sin(x)/x` is a function evaluated at sample abscissae (`value_at`),
+!< where columns are errors. The semantics are gnuplot's:
 !<
 !< - operators, loosest first: `?:`, `||`, `&&`, `== !=`, `< <= > >=`, `+ -`, `* / %`, unary `- + !`, `**` (right
 !<   associative, so `-2**2` is -4 and `2**3**2` is 512); `&&`, `||` and `?:` evaluate only what they need;
@@ -90,15 +91,20 @@ type :: expression_object
       procedure, pass(self) :: compile    !< Compile an expression.
       procedure, pass(self) :: evaluate   !< Value on a data row.
       procedure, pass(self) :: set_column !< Plain column.
+      procedure, pass(self) :: value_at   !< Value of a function at its variable value.
 endtype expression_object
 
 contains
-   subroutine compile(self, text, iostat, iomsg)
+   subroutine compile(self, text, iostat, iomsg, variable)
    !< Compile `text`; on error `iostat` is not 0 and `iomsg` names the problem and its position.
-   class(expression_object),      intent(inout) :: self    !< Expression.
-   character(len=*),              intent(in)    :: text    !< Source text.
-   integer(I4P),                  intent(out)   :: iostat  !< 0 on success.
-   character(len=:), allocatable, intent(out)   :: iomsg   !< Error message.
+   !<
+   !< With `variable` (gnuplot's dummy `x`) the expression is a function of it, evaluated by `value_at`; columns are
+   !< then errors. The variable is held as the only cell of the row `evaluate` receives.
+   class(expression_object),      intent(inout)        :: self     !< Expression.
+   character(len=*),              intent(in)           :: text     !< Source text.
+   integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg    !< Error message.
+   character(len=*),              intent(in), optional :: variable !< Dummy variable name, for a function.
    integer(I4P), parameter                      :: T_END = 0_I4P      !< End of text.
    integer(I4P), parameter                      :: T_NUMBER = 1_I4P   !< Number.
    integer(I4P), parameter                      :: T_COLUMN = 2_I4P   !< `$N`.
@@ -390,6 +396,10 @@ contains
          call emit(OP_CONSTANT, v=number)
          call next
       case (T_COLUMN)
+         if (present(variable)) then
+            call syntax('columns are only valid in using, not in a function')
+            return
+         endif
          call emit(OP_COLUMN, arg=int(number%i, I4P))
          call next
       case (T_NAME)
@@ -400,6 +410,8 @@ contains
          if (.not. (kind == T_OPERATOR .and. token == '(')) then
             if (name == 'pi') then
                call emit(OP_CONSTANT, v=value_object(r=PI))
+            elseif (is_variable(name)) then
+               call emit(OP_COLUMN, arg=1_I4P)
             else
                call syntax('unknown name "'//name//'" (user variables are not supported)', at)
             endif
@@ -420,6 +432,8 @@ contains
          if (name == 'atan2') then
             if (nargs /= 2_I4P) call syntax('atan2 needs 2 arguments', at)
             call emit(OP_ATAN2)
+         elseif (name == 'column' .and. present(variable)) then
+            call syntax('columns are only valid in using, not in a function', at)
          elseif (name == 'column' .or. f > 0) then
             if (nargs /= 1_I4P) call syntax(name//' needs 1 argument', at)
             if (name == 'column') then
@@ -441,6 +455,15 @@ contains
          call syntax('unexpected end')
       endselect
       endsubroutine parse_primary
+
+      function is_variable(name) result(yes)
+      !< Whether `name` is the dummy variable.
+      character(len=*), intent(in) :: name !< Name.
+      logical                      :: yes  !< The variable.
+
+      yes = .false.
+      if (present(variable)) yes = name == variable
+      endfunction is_variable
    endsubroutine compile
 
    pure function evaluate(self, row, point) result(v)
@@ -549,6 +572,15 @@ contains
    self%code = [instruction_object(op=OP_COLUMN, arg=c)]
    self%depth = 1_I4P
    endsubroutine set_column
+
+   pure function value_at(self, x) result(v)
+   !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.
+   class(expression_object), intent(in) :: self !< Expression.
+   real(R8P),                intent(in) :: x    !< Variable value.
+   real(R8P)                            :: v    !< Value.
+
+   v = self%evaluate([x], 0_I4P)
+   endfunction value_at
 
    ! private procedures
    pure function in_level(operator, level) result(yes)

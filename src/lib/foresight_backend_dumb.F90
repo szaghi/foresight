@@ -376,6 +376,7 @@ contains
    integer(I4P)                       :: sc         !< Column step.
    integer(I4P)                       :: sr         !< Row step.
    integer(I4P)                       :: err        !< Bresenham error.
+   integer(I4P)                       :: e2         !< Twice the error before the step.
 
    c = c1
    r = r1
@@ -393,11 +394,14 @@ contains
          call self%put(c, r, symbol)
       endif
       if (c == c2 .and. r == r2) exit
-      if (2_I4P * err >= dr) then
+      ! both tests on the error before the step: testing the updated one overshoots the end on some slopes, and the
+      ! loop never meets (c2, r2)
+      e2 = 2_I4P * err
+      if (e2 >= dr) then
          err = err + dr
          c = c + sc
       endif
-      if (2_I4P * err <= dc) then
+      if (e2 <= dc) then
          err = err + dc
          r = r + sr
       endif

@@ -17,7 +17,8 @@ interactive HTML, gnuplot usage, live monitoring.
 | gnuplot command language | subset | full | full (through gnuplot) | no | no | no |
 | Callable library | yes | no | yes | yes | yes | yes |
 | Static formats | SVG, text | many | through gnuplot | through matplotlib | SVG, PNG, PDF, EPS | PNG, PDF, ASCII |
-| 3D, fitting, functions | no | yes | yes | yes | partly | partly |
+| Function plots | yes (`plot sin(x)`) | yes | yes | yes | no | no |
+| 3D, fitting | no | yes | yes | yes | partly | partly |
 
 The rows on other projects summarise their documentation at the time foresight was designed
 ([fplotlib](https://github.com/certik/fplotlib), [fortplot](https://github.com/lazy-fortran/fortplot),
@@ -28,5 +29,5 @@ check them for their current state.
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.
 - **Static raster output** (PNG) from pure Fortran: fplotlib, whose PNG rasteriser and font are compiled in.
-- **The full gnuplot language** (functions, `fit`, `splot`, `set format`...): gnuplot itself.
+- **The full gnuplot language** (user functions and variables, `fit`, `splot`...): gnuplot itself.
 - **Fields on meshes**: ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran).

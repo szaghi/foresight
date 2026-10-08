@@ -3,9 +3,10 @@ module foresight_tokens
 !< foresight_tokens, lexer of the gnuplot-like command language.
 !<
 !< A line is split into statements at `;` and cut at `#` (both outside quotes); a statement into tokens: words,
-!< quoted strings (single quotes literal, double quotes with `\"` and `\\` escapes, as gnuplot), commas and bracketed
-!< ranges `[a:b]`. Inside parentheses a word goes on across blanks and commas: `($2 * 1e3)` and `atan2($2, $1)` are
-!< single words.
+!< quoted strings (single quotes literal, double quotes with `\t` for a tab and `\` taking the next character literally,
+!< so `\"` and `\\`, as gnuplot), commas and bracketed ranges `[a:b]`. Each token remembers where it lies in the
+!< statement, so that a plot item can be quoted as written. Inside parentheses a word goes on across blanks and commas:
+!< `($2 * 1e3)` and `atan2($2, $1)` are single words.
 use penf, only : I4P
 
 implicit none
@@ -25,6 +26,8 @@ type :: token_object
    integer(I4P)                  :: kind = TOKEN_WORD !< Token kind.
    character(len=:), allocatable :: text              !< Token text.
    character(len=1)              :: quote = ' '       !< Quote of a string token, blank for others.
+   integer(I4P)                  :: first = 0_I4P     !< First character in the statement, quotes or brackets included.
+   integer(I4P)                  :: last  = 0_I4P     !< Last character in the statement.
 endtype token_object
 
 contains
@@ -101,6 +104,7 @@ contains
          cycle
       endif
       token%quote = ' '
+      token%first = i
       select case (c)
       case (',')
          token%kind = TOKEN_COMMA
@@ -129,7 +133,14 @@ contains
                return
             endif
             if (statement(i:i) == '"') exit
-            if (statement(i:i) == '\' .and. i < n) i = i + 1_I4P
+            if (statement(i:i) == '\' .and. i < n) then
+               i = i + 1_I4P
+               if (statement(i:i) == 't') then
+                  token%text = token%text//achar(9)
+                  i = i + 1_I4P
+                  cycle
+               endif
+            endif
             token%text = token%text//statement(i:i)
             i = i + 1_I4P
          enddo
@@ -156,6 +167,7 @@ contains
          token%text = statement(i:j)
          i = j + 1_I4P
       endselect
+      token%last = i - 1_I4P
       tokens = [tokens, token]
    enddo
    contains

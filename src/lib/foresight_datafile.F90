@@ -4,8 +4,13 @@ module foresight_datafile
 !<
 !< Format, as gnuplot's default: whitespace separated numeric columns; `#` starts a comment; one blank line ends a
 !< block (plotted lines are broken there), two blank lines end a dataset (selected by `index`, 0-based); cells that
-!< are `?`, `NaN` or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of each
+!< are `?`, `NaN`, empty or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of each
 !< dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
+!<
+!< With a separator (gnuplot `set datafile separator`, e.g. `,` for CSV) every one of its characters ends a cell:
+!< two separators in a row leave an empty cell, a trailing one an empty last cell; blanks around a cell are ignored and
+!< a cell in double quotes is read without them (`"7"` is 7), its separators kept. Without one, a double quoted cell
+!< may hold blanks and is not a number, as gnuplot.
 !<
 !< Values are stored flattened, rows by offsets, with capacities doubled on growth: a large monitoring log costs one
 !< real per value plus three integers per row.
@@ -17,6 +22,8 @@ use penf, only : I4P, R8P
 implicit none
 private
 public :: datafile_object
+
+character(len=1), parameter :: TAB = achar(9) !< Tab character.
 
 type :: datafile_object
    !< Data file content.
@@ -35,24 +42,30 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg)
-   !< Read `file`, replacing the current content.
-   class(datafile_object),        intent(inout) :: self    !< Data.
-   character(len=*),              intent(in)    :: file    !< File name.
-   integer(I4P),                  intent(out)   :: iostat  !< 0 on success.
-   character(len=:), allocatable, intent(out)   :: iomsg   !< Error message.
-   character(len=:), allocatable                :: line    !< Current line.
-   character(len=256)                           :: message !< I/O message.
-   integer(I4P)                                 :: unit    !< File unit.
-   integer(I4P)                                 :: blanks  !< Blank lines since the last data row.
-   integer(I4P)                                 :: dset    !< Current dataset.
-   integer(I4P)                                 :: blk     !< Current block.
-   integer(I4P)                                 :: i       !< Character counter.
-   integer(I4P)                                 :: j       !< Token end.
-   integer(I4P)                                 :: n       !< Code part length.
-   logical                                      :: eof     !< End of file reached.
+   subroutine load(self, file, iostat, iomsg, separator)
+   !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
+   !< characters when given and not empty.
+   class(datafile_object),        intent(inout)        :: self      !< Data.
+   character(len=*),              intent(in)           :: file      !< File name.
+   integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
+   character(len=*),              intent(in), optional :: separator !< Cell separator characters.
+   character(len=:), allocatable                       :: line      !< Current line.
+   character(len=:), allocatable                       :: sep       !< Cell separator characters, empty for whitespace.
+   character(len=256)                                  :: message   !< I/O message.
+   integer(I4P)                                        :: unit      !< File unit.
+   integer(I4P)                                        :: blanks    !< Blank lines since the last data row.
+   integer(I4P)                                        :: dset      !< Current dataset.
+   integer(I4P)                                        :: blk       !< Current block.
+   integer(I4P)                                        :: i         !< Character counter.
+   integer(I4P)                                        :: j         !< Cell end.
+   integer(I4P)                                        :: n         !< Code part length.
+   logical                                             :: quoted    !< Inside double quotes.
+   logical                                             :: eof       !< End of file reached.
 
    self%file = file
+   sep = ''
+   if (present(separator)) sep = separator
    self%nrows = 0_I4P
    self%nvalues = 0_I4P
    if (allocated(self%values)) deallocate(self%values)
@@ -91,19 +104,38 @@ contains
          blanks = 0_I4P
          call new_row(dset, blk)
          i = 1_I4P
-         do while (i <= n)
-            if (line(i:i) == ' ' .or. line(i:i) == achar(9)) then
-               i = i + 1_I4P
-               cycle
-            endif
-            j = i
-            do while (j < n)
-               if (line(j + 1_I4P:j + 1_I4P) == ' ' .or. line(j + 1_I4P:j + 1_I4P) == achar(9)) exit
-               j = j + 1_I4P
+         if (len(sep) == 0) then
+            ! whitespace separated: runs of blanks between cells, a quoted cell may hold blanks
+            do while (i <= n)
+               if (line(i:i) == ' ' .or. line(i:i) == TAB) then
+                  i = i + 1_I4P
+                  cycle
+               endif
+               j = i
+               quoted = line(i:i) == '"'
+               do while (j < n)
+                  if (.not. quoted .and. (line(j + 1_I4P:j + 1_I4P) == ' ' .or. line(j + 1_I4P:j + 1_I4P) == TAB)) exit
+                  j = j + 1_I4P
+                  if (line(j:j) == '"') quoted = .not. quoted
+               enddo
+               call add_value(to_real(line(i:j)))
+               i = j + 1_I4P
             enddo
-            call add_value(to_real(line(i:j)))
-            i = j + 1_I4P
-         enddo
+         else
+            ! every separator ends a cell, also an empty one; separators inside double quotes do not
+            do
+               j = i
+               quoted = .false.
+               do while (j <= n)
+                  if (line(j:j) == '"') quoted = .not. quoted
+                  if (.not. quoted .and. index(sep, line(j:j)) > 0) exit
+                  j = j + 1_I4P
+               enddo
+               call add_value(cell_value(line(i:j - 1_I4P)))
+               if (j > n) exit
+               i = j + 1_I4P
+            enddo
+         endif
       endif
       if (eof) exit
    enddo
@@ -330,14 +362,34 @@ contains
    enddo
    endsubroutine read_line
 
+   function cell_value(cell) result(v)
+   !< Number in a separated `cell`: blanks around it ignored, then double quotes around it; NaN if empty or not a number.
+   character(len=*), intent(in) :: cell  !< Cell text.
+   real(R8P)                    :: v     !< Value.
+   integer(I4P)                 :: first !< First character of the trimmed cell.
+   integer(I4P)                 :: last  !< Last character of the trimmed cell.
+
+   first = verify(cell, ' '//TAB, kind=I4P)
+   last = verify(cell, ' '//TAB, back=.true., kind=I4P)
+   if (first == 0_I4P) then
+      v = ieee_value(1.0_R8P, ieee_quiet_nan)
+      return
+   endif
+   if (last > first .and. cell(first:first) == '"' .and. cell(last:last) == '"') then
+      first = first + 1_I4P
+      last = last - 1_I4P
+   endif
+   v = to_real(cell(first:last))
+   endfunction cell_value
+
    function to_real(token) result(v)
-   !< Number in `token`; NaN if missing (`?`) or not a number.
+   !< Number in `token`; NaN if empty, missing (`?`) or not a number.
    character(len=*), intent(in) :: token  !< Cell text.
    real(R8P)                    :: v      !< Value.
    integer(I4P)                 :: iostat !< Conversion status.
 
    v = ieee_value(1.0_R8P, ieee_quiet_nan)
-   if (verify(token, '0123456789+-.eEdD') > 0) return
+   if (len(token) == 0 .or. verify(token, '0123456789+-.eEdD') > 0) return
    read(token, *, iostat=iostat) v
    if (iostat /= 0_I4P) v = ieee_value(1.0_R8P, ieee_quiet_nan)
    endfunction to_real

@@ -21,7 +21,8 @@ network, no external files — and works opened straight from the disk.
 | `g` | toggle the grid |
 | `h` or `?` | show or hide the help |
 
-The cursor coordinates, in data values, show at the bottom left while the pointer is over a plot. In a multiplot the
+The cursor coordinates, in data values, show at the bottom left while the pointer is over a plot (with the y2 value
+when the panel has a second y axis). In a multiplot the
 mouse acts on the panel under the pointer, keys on the last panel hovered.
 
 ## What happens on zoom
@@ -30,7 +31,7 @@ The data are never re-plotted: they live in a nested SVG whose coordinates span 
 its `viewBox` only. Line widths stay constant thanks to `vector-effect="non-scaling-stroke"`. What does change is
 regenerated:
 
-- **ticks, tick labels and grid**, with a line-by-line port of the Fortran tick rules
+- **ticks, tick labels and grid** (y2 ticks included), with a line-by-line port of the Fortran tick rules
   (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals;
 - **error bar caps**, kept at their pixel length in a separate overlay.
 

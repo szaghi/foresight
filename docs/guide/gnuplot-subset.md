@@ -13,7 +13,8 @@ that did what it says.
 - One statement per line, or several separated by `;`
 - `#` starts a comment (outside quotes)
 - A line ending with `\` continues on the next one
-- Strings in single quotes are literal; in double quotes `\"` and `\\` are escapes
+- Strings in single quotes are literal; in double quotes `\t` is a tab and `\` takes the next character literally
+  (`\"`, `\\`)
 - Keywords accept gnuplot abbreviations: the shortest accepted form is in bold below
 
 ## Commands
@@ -30,13 +31,15 @@ that did what it says.
 | Option | `set` | `unset` |
 |---|---|---|
 | **tit**le `"text"` | panel title | no title |
-| **xl**abel / **yl**abel `"text"` | axis label | no label |
-| **xr**ange / **yr**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | — |
-| **log**scale [`x`\|`y`\|`xy`] [`10`] | base-10 log axes (default both) | linear axes |
+| **xl**abel / **yl**abel / **y2l**abel `"text"` | axis label (`y2` on the right) | no label |
+| **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | — |
+| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2` (`y`, `xy2`), all when absent | linear axes |
 | **gr**id | grid at major ticks | no grid |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] | show the key, inside the plot area (top right by default), see [below](#key) | hide the key |
-| **xti**cs / **yti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] | tick positions, see [below](#ticks-and-label-formats) | no ticks, labels nor grid lines |
-| **for**mat [`x`\|`y`\|`xy`] [`"format"`] | tick label format, see [below](#ticks-and-label-formats) | default labels |
+| **xti**cs / **yti**cs / **y2ti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis) | no ticks, labels nor grid lines |
+| **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
+| **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
+| **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
 | **st**yle **d**ata `STYLE` | style of items without `with` | — |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
@@ -49,18 +52,21 @@ that did what it says.
 ## `plot` items
 
 ```gnuplot
-plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitle]
+plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitle] [axes x1y1|x1y2]
             [lc [rgb] "color" | lc N] [lw W] [dt N] [ps S], ...
+plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
 | Modifier | Meaning |
 |---|---|
 | `'file'` | data file; `''` repeats the previous one |
+| *function* | an expression of `x`, see [below](#functions) |
 | **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
-| **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)` |
+| **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
+| **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
 | `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the `N`-th palette color |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
@@ -108,6 +114,41 @@ errors. Syntax errors point at the character: `using: unexpected ")" at characte
 Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
 stops the plot. Not supported: user variables and functions, string columns (`column("name")`, `stringcolumn`),
 bitwise operators, the pseudo-columns -1 and -2.
+
+## Functions
+
+A plot item that is not a quoted file is a function of `x`, with the operators, functions and rules of
+[`using` expressions](#expressions-in-using), without columns:
+
+```gnuplot
+plot 'run.dat' u 1:2, 1e-1 * exp(-x/5) t 'model'
+plot sin(x)/x, x > 0 ? log(x) : 1/0
+set samples 400; plot x * sin(1/x)
+```
+
+As gnuplot, a function is sampled at `set samples` points (100) evenly over the x range before its extension to the
+ticks: the `xrange` ends where set, else the extent of the data of the whole plot, else [-10:10]. On a log x axis the
+samples are evenly spaced in log x. Undefined values (`1/0`, `log(-1)`) are gaps. Functions are drawn `with lines`
+whatever `set style data` says (gnuplot's `set style function`); `points` and `linespoints` work too, error bars do
+not. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
+
+In the HTML page a zoom does not resample: the samples are those of the original range.
+
+## Second y axis
+
+```gnuplot
+set logscale y
+set ytics nomirror; set y2tics
+set ylabel 'residual'; set y2label 'coefficient'
+plot 'run.dat' u 1:2 t 'residual', '' u 1:3 axes x1y2 t 'cd'
+```
+
+The items plotted `axes x1y2` are scaled on the second y axis, autoscaled on them alone (on the points inside the x
+range), with its own `y2range`, `logscale y2` and `format y2`. As in gnuplot, the y2 ticks and labels are off until
+`set y2tics`: they go on the right border, not mirrored on the left (`set y2tics mirror` does). The y ticks stay
+mirrored on the right unless `set ytics nomirror`. The axis is drawn only when it has data, or a range fixed at both
+ends; `y2label` reads upward on the right, as `ylabel` on the left. In the HTML page the y2 ticks follow the zoom and
+the readout shows the y2 value too.
 
 ## Ticks and label formats
 
@@ -184,7 +225,8 @@ rewritten at each plot, so that a watched page shows the panels done so far.
 
 ## Not supported
 
-Plotting functions (`plot sin(x)`), user variables, `splot`, `fit`, log bases other than 10, `set size ratio` and
-`square`; in `set xtics`, explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `nomirror`,
-`rotate`, `out` options; in `set format`, the `%s`, `%L`, `%T` conversions; the key `outside` the plot area;
-point types (`pt`).
+User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`), `set style function`, the second
+x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
+explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
+`%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
+`outside` the plot area; point types (`pt`).

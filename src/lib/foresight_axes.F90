@@ -1,20 +1,26 @@
-!< foresight_axes, a plot panel: two axes, the plotted series, the key and the decorations.
+!< foresight_axes, a plot panel: the axes, the plotted series, the key and the decorations.
 module foresight_axes
-!< foresight_axes, a plot panel: two axes, the plotted series, the key and the decorations.
+!< foresight_axes, a plot panel: the axes, the plotted series, the key and the decorations.
 !<
 !< Layout follows gnuplot defaults: full border with inward ticks mirrored on the opposite side, tick labels outside
 !< bottom and left, key inside the plot area (top right by default) with right-aligned titles and the samples on their
 !< right.
+!<
+!< A second y axis (gnuplot `y2`) scales the series plotted on it (`axes x1y2`) on its own, autoscaled from them alone;
+!< as gnuplot, its ticks and labels are off until `set y2tics` (on the right border, not mirrored), and it is drawn only
+!< when it has data or a fully fixed range.
 !< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
 use foresight_series, only : series_object
 use foresight_style, only : default_color, style_with
+use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
 private
 public :: axes_object
+public :: axes_names
 public :: key_position
 
 real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
@@ -32,6 +38,9 @@ type :: axes_object
    !< Plot panel.
    type(axis_object)                :: xaxis          !< Horizontal axis.
    type(axis_object)                :: yaxis          !< Vertical axis.
+   type(axis_object)                :: y2axis = axis_object(tics=tics_object(mode=TICS_NONE, mirror=.false.)) !< Second
+                                                      !< vertical axis, on the right: no ticks until set (gnuplot).
+   logical                          :: y2_active = .false. !< The second y axis is drawn, set by `setup_axes`.
    type(series_object), allocatable :: series(:)      !< Plotted series.
    character(len=:), allocatable    :: title          !< Panel title, empty for none.
    logical                          :: grid = .false. !< Draw grid lines at the major ticks.
@@ -43,6 +52,7 @@ type :: axes_object
    real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
+      procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
       procedure, pass(self) :: render                      !< Render the panel.
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
@@ -51,15 +61,14 @@ type :: axes_object
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
-      procedure, pass(self), private :: ytick_labels_width !< Width of the widest y tick label.
 endtype axes_object
 
 contains
-   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh)
+   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
-   !< `xyerrorbars`.
+   !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default) or `x1y2`, the second y axis.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -73,9 +82,14 @@ contains
    real(R8P),          intent(in), optional :: xhigh(:) !< Horizontal error bar ends.
    real(R8P),          intent(in), optional :: ylow(:)  !< Vertical error bar starts.
    real(R8P),          intent(in), optional :: yhigh(:) !< Vertical error bar ends.
+   character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1` or `x1y2`.
    type(series_object)                      :: series !< New series.
 
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
+   if (present(axes)) then
+      if (axes /= 'x1y1' .and. axes /= 'x1y2') error stop 'foresight: plot: axes must be x1y1 or x1y2, not "'//axes//'"'
+      series%y2 = axes == 'x1y2'
+   endif
    if (.not. allocated(self%series)) allocate(self%series(0))
    series%x = x
    series%y = y
@@ -101,6 +115,33 @@ contains
    endif
    self%series = [self%series, series]
    endsubroutine add_series
+
+   pure subroutine data_extent(self, xmin, xmax, ymin, ymax, found)
+   !< Extent of the series points placeable on their axes, the whole data before any range is set: x over every series,
+   !< y per axis (1 the first, 2 the second).
+   class(axes_object), intent(in)  :: self     !< Panel.
+   real(R8P),          intent(out) :: xmin     !< Smallest abscissa.
+   real(R8P),          intent(out) :: xmax     !< Largest abscissa.
+   real(R8P),          intent(out) :: ymin(2)  !< Smallest ordinate, per y axis.
+   real(R8P),          intent(out) :: ymax(2)  !< Largest ordinate, per y axis.
+   logical,            intent(out) :: found(2) !< Any placeable point, per y axis.
+   integer(I4P)                    :: s        !< Series counter.
+   integer(I4P)                    :: k        !< y axis of the series: 1 or 2.
+
+   xmin = huge(1.0_R8P)
+   xmax = -huge(1.0_R8P)
+   ymin = huge(1.0_R8P)
+   ymax = -huge(1.0_R8P)
+   found = .false.
+   do s = 1_I4P, size(self%series, kind=I4P)
+      k = merge(2_I4P, 1_I4P, self%series(s)%y2)
+      if (k == 2_I4P) then
+         call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k))
+      else
+         call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin(k), ymax(k), found(k))
+      endif
+   enddo
+   endsubroutine data_extent
 
    subroutine render(self, backend, x0, y0, width, height, font_size)
    !< Render the panel into the pixel box of top-left corner (`x0`, `y0`) and size `width` x `height`.
@@ -132,6 +173,15 @@ contains
    view%yformat = ''
    if (self%xaxis%tics%has_format()) view%xformat = self%xaxis%tics%format
    if (self%yaxis%tics%has_format()) view%yformat = self%yaxis%tics%format
+   view%mirror = [self%xaxis%tics%mirror, self%yaxis%tics%mirror, self%y2axis%tics%mirror]
+   view%y2_active = self%y2_active
+   if (self%y2_active) then
+      view%y2 = [self%y2axis%lo, self%y2axis%hi]
+      view%y2log = self%y2axis%log
+      view%y2tics = self%y2axis%tics%attribute()
+      view%y2format = ''
+      if (self%y2axis%tics%has_format()) view%y2format = self%y2axis%tics%format
+   endif
    call backend%begin_axes(view)
    ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
    call backend%begin_group('fs-grid', visible=self%grid)
@@ -139,22 +189,27 @@ contains
    call backend%end_group
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
-      call self%draw_series(backend, s)
+      if (self%series(s)%y2) then
+         call self%draw_series(backend, s, self%y2axis)
+      else
+         call self%draw_series(backend, s, self%yaxis)
+      endif
    enddo
    call backend%end_plot_area
-   call self%draw_frame(backend, area, x0, y0, font_size)
+   call self%draw_frame(backend, area, x0, y0, x0 + width, font_size)
    if (self%key) call self%draw_key(backend, area, font_size)
    call backend%end_axes
    endsubroutine render
 
    ! private procedures
-   subroutine draw_frame(self, backend, area, x0, y0, font_size)
-   !< Draw border, mirrored ticks, tick labels, axis labels and title.
+   subroutine draw_frame(self, backend, area, x0, y0, x1, font_size)
+   !< Draw border, ticks (mirrored if so set), tick labels, axis labels and title.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: x0        !< Box left side [px].
    real(R8P),             intent(in)    :: y0        !< Box top side [px].
+   real(R8P),             intent(in)    :: x1        !< Box right side [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    real(R8P)                            :: p         !< Tick position [px].
    real(R8P)                            :: length    !< Tick length [px].
@@ -167,7 +222,7 @@ contains
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
          length = merge(TICK_MAJOR, TICK_MINOR, self%xaxis%ticks(t)%major)
          call backend%polyline([p, p], [bottom, bottom - length], FRAME_COLOR, 1.0_R8P, '')
-         call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
+         if (self%xaxis%tics%mirror) call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
          if (self%xaxis%ticks(t)%major) call backend%text(p, bottom + GAP + font_size, self%xaxis%ticks(t)%label, &
                                                           'middle', sup=self%xaxis%ticks(t)%sup)
       enddo
@@ -177,16 +232,32 @@ contains
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
          length = merge(TICK_MAJOR, TICK_MINOR, self%yaxis%ticks(t)%major)
          call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+         if (self%yaxis%tics%mirror) call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
          if (self%yaxis%ticks(t)%major) call backend%text(left - GAP, p + 0.35_R8P * font_size, &
                                                           self%yaxis%ticks(t)%label, 'end', sup=self%yaxis%ticks(t)%sup)
       enddo
       call backend%end_group
+      if (self%y2_active) then
+         call backend%begin_group('fs-y2ticks')
+         do t = 1_I4P, size(self%y2axis%ticks, kind=I4P)
+            p = bottom - self%y2axis%to_unit(self%y2axis%ticks(t)%value) * (bottom - top)
+            length = merge(TICK_MAJOR, TICK_MINOR, self%y2axis%ticks(t)%major)
+            call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+            if (self%y2axis%tics%mirror) call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+            if (self%y2axis%ticks(t)%major) call backend%text(right + GAP, p + 0.35_R8P * font_size, &
+                                                              self%y2axis%ticks(t)%label, 'start', &
+                                                              sup=self%y2axis%ticks(t)%sup)
+         enddo
+         call backend%end_group
+      endif
       if (self%xaxis%has_label()) call backend%text(0.5_R8P * (left + right), &
                                                     bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT) * font_size, &
                                                     self%xaxis%label, 'middle')
       if (self%yaxis%has_label()) call backend%text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
                                                     self%yaxis%label, 'middle', rotate=-90.0_R8P)
+      ! read upward as the y label, the glyphs on the left of the baseline
+      if (self%y2axis%has_label()) call backend%text(x1 - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
+                                                     self%y2axis%label, 'middle', rotate=-90.0_R8P)
       if (self%has_title()) call backend%text(0.5_R8P * (left + right), y0 + PAD + font_size, self%title, 'middle')
    endassociate
    endsubroutine draw_frame
@@ -279,11 +350,13 @@ contains
    enddo
    endsubroutine draw_key
 
-   subroutine draw_series(self, backend, s)
-   !< Draw the `s`-th series in the plot area; unplaceable points (NaN, non-positive on log axes) break the line.
+   subroutine draw_series(self, backend, s, yaxis)
+   !< Draw the `s`-th series in the plot area against its vertical axis `yaxis`; unplaceable points (NaN, non-positive
+   !< on log axes) break the line.
    class(axes_object),    intent(in)    :: self     !< Panel.
    class(backend_object), intent(inout) :: backend  !< Output device.
    integer(I4P),          intent(in)    :: s        !< Series index.
+   type(axis_object),     intent(in)    :: yaxis    !< Vertical axis of the series.
    logical, allocatable                 :: valid(:) !< Placeable points.
    real(R8P), allocatable               :: u(:)     !< Unit abscissae.
    real(R8P), allocatable               :: v(:)     !< Unit ordinates.
@@ -293,13 +366,13 @@ contains
 
    associate(series => self%series(s))
       n = size(series%x, kind=I4P)
-      valid = series%valid(self%xaxis, self%yaxis)
+      valid = series%valid(self%xaxis, yaxis)
       allocate(u(n), v(n))
       u = 0.0_R8P
       v = 0.0_R8P
       where (valid)
          u = self%xaxis%to_unit(series%x)
-         v = self%yaxis%to_unit(series%y)
+         v = yaxis%to_unit(series%y)
       endwhere
       if (series%style%draws_lines()) then
          i1 = 1_I4P
@@ -318,7 +391,7 @@ contains
             i1 = i2 + 1_I4P
          enddo
       endif
-      if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, self%yaxis, .true.)
+      if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
       if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) &
          call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter())
@@ -370,9 +443,10 @@ contains
    real(R8P),          intent(in) :: font_size  !< Font size [px].
    real(R8P)                      :: area(4)    !< Plot area: left, right, top, bottom [px].
    real(R8P)                      :: margins(4) !< Left, right, top, bottom margins [px].
+   real(R8P)                      :: y2_margin  !< Right margin the second y axis needs [px].
    integer(I4P)                   :: t          !< Tick counter.
 
-   margins(1) = PAD + self%ytick_labels_width(backend, font_size) + GAP
+   margins(1) = PAD + labels_width(self%yaxis) + GAP
    if (self%yaxis%has_label()) margins(1) = margins(1) + LINE_HEIGHT * font_size + GAP
    ! the rightmost x tick label is centred on the border: half of it sticks out
    margins(2) = PAD
@@ -380,59 +454,98 @@ contains
       if (self%xaxis%ticks(t)%major) margins(2) = max(margins(2), &
          0.5_R8P * backend%text_width(self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, font_size))
    enddo
+   if (self%y2_active .or. self%y2axis%has_label()) then
+      y2_margin = PAD
+      if (self%y2_active) then
+         if (any(self%y2axis%ticks%major)) y2_margin = y2_margin + labels_width(self%y2axis) + GAP
+      endif
+      if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
+      margins(2) = max(margins(2), y2_margin)
+   endif
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(4) = PAD + GAP + LINE_HEIGHT * font_size
    if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
+   contains
+      pure function labels_width(axis) result(widest)
+      !< Width of the widest major tick label of a vertical `axis` [px], measured by the device.
+      type(axis_object), intent(in) :: axis   !< Axis.
+      real(R8P)                     :: widest !< Width [px].
+      integer(I4P)                  :: k      !< Tick counter.
+
+      widest = 0.0_R8P
+      do k = 1_I4P, size(axis%ticks, kind=I4P)
+         if (axis%ticks(k)%major) widest = max(widest, backend%text_width(axis%ticks(k)%label, axis%ticks(k)%sup, &
+                                                                          font_size))
+      enddo
+      endfunction labels_width
    endfunction place_plot_area
 
    subroutine setup_axes(self, area)
-   !< Effective ranges and ticks for the plot area; y autoscales on the points inside the x range, as gnuplot.
-   class(axes_object), intent(inout) :: self    !< Panel.
-   real(R8P),          intent(in)    :: area(4) !< Plot area: left, right, top, bottom [px].
-   real(R8P)                         :: xmin    !< Smallest abscissa.
-   real(R8P)                         :: xmax    !< Largest abscissa.
-   real(R8P)                         :: ymin    !< Smallest ordinate.
-   real(R8P)                         :: ymax    !< Largest ordinate.
-   logical                           :: found   !< Any placeable point.
-   integer(I4P)                      :: s       !< Series counter.
+   !< Effective ranges and ticks for the plot area: x from every series, each y axis from its own series and the points
+   !< inside the x range, as gnuplot. The second y axis is active when it has data or both its ends are fixed.
+   class(axes_object), intent(inout) :: self      !< Panel.
+   real(R8P),          intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P)                         :: xmin      !< Smallest abscissa.
+   real(R8P)                         :: xmax      !< Largest abscissa.
+   real(R8P)                         :: ymin(2)   !< Smallest ordinate, per y axis.
+   real(R8P)                         :: ymax(2)   !< Largest ordinate, per y axis.
+   logical                           :: found(2)  !< Any placeable point, per y axis.
+   integer(I4P)                      :: s         !< Series counter.
+   integer(I4P)                      :: k         !< y axis of the series: 1 or 2.
 
+   call self%data_extent(xmin, xmax, ymin, ymax, found)
+   call self%xaxis%setup(xmin, xmax, any(found), area(2) - area(1))
    xmin = huge(1.0_R8P)
    xmax = -huge(1.0_R8P)
    ymin = huge(1.0_R8P)
    ymax = -huge(1.0_R8P)
    found = .false.
    do s = 1_I4P, size(self%series, kind=I4P)
-      call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin, ymax, found)
+      k = merge(2_I4P, 1_I4P, self%series(s)%y2)
+      if (k == 2_I4P) then
+         call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k), &
+                                    xwindow=[self%xaxis%lo, self%xaxis%hi])
+      else
+         call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin(k), ymax(k), found(k), &
+                                    xwindow=[self%xaxis%lo, self%xaxis%hi])
+      endif
    enddo
-   call self%xaxis%setup(xmin, xmax, found, area(2) - area(1))
-   xmin = huge(1.0_R8P)
-   xmax = -huge(1.0_R8P)
-   ymin = huge(1.0_R8P)
-   ymax = -huge(1.0_R8P)
-   found = .false.
-   do s = 1_I4P, size(self%series, kind=I4P)
-      call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin, ymax, found, &
-                                 xwindow=[self%xaxis%lo, self%xaxis%hi])
-   enddo
-   call self%yaxis%setup(ymin, ymax, found, area(4) - area(3))
+   call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
+   self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
+   if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
    endsubroutine setup_axes
 
-   pure function ytick_labels_width(self, backend, font_size) result(width)
-   !< Width of the widest y tick label [px], measured by the device.
-   class(axes_object),    intent(in) :: self      !< Panel.
-   class(backend_object), intent(in) :: backend   !< Output device, for text widths.
-   real(R8P),          intent(in) :: font_size !< Font size [px].
-   real(R8P)                      :: width     !< Width [px].
-   integer(I4P)                   :: t         !< Tick counter.
+   pure subroutine axes_names(names, x, y, y2, bad)
+   !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`: each found one sets its flag (the
+   !< others are left unchanged); `bad` is the first unsupported rest (`x2` included), empty if none.
+   character(len=*),              intent(in)    :: names !< Axis names.
+   logical,                       intent(inout) :: x     !< x named.
+   logical,                       intent(inout) :: y     !< y named.
+   logical,                       intent(inout) :: y2    !< y2 named.
+   character(len=:), allocatable, intent(out)   :: bad   !< Unsupported rest, empty if none.
+   integer(I4P)                                 :: i     !< Character counter.
+   logical                                      :: two   !< A `2` follows.
 
-   width = 0.0_R8P
-   do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
-      if (self%yaxis%ticks(t)%major) width = max(width, &
-         backend%text_width(self%yaxis%ticks(t)%label, self%yaxis%ticks(t)%sup, font_size))
+   bad = ''
+   i = 1_I4P
+   do while (i <= len(names))
+      two = .false.
+      if (i < len(names)) two = names(i + 1:i + 1) == '2'
+      if (names(i:i) == 'y' .and. two) then
+         y2 = .true.
+      elseif (names(i:i) == 'x' .and. .not. two) then
+         x = .true.
+      elseif (names(i:i) == 'y') then
+         y = .true.
+      else
+         bad = names(i:)
+         return
+      endif
+      i = i + merge(2_I4P, 1_I4P, two)
    enddo
-   endfunction ytick_labels_width
+   endsubroutine axes_names
 
    pure subroutine key_position(words, horizontal, vertical, bad)
    !< Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,

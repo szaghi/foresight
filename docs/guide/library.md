@@ -27,17 +27,17 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
-| `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)` | `set title`, `set xlabel`, `set ylabel` |
-| `set_xrange([min], [max])`, `set_yrange([min], [max])` | `set xrange [min:max]` |
-| `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale` |
+| `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
+| `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)` | `set xrange [min:max]` |
+| `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2` (all when absent) |
 | `set_grid([on])` | `set grid`, `unset grid` |
 | `set_key([on], [position], [box])` | `set key bottom left box`, `unset key` |
-| `set_xtics([step], [start], [end])`, `set_ytics(...)` | `set xtics START,STEP,END`; automatic without `step` |
-| `unset_xtics()`, `unset_ytics()` | `unset xtics` |
-| `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default |
+| `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
+| `unset_xtics()`, `unset_ytics()`, `unset_y2tics()` | `unset xtics` |
+| `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
 | `set_refresh(seconds)` | reload period of the HTML page |
@@ -54,6 +54,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `ps` | point size factor | 1 |
 | `ylow`, `yhigh` | vertical error bar ends, for `yerrorbars`, `xyerrorbars` | — |
 | `xlow`, `xhigh` | horizontal error bar ends, for `xerrorbars`, `xyerrorbars` | — |
+| `axes` | `x1y1`, or `x1y2` for the second y axis (scaled on its own, ticks off until `set_y2tics`) | `x1y1` |
 
 `x` and `y` may contain NaN: those points, and non-positive values on log axes, are gaps in the line.
 

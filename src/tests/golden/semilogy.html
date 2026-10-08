@@ -647,6 +647,7 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
   function Panel(svg, group, index) {
     var area = numbers(group.getAttribute("data-area"));
     var logs = numbers(group.getAttribute("data-log"));
+    var mirror = group.getAttribute("data-mirror");
     this.svg = svg;
     this.suffix = index > 0 ? String(index) : "";
     this.left = area[0];
@@ -657,16 +658,23 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       readTics(group.getAttribute("data-xtics"), group.getAttribute("data-xformat")));
     this.y = new Axis(numbers(group.getAttribute("data-y")), logs[1] === 1,
       readTics(group.getAttribute("data-ytics"), group.getAttribute("data-yformat")));
+    // second y axis: only when drawn; its series share the unit view of the plot area
+    this.y2 = group.hasAttribute("data-y2") ? new Axis(numbers(group.getAttribute("data-y2")),
+      logs[2] === 1, readTics(group.getAttribute("data-y2tics"),
+        group.getAttribute("data-y2format"))) : null;
+    // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
+    this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
     this.fontSize = Number(group.getAttribute("data-font-size"));
     this.grid = group.getAttribute("data-grid") === "1";
     this.plot = group.querySelector(".fs-plot");
     this.gridGroup = group.querySelector(".fs-grid");
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
+    this.y2ticks = group.querySelector(".fs-y2ticks");
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
-      this.caps ? this.caps.innerHTML : ""];
+      this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
   }
@@ -719,6 +727,7 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       this.xticks.innerHTML = this.original[1];
       this.yticks.innerHTML = this.original[2];
       if (this.caps) this.caps.innerHTML = this.original[3];
+      if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
     } else {
       this.drawTicks();
       this.drawCaps();
@@ -757,7 +766,7 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       var length = t.major ? TICK_MAJOR : TICK_MINOR;
       if (p < self.left - 0.5 || p > self.right + 0.5) return;
       line(self.xticks, p, self.bottom, p, self.bottom - length, FRAME_COLOR, 1);
-      line(self.xticks, p, self.top, p, self.top + length, FRAME_COLOR, 1);
+      if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + length, FRAME_COLOR, 1);
       if (!t.major) return;
       label(self.xticks, p, self.bottom + GAP + fs, t, "middle");
       line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
@@ -767,10 +776,20 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       var length = t.major ? TICK_MAJOR : TICK_MINOR;
       if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
       line(self.yticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
-      line(self.yticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
+      if (self.mirror[1]) line(self.yticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
       if (!t.major) return;
       label(self.yticks, self.left - GAP, p + 0.35 * fs, t, "end");
       line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
+    });
+    if (!this.y2ticks) return;
+    clear(this.y2ticks);
+    this.y2.ticks(v.v0, v.v1, h).forEach(function (t) {
+      var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
+      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
+      line(self.y2ticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
+      if (self.mirror[2]) line(self.y2ticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
+      if (t.major) label(self.y2ticks, self.right + GAP, p + 0.35 * fs, t, "start");
     });
   };
 
@@ -879,7 +898,8 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
       panel = hit;
       c = panel.unitAt(p);
       readout.textContent = "x = " + shortNumber(panel.x.toData(c.u)) +
-        "   y = " + shortNumber(panel.y.toData(c.v));
+        "   y = " + shortNumber(panel.y.toData(c.v)) +
+        (panel.y2 ? "   y2 = " + shortNumber(panel.y2.toData(c.v)) : "");
     }
 
     svg.addEventListener("contextmenu", function (evt) { evt.preventDefault(); });

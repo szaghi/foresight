@@ -14,7 +14,7 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_object, key_position
+use foresight_axes, only : axes_names, axes_object, key_position
 use foresight_backend, only : backend_object
 use foresight_backend_dumb, only : backend_dumb
 use foresight_backend_html, only : backend_html
@@ -67,10 +67,14 @@ type :: figure_object
       procedure, pass(self) :: set_ylabel      !< gnuplot `set ylabel`.
       procedure, pass(self) :: set_yrange      !< gnuplot `set yrange`.
       procedure, pass(self) :: set_ytics       !< gnuplot `set ytics`.
+      procedure, pass(self) :: set_y2label     !< gnuplot `set y2label`.
+      procedure, pass(self) :: set_y2range     !< gnuplot `set y2range`.
+      procedure, pass(self) :: set_y2tics      !< gnuplot `set y2tics`.
       procedure, pass(self) :: unset_logscale  !< gnuplot `unset logscale`.
       procedure, pass(self) :: unset_multiplot !< gnuplot `unset multiplot`.
       procedure, pass(self) :: unset_xtics     !< gnuplot `unset xtics`.
       procedure, pass(self) :: unset_ytics     !< gnuplot `unset ytics`.
+      procedure, pass(self) :: unset_y2tics    !< gnuplot `unset y2tics`.
       procedure, pass(self), private :: ensure_panels !< Allocate the single default panel if needed.
       procedure, pass(self), private :: render        !< Render on a device.
 endtype figure_object
@@ -132,10 +136,12 @@ contains
    self%panels(self%current) = settings
    endsubroutine next_panel
 
-   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh)
-   !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps`.
+   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes)
+   !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
+   !< ... axes`.
    !<
    !< Error bar styles (`yerrorbars`, `xerrorbars`, `xyerrorbars`) take the bar bounds `ylow`/`yhigh`, `xlow`/`xhigh`.
+   !< `axes='x1y2'` plots the series against the second y axis, scaled on its own.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -149,10 +155,11 @@ contains
    real(R8P),            intent(in), optional :: xhigh(:) !< Horizontal error bar ends.
    real(R8P),            intent(in), optional :: ylow(:)  !< Vertical error bar starts.
    real(R8P),            intent(in), optional :: yhigh(:) !< Vertical error bar ends.
+   character(len=*),     intent(in), optional :: axes     !< Axes of the series: `x1y1` (default) or `x1y2`.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
-                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh)
+                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -186,27 +193,25 @@ contains
    endsubroutine save
 
    subroutine set_format(self, format, axes)
-   !< Tick label `format` of the `axes` named by the letters `x`, `y` (both when absent), as gnuplot `set format`: text
+   !< Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text
    !< with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
    !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
    class(figure_object), intent(inout)        :: self    !< Figure.
    character(len=*),     intent(in)           :: format  !< Label format.
-   character(len=*),     intent(in), optional :: axes    !< Axes letters, e.g. `y` or `xy`.
+   character(len=*),     intent(in), optional :: axes    !< Axes names, e.g. `y`, `xy` or `y2`.
    character(len=:), allocatable              :: message !< Format problem.
+   logical                                    :: named(3) !< x, y, y2 named.
 
    if (len(format) > 0) then
       message = format_check(format)
       if (len(message) > 0) error stop 'foresight: set_format: '//message
    endif
+   named = which_axes(axes, 'set_format')
    call self%ensure_panels
    associate(panel => self%panels(self%current))
-      if (.not. present(axes)) then
-         panel%xaxis%tics%format = format
-         panel%yaxis%tics%format = format
-      else
-         if (index(axes, 'x') > 0) panel%xaxis%tics%format = format
-         if (index(axes, 'y') > 0) panel%yaxis%tics%format = format
-      endif
+      if (named(1)) panel%xaxis%tics%format = format
+      if (named(2)) panel%yaxis%tics%format = format
+      if (named(3)) panel%y2axis%tics%format = format
    endassociate
    endsubroutine set_format
 
@@ -242,19 +247,17 @@ contains
    endsubroutine set_key
 
    subroutine set_logscale(self, axes)
-   !< Base-10 log scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
-   class(figure_object), intent(inout)        :: self !< Figure.
-   character(len=*),     intent(in), optional :: axes !< Axes letters, e.g. `y` or `xy`.
+   !< Base-10 log scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   character(len=*),     intent(in), optional :: axes     !< Axes names, e.g. `y`, `xy` or `y2`.
+   logical                                    :: named(3) !< x, y, y2 named.
 
+   named = which_axes(axes, 'set_logscale')
    call self%ensure_panels
    associate(panel => self%panels(self%current))
-      if (present(axes)) then
-         if (index(axes, 'x') > 0) panel%xaxis%log = .true.
-         if (index(axes, 'y') > 0) panel%yaxis%log = .true.
-      else
-         panel%xaxis%log = .true.
-         panel%yaxis%log = .true.
-      endif
+      if (named(1)) panel%xaxis%log = .true.
+      if (named(2)) panel%yaxis%log = .true.
+      if (named(3)) panel%y2axis%log = .true.
    endassociate
    endsubroutine set_logscale
 
@@ -362,16 +365,18 @@ contains
    call self%panels(self%current)%xaxis%set_range(min=min, max=max)
    endsubroutine set_xrange
 
-   subroutine set_xtics(self, step, start, end)
+   subroutine set_xtics(self, step, start, end, mirror)
    !< x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
-   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
-   class(figure_object), intent(inout)        :: self  !< Figure.
-   real(R8P),            intent(in), optional :: step  !< Tick step, a factor on log axes.
-   real(R8P),            intent(in), optional :: start !< First tick.
-   real(R8P),            intent(in), optional :: end   !< Last tick.
+   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
+   !< the bottom border only (gnuplot `nomirror`).
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
+   real(R8P),            intent(in), optional :: start  !< First tick.
+   real(R8P),            intent(in), optional :: end    !< Last tick.
+   logical,              intent(in), optional :: mirror !< Ticks also on the top border.
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end)
+   call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end, mirror)
    endsubroutine set_xtics
 
    subroutine set_ylabel(self, label)
@@ -393,32 +398,64 @@ contains
    call self%panels(self%current)%yaxis%set_range(min=min, max=max)
    endsubroutine set_yrange
 
-   subroutine set_ytics(self, step, start, end)
+   subroutine set_ytics(self, step, start, end, mirror)
    !< y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
-   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
-   class(figure_object), intent(inout)        :: self  !< Figure.
-   real(R8P),            intent(in), optional :: step  !< Tick step, a factor on log axes.
-   real(R8P),            intent(in), optional :: start !< First tick.
-   real(R8P),            intent(in), optional :: end   !< Last tick.
+   !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
+   !< the left border only (gnuplot `nomirror`), leaving the right one to the second y axis.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
+   real(R8P),            intent(in), optional :: start  !< First tick.
+   real(R8P),            intent(in), optional :: end    !< Last tick.
+   logical,              intent(in), optional :: mirror !< Ticks also on the right border.
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end)
+   call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end, mirror)
    endsubroutine set_ytics
 
-   subroutine unset_logscale(self, axes)
-   !< Linear scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
-   class(figure_object), intent(inout)        :: self !< Figure.
-   character(len=*),     intent(in), optional :: axes !< Axes letters, e.g. `y` or `xy`.
+   subroutine set_y2label(self, label)
+   !< Set the second y axis label of the current panel, on the right, empty for none.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: label !< Label.
 
    call self%ensure_panels
+   self%panels(self%current)%y2axis%label = label
+   endsubroutine set_y2label
+
+   subroutine set_y2range(self, min, max)
+   !< Set the second y axis range as gnuplot `set y2range [min:max]`: an absent end is autoscaled on the `x1y2` series.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: min  !< Value at the axis start.
+   real(R8P),            intent(in), optional :: max  !< Value at the axis end.
+
+   call self%ensure_panels
+   call self%panels(self%current)%y2axis%set_range(min=min, max=max)
+   endsubroutine set_y2range
+
+   subroutine set_y2tics(self, step, start, end, mirror)
+   !< Ticks and labels of the second y axis on the right border, as gnuplot `set y2tics START,STEP,END` (automatic
+   !< without `step`); off by default, as in gnuplot. `mirror` true draws the ticks on the left border too.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
+   real(R8P),            intent(in), optional :: start  !< First tick.
+   real(R8P),            intent(in), optional :: end    !< Last tick.
+   logical,              intent(in), optional :: mirror !< Ticks also on the left border.
+
+   call self%ensure_panels
+   call set_tics(self%panels(self%current)%y2axis%tics, 'set_y2tics', step, start, end, mirror)
+   endsubroutine set_y2tics
+
+   subroutine unset_logscale(self, axes)
+   !< Linear scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   character(len=*),     intent(in), optional :: axes     !< Axes names, e.g. `y`, `xy` or `y2`.
+   logical                                    :: named(3) !< x, y, y2 named.
+
+   named = which_axes(axes, 'unset_logscale')
+   call self%ensure_panels
    associate(panel => self%panels(self%current))
-      if (present(axes)) then
-         if (index(axes, 'x') > 0) panel%xaxis%log = .false.
-         if (index(axes, 'y') > 0) panel%yaxis%log = .false.
-      else
-         panel%xaxis%log = .false.
-         panel%yaxis%log = .false.
-      endif
+      if (named(1)) panel%xaxis%log = .false.
+      if (named(2)) panel%yaxis%log = .false.
+      if (named(3)) panel%y2axis%log = .false.
    endassociate
    endsubroutine unset_logscale
 
@@ -456,6 +493,14 @@ contains
    call self%ensure_panels
    self%panels(self%current)%yaxis%tics%mode = TICS_NONE
    endsubroutine unset_ytics
+
+   subroutine unset_y2tics(self)
+   !< No second y axis ticks nor tick labels, the default, as gnuplot `unset y2tics`.
+   class(figure_object), intent(inout) :: self !< Figure.
+
+   call self%ensure_panels
+   self%panels(self%current)%y2axis%tics%mode = TICS_NONE
+   endsubroutine unset_y2tics
 
    ! private procedures
    subroutine ensure_panels(self)
@@ -508,6 +553,21 @@ contains
    call backend%end_page
    endsubroutine render
 
+   function which_axes(axes, caller) result(named)
+   !< Axes named in `axes` (`x`, `y`, `y2`, concatenated), all when absent; unsupported names stop.
+   character(len=*), intent(in), optional :: axes     !< Axes names.
+   character(len=*), intent(in)           :: caller   !< Procedure name, for messages.
+   logical                                :: named(3) !< x, y, y2 named.
+   character(len=:), allocatable          :: bad      !< Unsupported name.
+
+   named = .true.
+   if (.not. present(axes)) return
+   named = .false.
+   call axes_names(axes, named(1), named(2), named(3), bad)
+   if (len(bad) > 0 .or. len(axes) == 0) error stop 'foresight: '//caller//': axes must be among x, y, y2, not "'// &
+                                                    axes//'"'
+   endfunction which_axes
+
    pure function extension(file) result(ext)
    !< Lower case extension of `file`, empty if none.
    character(len=*), intent(in)  :: file !< File name.
@@ -524,17 +584,26 @@ contains
    enddo
    endfunction extension
 
-   subroutine set_tics(tics, caller, step, start, end)
-   !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop.
+   subroutine set_tics(tics, caller, step, start, end, mirror)
+   !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop. `mirror` alone (no
+   !< step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on.
    type(tics_object),   intent(inout)        :: tics    !< Axis tick settings.
    character(len=*),    intent(in)           :: caller  !< Procedure name, for messages.
    real(R8P),           intent(in), optional :: step    !< Tick step.
    real(R8P),           intent(in), optional :: start   !< First tick.
    real(R8P),           intent(in), optional :: end     !< Last tick.
+   logical,             intent(in), optional :: mirror  !< Ticks also on the opposite border.
    character(len=:), allocatable             :: first   !< Start text.
    character(len=:), allocatable             :: last    !< End text.
    character(len=:), allocatable             :: message !< Problem.
 
+   if (present(mirror)) then
+      tics%mirror = mirror
+      if (.not. (present(step) .or. present(start) .or. present(end))) then
+         if (tics%mode == TICS_NONE) tics%mode = TICS_AUTO
+         return
+      endif
+   endif
    if (.not. present(step)) then
       if (present(start) .or. present(end)) error stop 'foresight: '//caller//': start and end need a step'
       tics%mode = TICS_AUTO

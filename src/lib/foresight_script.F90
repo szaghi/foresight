@@ -4,29 +4,35 @@ module foresight_script
 !<
 !< Supported (with gnuplot abbreviations):
 !<
-!< - `set|unset title|xlabel|ylabel ["text"]`, `set xrange|yrange [min:max]` (`*` or empty autoscales an end),
-!<   `set|unset logscale [x|y|xy]`, `set|unset grid`, `set|unset key`, `set output "file"`,
-!<   `set terminal svg|html [size W,H] [refresh SECONDS]`;
+!< - `set|unset title|xlabel|ylabel|y2label ["text"]`, `set xrange|yrange|y2range [min:max]` (`*` or empty autoscales
+!<   an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, e.g. `xy2`; all when absent),
+!<   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
 !< - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
 !<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
-!< - `set xtics|ytics [auto|STEP|START,STEP[,END]]`, `unset xtics|ytics`, `set format [x|y|xy] ["fmt"]`,
-!<   `unset format`, `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
+!< - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
+!<   `unset xtics|ytics|y2tics`, `set format [AXES] ["fmt"]`, `unset format`,
+!<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
 !<   `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
-!< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
-!<   [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
-!<   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`;
-!<   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression);
-!<   `ls N`, `lt N` in an item apply a line style, a palette color.
+!< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
+!< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
+!<   [lc [rgb] "color"|N] [lw W] [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|
+!<   yerrorbars|xerrorbars|xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or
+!<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
+!<   `($2*1e3)` (see foresight_expression); `ls N`, `lt N` in an item apply a line style, a palette color;
+!< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
+!<   `lines` by default as gnuplot's function style): sampled at `set samples` points (100) over the x range before its
+!<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
+use foresight_axes, only : axes_names
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str
 use foresight_style, only : default_color
-use foresight_ticks, only : tics_object, TICS_AUTO
+use foresight_ticks, only : tics_object, TICS_AUTO, TICS_NONE
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -60,6 +66,8 @@ type :: script_object
                                                                 !< opens the next panel.
    character(len=:), allocatable   :: data_style               !< Default plot style, `set style data`.
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
+   character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
+   integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -90,6 +98,8 @@ contains
    self%data_style = 'lines'
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
+   self%separator = ''
+   self%samples = 100_I4P
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -222,7 +232,7 @@ contains
       call self%unset_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'plot', 1_I4P)) then
       self%last_plot = after_command(statement)
-      call self%plot_command(tokens(2:), iostat, iomsg)
+      call self%plot_command(tokens(2:), statement, iostat, iomsg)
    elseif (keyword(command, 'replot', 3_I4P)) then
       if (len(self%last_plot) == 0) then
          call fail('replot: no previous plot', iostat, iomsg)
@@ -231,20 +241,29 @@ contains
       if (size(tokens) > 1) self%last_plot = self%last_plot//', '//after_command(statement)
       call tokenize(self%last_plot, tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
-      call self%plot_command(tokens, iostat, iomsg)
+      call self%plot_command(tokens, self%last_plot, iostat, iomsg)
    else
       call fail('unsupported command "'//command//'"', iostat, iomsg)
    endif
    endsubroutine execute
 
    ! private procedures
-   subroutine plot_command(self, tokens, iostat, iomsg)
-   !< `plot` items: each a data file with modifiers, comma separated; replaces the previous plot and renders it.
+   subroutine plot_command(self, tokens, text, iostat, iomsg)
+   !< `plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
+   !< renders it.
+   !<
+   !< Functions are sampled once all the items are read: their x range depends on the data of the whole plot, as gnuplot.
+   !< Until then each holds its place (its color, its key row) as an empty series.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Items tokens.
+   character(len=*),              intent(in)    :: text      !< Text the tokens come from, for function titles.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(datafile_object)                        :: data      !< Current data file.
+   type(expression_object)                      :: func      !< Current function.
+   type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
+   integer(I4P),            allocatable         :: slots(:)  !< Series index of each function.
+   character(len=:), allocatable                :: axes      !< Item axes, `x1y1` or `x1y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
    character(len=:), allocatable                :: spec      !< `using` specification as written, empty if none.
@@ -271,11 +290,14 @@ contains
    integer(I4P)                                 :: every(6)  !< `every` fields.
    integer(I4P)                                 :: number    !< Integer argument.
    integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: head      !< First token of a function.
    logical                                      :: has_title !< Title given (or notitle).
+   logical                                      :: is_function !< The item is a function, else a data file.
 
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
+   allocate(functions(0), slots(0))
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
@@ -283,33 +305,55 @@ contains
    endif
    i = 1_I4P
    do
-      ! data file
+      ! data file or function
       if (i > size(tokens, kind=I4P)) then
          call fail('plot: missing item after ","', iostat, iomsg)
          return
       endif
-      if (tokens(i)%kind /= TOKEN_STRING) then
-         call fail('plot: only quoted data files can be plotted, found "'//tokens(i)%text// &
-                   '" (functions and expressions are not supported)', iostat, iomsg)
+      is_function = tokens(i)%kind == TOKEN_WORD
+      if (tokens(i)%kind == TOKEN_RANGE) then
+         call fail('plot: inline ranges are not supported, found "['//tokens(i)%text//']" (use set xrange)', &
+                   iostat, iomsg)
          return
-      endif
-      file = tokens(i)%text
-      written = file
-      quote = tokens(i)%quote
-      if (len(file) == 0) file = self%previous_file
-      if (len(file) == 0) then
-         call fail('plot: '''' needs a previous data file', iostat, iomsg)
+      elseif (tokens(i)%kind == TOKEN_COMMA) then
+         call fail('plot: missing item before ","', iostat, iomsg)
          return
+      elseif (is_function) then
+         ! the expression runs up to the first item option: blanks may separate its words, `x * 2`
+         head = i
+         do while (i < size(tokens, kind=I4P))
+            if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+            if (is_item_option(tokens(i + 1_I4P)%text)) exit
+            i = i + 1_I4P
+         enddo
+         written = text(tokens(head)%first:tokens(i)%last)
+         call func%compile(written, iostat, iomsg, variable='x')
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: '//iomsg
+            return
+         endif
+      else
+         file = tokens(i)%text
+         written = file
+         quote = tokens(i)%quote
+         if (len(file) == 0) file = self%previous_file
+         if (len(file) == 0) then
+            call fail('plot: '''' needs a previous data file', iostat, iomsg)
+            return
+         endif
+         self%previous_file = file
       endif
-      self%previous_file = file
       ! modifiers
       if (allocated(fields)) deallocate(fields)
       spec = ''
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       with = self%data_style
+      ! gnuplot `set style function`, never changed here
+      if (is_function) with = 'lines'
       has_title = .false.
       title = ''
+      axes = 'x1y1'
       line = line_style_object()
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
@@ -319,7 +363,11 @@ contains
             call fail('plot: unexpected "'//word//'"', iostat, iomsg)
             return
          endif
-         if (keyword(word, 'using', 1_I4P)) then
+         if (is_function .and. (keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. &
+                                keyword(word, 'every', 2_I4P))) then
+            call fail('plot: "'//word//'" applies to data files, not to the function "'//written//'"', iostat, iomsg)
+            return
+         elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
             call parse_using(spec, fields, iostat, iomsg)
@@ -336,6 +384,16 @@ contains
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
                          'xerrorbars, xyerrorbars)', iostat, iomsg)
+               return
+            endif
+            if (is_function .and. with /= 'lines' .and. with /= 'points' .and. with /= 'linespoints') then
+               call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
+               return
+            endif
+         elseif (keyword(word, 'axes', 2_I4P)) then
+            if (.not. next_word(tokens, i, axes, iostat, iomsg)) return
+            if (axes /= 'x1y1' .and. axes /= 'x1y2') then
+               call fail('plot: axes x1y1 or x1y2 expected, found "'//axes//'" (no second x axis)', iostat, iomsg)
                return
             endif
          elseif (keyword(word, 'title', 1_I4P)) then
@@ -367,9 +425,23 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      if (is_function) then
+         ! sampled at the end; gnuplot: the expression as written is the title
+         if (.not. has_title) title = written
+         call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
+                               dt=line%dt, ps=line%ps, axes=axes)
+         functions = [functions, func]
+         ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
+         associate(panel => self%figure%panels(self%figure%current))
+            slots = [slots, size(panel%series, kind=I4P)]
+         endassociate
+         if (i > size(tokens, kind=I4P)) exit
+         i = i + 1_I4P
+         cycle
+      endif
       ! data
       if (file /= loaded) then
-         call data%load(file, iostat, iomsg)
+         call data%load(file, iostat, iomsg, separator=self%separator)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
@@ -449,15 +521,67 @@ contains
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
       call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
-                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh)
+                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes)
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
+   if (size(functions) > 0) call sample_functions
    if (self%multiplot) self%advance_pending = .true.
    ! a multiplot on the standard output is printed once, complete, at unset multiplot (as gnuplot); files are rewritten
    ! at each plot, so that a watched page shows the panels done so far
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
+   contains
+      subroutine sample_functions
+      !< Sample the functions at `self%samples` abscissae over the x range of the data before its tick extension (the
+      !< user ends, the data extent, else the axis default range): evenly, in log x on a log axis.
+      real(R8P), allocatable :: xs(:)     !< Sample abscissae.
+      real(R8P), allocatable :: ys(:)     !< Sample values.
+      real(R8P)              :: xmin      !< Smallest data abscissa.
+      real(R8P)              :: xmax      !< Largest data abscissa.
+      real(R8P)              :: ymin(2)   !< Smallest data ordinates, unused.
+      real(R8P)              :: ymax(2)   !< Largest data ordinates, unused.
+      real(R8P)              :: lo        !< Range start.
+      real(R8P)              :: hi        !< Range end.
+      real(R8P)              :: a         !< Range start, log10 on a log axis.
+      real(R8P)              :: step      !< Sample spacing, in log10 on a log axis.
+      logical                :: found(2)  !< Any data per y axis.
+      integer(I4P)           :: n         !< Samples.
+      integer(I4P)           :: f         !< Function counter.
+      integer(I4P)           :: j         !< Sample counter.
+
+      n = self%samples
+      associate(panel => self%figure%panels(self%figure%current))
+         ! the functions are still empty: the extent is the data one
+         call panel%data_extent(xmin, xmax, ymin, ymax, found)
+         call panel%xaxis%range_of(xmin, xmax, any(found), lo, hi)
+         ! a log axis on a non-positive range is reported by the rendering
+         if (panel%xaxis%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) return
+         a = lo
+         if (panel%xaxis%log) a = log10(lo)
+         ! never hi - lo, which overflows on extreme ends
+         if (panel%xaxis%log) then
+            step = log10(hi) / real(n - 1_I4P, R8P) - a / real(n - 1_I4P, R8P)
+         else
+            step = hi / real(n - 1_I4P, R8P) - lo / real(n - 1_I4P, R8P)
+         endif
+         allocate(xs(n), ys(n))
+         do j = 1_I4P, n
+            xs(j) = a + real(j - 1_I4P, R8P) * step
+            if (panel%xaxis%log) xs(j) = 10.0_R8P**xs(j)
+         enddo
+         ! exact ends: a sample past an autoscaled end would widen the axis by a rounding error
+         xs(1) = lo
+         xs(n) = hi
+         do f = 1_I4P, size(functions, kind=I4P)
+            do j = 1_I4P, n
+               ys(j) = functions(f)%value_at(xs(j))
+            enddo
+            panel%series(slots(f))%x = xs
+            panel%series(slots(f))%y = ys
+         enddo
+      endassociate
+      endsubroutine sample_functions
    endsubroutine plot_command
 
    subroutine register_file(self, file)
@@ -529,12 +653,19 @@ contains
    elseif (keyword(option, 'ylabel', 2_I4P)) then
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_ylabel(text)
+   elseif (keyword(option, 'y2label', 3_I4P)) then
+      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      call self%figure%set_y2label(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
       endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%yaxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
+   elseif (keyword(option, 'y2range', 3_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%y2axis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
@@ -620,6 +751,12 @@ contains
       call tics_option(self%figure%panels(self%figure%current)%xaxis%tics)
    elseif (keyword(option, 'ytics', 3_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%yaxis%tics)
+   elseif (keyword(option, 'y2tics', 4_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%y2axis%tics)
+   elseif (keyword(option, 'datafile', 5_I4P)) then
+      call datafile_option
+   elseif (keyword(option, 'samples', 3_I4P)) then
+      call samples_option
    elseif (keyword(option, 'format', 3_I4P)) then
       call format_option
    elseif (keyword(option, 'origin', 2_I4P)) then
@@ -787,38 +924,123 @@ contains
       endsubroutine pair_option
 
       subroutine tics_option(tics)
-      !< `set xtics|ytics [auto|autofreq|STEP|START,STEP|START,STEP,END]`.
+      !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: `mirror` or
+      !< `nomirror` alone keeps the positions, turning off ticks on (gnuplot).
       type(tics_object), intent(inout) :: tics    !< Axis tick settings.
+      type(token_object), allocatable  :: args(:) !< Position tokens, mirror words removed.
       character(len=:), allocatable    :: message !< Problem.
       logical                          :: ok      !< Well formed.
-      integer(I4P)                     :: n       !< Tokens after the option.
+      logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
+      integer(I4P)                     :: n       !< Position tokens.
 
-      n = size(tokens, kind=I4P) - 1_I4P
+      allocate(args(0))
+      do i = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'mirror', 3_I4P)) then
+            mirror = .true.
+         elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'nomirror', 4_I4P)) then
+            mirror = .false.
+         else
+            args = [args, tokens(i)]
+         endif
+      enddo
+      n = size(args, kind=I4P)
       if (n == 0_I4P) then
-         tics%mode = TICS_AUTO
+         if (allocated(mirror)) then
+            tics%mirror = mirror
+            if (tics%mode == TICS_NONE) tics%mode = TICS_AUTO
+         else
+            tics%mode = TICS_AUTO
+         endif
          return
       endif
       ok = mod(n, 2_I4P) == 1_I4P .and. n <= 5_I4P
-      if (ok) ok = all(tokens(2:n + 1:2)%kind == TOKEN_WORD)
-      if (ok .and. n > 1_I4P) ok = all(tokens(3:n + 1:2)%kind == TOKEN_COMMA)
+      if (ok) ok = all(args(1:n:2)%kind == TOKEN_WORD)
+      if (ok .and. n > 1_I4P) ok = all(args(2:n:2)%kind == TOKEN_COMMA)
       if (.not. ok) then
-         call fail('set '//option//': supported forms are STEP, START,STEP, START,STEP,END and auto', iostat, iomsg)
+         call fail('set '//option//': supported forms are STEP, START,STEP, START,STEP,END and auto, with mirror or '// &
+                   'nomirror', iostat, iomsg)
          return
       endif
+      message = ''
       select case (n)
       case (1_I4P)
-         if (keyword(tokens(2)%text, 'autofreq', 4_I4P)) then
+         if (keyword(args(1)%text, 'autofreq', 4_I4P)) then
             tics%mode = TICS_AUTO
+         else
+            call tics%set_fixed(args(1)%text, '', '', message)
+         endif
+      case (3_I4P)
+         call tics%set_fixed(args(3)%text, args(1)%text, '', message)
+      case default
+         call tics%set_fixed(args(3)%text, args(1)%text, args(5)%text, message)
+      endselect
+      if (len(message) > 0) then
+         call fail('set '//option//': '//message, iostat, iomsg)
+         return
+      endif
+      if (allocated(mirror)) tics%mirror = mirror
+      endsubroutine tics_option
+
+      subroutine datafile_option
+      !< `set datafile separator [whitespace|tab|comma|"chars"]`: no argument restores whitespace.
+      if (size(tokens) < 2) then
+         call fail('set datafile: only "separator" is supported', iostat, iomsg)
+         return
+      endif
+      if (.not. keyword(tokens(2)%text, 'separator', 3_I4P) .or. tokens(2)%kind /= TOKEN_WORD) then
+         call fail('set datafile: unsupported option "'//tokens(2)%text//'" (only separator is)', iostat, iomsg)
+         return
+      endif
+      if (size(tokens) > 3) then
+         call fail('set datafile separator: one of whitespace, tab, comma or "characters" is expected', iostat, iomsg)
+         return
+      endif
+      if (size(tokens) == 2) then
+         self%separator = ''
+      elseif (tokens(3)%kind == TOKEN_STRING) then
+         ! "" is whitespace, as no argument
+         self%separator = tokens(3)%text
+      elseif (keyword(tokens(3)%text, 'whitespace', 5_I4P)) then
+         self%separator = ''
+      elseif (tokens(3)%text == 'tab') then
+         self%separator = achar(9)
+      elseif (tokens(3)%text == 'comma') then
+         self%separator = ','
+      else
+         call fail('set datafile separator: one of whitespace, tab, comma or "characters" is expected, found "'// &
+                   tokens(3)%text//'"', iostat, iomsg)
+      endif
+      endsubroutine datafile_option
+
+      subroutine samples_option
+      !< `set samples N[,M]`: N function samples, M (for surfaces) checked and ignored.
+      integer(I4P) :: n !< Samples.
+      integer(I4P) :: m !< Second sampling rate.
+
+      i = 1_I4P
+      if (.not. next_integer(tokens, i, n, iostat, iomsg)) then
+         iomsg = 'set samples: '//iomsg
+         return
+      endif
+      m = n
+      if (size(tokens, kind=I4P) > i) then
+         i = i + 1_I4P
+         if (tokens(i)%kind /= TOKEN_COMMA) then
+            call fail('set samples: N or N,M expected', iostat, iomsg)
             return
          endif
-         call tics%set_fixed(tokens(2)%text, '', '', message)
-      case (3_I4P)
-         call tics%set_fixed(tokens(4)%text, tokens(2)%text, '', message)
-      case default
-         call tics%set_fixed(tokens(4)%text, tokens(2)%text, tokens(6)%text, message)
-      endselect
-      if (len(message) > 0) call fail('set '//option//': '//message, iostat, iomsg)
-      endsubroutine tics_option
+         if (.not. next_integer(tokens, i, m, iostat, iomsg)) then
+            iomsg = 'set samples: '//iomsg
+            return
+         endif
+         if (.not. no_more(tokens, i + 1_I4P, iostat, iomsg)) return
+      endif
+      if (n < 2_I4P .or. m < 2_I4P) then
+         call fail('set samples: the sampling rate must be > 1', iostat, iomsg)
+         return
+      endif
+      self%samples = n
+      endsubroutine samples_option
 
       subroutine format_option
       !< `set format [x|y|xy] ["format"]`: no format restores the default labels.
@@ -826,14 +1048,14 @@ contains
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Problem.
 
-      axes = 'xy'
+      axes = 'xyy2'
       format = ''
       i = 2_I4P
       if (i <= size(tokens, kind=I4P)) then
          if (tokens(i)%kind == TOKEN_WORD) then
             axes = tokens(i)%text
-            if (axes /= 'x' .and. axes /= 'y' .and. axes /= 'xy') then
-               call fail('set format: axes must be x, y or xy, not "'//axes//'"', iostat, iomsg)
+            if (.not. valid_axes(axes)) then
+               call fail('set format: axes must be among x, y, y2 (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
                return
             endif
             i = i + 1_I4P
@@ -928,6 +1150,17 @@ contains
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
       call self%figure%unset_logscale(axes)
       return
+   elseif (keyword(option, 'datafile', 5_I4P)) then
+      ! all the datafile settings, or the separator only: the same here
+      if (size(tokens) > 1) then
+         if (.not. keyword(tokens(2)%text, 'separator', 3_I4P)) then
+            call fail('unset datafile: unsupported option "'//tokens(2)%text//'" (only separator is)', iostat, iomsg)
+            return
+         endif
+      endif
+      if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+      self%separator = ''
+      return
    endif
    if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
    if (keyword(option, 'multiplot', 5_I4P)) then
@@ -944,6 +1177,8 @@ contains
       call self%figure%set_xlabel('')
    elseif (keyword(option, 'ylabel', 2_I4P)) then
       call self%figure%set_ylabel('')
+   elseif (keyword(option, 'y2label', 3_I4P)) then
+      call self%figure%set_y2label('')
    elseif (keyword(option, 'grid', 2_I4P)) then
       call self%figure%set_grid(.false.)
    elseif (keyword(option, 'key', 1_I4P)) then
@@ -952,6 +1187,8 @@ contains
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then
       call self%figure%unset_ytics
+   elseif (keyword(option, 'y2tics', 4_I4P)) then
+      call self%figure%unset_y2tics
    elseif (keyword(option, 'format', 3_I4P)) then
       call self%figure%set_format('')
    else
@@ -976,7 +1213,7 @@ contains
    endfunction after_command
 
    function axes_argument(tokens, axes, iostat, iomsg) result(ok)
-   !< Optional axes letters after a `logscale` option (default `xy`); a base other than 10 is an error.
+   !< Optional axes names after a `logscale` option (default all: `xyy2`); a base other than 10 is an error.
    type(token_object),            intent(in)  :: tokens(:) !< Option tokens.
    character(len=:), allocatable, intent(out) :: axes      !< Axes letters.
    integer(I4P),                  intent(out) :: iostat    !< 0 on success.
@@ -985,12 +1222,12 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
-   axes = 'xy'
+   axes = 'xyy2'
    ok = .true.
    if (size(tokens) >= 2) then
       axes = tokens(2)%text
-      if (len(axes) == 0 .or. verify(axes, 'xy') > 0) then
-         call fail('logscale: axes x, y or xy expected, found "'//axes//'"', iostat, iomsg)
+      if (.not. valid_axes(axes)) then
+         call fail('logscale: axes among x, y, y2 expected (e.g. y or xy2), found "'//axes//'"', iostat, iomsg)
          ok = .false.
          return
       endif
@@ -1258,6 +1495,16 @@ contains
    line%lc = default_color(id)
    endsubroutine apply_line_style
 
+   pure function is_item_option(word) result(is)
+   !< Whether `word` is a plot item option: it ends a function expression.
+   character(len=*), intent(in) :: word !< Word.
+   logical                      :: is   !< Item option.
+
+   is = keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. keyword(word, 'every', 2_I4P) .or. &
+        keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
+        keyword(word, 'axes', 2_I4P) .or. word == 'ls' .or. keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word)
+   endfunction is_item_option
+
    pure function is_line_option(word) result(is)
    !< Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps` or their long forms.
    character(len=*), intent(in) :: word !< Option word.
@@ -1382,6 +1629,18 @@ contains
    endif
    text = tokens(2)%text
    endfunction string_argument
+
+   pure function valid_axes(names) result(ok)
+   !< Whether `names` concatenates supported axis names: x, y, y2.
+   character(len=*), intent(in)  :: names !< Axis names.
+   logical                       :: ok    !< Supported.
+   character(len=:), allocatable :: bad   !< Unsupported rest.
+   logical                       :: named(3) !< x, y, y2 named.
+
+   named = .false.
+   call axes_names(names, named(1), named(2), named(3), bad)
+   ok = len(names) > 0 .and. len(bad) == 0
+   endfunction valid_axes
 
    function to_number(word, value) result(ok)
    !< Parse a number.

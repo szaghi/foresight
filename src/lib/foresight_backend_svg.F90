@@ -6,7 +6,8 @@ module foresight_backend_svg
 !< never reads a partial document. The plot area is a nested `<svg class="fs-plot">` whose `viewBox` is the unit square:
 !< data geometry lives in unit coordinates, and `vector-effect="non-scaling-stroke"` keeps its line widths in pixels.
 !< Panels are `<g class="fs-axes">` carrying their geometry and axis ranges as `data-*` attributes; decorations the
-!< interactive viewer regenerates are `<g class="fs-...">` groups.
+!< interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
+!< attributes only when active or not the default, so a plain panel reads the same as before them.
 use foresight_backend, only : axes_view, backend_object
 use foresight_format, only : fixed, real_str, xml_escape
 use foresight_sys, only : rename_file
@@ -81,17 +82,28 @@ contains
 
    subroutine begin_axes(self, view)
    !< Open a panel group carrying geometry and axis ranges as `data-*` attributes.
-   class(backend_svg), intent(inout) :: self !< Device.
+   class(backend_svg), intent(inout) :: self  !< Device.
    type(axes_view),    intent(in)    :: view  !< Panel geometry and axis ranges.
    character(len=:), allocatable     :: extra !< Tick settings attributes, only when set.
 
+   character(len=:), allocatable     :: y2    !< Second y axis attributes, only when active.
+   character(len=:), allocatable     :: logs  !< Log flags: x, y, and y2 when active.
+
    extra = attribute('data-xtics', view%xtics)//attribute('data-ytics', view%ytics)// &
            attribute('data-xformat', view%xformat)//attribute('data-yformat', view%yformat)
+   if (any(view%mirror .neqv. [.true., .true., .false.])) &
+      extra = extra//' data-mirror="'//flag(view%mirror(1))//' '//flag(view%mirror(2))//' '//flag(view%mirror(3))//'"'
+   y2 = ''
+   logs = flag(view%xlog)//' '//flag(view%ylog)
+   if (view%y2_active) then
+      y2 = ' data-y2="'//real_str(view%y2(1))//' '//real_str(view%y2(2))//'"'
+      logs = logs//' '//flag(view%y2log)
+      extra = extra//attribute('data-y2tics', view%y2tics)//attribute('data-y2format', view%y2format)
+   endif
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
-                 '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'" data-log="'//flag(view%xlog)// &
-                 ' '//flag(view%ylog)//'" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)// &
-                 '"'//extra//'>')
+                 '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'"'//y2//' data-log="'//logs// &
+                 '" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)//'"'//extra//'>')
    contains
       pure function attribute(name, value) result(text)
       !< ` name="value"` (XML escaped), or nothing if `value` is unallocated or empty.

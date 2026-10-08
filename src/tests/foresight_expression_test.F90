@@ -1,6 +1,8 @@
-!< foresight_expression test: gnuplot semantics of `using` expressions, values checked against gnuplot 6.0.
+!< foresight_expression test: gnuplot semantics of `using` expressions and plotted functions, values checked against
+!< gnuplot 6.0.
 program foresight_expression_test
-!< foresight_expression test: gnuplot semantics of `using` expressions, values checked against gnuplot 6.0.
+!< foresight_expression test: gnuplot semantics of `using` expressions and plotted functions, values checked against
+!< gnuplot 6.0.
 !<
 !< Built with the debug flags (`-ffpe-trap=invalid,zero,overflow`), the undefined cases also check that evaluation
 !< raises no floating point exception.
@@ -94,6 +96,17 @@ call check_error('$', '"$" needs a column number')
 call check_error('1e+', 'malformed number')
 call check_error('1 = 2', 'unexpected "="')
 call check_error(repeat('(', 300)//'1'//repeat(')', 300), 'nested too deeply')
+! functions of the dummy variable x: a real, even at integer values; columns are errors
+call check_function('x**2', 3.0_R8P, 9.0_R8P)
+call check_function('1/x', 2.0_R8P, 0.5_R8P)
+call check_function('x/2', 3.0_R8P, 1.5_R8P)
+call check_function('sin(x)/x', 0.5_R8P * acos(-1.0_R8P), 2.0_R8P / acos(-1.0_R8P), 1.0e-15_R8P)
+call check_function('x > 0 ? log(x) : 1/0', 1.0_R8P, 0.0_R8P)
+call check_function('1/x', 0.0_R8P, ieee_value(1.0_R8P, ieee_quiet_nan))
+call check_function('sqrt(x)', -1.0_R8P, ieee_value(1.0_R8P, ieee_quiet_nan))
+call check_function_error('$1*x', 'columns are only valid in using, not in a function at character 1')
+call check_function_error('column(1)', 'columns are only valid in using, not in a function at character 1')
+call check_function_error('y', 'unknown name "y"')
 
 write(output_unit, '(A,I0,A,I0,A)') 'foresight_expression checks: ', checks - failures, ' of ', checks, ' passed'
 write(output_unit, '(A,L1)') 'Are all tests passed? ', failures == 0_I4P
@@ -152,6 +165,47 @@ contains
    call expression%compile(text, iostat, iomsg)
    call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, text//' -> '//iomsg)
    endsubroutine check_error
+
+   subroutine check_function(text, x, expected, tolerance)
+   !< Function `text` of `x` evaluates to `expected` at `x` (NaN expected: undefined).
+   character(len=*), intent(in)           :: text       !< Expression.
+   real(R8P),        intent(in)           :: x          !< Variable value.
+   real(R8P),        intent(in)           :: expected   !< Value, NaN if undefined.
+   real(R8P),        intent(in), optional :: tolerance  !< Absolute tolerance, exact if absent.
+   type(expression_object)                :: expression !< Compiled expression.
+   character(len=:), allocatable          :: iomsg      !< Error message.
+   integer(I4P)                           :: iostat     !< Status.
+   real(R8P)                              :: v          !< Value.
+   logical                                :: passed     !< Check outcome.
+
+   call expression%compile(text, iostat, iomsg, variable='x')
+   passed = iostat == 0_I4P
+   if (passed) then
+      v = expression%value_at(x)
+      if (ieee_is_nan(expected)) then
+         passed = ieee_is_nan(v)
+      elseif (ieee_is_nan(v)) then
+         passed = .false.
+      elseif (present(tolerance)) then
+         passed = abs(v - expected) <= tolerance
+      else
+         passed = v == expected
+      endif
+   endif
+   call record(passed, 'function '//text)
+   endsubroutine check_function
+
+   subroutine check_function_error(text, message)
+   !< Function `text` of `x` does not compile, and the error contains `message`.
+   character(len=*), intent(in)  :: text       !< Expression.
+   character(len=*), intent(in)  :: message    !< Expected part of the error.
+   type(expression_object)       :: expression !< Compiled expression.
+   character(len=:), allocatable :: iomsg      !< Error message.
+   integer(I4P)                  :: iostat     !< Status.
+
+   call expression%compile(text, iostat, iomsg, variable='x')
+   call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, 'function '//text//' -> '//iomsg)
+   endsubroutine check_function_error
 
    subroutine record(passed, what)
    !< Count a check, reporting a failure.

@@ -19,6 +19,7 @@ type :: series_object
    real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
    character(len=:), allocatable :: title !< Key title, empty for none.
    type(style_object)            :: style !< Drawing style.
+   logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

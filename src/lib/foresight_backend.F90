@@ -30,6 +30,12 @@ type :: axes_view
    character(len=:), allocatable :: ytics   !< y tick positions for the viewer, empty for auto.
    character(len=:), allocatable :: xformat !< x tick label format, empty for the default.
    character(len=:), allocatable :: yformat !< y tick label format, empty for the default.
+   logical   :: mirror(3) = [.true., .true., .false.] !< Ticks mirrored on the opposite border: x, y, y2.
+   logical   :: y2_active = .false. !< Second y axis drawn; the `y2*` components are meaningful only then.
+   real(R8P) :: y2(2)     = 0.0_R8P  !< y2 axis values at the axis start and end.
+   logical   :: y2log     = .false.  !< Log y2 axis.
+   character(len=:), allocatable :: y2tics   !< y2 tick positions for the viewer, empty for auto.
+   character(len=:), allocatable :: y2format !< y2 tick label format, empty for the default.
 endtype axes_view
 
 type, abstract :: backend_object

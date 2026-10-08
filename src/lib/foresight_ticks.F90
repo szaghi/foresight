@@ -42,6 +42,7 @@ type :: tics_object
    character(len=:), allocatable :: step             !< Fixed ticks step, a factor on log axes (decimal text).
    character(len=:), allocatable :: end              !< Fixed ticks end (decimal text), empty for none.
    character(len=:), allocatable :: format           !< Label format, empty for the default labels.
+   logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
       procedure, pass(self) :: has_format !< Whether a label format is set.

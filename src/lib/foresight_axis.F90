@@ -27,6 +27,7 @@ type :: axis_object
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
       procedure, pass(self) :: has_label !< Whether the axis has a label.
+      procedure, pass(self) :: range_of  !< Range before the tick extension.
       procedure, pass(self) :: set_range !< Set the range, gnuplot style.
       procedure, pass(self) :: setup     !< Compute effective range and ticks.
       procedure, pass(self) :: to_unit   !< Map a value to the unit interval.
@@ -64,18 +65,18 @@ contains
    if (present(max)) self%max_user = max
    endsubroutine set_range
 
-   subroutine setup(self, dmin, dmax, has_data, npx)
-   !< Compute the effective range and the ticks from the data extent and the axis length.
+   pure subroutine range_of(self, dmin, dmax, has_data, lo, hi)
+   !< Values at the axis start and end from the data extent and the user ends, before the extension to the ticks: the
+   !< range functions are sampled on, as gnuplot.
    !<
    !< A degenerate range is widened by 1% (gnuplot "empty range" behaviour); with no data the range defaults to
    !< [-10:10], or [1:10] on a log axis.
-   class(axis_object), intent(inout) :: self     !< Axis.
-   real(R8P),          intent(in)    :: dmin     !< Smallest placeable data value.
-   real(R8P),          intent(in)    :: dmax     !< Largest placeable data value.
-   logical,            intent(in)    :: has_data !< Whether `dmin`/`dmax` are meaningful.
-   real(R8P),          intent(in)    :: npx      !< Axis length [px].
-   real(R8P)                         :: lo       !< Value at the axis start.
-   real(R8P)                         :: hi       !< Value at the axis end.
+   class(axis_object), intent(in)  :: self     !< Axis.
+   real(R8P),          intent(in)  :: dmin     !< Smallest placeable data value.
+   real(R8P),          intent(in)  :: dmax     !< Largest placeable data value.
+   logical,            intent(in)  :: has_data !< Whether `dmin`/`dmax` are meaningful.
+   real(R8P),          intent(out) :: lo       !< Value at the axis start.
+   real(R8P),          intent(out) :: hi       !< Value at the axis end.
 
    if (has_data) then
       lo = dmin
@@ -89,9 +90,7 @@ contains
    endif
    if (self%min_fixed) lo = self%min_user
    if (self%max_fixed) hi = self%max_user
-   if (self%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) error stop 'foresight: log scale needs a positive range'
-   if (lo == hi) then
-      if (self%min_fixed .and. self%max_fixed) error stop 'foresight: empty axis range'
+   if (lo == hi .and. .not. (self%min_fixed .and. self%max_fixed)) then
       if (self%log) then
          if (.not. self%min_fixed) lo = lo * 0.99_R8P
          if (.not. self%max_fixed) hi = hi * 1.01_R8P
@@ -103,6 +102,21 @@ contains
          if (.not. self%max_fixed) hi = hi + 0.01_R8P * abs(hi)
       endif
    endif
+   endsubroutine range_of
+
+   subroutine setup(self, dmin, dmax, has_data, npx)
+   !< Compute the effective range (`range_of`) and the ticks from the data extent and the axis length.
+   class(axis_object), intent(inout) :: self     !< Axis.
+   real(R8P),          intent(in)    :: dmin     !< Smallest placeable data value.
+   real(R8P),          intent(in)    :: dmax     !< Largest placeable data value.
+   logical,            intent(in)    :: has_data !< Whether `dmin`/`dmax` are meaningful.
+   real(R8P),          intent(in)    :: npx      !< Axis length [px].
+   real(R8P)                         :: lo       !< Value at the axis start.
+   real(R8P)                         :: hi       !< Value at the axis end.
+
+   call self%range_of(dmin, dmax, has_data, lo, hi)
+   if (self%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) error stop 'foresight: log scale needs a positive range'
+   if (lo == hi) error stop 'foresight: empty axis range'
    if (self%log) then
       call log_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
    else

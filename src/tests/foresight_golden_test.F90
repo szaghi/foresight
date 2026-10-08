@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(4)                   !< Per-figure outcome.
+logical                     :: test_passed(6)                   !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -20,7 +20,9 @@ test_passed(1) = check('lines.svg', figure_lines())
 test_passed(2) = check('semilogy.svg', figure_semilogy())
 test_passed(3) = check('points_reversed.svg', figure_points_reversed())
 test_passed(4) = check('semilogy.html', figure_semilogy())
-write(output_unit, '(A,4L2)') 'foresight golden checks:', test_passed
+test_passed(5) = check('y2_api.svg', figure_y2())
+test_passed(6) = check('slopes.txt', figure_slopes())
+write(output_unit, '(A,6L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -75,6 +77,38 @@ contains
    call fig%set_key(.false.)
    call fig%plot(x, x**2 / 100.0_R8P, title='parabola', with='points', ps=1.5_R8P)
    endfunction figure_points_reversed
+
+   function figure_y2() result(fig)
+   !< Second y axis through the library API: a log y2 range fixed at both ends, y and x ticks not mirrored.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: t(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   t = [(real(i, R8P), i = 0, 20)]
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_xlabel('time')
+   call fig%set_ylabel('temperature')
+   call fig%set_y2label('pressure')
+   call fig%set_xtics(mirror=.false.)
+   call fig%set_ytics(mirror=.false.)
+   call fig%set_y2tics()
+   call fig%set_logscale('y2')
+   call fig%set_y2range(min=1.0_R8P, max=1.0e3_R8P)
+   call fig%plot(t, 300.0_R8P + 2.0_R8P * t, title='T')
+   call fig%plot(t, 10.0_R8P**(0.1_R8P * t + 0.5_R8P), title='p', with='points', axes='x1y2')
+   endfunction figure_y2
+
+   function figure_slopes() result(fig)
+   !< Text device: segments of every slope; a Bresenham error update once overshot some ends and never stopped.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   ! 60 x 12 characters of the text device
+   call fig%init(width=396_I4P, height=180_I4P)
+   x = [(real(i, R8P), i = 1, 30)]
+   call fig%plot(x, 10.0_R8P**(-0.2_R8P * x), title='decay')
+   endfunction figure_slopes
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.
