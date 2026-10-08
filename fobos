@@ -158,3 +158,7 @@ rule = bash scripts/embed_js.sh
 [rule-test-js]
 help = Test the viewer tick rules (needs node)
 rule = node src/js/viewer_test.js
+
+[rule-test-js-dom]
+help = Test the viewer in a parsed page: key entries, linked zoom, follow mode (needs node, npm ci --prefix src/js)
+rule = node src/js/viewer_dom_test.js

@@ -1,0 +1,11 @@
+{
+  "name": "foresight-viewer-tests",
+  "private": true,
+  "description": "Tests of the foresight viewer: tick rules (node only) and DOM behaviour (linkedom)",
+  "scripts": {
+    "test": "node viewer_test.js && node viewer_dom_test.js"
+  },
+  "devDependencies": {
+    "linkedom": "0.18.5"
+  }
+}

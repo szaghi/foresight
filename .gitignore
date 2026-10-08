@@ -42,6 +42,8 @@ get_automatic_changelog.sh
 references
 # VitePress
 docs/node_modules/
+# viewer tests
+src/js/node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 /bin/

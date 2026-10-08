@@ -28,6 +28,24 @@ jobs:
       id: cov
       uses: ./.github/actions/run-coverage-analysis
 
+  viewer:
+    # the viewer script on its own: its tick rules against the Fortran cases, and its behaviour in a
+    # parsed page (key entries, linked zoom, follow mode); node is preinstalled on the runner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install the test dependencies
+      run: npm ci --prefix src/js
+
+    - name: Run the viewer tests
+      run: npm test --prefix src/js
+
   docs-examples:
     # the documentation examples are built and run, and their snippets, outputs and plots regenerated:
     # the committed ones, embedded by the tutorial and the cookbook, must match what the code produces
