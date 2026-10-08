@@ -8,20 +8,30 @@ title: foresight_script
 
  Supported (with gnuplot abbreviations):
 
- - `set|unset title|xlabel|ylabel ["text"]`, `set xrange|yrange [min:max]` (`*` or empty autoscales an end),
-   `set|unset logscale [x|y|xy]`, `set|unset grid`, `set|unset key`, `set output "file"`,
-   `set terminal svg|html [size W,H] [refresh SECONDS]`;
- - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
+ - `set|unset title|xlabel|ylabel|y2label ["text"]`, `set xrange|yrange|y2range [min:max]` (`*` or empty autoscales
+   an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, e.g. `xy2`; all when absent),
+   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
+ - `set terminal dumb [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text, default 79x24 on standard output `-`),
+   `set terminal block [half|quadrants|sextants|braille] [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text drawn
+   with Unicode block or Braille characters);
  - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
    without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
- - `set xtics|ytics [auto|STEP|START,STEP[,END]]`, `unset xtics|ytics`, `set format [x|y|xy] ["fmt"]`,
-   `unset format`, `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
-   `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
- - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [lc [rgb] "color"|N] [lw W]
-   [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|yerrorbars|xerrorbars|
-   xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`;
-   a `using` field is a column number or a parenthesized expression, `($2*1e3)` (see foresight_expression);
-   `ls N`, `lt N` in an item apply a line style, a palette color.
+ - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
+   `unset xtics|ytics|y2tics`, `set format [AXES] ["fmt"]`, `unset format`,
+   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [autotitle [columnhead]|noautotitle]`,
+   `set style data|function STYLE`, `unset style function`, `set style line N [lc ...] [lt N] [lw W] [dt N] [pt N]
+   [ps S]`;
+ - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
+ - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
+   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
+   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|
+   yerrorbars|xerrorbars|xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or
+   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
+   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
+   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
+ - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
+   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
+   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
 
  Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
  `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
@@ -32,10 +42,12 @@ title: foresight_script
 
 ```mermaid
 graph LR
+  foresight_script["foresight_script"] --> foresight_axes["foresight_axes"]
   foresight_script["foresight_script"] --> foresight_datafile["foresight_datafile"]
   foresight_script["foresight_script"] --> foresight_expression["foresight_expression"]
   foresight_script["foresight_script"] --> foresight_figure["foresight_figure"]
   foresight_script["foresight_script"] --> foresight_format["foresight_format"]
+  foresight_script["foresight_script"] --> foresight_smooth["foresight_smooth"]
   foresight_script["foresight_script"] --> foresight_style["foresight_style"]
   foresight_script["foresight_script"] --> foresight_ticks["foresight_ticks"]
   foresight_script["foresight_script"] --> foresight_tokens["foresight_tokens"]
@@ -65,14 +77,19 @@ graph LR
 - [extension](#extension)
 - [is_multiplot_option](#is-multiplot-option)
 - [keyword](#keyword)
+- [is_word](#is-word)
 - [next_integer](#next-integer)
 - [next_real](#next-real)
 - [next_word](#next-word)
 - [no_more](#no-more)
+- [columnhead_title](#columnhead-title)
+- [function_drawable](#function-drawable)
+- [is_item_option](#is-item-option)
 - [is_line_option](#is-line-option)
 - [line_option](#line-option)
 - [plain_columns](#plain-columns)
 - [string_argument](#string-argument)
+- [valid_axes](#valid-axes)
 - [to_number](#to-number)
 
 ## Variables
@@ -96,6 +113,7 @@ Line properties: a `set style line`, or the options of a plot item; unallocated 
 | `lw` | real(kind=R8P) | allocatable | Line width. |
 | `dt` | integer(kind=I4P) | allocatable | Dash type. |
 | `ps` | real(kind=R8P) | allocatable | Point size. |
+| `pt` | integer(kind=I4P) | allocatable | Point type. |
 
 ### script_object
 
@@ -115,7 +133,11 @@ Script interpreter state.
 | `multiplot` | logical |  | Inside `set multiplot`. |
 | `advance_pending` | logical |  | A multiplot panel was plotted: the next command |
 | `data_style` | character(len=:) | allocatable | Default plot style, `set style data`. |
+| `function_style` | character(len=:) | allocatable | Default function style, `set style function`. |
+| `autotitle` | character(len=:) | allocatable | Untitled items: `file` (as written), `columnhead`, |
 | `line_styles` | type([line_style_object](/api/src/lib/foresight_script#line-style-object)) | allocatable | `set style line` definitions. |
+| `separator` | character(len=:) | allocatable | Data cell separators, empty for whitespace. |
+| `samples` | integer(kind=I4P) |  | Function samples, `set samples`. |
 
 #### Type-Bound Procedures
 
@@ -244,10 +266,14 @@ flowchart TD
 
 ### plot_command
 
-`plot` items: each a data file with modifiers, comma separated; replaces the previous plot and renders it.
+`plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
+ renders it.
+
+ Functions are sampled once all the items are read: their x range depends on the data of the whole plot, as gnuplot.
+ Until then each holds its place (its color, its key row) as an empty series.
 
 ```fortran
-subroutine plot_command(self, tokens, iostat, iomsg)
+subroutine plot_command(self, tokens, text, iostat, iomsg)
 ```
 
 **Arguments**
@@ -256,6 +282,7 @@ subroutine plot_command(self, tokens, iostat, iomsg)
 |------|------|--------|------------|-------------|
 | `self` | class([script_object](/api/src/lib/foresight_script#script-object)) | inout |  | Interpreter. |
 | `tokens` | type([token_object](/api/src/lib/foresight_tokens#token-object)) | in |  | Items tokens. |
+| `text` | character(len=*) | in |  | Text the tokens come from, for function titles. |
 | `iostat` | integer(kind=I4P) | out |  | 0 on success. |
 | `iomsg` | character(len=:) | out | allocatable | Error message. |
 
@@ -267,12 +294,20 @@ flowchart TD
   plot_command["plot_command"] --> apply_line_style["apply_line_style"]
   plot_command["plot_command"] --> canonical_style["canonical_style"]
   plot_command["plot_command"] --> clear["clear"]
+  plot_command["plot_command"] --> columnhead_title["columnhead_title"]
+  plot_command["plot_command"] --> compile["compile"]
   plot_command["plot_command"] --> default_using["default_using"]
   plot_command["plot_command"] --> fail["fail"]
+  plot_command["plot_command"] --> function_drawable["function_drawable"]
+  plot_command["plot_command"] --> header_title["header_title"]
+  plot_command["plot_command"] --> is_item_option["is_item_option"]
   plot_command["plot_command"] --> is_line_option["is_line_option"]
+  plot_command["plot_command"] --> is_word["is_word"]
   plot_command["plot_command"] --> keyword["keyword"]
   plot_command["plot_command"] --> line_option["line_option"]
   plot_command["plot_command"] --> load["load"]
+  plot_command["plot_command"] --> missing_name["missing_name"]
+  plot_command["plot_command"] --> name_count["name_count"]
   plot_command["plot_command"] --> next_integer["next_integer"]
   plot_command["plot_command"] --> next_word["next_word"]
   plot_command["plot_command"] --> parse_every["parse_every"]
@@ -280,8 +315,10 @@ flowchart TD
   plot_command["plot_command"] --> plain_columns["plain_columns"]
   plot_command["plot_command"] --> plot["plot"]
   plot_command["plot_command"] --> register_file["register_file"]
+  plot_command["plot_command"] --> sample_functions["sample_functions"]
   plot_command["plot_command"] --> save_output["save_output"]
   plot_command["plot_command"] --> set_column["set_column"]
+  plot_command["plot_command"] --> smooth["smooth"]
   plot_command["plot_command"] --> table["table"]
   style plot_command fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -361,20 +398,25 @@ flowchart TD
   execute["execute"] --> set_command["set_command"]
   set_command["set_command"] --> axes_argument["axes_argument"]
   set_command["set_command"] --> change_extension["change_extension"]
+  set_command["set_command"] --> datafile_option["datafile_option"]
   set_command["set_command"] --> fail["fail"]
   set_command["set_command"] --> format_option["format_option"]
+  set_command["set_command"] --> is_word["is_word"]
   set_command["set_command"] --> key_option["key_option"]
   set_command["set_command"] --> keyword["keyword"]
   set_command["set_command"] --> next_integer["next_integer"]
   set_command["set_command"] --> no_more["no_more"]
   set_command["set_command"] --> pair_option["pair_option"]
+  set_command["set_command"] --> samples_option["samples_option"]
   set_command["set_command"] --> set_grid["set_grid"]
   set_command["set_command"] --> set_logscale["set_logscale"]
   set_command["set_command"] --> set_multiplot["set_multiplot"]
   set_command["set_command"] --> set_range["set_range"]
   set_command["set_command"] --> set_refresh["set_refresh"]
+  set_command["set_command"] --> set_text["set_text"]
   set_command["set_command"] --> set_title["set_title"]
   set_command["set_command"] --> set_xlabel["set_xlabel"]
+  set_command["set_command"] --> set_y2label["set_y2label"]
   set_command["set_command"] --> set_ylabel["set_ylabel"]
   set_command["set_command"] --> string_argument["string_argument"]
   set_command["set_command"] --> style_option["style_option"]
@@ -414,10 +456,12 @@ flowchart TD
   unset_command["unset_command"] --> set_key["set_key"]
   unset_command["unset_command"] --> set_title["set_title"]
   unset_command["unset_command"] --> set_xlabel["set_xlabel"]
+  unset_command["unset_command"] --> set_y2label["set_y2label"]
   unset_command["unset_command"] --> set_ylabel["set_ylabel"]
   unset_command["unset_command"] --> unset_logscale["unset_logscale"]
   unset_command["unset_command"] --> unset_multiplot["unset_multiplot"]
   unset_command["unset_command"] --> unset_xtics["unset_xtics"]
+  unset_command["unset_command"] --> unset_y2tics["unset_y2tics"]
   unset_command["unset_command"] --> unset_ytics["unset_ytics"]
   style unset_command fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -487,7 +531,9 @@ flowchart TD
   parse_using["parse_using"] --> compile["compile"]
   parse_using["parse_using"] --> fail["fail"]
   parse_using["parse_using"] --> is_parenthesized["is_parenthesized"]
+  parse_using["parse_using"] --> is_quoted["is_quoted"]
   parse_using["parse_using"] --> set_column["set_column"]
+  parse_using["parse_using"] --> set_name["set_name"]
   style parse_using fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -575,7 +621,7 @@ flowchart TD
 
 ### axes_argument
 
-Optional axes letters after a `logscale` option (default `xy`); a base other than 10 is an error.
+Optional axes names after a `logscale` option (default all: `xyy2`); a base other than 10 is an error.
 
 **Returns**: `logical`
 
@@ -599,6 +645,7 @@ flowchart TD
   set_command["set_command"] --> axes_argument["axes_argument"]
   unset_command["unset_command"] --> axes_argument["axes_argument"]
   axes_argument["axes_argument"] --> fail["fail"]
+  axes_argument["axes_argument"] --> valid_axes["valid_axes"]
   style axes_argument fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -733,7 +780,9 @@ function keyword(word, full, minimum) result(match)
 
 ```mermaid
 flowchart TD
+  columnhead_title["columnhead_title"] --> keyword["keyword"]
   execute["execute"] --> keyword["keyword"]
+  is_item_option["is_item_option"] --> keyword["keyword"]
   is_line_option["is_line_option"] --> keyword["keyword"]
   is_multiplot_option["is_multiplot_option"] --> keyword["keyword"]
   line_option["line_option"] --> keyword["keyword"]
@@ -741,6 +790,35 @@ flowchart TD
   set_command["set_command"] --> keyword["keyword"]
   unset_command["unset_command"] --> keyword["keyword"]
   style keyword fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### is_word
+
+Whether `word` is one of the blank separated `words`.
+
+**Attributes**: pure
+
+**Returns**: `logical`
+
+```fortran
+function is_word(word, words) result(found)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `word` | character(len=*) | in |  | Word. |
+| `words` | character(len=*) | in |  | Blank separated words. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  plot_command["plot_command"] --> is_word["is_word"]
+  set_command["set_command"] --> is_word["is_word"]
+  set_text["set_text"] --> is_word["is_word"]
+  style is_word fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### next_integer
@@ -866,9 +944,90 @@ flowchart TD
   style no_more fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### columnhead_title
+
+Parse `columnhead`, `columnheader` or `columnhead(N)` (gnuplot `title columnhead`): `column` is N, or 0 for the
+ column of the y field; false if `word` is none of them.
+
+**Returns**: `logical`
+
+```fortran
+function columnhead_title(word, column) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `word` | character(len=*) | in |  | Title word. |
+| `column` | integer(kind=I4P) | out |  | Header column, 0 for the y one. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  plot_command["plot_command"] --> columnhead_title["columnhead_title"]
+  columnhead_title["columnhead_title"] --> keyword["keyword"]
+  style columnhead_title fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### function_drawable
+
+Whether the style `with` draws a function: lines, points or linespoints, not error bars.
+
+**Attributes**: pure
+
+**Returns**: `logical`
+
+```fortran
+function function_drawable(with) result(yes)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `with` | character(len=*) | in |  | Full style name. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  plot_command["plot_command"] --> function_drawable["function_drawable"]
+  style function_drawable fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### is_item_option
+
+Whether `word` is a plot item option: it ends a function expression.
+
+**Attributes**: pure
+
+**Returns**: `logical`
+
+```fortran
+function is_item_option(word) result(is)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `word` | character(len=*) | in |  | Word. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  plot_command["plot_command"] --> is_item_option["is_item_option"]
+  is_item_option["is_item_option"] --> is_line_option["is_line_option"]
+  is_item_option["is_item_option"] --> keyword["keyword"]
+  style is_item_option fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### is_line_option
 
-Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps` or their long forms.
+Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps`, `pt` or their long forms.
 
 **Attributes**: pure
 
@@ -888,6 +1047,7 @@ function is_line_option(word) result(is)
 
 ```mermaid
 flowchart TD
+  is_item_option["is_item_option"] --> is_line_option["is_line_option"]
   plot_command["plot_command"] --> is_line_option["is_line_option"]
   is_line_option["is_line_option"] --> keyword["keyword"]
   style is_line_option fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -896,7 +1056,7 @@ flowchart TD
 ### line_option
 
 Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
- `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`.
+ `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`, `pt N`.
 
 **Returns**: `logical`
 
@@ -921,6 +1081,7 @@ flowchart TD
   plot_command["plot_command"] --> line_option["line_option"]
   line_option["line_option"] --> default_color["default_color"]
   line_option["line_option"] --> fail["fail"]
+  line_option["line_option"] --> int_str["int_str"]
   line_option["line_option"] --> keyword["keyword"]
   line_option["line_option"] --> next_integer["next_integer"]
   line_option["line_option"] --> next_real["next_real"]
@@ -982,9 +1143,36 @@ flowchart TD
   style string_argument fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### valid_axes
+
+Whether `names` concatenates supported axis names: x, y, y2.
+
+**Attributes**: pure
+
+**Returns**: `logical`
+
+```fortran
+function valid_axes(names) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `names` | character(len=*) | in |  | Axis names. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  axes_argument["axes_argument"] --> valid_axes["valid_axes"]
+  valid_axes["valid_axes"] --> axes_names["axes_names"]
+  style valid_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### to_number
 
-Parse a number.
+Parse a number; false if malformed or beyond the real range.
 
 **Returns**: `logical`
 
@@ -1004,5 +1192,6 @@ function to_number(word, value) result(ok)
 ```mermaid
 flowchart TD
   next_real["next_real"] --> to_number["to_number"]
+  to_number["to_number"] --> real_from_decimal["real_from_decimal"]
   style to_number fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

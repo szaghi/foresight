@@ -26,6 +26,7 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="60.1,37 590,37"/>
 </g>
 <svg class="fs-plot" x="60.1" y="37" width="529.9" height="391" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.016667,0.00032 0.033333,0.013606 0.05,0.040285 0.066667,0.07312 0.083333,0.092475 0.1,0.091146 0.116667,0.088839 0.133333,0.098161
 0.15,0.121339 0.166667,0.153912 0.183333,0.179271 0.2,0.182318 0.216667,0.178349 0.233333,0.183857 0.25,0.203229 0.266667,0.234176
 0.283333,0.263968 0.3,0.272981 0.316667,0.2687"/>
@@ -35,10 +36,13 @@
 0.733333,0.628243 0.75,0.628752 0.766667,0.642288 0.783333,0.66917 0.8,0.701968 0.816667,0.720911 0.833333,0.719372 0.85,0.717205
 0.866667,0.726771 0.883333,0.750179 0.9,0.782812 0.916667,0.807837 0.933333,0.810557 0.95,0.806656 0.966667,0.812396 0.983333,0.832011
 1,0.863093"/>
+</g>
+<g class="fs-series" data-series="2">
 <polyline fill="none" stroke="#009e73" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.083333,0.057143 0.166667,0.114286 0.25,0.171429 0.333333,0.228571 0.416667,0.285714 0.5,0.342857 0.583333,0.4 0.666667,0.457143
 0.75,0.514286 0.833333,0.571429 0.916667,0.628571 1,0.685714"/>
 <path fill="none" stroke="#009e73" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0.083333,0.057143h0 M0.166667,0.114286h0 M0.25,0.171429h0 M0.333333,0.228571h0 M0.416667,0.285714h0 M0.5,0.342857h0 M0.583333,0.4h0 M0.666667,0.457143h0
 M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
+</g>
 </svg>
 <rect x="60.1" y="37" width="529.9" height="391" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -223,10 +227,14 @@ M0.75,0.514286h0 M0.833333,0.571429h0 M0.916667,0.628571h0 M1,0.685714h0"/>
 <text x="325.05" y="467" text-anchor="middle">iteration</text>
 <text x="22" y="232.5" text-anchor="middle" transform="rotate(-90 22 232.5)">residual</text>
 <text x="325.05" y="22" text-anchor="middle">Convergence history</text>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="544,50.5 580,50.5"/>
 <text x="538" y="54.7" text-anchor="end">continuity</text>
+</g>
+<g class="fs-key-entry" data-series="2">
 <polyline fill="none" stroke="#009e73" stroke-width="2" points="544,65.5 580,65.5"/>
 <path fill="none" stroke="#009e73" stroke-width="6" stroke-linecap="round" d="M562,65.5h0"/>
 <text x="538" y="69.7" text-anchor="end">momentum</text>
+</g>
 </g>
 </svg>

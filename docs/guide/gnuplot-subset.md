@@ -45,7 +45,8 @@ that did what it says.
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
-| **te**rminal `dumb` [**si**ze `COLS,ROWS`] | text output, 79 x 24 by default, on the standard output | — |
+| **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
+| **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
 | **or**igin [`X,Y`] | bottom left corner of the plot, page fractions (default `0,0`); not with a layout | — |
 | **si**ze [`W,H`] | plot size, page fractions (default `1,1`); not with a layout | — |
@@ -53,8 +54,8 @@ that did what it says.
 ## `plot` items
 
 ```gnuplot
-plot 'file' [using SPEC] [index N] [every N] [with STYLE] [title "text" | notitle] [axes x1y1|x1y2]
-            [lc [rgb] "color" | lc N] [lw W] [dt N] [ps S], ...
+plot 'file' [using SPEC] [index N] [every N] [smooth FILTER] [with STYLE] [title "text" | notitle]
+            [axes x1y1|x1y2] [lc [rgb] "color" | lc N] [lw W] [dt N] [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
@@ -65,6 +66,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
+| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
@@ -136,6 +138,32 @@ by default whatever `set style data` says; `set style function points` (or `line
 not usable. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
 
 In the HTML page a zoom does not resample: the samples are those of the original range.
+
+## Smoothing
+
+`smooth FILTER` replaces the points of a data item by a filtered series, as gnuplot computes it. Each run of points
+(a block of the file, ended also by an undefined point or by a value not placeable on a log axis) is sorted by x, and
+its points of equal x are merged into one:
+
+| Filter | y of the merged point |
+|---|---|
+| `unique` | the mean of their y |
+| `frequency` | the sum of their y: with `using (BIN):(1)`, a histogram |
+| `fnormal` | `frequency` divided by the sum of y over the whole item |
+| `cumulative` | the sum of y up to that x, within the run |
+| `cnormal` | `cumulative` divided by the sum of y over the whole item: an empirical distribution |
+
+```gnuplot
+plot 'run.dat' u 1:2 smooth unique                              # iterations repeated by a restart: averaged
+plot 'run.dat' u (floor($5/0.02)*0.02):(1) smooth frequency     # histogram of column 5, bins 0.02 wide
+plot 'run.dat' u 5:(1) smooth cnormal                           # its empirical distribution
+```
+
+The [cookbook](/manual/cookbook#histogram-and-distribution) draws the last two.
+
+The runs stay separate lines. `smooth` applies to `lines`, `points` and `linespoints`; with error bars or on a
+function it is an error (gnuplot ignores the extra columns, or the filter). The other filters (splines, Bézier,
+`kdensity`, ...) are [not supported](#not-supported).
 
 ## Second y axis
 
@@ -262,7 +290,7 @@ unset multiplot
 ```
 
 Panels are drawn in order, without a background: in the HTML page the mouse acts on the topmost panel under it.
-On the standard output (`set terminal dumb`), a multiplot is printed once, complete, at `unset multiplot`; files are
+On the standard output (`set terminal dumb` or `block`), a multiplot is printed once, complete, at `unset multiplot`; files are
 rewritten at each plot, so that a watched page shows the panels done so far.
 
 ## Not supported
@@ -271,4 +299,7 @@ User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`)
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
-at a position (`at`) or in a named margin (`lmargin`, ...); `pointinterval` (`pi`).
+at a position (`at`) or in a named margin (`lmargin`, ...); `pointinterval` (`pi`); the `smooth` filters other than
+`unique`, `frequency`, `fnormal`, `cumulative`, `cnormal` (`csplines`, `acsplines`, `mcsplines`, `bezier`,
+`sbezier`, `kdensity`, `unwrap`, `path`) and `bins`; the `block` character sets `dot`, `octants`, `sextpua`,
+`octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

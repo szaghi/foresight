@@ -225,11 +225,13 @@ contains
    call backend%end_group
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
+      call backend%begin_group('fs-series', series=s)
       if (self%series(s)%y2) then
          call self%draw_series(backend, s, self%y2axis)
       else
          call self%draw_series(backend, s, self%yaxis)
       endif
+      call backend%end_group
    enddo
    call backend%end_plot_area
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
@@ -401,6 +403,7 @@ contains
       xs(1) = xs(2) - SAMPLE_LENGTH * font_size
       yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
       k = k + 1_I4P
+      call backend%begin_group('fs-key-entry', series=s)
       if (self%series(s)%style%draws_lines()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
@@ -415,6 +418,7 @@ contains
                            self%series(s)%style%point_diameter(), pt=self%series(s)%style%pointtype, &
                            line_width=self%series(s)%style%linewidth)
       call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
+      call backend%end_group
    enddo
    endsubroutine draw_key
 

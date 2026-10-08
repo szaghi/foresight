@@ -11,6 +11,13 @@ title: foresight_backend_dumb
  frame with `+`, `-` and `|`, the grid with `.`; superscripts become `^`. Data segments are clipped to the plot area
  before rasterisation: points far outside the range never cost more than the cells actually drawn.
 
+ With `colors` other than `mono` (gnuplot `ansi`, `ansi256`, `ansirgb`) the cells of each series take its color
+ through ANSI escape sequences, the nearest of the 6 basic colors, of the 256-color palette, or the color itself;
+ frame, grid, text, and black, white or named series colors keep the terminal's own color.
+
+ Data are drawn through `px_segment` and `px_point`, in pixels: a device drawing at a finer resolution than the cells
+ (foresight_backend_block) overrides them, `cell`, `rect` and `polyline`, and keeps the rest.
+
 **Source**: `src/lib/foresight_backend_dumb.F90`
 
 **Dependencies**
@@ -41,13 +48,19 @@ graph LR
 - [data_polyline](#data-polyline)
 - [data_dots](#data-dots)
 - [data_bars](#data-bars)
+- [px_point](#px-point)
+- [px_segment](#px-segment)
 - [put](#put)
 - [segment](#segment)
 - [unit_segment](#unit-segment)
 - [text_width](#text-width)
+- [cell](#cell)
 - [col](#col)
 - [row](#row)
+- [color_index](#color-index)
 - [symbol_of](#symbol-of)
+- [color_rgb](#color-rgb)
+- [ansi_escape](#ansi-escape)
 
 ## Variables
 
@@ -58,6 +71,8 @@ graph LR
 | `GRID_COLOR` | character(len=*) | parameter | Grid color, drawn as dots on blank cells. |
 | `CELL_WIDTH` | real(kind=R8P) | parameter | Cell width [font size]. |
 | `CELL_HEIGHT` | real(kind=R8P) | parameter | Cell height [font size]. |
+| `TEXT_COLORS` | character(len=*) | parameter | Color modes (gnuplot names). |
+| `ESC` | character(len=1) | parameter | Escape character. |
 
 ## Derived Types
 
@@ -81,6 +96,7 @@ Text output device.
 ```mermaid
 classDiagram
   backend_object <|-- backend_dumb
+  backend_dumb <|-- backend_block
 ```
 
 **Extends**: [`backend_object`](/api/src/lib/foresight_backend#backend-object)
@@ -93,6 +109,8 @@ classDiagram
 | `file` | character(len=:) | allocatable | Output file, `-` for standard output. |
 | `grid` | character(len=1) | allocatable | Cells, (column, row). |
 | `symbols` | type([color_symbol](/api/src/lib/foresight_backend_dumb#color-symbol)) | allocatable | Symbols in use. |
+| `tint` | integer(kind=I4P) | allocatable | Cell color, index in `symbols`, 0 for the default. |
+| `colors` | character(len=7) |  | Color mode: `mono`, `ansi`, `ansi256`, `ansirgb`. |
 | `cw` | real(kind=R8P) |  | Cell width [px]. |
 | `ch` | real(kind=R8P) |  | Cell height [px]. |
 | `font_size` | real(kind=R8P) |  | Font size [px]. |
@@ -119,12 +137,16 @@ classDiagram
 | `data_dots` | pass(self) |  |
 | `data_bars` | pass(self) |  |
 | `text_width` | pass(self) |  |
+| `cell` | pass(self) | Text of a cell. |
 | `col` | pass(self) | Column of an abscissa [px]. |
+| `color_index` | pass(self) | Index of a color in `symbols`. |
+| `px_point` | pass(self) | Draw a data point [px]. |
+| `px_segment` | pass(self) | Draw a data segment [px]. |
 | `row` | pass(self) | Row of an ordinate [px]. |
 | `put` | pass(self) | Set a cell. |
 | `segment` | pass(self) | Rasterise a cell segment. |
 | `symbol_of` | pass(self) | Symbol of a color. |
-| `unit_segment` | pass(self) | Clip and rasterise a unit-square segment. |
+| `unit_segment` | pass(self) | Clip and draw a unit-square segment. |
 
 ## Subroutines
 
@@ -150,6 +172,7 @@ subroutine begin_page(self, file, width, height, font_size)
 
 ```mermaid
 flowchart TD
+  begin_page["begin_page"] --> begin_page["begin_page"]
   render["render"] --> begin_page["begin_page"]
   style begin_page fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -173,6 +196,9 @@ subroutine end_page(self)
 ```mermaid
 flowchart TD
   render["render"] --> end_page["end_page"]
+  end_page["end_page"] --> ansi_escape["ansi_escape"]
+  end_page["end_page"] --> cell["cell"]
+  end_page["end_page"] --> color_rgb["color_rgb"]
   end_page["end_page"] --> rename_file["rename_file"]
   style end_page fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -227,7 +253,7 @@ flowchart TD
 A hidden group (the grid when off) is not drawn at all.
 
 ```fortran
-subroutine begin_group(self, name, visible)
+subroutine begin_group(self, name, visible, series)
 ```
 
 **Arguments**
@@ -237,12 +263,14 @@ subroutine begin_group(self, name, visible)
 | `self` | class([backend_dumb](/api/src/lib/foresight_backend_dumb#backend-dumb)) | inout |  | Device. |
 | `name` | character(len=*) | in |  | Group name. |
 | `visible` | logical | in | optional | Group shown. |
+| `series` | integer(kind=I4P) | in | optional | Series number, unused in text. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_frame["draw_frame"] --> begin_group["begin_group"]
+  draw_key["draw_key"] --> begin_group["begin_group"]
   render["render"] --> begin_group["begin_group"]
   style begin_group fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -266,6 +294,7 @@ subroutine end_group(self)
 ```mermaid
 flowchart TD
   draw_frame["draw_frame"] --> end_group["end_group"]
+  draw_key["draw_key"] --> end_group["end_group"]
   render["render"] --> end_group["end_group"]
   style end_group fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -332,18 +361,18 @@ flowchart TD
   draw_key["draw_key"] --> polyline["polyline"]
   polyline["polyline"] --> col["col"]
   polyline["polyline"] --> put["put"]
+  polyline["polyline"] --> px_segment["px_segment"]
   polyline["polyline"] --> row["row"]
   polyline["polyline"] --> segment["segment"]
-  polyline["polyline"] --> symbol_of["symbol_of"]
   style polyline fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### dots
 
-Dots are the color symbol.
+Dots are the color symbol, whatever the point type.
 
 ```fortran
-subroutine dots(self, x, y, color, diameter)
+subroutine dots(self, x, y, color, diameter, pt, line_width)
 ```
 
 **Arguments**
@@ -355,16 +384,15 @@ subroutine dots(self, x, y, color, diameter)
 | `y` | real(kind=R8P) | in |  | Ordinates [px]. |
 | `color` | character(len=*) | in |  | Fill color. |
 | `diameter` | real(kind=R8P) | in |  | Dot diameter [px]. |
+| `pt` | integer(kind=I4P) | in | optional | Point type, ignored. |
+| `line_width` | real(kind=R8P) | in | optional | Marker line width, ignored. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_key["draw_key"] --> dots["dots"]
-  dots["dots"] --> col["col"]
-  dots["dots"] --> put["put"]
-  dots["dots"] --> row["row"]
-  dots["dots"] --> symbol_of["symbol_of"]
+  dots["dots"] --> px_point["px_point"]
   style dots fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -395,6 +423,7 @@ flowchart TD
   draw_frame["draw_frame"] --> text["text"]
   draw_key["draw_key"] --> text["text"]
   render["render"] --> text["text"]
+  save["save"] --> text["text"]
   text["text"] --> col["col"]
   text["text"] --> put["put"]
   text["text"] --> row["row"]
@@ -423,6 +452,7 @@ subroutine begin_plot_area(self, x, y, width, height)
 
 ```mermaid
 flowchart TD
+  begin_plot_area["begin_plot_area"] --> begin_plot_area["begin_plot_area"]
   render["render"] --> begin_plot_area["begin_plot_area"]
   style begin_plot_area fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -473,17 +503,16 @@ subroutine data_polyline(self, x, y, color, line_width, dasharray)
 ```mermaid
 flowchart TD
   draw_series["draw_series"] --> data_polyline["data_polyline"]
-  data_polyline["data_polyline"] --> symbol_of["symbol_of"]
   data_polyline["data_polyline"] --> unit_segment["unit_segment"]
   style data_polyline fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### data_dots
 
-Dots [unit square] inside the plot area drawn with the color symbol.
+Dots [unit square] inside the plot area drawn with the color symbol, whatever the point type.
 
 ```fortran
-subroutine data_dots(self, x, y, color, diameter)
+subroutine data_dots(self, x, y, color, diameter, pt, line_width)
 ```
 
 **Arguments**
@@ -495,16 +524,15 @@ subroutine data_dots(self, x, y, color, diameter)
 | `y` | real(kind=R8P) | in |  | Ordinates [unit]. |
 | `color` | character(len=*) | in |  | Fill color. |
 | `diameter` | real(kind=R8P) | in |  | Dot diameter [px]. |
+| `pt` | integer(kind=I4P) | in | optional | Point type, ignored. |
+| `line_width` | real(kind=R8P) | in | optional | Marker line width, ignored. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_series["draw_series"] --> data_dots["data_dots"]
-  data_dots["data_dots"] --> col["col"]
-  data_dots["data_dots"] --> put["put"]
-  data_dots["data_dots"] --> row["row"]
-  data_dots["data_dots"] --> symbol_of["symbol_of"]
+  data_dots["data_dots"] --> px_point["px_point"]
   style data_dots fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -538,14 +566,77 @@ flowchart TD
   style data_bars fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### px_point
+
+A data point at `p` [px]: the color symbol in its cell.
+
+```fortran
+subroutine px_point(self, p, color)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([backend_dumb](/api/src/lib/foresight_backend_dumb#backend-dumb)) | inout |  | Device. |
+| `p` | real(kind=R8P) | in |  | Point [px]. |
+| `color` | character(len=*) | in |  | Color. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  data_dots["data_dots"] --> px_point["px_point"]
+  dots["dots"] --> px_point["px_point"]
+  px_point["px_point"] --> col["col"]
+  px_point["px_point"] --> color_index["color_index"]
+  px_point["px_point"] --> put["put"]
+  px_point["px_point"] --> row["row"]
+  px_point["px_point"] --> symbol_of["symbol_of"]
+  style px_point fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### px_segment
+
+A data segment from `a` to `b` [px] with `symbol`, or the color symbol if empty.
+
+```fortran
+subroutine px_segment(self, a, b, color, symbol)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([backend_dumb](/api/src/lib/foresight_backend_dumb#backend-dumb)) | inout |  | Device. |
+| `a` | real(kind=R8P) | in |  | Start [px]. |
+| `b` | real(kind=R8P) | in |  | End [px]. |
+| `color` | character(len=*) | in |  | Color. |
+| `symbol` | character(len=*) | in |  | Symbol, empty for the color symbol. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  polyline["polyline"] --> px_segment["px_segment"]
+  polyline["polyline"] --> px_segment["px_segment"]
+  unit_segment["unit_segment"] --> px_segment["px_segment"]
+  px_segment["px_segment"] --> col["col"]
+  px_segment["px_segment"] --> color_index["color_index"]
+  px_segment["px_segment"] --> row["row"]
+  px_segment["px_segment"] --> segment["segment"]
+  px_segment["px_segment"] --> symbol_of["symbol_of"]
+  style px_segment fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### put
 
-Set cell (`c`, `r`), ignoring cells off the page.
+Set cell (`c`, `r`) and its color index `tint` (default 0), ignoring cells off the page.
 
 **Attributes**: pure
 
 ```fortran
-subroutine put(self, c, r, symbol)
+subroutine put(self, c, r, symbol, tint)
 ```
 
 **Arguments**
@@ -556,6 +647,7 @@ subroutine put(self, c, r, symbol)
 | `c` | integer(kind=I4P) | in |  | Column. |
 | `r` | integer(kind=I4P) | in |  | Row. |
 | `symbol` | character(len=1) | in |  | Symbol. |
+| `tint` | integer(kind=I4P) | in | optional | Color index in `symbols`. |
 
 **Call graph**
 
@@ -568,9 +660,7 @@ flowchart TD
   begin_plot_area["begin_plot_area"] --> put["put"]
   data_bars["data_bars"] --> put["put"]
   data_dots["data_dots"] --> put["put"]
-  data_dots["data_dots"] --> put["put"]
   data_polyline["data_polyline"] --> put["put"]
-  dots["dots"] --> put["put"]
   dots["dots"] --> put["put"]
   end_axes["end_axes"] --> put["put"]
   end_group["end_group"] --> put["put"]
@@ -580,6 +670,7 @@ flowchart TD
   open_svg["open_svg"] --> put["put"]
   polyline["polyline"] --> put["put"]
   polyline["polyline"] --> put["put"]
+  px_point["px_point"] --> put["put"]
   rect["rect"] --> put["put"]
   rect["rect"] --> put["put"]
   segment["segment"] --> put["put"]
@@ -595,7 +686,7 @@ Bresenham segment between cells, optionally writing blank cells only.
 **Attributes**: pure
 
 ```fortran
-subroutine segment(self, c1, r1, c2, r2, symbol, blank_only)
+subroutine segment(self, c1, r1, c2, r2, symbol, blank_only, tint)
 ```
 
 **Arguments**
@@ -609,23 +700,24 @@ subroutine segment(self, c1, r1, c2, r2, symbol, blank_only)
 | `r2` | integer(kind=I4P) | in |  | End row. |
 | `symbol` | character(len=1) | in |  | Symbol. |
 | `blank_only` | logical | in |  | Write blank cells only. |
+| `tint` | integer(kind=I4P) | in | optional | Color index in `symbols`. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   polyline["polyline"] --> segment["segment"]
-  unit_segment["unit_segment"] --> segment["segment"]
+  px_segment["px_segment"] --> segment["segment"]
   segment["segment"] --> put["put"]
   style segment fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### unit_segment
 
-Clip the unit-square segment to [0, 1]^2 (Liang-Barsky), then rasterise it in the plot area.
+Clip the unit-square segment to [0, 1]^2 (Liang-Barsky), then draw it in the plot area.
 
 ```fortran
-subroutine unit_segment(self, u1, v1, u2, v2, symbol)
+subroutine unit_segment(self, u1, v1, u2, v2, color, symbol)
 ```
 
 **Arguments**
@@ -637,7 +729,8 @@ subroutine unit_segment(self, u1, v1, u2, v2, symbol)
 | `v1` | real(kind=R8P) | in |  | Start ordinate [unit]. |
 | `u2` | real(kind=R8P) | in |  | End abscissa [unit]. |
 | `v2` | real(kind=R8P) | in |  | End ordinate [unit]. |
-| `symbol` | character(len=1) | in |  | Symbol. |
+| `color` | character(len=*) | in |  | Color. |
+| `symbol` | character(len=*) | in |  | Symbol, empty for the color symbol. |
 
 **Call graph**
 
@@ -645,9 +738,7 @@ subroutine unit_segment(self, u1, v1, u2, v2, symbol)
 flowchart TD
   data_bars["data_bars"] --> unit_segment["unit_segment"]
   data_polyline["data_polyline"] --> unit_segment["unit_segment"]
-  unit_segment["unit_segment"] --> col["col"]
-  unit_segment["unit_segment"] --> row["row"]
-  unit_segment["unit_segment"] --> segment["segment"]
+  unit_segment["unit_segment"] --> px_segment["px_segment"]
   style unit_segment fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -678,10 +769,37 @@ function text_width(self, string, sup, font_size) result(width)
 
 ```mermaid
 flowchart TD
-  draw_key["draw_key"] --> text_width["text_width"]
+  key_layout["key_layout"] --> text_width["text_width"]
   place_plot_area["place_plot_area"] --> text_width["text_width"]
-  ytick_labels_width["ytick_labels_width"] --> text_width["text_width"]
   style text_width fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### cell
+
+Text of the cell (`c`, `r`): its character.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function cell(self, c, r) result(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([backend_dumb](/api/src/lib/foresight_backend_dumb#backend-dumb)) | in |  | Device. |
+| `c` | integer(kind=I4P) | in |  | Column. |
+| `r` | integer(kind=I4P) | in |  | Row. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  end_page["end_page"] --> cell["cell"]
+  style cell fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### col
@@ -707,12 +825,11 @@ function col(self, x) result(c)
 
 ```mermaid
 flowchart TD
-  data_dots["data_dots"] --> col["col"]
-  dots["dots"] --> col["col"]
   polyline["polyline"] --> col["col"]
+  px_point["px_point"] --> col["col"]
+  px_segment["px_segment"] --> col["col"]
   rect["rect"] --> col["col"]
   text["text"] --> col["col"]
-  unit_segment["unit_segment"] --> col["col"]
   style col fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -739,13 +856,41 @@ function row(self, y) result(r)
 
 ```mermaid
 flowchart TD
-  data_dots["data_dots"] --> row["row"]
-  dots["dots"] --> row["row"]
   polyline["polyline"] --> row["row"]
+  px_point["px_point"] --> row["row"]
+  px_segment["px_segment"] --> row["row"]
   rect["rect"] --> row["row"]
   text["text"] --> row["row"]
-  unit_segment["unit_segment"] --> row["row"]
   style row fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### color_index
+
+Index of `color` in `symbols`, assigning the next symbol on first use.
+
+**Returns**: `integer(kind=I4P)`
+
+```fortran
+function color_index(self, color) result(k)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([backend_dumb](/api/src/lib/foresight_backend_dumb#backend-dumb)) | inout |  | Device. |
+| `color` | character(len=*) | in |  | SVG color. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  px_point["px_point"] --> color_index["color_index"]
+  px_point["px_point"] --> color_index["color_index"]
+  px_segment["px_segment"] --> color_index["color_index"]
+  px_segment["px_segment"] --> color_index["color_index"]
+  symbol_of["symbol_of"] --> color_index["color_index"]
+  style color_index fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### symbol_of
@@ -769,9 +914,66 @@ function symbol_of(self, color) result(symbol)
 
 ```mermaid
 flowchart TD
-  data_dots["data_dots"] --> symbol_of["symbol_of"]
-  data_polyline["data_polyline"] --> symbol_of["symbol_of"]
-  dots["dots"] --> symbol_of["symbol_of"]
-  polyline["polyline"] --> symbol_of["symbol_of"]
+  px_point["px_point"] --> symbol_of["symbol_of"]
+  px_segment["px_segment"] --> symbol_of["symbol_of"]
+  symbol_of["symbol_of"] --> color_index["color_index"]
   style symbol_of fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### color_rgb
+
+Red, green, blue (0-255) of the color `k` of `symbols`; -1 for the terminal's own color: index 0, a color that is
+ not `#rrggbb`, black or white (unreadable on one of the backgrounds).
+
+**Attributes**: pure
+
+**Returns**: `integer(kind=I4P)`
+
+```fortran
+function color_rgb(symbols, k) result(rgb)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `symbols` | type([color_symbol](/api/src/lib/foresight_backend_dumb#color-symbol)) | in |  | Symbols in use. |
+| `k` | integer(kind=I4P) | in |  | Index, 0 for the default. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  end_page["end_page"] --> color_rgb["color_rgb"]
+  style color_rgb fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ansi_escape
+
+ANSI escape sequence setting the foreground to `rgb` in the color `mode`, or to the default if `rgb` is -1: the
+ nearest of the 6 basic colors (no black and white) for `ansi`, of the 6x6x6 cube and the gray ramp for `ansi256`,
+ the color itself for `ansirgb`.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function ansi_escape(mode, rgb) result(escape)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `mode` | character(len=*) | in |  | `ansi`, `ansi256` or `ansirgb`. |
+| `rgb` | integer(kind=I4P) | in |  | Color, -1 for the default. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  end_page["end_page"] --> ansi_escape["ansi_escape"]
+  ansi_escape["ansi_escape"] --> str["str"]
+  style ansi_escape fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

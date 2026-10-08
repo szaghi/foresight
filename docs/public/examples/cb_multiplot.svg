@@ -22,6 +22,7 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="39.1,39.29 550,39.29"/>
 </g>
 <svg class="fs-plot" x="39.1" y="16" width="510.9" height="163" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.008333,0.142559 0.016667,0.143559 0.025,0.146128 0.033333,0.150405 0.041667,0.156455 0.05,0.164286 0.058333,0.17386 0.066667,0.185075
 0.075,0.197723 0.083333,0.211425 0.091667,0.22554 0.1,0.239092 0.108333,0.250828 0.116667,0.259549 0.125,0.264655 0.133333,0.266499
 0.141667,0.266171 0.15,0.264956 0.158333,0.263921 0.166667,0.263793 0.175,0.265016 0.183333,0.267835 0.191667,0.272377 0.2,0.278695
@@ -38,6 +39,7 @@
 0.841667,0.777208 0.85,0.788031 0.858333,0.800351 0.866667,0.81384 0.875,0.82793 0.883333,0.84173 0.891667,0.854039 0.9,0.863595
 0.908333,0.869602 0.916667,0.872173 0.925,0.872262 0.933333,0.871155 0.941667,0.869994 0.95,0.869591 0.958333,0.87045 0.966667,0.872858
 0.975,0.876966 0.983333,0.882842 0.991667,0.8905 1,0.899908"/>
+</g>
 </svg>
 <rect x="39.1" y="16" width="510.9" height="163" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -95,8 +97,10 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="550,39.29 544,39.29"/>
 <text x="33.1" y="43.49" text-anchor="end">10<tspan dy="-0.45em" font-size="0.75em">0</tspan></text>
 </g>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="504,29.5 540,29.5"/>
 <text x="498" y="33.7" text-anchor="end">continuity</text>
+</g>
 </g>
 <g class="fs-axes" data-area="35.8 550 226 389" data-x="0 1.2e2" data-y="1e-1 6e-1" data-log="0 0" data-grid="0" data-font-size="12">
 <g class="fs-grid" display="none">
@@ -121,6 +125,7 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,226 550,226"/>
 </g>
 <svg class="fs-plot" x="35.8" y="226" width="514.2" height="163" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.008333,0.126262 0.016667,0.163848 0.025,0.210828 0.033333,0.265156 0.041667,0.324738 0.05,0.387492 0.058333,0.451406 0.066667,0.514592
 0.075,0.575324 0.083333,0.632082 0.091667,0.683574 0.1,0.728752 0.108333,0.766832 0.116667,0.797284 0.125,0.819838 0.133333,0.834468
 0.141667,0.841368 0.15,0.84094 0.158333,0.83376 0.166667,0.820548 0.175,0.80214 0.183333,0.779454 0.191667,0.753458 0.2,0.725138
@@ -137,6 +142,7 @@
 0.841667,0.60379 0.85,0.602326 0.858333,0.600908 0.866667,0.599574 0.875,0.598354 0.883333,0.597276 0.891667,0.596356 0.9,0.595608
 0.908333,0.595044 0.916667,0.594662 0.925,0.594458 0.933333,0.594428 0.941667,0.594556 0.95,0.594828 0.958333,0.595224 0.966667,0.595726
 0.975,0.596308 0.983333,0.59695 0.991667,0.597628 1,0.59832"/>
+</g>
 </svg>
 <rect x="35.8" y="226" width="514.2" height="163" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -200,7 +206,9 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="550,226 544,226"/>
 <text x="29.8" y="230.2" text-anchor="end">0.6</text>
 </g>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="504,239.5 540,239.5"/>
 <text x="498" y="243.7" text-anchor="end">cd</text>
+</g>
 </g>
 </svg>

@@ -16,10 +16,11 @@ Everything foresight does, and where it is documented. The [tutorial](/manual/) 
 | Expressions | `using ($2*1e3)`, `column("name")`, `?:`, `1/0` gaps, gnuplot's integer arithmetic and functions | [Expressions](gnuplot-subset#expressions-in-using) |
 | Column headers | `using 1:"residual"`, `title columnhead`, `set key autotitle columnhead` | [Column headers](gnuplot-subset#column-headers) |
 | Functions | `plot sin(x)/x`, sampled over the data x range, `set samples`, `set style function` | [Functions](gnuplot-subset#functions) |
+| Smoothing | `smooth unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`: averages of repeated x, histograms, distributions | [Smoothing](gnuplot-subset#smoothing) |
 | Layout | multiplot grids with a title, panels in `origin`/`size` boxes (insets) | [Multiplot](gnuplot-subset#multiplot) |
-| Output | interactive HTML (one self-contained page), SVG, text (`dumb`), atomic rewrites | [Output Formats](output-formats) |
-| Viewer | wheel and box zoom, pan, `u` `a` `g` `h`, live coordinates (y2 too), ticks and markers regenerated on zoom, the view kept in the URL | [Interactive Viewer](viewer) |
-| Monitoring | `--watch`: re-render on any change of the script or its data; reloading pages; the text terminal redrawn in place | [Live Monitoring](monitoring) |
+| Output | interactive HTML (one self-contained page), SVG, text with characters (`dumb`) or Unicode blocks and Braille (`block`), in ANSI colors; atomic rewrites | [Output Formats](output-formats) |
+| Viewer | wheel and box zoom, pan, `u` `a` `g` `h`, live coordinates (y2 too), ticks and markers regenerated on zoom; series hidden from the key; panels sharing x zoomed together; following the end of a live run; the view kept in the URL | [Interactive Viewer](viewer) |
+| Monitoring | `--watch`: re-render on any change of the script or its data; reloading pages that keep the zoom or follow the newest data; the text terminal redrawn in place | [Live Monitoring](monitoring) |
 | Library | `figure_object` (methods mirroring gnuplot commands), `script_object` (the interpreter) | [Fortran Library](library), [API](/api/) |
 | Command line | `foresight [-e CMDS] [-o OUT] [-w [S]] [SCRIPT]` | [Command Line](cli) |
 | Engineering | pure Fortran 2018; exact tick labels from integers; byte-exact golden tests; never an IEEE exception on bad data | [Architecture](architecture) |

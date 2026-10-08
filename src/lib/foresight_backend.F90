@@ -83,12 +83,15 @@ abstract interface
    type(axes_view),       intent(in)    :: view !< Panel geometry and axis ranges.
    endsubroutine begin_axes_interface
 
-   subroutine begin_group_interface(self, name, visible)
-   !< Open the group `name` of redrawable decorations; `visible` false hides it (default true).
-   import :: backend_object
+   subroutine begin_group_interface(self, name, visible, series)
+   !< Open the group `name` of redrawable decorations; `visible` false hides it (default true). A group of a plotted
+   !< series, or of its key entry, carries the series number `series` (from 1): an interactive viewer hides the series
+   !< when its key entry is clicked.
+   import :: backend_object, I4P
    class(backend_object), intent(inout)        :: self    !< Device.
    character(len=*),      intent(in)           :: name    !< Group name.
    logical,               intent(in), optional :: visible !< Group shown.
+   integer(I4P),          intent(in), optional :: series  !< Series number.
    endsubroutine begin_group_interface
 
    subroutine rect_interface(self, x, y, width, height, stroke, fill, line_width)

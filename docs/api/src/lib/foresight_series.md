@@ -40,6 +40,7 @@ Data series.
 | `yhigh` | real(kind=R8P) | allocatable | Vertical error bar ends, allocated for y error bars. |
 | `title` | character(len=:) | allocatable | Key title, empty for none. |
 | `style` | type([style_object](/api/src/lib/foresight_style#style-object)) |  | Drawing style. |
+| `y2` | logical |  | On the second y axis (gnuplot `axes x1y2`), else on the first. |
 
 #### Type-Bound Procedures
 
@@ -81,6 +82,7 @@ subroutine extent(self, xaxis, yaxis, xmin, xmax, ymin, ymax, found, xwindow)
 
 ```mermaid
 flowchart TD
+  data_extent["data_extent"] --> extent["extent"]
   setup_axes["setup_axes"] --> extent["extent"]
   extent["extent"] --> valid["valid"]
   extent["extent"] --> widen["widen"]

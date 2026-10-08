@@ -27,7 +27,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(43)                           !< Per-check outcome.
+logical                       :: test_passed(45)                           !< Per-check outcome.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -327,6 +327,36 @@ test_passed(43) = test_passed(43) .and. iostat /= 0_I4P .and. index(iomsg, 'pt n
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! smooth, as gnuplot 6 computes it (set table): each run (block, between undefined points) sorted by x, equal x merged;
+! the normalized filters divide by the sum over every run
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '3 1', '1 2', '2 4', '1 6', 'NaN 5', '4 NaN', '2 1', '', '', '5 2', '0 3'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//data_file//"' smooth unique, '' s cumulative, '' smooth cnormal, '' smooth frequency", &
+                          iostat, iomsg)
+test_passed(44) = iostat == 0_I4P
+if (test_passed(44)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(44) = same(series(1)%x, [1, 2, 3, -1, 2, -1, 0, 5]) .and. same(series(1)%y, [4, 4, 1, -1, 1, -1, 3, 2]) &
+                        .and. same(series(2)%y, [8, 12, 13, -1, 1, -1, 3, 5]) .and. &
+                        same(series(3)%y * 19.0_R8P, [8, 12, 13, -1, 1, -1, 3, 5]) .and. &
+                        same(series(4)%y, [8, 4, 1, -1, 1, -1, 3, 2])
+   endassociate
+endif
+! a log y axis breaks the runs at the non-positive values
+call interpreter%run_text("set logscale y; plot '"//data_file//"' smooth cumulative", iostat, iomsg)
+test_passed(44) = test_passed(44) .and. iostat == 0_I4P
+if (test_passed(44)) test_passed(44) = same(interpreter%figure%panels(1)%series(1)%y, [8, 12, 13, -1, 1, -1, 3, 5])
+call interpreter%run_text("plot '"//data_file//"' smooth csplines", iostat, iomsg)
+test_passed(45) = iostat /= 0_I4P .and. index(iomsg, 'unsupported smooth "csplines"') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:(0.1) w yerr smooth unique", iostat, iomsg)
+test_passed(45) = test_passed(45) .and. iostat /= 0_I4P .and. index(iomsg, 'smooth applies to lines') > 0
+call interpreter%run_text("plot x smooth unique", iostat, iomsg)
+test_passed(45) = test_passed(45) .and. iostat /= 0_I4P .and. index(iomsg, 'smooth applies to data files') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -339,11 +369,31 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,43L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,45L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   pure function same(values, expected) result(equal)
+   !< Whether `values` equal the integers `expected` to rounding, -1 standing for NaN.
+   real(R8P),    intent(in) :: values(:)   !< Values.
+   integer,      intent(in) :: expected(:) !< Expected values, -1 for NaN.
+   logical                  :: equal       !< Equal.
+   integer                  :: k           !< Counter.
+
+   equal = size(values) == size(expected)
+   if (.not. equal) return
+   do k = 1, size(values)
+      if (expected(k) == -1) then
+         equal = equal .and. ieee_is_nan(values(k))
+      elseif (ieee_is_nan(values(k))) then
+         equal = .false.
+      else
+         equal = equal .and. abs(values(k) - real(expected(k), R8P)) <= 1e-12_R8P * max(1, abs(expected(k)))
+      endif
+   enddo
+   endfunction same
+
    function matches_golden(output, golden) result(passed)
    !< Compare the rendered file with the reference, or rewrite the reference in update mode.
    character(len=*), intent(in)  :: output   !< Rendered file.

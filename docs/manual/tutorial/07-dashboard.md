@@ -14,7 +14,9 @@ One panel per quantity, side by side: the residuals, and the drag coefficient wi
   `unset logscale y` before the second plot affects that panel only. `unset multiplot` closes it.
 - `with yerrorbars` takes a third column, the error: `x:y:dy` (or `x:y:low:high`). `xerrorbars` and `xyerrorbars` work
   the same way. The bar caps keep their size when you zoom.
-- In the page, each panel zooms on its own: the pointer picks the panel.
+- In the page, the pointer picks the panel. Both panels plot iterations 0 to 120, so they share their x axis: a zoom on
+  one shows the same iterations on the other, each keeping its own y (`l` unlinks them). Try a box zoom (right drag)
+  on the residuals.
 
 ## An inset
 

@@ -31,6 +31,7 @@ type, extends(backend_object) :: backend_svg
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
    character(len=:), allocatable :: caps          !< Error bar caps of the current plot area, pixel overlay.
    character(len=:), allocatable :: marks         !< Point type markers of the current plot area, pixel overlay.
+   integer(I4P)                  :: series = 0_I4P !< Series of the open group, 0 for none.
    contains
       ! deferred bindings
       procedure, pass(self) :: begin_page
@@ -125,16 +126,23 @@ contains
    call self%put('</g>')
    endsubroutine end_axes
 
-   subroutine begin_group(self, name, visible)
-   !< Open the group of class `name`; hidden with `display="none"` when `visible` is false.
+   subroutine begin_group(self, name, visible, series)
+   !< Open the group of class `name`; hidden with `display="none"` when `visible` is false; a series group carries its
+   !< number as `data-series`, as do its overlay markers and caps.
    class(backend_svg), intent(inout)        :: self    !< Device.
    character(len=*),   intent(in)           :: name    !< Group name.
    logical,            intent(in), optional :: visible !< Group shown.
+   integer(I4P),       intent(in), optional :: series  !< Series number.
    character(len=:), allocatable            :: line    !< Output line.
 
    line = '<g class="'//name//'"'
    if (present(visible)) then
       if (.not. visible) line = line//' display="none"'
+   endif
+   self%series = 0_I4P
+   if (present(series)) then
+      self%series = series
+      line = line//series_attribute(series)
    endif
    call self%put(line//'>')
    endsubroutine begin_group
@@ -143,6 +151,7 @@ contains
    !< Close the group.
    class(backend_svg), intent(inout) :: self !< Device.
 
+   self%series = 0_I4P
    call self%put('</g>')
    endsubroutine end_group
 
@@ -300,7 +309,7 @@ contains
          call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', '')
          call self%put('"/>')
          self%marks = self%marks//marker_element(x * self%area(3), (1.0_R8P - y) * self%area(4), color, diameter, &
-                                                 pt, width)//new_line('a')
+                                                 pt, width, self%series)//new_line('a')
          return
       endif
    endif
@@ -343,6 +352,7 @@ contains
    enddo
    call self%put('"/>')
    h = 0.5_R8P * cap
+   if (self%series > 0_I4P) self%caps = self%caps//'<g'//series_attribute(self%series)//'>'//new_line('a')
    do i = 1_I4P, size(x1, kind=I4P)
       do e = 1_I4P, 2_I4P
          if (e == 1_I4P) then
@@ -359,6 +369,7 @@ contains
          endif
       enddo
    enddo
+   if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
 
    pure function text_width(self, string, sup, font_size) result(width)
@@ -452,7 +463,7 @@ contains
    enddo
    endsubroutine write_pairs
 
-   function marker_element(x, y, color, width_px, pt, line_width) result(element)
+   function marker_element(x, y, color, width_px, pt, line_width, series) result(element)
    !< One `<path>` of the markers of gnuplot point type `pt`, `width_px` px wide, centred on the points (`x`, `y`) [px]:
    !< the filled shapes (the odd types from 5, and the dot) are filled with `color`, the others stroked only.
    real(R8P),        intent(in)           :: x(:)       !< Abscissae [px].
@@ -461,6 +472,7 @@ contains
    real(R8P),        intent(in)           :: width_px   !< Marker width [px].
    integer(I4P),     intent(in)           :: pt         !< gnuplot point type, >= 0.
    real(R8P),        intent(in), optional :: line_width !< Line width [px], default 1.
+   integer(I4P),     intent(in), optional :: series     !< Series number, 0 or absent for none.
    character(len=:), allocatable          :: element    !< Path element.
    character(len=:), allocatable          :: d          !< Path data.
    character(len=:), allocatable          :: fill       !< Fill color or none.
@@ -481,7 +493,11 @@ contains
    do i = 1_I4P, size(x, kind=I4P)
       call append(marker_path(x(i), y(i), 0.5_R8P * width_px, shape))
    enddo
-   element = '<path fill="'//fill//'" stroke="'//color//'" stroke-width="'//width//'" d="'//d(1:used)//'"/>'
+   element = '<path'
+   if (present(series)) then
+      if (series > 0_I4P) element = element//series_attribute(series)
+   endif
+   element = element//' fill="'//fill//'" stroke="'//color//'" stroke-width="'//width//'" d="'//d(1:used)//'"/>'
    contains
       subroutine append(piece)
       !< Append `piece` to `d`.
@@ -578,6 +594,14 @@ contains
    attribute = ''
    if (len(dasharray) > 0) attribute = ' stroke-dasharray="'//dasharray//'"'
    endfunction dash_attribute
+
+   pure function series_attribute(series) result(attribute)
+   !< ` data-series="N"` attribute.
+   integer(I4P), intent(in)      :: series    !< Series number.
+   character(len=:), allocatable :: attribute !< Attribute text.
+
+   attribute = ' data-series="'//int_str(int(series, I8P))//'"'
+   endfunction series_attribute
 
    pure function flag(value) result(str)
    !< `1` or `0`.

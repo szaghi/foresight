@@ -17,7 +17,7 @@ logical                       :: update                                     !< R
 integer(I4P)                  :: iostat                                     !< Status.
 integer(I4P)                  :: unit                                       !< File unit.
 integer(I4P)                  :: i                                          !< Counter.
-logical                       :: test_passed(13)                            !< Per-check outcome.
+logical                       :: test_passed(16)                            !< Per-check outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -60,6 +60,27 @@ test_passed(4) = iostat == 0_I4P .and. check('dumb.txt', 'foresight_multiplot_te
 call interpreter%init('x.html')
 call interpreter%execute('set terminal dumb', iostat, iomsg)
 test_passed(5) = interpreter%output == '-'
+
+! block terminal: Braille dots, series in their colors (ANSI escapes), dotted grid, text over the graphics
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal block braille ansirgb size 60,20; set output 'foresight_multiplot_test_block.txt'"// &
+                          new_line('a')//"set title 'block'; set key; set grid"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:3 w lp t 'cd', '' u 1:3:4 w yerr notitle, 1.2 - 0.01*x t 'model'", &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(14) = iostat == 0_I4P .and. check('block.txt', 'foresight_multiplot_test_block.txt')
+! the terminal options: block defaults to quadrants in mono, each set terminal restarts from its defaults
+call interpreter%init('x.html')
+call interpreter%run_text('set terminal block sextants ansi; set terminal block', iostat, iomsg)
+test_passed(15) = iostat == 0_I4P .and. interpreter%figure%text_charset == 'quadrants' .and. &
+                  interpreter%figure%text_colors == 'mono' .and. interpreter%output == '-'
+call interpreter%run_text('set terminal dumb ansi256', iostat, iomsg)
+test_passed(15) = test_passed(15) .and. iostat == 0_I4P .and. interpreter%figure%text_charset == 'dumb' .and. &
+                  interpreter%figure%text_colors == 'ansi256'
+call interpreter%run_text('set terminal block octants', iostat, iomsg)
+test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'unsupported option "octants"') > 0
+call interpreter%run_text('set terminal dumb braille', iostat, iomsg)
+test_passed(16) = test_passed(16) .and. iostat /= 0_I4P
 
 ! errors: full layout, error bar columns
 call interpreter%init('x.svg')
@@ -118,7 +139,7 @@ close(unit, status='delete')
 ! the full-layout case rendered its first panel before failing
 open(newunit=unit, file='x.svg')
 close(unit, status='delete')
-write(output_unit, '(A,13L2)') 'foresight multiplot checks:', test_passed
+write(output_unit, '(A,16L2)') 'foresight multiplot checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

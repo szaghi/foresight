@@ -9,9 +9,9 @@
 [![coverage](https://img.shields.io/endpoint?url=https://szaghi.github.io/foresight/coverage.json)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](#copyrights)
 
-| 🖱️ **Interactive HTML**<br>One self-contained page per plot: wheel zoom, pan, box zoom, gnuplot hotkeys `u` `a` `g` in any browser | 📈 **gnuplot Semantics**<br>Autoscale to the tick grid, reversed and log axes, blocks and datasets, gnuplot palette and dash types | 🛰️ **Live Monitoring**<br>`foresight --watch` re-renders while a job appends to its logs; the page reloads keeping your zoom | 🧩 **Library and CLI**<br>`fig%plot(...)` from your solver, or gnuplot-subset scripts from the shell — the same interpreter |
+| 🖱️ **Interactive HTML**<br>One self-contained page per plot: wheel zoom, pan, box zoom, gnuplot hotkeys, series hidden from the key, dashboard panels zoomed together | 📈 **gnuplot Semantics**<br>Autoscale to the tick grid, reversed and log axes, blocks and datasets, gnuplot palette and dash types | 🛰️ **Live Monitoring**<br>`foresight --watch` re-renders while a job appends to its logs; the page reloads keeping your zoom, or following the newest data | 🧩 **Library and CLI**<br>`fig%plot(...)` from your solver, or gnuplot-subset scripts from the shell — the same interpreter |
 |:---:|:---:|:---:|:---:|
-| 🎯 **Exact & Reproducible**<br>Tick labels built from integers (`0.3`, never `0.30000000000000004`), byte-exact golden tests | 🪶 **Pure Fortran**<br>Fortran 2018 plus libc `rename` and `nanosleep` — no Python, no gnuplot, no graphics library | 📟 **Text Terminal**<br>gnuplot `dumb` output: plots over plain ssh, redrawn in place while watching | 📦 **FoBiS**<br>Static library and command line tool, built and tested with FoBiS |
+| 🎯 **Exact & Reproducible**<br>Tick labels built from integers (`0.3`, never `0.30000000000000004`), byte-exact golden tests | 🪶 **Pure Fortran**<br>Fortran 2018 plus libc `rename` and `nanosleep` — no Python, no gnuplot, no graphics library | 📟 **Text Terminal**<br>gnuplot `dumb` and `block` output, characters or Braille dots in ANSI colors: plots over plain ssh, redrawn in place while watching | 📦 **FoBiS**<br>Static library and command line tool, built and tested with FoBiS |
 
 For full documentation (guide, gnuplot subset reference, examples, API, etc...) see the [foresight website](https://szaghi.github.io/foresight/).
 
@@ -66,7 +66,7 @@ foresight --watch residuals.gp                          # re-render while residu
 foresight --watch -e "set terminal dumb" residuals.gp   # the same, as text in the terminal
 ```
 
-![A two-panel run monitor with error bars](docs/public/examples/multiplot.svg)
+![Two panels of a run: a residual and the drag coefficient](docs/public/examples/cb_multiplot.svg)
 
 ---
 

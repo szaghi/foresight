@@ -25,8 +25,10 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="39.1,68 340,68"/>
 </g>
 <svg class="fs-plot" x="39.1" y="68" width="300.9" height="251" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.083333,0.075 0.166667,0.15 0.25,0.225 0.333333,0.3 0.416667,0.375 0.5,0.45 0.583333,0.525 0.666667,0.6
 0.75,0.675 0.833333,0.75 0.916667,0.825 1,0.9"/>
+</g>
 </svg>
 <rect x="39.1" y="68" width="300.9" height="251" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -134,8 +136,10 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="340,70.87 337,70.87"/>
 </g>
 <text x="189.55" y="53" text-anchor="middle">residual</text>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="294,81.5 330,81.5"/>
 <text x="288" y="85.7" text-anchor="end">res</text>
+</g>
 </g>
 <g class="fs-axes" data-area="385.8 690 68 319" data-x="0 1.2e1" data-y="7e-1 1.3e0" data-log="0 0" data-grid="0" data-font-size="12">
 <g class="fs-grid" display="none">
@@ -155,13 +159,16 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="385.8,68 690,68"/>
 </g>
 <svg class="fs-plot" x="385.8" y="68" width="304.2" height="251" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <path class="fs-ybars" data-cap="6" fill="none" stroke="#9400d3" stroke-width="1" vector-effect="non-scaling-stroke" d="M0.083333,0.366667L0.083333,0.3M0.166667,0.483333L0.166667,0.35M0.25,0.544444L0.25,0.344444M0.333333,0.591667L0.333333,0.325
 M0.416667,0.633333L0.416667,0.3M0.5,0.672222L0.5,0.272222M0.583333,0.709524L0.583333,0.242857M0.666667,0.745833L0.666667,0.2125
 M0.75,0.781481L0.75,0.181481M0.833333,0.816667L0.833333,0.15M0.916667,0.851515L0.916667,0.118182M1,0.886111L1,0.086111"/>
 <path fill="none" stroke="#9400d3" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0.083333,0.333333h0 M0.166667,0.416667h0 M0.25,0.444444h0 M0.333333,0.458333h0 M0.416667,0.466667h0 M0.5,0.472222h0 M0.583333,0.47619h0 M0.666667,0.479167h0
 M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
+</g>
 </svg>
 <svg class="fs-caps" x="385.8" y="68" width="304.2" height="251" viewBox="0 0 304.2 251" overflow="hidden">
+<g data-series="1">
 <line x1="22.35" y1="92.03" x2="28.35" y2="92.03" stroke="#9400d3" stroke-width="1"/>
 <line x1="22.35" y1="75.3" x2="28.35" y2="75.3" stroke="#9400d3" stroke-width="1"/>
 <line x1="47.7" y1="121.32" x2="53.7" y2="121.32" stroke="#9400d3" stroke-width="1"/>
@@ -186,6 +193,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
 <line x1="275.85" y1="29.66" x2="281.85" y2="29.66" stroke="#9400d3" stroke-width="1"/>
 <line x1="301.2" y1="222.41" x2="307.2" y2="222.41" stroke="#9400d3" stroke-width="1"/>
 <line x1="301.2" y1="21.61" x2="307.2" y2="21.61" stroke="#9400d3" stroke-width="1"/>
+</g>
 </svg>
 <rect x="385.8" y="68" width="304.2" height="251" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -235,9 +243,11 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
 <text x="379.8" y="72.2" text-anchor="end">1.3</text>
 </g>
 <text x="537.9" y="53" text-anchor="middle">drag</text>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="662,76.7 662,86.3"/>
 <path fill="none" stroke="#9400d3" stroke-width="6" stroke-linecap="round" d="M662,81.5h0"/>
 <text x="638" y="85.7" text-anchor="end">cd</text>
+</g>
 </g>
 </svg>
 <script>
@@ -652,6 +662,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     var logs = numbers(group.getAttribute("data-log"));
     var mirror = group.getAttribute("data-mirror");
     this.svg = svg;
+    this.group = group;
     this.suffix = index > 0 ? String(index) : "";
     this.left = area[0];
     this.right = area[1];
@@ -683,6 +694,14 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       this.marks ? this.marks.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
+    this.hidden = {};  // series numbers hidden by a click on their key entry
+    this.linked = [];  // panels sharing the x axis, zoomed together (set by start)
+  }
+
+  // number of the plotted series of an element (its data-series or an ancestor's), 0 if none
+  function seriesOf(node) {
+    var owner = node.closest("[data-series]");
+    return owner ? Number(owner.getAttribute("data-series")) : 0;
   }
 
   // error bars of the plot area: segments in viewBox coordinates (unit square, y downward)
@@ -690,7 +709,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     var bars = [], pattern = /M([^,]+),([^L]+)L([^,]+),([^M]+)/g;
     group.querySelectorAll(".fs-ybars, .fs-xbars").forEach(function (path) {
       var d = path.getAttribute("d").replace(/\s+/g, ""), m;
-      var style = {vertical: path.getAttribute("class") === "fs-ybars",
+      var style = {vertical: path.getAttribute("class") === "fs-ybars", series: seriesOf(path),
         cap: Number(path.getAttribute("data-cap")), color: path.getAttribute("stroke"),
         width: path.getAttribute("stroke-width")};
       while ((m = pattern.exec(d)) !== null) {
@@ -706,7 +725,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     group.querySelectorAll(".fs-pts").forEach(function (path) {
       var centres = path.getAttribute("d").replace(/\s+/g, "").split("M").filter(Boolean)
         .map(function (pair) { return pair.split(",").map(Number); });
-      points.push({pt: Number(path.getAttribute("data-pt")),
+      points.push({pt: Number(path.getAttribute("data-pt")), series: seriesOf(path),
         size: Number(path.getAttribute("data-size")), lw: path.getAttribute("data-lw"),
         color: path.getAttribute("data-color"), centres: centres});
     });
@@ -759,12 +778,17 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       v: v.v0 + (this.bottom - p.y) / (this.bottom - this.top) * (v.v1 - v.v0)};
   };
 
-  Panel.prototype.setView = function (view, record) {
+  // a view change spreads its x window to the linked panels, unless it comes from one (alone)
+  Panel.prototype.setView = function (view, record, alone) {
     if (!(view.u1 - view.u0 > 1e-12 && view.v1 - view.v0 > 1e-12)) return;
     if (record) this.history.push(this.view);
     this.view = view;
     this.redraw();
     this.saveState();
+    if (alone || !linkX) return;
+    this.linked.forEach(function (q) {
+      q.setView({u0: view.u0, u1: view.u1, v0: q.view.v0, v1: q.view.v1}, record, true);
+    });
   };
 
   Panel.prototype.redraw = function () {
@@ -783,6 +807,25 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       this.drawCaps();
       this.drawMarks();
     }
+    this.showSeries();
+  };
+
+  // hidden series: their plot elements and overlays not displayed, their key entries dimmed
+  Panel.prototype.showSeries = function () {
+    var self = this;
+    this.group.querySelectorAll(".fs-series, .fs-marks [data-series], .fs-caps [data-series]")
+      .forEach(function (node) {
+        node.setAttribute("display", self.hidden[seriesOf(node)] ? "none" : "inline");
+      });
+    this.group.querySelectorAll(".fs-key-entry").forEach(function (node) {
+      node.setAttribute("opacity", self.hidden[seriesOf(node)] ? 0.3 : 1);
+    });
+  };
+
+  Panel.prototype.toggleSeries = function (series) {
+    this.hidden[series] = !this.hidden[series];
+    this.redraw();
+    this.saveState();
   };
 
   // point type markers keep their pixel shape: recomputed in the pixel overlay for the current view
@@ -793,13 +836,14 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     clear(this.marks);
     this.points.forEach(function (p) {
       var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
+      if (self.hidden[p.series]) return;
       var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
       p.centres.forEach(function (c) {
         var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
         if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
       });
-      element(self.marks, "path", {fill: filled ? p.color : "none", stroke: p.color,
-        "stroke-width": p.lw, d: d.join("")});
+      element(self.marks, "path", {"data-series": p.series, fill: filled ? p.color : "none",
+        stroke: p.color, "stroke-width": p.lw, d: d.join("")});
     });
   };
 
@@ -811,6 +855,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     clear(this.caps);
     this.bars.forEach(function (bar) {
       var half = bar.style.cap / 2;
+      if (self.hidden[bar.style.series]) return;
       bar.ends.forEach(function (end) {
         var x = (end[0] - v.u0) / (v.u1 - v.u0) * w;
         var y = (end[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
@@ -876,12 +921,54 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       v0: Math.min(a.v, b.v), v1: Math.max(a.v, b.v)}, true);
   };
 
+  // linked panels record the same zooms: they undo theirs together
   Panel.prototype.unzoom = function () {
-    if (this.history.length) this.setView(this.history.pop(), false);
+    if (!this.history.length) return;
+    this.setView(this.history.pop(), false, true);
+    if (!linkX) return;
+    this.linked.forEach(function (q) {
+      if (q.history.length) q.setView(q.history.pop(), false, true);
+    });
   };
 
   Panel.prototype.autoscale = function () {
     if (!this.isHome()) this.setView({u0: 0, u1: 1, v0: 0, v1: 1}, true);
+  };
+
+  // follow the end of the data: a zoomed x window slides to the end of the x axis, keeping its
+  // width, and the y window fits the points shown (gnuplot autoscale within the window); a page
+  // reloaded with new data (live monitoring) shows the latest part of it
+  Panel.prototype.follow = function () {
+    var v = this.view, w = v.u1 - v.u0, lo = Infinity, hi = -Infinity, u0, pad, self = this;
+    if (w >= 1 - 1e-12) return;
+    u0 = 1 - w;
+    this.data().forEach(function (c) {
+      if (c[0] < u0 || c[0] > 1 || self.hidden[c[2]]) return;
+      lo = Math.min(lo, c[1]);
+      hi = Math.max(hi, c[1]);
+    });
+    if (lo > hi) {
+      lo = v.v0;
+      hi = v.v1;
+    } else {
+      pad = hi > lo ? 0.05 * (hi - lo) : 0.05;
+      lo -= pad;
+      hi += pad;
+    }
+    this.setView({u0: u0, u1: 1, v0: lo, v1: hi}, false, true);
+  };
+
+  // plotted points in unit coordinates (y upward) with their series: [u, v, series], read once
+  Panel.prototype.data = function () {
+    var pair = /(-?[0-9.]+),(-?[0-9.]+)/g, coords = [];
+    if (this.coords) return this.coords;
+    this.plot.querySelectorAll("polyline, path").forEach(function (node) {
+      var text = node.getAttribute("points") || node.getAttribute("d") || "", m;
+      var series = seriesOf(node);
+      while ((m = pair.exec(text)) !== null) coords.push([+m[1], 1 - m[2], series]);
+    });
+    this.coords = coords;
+    return coords;
   };
 
   Panel.prototype.toggleGrid = function () {
@@ -894,15 +981,19 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
   // keys are g, x, y for the first panel, g1, x1, y1 for the second, and so on
   Panel.prototype.state = function () {
     var v = this.view, n = this.suffix, items = ["g" + n + "=" + (this.grid ? 1 : 0)];
+    var hidden = Object.keys(this.hidden).filter(function (k) { return this.hidden[k]; }, this);
     if (!this.isHome()) {
       items.push("x" + n + "=" + [this.x.toData(v.u0), this.x.toData(v.u1)].join(","));
       items.push("y" + n + "=" + [this.y.toData(v.v0), this.y.toData(v.v1)].join(","));
     }
+    if (hidden.length) items.push("s" + n + "=" + hidden.join(","));
     return items;
   };
 
+  // page settings first: l=0 x zoom not linked, f=1 following the end of the data
   Panel.prototype.saveState = function () {
-    var state = [].concat.apply([], panels.map(function (p) { return p.state(); })).join("&");
+    var page = (linkX ? [] : ["l=0"]).concat(following ? ["f=1"] : []);
+    var state = page.concat.apply(page, panels.map(function (p) { return p.state(); })).join("&");
     try {
       history.replaceState(null, "", "#" + state);
     } catch (e) {
@@ -912,12 +1003,11 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
   };
 
   Panel.prototype.loadState = function () {
-    var state = {}, x, y, view, n = this.suffix;
-    location.hash.slice(1).split("&").forEach(function (item) {
-      var pair = item.split("=");
-      if (pair.length === 2) state[pair[0]] = pair[1];
-    });
+    var state = hashState(), x, y, view, n = this.suffix, self = this;
     if (state["g" + n] === "0" || state["g" + n] === "1") this.grid = state["g" + n] === "1";
+    if (state["s" + n]) {
+      state["s" + n].split(",").forEach(function (k) { if (Number(k) > 0) self.hidden[k] = true; });
+    }
     if (state["x" + n] && state["y" + n]) {
       x = state["x" + n].split(",").map(Number);
       y = state["y" + n].split(",").map(Number);
@@ -928,9 +1018,40 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     this.redraw();
   };
 
+  function hashState() {
+    var state = {};
+    location.hash.slice(1).split("&").forEach(function (item) {
+      var pair = item.split("=");
+      if (pair.length === 2) state[pair[0]] = pair[1];
+    });
+    return state;
+  }
+
   // ---- page: overlays and input handling ----
 
   var panels = [];
+  var linkX = true;      // panels with the same x axis zoom and pan their x together
+  var following = false; // zoomed x windows follow the end of the data
+
+  // panels sharing their x axis: same range and scale (a dashboard over the same iterations)
+  function linkPanels() {
+    panels.forEach(function (p) {
+      p.linked = panels.filter(function (q) {
+        return q !== p && q.group.getAttribute("data-x") === p.group.getAttribute("data-x") &&
+          q.x.log === p.x.log;
+      });
+    });
+  }
+
+  // a key entry toggles its series: a transparent box over the entry takes the clicks
+  function keyTargets(svg) {
+    svg.querySelectorAll(".fs-key-entry").forEach(function (node) {
+      var b = node.getBBox();
+      element(node, "rect", {x: b.x - 2, y: b.y - 2, width: b.width + 4, height: b.height + 4,
+        fill: "transparent", cursor: "pointer"}).appendChild(document.createElementNS(NS, "title"))
+        .textContent = "click: hide or show this series";
+    });
+  }
 
   function start() {
     var svg = document.querySelector("svg");
@@ -938,6 +1059,8 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
       panels.push(new Panel(svg, group, k));
     });
+    linkPanels();
+    keyTargets(svg);
     var panel = panels[0];
     var height = Number(svg.getAttribute("height"));
     var refresh = Number(svg.getAttribute("data-refresh") || 0);
@@ -981,7 +1104,13 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       panel.zoomAt(p, evt.ctrlKey ? 1 : f, evt.shiftKey ? 1 : f);
     }, {passive: false});
     svg.addEventListener("mousedown", function (evt) {
-      var p = point(evt);
+      var p = point(evt), entry = evt.target.closest(".fs-key-entry");
+      if (entry && evt.button === 0) {
+        evt.preventDefault();
+        panels.filter(function (q) { return q.group.contains(entry); })[0]
+          .toggleSeries(seriesOf(entry));
+        return;
+      }
       if (!panelAt(p)) return;
       panel = panelAt(p);
       evt.preventDefault();
@@ -1019,12 +1148,25 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       if (evt.key === "u") panel.unzoom();
       else if (evt.key === "a") panel.autoscale();
       else if (evt.key === "g") panel.toggleGrid();
+      else if (evt.key === "l") {
+        linkX = !linkX;
+        readout.textContent = "x zoom " + (linkX ? "linked" : "per panel");
+        panel.saveState();
+      } else if (evt.key === "f") {
+        following = !following;
+        readout.textContent = following ? "following the end of the data" : "follow off";
+        if (following) panels.forEach(function (q) { q.follow(); });
+        panel.saveState();
+      }
       else if (evt.key === "h" || evt.key === "?") {
         help.setAttribute("display", help.getAttribute("display") === "none" ? "inline" : "none");
       }
     });
 
+    linkX = hashState().l !== "0";
+    following = hashState().f === "1";
     panels.forEach(function (p) { p.loadState(); });
+    if (following) panels.forEach(function (p) { p.follow(); });
     if (refresh > 0) {
       (function reload() {
         setTimeout(function () { if (drag) reload(); else location.reload(); }, refresh * 1000);
@@ -1035,9 +1177,10 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
   function helpOverlay(svg) {
     var lines = ["wheel: zoom (shift: x only, ctrl: y only)", "left drag: pan",
       "right drag: zoom box", "u: undo zoom", "a: autoscale", "g: toggle grid",
-      "h: toggle this help"];
+      "click a key entry: hide or show its series", "l: link or unlink the x zoom of the panels",
+      "f: follow the end of the data (zoom first)", "h: toggle this help"];
     var group = element(svg, "g", {display: "none"});
-    element(group, "rect", {x: 20, y: 20, width: 260, height: 16 * lines.length + 12,
+    element(group, "rect", {x: 20, y: 20, width: 310, height: 16 * lines.length + 12,
       fill: "white", stroke: "#555", opacity: 0.95});
     lines.forEach(function (text, i) {
       element(group, "text", {x: 30, y: 38 + 16 * i, "font-size": 12}).textContent = text;

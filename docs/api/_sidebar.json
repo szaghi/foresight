@@ -20,6 +20,10 @@
         "link": "/api/src/lib/foresight_backend"
       },
       {
+        "text": "foresight_backend_block",
+        "link": "/api/src/lib/foresight_backend_block"
+      },
+      {
         "text": "foresight_backend_dumb",
         "link": "/api/src/lib/foresight_backend_dumb"
       },
@@ -58,6 +62,10 @@
       {
         "text": "foresight_series",
         "link": "/api/src/lib/foresight_series"
+      },
+      {
+        "text": "foresight_smooth",
+        "link": "/api/src/lib/foresight_smooth"
       },
       {
         "text": "foresight_style",

@@ -23,6 +23,7 @@ graph LR
 
 - [axis_object](#axis-object)
 - [set_range](#set-range)
+- [range_of](#range-of)
 - [setup](#setup)
 - [accepts](#accepts)
 - [has_label](#has-label)
@@ -55,6 +56,7 @@ Plot axis.
 |------|------------|-------------|
 | `accepts` | pass(self) | Whether a value can be placed on the axis. |
 | `has_label` | pass(self) | Whether the axis has a label. |
+| `range_of` | pass(self) | Range before the tick extension. |
 | `set_range` | pass(self) | Set the range, gnuplot style. |
 | `setup` | pass(self) | Compute effective range and ticks. |
 | `to_unit` | pass(self) | Map a value to the unit interval. |
@@ -85,16 +87,47 @@ subroutine set_range(self, min, max)
 flowchart TD
   set_command["set_command"] --> set_range["set_range"]
   set_xrange["set_xrange"] --> set_range["set_range"]
+  set_y2range["set_y2range"] --> set_range["set_range"]
   set_yrange["set_yrange"] --> set_range["set_range"]
   style set_range fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
-### setup
+### range_of
 
-Compute the effective range and the ticks from the data extent and the axis length.
+Values at the axis start and end from the data extent and the user ends, before the extension to the ticks: the
+ range functions are sampled on, as gnuplot.
 
  A degenerate range is widened by 1% (gnuplot "empty range" behaviour); with no data the range defaults to
  [-10:10], or [1:10] on a log axis.
+
+**Attributes**: pure
+
+```fortran
+subroutine range_of(self, dmin, dmax, has_data, lo, hi)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([axis_object](/api/src/lib/foresight_axis#axis-object)) | in |  | Axis. |
+| `dmin` | real(kind=R8P) | in |  | Smallest placeable data value. |
+| `dmax` | real(kind=R8P) | in |  | Largest placeable data value. |
+| `has_data` | logical | in |  | Whether `dmin`/`dmax` are meaningful. |
+| `lo` | real(kind=R8P) | out |  | Value at the axis start. |
+| `hi` | real(kind=R8P) | out |  | Value at the axis end. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  setup["setup"] --> range_of["range_of"]
+  style range_of fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### setup
+
+Compute the effective range (`range_of`) and the ticks from the data extent and the axis length.
 
 ```fortran
 subroutine setup(self, dmin, dmax, has_data, npx)
@@ -117,6 +150,7 @@ flowchart TD
   setup_axes["setup_axes"] --> setup["setup"]
   setup["setup"] --> linear_ticks["linear_ticks"]
   setup["setup"] --> log_ticks["log_ticks"]
+  setup["setup"] --> range_of["range_of"]
   style setup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

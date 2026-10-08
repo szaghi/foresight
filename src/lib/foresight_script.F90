@@ -7,7 +7,9 @@ module foresight_script
 !< - `set|unset title|xlabel|ylabel|y2label ["text"]`, `set xrange|yrange|y2range [min:max]` (`*` or empty autoscales
 !<   an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, e.g. `xy2`; all when absent),
 !<   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
-!< - `set terminal dumb [size COLS,ROWS]` (text, default 79x24 on standard output `-`);
+!< - `set terminal dumb [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text, default 79x24 on standard output `-`),
+!<   `set terminal block [half|quadrants|sextants|braille] [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text drawn
+!<   with Unicode block or Braille characters);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
 !<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
 !< - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
@@ -17,7 +19,8 @@ module foresight_script
 !<   [ps S]`;
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
-!<   [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|
+!<   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
+!<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|
 !<   yerrorbars|xerrorbars|xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or
 !<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
@@ -33,6 +36,7 @@ use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
+use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_style, only : default_color
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
@@ -281,6 +285,7 @@ contains
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
    character(len=:), allocatable                :: with      !< Item style.
+   character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -366,6 +371,7 @@ contains
       title = ''
       title_column = -1_I4P
       axes = 'x1y1'
+      filter = ''
       line = line_style_object()
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
@@ -400,6 +406,16 @@ contains
             endif
             if (is_function .and. .not. function_drawable(with)) then
                call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
+               return
+            endif
+         elseif (keyword(word, 'smooth', 1_I4P)) then
+            if (.not. next_word(tokens, i, filter, iostat, iomsg)) return
+            if (.not. is_word(filter, SMOOTH_MODES)) then
+               call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//')', iostat, iomsg)
+               return
+            endif
+            if (is_function) then
+               call fail('plot: smooth applies to data files, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
          elseif (keyword(word, 'axes', 2_I4P)) then
@@ -502,6 +518,10 @@ contains
             return
          endif
       endselect
+      if (len(filter) > 0 .and. nbar /= 0_I4P) then
+         call fail('plot: smooth applies to lines, points and linespoints, not to '//with, iostat, iomsg)
+         return
+      endif
       if (.not. has_title) then
          select case (self%autotitle)
          case ('columnhead')
@@ -525,6 +545,16 @@ contains
       call data%table(fields, set_index, every, values, header=headed)
       x = values(:, 1)
       y = values(:, 2)
+      if (len(filter) > 0) then
+         ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
+         associate(panel => self%figure%panels(self%figure%current))
+            if (axes == 'x1y2') then
+               call smooth(filter, values(:, 1), values(:, 2), panel%xaxis%log, panel%y2axis%log, x, y)
+            else
+               call smooth(filter, values(:, 1), values(:, 2), panel%xaxis%log, panel%yaxis%log, x, y)
+            endif
+         endassociate
+      endif
       if (allocated(xlow)) deallocate(xlow, xhigh)
       if (allocated(ylow)) deallocate(ylow, yhigh)
       select case (with)
@@ -742,23 +772,28 @@ contains
       self%output_set = .true.
    elseif (keyword(option, 'terminal', 2_I4P)) then
       if (size(tokens) < 2) then
-         call fail('set terminal: svg, html or dumb expected', iostat, iomsg)
+         call fail('set terminal: svg, html, dumb or block expected', iostat, iomsg)
          return
       endif
-      select case (tokens(2)%text)
+      text = tokens(2)%text
+      select case (text)
       case ('svg', 'html')
-      case ('dumb')
-         ! gnuplot dumb default size, in characters
+      case ('dumb', 'block')
+         ! gnuplot dumb and block default size, in characters
          self%figure%width = 79.0_R8P * DUMB_CELL(1) * self%figure%font_size
          self%figure%height = 24.0_R8P * DUMB_CELL(2) * self%figure%font_size
+         call self%figure%set_text(charset=merge('dumb     ', 'quadrants', text == 'dumb'), colors='mono')
       case default
-         call fail('set terminal: unsupported terminal "'//tokens(2)%text//'" (supported: svg, html, dumb)', &
-                   iostat, iomsg)
+         call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, dumb, block)', iostat, iomsg)
          return
       endselect
       i = 3_I4P
       do while (i <= size(tokens, kind=I4P))
-         if (keyword(tokens(i)%text, 'size', 2_I4P)) then
+         if ((text == 'dumb' .or. text == 'block') .and. is_word(tokens(i)%text, 'mono ansi ansi256 ansirgb')) then
+            call self%figure%set_text(colors=tokens(i)%text)
+         elseif (text == 'block' .and. is_word(tokens(i)%text, 'half quadrants sextants braille')) then
+            call self%figure%set_text(charset=tokens(i)%text)
+         elseif (keyword(tokens(i)%text, 'size', 2_I4P)) then
             if (.not. next_integer(tokens, i, width, iostat, iomsg)) return
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -774,8 +809,8 @@ contains
                call fail('set terminal: size must be positive', iostat, iomsg)
                return
             endif
-            if (tokens(2)%text == 'dumb') then
-               ! characters to the virtual pixels of the text device
+            if (text == 'dumb' .or. text == 'block') then
+               ! characters to the virtual pixels of the text devices
                self%figure%width = real(width, R8P) * DUMB_CELL(1) * self%figure%font_size
                self%figure%height = real(height, R8P) * DUMB_CELL(2) * self%figure%font_size
             else
@@ -793,12 +828,12 @@ contains
       enddo
       ! the terminal decides the format of the default output, never of one set explicitly
       if (.not. self%output_set) then
-         if (tokens(2)%text == 'dumb') then
+         if (text == 'dumb' .or. text == 'block') then
             self%output = '-'
          elseif (self%output == '-') then
-            self%output = 'foresight.'//tokens(2)%text
+            self%output = 'foresight.'//text
          else
-            self%output = change_extension(self%output, tokens(2)%text)
+            self%output = change_extension(self%output, text)
          endif
       endif
    elseif (keyword(option, 'style', 2_I4P)) then
@@ -1423,6 +1458,15 @@ contains
    if (match) match = full(1:len(word)) == word
    endfunction keyword
 
+   pure function is_word(word, words) result(found)
+   !< Whether `word` is one of the blank separated `words`.
+   character(len=*), intent(in) :: word  !< Word.
+   character(len=*), intent(in) :: words !< Blank separated words.
+   logical                      :: found !< Found.
+
+   found = len(word) > 0 .and. index(' '//words//' ', ' '//word//' ') > 0
+   endfunction is_word
+
    function next_integer(tokens, i, value, iostat, iomsg) result(ok)
    !< Advance `i` to the next token, which must be an integer.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
@@ -1654,7 +1698,8 @@ contains
 
    is = keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. keyword(word, 'every', 2_I4P) .or. &
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
-        keyword(word, 'axes', 2_I4P) .or. word == 'ls' .or. keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word)
+        keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
+        keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

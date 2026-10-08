@@ -29,6 +29,8 @@ graph LR
 
 - [tick_object](#tick-object)
 - [tics_object](#tics-object)
+- [enable](#enable)
+- [set_auto](#set-auto)
 - [set_fixed](#set-fixed)
 - [nice_step](#nice-step)
 - [linear_ticks](#linear-ticks)
@@ -87,16 +89,68 @@ User tick settings of an axis, gnuplot `set xtics` and `set format`.
 | `step` | character(len=:) | allocatable | Fixed ticks step, a factor on log axes (decimal text). |
 | `end` | character(len=:) | allocatable | Fixed ticks end (decimal text), empty for none. |
 | `format` | character(len=:) | allocatable | Label format, empty for the default labels. |
+| `mirror` | logical |  | Ticks also on the opposite border, gnuplot `mirror`. |
 
 #### Type-Bound Procedures
 
 | Name | Attributes | Description |
 |------|------------|-------------|
 | `attribute` | pass(self) | Viewer attribute of the tick positions. |
+| `enable` | pass(self) | Turn the ticks on, keeping their positions. |
 | `has_format` | pass(self) | Whether a label format is set. |
+| `set_auto` | pass(self) | Automatic ticks, forgetting a fixed step. |
 | `set_fixed` | pass(self) | Set fixed ticks, validated. |
 
 ## Subroutines
+
+### enable
+
+Turn off ticks on again at their last positions, as gnuplot `set xtics` without positions: the fixed step if one
+ was set (and not reset by `set_auto`), else automatic. Ticks already on are unchanged.
+
+**Attributes**: pure
+
+```fortran
+subroutine enable(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([tics_object](/api/src/lib/foresight_ticks#tics-object)) | inout |  | Settings. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_tics["set_tics"] --> enable["enable"]
+  style enable fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_auto
+
+Automatic ticks, as gnuplot `set xtics auto`: the fixed step is forgotten, so `enable` restores automatic ones.
+
+**Attributes**: pure
+
+```fortran
+subroutine set_auto(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([tics_object](/api/src/lib/foresight_ticks#tics-object)) | inout |  | Settings. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_tics["set_tics"] --> set_auto["set_auto"]
+  style set_auto fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### set_fixed
 

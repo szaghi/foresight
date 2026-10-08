@@ -41,6 +41,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
 | `set_refresh(seconds)` | reload period of the HTML page |
+| `set_text([charset], [colors])` | text output (`.txt`, `-`): `charset` `dumb` (default) or `half`, `quadrants`, `sextants`, `braille`, the `set terminal block` sets; `colors` `mono` (default), `ansi`, `ansi256`, `ansirgb` |
 
 ### `plot` options
 

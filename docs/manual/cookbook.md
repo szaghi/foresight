@@ -146,6 +146,16 @@ Without data, functions are sampled over [-10:10], or the `xrange`; `set samples
 
 A function is sampled over the x range of the data of the same plot.
 
+## Histogram and distribution
+
+<<< @/examples/snippets/cb_smooth.gp{gnuplot}
+
+<Plot name="cb_smooth" svg :width="560" :height="320" />
+
+`smooth frequency` sums the y of the points of equal x: binned x and y = 1 count the points per bin. `smooth cnormal`
+accumulates them over the sorted x, divided by the total: the fraction of iterations below each value. `smooth unique`
+averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
+
 ## A grid of panels
 
 <<< @/examples/snippets/cb_multiplot.gp{gnuplot}
@@ -159,6 +169,15 @@ A function is sampled over the x range of the data of the same plot.
 <<< @/examples/output/cb_dumb.txt{text}
 
 `set terminal dumb` writes to the standard output; `set output 'plot.txt'` to a file.
+
+## Unicode text in the terminal
+
+<<< @/examples/snippets/cb_block.gp{gnuplot}
+
+<<< @/examples/output/cb_block.txt{text}
+
+`block` draws with Unicode characters of 2 x 4 dots (`braille`), 2 x 3 (`sextants`), 2 x 2 (`quadrants`, the default)
+or 1 x 2 (`half`). Add `ansi` (or `ansi256`, `ansirgb`) to draw each series in its color, in `dumb` as well.
 
 ## From Fortran: gaps in the data
 

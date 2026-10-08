@@ -31,14 +31,21 @@ renamed over the page), so a reload never catches half a page.
 
 A longer period for slow jobs: `foresight --watch 10 residuals.gp`.
 
+To watch the latest iterations only, zoom to a window of the width you want and press `f`: at each reload the window
+slides to the end of the data and the y range fits what it shows ([Following a live run](viewer#following-a-live-run)).
+A click on a key entry hides a series that crowds the others; both settings survive the reloads, in the page URL.
+
 ## Over ssh
 
 ```bash
 foresight --watch -e "set terminal dumb" residuals.gp
+foresight --watch -e "set terminal block braille ansi" residuals.gp
 ```
 
 The plot is drawn in text on the standard output; each re-render clears the screen and redraws in place. No browser,
-no X forwarding, no port to open.
+no X forwarding, no port to open. `block braille` draws with Braille dots, 2 x 4 per character, and `ansi` colors the
+series ([Output Formats](output-formats#block-characters)): the curves of a terminal plot then read almost as a
+picture.
 
 ## Robustness
 

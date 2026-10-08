@@ -15,10 +15,22 @@ title: foresight_format
  tick: `format_decimal` works on digit strings and rounds half to even, so the interactive viewer, which mirrors it,
  prints identical labels.
 
+ Text to real goes through `real_from_decimal`, which never raises an IEEE overflow: a debug build trapping overflows
+ would otherwise stop on a data cell such as `1e999`, inside the C library conversion.
+
 **Source**: `src/lib/foresight_format.F90`
+
+**Dependencies**
+
+```mermaid
+graph LR
+  foresight_format["foresight_format"] --> ieee_arithmetic["ieee_arithmetic"]
+  foresight_format["foresight_format"] --> ieee_exceptions["ieee_exceptions"]
+```
 
 ## Contents
 
+- [real_from_decimal](#real-from-decimal)
 - [decimal_of](#decimal-of)
 - [parse_decimal](#parse-decimal)
 - [format_decimal](#format-decimal)
@@ -43,6 +55,35 @@ title: foresight_format
 | `FIXED_CLAMP` | real(kind=R8P) | parameter | Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`. |
 
 ## Subroutines
+
+### real_from_decimal
+
+Value of the decimal number `text` (Fortran list-directed syntax, e.g. `-1.5e-3`); `ok` false if it is malformed or
+ beyond the real range, never raising an IEEE overflow.
+
+ Only a text whose exponent and length could reach the overflow range is read with the overflow halting off (and
+ the overflow flag restored): the common case stays a plain read.
+
+```fortran
+subroutine real_from_decimal(text, value, ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Decimal text. |
+| `value` | real(kind=R8P) | out |  | Value. |
+| `ok` | logical | out |  | Well formed and finite. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  to_number["to_number"] --> real_from_decimal["real_from_decimal"]
+  to_real["to_real"] --> real_from_decimal["real_from_decimal"]
+  style real_from_decimal fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### decimal_of
 
@@ -222,12 +263,15 @@ function int_str(n) result(str)
 ```mermaid
 flowchart TD
   begin_page["begin_page"] --> int_str["int_str"]
+  data_dots["data_dots"] --> int_str["int_str"]
   decimal_str["decimal_str"] --> int_str["int_str"]
   exp_text["exp_text"] --> int_str["int_str"]
   format_decimal["format_decimal"] --> int_str["int_str"]
   format_label["format_label"] --> int_str["int_str"]
+  line_option["line_option"] --> int_str["int_str"]
   log_ticks["log_ticks"] --> int_str["int_str"]
   real_str["real_str"] --> int_str["int_str"]
+  series_attribute["series_attribute"] --> int_str["int_str"]
   style int_str fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

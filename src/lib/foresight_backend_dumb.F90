@@ -6,6 +6,13 @@ module foresight_backend_dumb
 !< unchanged in its virtual pixels. Series are drawn with gnuplot's dumb symbols, one per color in order of use, the
 !< frame with `+`, `-` and `|`, the grid with `.`; superscripts become `^`. Data segments are clipped to the plot area
 !< before rasterisation: points far outside the range never cost more than the cells actually drawn.
+!<
+!< With `colors` other than `mono` (gnuplot `ansi`, `ansi256`, `ansirgb`) the cells of each series take its color
+!< through ANSI escape sequences, the nearest of the 6 basic colors, of the 256-color palette, or the color itself;
+!< frame, grid, text, and black, white or named series colors keep the terminal's own color.
+!<
+!< Data are drawn through `px_segment` and `px_point`, in pixels: a device drawing at a finer resolution than the cells
+!< (foresight_backend_block) overrides them, `cell`, `rect` and `polyline`, and keeps the rest.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : axes_view, backend_object
 use foresight_sys, only : rename_file
@@ -14,12 +21,17 @@ use penf, only : I4P, R8P
 implicit none
 private
 public :: backend_dumb
+public :: FRAME_COLOR
+public :: GRID_COLOR
+public :: TEXT_COLORS
 
 character(len=*), parameter :: SYMBOLS     = '*#$%@&=+' !< Series symbols, cycled.
 character(len=*), parameter :: FRAME_COLOR = 'black'    !< Frame color, drawn as ticks.
 character(len=*), parameter :: GRID_COLOR  = '#a0a0a0'  !< Grid color, drawn as dots on blank cells.
 real(R8P),        parameter :: CELL_WIDTH  = 0.55_R8P   !< Cell width [font size].
 real(R8P),        parameter :: CELL_HEIGHT = 1.25_R8P   !< Cell height [font size].
+character(len=*), parameter :: TEXT_COLORS = 'mono ansi ansi256 ansirgb' !< Color modes (gnuplot names).
+character(len=1), parameter :: ESC         = achar(27)  !< Escape character.
 
 type :: color_symbol
    !< Symbol assigned to a color.
@@ -33,6 +45,8 @@ type, extends(backend_object) :: backend_dumb
    character(len=:), allocatable   :: file                   !< Output file, `-` for standard output.
    character(len=1), allocatable   :: grid(:,:)              !< Cells, (column, row).
    type(color_symbol), allocatable :: symbols(:)             !< Symbols in use.
+   integer(I4P), allocatable       :: tint(:,:)              !< Cell color, index in `symbols`, 0 for the default.
+   character(len=7)                :: colors = 'mono'        !< Color mode: `mono`, `ansi`, `ansi256`, `ansirgb`.
    real(R8P)                       :: cw = 1.0_R8P           !< Cell width [px].
    real(R8P)                       :: ch = 1.0_R8P           !< Cell height [px].
    real(R8P)                       :: font_size = 12.0_R8P   !< Font size [px].
@@ -55,12 +69,17 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
       procedure, pass(self) :: text_width
-      procedure, pass(self), private :: col          !< Column of an abscissa [px].
-      procedure, pass(self), private :: row          !< Row of an ordinate [px].
-      procedure, pass(self), private :: put          !< Set a cell.
+      ! building blocks for finer devices
+      procedure, pass(self) :: cell         !< Text of a cell.
+      procedure, pass(self) :: col          !< Column of an abscissa [px].
+      procedure, pass(self) :: color_index  !< Index of a color in `symbols`.
+      procedure, pass(self) :: px_point     !< Draw a data point [px].
+      procedure, pass(self) :: px_segment   !< Draw a data segment [px].
+      procedure, pass(self) :: row          !< Row of an ordinate [px].
+      procedure, pass(self) :: put          !< Set a cell.
       procedure, pass(self), private :: segment      !< Rasterise a cell segment.
       procedure, pass(self), private :: symbol_of    !< Symbol of a color.
-      procedure, pass(self), private :: unit_segment !< Clip and rasterise a unit-square segment.
+      procedure, pass(self), private :: unit_segment !< Clip and draw a unit-square segment.
 endtype backend_dumb
 
 contains
@@ -80,17 +99,22 @@ contains
    if (allocated(self%grid)) deallocate(self%grid)
    allocate(self%grid(max(1_I4P, nint(width / self%cw, I4P)), max(1_I4P, nint(height / self%ch, I4P))))
    self%grid = ' '
+   if (allocated(self%tint)) deallocate(self%tint)
+   allocate(self%tint(size(self%grid, 1), size(self%grid, 2)))
+   self%tint = 0_I4P
    if (allocated(self%symbols)) deallocate(self%symbols)
    allocate(self%symbols(0))
    endsubroutine begin_page
 
    subroutine end_page(self)
    !< Write the page, rows right-trimmed: to standard output, or atomically to the file.
-   class(backend_dumb), intent(inout) :: self !< Device.
-   character(len=:), allocatable      :: line !< Row text.
-   integer(I4P)                       :: unit !< Output unit.
-   integer(I4P)                       :: r    !< Row counter.
-   integer(I4P)                       :: c    !< Column counter.
+   class(backend_dumb), intent(inout) :: self  !< Device.
+   character(len=:), allocatable      :: line  !< Row text.
+   integer(I4P)                       :: unit  !< Output unit.
+   integer(I4P)                       :: r     !< Row counter.
+   integer(I4P)                       :: c     !< Column counter.
+   integer(I4P)                       :: last  !< Last non-blank column.
+   integer(I4P)                       :: color !< Color of the text written so far, 0 for the default.
 
    if (self%file == '-') then
       unit = output_unit
@@ -98,12 +122,25 @@ contains
    else
       open(newunit=unit, file=self%file//'.tmp', action='write', status='replace')
    endif
-   allocate(character(len=size(self%grid, 1)) :: line)
    do r = 1_I4P, size(self%grid, 2, kind=I4P)
-      do c = 1_I4P, size(self%grid, 1, kind=I4P)
-         line(c:c) = self%grid(c, r)
+      last = 0_I4P
+      do c = size(self%grid, 1, kind=I4P), 1_I4P, -1_I4P
+         if (self%cell(c, r) /= ' ') then
+            last = c
+            exit
+         endif
       enddo
-      write(unit, '(A)') trim(line)
+      line = ''
+      color = 0_I4P
+      do c = 1_I4P, last
+         if (self%colors /= 'mono' .and. self%tint(c, r) /= color .and. self%cell(c, r) /= ' ') then
+            color = self%tint(c, r)
+            line = line//ansi_escape(self%colors, color_rgb(self%symbols, color))
+         endif
+         line = line//self%cell(c, r)
+      enddo
+      if (color /= 0_I4P) line = line//ESC//'[39m'
+      write(unit, '(A)') line
    enddo
    if (self%file /= '-') then
       close(unit)
@@ -122,11 +159,12 @@ contains
    class(backend_dumb), intent(inout) :: self !< Device.
    endsubroutine end_axes
 
-   subroutine begin_group(self, name, visible)
+   subroutine begin_group(self, name, visible, series)
    !< A hidden group (the grid when off) is not drawn at all.
    class(backend_dumb), intent(inout)        :: self    !< Device.
    character(len=*),    intent(in)           :: name    !< Group name.
    logical,             intent(in), optional :: visible !< Group shown.
+   integer(I4P),        intent(in), optional :: series  !< Series number, unused in text.
 
    self%hidden = .false.
    if (present(visible)) self%hidden = .not. visible
@@ -189,8 +227,7 @@ contains
       if (color == GRID_COLOR) then
          call self%segment(self%col(x(i)), self%row(y(i)), self%col(x(i + 1)), self%row(y(i + 1)), '.', .true.)
       else
-         call self%segment(self%col(x(i)), self%row(y(i)), self%col(x(i + 1)), self%row(y(i + 1)), &
-                           self%symbol_of(color), .false.)
+         call self%px_segment([x(i), y(i)], [x(i + 1), y(i + 1)], color, '')
       endif
    enddo
    endsubroutine polyline
@@ -208,7 +245,7 @@ contains
 
    if (self%hidden) return
    do i = 1_I4P, size(x, kind=I4P)
-      call self%put(self%col(x(i)), self%row(y(i)), self%symbol_of(color))
+      call self%px_point([x(i), y(i)], color)
    enddo
    endsubroutine dots
 
@@ -280,7 +317,7 @@ contains
    integer(I4P)                       :: i          !< Counter.
 
    do i = 1_I4P, size(x, kind=I4P) - 1_I4P
-      call self%unit_segment(x(i), y(i), x(i + 1), y(i + 1), self%symbol_of(color))
+      call self%unit_segment(x(i), y(i), x(i + 1), y(i + 1), color, '')
    enddo
    endsubroutine data_polyline
 
@@ -299,7 +336,7 @@ contains
    do i = 1_I4P, size(x, kind=I4P)
       if (x(i) < 0.0_R8P .or. x(i) > 1.0_R8P .or. y(i) < 0.0_R8P .or. y(i) > 1.0_R8P) cycle
       p = [self%area(1) + x(i) * self%area(3), self%area(2) + (1.0_R8P - y(i)) * self%area(4)]
-      call self%put(self%col(p(1)), self%row(p(2)), self%symbol_of(color))
+      call self%px_point(p, color)
    enddo
    endsubroutine data_dots
 
@@ -317,7 +354,7 @@ contains
    integer(I4P)                       :: i          !< Counter.
 
    do i = 1_I4P, size(x1, kind=I4P)
-      call self%unit_segment(x1(i), y1(i), x2(i), y2(i), merge('|', '-', vertical))
+      call self%unit_segment(x1(i), y1(i), x2(i), y2(i), color, merge('|', '-', vertical))
    enddo
    endsubroutine data_bars
 
@@ -333,7 +370,17 @@ contains
    if (len(sup) > 0) width = width + CELL_WIDTH * font_size * real(len(sup) + 1, R8P)
    endfunction text_width
 
-   ! private procedures
+   ! building blocks for finer devices
+   pure function cell(self, c, r) result(text)
+   !< Text of the cell (`c`, `r`): its character.
+   class(backend_dumb), intent(in) :: self !< Device.
+   integer(I4P),        intent(in) :: c    !< Column.
+   integer(I4P),        intent(in) :: r    !< Row.
+   character(len=:), allocatable   :: text !< Cell text (UTF-8).
+
+   text = self%grid(c, r)
+   endfunction cell
+
    elemental function col(self, x) result(c)
    !< Column of the cell containing the abscissa `x` [px], clamped to the page.
    class(backend_dumb), intent(in) :: self !< Device.
@@ -353,26 +400,73 @@ contains
    r = min(max(1_I4P, floor(y / self%ch, I4P) + 1_I4P), size(self%grid, 2, kind=I4P))
    endfunction row
 
-   pure subroutine put(self, c, r, symbol)
-   !< Set cell (`c`, `r`), ignoring cells off the page.
+   function color_index(self, color) result(k)
+   !< Index of `color` in `symbols`, assigning the next symbol on first use.
+   class(backend_dumb), intent(inout) :: self  !< Device.
+   character(len=*),    intent(in)    :: color !< SVG color.
+   integer(I4P)                       :: k     !< Index.
+   integer(I4P)                       :: s     !< Symbol position.
+   type(color_symbol)                 :: entry !< New entry.
+
+   do k = 1_I4P, size(self%symbols, kind=I4P)
+      if (self%symbols(k)%color == color) return
+   enddo
+   s = modulo(k - 1_I4P, len(SYMBOLS, kind=I4P)) + 1_I4P
+   entry%color = color
+   entry%symbol = SYMBOLS(s:s)
+   self%symbols = [self%symbols, entry]
+   endfunction color_index
+
+   subroutine px_point(self, p, color)
+   !< A data point at `p` [px]: the color symbol in its cell.
+   class(backend_dumb), intent(inout) :: self  !< Device.
+   real(R8P),           intent(in)    :: p(2)  !< Point [px].
+   character(len=*),    intent(in)    :: color !< Color.
+
+   call self%put(self%col(p(1)), self%row(p(2)), self%symbol_of(color), self%color_index(color))
+   endsubroutine px_point
+
+   subroutine px_segment(self, a, b, color, symbol)
+   !< A data segment from `a` to `b` [px] with `symbol`, or the color symbol if empty.
    class(backend_dumb), intent(inout) :: self   !< Device.
-   integer(I4P),        intent(in)    :: c      !< Column.
-   integer(I4P),        intent(in)    :: r      !< Row.
-   character(len=1),    intent(in)    :: symbol !< Symbol.
+   real(R8P),           intent(in)    :: a(2)   !< Start [px].
+   real(R8P),           intent(in)    :: b(2)   !< End [px].
+   character(len=*),    intent(in)    :: color  !< Color.
+   character(len=*),    intent(in)    :: symbol !< Symbol, empty for the color symbol.
+   character(len=1)                   :: s      !< Drawn symbol.
+
+   s = symbol
+   if (len(symbol) == 0) s = self%symbol_of(color)
+   call self%segment(self%col(a(1)), self%row(a(2)), self%col(b(1)), self%row(b(2)), s, .false., &
+                     self%color_index(color))
+   endsubroutine px_segment
+
+   pure subroutine put(self, c, r, symbol, tint)
+   !< Set cell (`c`, `r`) and its color index `tint` (default 0), ignoring cells off the page.
+   class(backend_dumb), intent(inout)        :: self   !< Device.
+   integer(I4P),        intent(in)           :: c      !< Column.
+   integer(I4P),        intent(in)           :: r      !< Row.
+   character(len=1),    intent(in)           :: symbol !< Symbol.
+   integer(I4P),        intent(in), optional :: tint   !< Color index in `symbols`.
 
    if (c < 1_I4P .or. c > size(self%grid, 1) .or. r < 1_I4P .or. r > size(self%grid, 2)) return
    self%grid(c, r) = symbol
+   self%tint(c, r) = 0_I4P
+   if (present(tint)) self%tint(c, r) = tint
    endsubroutine put
 
-   pure subroutine segment(self, c1, r1, c2, r2, symbol, blank_only)
+   ! private procedures
+
+   pure subroutine segment(self, c1, r1, c2, r2, symbol, blank_only, tint)
    !< Bresenham segment between cells, optionally writing blank cells only.
-   class(backend_dumb), intent(inout) :: self       !< Device.
-   integer(I4P),        intent(in)    :: c1         !< Start column.
-   integer(I4P),        intent(in)    :: r1         !< Start row.
-   integer(I4P),        intent(in)    :: c2         !< End column.
-   integer(I4P),        intent(in)    :: r2         !< End row.
-   character(len=1),    intent(in)    :: symbol     !< Symbol.
-   logical,             intent(in)    :: blank_only !< Write blank cells only.
+   class(backend_dumb), intent(inout)        :: self       !< Device.
+   integer(I4P),        intent(in)           :: c1         !< Start column.
+   integer(I4P),        intent(in)           :: r1         !< Start row.
+   integer(I4P),        intent(in)           :: c2         !< End column.
+   integer(I4P),        intent(in)           :: r2         !< End row.
+   character(len=1),    intent(in)           :: symbol     !< Symbol.
+   logical,             intent(in)           :: blank_only !< Write blank cells only.
+   integer(I4P),        intent(in), optional :: tint       !< Color index in `symbols`.
    integer(I4P)                       :: c          !< Current column.
    integer(I4P)                       :: r          !< Current row.
    integer(I4P)                       :: dc         !< Column distance.
@@ -395,7 +489,7 @@ contains
             if (self%grid(c, r) == ' ') self%grid(c, r) = symbol
          endif
       else
-         call self%put(c, r, symbol)
+         call self%put(c, r, symbol, tint)
       endif
       if (c == c2 .and. r == r2) exit
       ! both tests on the error before the step: testing the updated one overshoots the end on some slopes, and the
@@ -417,31 +511,21 @@ contains
    class(backend_dumb), intent(inout) :: self   !< Device.
    character(len=*),    intent(in)    :: color  !< SVG color.
    character(len=1)                   :: symbol !< Symbol.
-   type(color_symbol)                 :: entry  !< New entry.
-   integer(I4P)                       :: s      !< Counter.
-   integer(I4P)                       :: k      !< Symbol index.
+   integer(I4P)                       :: k      !< Index in `symbols`.
 
-   do s = 1_I4P, size(self%symbols, kind=I4P)
-      if (self%symbols(s)%color == color) then
-         symbol = self%symbols(s)%symbol
-         return
-      endif
-   enddo
-   k = modulo(size(self%symbols, kind=I4P), len(SYMBOLS, kind=I4P)) + 1_I4P
-   entry%color = color
-   entry%symbol = SYMBOLS(k:k)
-   self%symbols = [self%symbols, entry]
-   symbol = entry%symbol
+   k = self%color_index(color)
+   symbol = self%symbols(k)%symbol
    endfunction symbol_of
 
-   subroutine unit_segment(self, u1, v1, u2, v2, symbol)
-   !< Clip the unit-square segment to [0, 1]^2 (Liang-Barsky), then rasterise it in the plot area.
+   subroutine unit_segment(self, u1, v1, u2, v2, color, symbol)
+   !< Clip the unit-square segment to [0, 1]^2 (Liang-Barsky), then draw it in the plot area.
    class(backend_dumb), intent(inout) :: self   !< Device.
    real(R8P),           intent(in)    :: u1     !< Start abscissa [unit].
    real(R8P),           intent(in)    :: v1     !< Start ordinate [unit].
    real(R8P),           intent(in)    :: u2     !< End abscissa [unit].
    real(R8P),           intent(in)    :: v2     !< End ordinate [unit].
-   character(len=1),    intent(in)    :: symbol !< Symbol.
+   character(len=*),    intent(in)    :: color  !< Color.
+   character(len=*),    intent(in)    :: symbol !< Symbol, empty for the color symbol.
    real(R8P)                          :: t0     !< Clipped start parameter.
    real(R8P)                          :: t1     !< Clipped end parameter.
    real(R8P)                          :: p(4)   !< Liang-Barsky directions.
@@ -471,6 +555,81 @@ contains
    if (t0 > t1) return
    a = [self%area(1) + (u1 + t0 * (u2 - u1)) * self%area(3), self%area(2) + (1.0_R8P - v1 - t0 * (v2 - v1)) * self%area(4)]
    b = [self%area(1) + (u1 + t1 * (u2 - u1)) * self%area(3), self%area(2) + (1.0_R8P - v1 - t1 * (v2 - v1)) * self%area(4)]
-   call self%segment(self%col(a(1)), self%row(a(2)), self%col(b(1)), self%row(b(2)), symbol, .false.)
+   call self%px_segment(a, b, color, symbol)
    endsubroutine unit_segment
+
+   pure function color_rgb(symbols, k) result(rgb)
+   !< Red, green, blue (0-255) of the color `k` of `symbols`; -1 for the terminal's own color: index 0, a color that is
+   !< not `#rrggbb`, black or white (unreadable on one of the backgrounds).
+   type(color_symbol), intent(in) :: symbols(:) !< Symbols in use.
+   integer(I4P),       intent(in) :: k          !< Index, 0 for the default.
+   integer(I4P)                   :: rgb(3)     !< Color.
+   integer(I4P)                   :: i          !< Component counter.
+   integer(I4P)                   :: ios        !< Conversion status.
+
+   rgb = -1_I4P
+   if (k < 1_I4P) return
+   associate(color => symbols(k)%color)
+      if (len(color) /= 7 .or. color(1:1) /= '#') return
+      do i = 1_I4P, 3_I4P
+         read(color(2 * i:2 * i + 1), '(Z2)', iostat=ios) rgb(i)
+         if (ios /= 0_I4P) then
+            rgb = -1_I4P
+            return
+         endif
+      enddo
+   endassociate
+   if (all(rgb == 0_I4P) .or. all(rgb == 255_I4P)) rgb = -1_I4P
+   endfunction color_rgb
+
+   pure function ansi_escape(mode, rgb) result(escape)
+   !< ANSI escape sequence setting the foreground to `rgb` in the color `mode`, or to the default if `rgb` is -1: the
+   !< nearest of the 6 basic colors (no black and white) for `ansi`, of the 6x6x6 cube and the gray ramp for `ansi256`,
+   !< the color itself for `ansirgb`.
+   character(len=*), intent(in)  :: mode   !< `ansi`, `ansi256` or `ansirgb`.
+   integer(I4P),     intent(in)  :: rgb(3) !< Color, -1 for the default.
+   character(len=:), allocatable :: escape !< Escape sequence.
+   integer(I4P), parameter       :: BASIC(3,6) = reshape([205, 0, 0,  0, 205, 0,  205, 205, 0,  0, 0, 238, &
+                                                          205, 0, 205,  0, 205, 205], [3, 6]) !< xterm basic colors.
+   integer(I4P), parameter       :: LEVELS(6) = [0, 95, 135, 175, 215, 255] !< xterm 256-color cube levels.
+   integer(I4P)                  :: cube(3) !< Nearest cube level indexes.
+   integer(I4P)                  :: gray    !< Nearest gray ramp index.
+   integer(I4P)                  :: k       !< Counter.
+   integer(I4P)                  :: best    !< Nearest basic color.
+
+   if (rgb(1) < 0_I4P) then
+      escape = ESC//'[39m'
+      return
+   endif
+   select case (trim(mode))
+   case ('ansi')
+      best = 1_I4P
+      do k = 2_I4P, 6_I4P
+         if (sum((BASIC(:, k) - rgb)**2) < sum((BASIC(:, best) - rgb)**2)) best = k
+      enddo
+      escape = ESC//'['//str(30_I4P + best)//'m'
+   case ('ansi256')
+      do k = 1_I4P, 3_I4P
+         cube(k) = minloc(abs(LEVELS - rgb(k)), dim=1) - 1_I4P
+      enddo
+      gray = min(23_I4P, max(0_I4P, (sum(rgb) / 3_I4P - 3_I4P) / 10_I4P))
+      if (sum((LEVELS(cube + 1_I4P) - rgb)**2) <= sum((8_I4P + 10_I4P * gray - rgb)**2)) then
+         escape = ESC//'[38;5;'//str(16_I4P + 36_I4P * cube(1) + 6_I4P * cube(2) + cube(3))//'m'
+      else
+         escape = ESC//'[38;5;'//str(232_I4P + gray)//'m'
+      endif
+   case default
+      escape = ESC//'[38;2;'//str(rgb(1))//';'//str(rgb(2))//';'//str(rgb(3))//'m'
+   endselect
+   contains
+      pure function str(n) result(text)
+      !< Decimal text of `n`.
+      integer(I4P), intent(in)      :: n    !< Number.
+      character(len=:), allocatable :: text !< Text.
+      character(len=11)             :: buffer !< Conversion buffer.
+
+      write(buffer, '(I0)') n
+      text = trim(buffer)
+      endfunction str
+   endfunction ansi_escape
 endmodule foresight_backend_dumb

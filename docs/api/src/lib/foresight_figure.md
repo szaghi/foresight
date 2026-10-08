@@ -27,6 +27,7 @@ title: foresight_figure
 graph LR
   foresight_figure["foresight_figure"] --> foresight_axes["foresight_axes"]
   foresight_figure["foresight_figure"] --> foresight_backend["foresight_backend"]
+  foresight_figure["foresight_figure"] --> foresight_backend_block["foresight_backend_block"]
   foresight_figure["foresight_figure"] --> foresight_backend_dumb["foresight_backend_dumb"]
   foresight_figure["foresight_figure"] --> foresight_backend_html["foresight_backend_html"]
   foresight_figure["foresight_figure"] --> foresight_backend_svg["foresight_backend_svg"]
@@ -48,6 +49,7 @@ graph LR
 - [set_logscale](#set-logscale)
 - [set_multiplot](#set-multiplot)
 - [set_origin](#set-origin)
+- [set_text](#set-text)
 - [set_refresh](#set-refresh)
 - [set_size](#set-size)
 - [set_title](#set-title)
@@ -57,13 +59,18 @@ graph LR
 - [set_ylabel](#set-ylabel)
 - [set_yrange](#set-yrange)
 - [set_ytics](#set-ytics)
+- [set_y2label](#set-y2label)
+- [set_y2range](#set-y2range)
+- [set_y2tics](#set-y2tics)
 - [unset_logscale](#unset-logscale)
 - [unset_multiplot](#unset-multiplot)
 - [unset_xtics](#unset-xtics)
 - [unset_ytics](#unset-ytics)
+- [unset_y2tics](#unset-y2tics)
 - [ensure_panels](#ensure-panels)
 - [render](#render)
 - [set_tics](#set-tics)
+- [which_axes](#which-axes)
 - [extension](#extension)
 
 ## Variables
@@ -89,6 +96,8 @@ Figure.
 | `font_size` | real(kind=R8P) |  | Font size [px]. |
 | `refresh` | integer(kind=I4P) |  | HTML page reload period [s], 0 for none. |
 | `clear_screen` | logical |  | Clear the terminal before text output (live view). |
+| `text_charset` | character(len=9) |  | Text output: `dumb` characters, or the block |
+| `text_colors` | character(len=7) |  | Text output colors: `mono`, `ansi`, `ansi256`, |
 | `rows` | integer(kind=I4P) |  | Panel grid rows. |
 | `cols` | integer(kind=I4P) |  | Panel grid columns. |
 | `current` | integer(kind=I4P) |  | Current panel, filled row by row. |
@@ -114,6 +123,7 @@ Figure.
 | `set_origin` | pass(self) | gnuplot `set origin`. |
 | `set_refresh` | pass(self) | HTML page reload period, for live monitoring. |
 | `set_size` | pass(self) | gnuplot `set size`. |
+| `set_text` | pass(self) | Text output: gnuplot `dumb` or `block` terminal, colors. |
 | `set_title` | pass(self) | gnuplot `set title`. |
 | `set_xlabel` | pass(self) | gnuplot `set xlabel`. |
 | `set_xrange` | pass(self) | gnuplot `set xrange`. |
@@ -121,10 +131,14 @@ Figure.
 | `set_ylabel` | pass(self) | gnuplot `set ylabel`. |
 | `set_yrange` | pass(self) | gnuplot `set yrange`. |
 | `set_ytics` | pass(self) | gnuplot `set ytics`. |
+| `set_y2label` | pass(self) | gnuplot `set y2label`. |
+| `set_y2range` | pass(self) | gnuplot `set y2range`. |
+| `set_y2tics` | pass(self) | gnuplot `set y2tics`. |
 | `unset_logscale` | pass(self) | gnuplot `unset logscale`. |
 | `unset_multiplot` | pass(self) | gnuplot `unset multiplot`. |
 | `unset_xtics` | pass(self) | gnuplot `unset xtics`. |
 | `unset_ytics` | pass(self) | gnuplot `unset ytics`. |
+| `unset_y2tics` | pass(self) | gnuplot `unset y2tics`. |
 | `ensure_panels` | pass(self) | Allocate the single default panel if needed. |
 | `render` | pass(self) | Render on a device. |
 
@@ -205,12 +219,16 @@ flowchart TD
 
 ### plot
 
-Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps`.
+Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
+ ... axes`.
 
  Error bar styles (`yerrorbars`, `xerrorbars`, `xyerrorbars`) take the bar bounds `ylow`/`yhigh`, `xlow`/`xhigh`.
+ `axes='x1y2'` plots the series against the second y axis, scaled on its own. `pt` is gnuplot's point type (0 a
+ dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond,
+ 14-15 pentagon, odd ones from 5 filled; cycling every 15), 9 px wide at `ps` 1; without it points are round dots.
 
 ```fortran
-subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh)
+subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt)
 ```
 
 **Arguments**
@@ -230,6 +248,8 @@ subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhig
 | `xhigh` | real(kind=R8P) | in | optional | Horizontal error bar ends. |
 | `ylow` | real(kind=R8P) | in | optional | Vertical error bar starts. |
 | `yhigh` | real(kind=R8P) | in | optional | Vertical error bar ends. |
+| `axes` | character(len=*) | in | optional | Axes of the series: `x1y1` (default) or `x1y2`. |
+| `pt` | integer(kind=I4P) | in | optional | gnuplot point type, >= 0. |
 
 **Call graph**
 
@@ -244,7 +264,7 @@ flowchart TD
 ### save
 
 Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.txt` text (the
- gnuplot `dumb` terminal), `-` text on standard output.
+ gnuplot `dumb` or `block` terminal, see `set_text`), `-` text on standard output.
 
 ```fortran
 subroutine save(self, file)
@@ -264,12 +284,13 @@ flowchart TD
   save["save"] --> ensure_panels["ensure_panels"]
   save["save"] --> extension["extension"]
   save["save"] --> render["render"]
+  save["save"] --> text["text"]
   style save fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_format
 
-Tick label `format` of the `axes` named by the letters `x`, `y` (both when absent), as gnuplot `set format`: text
+Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text
  with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
  superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
 
@@ -283,7 +304,7 @@ subroutine set_format(self, format, axes)
 |------|------|--------|------------|-------------|
 | `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
 | `format` | character(len=*) | in |  | Label format. |
-| `axes` | character(len=*) | in | optional | Axes letters, e.g. `y` or `xy`. |
+| `axes` | character(len=*) | in | optional | Axes names, e.g. `y`, `xy` or `y2`. |
 
 **Call graph**
 
@@ -292,6 +313,7 @@ flowchart TD
   unset_command["unset_command"] --> set_format["set_format"]
   set_format["set_format"] --> ensure_panels["ensure_panels"]
   set_format["set_format"] --> format_check["format_check"]
+  set_format["set_format"] --> which_axes["which_axes"]
   style set_format fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -323,7 +345,8 @@ flowchart TD
 ### set_key
 
 Draw the key (`on` absent or true), as gnuplot `set key`, or not; `position` takes gnuplot's words, e.g.
- `'bottom left'` or `'center'` (inside the plot area, top right by default); `box` draws a box around it.
+ `'bottom left'`, `'center'` (inside the plot area, top right by default), `'outside'`, `'below'`, `'above'`,
+ `'horizontal'`; `box` draws a box around it.
 
 ```fortran
 subroutine set_key(self, on, position, box)
@@ -350,7 +373,7 @@ flowchart TD
 
 ### set_logscale
 
-Base-10 log scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
+Base-10 log scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
 
 ```fortran
 subroutine set_logscale(self, axes)
@@ -361,7 +384,7 @@ subroutine set_logscale(self, axes)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
-| `axes` | character(len=*) | in | optional | Axes letters, e.g. `y` or `xy`. |
+| `axes` | character(len=*) | in | optional | Axes names, e.g. `y`, `xy` or `y2`. |
 
 **Call graph**
 
@@ -369,6 +392,7 @@ subroutine set_logscale(self, axes)
 flowchart TD
   set_command["set_command"] --> set_logscale["set_logscale"]
   set_logscale["set_logscale"] --> ensure_panels["ensure_panels"]
+  set_logscale["set_logscale"] --> which_axes["which_axes"]
   style set_logscale fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -423,6 +447,33 @@ subroutine set_origin(self, x, y)
 flowchart TD
   set_origin["set_origin"] --> ensure_panels["ensure_panels"]
   style set_origin fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_text
+
+Text output (`.txt`, `-`): `charset` `dumb` (default), drawing with characters, or the gnuplot `block` character
+ set `half`, `quadrants`, `sextants`, `braille`; `colors` `mono` (default), `ansi`, `ansi256` or `ansirgb`, the
+ series in ANSI colors. Absent arguments keep their setting.
+
+```fortran
+subroutine set_text(self, charset, colors)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `charset` | character(len=*) | in | optional | Character set. |
+| `colors` | character(len=*) | in | optional | Color mode. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_command["set_command"] --> set_text["set_text"]
+  set_text["set_text"] --> is_word["is_word"]
+  style set_text fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_refresh
@@ -556,10 +607,11 @@ flowchart TD
 ### set_xtics
 
 x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
- without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+ without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
+ the bottom border only (gnuplot `nomirror`).
 
 ```fortran
-subroutine set_xtics(self, step, start, end)
+subroutine set_xtics(self, step, start, end, mirror)
 ```
 
 **Arguments**
@@ -570,6 +622,7 @@ subroutine set_xtics(self, step, start, end)
 | `step` | real(kind=R8P) | in | optional | Tick step, a factor on log axes. |
 | `start` | real(kind=R8P) | in | optional | First tick. |
 | `end` | real(kind=R8P) | in | optional | Last tick. |
+| `mirror` | logical | in | optional | Ticks also on the top border. |
 
 **Call graph**
 
@@ -633,10 +686,11 @@ flowchart TD
 ### set_ytics
 
 y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
- without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k.
+ without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
+ the left border only (gnuplot `nomirror`), leaving the right one to the second y axis.
 
 ```fortran
-subroutine set_ytics(self, step, start, end)
+subroutine set_ytics(self, step, start, end, mirror)
 ```
 
 **Arguments**
@@ -647,6 +701,7 @@ subroutine set_ytics(self, step, start, end)
 | `step` | real(kind=R8P) | in | optional | Tick step, a factor on log axes. |
 | `start` | real(kind=R8P) | in | optional | First tick. |
 | `end` | real(kind=R8P) | in | optional | Last tick. |
+| `mirror` | logical | in | optional | Ticks also on the right border. |
 
 **Call graph**
 
@@ -657,9 +712,87 @@ flowchart TD
   style set_ytics fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_y2label
+
+Set the second y axis label of the current panel, on the right, empty for none.
+
+```fortran
+subroutine set_y2label(self, label)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `label` | character(len=*) | in |  | Label. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_command["set_command"] --> set_y2label["set_y2label"]
+  unset_command["unset_command"] --> set_y2label["set_y2label"]
+  set_y2label["set_y2label"] --> ensure_panels["ensure_panels"]
+  style set_y2label fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_y2range
+
+Set the second y axis range as gnuplot `set y2range [min:max]`: an absent end is autoscaled on the `x1y2` series.
+
+```fortran
+subroutine set_y2range(self, min, max)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `min` | real(kind=R8P) | in | optional | Value at the axis start. |
+| `max` | real(kind=R8P) | in | optional | Value at the axis end. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_y2range["set_y2range"] --> ensure_panels["ensure_panels"]
+  set_y2range["set_y2range"] --> set_range["set_range"]
+  style set_y2range fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_y2tics
+
+Ticks and labels of the second y axis on the right border, as gnuplot `set y2tics START,STEP,END` (automatic
+ without `step`); off by default, as in gnuplot. `mirror` true draws the ticks on the left border too.
+
+```fortran
+subroutine set_y2tics(self, step, start, end, mirror)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+| `step` | real(kind=R8P) | in | optional | Tick step, a factor on log axes. |
+| `start` | real(kind=R8P) | in | optional | First tick. |
+| `end` | real(kind=R8P) | in | optional | Last tick. |
+| `mirror` | logical | in | optional | Ticks also on the left border. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_y2tics["set_y2tics"] --> ensure_panels["ensure_panels"]
+  set_y2tics["set_y2tics"] --> set_tics["set_tics"]
+  style set_y2tics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### unset_logscale
 
-Linear scale on the `axes` named by the letters `x`, `y`; all axes when absent, as gnuplot.
+Linear scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
 
 ```fortran
 subroutine unset_logscale(self, axes)
@@ -670,7 +803,7 @@ subroutine unset_logscale(self, axes)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
-| `axes` | character(len=*) | in | optional | Axes letters, e.g. `y` or `xy`. |
+| `axes` | character(len=*) | in | optional | Axes names, e.g. `y`, `xy` or `y2`. |
 
 **Call graph**
 
@@ -678,6 +811,7 @@ subroutine unset_logscale(self, axes)
 flowchart TD
   unset_command["unset_command"] --> unset_logscale["unset_logscale"]
   unset_logscale["unset_logscale"] --> ensure_panels["ensure_panels"]
+  unset_logscale["unset_logscale"] --> which_axes["which_axes"]
   style unset_logscale fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -750,6 +884,29 @@ flowchart TD
   style unset_ytics fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### unset_y2tics
+
+No second y axis ticks nor tick labels, the default, as gnuplot `unset y2tics`.
+
+```fortran
+subroutine unset_y2tics(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([figure_object](/api/src/lib/foresight_figure#figure-object)) | inout |  | Figure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  unset_command["unset_command"] --> unset_y2tics["unset_y2tics"]
+  unset_y2tics["unset_y2tics"] --> ensure_panels["ensure_panels"]
+  style unset_y2tics fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ensure_panels
 
 Allocate the single default panel of a fresh figure.
@@ -784,12 +941,16 @@ flowchart TD
   set_xlabel["set_xlabel"] --> ensure_panels["ensure_panels"]
   set_xrange["set_xrange"] --> ensure_panels["ensure_panels"]
   set_xtics["set_xtics"] --> ensure_panels["ensure_panels"]
+  set_y2label["set_y2label"] --> ensure_panels["ensure_panels"]
+  set_y2range["set_y2range"] --> ensure_panels["ensure_panels"]
+  set_y2tics["set_y2tics"] --> ensure_panels["ensure_panels"]
   set_ylabel["set_ylabel"] --> ensure_panels["ensure_panels"]
   set_yrange["set_yrange"] --> ensure_panels["ensure_panels"]
   set_ytics["set_ytics"] --> ensure_panels["ensure_panels"]
   unset_logscale["unset_logscale"] --> ensure_panels["ensure_panels"]
   unset_multiplot["unset_multiplot"] --> ensure_panels["ensure_panels"]
   unset_xtics["unset_xtics"] --> ensure_panels["ensure_panels"]
+  unset_y2tics["unset_y2tics"] --> ensure_panels["ensure_panels"]
   unset_ytics["unset_ytics"] --> ensure_panels["ensure_panels"]
   style ensure_panels fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -827,10 +988,12 @@ flowchart TD
 
 ### set_tics
 
-Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop.
+Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop. `mirror` alone (no
+ step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on at their last
+ positions.
 
 ```fortran
-subroutine set_tics(tics, caller, step, start, end)
+subroutine set_tics(tics, caller, step, start, end, mirror)
 ```
 
 **Arguments**
@@ -842,19 +1005,51 @@ subroutine set_tics(tics, caller, step, start, end)
 | `step` | real(kind=R8P) | in | optional | Tick step. |
 | `start` | real(kind=R8P) | in | optional | First tick. |
 | `end` | real(kind=R8P) | in | optional | Last tick. |
+| `mirror` | logical | in | optional | Ticks also on the opposite border. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   set_xtics["set_xtics"] --> set_tics["set_tics"]
+  set_y2tics["set_y2tics"] --> set_tics["set_tics"]
   set_ytics["set_ytics"] --> set_tics["set_tics"]
+  set_tics["set_tics"] --> enable["enable"]
   set_tics["set_tics"] --> real_str["real_str"]
+  set_tics["set_tics"] --> set_auto["set_auto"]
   set_tics["set_tics"] --> set_fixed["set_fixed"]
   style set_tics fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions
+
+### which_axes
+
+Axes named in `axes` (`x`, `y`, `y2`, concatenated), all when absent; unsupported names stop.
+
+**Returns**: `logical`
+
+```fortran
+function which_axes(axes, caller) result(named)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `axes` | character(len=*) | in | optional | Axes names. |
+| `caller` | character(len=*) | in |  | Procedure name, for messages. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_format["set_format"] --> which_axes["which_axes"]
+  set_logscale["set_logscale"] --> which_axes["which_axes"]
+  unset_logscale["unset_logscale"] --> which_axes["which_axes"]
+  which_axes["which_axes"] --> axes_names["axes_names"]
+  style which_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### extension
 

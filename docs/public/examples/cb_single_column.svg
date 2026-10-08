@@ -22,11 +22,13 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,16 550,16"/>
 </g>
 <svg class="fs-plot" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0,0.92 0.2,0.56 0.4,0.68 0.6,0.2 0.8,0.36 1,0.04"/>
 <path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#9400d3" fill="none" stroke="none" d="M0,0.92 M0.2,0.56 M0.4,0.68 M0.6,0.2 M0.8,0.36 M1,0.04"/>
+</g>
 </svg>
 <svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="hidden">
-<path fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M-4.5,251.16A4.5,4.5 0 1 0 4.5,251.16A4.5,4.5 0 1 0 -4.5,251.16ZM98.34,152.88A4.5,4.5 0 1 0 107.34,152.88A4.5,4.5 0 1 0 98.34,152.88ZM201.18,185.64A4.5,4.5 0 1 0 210.18,185.64A4.5,4.5 0 1 0 201.18,185.64ZM304.02,54.6A4.5,4.5 0 1 0 313.02,54.6A4.5,4.5 0 1 0 304.02,54.6ZM406.86,98.28A4.5,4.5 0 1 0 415.86,98.28A4.5,4.5 0 1 0 406.86,98.28ZM509.7,10.92A4.5,4.5 0 1 0 518.7,10.92A4.5,4.5 0 1 0 509.7,10.92Z"/>
+<path data-series="1" fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M-4.5,251.16A4.5,4.5 0 1 0 4.5,251.16A4.5,4.5 0 1 0 -4.5,251.16ZM98.34,152.88A4.5,4.5 0 1 0 107.34,152.88A4.5,4.5 0 1 0 98.34,152.88ZM201.18,185.64A4.5,4.5 0 1 0 210.18,185.64A4.5,4.5 0 1 0 201.18,185.64ZM304.02,54.6A4.5,4.5 0 1 0 313.02,54.6A4.5,4.5 0 1 0 304.02,54.6ZM406.86,98.28A4.5,4.5 0 1 0 415.86,98.28A4.5,4.5 0 1 0 406.86,98.28ZM509.7,10.92A4.5,4.5 0 1 0 518.7,10.92A4.5,4.5 0 1 0 509.7,10.92Z"/>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="273" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -84,8 +86,10 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="550,16 544,16"/>
 <text x="29.8" y="20.2" text-anchor="end">5.5</text>
 </g>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="504,29.5 540,29.5"/>
 <path fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M517.5,29.5A4.5,4.5 0 1 0 526.5,29.5A4.5,4.5 0 1 0 517.5,29.5Z"/>
 <text x="498" y="33.7" text-anchor="end">'single.dat'</text>
+</g>
 </g>
 </svg>

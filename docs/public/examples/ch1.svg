@@ -25,6 +25,7 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="56.8,37 630,37"/>
 </g>
 <svg class="fs-plot" x="56.8" y="37" width="573.2" height="291" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.008333,0.162652 0.016667,0.176041 0.025,0.209456 0.033333,0.262128 0.041667,0.330678 0.05,0.410046 0.058333,0.494411 0.066667,0.578018
 0.075,0.655843 0.083333,0.724044 0.091667,0.780195 0.1,0.823324 0.108333,0.853775 0.116667,0.872949 0.125,0.882987 0.133333,0.886413
 0.141667,0.885812 0.15,0.883554 0.158333,0.881594 0.166667,0.881351 0.175,0.883667 0.183333,0.888834 0.191667,0.896681 0.2,0.906685
@@ -40,6 +41,7 @@
 0.808333,0.999954 0.816667,0.999957 0.825,0.999961 0.833333,0.999965 0.841667,0.99997 0.85,0.999975 0.858333,0.999979 0.866667,0.999983
 0.875,0.999987 0.883333,0.999989 0.891667,0.999991 0.9,0.999992 0.908333,0.999993 0.916667,0.999993 0.925,0.999993 0.933333,0.999993
 0.941667,0.999993 0.95,0.999993 0.958333,0.999993 0.966667,0.999994 0.975,0.999994 0.983333,0.999994 0.991667,0.999995 1,0.999996"/>
+</g>
 </svg>
 <rect x="56.8" y="37" width="573.2" height="291" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -109,7 +111,9 @@
 <text x="343.4" y="367" text-anchor="middle">iteration</text>
 <text x="22" y="182.5" text-anchor="middle" transform="rotate(-90 22 182.5)">continuity residual</text>
 <text x="343.4" y="22" text-anchor="middle">Residual history</text>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="584,50.5 620,50.5"/>
 <text x="578" y="54.7" text-anchor="end">continuity</text>
+</g>
 </g>
 </svg>

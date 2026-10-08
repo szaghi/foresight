@@ -98,6 +98,7 @@ subroutine begin_page(self, file, width, height, font_size)
 
 ```mermaid
 flowchart TD
+  begin_page["begin_page"] --> begin_page["begin_page"]
   render["render"] --> begin_page["begin_page"]
   begin_page["begin_page"] --> int_str["int_str"]
   begin_page["begin_page"] --> open_file["open_file"]

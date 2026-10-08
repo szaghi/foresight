@@ -16,7 +16,8 @@ module foresight_figure
 !<```
 use foresight_axes, only : axes_names, axes_object, key_position
 use foresight_backend, only : backend_object
-use foresight_backend_dumb, only : backend_dumb
+use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
+use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
@@ -38,6 +39,11 @@ type :: figure_object
    real(R8P)                      :: font_size    = 12.0_R8P  !< Font size [px].
    integer(I4P)                   :: refresh      = 0_I4P     !< HTML page reload period [s], 0 for none.
    logical                        :: clear_screen = .false.   !< Clear the terminal before text output (live view).
+   character(len=9)               :: text_charset = 'dumb'    !< Text output: `dumb` characters, or the block
+                                                              !< character set `half`, `quadrants`, `sextants`,
+                                                              !< `braille` (gnuplot `block` terminal).
+   character(len=7)               :: text_colors  = 'mono'    !< Text output colors: `mono`, `ansi`, `ansi256`,
+                                                              !< `ansirgb`.
    integer(I4P)                   :: rows         = 1_I4P     !< Panel grid rows.
    integer(I4P)                   :: cols         = 1_I4P     !< Panel grid columns.
    integer(I4P)                   :: current      = 1_I4P     !< Current panel, filled row by row.
@@ -60,6 +66,7 @@ type :: figure_object
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
+      procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
@@ -105,6 +112,8 @@ contains
    self%font_size = fresh%font_size
    self%refresh = fresh%refresh
    self%clear_screen = fresh%clear_screen
+   self%text_charset = fresh%text_charset
+   self%text_colors = fresh%text_colors
    self%rows = fresh%rows
    self%cols = fresh%cols
    self%current = fresh%current
@@ -167,17 +176,15 @@ contains
 
    subroutine save(self, file)
    !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.txt` text (the
-   !< gnuplot `dumb` terminal), `-` text on standard output.
-   class(figure_object), intent(inout) :: self !< Figure.
-   character(len=*),     intent(in)    :: file !< Output file.
-   type(backend_svg)                   :: svg  !< SVG device.
-   type(backend_html)                  :: html !< HTML device.
-   type(backend_dumb)                  :: dumb !< Text device.
+   !< gnuplot `dumb` or `block` terminal, see `set_text`), `-` text on standard output.
+   class(figure_object), intent(inout) :: self   !< Figure.
+   character(len=*),     intent(in)    :: file   !< Output file.
+   type(backend_svg)                   :: svg    !< SVG device.
+   type(backend_html)                  :: html   !< HTML device.
 
    call self%ensure_panels
    if (file == '-') then
-      dumb%clear_screen = self%clear_screen
-      call self%render(dumb, file)
+      call text(self%clear_screen)
       return
    endif
    select case (extension(file))
@@ -189,10 +196,28 @@ contains
       html%refresh = self%refresh
       call self%render(html, file)
    case ('txt')
-      call self%render(dumb, file)
+      call text(.false.)
    case default
       error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html, .txt, -)'
    endselect
+   contains
+      subroutine text(clear_screen)
+      !< Render on the text device of `text_charset`.
+      logical, intent(in) :: clear_screen !< Clear the terminal first.
+      type(backend_dumb)  :: dumb         !< Text device.
+      type(backend_block) :: blocks       !< Block character text device.
+
+      if (self%text_charset == 'dumb') then
+         dumb%clear_screen = clear_screen
+         dumb%colors = self%text_colors
+         call self%render(dumb, file)
+      else
+         blocks%clear_screen = clear_screen
+         blocks%colors = self%text_colors
+         blocks%charset = self%text_charset
+         call self%render(blocks, file)
+      endif
+      endsubroutine text
    endsubroutine save
 
    subroutine set_format(self, format, axes)
@@ -316,6 +341,35 @@ contains
       panel%origin = [x, y]
    endassociate
    endsubroutine set_origin
+
+   subroutine set_text(self, charset, colors)
+   !< Text output (`.txt`, `-`): `charset` `dumb` (default), drawing with characters, or the gnuplot `block` character
+   !< set `half`, `quadrants`, `sextants`, `braille`; `colors` `mono` (default), `ansi`, `ansi256` or `ansirgb`, the
+   !< series in ANSI colors. Absent arguments keep their setting.
+   class(figure_object), intent(inout)        :: self    !< Figure.
+   character(len=*),     intent(in), optional :: charset !< Character set.
+   character(len=*),     intent(in), optional :: colors  !< Color mode.
+
+   if (present(charset)) then
+      if (charset /= 'dumb' .and. .not. is_word(charset, BLOCK_CHARSETS)) &
+         error stop 'foresight: set_text: charset must be dumb, '//BLOCK_CHARSETS//', not "'//charset//'"'
+      self%text_charset = charset
+   endif
+   if (present(colors)) then
+      if (.not. is_word(colors, TEXT_COLORS)) &
+         error stop 'foresight: set_text: colors must be one of '//TEXT_COLORS//', not "'//colors//'"'
+      self%text_colors = colors
+   endif
+   contains
+      pure function is_word(word, words) result(found)
+      !< Whether `word` is one of the blank separated `words`.
+      character(len=*), intent(in) :: word  !< Word.
+      character(len=*), intent(in) :: words !< Blank separated words.
+      logical                      :: found !< Found.
+
+      found = len(word) > 0 .and. index(' '//words//' ', ' '//word//' ') > 0
+      endfunction is_word
+   endsubroutine set_text
 
    pure subroutine set_refresh(self, seconds)
    !< Make the HTML page reload itself every `seconds` (0 disables): live view of a file rewritten by a running job.

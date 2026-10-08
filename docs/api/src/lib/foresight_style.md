@@ -4,7 +4,7 @@ title: foresight_style
 
 # foresight_style
 
-> foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `ps`).
+> foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`).
 
 **Source**: `src/lib/foresight_style.F90`
 
@@ -38,7 +38,8 @@ graph LR
 | `WITH_XERRORBARS` | integer(kind=I4P) | parameter | gnuplot `with xerrorbars`. |
 | `WITH_XYERRORBARS` | integer(kind=I4P) | parameter | gnuplot `with xyerrorbars`. |
 | `PALETTE` | character(len=7) | parameter | gnuplot 5 line colors. |
-| `DIAMETER_AT_UNIT_SIZE` | real(kind=R8P) | parameter | Point diameter at `pointsize` 1 [px]. |
+| `DIAMETER_AT_UNIT_SIZE` | real(kind=R8P) | parameter | Round dot diameter at `pointsize` 1 [px]. |
+| `MARKER_AT_UNIT_SIZE` | real(kind=R8P) | parameter | Point type size at `pointsize` 1 [px], gnuplot svg. |
 
 ## Derived Types
 
@@ -55,6 +56,7 @@ Series drawing style.
 | `linewidth` | real(kind=R8P) |  | Line width [px]. |
 | `dashtype` | integer(kind=I4P) |  | gnuplot dash type: 1 solid, 2..5 dash patterns. |
 | `pointsize` | real(kind=R8P) |  | Point size scale factor. |
+| `pointtype` | integer(kind=I4P) |  | gnuplot point type: 0 a dot, 1.. the shapes (cycling every |
 
 #### Type-Bound Procedures
 
@@ -261,7 +263,7 @@ flowchart TD
 
 ### point_diameter
 
-Point diameter [px].
+Point size [px]: the round dot diameter, or the width of a point type shape (gnuplot svg scale).
 
 **Attributes**: elemental
 

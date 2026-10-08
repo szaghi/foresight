@@ -19,17 +19,23 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="60.1,16 443.2,16"/>
 </g>
 <svg class="fs-plot" x="60.1" y="16" width="383.1" height="303" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.033333,0.033333 0.066667,0.066667 0.1,0.1 0.133333,0.133333 0.166667,0.166667 0.2,0.2 0.233333,0.233333 0.266667,0.266667
 0.3,0.3 0.333333,0.333333 0.366667,0.366667 0.4,0.4 0.433333,0.433333 0.466667,0.466667 0.5,0.5 0.533333,0.533333
 0.566667,0.566667 0.6,0.6 0.633333,0.633333 0.666667,0.666667 0.7,0.7 0.733333,0.733333 0.766667,0.766667 0.8,0.8
 0.833333,0.833333 0.866667,0.866667 0.9,0.9 0.933333,0.933333 0.966667,0.966667 1,1"/>
+</g>
+<g class="fs-series" data-series="2">
 <path fill="none" stroke="#009e73" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0.033333,0.376298h0 M0.066667,0.260287h0 M0.1,0.15918h0 M0.133333,0.079265h0 M0.166667,0.025508h0 M0.2,0.001253h0 M0.233333,0.008007h0 M0.266667,0.045352h0
 M0.3,0.110963h0 M0.333333,0.200763h0 M0.366667,0.30917h0 M0.433333,0.554098h0 M0.466667,0.675392h0 M0.5,0.78578h0 M0.533333,0.878402h0 M0.566667,0.947495h0
 M0.6,0.988765h0 M0.633333,0.999647h0 M0.666667,0.979462h0 M0.7,0.929467h0 M0.733333,0.85277h0 M0.766667,0.75414h0 M0.8,0.639708h0 M0.833333,0.51659h0
 M0.866667,0.39244h0 M0.9,0.274978h0 M0.933333,0.171507h0 M0.966667,0.08846h0 M1,0.031h0"/>
+</g>
+<g class="fs-series" data-series="3">
 <polyline fill="none" stroke="#56b4e9" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.033333,0.376298 0.084211,0.20479 0.135088,0.075746 0.185965,0.007729 0.236842,0.010522 0.287719,0.083724 0.338596,0.216805 0.389474,0.390622
 0.440351,0.580172 0.491228,0.75819 0.542105,0.899069 0.592982,0.982544 0.64386,0.996607 0.694737,0.939237 0.745614,0.818685 0.796491,0.652292
 0.847368,0.463992 0.898246,0.280872 0.949123,0.129273 1,0.031"/>
+</g>
 </svg>
 <rect x="60.1" y="16" width="383.1" height="303" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -137,11 +143,17 @@ M0.866667,0.39244h0 M0.9,0.274978h0 M0.933333,0.171507h0 M0.966667,0.08846h0 M1,
 </g>
 <text x="22" y="167.5" text-anchor="middle" transform="rotate(-90 22 167.5)">residual</text>
 <text x="487" y="167.5" text-anchor="middle" transform="rotate(-90 487 167.5)">coefficient</text>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="397.2,29.5 433.2,29.5"/>
 <text x="391.2" y="33.7" text-anchor="end">residual</text>
+</g>
+<g class="fs-key-entry" data-series="2">
 <path fill="none" stroke="#009e73" stroke-width="6" stroke-linecap="round" d="M415.2,44.5h0"/>
 <text x="391.2" y="48.7" text-anchor="end">coefficient</text>
+</g>
+<g class="fs-key-entry" data-series="3">
 <polyline fill="none" stroke="#56b4e9" stroke-width="1" points="397.2,59.5 433.2,59.5"/>
 <text x="391.2" y="63.7" text-anchor="end">model</text>
+</g>
 </g>
 </svg>

@@ -10,6 +10,7 @@ flowchart TD
     SCRIPT["foresight_script<br/>gnuplot subset interpreter"] --> TOKENS["foresight_tokens<br/>lexer"]
     SCRIPT --> DATA["foresight_datafile<br/>data files"]
     DATA --> EXPR["foresight_expression<br/>using expressions"]
+    SCRIPT --> SMOOTH["foresight_smooth<br/>smooth filters"]
     SCRIPT --> FIG
     USER["your Fortran code"] --> FIG
     FIG["foresight_figure<br/>panels, gnuplot-like API"] --> AXES
@@ -20,11 +21,13 @@ flowchart TD
     BACKEND["foresight_backend<br/>abstract device"] --> SVG["backend_svg"]
     SVG --> HTML["backend_html<br/>+ embedded viewer.js"]
     BACKEND --> DUMB["backend_dumb<br/>character cells"]
+    DUMB --> BLOCK["backend_block<br/>block and Braille dots"]
 ```
 
 ## Layers
 
-- **Interpreter** (`foresight_script`, `foresight_tokens`, `foresight_datafile`, `foresight_expression`): turns gnuplot
+- **Interpreter** (`foresight_script`, `foresight_tokens`, `foresight_datafile`, `foresight_expression`,
+  `foresight_smooth`): turns gnuplot
   statements into calls of the figure API. It lives in the library, so the command line tool is a thin shell and Fortran code can run
   scripts too. Errors are returned, not stopped on, which lets a watch loop survive a bad cycle.
 - **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`): panels,
@@ -56,7 +59,12 @@ test cases run on both (`src/tests/foresight_ticks_test.F90`, `src/js/viewer_tes
 vector formats, whose viewer renders the glyphs, exact for character cells.
 
 **Decorations regenerated, data never re-plotted.** Grid, ticks and error bar caps are named groups the viewer
-rebuilds; data geometry is written once.
+rebuilds; data geometry is written once. Each series is a numbered group, which is all the viewer needs to hide it
+from its key entry, or to find the points it shows when following a live run.
+
+**One text layout, two resolutions.** The `block` device extends the `dumb` one: same cells, same text, but data drawn
+through two overridable primitives (`px_segment`, `px_point`) onto a bitmap of 2 x 4 dots at most per cell, written
+as Unicode block or Braille characters.
 
 **Atomic output.** Write to `<file>.tmp`, then `rename`: live viewers never read partial files.
 

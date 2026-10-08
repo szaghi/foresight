@@ -43,6 +43,12 @@ Geometry and axis ranges of a plot panel.
 | `ytics` | character(len=:) | allocatable | y tick positions for the viewer, empty for auto. |
 | `xformat` | character(len=:) | allocatable | x tick label format, empty for the default. |
 | `yformat` | character(len=:) | allocatable | y tick label format, empty for the default. |
+| `mirror` | logical |  | Ticks mirrored on the opposite border: x, y, y2. |
+| `y2_active` | logical |  | Second y axis drawn; the `y2*` components are meaningful only then. |
+| `y2` | real(kind=R8P) |  | y2 axis values at the axis start and end. |
+| `y2log` | logical |  | Log y2 axis. |
+| `y2tics` | character(len=:) | allocatable | y2 tick positions for the viewer, empty for auto. |
+| `y2format` | character(len=:) | allocatable | y2 tick label format, empty for the default. |
 
 ### backend_object
 
@@ -70,11 +76,11 @@ classDiagram
 | `end_group` | pass(self) | Close the group. |
 | `rect` | pass(self) | Rectangle [px]. |
 | `polyline` | pass(self) | Polyline [px]. |
-| `dots` | pass(self) | Round dots [px]. |
+| `dots` | pass(self) | Round dots or markers [px]. |
 | `text` | pass(self) | Text [px]. |
 | `begin_plot_area` | pass(self) | Open the clipped plot area. |
 | `end_plot_area` | pass(self) | Close the plot area. |
 | `data_polyline` | pass(self) | Polyline [unit square]. |
-| `data_dots` | pass(self) | Round dots [unit square]. |
+| `data_dots` | pass(self) | Dots or markers [unit square]. |
 | `data_bars` | pass(self) | Error bars [unit square]. |
 | `text_width` | pass(self) | Text width [px]. |

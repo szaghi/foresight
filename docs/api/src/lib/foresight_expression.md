@@ -4,14 +4,16 @@ title: foresight_expression
 
 # foresight_expression
 
-> foresight_expression, arithmetic expressions of gnuplot `using` fields.
+> foresight_expression, arithmetic expressions of gnuplot `using` fields and plotted functions.
 
  An expression such as `($2*1e3)` or `($3 > 0 ? log10($3) : 1/0)` is compiled once into stack code and evaluated on
- each data row. The semantics are gnuplot's:
+ each data row; compiled with a dummy variable, `sin(x)/x` is a function evaluated at sample abscissae (`value_at`),
+ where columns are errors. The semantics are gnuplot's:
 
  - operators, loosest first: `?:`, `||`, `&&`, `== !=`, `< <= > >=`, `+ -`, `* / %`, unary `- + !`, `**` (right
    associative, so `-2**2` is -4 and `2**3**2` is 512); `&&`, `||` and `?:` evaluate only what they need;
- - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `pi`, and the functions
+ - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `column("name")` (the column
+   of that header, see `resolve`), `pi`, and the functions
    `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`;
  - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
    columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
@@ -28,6 +30,7 @@ title: foresight_expression
 
 ```mermaid
 graph LR
+  foresight_expression["foresight_expression"] --> foresight_format["foresight_format"]
   foresight_expression["foresight_expression"] --> ieee_arithmetic["ieee_arithmetic"]
 ```
 
@@ -35,15 +38,22 @@ graph LR
 
 - [value_object](#value-object)
 - [instruction_object](#instruction-object)
+- [name_object](#name-object)
 - [expression_object](#expression-object)
 - [compile](#compile)
 - [set_column](#set-column)
+- [set_name](#set-name)
 - [binary](#binary)
 - [integer_binary](#integer-binary)
 - [unary](#unary)
 - [safe_add](#safe-add)
 - [safe_power](#safe-power)
 - [evaluate](#evaluate)
+- [first_column](#first-column)
+- [name_count](#name-count)
+- [name_of](#name-of)
+- [resolve](#resolve)
+- [value_at](#value-at)
 - [in_level](#in-level)
 - [binary_code](#binary-code)
 - [real_of](#real-of)
@@ -81,6 +91,7 @@ graph LR
 | `OP_JUMP_UNLESS` | integer(kind=I4P) | parameter | Pop; jump to `arg` if false. |
 | `OP_AND_JUMP` | integer(kind=I4P) | parameter | If the top is false: make it 0, jump to `arg`; else pop. |
 | `OP_OR_JUMP` | integer(kind=I4P) | parameter | If the top is true: make it 1, jump to `arg`; else pop. |
+| `OP_COLUMN_NAMED` | integer(kind=I4P) | parameter | Push the column of header `names(arg)`: undefined until resolved. |
 | `FUNCTIONS` | character(len=*) | parameter |  |
 | `LEVELS` | character(len=*) | parameter |  |
 | `MAX_NESTING` | integer(kind=I4P) | parameter | Deepest parentheses and unary chains. |
@@ -118,6 +129,16 @@ Stack code instruction.
 | `arg` | integer(kind=I4P) |  | Column, function or jump target. |
 | `v` | type([value_object](/api/src/lib/foresight_expression#value-object)) |  | Constant. |
 
+### name_object
+
+Column header name.
+
+#### Components
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `text` | character(len=:) | allocatable | Name. |
+
 ### expression_object
 
 Compiled expression.
@@ -128,6 +149,7 @@ Compiled expression.
 |------|------|------------|-------------|
 | `text` | character(len=:) | allocatable | Source text. |
 | `code` | type([instruction_object](/api/src/lib/foresight_expression#instruction-object)) | allocatable | Stack code. |
+| `names` | type([name_object](/api/src/lib/foresight_expression#name-object)) | allocatable | Column header names, `column("name")`. |
 | `depth` | integer(kind=I4P) |  | Stack size needed. |
 
 #### Type-Bound Procedures
@@ -136,7 +158,13 @@ Compiled expression.
 |------|------------|-------------|
 | `compile` | pass(self) | Compile an expression. |
 | `evaluate` | pass(self) | Value on a data row. |
+| `first_column` | pass(self) | First data column read. |
+| `name_count` | pass(self) | Number of column header names. |
+| `name_of` | pass(self) | A column header name. |
+| `resolve` | pass(self) | Header names to column numbers. |
 | `set_column` | pass(self) | Plain column. |
+| `set_name` | pass(self) | Plain column of a header name. |
+| `value_at` | pass(self) | Value of a function at its variable value. |
 
 ## Subroutines
 
@@ -144,8 +172,11 @@ Compiled expression.
 
 Compile `text`; on error `iostat` is not 0 and `iomsg` names the problem and its position.
 
+ With `variable` (gnuplot's dummy `x`) the expression is a function of it, evaluated by `value_at`; columns are
+ then errors. The variable is held as the only cell of the row `evaluate` receives.
+
 ```fortran
-subroutine compile(self, text, iostat, iomsg)
+subroutine compile(self, text, iostat, iomsg, variable)
 ```
 
 **Arguments**
@@ -156,12 +187,14 @@ subroutine compile(self, text, iostat, iomsg)
 | `text` | character(len=*) | in |  | Source text. |
 | `iostat` | integer(kind=I4P) | out |  | 0 on success. |
 | `iomsg` | character(len=:) | out | allocatable | Error message. |
+| `variable` | character(len=*) | in | optional | Dummy variable name, for a function. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   parse_using["parse_using"] --> compile["compile"]
+  plot_command["plot_command"] --> compile["compile"]
   compile["compile"] --> next["next"]
   compile["compile"] --> parse_ternary["parse_ternary"]
   compile["compile"] --> syntax["syntax"]
@@ -194,6 +227,31 @@ flowchart TD
   plain_columns["plain_columns"] --> set_column["set_column"]
   plot_command["plot_command"] --> set_column["set_column"]
   style set_column fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_name
+
+Make the expression the plain column of header `name`, as gnuplot `using 1:"name"`.
+
+**Attributes**: pure
+
+```fortran
+subroutine set_name(self, name)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | inout |  | Expression. |
+| `name` | character(len=*) | in |  | Column header name. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  parse_using["parse_using"] --> set_name["set_name"]
+  style set_name fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### binary
@@ -373,6 +431,7 @@ function evaluate(self, row, point) result(v)
 
 ```mermaid
 flowchart TD
+  value_at["value_at"] --> evaluate["evaluate"]
   evaluate["evaluate"] --> binary["binary"]
   evaluate["evaluate"] --> column["column"]
   evaluate["evaluate"] --> logical_value["logical_value"]
@@ -380,6 +439,126 @@ flowchart TD
   evaluate["evaluate"] --> truth["truth"]
   evaluate["evaluate"] --> unary["unary"]
   style evaluate fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### first_column
+
+First data column (from 1) the expression reads, 0 if none (an unresolved name is none): the column whose header
+ titles the item, as gnuplot `title columnhead`.
+
+**Attributes**: pure
+
+**Returns**: `integer(kind=I4P)`
+
+```fortran
+function first_column(self) result(c)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | Expression. |
+
+### name_count
+
+Number of column header names used.
+
+**Attributes**: elemental
+
+**Returns**: `integer(kind=I4P)`
+
+```fortran
+function name_count(self) result(n)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | Expression. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  missing_name["missing_name"] --> name_count["name_count"]
+  plot_command["plot_command"] --> name_count["name_count"]
+  style name_count fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### name_of
+
+The `k`-th column header name.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function name_of(self, k) result(name)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | Expression. |
+| `k` | integer(kind=I4P) | in |  | Name index. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  missing_name["missing_name"] --> name_of["name_of"]
+  style name_of fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### resolve
+
+The expression with its column header names replaced by their column numbers in `header` (the names of columns
+ 1, 2, ...; trailing blanks ignored); a name not in it reads no column: undefined.
+
+**Attributes**: pure
+
+**Returns**: type([expression_object](/api/src/lib/foresight_expression#expression-object))
+
+```fortran
+function resolve(self, header) result(resolved)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | Expression. |
+| `header` | character(len=*) | in |  | Column names. |
+
+### value_at
+
+Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.
+
+**Attributes**: pure
+
+**Returns**: `real(kind=R8P)`
+
+```fortran
+function value_at(self, x) result(v)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([expression_object](/api/src/lib/foresight_expression#expression-object)) | in |  | Expression. |
+| `x` | real(kind=R8P) | in |  | Variable value. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  value_at["value_at"] --> evaluate["evaluate"]
+  style value_at fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### in_level

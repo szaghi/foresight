@@ -10,7 +10,8 @@ title: foresight_backend_svg
  never reads a partial document. The plot area is a nested `<svg class="fs-plot">` whose `viewBox` is the unit square:
  data geometry lives in unit coordinates, and `vector-effect="non-scaling-stroke"` keeps its line widths in pixels.
  Panels are `<g class="fs-axes">` carrying their geometry and axis ranges as `data-*` attributes; decorations the
- interactive viewer regenerates are `<g class="fs-...">` groups.
+ interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
+ attributes only when active or not the default, so a plain panel reads the same as before them.
 
 **Source**: `src/lib/foresight_backend_svg.F90`
 
@@ -48,7 +49,10 @@ graph LR
 - [write_pairs](#write-pairs)
 - [text_width](#text-width)
 - [output_unit](#output-unit)
+- [marker_element](#marker-element)
+- [marker_path](#marker-path)
 - [dash_attribute](#dash-attribute)
+- [series_attribute](#series-attribute)
 - [flag](#flag)
 - [px](#px)
 
@@ -86,6 +90,8 @@ classDiagram
 | `tmp_file` | character(len=:) | allocatable | File being written. |
 | `area` | real(kind=R8P) |  | Current plot area: left, top, width, height [px]. |
 | `caps` | character(len=:) | allocatable | Error bar caps of the current plot area, pixel overlay. |
+| `marks` | character(len=:) | allocatable | Point type markers of the current plot area, pixel overlay. |
+| `series` | integer(kind=I4P) |  | Series of the open group, 0 for none. |
 
 #### Type-Bound Procedures
 
@@ -138,6 +144,7 @@ subroutine begin_page(self, file, width, height, font_size)
 
 ```mermaid
 flowchart TD
+  begin_page["begin_page"] --> begin_page["begin_page"]
   render["render"] --> begin_page["begin_page"]
   begin_page["begin_page"] --> open_file["open_file"]
   begin_page["begin_page"] --> open_svg["open_svg"]
@@ -222,10 +229,11 @@ flowchart TD
 
 ### begin_group
 
-Open the group of class `name`; hidden with `display="none"` when `visible` is false.
+Open the group of class `name`; hidden with `display="none"` when `visible` is false; a series group carries its
+ number as `data-series`, as do its overlay markers and caps.
 
 ```fortran
-subroutine begin_group(self, name, visible)
+subroutine begin_group(self, name, visible, series)
 ```
 
 **Arguments**
@@ -235,14 +243,17 @@ subroutine begin_group(self, name, visible)
 | `self` | class([backend_svg](/api/src/lib/foresight_backend_svg#backend-svg)) | inout |  | Device. |
 | `name` | character(len=*) | in |  | Group name. |
 | `visible` | logical | in | optional | Group shown. |
+| `series` | integer(kind=I4P) | in | optional | Series number. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_frame["draw_frame"] --> begin_group["begin_group"]
+  draw_key["draw_key"] --> begin_group["begin_group"]
   render["render"] --> begin_group["begin_group"]
   begin_group["begin_group"] --> put["put"]
+  begin_group["begin_group"] --> series_attribute["series_attribute"]
   style begin_group fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -265,6 +276,7 @@ subroutine end_group(self)
 ```mermaid
 flowchart TD
   draw_frame["draw_frame"] --> end_group["end_group"]
+  draw_key["draw_key"] --> end_group["end_group"]
   render["render"] --> end_group["end_group"]
   end_group["end_group"] --> put["put"]
   style end_group fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -338,10 +350,10 @@ flowchart TD
 
 ### dots
 
-Filled round dots centred on the points (`x`, `y`) [px].
+Filled round dots centred on the points (`x`, `y`) [px], or point type markers.
 
 ```fortran
-subroutine dots(self, x, y, color, diameter)
+subroutine dots(self, x, y, color, diameter, pt, line_width)
 ```
 
 **Arguments**
@@ -352,13 +364,16 @@ subroutine dots(self, x, y, color, diameter)
 | `x` | real(kind=R8P) | in |  | Abscissae [px]. |
 | `y` | real(kind=R8P) | in |  | Ordinates [px]. |
 | `color` | character(len=*) | in |  | Fill color. |
-| `diameter` | real(kind=R8P) | in |  | Dot diameter [px]. |
+| `diameter` | real(kind=R8P) | in |  | Dot diameter, or marker width [px]. |
+| `pt` | integer(kind=I4P) | in | optional | gnuplot point type; negative or absent: round dots. |
+| `line_width` | real(kind=R8P) | in | optional | Marker line width [px]. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_key["draw_key"] --> dots["dots"]
+  dots["dots"] --> marker_element["marker_element"]
   dots["dots"] --> put["put"]
   dots["dots"] --> px["px"]
   dots["dots"] --> write_pairs["write_pairs"]
@@ -392,6 +407,7 @@ flowchart TD
   draw_frame["draw_frame"] --> text["text"]
   draw_key["draw_key"] --> text["text"]
   render["render"] --> text["text"]
+  save["save"] --> text["text"]
   text["text"] --> put["put"]
   text["text"] --> px["px"]
   text["text"] --> xml_escape["xml_escape"]
@@ -420,6 +436,7 @@ subroutine begin_plot_area(self, x, y, width, height)
 
 ```mermaid
 flowchart TD
+  begin_plot_area["begin_plot_area"] --> begin_plot_area["begin_plot_area"]
   render["render"] --> begin_plot_area["begin_plot_area"]
   begin_plot_area["begin_plot_area"] --> put["put"]
   begin_plot_area["begin_plot_area"] --> px["px"]
@@ -428,8 +445,8 @@ flowchart TD
 
 ### end_plot_area
 
-Close the plot area, then write the error bar caps overlay (pixel space, clipped to the plot area): caps keep
- their pixel length under zoom, the interactive viewer regenerates them from the bars.
+Close the plot area, then write the overlays of error bar caps and point type markers (pixel space, clipped to the
+ plot area): they keep their pixel size under zoom, the interactive viewer regenerates them from the data.
 
 ```fortran
 subroutine end_plot_area(self)
@@ -446,8 +463,8 @@ subroutine end_plot_area(self)
 ```mermaid
 flowchart TD
   render["render"] --> end_plot_area["end_plot_area"]
+  end_plot_area["end_plot_area"] --> overlay["overlay"]
   end_plot_area["end_plot_area"] --> put["put"]
-  end_plot_area["end_plot_area"] --> px["px"]
   style end_plot_area fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -484,10 +501,14 @@ flowchart TD
 
 ### data_dots
 
-Filled round dots centred on the points (`x`, `y`) [unit square].
+Filled round dots centred on the points (`x`, `y`) [unit square], or point type markers.
+
+ Markers keep their shape only in pixels: the plot area holds their centres as an invisible `fs-pts` path of
+ `M` moves (unit square) carrying the marker as `data-*` attributes, and the markers are queued for the pixel
+ overlay written by `end_plot_area`, which the interactive viewer regenerates from the centres after a zoom.
 
 ```fortran
-subroutine data_dots(self, x, y, color, diameter)
+subroutine data_dots(self, x, y, color, diameter, pt, line_width)
 ```
 
 **Arguments**
@@ -498,13 +519,17 @@ subroutine data_dots(self, x, y, color, diameter)
 | `x` | real(kind=R8P) | in |  | Abscissae [unit]. |
 | `y` | real(kind=R8P) | in |  | Ordinates [unit]. |
 | `color` | character(len=*) | in |  | Fill color. |
-| `diameter` | real(kind=R8P) | in |  | Dot diameter [px]. |
+| `diameter` | real(kind=R8P) | in |  | Dot diameter, or marker width [px]. |
+| `pt` | integer(kind=I4P) | in | optional | gnuplot point type; negative or absent: round dots. |
+| `line_width` | real(kind=R8P) | in | optional | Marker line width [px]. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   draw_series["draw_series"] --> data_dots["data_dots"]
+  data_dots["data_dots"] --> int_str["int_str"]
+  data_dots["data_dots"] --> marker_element["marker_element"]
   data_dots["data_dots"] --> put["put"]
   data_dots["data_dots"] --> px["px"]
   data_dots["data_dots"] --> write_pairs["write_pairs"]
@@ -541,6 +566,7 @@ flowchart TD
   data_bars["data_bars"] --> fixed["fixed"]
   data_bars["data_bars"] --> put["put"]
   data_bars["data_bars"] --> px["px"]
+  data_bars["data_bars"] --> series_attribute["series_attribute"]
   style data_bars fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -647,9 +673,7 @@ flowchart TD
   begin_plot_area["begin_plot_area"] --> put["put"]
   data_bars["data_bars"] --> put["put"]
   data_dots["data_dots"] --> put["put"]
-  data_dots["data_dots"] --> put["put"]
   data_polyline["data_polyline"] --> put["put"]
-  dots["dots"] --> put["put"]
   dots["dots"] --> put["put"]
   end_axes["end_axes"] --> put["put"]
   end_group["end_group"] --> put["put"]
@@ -659,6 +683,7 @@ flowchart TD
   open_svg["open_svg"] --> put["put"]
   polyline["polyline"] --> put["put"]
   polyline["polyline"] --> put["put"]
+  px_point["px_point"] --> put["put"]
   rect["rect"] --> put["put"]
   rect["rect"] --> put["put"]
   segment["segment"] --> put["put"]
@@ -726,9 +751,8 @@ function text_width(self, string, sup, font_size) result(width)
 
 ```mermaid
 flowchart TD
-  draw_key["draw_key"] --> text_width["text_width"]
+  key_layout["key_layout"] --> text_width["text_width"]
   place_plot_area["place_plot_area"] --> text_width["text_width"]
-  ytick_labels_width["ytick_labels_width"] --> text_width["text_width"]
   style text_width fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -758,6 +782,76 @@ flowchart TD
   style output_unit fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### marker_element
+
+One `<path>` of the markers of gnuplot point type `pt`, `width_px` px wide, centred on the points (`x`, `y`) [px]:
+ the filled shapes (the odd types from 5, and the dot) are filled with `color`, the others stroked only.
+
+**Returns**: `character(len=:)`
+
+```fortran
+function marker_element(x, y, color, width_px, pt, line_width, series) result(element)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `x` | real(kind=R8P) | in |  | Abscissae [px]. |
+| `y` | real(kind=R8P) | in |  | Ordinates [px]. |
+| `color` | character(len=*) | in |  | Color. |
+| `width_px` | real(kind=R8P) | in |  | Marker width [px]. |
+| `pt` | integer(kind=I4P) | in |  | gnuplot point type, >= 0. |
+| `line_width` | real(kind=R8P) | in | optional | Line width [px], default 1. |
+| `series` | integer(kind=I4P) | in | optional | Series number, 0 or absent for none. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  data_dots["data_dots"] --> marker_element["marker_element"]
+  dots["dots"] --> marker_element["marker_element"]
+  marker_element["marker_element"] --> append["append"]
+  marker_element["marker_element"] --> marker_path["marker_path"]
+  marker_element["marker_element"] --> px["px"]
+  marker_element["marker_element"] --> series_attribute["series_attribute"]
+  style marker_element fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### marker_path
+
+Path data of a marker of half width `r` centred on (`x`, `y`) [px]: gnuplot's svg shapes, 1 plus, 2 cross, 3 star,
+ 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond, 14-15 pentagon, 0 a 1 px dot.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function marker_path(x, y, r, shape) result(d)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `x` | real(kind=R8P) | in |  | Centre abscissa [px]. |
+| `y` | real(kind=R8P) | in |  | Centre ordinate [px]. |
+| `r` | real(kind=R8P) | in |  | Half width [px]. |
+| `shape` | integer(kind=I4P) | in |  | Shape, 0..15. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  marker_element["marker_element"] --> marker_path["marker_path"]
+  marker_path["marker_path"] --> circle["circle"]
+  marker_path["marker_path"] --> cross["cross"]
+  marker_path["marker_path"] --> plus["plus"]
+  marker_path["marker_path"] --> polygon["polygon"]
+  style marker_path fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### dash_attribute
 
 ` stroke-dasharray="..."` attribute, empty for solid lines.
@@ -783,6 +877,35 @@ flowchart TD
   data_polyline["data_polyline"] --> dash_attribute["dash_attribute"]
   polyline["polyline"] --> dash_attribute["dash_attribute"]
   style dash_attribute fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### series_attribute
+
+` data-series="N"` attribute.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function series_attribute(series) result(attribute)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `series` | integer(kind=I4P) | in |  | Series number. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  begin_group["begin_group"] --> series_attribute["series_attribute"]
+  data_bars["data_bars"] --> series_attribute["series_attribute"]
+  marker_element["marker_element"] --> series_attribute["series_attribute"]
+  series_attribute["series_attribute"] --> int_str["int_str"]
+  style series_attribute fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### flag
@@ -839,7 +962,7 @@ flowchart TD
   data_dots["data_dots"] --> px["px"]
   data_polyline["data_polyline"] --> px["px"]
   dots["dots"] --> px["px"]
-  end_plot_area["end_plot_area"] --> px["px"]
+  marker_element["marker_element"] --> px["px"]
   open_svg["open_svg"] --> px["px"]
   polyline["polyline"] --> px["px"]
   rect["rect"] --> px["px"]

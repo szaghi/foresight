@@ -29,8 +29,10 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,47 590,47"/>
 </g>
 <svg class="fs-plot" x="42.4" y="47" width="547.6" height="322" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0,0 0.090909,0.5 0.181818,0.666667 0.272727,0.75 0.363636,0.8 0.454545,0.833333 0.545455,0.857143 0.636364,0.875
 0.727273,0.888889 0.818182,0.9 0.909091,0.909091 1,0.916667"/>
+</g>
 </svg>
 <rect x="42.4" y="47" width="547.6" height="322" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
@@ -106,8 +108,10 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="590,47 584,47"/>
 <text x="36.4" y="51.2" text-anchor="end">1.1</text>
 </g>
+<g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" points="544,60.5 580,60.5"/>
 <text x="538" y="64.7" text-anchor="end">cd</text>
+</g>
 </g>
 <g class="fs-axes" data-area="249.1 530 102.35 239.85" data-x="0 1.2e1" data-y="1e-4 1e0" data-log="0 1" data-grid="0" data-font-size="12">
 <g class="fs-grid" display="none">
@@ -125,10 +129,12 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="249.1,102.35 530,102.35"/>
 </g>
 <svg class="fs-plot" x="249.1" y="102.35" width="280.9" height="137.5" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.083333,0.075 0.166667,0.15 0.25,0.225 0.333333,0.3 0.416667,0.375 0.5,0.45 0.583333,0.525 0.666667,0.6
 0.75,0.675 0.833333,0.75 0.916667,0.825 1,0.9"/>
 <path fill="none" stroke="#9400d3" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0.083333,0.075h0 M0.166667,0.15h0 M0.25,0.225h0 M0.333333,0.3h0 M0.416667,0.375h0 M0.5,0.45h0 M0.583333,0.525h0 M0.666667,0.6h0
 M0.75,0.675h0 M0.833333,0.75h0 M0.916667,0.825h0 M1,0.9h0"/>
+</g>
 </svg>
 <rect x="249.1" y="102.35" width="280.9" height="137.5" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">

@@ -21,7 +21,7 @@ options:
 
 Plots go to `SCRIPT.html` (the script name without directory and extension), or `foresight.html` when only `-e`
 commands are given. `-o` changes that default; inside the script, `set output` wins, and `set terminal` changes the
-extension of the default output only (`set terminal dumb` sends it to the standard output). See
+extension of the default output only (`set terminal dumb` or `block` sends it to the standard output). See
 [Output Formats](output-formats).
 
 ```bash
