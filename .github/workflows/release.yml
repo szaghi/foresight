@@ -60,6 +60,9 @@ jobs:
 
   install:
     # run in this workflow: a release published with GITHUB_TOKEN triggers no workflow
+    # TEMPORARY: the smoke test installs anonymously, as a user would, which a private repository refuses (the
+    # releases API answers 404); it runs again once the repository is public
+    if: ${{ !github.event.repository.private }}
     needs: release
     permissions:
       contents: read
