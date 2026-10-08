@@ -40,7 +40,8 @@ that did what it says.
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
-| **st**yle **d**ata `STYLE` | style of items without `with` | — |
+| **st**yle **d**ata `STYLE` | style of data items without `with` | — |
+| **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
@@ -129,8 +130,8 @@ set samples 400; plot x * sin(1/x)
 As gnuplot, a function is sampled at `set samples` points (100) evenly over the x range before its extension to the
 ticks: the `xrange` ends where set, else the extent of the data of the whole plot, else [-10:10]. On a log x axis the
 samples are evenly spaced in log x. Undefined values (`1/0`, `log(-1)`) are gaps. Functions are drawn `with lines`
-whatever `set style data` says (gnuplot's `set style function`); `points` and `linespoints` work too, error bars do
-not. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
+by default whatever `set style data` says; `set style function points` (or `linespoints`) changes it, error bars are
+not usable. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
 
 In the HTML page a zoom does not resample: the samples are those of the original range.
 
@@ -228,7 +229,7 @@ rewritten at each plot, so that a watched page shows the panels done so far.
 
 ## Not supported
 
-User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`), `set style function`, the second
+User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`), the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key

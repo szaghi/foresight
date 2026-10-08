@@ -8,7 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : WITH_LINES
+use foresight_style, only : WITH_LINES, WITH_LINESPOINTS, WITH_POINTS
 
 implicit none
 character(len=*), parameter   :: data_file = 'foresight_script_test.dat'   !< Test data file.
@@ -27,7 +27,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(37)                           !< Per-check outcome.
+logical                       :: test_passed(38)                           !< Per-check outcome.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -236,6 +236,20 @@ endassociate
 call interpreter%run_text('set xrange [1e999:1]', iostat, iomsg)
 test_passed(37) = iostat /= 0_I4P .and. index(iomsg, '"1e999" is not a number') > 0
 
+! set style function: the default style of functions, error bars refused; with overrides it; unset restores lines
+call interpreter%init(scratch)
+call interpreter%run_text('set style f p; plot x, x**2 w lp', iostat, iomsg)
+test_passed(38) = iostat == 0_I4P
+if (test_passed(38)) test_passed(38) = interpreter%figure%panels(1)%series(1)%style%with == WITH_POINTS .and. &
+                                       interpreter%figure%panels(1)%series(2)%style%with == WITH_LINESPOINTS
+call interpreter%run_text('set style function yerrorbars', iostat, iomsg)
+test_passed(38) = test_passed(38) .and. iostat /= 0_I4P .and. index(iomsg, 'not usable for function plots') > 0
+call interpreter%run_text('unset style function; plot x', iostat, iomsg)
+test_passed(38) = test_passed(38) .and. iostat == 0_I4P
+if (test_passed(38)) test_passed(38) = interpreter%figure%panels(1)%series(1)%style%with == WITH_LINES
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -248,7 +262,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,37L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,38L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

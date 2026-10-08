@@ -13,7 +13,7 @@ module foresight_script
 !< - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
 !<   `unset xtics|ytics|y2tics`, `set format [AXES] ["fmt"]`, `unset format`,
 !<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
-!<   `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
+!<   `set style data|function STYLE`, `unset style function`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
 !<   [lc [rgb] "color"|N] [lw W] [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|
@@ -21,7 +21,7 @@ module foresight_script
 !<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression); `ls N`, `lt N` in an item apply a line style, a palette color;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
-!<   `lines` by default as gnuplot's function style): sampled at `set samples` points (100) over the x range before its
+!<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
@@ -65,6 +65,7 @@ type :: script_object
    logical                         :: advance_pending = .false. !< A multiplot panel was plotted: the next command
                                                                 !< opens the next panel.
    character(len=:), allocatable   :: data_style               !< Default plot style, `set style data`.
+   character(len=:), allocatable   :: function_style           !< Default function style, `set style function`.
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
@@ -96,6 +97,7 @@ contains
    if (allocated(self%data_files)) deallocate(self%data_files)
    allocate(self%data_files(0))
    self%data_style = 'lines'
+   self%function_style = 'lines'
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
    self%separator = ''
@@ -349,8 +351,7 @@ contains
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       with = self%data_style
-      ! gnuplot `set style function`, never changed here
-      if (is_function) with = 'lines'
+      if (is_function) with = self%function_style
       has_title = .false.
       title = ''
       axes = 'x1y1'
@@ -386,7 +387,7 @@ contains
                          'xerrorbars, xyerrorbars)', iostat, iomsg)
                return
             endif
-            if (is_function .and. with /= 'lines' .and. with /= 'points' .and. with /= 'linespoints') then
+            if (is_function .and. .not. function_drawable(with)) then
                call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
                return
             endif
@@ -1075,7 +1076,7 @@ contains
       endsubroutine format_option
 
       subroutine style_option
-      !< `set style data STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
+      !< `set style data|function STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
       type(line_style_object) :: style !< New line style.
       character(len=:), allocatable :: with !< Style name.
       integer(I4P) :: s !< Counter.
@@ -1092,6 +1093,23 @@ contains
                return
             endif
             self%data_style = with
+            return
+         elseif (keyword(tokens(2)%text, 'function', 1_I4P)) then
+            if (size(tokens) /= 3) then
+               call fail('set style function: one style is expected', iostat, iomsg)
+               return
+            endif
+            with = canonical_style(tokens(3)%text)
+            if (len(with) == 0) then
+               call fail('set style function: unsupported style "'//tokens(3)%text//'"', iostat, iomsg)
+               return
+            endif
+            if (.not. function_drawable(with)) then
+               call fail('set style function: '//with//' is not usable for function plots (lines, points, '// &
+                         'linespoints are)', iostat, iomsg)
+               return
+            endif
+            self%function_style = with
             return
          elseif (keyword(tokens(2)%text, 'line', 1_I4P)) then
             i = 2_I4P
@@ -1122,7 +1140,7 @@ contains
             return
          endif
       endif
-      call fail('set style: only "data STYLE" and "line N ..." are supported', iostat, iomsg)
+      call fail('set style: only "data STYLE", "function STYLE" and "line N ..." are supported', iostat, iomsg)
       endsubroutine style_option
    endsubroutine set_command
 
@@ -1134,6 +1152,7 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    character(len=:), allocatable                :: option    !< Option word.
    character(len=:), allocatable                :: axes      !< Axes letters.
+   logical                                      :: ok        !< Supported sub-option.
 
    iostat = 0_I4P
    iomsg = ''
@@ -1145,6 +1164,15 @@ contains
    if (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
       call self%figure%unset_logscale(axes)
+      return
+   elseif (keyword(option, 'style', 2_I4P)) then
+      ok = .false.
+      if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P)
+      if (.not. ok) then
+         call fail('unset style: only "function" is supported', iostat, iomsg)
+         return
+      endif
+      self%function_style = 'lines'
       return
    elseif (keyword(option, 'datafile', 5_I4P)) then
       ! all the datafile settings, or the separator only: the same here
@@ -1490,6 +1518,14 @@ contains
    enddo
    line%lc = default_color(id)
    endsubroutine apply_line_style
+
+   pure function function_drawable(with) result(yes)
+   !< Whether the style `with` draws a function: lines, points or linespoints, not error bars.
+   character(len=*), intent(in) :: with !< Full style name.
+   logical                      :: yes  !< Usable for functions.
+
+   yes = with == 'lines' .or. with == 'points' .or. with == 'linespoints'
+   endfunction function_drawable
 
    pure function is_item_option(word) result(is)
    !< Whether `word` is a plot item option: it ends a function expression.
