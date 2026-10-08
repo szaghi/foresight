@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.2] — 2026-10-08
+### Added
+- Add block terminal, smooth filters and live-monitoring viewer keys
+
+
+### Documentation
+- Rebuild the documentation around a tutorial, a cookbook and live plots
+
+
 ## [0.2.1] — 2026-10-08
 ### Added
 - **script**: Add column headers, point types and keys outside the plot
