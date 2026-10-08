@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.0] — 2026-10-08
+### Added
+- **script**: Add CSV separators, function plots and a second y axis
+
+- **script**: Add set style function
+
+
+### Fixed
+- **ci**: Run install smoke test from the release workflow
+
+- **build**: Exclude dependency docs from source scan
+
+- **datafile**: Read cells as gnuplot and keep tick positions on set xtics
+
+
 ## [0.1.0] — 2026-09-29
 ### Added
 - Initial foresight scaffold and static SVG plotting core
