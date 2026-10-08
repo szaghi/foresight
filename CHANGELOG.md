@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.1] — 2026-10-08
+### Added
+- **script**: Add column headers, point types and keys outside the plot
+
+
+### Fixed
+- **ci**: Skip the release install smoke test while the repo is private
+
+
 ## [0.2.0] — 2026-10-08
 ### Added
 - **script**: Add CSV separators, function plots and a second y axis
