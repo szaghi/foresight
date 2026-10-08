@@ -7,6 +7,9 @@ module foresight_datafile
 !< are `?`, `NaN`, `inf`, empty or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of
 !< each dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
 !<
+!< The first row of each dataset is kept as text too: with headers in use (`table(..., header=.true.)`) it names the
+!< columns, for `using 1:"name"` and `title columnhead`, and is not data; else it is a row as any other.
+!<
 !< A cell is read as gnuplot does, by C `strtod`: its longest leading number counts and the rest is ignored (`3abc` is
 !< 3, `1.2.3` is 1.2, `1d3` is 1), hexadecimal included (`0x10` is 16, `0x1.8p1` is 3); a value beyond the real range
 !< is a gap.
@@ -30,6 +33,16 @@ public :: datafile_object
 
 character(len=1), parameter :: TAB = achar(9) !< Tab character.
 
+type :: text_object
+   !< Cell text.
+   character(len=:), allocatable :: text !< Text, unquoted.
+endtype text_object
+
+type :: header_object
+   !< First row of a dataset, as text.
+   type(text_object), allocatable :: cells(:) !< Cells.
+endtype header_object
+
 type :: datafile_object
    !< Data file content.
    character(len=:), allocatable :: file              !< File name.
@@ -37,12 +50,16 @@ type :: datafile_object
    integer(I4P), allocatable     :: first(:)          !< Index in `values` of the first value of each row (+1 sentinel).
    integer(I4P), allocatable     :: dataset(:)        !< Dataset (0-based) of each row.
    integer(I4P), allocatable     :: block(:)          !< Block (global counter) of each row.
+   type(header_object), allocatable :: headers(:)     !< First row of each dataset as text, by dataset from 1.
    integer(I4P)                  :: nrows   = 0_I4P   !< Number of data rows.
    integer(I4P)                  :: nvalues = 0_I4P   !< Number of stored values.
    contains
+      procedure, pass(self) :: column_header !< Header name of a column.
       procedure, pass(self) :: columns       !< Extract a (x, y) series.
       procedure, pass(self) :: default_using !< gnuplot default columns.
+      procedure, pass(self) :: header_names  !< Header names of a dataset.
       procedure, pass(self) :: load          !< Read a file.
+      procedure, pass(self) :: missing_name  !< A header name of the fields found nowhere.
       procedure, pass(self) :: table         !< Evaluate `using` fields.
 endtype datafile_object
 
@@ -67,6 +84,7 @@ contains
    integer(I4P)                                        :: n         !< Code part length.
    logical                                             :: quoted    !< Inside double quotes.
    logical                                             :: eof       !< End of file reached.
+   logical                                             :: recording !< Recording the header of a dataset.
 
    self%file = file
    sep = ''
@@ -77,7 +95,8 @@ contains
    if (allocated(self%first)) deallocate(self%first)
    if (allocated(self%dataset)) deallocate(self%dataset)
    if (allocated(self%block)) deallocate(self%block)
-   allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256))
+   if (allocated(self%headers)) deallocate(self%headers)
+   allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256), self%headers(0))
    self%first(1) = 1_I4P
    iomsg = ''
    open(newunit=unit, file=file, action='read', status='old', form='formatted', access='sequential', &
@@ -124,6 +143,7 @@ contains
                   if (line(j:j) == '"') quoted = .not. quoted
                enddo
                call add_value(to_real(line(i:j)))
+               if (recording) call record(line(i:j))
                i = j + 1_I4P
             enddo
          else
@@ -137,6 +157,7 @@ contains
                   j = j + 1_I4P
                enddo
                call add_value(cell_value(line(i:j - 1_I4P)))
+               if (recording) call record(line(i:j - 1_I4P))
                if (j > n) exit
                i = j + 1_I4P
             enddo
@@ -169,7 +190,31 @@ contains
       self%dataset(self%nrows) = dset
       self%block(self%nrows) = blk
       self%first(self%nrows + 1_I4P) = self%nvalues + 1_I4P
+      ! the first row of a dataset is also kept as text, a header if one is used
+      recording = self%nrows == 1_I4P
+      if (.not. recording) recording = self%dataset(self%nrows - 1_I4P) /= dset
+      if (recording) self%headers = [self%headers, header_object([text_object ::])]
       endsubroutine new_row
+
+      subroutine record(cell)
+      !< Append `cell` to the header of the current dataset: blanks around it and double quotes removed.
+      character(len=*), intent(in) :: cell  !< Cell text.
+      integer(I4P)                 :: first !< First character kept.
+      integer(I4P)                 :: last  !< Last character kept.
+
+      first = verify(cell, ' '//TAB, kind=I4P)
+      last = verify(cell, ' '//TAB, back=.true., kind=I4P)
+      if (first == 0_I4P) then
+         first = 1_I4P
+         last = 0_I4P
+      elseif (last > first .and. cell(first:first) == '"' .and. cell(last:last) == '"') then
+         first = first + 1_I4P
+         last = last - 1_I4P
+      endif
+      associate(header => self%headers(size(self%headers)))
+         header%cells = [header%cells, text_object(cell(first:last))]
+      endassociate
+      endsubroutine record
 
       subroutine add_value(v)
       !< Append a value to the current row, doubling the storage when full.
@@ -222,9 +267,12 @@ contains
    y = values(:, 2)
    endsubroutine columns
 
-   subroutine table(self, fields, index, every, values)
+   subroutine table(self, fields, index, every, values, header)
    !< Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
    !< `values(point, field)`.
+   !<
+   !< With `header` the first row of each dataset names the columns: it is skipped, neither a point nor counted, and
+   !< the column header names of the fields are resolved on the header of each dataset.
    !<
    !< `every` is gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, an end negative for
    !< none. Points are numbered within their block, blocks within their dataset, from 0.
@@ -236,10 +284,23 @@ contains
    integer(I4P),            intent(in)  :: index       !< Dataset, 0-based; negative for all.
    integer(I4P),            intent(in)  :: every(6)    !< gnuplot `every` fields.
    real(R8P), allocatable,  intent(out) :: values(:,:) !< Points.
+   logical,                 intent(in), optional :: header !< The first row of each dataset is a header.
+   logical                              :: headed      !< Headers in use.
 
+   headed = .false.
+   if (present(header)) headed = header
    allocate(values(count_points(), size(fields)))
    call store_points
    contains
+      pure function is_header(r) result(yes)
+      !< Whether row `r` is a header: the first of its dataset, with headers in use.
+      integer(I4P), intent(in) :: r   !< Row.
+      logical                  :: yes !< Header row.
+
+      yes = headed
+      if (yes .and. r > 1_I4P) yes = self%dataset(r) /= self%dataset(r - 1_I4P)
+      endfunction is_header
+
       pure function count_points() result(total)
       !< Number of points, breaks included.
       integer(I4P) :: total    !< Points.
@@ -254,6 +315,11 @@ contains
       last_blk = -1_I4P
       do r = 1_I4P, self%nrows
          call advance(r, in_block, in_set_block)
+         if (is_header(r)) then
+            ! the next row is the first point of the block
+            in_block = -1_I4P
+            cycle
+         endif
          if (.not. selected(r, in_block, in_set_block)) cycle
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) total = total + 1_I4P
          last_blk = self%block(r)
@@ -271,7 +337,10 @@ contains
       integer(I4P) :: last_blk !< Block of the last selected point.
       integer(I4P) :: picked   !< Selected point number within the dataset: gnuplot's column 0.
       integer(I4P) :: set      !< Dataset of the last selected point.
+      type(expression_object) :: resolved(size(fields)) !< Fields on the header of the current dataset.
+      character(len=:), allocatable :: names(:) !< Header names of the current dataset.
 
+      resolved = fields
       k = 0_I4P
       in_block = -1_I4P
       in_set_block = -1_I4P
@@ -280,6 +349,14 @@ contains
       set = -1_I4P
       do r = 1_I4P, self%nrows
          call advance(r, in_block, in_set_block)
+         if (is_header(r)) then
+            in_block = -1_I4P
+            call self%header_names(self%dataset(r), names)
+            do f = 1_I4P, size(fields, kind=I4P)
+               resolved(f) = fields(f)%resolve(names)
+            enddo
+            cycle
+         endif
          if (.not. selected(r, in_block, in_set_block)) cycle
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) then
             k = k + 1_I4P
@@ -291,7 +368,7 @@ contains
          picked = picked + 1_I4P
          k = k + 1_I4P
          do f = 1_I4P, size(fields, kind=I4P)
-            values(k, f) = fields(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), picked)
+            values(k, f) = resolved(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), picked)
          enddo
       enddo
       endsubroutine store_points
@@ -338,6 +415,77 @@ contains
       if (yes .and. last >= 0_I4P) yes = k <= last
       endfunction in_loop
    endsubroutine table
+
+   pure function column_header(self, set, c) result(name)
+   !< Header name of column `c` (from 1) of dataset `set` (from 0), empty if none.
+   class(datafile_object), intent(in) :: self !< Data.
+   integer(I4P),           intent(in) :: set  !< Dataset.
+   integer(I4P),           intent(in) :: c    !< Column.
+   character(len=:), allocatable      :: name !< Header name.
+
+   name = ''
+   if (set < 0_I4P .or. set >= size(self%headers, kind=I4P)) return
+   associate(header => self%headers(set + 1_I4P))
+      if (c >= 1_I4P .and. c <= size(header%cells, kind=I4P)) name = header%cells(c)%text
+   endassociate
+   endfunction column_header
+
+   pure subroutine header_names(self, set, names)
+   !< Header names of the columns of dataset `set` (from 0), blank padded; none if no such dataset.
+   !<
+   !< A subroutine: a function with this deferred length array result, called in an internal procedure, is an internal
+   !< compiler error of gfortran 16.
+   class(datafile_object),        intent(in)  :: self     !< Data.
+   integer(I4P),                  intent(in)  :: set      !< Dataset.
+   character(len=:), allocatable, intent(out) :: names(:) !< Names of columns 1, 2, ...
+   integer(I4P)                       :: c        !< Column counter.
+   integer(I4P)                       :: width    !< Longest name.
+
+   if (set < 0_I4P .or. set >= size(self%headers, kind=I4P)) then
+      allocate(character(len=0) :: names(0))
+      return
+   endif
+   associate(header => self%headers(set + 1_I4P))
+      width = 0_I4P
+      do c = 1_I4P, size(header%cells, kind=I4P)
+         width = max(width, len(header%cells(c)%text, kind=I4P))
+      enddo
+      allocate(character(len=width) :: names(size(header%cells)))
+      do c = 1_I4P, size(header%cells, kind=I4P)
+         names(c) = header%cells(c)%text
+      enddo
+   endassociate
+   endsubroutine header_names
+
+   pure function missing_name(self, fields, index) result(name)
+   !< First column header name of the `fields` that no header of dataset `index` (all if negative) has, empty if none.
+   class(datafile_object),  intent(in) :: self      !< Data.
+   type(expression_object), intent(in) :: fields(:) !< `using` fields.
+   integer(I4P),            intent(in) :: index     !< Dataset, 0-based; negative for all.
+   character(len=:), allocatable       :: name      !< Missing name.
+   integer(I4P)                        :: f         !< Field counter.
+   integer(I4P)                        :: k         !< Name counter.
+   integer(I4P)                        :: set       !< Dataset counter.
+   logical                             :: found     !< Name found.
+   character(len=:), allocatable       :: names(:)  !< Header names of a dataset.
+
+   do f = 1_I4P, size(fields, kind=I4P)
+      do k = 1_I4P, fields(f)%name_count()
+         name = fields(f)%name_of(k)
+         found = .false.
+         do set = 0_I4P, size(self%headers, kind=I4P) - 1_I4P
+            if (index >= 0_I4P .and. set /= index) cycle
+            call self%header_names(set, names)
+            if (any(names == name)) then
+               found = .true.
+               exit
+            endif
+         enddo
+         if (.not. found) return
+      enddo
+   enddo
+   name = ''
+   endfunction missing_name
 
    ! private procedures
    subroutine read_line(unit, line, eof, iostat)

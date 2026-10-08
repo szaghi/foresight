@@ -1,6 +1,6 @@
-!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `ps`).
+!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`).
 module foresight_style
-!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `ps`).
+!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`).
 use penf, only : I4P, R8P
 use foresight_format, only : fixed
 
@@ -20,7 +20,8 @@ integer(I4P), parameter :: WITH_XYERRORBARS = 6_I4P !< gnuplot `with xyerrorbars
 
 character(len=7), parameter :: PALETTE(8) = ['#9400d3', '#009e73', '#56b4e9', '#e69f00', &
                                              '#f0e442', '#0072b2', '#e51e10', '#000000'] !< gnuplot 5 line colors.
-real(R8P),        parameter :: DIAMETER_AT_UNIT_SIZE = 6.0_R8P !< Point diameter at `pointsize` 1 [px].
+real(R8P),        parameter :: DIAMETER_AT_UNIT_SIZE = 6.0_R8P !< Round dot diameter at `pointsize` 1 [px].
+real(R8P),        parameter :: MARKER_AT_UNIT_SIZE   = 9.0_R8P !< Point type size at `pointsize` 1 [px], gnuplot svg.
 
 type :: style_object
    !< Series drawing style.
@@ -29,6 +30,8 @@ type :: style_object
    real(R8P)                     :: linewidth = 1.0_R8P    !< Line width [px].
    integer(I4P)                  :: dashtype  = 1_I4P      !< gnuplot dash type: 1 solid, 2..5 dash patterns.
    real(R8P)                     :: pointsize = 1.0_R8P    !< Point size scale factor.
+   integer(I4P)                  :: pointtype = -1_I4P     !< gnuplot point type: 0 a dot, 1.. the shapes (cycling every
+                                                           !< 15); negative for foresight's round dot.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
@@ -135,10 +138,14 @@ contains
    endfunction draws_ybars
 
    elemental function point_diameter(self) result(diameter)
-   !< Point diameter [px].
+   !< Point size [px]: the round dot diameter, or the width of a point type shape (gnuplot svg scale).
    class(style_object), intent(in) :: self     !< Style.
-   real(R8P)                       :: diameter !< Point diameter [px].
+   real(R8P)                       :: diameter !< Point size [px].
 
-   diameter = DIAMETER_AT_UNIT_SIZE * self%pointsize
+   if (self%pointtype >= 0_I4P) then
+      diameter = MARKER_AT_UNIT_SIZE * self%pointsize
+   else
+      diameter = DIAMETER_AT_UNIT_SIZE * self%pointsize
+   endif
    endfunction point_diameter
 endmodule foresight_style

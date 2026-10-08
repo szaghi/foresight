@@ -27,14 +27,14 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2` (all when absent) |
 | `set_grid([on])` | `set grid`, `unset grid` |
-| `set_key([on], [position], [box])` | `set key bottom left box`, `unset key` |
+| `set_key([on], [position], [box])` | `set key bottom left box`, `set key outside`, `set key below`, `unset key` |
 | `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()` | `unset xtics` |
 | `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default; all axes when absent |
@@ -52,6 +52,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `lw` | line width [px] | 1 |
 | `dt` | dash type 1..5 | 1 (solid) |
 | `ps` | point size factor | 1 |
+| `pt` | gnuplot point type: 0 a dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond, 14-15 pentagon (odd ones from 5 filled), cycling every 15 | round dot |
 | `ylow`, `yhigh` | vertical error bar ends, for `yerrorbars`, `xyerrorbars` | — |
 | `xlow`, `xhigh` | horizontal error bar ends, for `xerrorbars`, `xyerrorbars` | — |
 | `axes` | `x1y1`, or `x1y2` for the second y axis (scaled on its own, ticks off until `set_y2tics`) | `x1y1` |

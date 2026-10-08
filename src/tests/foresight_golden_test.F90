@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(6)                   !< Per-figure outcome.
+logical                     :: test_passed(7)                   !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -22,7 +22,8 @@ test_passed(3) = check('points_reversed.svg', figure_points_reversed())
 test_passed(4) = check('semilogy.html', figure_semilogy())
 test_passed(5) = check('y2_api.svg', figure_y2())
 test_passed(6) = check('slopes.txt', figure_slopes())
-write(output_unit, '(A,6L2)') 'foresight golden checks:', test_passed
+test_passed(7) = check('point_types.svg', figure_point_types())
+write(output_unit, '(A,7L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -109,6 +110,22 @@ contains
    x = [(real(i, R8P), i = 1, 30)]
    call fig%plot(x, 10.0_R8P**(-0.2_R8P * x), title='decay')
    endfunction figure_slopes
+
+   function figure_point_types() result(fig)
+   !< gnuplot point types: stroked, filled, the dot, a type beyond 15 cycling; markers in the key; a reversed y range.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   x = [(real(i, R8P), i = 1, 8)]
+   call fig%set_yrange(min=5.0_R8P, max=0.0_R8P)
+   call fig%plot(x, 1.0_R8P + 0.1_R8P * x, title='plus', with='points', pt=1_I4P)
+   call fig%plot(x, 2.0_R8P + 0.1_R8P * x, title='circle', with='linespoints', pt=7_I4P, lw=2.0_R8P)
+   call fig%plot(x, 3.0_R8P + 0.1_R8P * x, title='triangle', with='points', pt=8_I4P, ps=2.0_R8P)
+   call fig%plot(x, 4.0_R8P + 0.1_R8P * x, title='pt 27: diamond', with='points', pt=27_I4P)
+   call fig%plot(x, 4.5_R8P + 0.0_R8P * x, title='dot', with='points', pt=0_I4P)
+   endfunction figure_point_types
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

@@ -195,13 +195,15 @@ contains
    enddo
    endsubroutine polyline
 
-   subroutine dots(self, x, y, color, diameter)
-   !< Dots are the color symbol.
-   class(backend_dumb), intent(inout) :: self     !< Device.
-   real(R8P),           intent(in)    :: x(:)     !< Abscissae [px].
-   real(R8P),           intent(in)    :: y(:)     !< Ordinates [px].
-   character(len=*),    intent(in)    :: color    !< Fill color.
-   real(R8P),           intent(in)    :: diameter !< Dot diameter [px].
+   subroutine dots(self, x, y, color, diameter, pt, line_width)
+   !< Dots are the color symbol, whatever the point type.
+   class(backend_dumb), intent(inout)        :: self       !< Device.
+   real(R8P),           intent(in)           :: x(:)       !< Abscissae [px].
+   real(R8P),           intent(in)           :: y(:)       !< Ordinates [px].
+   character(len=*),    intent(in)           :: color      !< Fill color.
+   real(R8P),           intent(in)           :: diameter   !< Dot diameter [px].
+   integer(I4P),        intent(in), optional :: pt         !< Point type, ignored.
+   real(R8P),           intent(in), optional :: line_width !< Marker line width, ignored.
    integer(I4P)                       :: i        !< Counter.
 
    if (self%hidden) return
@@ -282,13 +284,15 @@ contains
    enddo
    endsubroutine data_polyline
 
-   subroutine data_dots(self, x, y, color, diameter)
-   !< Dots [unit square] inside the plot area drawn with the color symbol.
-   class(backend_dumb), intent(inout) :: self     !< Device.
-   real(R8P),           intent(in)    :: x(:)     !< Abscissae [unit].
-   real(R8P),           intent(in)    :: y(:)     !< Ordinates [unit].
-   character(len=*),    intent(in)    :: color    !< Fill color.
-   real(R8P),           intent(in)    :: diameter !< Dot diameter [px].
+   subroutine data_dots(self, x, y, color, diameter, pt, line_width)
+   !< Dots [unit square] inside the plot area drawn with the color symbol, whatever the point type.
+   class(backend_dumb), intent(inout)        :: self       !< Device.
+   real(R8P),           intent(in)           :: x(:)       !< Abscissae [unit].
+   real(R8P),           intent(in)           :: y(:)       !< Ordinates [unit].
+   character(len=*),    intent(in)           :: color      !< Fill color.
+   real(R8P),           intent(in)           :: diameter   !< Dot diameter [px].
+   integer(I4P),        intent(in), optional :: pt         !< Point type, ignored.
+   real(R8P),           intent(in), optional :: line_width !< Marker line width, ignored.
    real(R8P)                          :: p(2)     !< Dot position [px].
    integer(I4P)                       :: i        !< Counter.
 

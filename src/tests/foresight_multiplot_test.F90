@@ -17,7 +17,7 @@ logical                       :: update                                     !< R
 integer(I4P)                  :: iostat                                     !< Status.
 integer(I4P)                  :: unit                                       !< File unit.
 integer(I4P)                  :: i                                          !< Counter.
-logical                       :: test_passed(11)                            !< Per-check outcome.
+logical                       :: test_passed(13)                            !< Per-check outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -91,12 +91,34 @@ call interpreter%run_text("set size 0.5,0.5; set origin 0.5,0.5; set size; set o
 test_passed(11) = iostat == 0_I4P .and. all(interpreter%figure%panels(1)%size == 1.0_R8P) .and. &
                   all(interpreter%figure%panels(1)%origin == 0.0_R8P)
 
+! key placements: beside the plot (with a second y axis), on the left aligned to the bottom, rows below (wrapping in a
+! narrow panel) and above
+call interpreter%init('x.html')
+call interpreter%run_text("set terminal svg size 900,600; set output 'foresight_multiplot_test_keys.svg'"// &
+                          new_line('a')//"set multiplot layout 2,2"//new_line('a')// &
+                          "set key outside; set y2tics; plot x t 'alpha', -x t 'beta' axes x1y2, 2*x t 'gamma'"// &
+                          new_line('a')//"unset y2tics; set key outside left bottom box; set ylabel 'y'"// &
+                          new_line('a')//"plot x t 'alpha', -x t 'beta', 2*x t 'gamma'"//new_line('a')// &
+                          "set key below; set xlabel 'x'; plot x t 'alpha', -x t 'beta', 2*x t 'gamma', 3*x t 'delta', "// &
+                          "4*x t 'epsilon'"//new_line('a')// &
+                          "set key above box; set title 'title'; plot x t 'alpha', -x t 'beta'"//new_line('a')// &
+                          "unset multiplot", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(12) = iostat == 0_I4P .and. check('keys.svg', 'foresight_multiplot_test_keys.svg')
+! the key words: below/above set rows, inside keeps them, outside centred both ways stays inside
+call interpreter%init('x.svg')
+call interpreter%run_text('set key below left; set key inside', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(13) = iostat == 0_I4P .and. panel%key_horizontal .and. .not. panel%key_outside .and. &
+                     panel%key_margin == '' .and. panel%key_h == 'left'
+endassociate
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 ! the full-layout case rendered its first panel before failing
 open(newunit=unit, file='x.svg')
 close(unit, status='delete')
-write(output_unit, '(A,11L2)') 'foresight multiplot checks:', test_passed
+write(output_unit, '(A,13L2)') 'foresight multiplot checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

@@ -53,7 +53,9 @@ iteration,residual,cd                  <- a header of words: a row of missing va
 ```
 
 Every separator ends a cell, so two in a row leave an empty one; separators inside double quotes do not count.
-Comments, blocks and datasets work as above. A header row is counted by column 0, as gnuplot counts it.
+Comments, blocks and datasets work as above. A header row is a row of missing values, counted by column 0, until an
+item uses the headers: `using 1:"residual"`, `title columnhead` or `set key autotitle columnhead` make the first row
+of each dataset a header, no longer a point (see [Column headers](gnuplot-subset#column-headers)).
 
 ## Monitoring logs
 

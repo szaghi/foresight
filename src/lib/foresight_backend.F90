@@ -10,7 +10,7 @@ module foresight_backend
 !< A panel is bracketed by `begin_axes`/`end_axes`, which hand the device the panel geometry and axis ranges, and its
 !< redrawable decorations (grid, ticks) by named `begin_group`/`end_group`: an interactive device regenerates them after
 !< a zoom, a static one just writes them.
-use penf, only : R8P
+use penf, only : I4P, R8P
 
 implicit none
 private
@@ -49,12 +49,12 @@ type, abstract :: backend_object
       procedure(finish_interface),          pass(self), deferred :: end_group       !< Close the group.
       procedure(rect_interface),            pass(self), deferred :: rect            !< Rectangle [px].
       procedure(lines_interface),           pass(self), deferred :: polyline        !< Polyline [px].
-      procedure(dots_interface),            pass(self), deferred :: dots            !< Round dots [px].
+      procedure(dots_interface),            pass(self), deferred :: dots            !< Round dots or markers [px].
       procedure(text_interface),            pass(self), deferred :: text            !< Text [px].
       procedure(begin_plot_area_interface), pass(self), deferred :: begin_plot_area !< Open the clipped plot area.
       procedure(finish_interface),          pass(self), deferred :: end_plot_area   !< Close the plot area.
       procedure(lines_interface),           pass(self), deferred :: data_polyline   !< Polyline [unit square].
-      procedure(dots_interface),            pass(self), deferred :: data_dots       !< Round dots [unit square].
+      procedure(dots_interface),            pass(self), deferred :: data_dots       !< Dots or markers [unit square].
       procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
       procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
 endtype backend_object
@@ -129,14 +129,17 @@ abstract interface
    logical,               intent(in)    :: vertical   !< Vertical bars (horizontal caps), else horizontal.
    endsubroutine bars_interface
 
-   subroutine dots_interface(self, x, y, color, diameter)
-   !< Filled round dots centred on the points (`x`, `y`).
-   import :: backend_object, R8P
-   class(backend_object), intent(inout) :: self     !< Device.
-   real(R8P),             intent(in)    :: x(:)     !< Abscissae.
-   real(R8P),             intent(in)    :: y(:)     !< Ordinates.
-   character(len=*),      intent(in)    :: color    !< Fill color.
-   real(R8P),             intent(in)    :: diameter !< Dot diameter [px].
+   subroutine dots_interface(self, x, y, color, diameter, pt, line_width)
+   !< Filled round dots centred on the points (`x`, `y`), or the markers of the gnuplot point type `pt` (0 a dot, 1.. the
+   !< shapes, cycling every 15) drawn `diameter` wide with lines `line_width` px wide (default 1).
+   import :: backend_object, I4P, R8P
+   class(backend_object), intent(inout)        :: self       !< Device.
+   real(R8P),             intent(in)           :: x(:)       !< Abscissae.
+   real(R8P),             intent(in)           :: y(:)       !< Ordinates.
+   character(len=*),      intent(in)           :: color      !< Fill color.
+   real(R8P),             intent(in)           :: diameter   !< Dot diameter, or marker width [px].
+   integer(I4P),          intent(in), optional :: pt         !< gnuplot point type; negative or absent: round dots.
+   real(R8P),             intent(in), optional :: line_width !< Marker line width [px].
    endsubroutine dots_interface
 
    subroutine text_interface(self, x, y, string, anchor, sup, rotate)

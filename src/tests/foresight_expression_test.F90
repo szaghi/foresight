@@ -95,6 +95,8 @@ call check_error('atan2(1)', 'atan2 needs 2 arguments')
 call check_error('$', '"$" needs a column number')
 call check_error('1e+', 'malformed number')
 call check_error('1e999', 'number out of range')
+call check_error('"a" + 1', 'a string is only valid as column("name")')
+call check_undefined('column("res")')
 call check_error('1 = 2', 'unexpected "="')
 call check_error(repeat('(', 300)//'1'//repeat(')', 300), 'nested too deeply')
 ! functions of the dummy variable x: a real, even at integer values; columns are errors

@@ -12,14 +12,16 @@ module foresight_script
 !<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
 !< - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
 !<   `unset xtics|ytics|y2tics`, `set format [AXES] ["fmt"]`, `unset format`,
-!<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox]`,
-!<   `set style data|function STYLE`, `unset style function`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`;
+!<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [autotitle [columnhead]|noautotitle]`,
+!<   `set style data|function STYLE`, `unset style function`, `set style line N [lc ...] [lt N] [lw W] [dt N] [pt N]
+!<   [ps S]`;
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
-!<   [lc [rgb] "color"|N] [lw W] [dt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|
+!<   [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''` repeats the previous file), STYLE `lines|points|linespoints|
 !<   yerrorbars|xerrorbars|xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or
 !<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
-!<   `($2*1e3)` (see foresight_expression); `ls N`, `lt N` in an item apply a line style, a palette color;
+!<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
+!<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -50,6 +52,7 @@ type :: line_style_object
    real(R8P),        allocatable :: lw         !< Line width.
    integer(I4P),     allocatable :: dt         !< Dash type.
    real(R8P),        allocatable :: ps         !< Point size.
+   integer(I4P),     allocatable :: pt         !< Point type.
 endtype line_style_object
 
 type :: script_object
@@ -66,6 +69,8 @@ type :: script_object
                                                                 !< opens the next panel.
    character(len=:), allocatable   :: data_style               !< Default plot style, `set style data`.
    character(len=:), allocatable   :: function_style           !< Default function style, `set style function`.
+   character(len=:), allocatable   :: autotitle                !< Untitled items: `file` (as written), `columnhead`,
+                                                                !< `none` (gnuplot `set key [no]autotitle`).
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
@@ -98,6 +103,7 @@ contains
    allocate(self%data_files(0))
    self%data_style = 'lines'
    self%function_style = 'lines'
+   self%autotitle = 'file'
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
    self%separator = ''
@@ -295,6 +301,10 @@ contains
    integer(I4P)                                 :: head      !< First token of a function.
    logical                                      :: has_title !< Title given (or notitle).
    logical                                      :: is_function !< The item is a function, else a data file.
+   logical                                      :: headed    !< The first row of each dataset is a header.
+   integer(I4P)                                 :: title_column !< Header column titling the item: 0 the y one,
+                                                                !< negative for none (gnuplot `title columnhead(N)`).
+   character(len=:), allocatable                :: missing   !< Header name found nowhere.
 
    iostat = 0_I4P
    iomsg = ''
@@ -354,6 +364,7 @@ contains
       if (is_function) with = self%function_style
       has_title = .false.
       title = ''
+      title_column = -1_I4P
       axes = 'x1y1'
       line = line_style_object()
       i = i + 1_I4P
@@ -400,14 +411,25 @@ contains
          elseif (keyword(word, 'title', 1_I4P)) then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
-               call fail('plot: title needs a quoted string', iostat, iomsg)
+               call fail('plot: title needs a quoted string or columnhead', iostat, iomsg)
                return
             endif
-            if (tokens(i)%kind /= TOKEN_STRING) then
-               call fail('plot: title needs a quoted string', iostat, iomsg)
+            if (tokens(i)%kind == TOKEN_WORD) then
+               if (.not. columnhead_title(tokens(i)%text, title_column)) then
+                  call fail('plot: title needs a quoted string or columnhead, found "'//tokens(i)%text//'"', &
+                            iostat, iomsg)
+                  return
+               endif
+               if (is_function) then
+                  call fail('plot: a function has no column header', iostat, iomsg)
+                  return
+               endif
+            elseif (tokens(i)%kind /= TOKEN_STRING) then
+               call fail('plot: title needs a quoted string or columnhead', iostat, iomsg)
                return
+            else
+               title = tokens(i)%text
             endif
-            title = tokens(i)%text
             has_title = .true.
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
@@ -428,9 +450,9 @@ contains
       enddo
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
-         if (.not. has_title) title = written
+         if (.not. has_title .and. self%autotitle /= 'none') title = written
          call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
-                               dt=line%dt, ps=line%ps, axes=axes)
+                               dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
          functions = [functions, func]
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
@@ -481,11 +503,26 @@ contains
          endif
       endselect
       if (.not. has_title) then
-         ! gnuplot: the item as written, '' included
-         title = quote//written//quote
-         if (len(spec) > 0) title = title//' '//using//' '//spec
+         select case (self%autotitle)
+         case ('columnhead')
+            title_column = 0_I4P
+         case ('file')
+            ! gnuplot: the item as written, '' included
+            title = quote//written//quote
+            if (len(spec) > 0) title = title//' '//using//' '//spec
+         endselect
       endif
-      call data%table(fields, set_index, every, values)
+      ! the first row of each dataset is a header as soon as one is used, as gnuplot
+      headed = title_column >= 0_I4P .or. self%autotitle == 'columnhead' .or. any(fields%name_count() > 0_I4P)
+      if (headed) then
+         missing = data%missing_name(fields, set_index)
+         if (len(missing) > 0) then
+            call fail('plot: no column with header "'//missing//'" in "'//file//'"', iostat, iomsg)
+            return
+         endif
+         if (title_column >= 0_I4P) title = header_title(max(0_I4P, set_index))
+      endif
+      call data%table(fields, set_index, every, values, header=headed)
       x = values(:, 1)
       y = values(:, 2)
       if (allocated(xlow)) deallocate(xlow, xhigh)
@@ -522,7 +559,7 @@ contains
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
       call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
-                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes)
+                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt)
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
@@ -533,6 +570,24 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      function header_title(set) result(name)
+      !< Header of the column titling the item in dataset `set`: `title_column`, or the first column the y field reads;
+      !< empty if none, as gnuplot.
+      integer(I4P), intent(in)      :: set  !< Dataset.
+      character(len=:), allocatable :: name !< Title.
+      integer(I4P)                  :: c    !< Column.
+      type(expression_object)       :: y    !< y field on the header.
+      character(len=:), allocatable :: names(:) !< Header names.
+
+      c = title_column
+      if (c == 0_I4P) then
+         call data%header_names(set, names)
+         y = fields(2)%resolve(names)
+         c = y%first_column()
+      endif
+      name = data%column_header(set, c)
+      endfunction header_title
+
       subroutine sample_functions
       !< Sample the functions at `self%samples` abscissae over the x range of the data before its tick extension (the
       !< user ends, the data extent, else the axis default range): evenly, in log x on a log axis.
@@ -863,7 +918,8 @@ contains
       value = v
       endsubroutine range_end
       subroutine key_option
-      !< `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [inside]`.
+      !< `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [inside|outside|below|above]
+      !< [horizontal|vertical] [autotitle [columnhead]|noautotitle]`.
       character(len=:), allocatable :: words !< Position words.
       logical                       :: on    !< Key on.
       logical, allocatable          :: box   !< Box, unallocated if not given.
@@ -872,6 +928,22 @@ contains
       words = ''
       do i = 2_I4P, size(tokens, kind=I4P)
          select case (tokens(i)%text)
+         case ('autotitle')
+            self%autotitle = 'file'
+            if (i < size(tokens, kind=I4P)) then
+               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 7_I4P)) self%autotitle = 'columnhead'
+            endif
+         case ('noautotitle')
+            self%autotitle = 'none'
+         case ('columnhead', 'columnheader')
+            if (i == 2_I4P) then
+               call fail('set key: columnhead goes after autotitle', iostat, iomsg)
+               return
+            endif
+            if (tokens(i - 1_I4P)%text /= 'autotitle') then
+               call fail('set key: columnhead goes after autotitle', iostat, iomsg)
+               return
+            endif
          case ('on')
             on = .true.
          case ('off')
@@ -880,12 +952,13 @@ contains
             box = .true.
          case ('nobox')
             box = .false.
-         case ('inside', 'ins')
-         case ('left', 'right', 'center', 'top', 'bottom')
+         case ('left', 'right', 'center', 'top', 'bottom', 'inside', 'ins', 'outside', 'out', 'below', 'under', 'above', &
+               'over', 'horizontal', 'horiz', 'vertical', 'vert')
             words = words//' '//tokens(i)%text
          case default
             call fail('set key: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, center, '// &
-                      'top, bottom, box, nobox, inside)', iostat, iomsg)
+                      'top, bottom, box, nobox, inside, outside, below, above, horizontal, vertical, autotitle '// &
+                      '[columnhead], noautotitle)', iostat, iomsg)
             return
          endselect
       enddo
@@ -1440,6 +1513,7 @@ contains
    integer(I4P)                                      :: finish    !< Field end.
    integer(I4P)                                      :: depth     !< Parenthesis depth.
    integer(I4P)                                      :: c         !< Column.
+   character(len=1)                                  :: quote     !< Open quote, blank if none.
 
    iostat = 0_I4P
    iomsg = ''
@@ -1448,17 +1522,27 @@ contains
    do while (start <= len(spec) + 1)
       ! the field ends at the first ':' outside parentheses (a ?: inside an expression is not a separator)
       depth = 0_I4P
+      quote = ' '
       finish = start
       do while (finish <= len(spec))
-         if (spec(finish:finish) == '(') depth = depth + 1_I4P
-         if (spec(finish:finish) == ')') depth = depth - 1_I4P
-         if (spec(finish:finish) == ':' .and. depth == 0_I4P) exit
+         if (quote /= ' ') then
+            if (spec(finish:finish) == quote) quote = ' '
+         elseif (spec(finish:finish) == '"' .or. spec(finish:finish) == "'") then
+            quote = spec(finish:finish)
+         else
+            if (spec(finish:finish) == '(') depth = depth + 1_I4P
+            if (spec(finish:finish) == ')') depth = depth - 1_I4P
+            if (spec(finish:finish) == ':' .and. depth == 0_I4P) exit
+         endif
          finish = finish + 1_I4P
       enddo
       associate(text => spec(start:finish - 1_I4P))
          if (len(text) > 0 .and. verify(text, '0123456789') == 0 .and. len(text) < 10) then
             read(text, *) c
             call field%set_column(c)
+         elseif (is_quoted(text)) then
+            ! a column header name, gnuplot `using 1:"residual"`
+            call field%set_name(text(2:len(text) - 1))
          elseif (text(1:min(1, len(text))) == '(') then
             ! compiled first, so that an unbalanced expression gets the precise syntax error
             call field%compile(text, iostat, iomsg)
@@ -1471,8 +1555,8 @@ contains
                return
             endif
          else
-            call fail('using: field "'//text//'" is neither a column number nor a parenthesized expression '// &
-                      '(write ($2*1e3), not $2*1e3)', iostat, iomsg)
+            call fail('using: field "'//text//'" is neither a column number, a "header" nor a parenthesized '// &
+                      'expression (write ($2*1e3), not $2*1e3)', iostat, iomsg)
             return
          endif
       endassociate
@@ -1481,6 +1565,16 @@ contains
    enddo
    if (size(fields) > 6) call fail('using: "'//spec//'" has more than 6 fields', iostat, iomsg)
    contains
+      pure function is_quoted(text) result(yes)
+      !< Whether `text` is one quoted string, single or double quotes.
+      character(len=*), intent(in) :: text !< Field.
+      logical                      :: yes  !< Quoted.
+
+      yes = len(text) >= 2
+      if (yes) yes = (text(1:1) == '"' .or. text(1:1) == "'") .and. text(len(text):len(text)) == text(1:1) .and. &
+                     index(text(2:len(text) - 1), text(1:1)) == 0
+      endfunction is_quoted
+
       pure function is_parenthesized(text) result(yes)
       !< Whether `text` is one parenthesized group: `(...)`, the first parenthesis closed by the last character.
       character(len=*), intent(in) :: text  !< Field.
@@ -1514,10 +1608,36 @@ contains
       if (allocated(styles(s)%lw)) line%lw = styles(s)%lw
       if (allocated(styles(s)%dt)) line%dt = styles(s)%dt
       if (allocated(styles(s)%ps)) line%ps = styles(s)%ps
+      if (allocated(styles(s)%pt)) line%pt = styles(s)%pt
       return
    enddo
    line%lc = default_color(id)
    endsubroutine apply_line_style
+
+   function columnhead_title(word, column) result(ok)
+   !< Parse `columnhead`, `columnheader` or `columnhead(N)` (gnuplot `title columnhead`): `column` is N, or 0 for the
+   !< column of the y field; false if `word` is none of them.
+   character(len=*), intent(in)  :: word   !< Title word.
+   integer(I4P),     intent(out) :: column !< Header column, 0 for the y one.
+   logical                       :: ok     !< Well formed.
+   integer(I4P)                  :: open   !< Opening parenthesis.
+   integer(I4P)                  :: ios    !< Conversion status.
+
+   column = 0_I4P
+   open = index(word, '(', kind=I4P)
+   if (open == 0_I4P) then
+      ok = keyword(word, 'columnheader', 7_I4P)
+      return
+   endif
+   ok = keyword(word(1:open - 1_I4P), 'columnheader', 7_I4P) .and. word(len(word):len(word)) == ')' .and. &
+        len(word) > open + 1
+   if (.not. ok) return
+   ok = verify(word(open + 1_I4P:len(word) - 1), '0123456789') == 0
+   if (ok) then
+      read(word(open + 1_I4P:len(word) - 1), *, iostat=ios) column
+      ok = ios == 0_I4P .and. column >= 1_I4P
+   endif
+   endfunction columnhead_title
 
    pure function function_drawable(with) result(yes)
    !< Whether the style `with` draws a function: lines, points or linespoints, not error bars.
@@ -1538,18 +1658,18 @@ contains
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)
-   !< Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps` or their long forms.
+   !< Whether `word` names a line property: `lc`, `lt`, `lw`, `dt`, `ps`, `pt` or their long forms.
    character(len=*), intent(in) :: word !< Option word.
    logical                      :: is   !< Line property.
 
    is = word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. keyword(word, 'linetype', 5_I4P) &
         .or. word == 'lw' .or. keyword(word, 'linewidth', 5_I4P) .or. word == 'dt' .or. keyword(word, 'dashtype', 5_I4P) &
-        .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P)
+        .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)
    endfunction is_line_option
 
    function line_option(tokens, i, line, iostat, iomsg) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
-   !< `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`.
+   !< `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`, `pt N`.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
    type(line_style_object),       intent(inout) :: line      !< Line properties.
@@ -1588,6 +1708,13 @@ contains
    elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
       ok = next_integer(tokens, i, number, iostat, iomsg)
       if (ok) line%dt = number
+   elseif (word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) then
+      ok = next_integer(tokens, i, number, iostat, iomsg)
+      if (ok .and. number < 0_I4P) then
+         call fail('pt needs a point type >= 0, not '//int_str(int(number, I8P)), iostat, iomsg)
+         ok = .false.
+      endif
+      if (ok) line%pt = number
    else
       ok = next_real(tokens, i, value, iostat, iomsg)
       if (ok) line%ps = value

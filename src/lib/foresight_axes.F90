@@ -4,7 +4,8 @@ module foresight_axes
 !<
 !< Layout follows gnuplot defaults: full border with inward ticks mirrored on the opposite side, tick labels outside
 !< bottom and left, key inside the plot area (top right by default) with right-aligned titles and the samples on their
-!< right.
+!< right. A key `outside` lies in a side margin (left, right) or, centred, above or below the plot; `below` and `above`
+!< lay its entries out in rows (`horizontal`), as many per row as the panel width holds.
 !<
 !< A second y axis (gnuplot `y2`) scales the series plotted on it (`axes x1y2`) on its own, autoscaled from them alone;
 !< as gnuplot, its ticks and labels are off until `set y2tics` (on the right border, not mirrored), and it is drawn only
@@ -48,6 +49,10 @@ type :: axes_object
    character(len=6)                 :: key_h = 'right' !< Key horizontal position: left, center, right.
    character(len=6)                 :: key_v = 'top'   !< Key vertical position: top, center, bottom.
    logical                          :: key_box = .false. !< Draw a box around the key.
+   logical                          :: key_outside = .false. !< Key outside the plot area (gnuplot `outside`).
+   character(len=6)                 :: key_margin = ''  !< `top` or `bottom` margin (gnuplot `above`, `below`), else
+                                                        !< empty.
+   logical                          :: key_horizontal = .false. !< Entries side by side, in rows.
    real(R8P)                        :: origin(2) = [0.0_R8P, 0.0_R8P] !< Bottom left corner, page fraction (`set origin`).
    real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
    contains
@@ -57,6 +62,8 @@ type :: axes_object
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
       procedure, pass(self), private :: draw_key           !< Draw the key.
+      procedure, pass(self), private :: key_layout         !< Key size and entry grid.
+      procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
@@ -64,7 +71,7 @@ type :: axes_object
 endtype axes_object
 
 contains
-   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes)
+   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -83,6 +90,7 @@ contains
    real(R8P),          intent(in), optional :: ylow(:)  !< Vertical error bar starts.
    real(R8P),          intent(in), optional :: yhigh(:) !< Vertical error bar ends.
    character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1` or `x1y2`.
+   integer(I4P),       intent(in), optional :: pt       !< gnuplot point type: 0 a dot, 1.. the shapes.
    type(series_object)                      :: series !< New series.
 
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
@@ -101,6 +109,10 @@ contains
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt
    if (present(ps)) series%style%pointsize = ps
+   if (present(pt)) then
+      if (pt < 0_I4P) error stop 'foresight: plot: the point type must not be negative'
+      series%style%pointtype = pt
+   endif
    if (series%style%draws_xbars()) then
       if (.not. (present(xlow) .and. present(xhigh))) error stop 'foresight: plot: x error bars need xlow and xhigh'
       if (size(xlow) /= size(x) .or. size(xhigh) /= size(x)) error stop 'foresight: plot: xlow/xhigh sizes differ from x'
@@ -153,17 +165,41 @@ contains
    real(R8P),             intent(in)    :: height    !< Box height [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    real(R8P)                            :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P)                            :: box(4)    !< Box left to the rest of the panel by an outside key:
+                                                     !< left, top, width, height [px].
+   real(R8P)                            :: key(2)    !< Key width and height [px].
+   real(R8P)                            :: above     !< Room for a key above the plot [px].
    type(axes_view)                      :: view      !< Panel geometry and ranges for the device.
    integer(I4P)                         :: s         !< Series counter.
+   integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
 
    if (.not. allocated(self%series)) allocate(self%series(0))
+   ! an outside key takes its side of the panel box; above the plot it goes below the title, as gnuplot
+   box = [x0, y0, width, height]
+   above = 0.0_R8P
+   call self%key_layout(backend, font_size, width - 2.0_R8P * PAD, grid, key)
+   if (self%key .and. grid(1) > 0_I4P) then
+      select case (self%key_place())
+      case ('left')
+         box(1) = x0 + PAD + key(1)
+         box(3) = width - PAD - key(1)
+      case ('right')
+         box(3) = width - PAD - key(1)
+      case ('bottom')
+         box(4) = height - PAD - key(2)
+      case ('top')
+         above = key(2) + GAP
+      endselect
+   endif
    ! ticks depend on the plot area size, margins on the tick labels: refine a first guess twice
-   area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, &
-           y0 + 2.0_R8P * font_size, y0 + height - 4.0_R8P * font_size]
-   call self%setup_axes(area)
-   area = self%place_plot_area(backend, x0, y0, width, height, font_size)
-   call self%setup_axes(area)
-   area = self%place_plot_area(backend, x0, y0, width, height, font_size)
+   associate(bx => box(1), by => box(2), bw => box(3), bh => box(4))
+      area = [bx + 6.0_R8P * font_size, bx + bw - 2.0_R8P * font_size, &
+              by + 2.0_R8P * font_size + above, by + bh - 4.0_R8P * font_size]
+      call self%setup_axes(area)
+      area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
+      call self%setup_axes(area)
+      area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
+   endassociate
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
@@ -196,8 +232,9 @@ contains
       endif
    enddo
    call backend%end_plot_area
-   call self%draw_frame(backend, area, x0, y0, x0 + width, font_size)
-   if (self%key) call self%draw_key(backend, area, font_size)
+   call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
+                                                         grid, key)
    call backend%end_axes
    endsubroutine render
 
@@ -284,56 +321,86 @@ contains
    endassociate
    endsubroutine draw_grid
 
-   subroutine draw_key(self, backend, area, font_size)
-   !< Draw the key inside the plot area at its position: right-aligned titles, style samples on their right.
+   subroutine draw_key(self, backend, area, box, font_size, grid, extent)
+   !< Draw the key at its place (`key_place`): right-aligned titles, style samples on their right; entries in a column,
+   !< or row after row (`key_horizontal`).
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: box(4)    !< Panel box: left, top, right, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
+   integer(I4P),          intent(in)    :: grid(3)   !< Entries, columns, rows (`key_layout`).
+   real(R8P),             intent(in)    :: extent(2) !< Key width and height [px] (`key_layout`).
    real(R8P)                            :: xs(2)     !< Sample abscissae [px].
    real(R8P)                            :: yc        !< Row centre ordinate [px].
-   real(R8P)                            :: width     !< Key width: widest title, gap, sample [px].
-   real(R8P)                            :: height    !< Key height [px].
+   real(R8P)                            :: entry     !< Entry width, spacing included [px].
+   real(R8P)                            :: left      !< Key left [px].
    real(R8P)                            :: top       !< Key top [px].
-   integer(I4P)                         :: rows      !< Key rows.
-   integer(I4P)                         :: row       !< Key row.
+   integer(I4P)                         :: k         !< Entry counter.
    integer(I4P)                         :: s         !< Series counter.
 
-   width = 0.0_R8P
-   rows = 0_I4P
+   associate(width => extent(1), height => extent(2))
+      entry = (width + GAP) / real(grid(2), R8P)
+      select case (self%key_place())
+      case ('left', 'right')
+         ! beside the plot, aligned with its border
+         if (self%key_place() == 'left') then
+            left = box(1) + PAD
+         else
+            left = box(3) - PAD - width
+         endif
+         select case (trim(self%key_v))
+         case ('bottom')
+            top = area(4) - height
+         case ('center')
+            top = 0.5_R8P * (area(3) + area(4) - height)
+         case default
+            top = area(3)
+         endselect
+      case ('top', 'bottom')
+         ! above or below the plot, aligned with it
+         select case (trim(self%key_h))
+         case ('left')
+            left = area(1)
+         case ('right')
+            left = area(2) - width
+         case default
+            left = 0.5_R8P * (area(1) + area(2) - width)
+         endselect
+         if (self%key_place() == 'top') then
+            top = area(3) - GAP - height
+         else
+            top = box(4) - PAD - height
+         endif
+      case default
+         select case (trim(self%key_h))
+         case ('left')
+            left = area(1) + PAD
+         case ('center')
+            left = 0.5_R8P * (area(1) + area(2) - width)
+         case default
+            left = area(2) - PAD - width
+         endselect
+         select case (trim(self%key_v))
+         case ('bottom')
+            top = area(4) - GAP - height
+         case ('center')
+            top = 0.5_R8P * (area(3) + area(4) - height)
+         case default
+            top = area(3) + GAP
+         endselect
+      endselect
+      if (self%key_box) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
+                                          FRAME_COLOR, 'none', 1.0_R8P)
+   endassociate
+   k = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
       if (len(self%series(s)%title) == 0) cycle
-      rows = rows + 1_I4P
-      width = max(width, backend%text_width(self%series(s)%title, '', font_size))
-   enddo
-   if (rows == 0_I4P) return
-   ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
-   width = width + font_size + GAP + SAMPLE_LENGTH * font_size
-   height = real(rows, R8P) * LINE_HEIGHT * font_size
-   select case (trim(self%key_h))
-   case ('left')
-      xs(2) = area(1) + PAD + width
-   case ('center')
-      xs(2) = 0.5_R8P * (area(1) + area(2) + width)
-   case default
-      xs(2) = area(2) - PAD
-   endselect
-   xs(1) = xs(2) - SAMPLE_LENGTH * font_size
-   select case (trim(self%key_v))
-   case ('bottom')
-      top = area(4) - GAP - height
-   case ('center')
-      top = 0.5_R8P * (area(3) + area(4) - height)
-   case default
-      top = area(3) + GAP
-   endselect
-   if (self%key_box) call backend%rect(xs(2) - width - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
-                                       FRAME_COLOR, 'none', 1.0_R8P)
-   row = 0_I4P
-   do s = 1_I4P, size(self%series, kind=I4P)
-      if (len(self%series(s)%title) == 0) cycle
-      row = row + 1_I4P
-      yc = top + (real(row, R8P) - 0.5_R8P) * LINE_HEIGHT * font_size
+      ! entry k (from 0) in column mod(k, columns), row k / columns
+      xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
+      xs(1) = xs(2) - SAMPLE_LENGTH * font_size
+      yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
+      k = k + 1_I4P
       if (self%series(s)%style%draws_lines()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
@@ -345,10 +412,57 @@ contains
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, '')
       if (self%series(s)%style%draws_points()) &
          call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], self%series(s)%style%color, &
-                           self%series(s)%style%point_diameter())
+                           self%series(s)%style%point_diameter(), pt=self%series(s)%style%pointtype, &
+                           line_width=self%series(s)%style%linewidth)
       call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
    enddo
    endsubroutine draw_key
+
+   pure subroutine key_layout(self, backend, font_size, room, grid, extent)
+   !< Key grid and size: entries (titled series), columns (1, or as many as `room` holds when horizontal) and rows;
+   !< each entry is the widest title, a gap and the sample, with a gap between entries.
+   class(axes_object),    intent(in)  :: self      !< Panel.
+   class(backend_object), intent(in)  :: backend   !< Output device, for text widths.
+   real(R8P),             intent(in)  :: font_size !< Font size [px].
+   real(R8P),             intent(in)  :: room      !< Width available to a row of entries [px].
+   integer(I4P),          intent(out) :: grid(3)   !< Entries, columns, rows.
+   real(R8P),             intent(out) :: extent(2) !< Key width and height [px].
+   real(R8P)                          :: entry     !< Entry width, spacing included [px].
+   integer(I4P)                       :: s         !< Series counter.
+
+   grid = [0_I4P, 1_I4P, 0_I4P]
+   entry = 0.0_R8P
+   if (allocated(self%series)) then
+      do s = 1_I4P, size(self%series, kind=I4P)
+         if (len(self%series(s)%title) == 0) cycle
+         grid(1) = grid(1) + 1_I4P
+         entry = max(entry, backend%text_width(self%series(s)%title, '', font_size))
+      enddo
+   endif
+   ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
+   entry = entry + font_size + GAP + SAMPLE_LENGTH * font_size + GAP
+   if (self%key_horizontal .and. grid(1) > 0_I4P) grid(2) = max(1_I4P, min(grid(1), int((room + GAP) / entry, I4P)))
+   grid(3) = (grid(1) + grid(2) - 1_I4P) / grid(2)
+   extent = [real(grid(2), R8P) * entry - GAP, real(grid(3), R8P) * LINE_HEIGHT * font_size]
+   endsubroutine key_layout
+
+   pure function key_place(self) result(place)
+   !< Where the key lies: `inside` the plot area, in the `left` or `right` margin, `top` (above the plot) or `bottom`
+   !< (below it); outside and centred both ways it stays inside, as gnuplot.
+   class(axes_object), intent(in) :: self  !< Panel.
+   character(len=6)               :: place !< Place.
+
+   place = 'inside'
+   if (len_trim(self%key_margin) > 0) then
+      place = self%key_margin
+   elseif (self%key_outside) then
+      if (trim(self%key_h) /= 'center') then
+         place = self%key_h
+      elseif (trim(self%key_v) /= 'center') then
+         place = self%key_v
+      endif
+   endif
+   endfunction key_place
 
    subroutine draw_series(self, backend, s, yaxis)
    !< Draw the `s`-th series in the plot area against its vertical axis `yaxis`; unplaceable points (NaN, non-positive
@@ -394,7 +508,8 @@ contains
       if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
       if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) &
-         call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter())
+         call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter(), &
+                                pt=series%style%pointtype, line_width=series%style%linewidth)
    endassociate
    contains
       subroutine draw_bars(low, high, axis, vertical)
@@ -432,8 +547,8 @@ contains
    if (allocated(self%title)) has = len(self%title) > 0
    endfunction has_title
 
-   pure function place_plot_area(self, backend, x0, y0, width, height, font_size) result(area)
-   !< Plot area left by the margins that tick labels, axis labels and title need, measured by the device.
+   pure function place_plot_area(self, backend, x0, y0, width, height, font_size, above) result(area)
+   !< Plot area left by the margins that tick labels, axis labels, title and a key `above` need, measured by the device.
    class(axes_object),    intent(in) :: self       !< Panel.
    class(backend_object), intent(in) :: backend    !< Output device, for text widths.
    real(R8P),          intent(in) :: x0         !< Box left side [px].
@@ -441,6 +556,7 @@ contains
    real(R8P),          intent(in) :: width      !< Box width [px].
    real(R8P),          intent(in) :: height     !< Box height [px].
    real(R8P),          intent(in) :: font_size  !< Font size [px].
+   real(R8P),          intent(in) :: above      !< Room for a key between the title and the plot [px].
    real(R8P)                      :: area(4)    !< Plot area: left, right, top, bottom [px].
    real(R8P)                      :: margins(4) !< Left, right, top, bottom margins [px].
    real(R8P)                      :: y2_margin  !< Right margin the second y axis needs [px].
@@ -464,6 +580,7 @@ contains
    endif
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
+   margins(3) = margins(3) + above
    margins(4) = PAD + GAP + LINE_HEIGHT * font_size
    if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
@@ -547,12 +664,17 @@ contains
    enddo
    endsubroutine axes_names
 
-   pure subroutine key_position(words, horizontal, vertical, bad)
+   pure subroutine key_position(words, horizontal, vertical, outside, margin, layout, bad)
    !< Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,
-   !< `bottom`, and `center`, which centres the direction not given yet by `words` (both if none, as gnuplot).
+   !< `bottom`, and `center`, which centres the direction not given yet by `words` (both if none, as gnuplot);
+   !< `inside`, `outside`; `below` (`under`) and `above` (`over`), centred rows below or above the plot; `horizontal`,
+   !< `vertical` the layout of the entries.
    character(len=*),              intent(in)    :: words      !< Blank separated words.
    character(len=6),              intent(inout) :: horizontal !< Horizontal position.
    character(len=6),              intent(inout) :: vertical   !< Vertical position.
+   logical,                       intent(inout) :: outside    !< Outside the plot area.
+   character(len=6),              intent(inout) :: margin     !< `top`, `bottom` or empty.
+   logical,                       intent(inout) :: layout     !< Entries side by side.
    character(len=:), allocatable, intent(out)   :: bad        !< First word not a position, empty if none.
    character(len=:), allocatable                :: word       !< Current word.
    integer(I4P)                                 :: start      !< Word start.
@@ -593,6 +715,21 @@ contains
             horizontal = 'center'
             vertical = 'center'
          endif
+      case ('inside', 'ins')
+         outside = .false.
+         margin = ''
+      case ('outside', 'out')
+         outside = .true.
+         margin = ''
+      case ('below', 'under', 'above', 'over')
+         margin = merge('bottom', 'top   ', word == 'below' .or. word == 'under')
+         horizontal = 'center'
+         h_set = .false.
+         layout = .true.
+      case ('horizontal', 'horiz')
+         layout = .true.
+      case ('vertical', 'vert')
+         layout = .false.
       case default
          bad = word
          return

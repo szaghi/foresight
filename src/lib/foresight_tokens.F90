@@ -6,7 +6,8 @@ module foresight_tokens
 !< quoted strings (single quotes literal, double quotes with `\t` for a tab and `\` taking the next character literally,
 !< so `\"` and `\\`, as gnuplot), commas and bracketed ranges `[a:b]`. Each token remembers where it lies in the
 !< statement, so that a plot item can be quoted as written. Inside parentheses a word goes on across blanks and commas:
-!< `($2 * 1e3)` and `atan2($2, $1)` are single words.
+!< `($2 * 1e3)` and `atan2($2, $1)` are single words; quotes inside a word keep their content, blanks included, and a
+!< quoted string followed by `:` starts a word: `1:"the res"` and `"it":"res"` are `using` specifications.
 use penf, only : I4P
 
 implicit none
@@ -91,6 +92,8 @@ contains
    integer(I4P)                                 :: j         !< End of the token.
    integer(I4P)                                 :: n         !< Statement length.
    integer(I4P)                                 :: depth     !< Parenthesis depth in a word.
+   character(len=1)                             :: quote     !< Open quote in a word, blank if none.
+   character(len=1)                             :: lead      !< First character, `w` for a word glued to a string.
 
    allocate(tokens(0))
    iostat = 0_I4P
@@ -105,7 +108,15 @@ contains
       endif
       token%quote = ' '
       token%first = i
-      select case (c)
+      lead = c
+      if (c == '"' .or. c == "'") then
+         ! a string glued to a `:` is part of a using specification
+         j = closing_quote(i)
+         if (j > 0_I4P .and. j < n) then
+            if (statement(j + 1_I4P:j + 1_I4P) == ':') lead = 'w'
+         endif
+      endif
+      select case (lead)
       case (',')
          token%kind = TOKEN_COMMA
          token%text = ','
@@ -156,12 +167,25 @@ contains
          token%text = trim(adjustl(statement(i + 1_I4P:i + j - 1_I4P)))
          i = i + j + 1_I4P
       case default
+         ! up to a blank, comma or `[` outside parentheses and quotes
          j = i
-         depth = count_parentheses(c, 0_I4P)
-         do while (j < n)
-            if (depth == 0_I4P .and. scan(statement(j + 1_I4P:j + 1_I4P), ' ,['//achar(9)) > 0) exit
+         depth = 0_I4P
+         quote = ' '
+         do
+            if (quote /= ' ') then
+               if (quote == '"' .and. statement(j:j) == '\' .and. j < n) then
+                  j = j + 1_I4P
+               elseif (statement(j:j) == quote) then
+                  quote = ' '
+               endif
+            elseif (statement(j:j) == '"' .or. statement(j:j) == "'") then
+               quote = statement(j:j)
+            else
+               depth = count_parentheses(statement(j:j), depth)
+            endif
+            if (j >= n) exit
+            if (quote == ' ' .and. depth == 0_I4P .and. scan(statement(j + 1_I4P:j + 1_I4P), ' ,['//achar(9)) > 0) exit
             j = j + 1_I4P
-            depth = count_parentheses(statement(j:j), depth)
          enddo
          token%kind = TOKEN_WORD
          token%text = statement(i:j)
@@ -171,6 +195,23 @@ contains
       tokens = [tokens, token]
    enddo
    contains
+      pure function closing_quote(open) result(close)
+      !< Position of the quote closing the one at `open`, 0 if none; in double quotes `\` escapes the next character.
+      integer(I4P), intent(in) :: open  !< Opening quote position.
+      integer(I4P)             :: close !< Closing quote position.
+
+      close = open + 1_I4P
+      do while (close <= n)
+         if (statement(open:open) == '"' .and. statement(close:close) == '\') then
+            close = close + 2_I4P
+            cycle
+         endif
+         if (statement(close:close) == statement(open:open)) return
+         close = close + 1_I4P
+      enddo
+      close = 0_I4P
+      endfunction closing_quote
+
       pure function count_parentheses(c, depth) result(new_depth)
       !< Parenthesis depth after character `c`.
       character(len=1), intent(in) :: c         !< Character.

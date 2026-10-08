@@ -9,9 +9,9 @@ module foresight_backend_svg
 !< interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
 use foresight_backend, only : axes_view, backend_object
-use foresight_format, only : fixed, real_str, xml_escape
+use foresight_format, only : fixed, int_str, real_str, xml_escape
 use foresight_sys, only : rename_file
-use penf, only : I4P, R8P
+use penf, only : I4P, I8P, R8P
 
 implicit none
 private
@@ -30,6 +30,7 @@ type, extends(backend_object) :: backend_svg
    character(len=:), allocatable :: tmp_file      !< File being written.
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
    character(len=:), allocatable :: caps          !< Error bar caps of the current plot area, pixel overlay.
+   character(len=:), allocatable :: marks         !< Point type markers of the current plot area, pixel overlay.
    contains
       ! deferred bindings
       procedure, pass(self) :: begin_page
@@ -175,14 +176,22 @@ contains
    call self%put('"/>')
    endsubroutine polyline
 
-   subroutine dots(self, x, y, color, diameter)
-   !< Filled round dots centred on the points (`x`, `y`) [px].
-   class(backend_svg), intent(inout) :: self     !< Device.
-   real(R8P),          intent(in)    :: x(:)     !< Abscissae [px].
-   real(R8P),          intent(in)    :: y(:)     !< Ordinates [px].
-   character(len=*),   intent(in)    :: color    !< Fill color.
-   real(R8P),          intent(in)    :: diameter !< Dot diameter [px].
+   subroutine dots(self, x, y, color, diameter, pt, line_width)
+   !< Filled round dots centred on the points (`x`, `y`) [px], or point type markers.
+   class(backend_svg), intent(inout)        :: self       !< Device.
+   real(R8P),          intent(in)           :: x(:)       !< Abscissae [px].
+   real(R8P),          intent(in)           :: y(:)       !< Ordinates [px].
+   character(len=*),   intent(in)           :: color      !< Fill color.
+   real(R8P),          intent(in)           :: diameter   !< Dot diameter, or marker width [px].
+   integer(I4P),       intent(in), optional :: pt         !< gnuplot point type; negative or absent: round dots.
+   real(R8P),          intent(in), optional :: line_width !< Marker line width [px].
 
+   if (present(pt)) then
+      if (pt >= 0_I4P) then
+         call self%put(marker_element(x, y, color, diameter, pt, line_width))
+         return
+      endif
+   endif
    ! a zero-length subpath with round caps renders as a dot of diameter stroke-width
    write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//color//'" stroke-width="'//px(diameter)// &
                                          '" stroke-linecap="round" d="'
@@ -221,22 +230,33 @@ contains
 
    self%area = [x, y, width, height]
    self%caps = ''
+   self%marks = ''
    call self%put('<svg class="fs-plot" x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
                  '" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">')
    endsubroutine begin_plot_area
 
    subroutine end_plot_area(self)
-   !< Close the plot area, then write the error bar caps overlay (pixel space, clipped to the plot area): caps keep
-   !< their pixel length under zoom, the interactive viewer regenerates them from the bars.
+   !< Close the plot area, then write the overlays of error bar caps and point type markers (pixel space, clipped to the
+   !< plot area): they keep their pixel size under zoom, the interactive viewer regenerates them from the data.
    class(backend_svg), intent(inout) :: self !< Device.
 
    call self%put('</svg>')
-   if (len(self%caps) == 0) return
-   call self%put('<svg class="fs-caps" x="'//px(self%area(1))//'" y="'//px(self%area(2))//'" width="'// &
-                 px(self%area(3))//'" height="'//px(self%area(4))//'" viewBox="0 0 '//px(self%area(3))//' '// &
-                 px(self%area(4))//'" overflow="hidden">')
-   call self%put(self%caps//'</svg>')
+   call overlay('fs-caps', self%caps)
+   call overlay('fs-marks', self%marks)
    self%caps = ''
+   self%marks = ''
+   contains
+      subroutine overlay(name, content)
+      !< Overlay `name` holding `content`, nothing if empty.
+      character(len=*), intent(in) :: name    !< Overlay class.
+      character(len=*), intent(in) :: content !< Elements.
+
+      if (len(content) == 0) return
+      call self%put('<svg class="'//name//'" x="'//px(self%area(1))//'" y="'//px(self%area(2))//'" width="'// &
+                    px(self%area(3))//'" height="'//px(self%area(4))//'" viewBox="0 0 '//px(self%area(3))//' '// &
+                    px(self%area(4))//'" overflow="hidden">')
+      call self%put(content//'</svg>')
+      endsubroutine overlay
    endsubroutine end_plot_area
 
    subroutine data_polyline(self, x, y, color, line_width, dasharray)
@@ -255,14 +275,35 @@ contains
    call self%put('"/>')
    endsubroutine data_polyline
 
-   subroutine data_dots(self, x, y, color, diameter)
-   !< Filled round dots centred on the points (`x`, `y`) [unit square].
-   class(backend_svg), intent(inout) :: self     !< Device.
-   real(R8P),          intent(in)    :: x(:)     !< Abscissae [unit].
-   real(R8P),          intent(in)    :: y(:)     !< Ordinates [unit].
-   character(len=*),   intent(in)    :: color    !< Fill color.
-   real(R8P),          intent(in)    :: diameter !< Dot diameter [px].
+   subroutine data_dots(self, x, y, color, diameter, pt, line_width)
+   !< Filled round dots centred on the points (`x`, `y`) [unit square], or point type markers.
+   !<
+   !< Markers keep their shape only in pixels: the plot area holds their centres as an invisible `fs-pts` path of
+   !< `M` moves (unit square) carrying the marker as `data-*` attributes, and the markers are queued for the pixel
+   !< overlay written by `end_plot_area`, which the interactive viewer regenerates from the centres after a zoom.
+   class(backend_svg), intent(inout)        :: self       !< Device.
+   real(R8P),          intent(in)           :: x(:)       !< Abscissae [unit].
+   real(R8P),          intent(in)           :: y(:)       !< Ordinates [unit].
+   character(len=*),   intent(in)           :: color      !< Fill color.
+   real(R8P),          intent(in)           :: diameter   !< Dot diameter, or marker width [px].
+   integer(I4P),       intent(in), optional :: pt         !< gnuplot point type; negative or absent: round dots.
+   real(R8P),          intent(in), optional :: line_width !< Marker line width [px].
+   real(R8P)                                :: width      !< Marker line width [px].
 
+   if (present(pt)) then
+      if (pt >= 0_I4P) then
+         width = 1.0_R8P
+         if (present(line_width)) width = line_width
+         write(self%unit, '(A)', advance='no') '<path class="fs-pts" data-pt="'//int_str(int(pt, I8P))// &
+                                               '" data-size="'//px(diameter)//'" data-lw="'//px(width)// &
+                                               '" data-color="'//color//'" fill="none" stroke="none" d="'
+         call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', '')
+         call self%put('"/>')
+         self%marks = self%marks//marker_element(x * self%area(3), (1.0_R8P - y) * self%area(4), color, diameter, &
+                                                 pt, width)//new_line('a')
+         return
+      endif
+   endif
    write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//color//'" stroke-width="'//px(diameter)// &
                                          '" stroke-linecap="round" vector-effect="non-scaling-stroke" d="'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', 'h0')
@@ -410,6 +451,124 @@ contains
       write(self%unit, '(A)', advance='no') prefix//fixed(x(i), ndec)//','//fixed(y(i), ndec)//suffix
    enddo
    endsubroutine write_pairs
+
+   function marker_element(x, y, color, width_px, pt, line_width) result(element)
+   !< One `<path>` of the markers of gnuplot point type `pt`, `width_px` px wide, centred on the points (`x`, `y`) [px]:
+   !< the filled shapes (the odd types from 5, and the dot) are filled with `color`, the others stroked only.
+   real(R8P),        intent(in)           :: x(:)       !< Abscissae [px].
+   real(R8P),        intent(in)           :: y(:)       !< Ordinates [px].
+   character(len=*), intent(in)           :: color      !< Color.
+   real(R8P),        intent(in)           :: width_px   !< Marker width [px].
+   integer(I4P),     intent(in)           :: pt         !< gnuplot point type, >= 0.
+   real(R8P),        intent(in), optional :: line_width !< Line width [px], default 1.
+   character(len=:), allocatable          :: element    !< Path element.
+   character(len=:), allocatable          :: d          !< Path data.
+   character(len=:), allocatable          :: fill       !< Fill color or none.
+   character(len=:), allocatable          :: width      !< Line width text.
+   integer(I4P)                           :: shape      !< Shape: 0 the dot, 1..15.
+   integer(I4P)                           :: used       !< Characters of `d` in use.
+   integer(I4P)                           :: i          !< Counter.
+
+   shape = 0_I4P
+   if (pt > 0_I4P) shape = modulo(pt - 1_I4P, 15_I4P) + 1_I4P
+   fill = 'none'
+   if (shape == 0_I4P .or. modulo(shape, 2_I4P) == 1_I4P .and. shape >= 5_I4P) fill = color
+   width = '1.00'
+   if (present(line_width)) width = px(line_width)
+   ! grown by doubling: a marker per point, never quadratic
+   allocate(character(len=256) :: d)
+   used = 0_I4P
+   do i = 1_I4P, size(x, kind=I4P)
+      call append(marker_path(x(i), y(i), 0.5_R8P * width_px, shape))
+   enddo
+   element = '<path fill="'//fill//'" stroke="'//color//'" stroke-width="'//width//'" d="'//d(1:used)//'"/>'
+   contains
+      subroutine append(piece)
+      !< Append `piece` to `d`.
+      character(len=*), intent(in)  :: piece !< Text.
+      character(len=:), allocatable :: grown !< Larger buffer.
+
+      if (used + len(piece) > len(d)) then
+         allocate(character(len=2 * (used + len(piece))) :: grown)
+         grown(1:used) = d(1:used)
+         call move_alloc(grown, d)
+      endif
+      d(used + 1:used + len(piece)) = piece
+      used = used + len(piece, kind=I4P)
+      endsubroutine append
+   endfunction marker_element
+
+   pure function marker_path(x, y, r, shape) result(d)
+   !< Path data of a marker of half width `r` centred on (`x`, `y`) [px]: gnuplot's svg shapes, 1 plus, 2 cross, 3 star,
+   !< 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond, 14-15 pentagon, 0 a 1 px dot.
+   real(R8P),    intent(in)      :: x     !< Centre abscissa [px].
+   real(R8P),    intent(in)      :: y     !< Centre ordinate [px].
+   real(R8P),    intent(in)      :: r     !< Half width [px].
+   integer(I4P), intent(in)      :: shape !< Shape, 0..15.
+   character(len=:), allocatable :: d     !< Path data.
+
+   select case (shape)
+   case (0_I4P)
+      d = circle(0.5_R8P)
+   case (1_I4P)
+      d = plus()
+   case (2_I4P)
+      d = cross()
+   case (3_I4P)
+      d = plus()//cross()
+   case (4_I4P, 5_I4P)
+      d = polygon([-1.0_R8P, 1.0_R8P, 1.0_R8P, -1.0_R8P], [-1.0_R8P, -1.0_R8P, 1.0_R8P, 1.0_R8P])
+   case (6_I4P, 7_I4P)
+      d = circle(r)
+   case (8_I4P, 9_I4P)
+      d = polygon([0.0_R8P, -1.33_R8P, 1.33_R8P], [-1.33_R8P, 0.67_R8P, 0.67_R8P])
+   case (10_I4P, 11_I4P)
+      d = polygon([0.0_R8P, -1.33_R8P, 1.33_R8P], [1.33_R8P, -0.67_R8P, -0.67_R8P])
+   case (12_I4P, 13_I4P)
+      d = polygon([0.0_R8P, 1.414_R8P, 0.0_R8P, -1.414_R8P], [-1.414_R8P, 0.0_R8P, 1.414_R8P, 0.0_R8P])
+   case default
+      d = polygon([0.0_R8P, 1.265_R8P, 0.782_R8P, -0.782_R8P, -1.265_R8P], &
+                  [1.33_R8P, 0.411_R8P, -1.067_R8P, -1.067_R8P, 0.411_R8P])
+   endselect
+   contains
+      pure function plus() result(p)
+      !< Plus.
+      character(len=:), allocatable :: p !< Path data.
+
+      p = 'M'//px(x - r)//','//px(y)//'H'//px(x + r)//'M'//px(x)//','//px(y - r)//'V'//px(y + r)
+      endfunction plus
+
+      pure function cross() result(p)
+      !< Diagonal cross.
+      character(len=:), allocatable :: p !< Path data.
+
+      p = 'M'//px(x - r)//','//px(y - r)//'L'//px(x + r)//','//px(y + r)//'M'//px(x + r)//','//px(y - r)//'L'// &
+          px(x - r)//','//px(y + r)
+      endfunction cross
+
+      pure function circle(radius) result(p)
+      !< Circle of `radius`, two arcs.
+      real(R8P), intent(in)         :: radius !< Radius [px].
+      character(len=:), allocatable :: p      !< Path data.
+
+      p = 'M'//px(x - radius)//','//px(y)//'A'//px(radius)//','//px(radius)//' 0 1 0 '//px(x + radius)//','//px(y)// &
+          'A'//px(radius)//','//px(radius)//' 0 1 0 '//px(x - radius)//','//px(y)//'Z'
+      endfunction circle
+
+      pure function polygon(px_, py_) result(p)
+      !< Closed polygon of the vertices (`px_`, `py_`), in half widths from the centre.
+      real(R8P), intent(in)         :: px_(:) !< Vertex abscissae [half width].
+      real(R8P), intent(in)         :: py_(:) !< Vertex ordinates [half width].
+      character(len=:), allocatable :: p      !< Path data.
+      integer(I4P)                  :: k      !< Vertex counter.
+
+      p = 'M'//px(x + r * px_(1))//','//px(y + r * py_(1))
+      do k = 2_I4P, size(px_, kind=I4P)
+         p = p//'L'//px(x + r * px_(k))//','//px(y + r * py_(k))
+      enddo
+      p = p//'Z'
+      endfunction polygon
+   endfunction marker_path
 
    pure function dash_attribute(dasharray) result(attribute)
    !< ` stroke-dasharray="..."` attribute, empty for solid lines.

@@ -19,9 +19,11 @@ title: Features
 - y autoscales on the points inside the x range only
 - Error bar ends widen the autoscale
 - Data files with comments, blocks (one blank line) and datasets (two blank lines), `using`, `index`, `every`,
-  pseudo-column 0; CSV and other separators (`set datafile separator comma`)
+  pseudo-column 0; CSV and other separators (`set datafile separator comma`); column headers: `using 1:"residual"`,
+  `title columnhead`, `set key autotitle columnhead`
 - Function plots, `plot 'run.dat', 1e-1*exp(-x/5)`, sampled as gnuplot over the data x range (`set samples`)
 - A second y axis: `plot ... axes x1y2` with `set y2tics`, `y2label`, `y2range`, `logscale y2`, `ytics nomirror`
+- gnuplot point types (`pt 7`), kept in shape under zoom; the key inside or `outside` the plot, `below`/`above` in rows
 - `set xtics`/`ytics` steps and `set format` printf labels, following the zoom in the viewer; key placement and
   box; `set style data`, `set style line` and `ls`; the full `every`
 - Expressions in `using` with gnuplot's rules, integer division and `1/0` gaps included: `u 1:($2*1e3)`,

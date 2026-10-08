@@ -8,7 +8,8 @@ module foresight_expression
 !<
 !< - operators, loosest first: `?:`, `||`, `&&`, `== !=`, `< <= > >=`, `+ -`, `* / %`, unary `- + !`, `**` (right
 !<   associative, so `-2**2` is -4 and `2**3**2` is 512); `&&`, `||` and `?:` evaluate only what they need;
-!< - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `pi`, and the functions
+!< - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `column("name")` (the column
+!<   of that header, see `resolve`), `pi`, and the functions
 !<   `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`;
 !< - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
 !<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
@@ -51,6 +52,7 @@ integer(I4P), parameter :: OP_JUMP        = 21_I4P !< Jump to `arg`.
 integer(I4P), parameter :: OP_JUMP_UNLESS = 22_I4P !< Pop; jump to `arg` if false.
 integer(I4P), parameter :: OP_AND_JUMP    = 23_I4P !< If the top is false: make it 0, jump to `arg`; else pop.
 integer(I4P), parameter :: OP_OR_JUMP     = 24_I4P !< If the top is true: make it 1, jump to `arg`; else pop.
+integer(I4P), parameter :: OP_COLUMN_NAMED = 25_I4P !< Push the column of header `names(arg)`: undefined until resolved.
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
 character(len=*), parameter :: FUNCTIONS(18) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
@@ -83,16 +85,27 @@ type :: instruction_object
    type(value_object) :: v                 !< Constant.
 endtype instruction_object
 
+type :: name_object
+   !< Column header name.
+   character(len=:), allocatable :: text !< Name.
+endtype name_object
+
 type :: expression_object
    !< Compiled expression.
    character(len=:),         allocatable :: text          !< Source text.
    type(instruction_object), allocatable :: code(:)       !< Stack code.
+   type(name_object),        allocatable :: names(:)      !< Column header names, `column("name")`.
    integer(I4P)                          :: depth = 0_I4P !< Stack size needed.
    contains
-      procedure, pass(self) :: compile    !< Compile an expression.
-      procedure, pass(self) :: evaluate   !< Value on a data row.
-      procedure, pass(self) :: set_column !< Plain column.
-      procedure, pass(self) :: value_at   !< Value of a function at its variable value.
+      procedure, pass(self) :: compile      !< Compile an expression.
+      procedure, pass(self) :: evaluate     !< Value on a data row.
+      procedure, pass(self) :: first_column !< First data column read.
+      procedure, pass(self) :: name_count   !< Number of column header names.
+      procedure, pass(self) :: name_of      !< A column header name.
+      procedure, pass(self) :: resolve      !< Header names to column numbers.
+      procedure, pass(self) :: set_column   !< Plain column.
+      procedure, pass(self) :: set_name     !< Plain column of a header name.
+      procedure, pass(self) :: value_at     !< Value of a function at its variable value.
 endtype expression_object
 
 contains
@@ -111,6 +124,7 @@ contains
    integer(I4P), parameter                      :: T_COLUMN = 2_I4P   !< `$N`.
    integer(I4P), parameter                      :: T_NAME = 3_I4P     !< Constant or function name.
    integer(I4P), parameter                      :: T_OPERATOR = 4_I4P !< Operator or punctuation.
+   integer(I4P), parameter                      :: T_STRING = 5_I4P   !< Quoted string, quotes removed.
    character(len=:), allocatable                :: token   !< Current token text.
    type(value_object)                           :: number  !< Current number or column token value.
    integer(I4P)                                 :: kind    !< Current token kind.
@@ -122,6 +136,8 @@ contains
    self%text = text
    if (allocated(self%code)) deallocate(self%code)
    allocate(self%code(0))
+   if (allocated(self%names)) deallocate(self%names)
+   allocate(self%names(0))
    self%depth = 0_I4P
    iostat = 0_I4P
    iomsg = ''
@@ -156,6 +172,7 @@ contains
       integer(I4P)                :: ios     !< Conversion status.
       logical                     :: is_real !< Number with a point or an exponent.
       logical                     :: ok      !< Real conversion succeeded.
+      integer(I4P)                :: close   !< Closing quote, from the opening one.
 
       if (iostat /= 0_I4P) return
       n = len(text, kind=I4P)
@@ -213,6 +230,15 @@ contains
          number = value_object(is_int=.true.)
          read(token(2:), *, iostat=ios) number%i
          if (ios /= 0_I4P .or. number%i > huge(1_I4P)) call syntax('column number too large')
+      elseif (text(pos:pos) == '"' .or. text(pos:pos) == "'") then
+         kind = T_STRING
+         close = index(text(pos + 1_I4P:), text(pos:pos), kind=I4P)
+         if (close == 0_I4P) then
+            call syntax('unterminated string')
+            return
+         endif
+         token = text(pos + 1_I4P:pos + close - 1_I4P)
+         pos = pos + close + 1_I4P
       elseif (scan(text(pos:pos), LETTERS) > 0) then
          kind = T_NAME
          call skip(LETTERS//DIGITS)
@@ -271,7 +297,7 @@ contains
       self%code = [self%code, instruction]
       if (present(k)) k = size(self%code, kind=I4P)
       select case (op)
-      case (OP_CONSTANT, OP_COLUMN)
+      case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED)
          depth = depth + 1_I4P
       case (OP_ADD:OP_NE, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
          ! the conditional jumps pop on the path that falls through
@@ -423,6 +449,17 @@ contains
             return
          endif
          call next
+         if (name == 'column' .and. kind == T_STRING) then
+            if (present(variable)) then
+               call syntax('columns are only valid in using, not in a function', at)
+               return
+            endif
+            self%names = [self%names, name_object(token)]
+            call next
+            call expect(')')
+            call emit(OP_COLUMN_NAMED, arg=size(self%names, kind=I4P))
+            return
+         endif
          nargs = 0_I4P
          if (.not. (kind == T_OPERATOR .and. token == ')')) then
             do
@@ -449,6 +486,8 @@ contains
          else
             call syntax('unknown function "'//name//'"', at)
          endif
+      case (T_STRING)
+         call syntax('a string is only valid as column("name")')
       case (T_OPERATOR)
          if (accept('(')) then
             call parse_ternary
@@ -500,6 +539,10 @@ contains
          case (OP_COLUMN)
             sp = sp + 1_I4P
             call column(int(instruction%arg, I8P), stack(sp), ok)
+         case (OP_COLUMN_NAMED)
+            ! a name not resolved against a header: no column
+            sp = sp + 1_I4P
+            call column(-1_I8P, stack(sp), ok)
          case (OP_COLUMN_OF)
             c = -1_I8P
             if (stack(sp)%is_int) then
@@ -568,6 +611,64 @@ contains
       endsubroutine column
    endfunction evaluate
 
+   pure function first_column(self) result(c)
+   !< First data column (from 1) the expression reads, 0 if none (an unresolved name is none): the column whose header
+   !< titles the item, as gnuplot `title columnhead`.
+   class(expression_object), intent(in) :: self !< Expression.
+   integer(I4P)                         :: c    !< Column.
+   integer(I4P)                         :: k    !< Instruction counter.
+
+   c = 0_I4P
+   do k = 1_I4P, size(self%code, kind=I4P)
+      if (self%code(k)%op == OP_COLUMN .and. self%code(k)%arg >= 1_I4P) then
+         c = self%code(k)%arg
+         return
+      endif
+   enddo
+   endfunction first_column
+
+   elemental function name_count(self) result(n)
+   !< Number of column header names used.
+   class(expression_object), intent(in) :: self !< Expression.
+   integer(I4P)                         :: n    !< Names.
+
+   n = 0_I4P
+   if (allocated(self%names)) n = size(self%names, kind=I4P)
+   endfunction name_count
+
+   pure function name_of(self, k) result(name)
+   !< The `k`-th column header name.
+   class(expression_object), intent(in) :: self !< Expression.
+   integer(I4P),             intent(in) :: k    !< Name index.
+   character(len=:), allocatable        :: name !< Name.
+
+   name = self%names(k)%text
+   endfunction name_of
+
+   pure function resolve(self, header) result(resolved)
+   !< The expression with its column header names replaced by their column numbers in `header` (the names of columns
+   !< 1, 2, ...; trailing blanks ignored); a name not in it reads no column: undefined.
+   class(expression_object), intent(in) :: self      !< Expression.
+   character(len=*),         intent(in) :: header(:) !< Column names.
+   type(expression_object)              :: resolved  !< Resolved expression.
+   integer(I4P)                         :: k         !< Instruction counter.
+   integer(I4P)                         :: c         !< Column counter.
+
+   resolved = self
+   do k = 1_I4P, size(resolved%code, kind=I4P)
+      if (resolved%code(k)%op /= OP_COLUMN_NAMED) cycle
+      associate(name => self%names(resolved%code(k)%arg)%text)
+         resolved%code(k) = instruction_object(op=OP_COLUMN, arg=-1_I4P)
+         do c = 1_I4P, size(header, kind=I4P)
+            if (trim(header(c)) == name) then
+               resolved%code(k)%arg = c
+               exit
+            endif
+         enddo
+      endassociate
+   enddo
+   endfunction resolve
+
    pure subroutine set_column(self, c)
    !< Make the expression the plain column `c` (0 is the point number).
    class(expression_object), intent(inout) :: self !< Expression.
@@ -575,8 +676,20 @@ contains
 
    self%text = ''
    self%code = [instruction_object(op=OP_COLUMN, arg=c)]
+   self%names = [name_object ::]
    self%depth = 1_I4P
    endsubroutine set_column
+
+   pure subroutine set_name(self, name)
+   !< Make the expression the plain column of header `name`, as gnuplot `using 1:"name"`.
+   class(expression_object), intent(inout) :: self !< Expression.
+   character(len=*),         intent(in)    :: name !< Column header name.
+
+   self%text = ''
+   self%code = [instruction_object(op=OP_COLUMN_NAMED, arg=1_I4P)]
+   self%names = [name_object(name)]
+   self%depth = 1_I4P
+   endsubroutine set_name
 
    pure function value_at(self, x) result(v)
    !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.

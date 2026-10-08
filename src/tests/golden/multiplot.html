@@ -676,8 +676,11 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     this.y2ticks = group.querySelector(".fs-y2ticks");
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
+    this.marks = group.querySelector(".fs-marks");
+    this.points = readPoints(group);
     this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
-      this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : ""];
+      this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : "",
+      this.marks ? this.marks.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
   }
@@ -695,6 +698,49 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       }
     });
     return bars;
+  }
+
+  // point type markers: centres in viewBox coordinates (unit square, y downward) and the marker
+  function readPoints(group) {
+    var points = [];
+    group.querySelectorAll(".fs-pts").forEach(function (path) {
+      var centres = path.getAttribute("d").replace(/\s+/g, "").split("M").filter(Boolean)
+        .map(function (pair) { return pair.split(",").map(Number); });
+      points.push({pt: Number(path.getAttribute("data-pt")),
+        size: Number(path.getAttribute("data-size")), lw: path.getAttribute("data-lw"),
+        color: path.getAttribute("data-color"), centres: centres});
+    });
+    return points;
+  }
+
+  function px(v) { return v.toFixed(2); }
+
+  // path of a marker of half width r centred on (x, y), gnuplot svg shapes (mirror of marker_path)
+  function markerPath(x, y, r, shape) {
+    var poly = function (xs, ys) {
+      return xs.map(function (a, k) {
+        return (k ? "L" : "M") + px(x + r * a) + "," + px(y + r * ys[k]);
+      }).join("") + "Z";
+    };
+    var circle = function (c) {
+      var arc = "A" + px(c) + "," + px(c) + " 0 1 0 ";
+      return "M" + px(x - c) + "," + px(y) + arc + px(x + c) + "," + px(y) + arc + px(x - c) + "," +
+        px(y) + "Z";
+    };
+    var plus = "M" + px(x - r) + "," + px(y) + "H" + px(x + r) + "M" + px(x) + "," + px(y - r) +
+      "V" + px(y + r);
+    var cross = "M" + px(x - r) + "," + px(y - r) + "L" + px(x + r) + "," + px(y + r) + "M" +
+      px(x + r) + "," + px(y - r) + "L" + px(x - r) + "," + px(y + r);
+    if (shape === 0) return circle(0.5);
+    if (shape === 1) return plus;
+    if (shape === 2) return cross;
+    if (shape === 3) return plus + cross;
+    if (shape <= 5) return poly([-1, 1, 1, -1], [-1, -1, 1, 1]);
+    if (shape <= 7) return circle(r);
+    if (shape <= 9) return poly([0, -1.33, 1.33], [-1.33, 0.67, 0.67]);
+    if (shape <= 11) return poly([0, -1.33, 1.33], [1.33, -0.67, -0.67]);
+    if (shape <= 13) return poly([0, 1.414, 0, -1.414], [-1.414, 0, 1.414, 0]);
+    return poly([0, 1.265, 0.782, -0.782, -1.265], [1.33, 0.411, -1.067, -1.067, 0.411]);
   }
 
   Panel.prototype.isHome = function () {
@@ -731,10 +777,30 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       this.yticks.innerHTML = this.original[2];
       if (this.caps) this.caps.innerHTML = this.original[3];
       if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
+      if (this.marks) this.marks.innerHTML = this.original[5];
     } else {
       this.drawTicks();
       this.drawCaps();
+      this.drawMarks();
     }
+  };
+
+  // point type markers keep their pixel shape: recomputed in the pixel overlay for the current view
+  Panel.prototype.drawMarks = function () {
+    var self = this, v = this.view;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.marks) return;
+    clear(this.marks);
+    this.points.forEach(function (p) {
+      var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
+      var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
+      p.centres.forEach(function (c) {
+        var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
+        if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
+      });
+      element(self.marks, "path", {fill: filled ? p.color : "none", stroke: p.color,
+        "stroke-width": p.lw, d: d.join("")});
+    });
   };
 
   // error bar caps keep their pixel length: recomputed in the pixel overlay for the current view

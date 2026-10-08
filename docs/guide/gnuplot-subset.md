@@ -35,14 +35,14 @@ that did what it says.
 | **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | — |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2` (`y`, `xy2`), all when absent | linear axes |
 | **gr**id | grid at major ticks | no grid |
-| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] | show the key, inside the plot area (top right by default), see [below](#key) | hide the key |
+| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
 | **xti**cs / **yti**cs / **y2ti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis) | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
-| **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`ps S`] | line style `N`, used by `ls N` | — |
+| **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] | text output, 79 x 24 by default, on the standard output | — |
@@ -62,14 +62,16 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 |---|---|
 | `'file'` | data file; `''` repeats the previous one |
 | *function* | an expression of `x`, see [below](#functions) |
-| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
+| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
+| **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
 | `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the `N`-th palette color |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
+| `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
 
 `using` defaults as gnuplot: `1:2`, or `0:1` for single-column files; `1:2:3` for `yerrorbars` and `xerrorbars`,
@@ -93,7 +95,7 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 
 | | |
 |---|---|
-| Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)` |
+| Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")` |
 | Operators, loosest first | `?:` · `\|\|` · `&&` · `==` `!=` · `<` `<=` `>` `>=` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` · `**` |
 | Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh` |
 | Constants | numbers (`2`, `1.5`, `.5`, `1e-3`), `pi` |
@@ -113,7 +115,7 @@ A field must be a column number or one parenthesized expression, as in gnuplot: 
 errors. Syntax errors point at the character: `using: unexpected ")" at character 6 of "($2 +)"`.
 
 Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
-stops the plot. Not supported: user variables and functions, string columns (`column("name")`, `stringcolumn`),
+stops the plot. Not supported: user variables and functions, string values (`stringcolumn`, string operators),
 bitwise operators, the pseudo-columns -1 and -2.
 
 ## Functions
@@ -151,6 +153,22 @@ mirrored on the right unless `set ytics nomirror`. The axis is drawn only when i
 ends; `y2label` reads upward on the right, as `ylabel` on the left. In the HTML page the y2 ticks follow the zoom and
 the readout shows the y2 value too.
 
+## Column headers
+
+```gnuplot
+set datafile separator comma
+plot 'run.csv' using 1:"residual" title columnhead, '' using "iteration":(column("cd")*1e3)
+set key autotitle columnhead       # every untitled item takes the header of its y column
+```
+
+As in gnuplot, the first row of each dataset is a header as soon as an item uses it: a quoted name in `using` (also
+in `column("name")`), `title columnhead`, or `set key autotitle columnhead`. It is then neither a point nor counted by
+`$0`; otherwise it is an ordinary row, whose words are missing values. A name is looked up in the header of the
+dataset each row belongs to; a name no selected dataset has is an error. `title columnhead` takes the header of the
+first column the y field reads (`($3*2)` gives the header of column 3), `columnhead(N)` of column `N`; no header, no
+title. Quoted header cells may hold blanks: `"the res"`. `set key noautotitle` leaves untitled items, functions
+included, out of the key.
+
 ## Ticks and label formats
 
 ```gnuplot
@@ -182,10 +200,18 @@ Both settings follow the zoom in the HTML page: the viewer places and formats th
 set key bottom left box
 set key center           # centred both ways
 set key top center       # top, centred horizontally
+set key outside          # right of the plot, top aligned
+set key outside left bottom
+set key below            # a row below the plot (above: over it), wrapping when the panel is narrow
+set key inside           # back inside, keeping the rows
 ```
 
-Position words apply in order; `center` centres the direction not named yet, as in gnuplot. The key stays inside
-the plot area, titles right-aligned with their sample on the right.
+Position words apply in order; `center` centres the direction not named yet, as in gnuplot. Titles are right-aligned
+with their sample on the right. Inside, the key lies in the plot area. `outside` puts it in the left or right margin,
+aligned with the top, centre or bottom of the plot; centred horizontally, above (`top`) or below (`bottom`) the
+plot; centred both ways it stays inside, as gnuplot. `below` and `above` centre a row of entries under the x label or
+between the title and the plot (`below left` aligns it to the left); `horizontal` and `vertical` choose rows or a
+column anywhere. The plot shrinks to make room for a key outside it.
 
 ## Styles
 
@@ -196,6 +222,18 @@ plot 'run.dat' u 1:2 ls 1 t 'residual', '' u 1:3 lt 3 t 'momentum'
 ```
 
 `ls N` of an undefined style uses the palette color `N`, as gnuplot's linetype.
+
+## Point types
+
+```gnuplot
+plot 'run.dat' u 1:2 w lp pt 7 t 'residual', '' u 1:3 w p pt 4 ps 1.5 t 'cd'
+```
+
+The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3 star, 4 square, 6 circle,
+8 triangle, 10 inverted triangle, 12 diamond, 14 pentagon, each odd type from 5 the filled shape before it; beyond 15
+they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` a point is foresight's round dot,
+6 px at `ps 1`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
+with the symbol of its color.
 
 ## Multiplot
 
@@ -233,4 +271,4 @@ User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`)
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
-`outside` the plot area; point types (`pt`).
+at a position (`at`) or in a named margin (`lmargin`, ...); `pointinterval` (`pi`).

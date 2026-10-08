@@ -136,12 +136,14 @@ contains
    self%panels(self%current) = settings
    endsubroutine next_panel
 
-   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes)
+   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
    !< Error bar styles (`yerrorbars`, `xerrorbars`, `xyerrorbars`) take the bar bounds `ylow`/`yhigh`, `xlow`/`xhigh`.
-   !< `axes='x1y2'` plots the series against the second y axis, scaled on its own.
+   !< `axes='x1y2'` plots the series against the second y axis, scaled on its own. `pt` is gnuplot's point type (0 a
+   !< dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond,
+   !< 14-15 pentagon, odd ones from 5 filled; cycling every 15), 9 px wide at `ps` 1; without it points are round dots.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -156,10 +158,11 @@ contains
    real(R8P),            intent(in), optional :: ylow(:)  !< Vertical error bar starts.
    real(R8P),            intent(in), optional :: yhigh(:) !< Vertical error bar ends.
    character(len=*),     intent(in), optional :: axes     !< Axes of the series: `x1y1` (default) or `x1y2`.
+   integer(I4P),         intent(in), optional :: pt       !< gnuplot point type, >= 0.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
-                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes)
+                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -227,7 +230,8 @@ contains
 
    subroutine set_key(self, on, position, box)
    !< Draw the key (`on` absent or true), as gnuplot `set key`, or not; `position` takes gnuplot's words, e.g.
-   !< `'bottom left'` or `'center'` (inside the plot area, top right by default); `box` draws a box around it.
+   !< `'bottom left'`, `'center'` (inside the plot area, top right by default), `'outside'`, `'below'`, `'above'`,
+   !< `'horizontal'`; `box` draws a box around it.
    class(figure_object), intent(inout)        :: self     !< Figure.
    logical,              intent(in), optional :: on       !< Key on.
    character(len=*),     intent(in), optional :: position !< Position words: left, right, center, top, bottom.
@@ -239,7 +243,8 @@ contains
       panel%key = .true.
       if (present(on)) panel%key = on
       if (present(position)) then
-         call key_position(position, panel%key_h, panel%key_v, bad)
+         call key_position(position, panel%key_h, panel%key_v, panel%key_outside, panel%key_margin, &
+                           panel%key_horizontal, bad)
          if (len(bad) > 0) error stop 'foresight: set_key: unknown position "'//bad//'"'
       endif
       if (present(box)) panel%key_box = box

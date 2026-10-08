@@ -33,7 +33,7 @@ regenerated:
 
 - **ticks, tick labels and grid** (y2 ticks included), with a line-by-line port of the Fortran tick rules
   (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals;
-- **error bar caps**, kept at their pixel length in a separate overlay.
+- **error bar caps** and **point type markers** (`pt`), kept at their pixel size in separate overlays.
 
 Back at the original view (`a`), the ticks written by Fortran are restored exactly.
 

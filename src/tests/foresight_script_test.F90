@@ -27,7 +27,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(38)                           !< Per-check outcome.
+logical                       :: test_passed(43)                           !< Per-check outcome.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -122,12 +122,12 @@ call interpreter%run_text("set format z '%g'", iostat, iomsg)
 test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be among x, y, y2') > 0
 call interpreter%run_text("set format y '%d'", iostat, iomsg)
 test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
-call interpreter%run_text('set key outside', iostat, iomsg)
-test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "outside"') > 0
+call interpreter%run_text('set key lmargin', iostat, iomsg)
+test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "lmargin"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
-call interpreter%run_text('set style line 1 pt 7', iostat, iomsg)
-test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pt"') > 0
+call interpreter%run_text('set style line 1 pi 2', iostat, iomsg)
+test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pi"') > 0
 
 ! functions: 100 samples over [-10:10] without data, the expression as written is the title
 call interpreter%init(scratch)
@@ -250,6 +250,83 @@ if (test_passed(38)) test_passed(38) = interpreter%figure%panels(1)%series(1)%st
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! column headers, as gnuplot 6.0: used by name, as titles; the header row is then not a point (nor counted by $0)
+open(newunit=unit, file=csv_file, action='write', status='replace')
+write(unit, '(A)') 'it,res,coef'
+write(unit, '(A)') '1,10,5'
+write(unit, '(A)') '2,20,6'
+write(unit, '(A)') '3,30,7'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set datafile separator comma"//new_line('a')//"plot '"//csv_file//"' u 1:""res"", "// &
+                          "'' u 0:3 t columnhead, '' u 1:(column(""coef"")*2) t columnheader(2), '' u 1:3", iostat, iomsg)
+test_passed(39) = iostat == 0_I4P
+if (test_passed(39)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(39) = series(1)%title == "'"//csv_file//"' u 1:""res""" .and. all(series(1)%y == [10, 20, 30]) .and. &
+                        series(2)%title == 'coef' .and. all(series(2)%x == [0, 1, 2]) .and. &
+                        series(3)%title == 'res' .and. all(series(3)%y == [10, 12, 14]) .and. &
+                        size(series(4)%y) == 4 .and. ieee_is_nan(series(4)%y(1))
+   endassociate
+endif
+! autotitle columnhead: every item reads a header, explicit titles win
+call interpreter%run_text("set key autotitle columnhead; plot '"//csv_file//"' u 1:2, '' u 1:3 t 'mine', '' u 0:3", &
+                          iostat, iomsg)
+test_passed(40) = iostat == 0_I4P
+if (test_passed(40)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(40) = series(1)%title == 'res' .and. series(2)%title == 'mine' .and. size(series(2)%y) == 3 .and. &
+                        series(3)%title == 'coef' .and. all(series(3)%x == [0, 1, 2])
+   endassociate
+endif
+call interpreter%run_text("set key noautotitle; plot '"//csv_file//"' u 1:2, x", iostat, iomsg)
+if (test_passed(40)) test_passed(40) = iostat == 0_I4P .and. interpreter%figure%panels(1)%series(1)%title == '' .and. &
+                                       interpreter%figure%panels(1)%series(2)%title == ''
+! names glued to ":", quoted names with blanks, columnhead(N), the header of each dataset
+open(newunit=unit, file=csv_file, action='write', status='replace')
+write(unit, '(A)') '"it" "the res" coef'
+write(unit, '(A)') '1 10 5'
+write(unit, '(A)') '2 20 6'
+write(unit, '(A)') ''
+write(unit, '(A)') ''
+write(unit, '(A)') 'it res2 coef2'
+write(unit, '(A)') '1 11 9'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//csv_file//"' i 0 u ""it"":""the res"" t columnhead, '' i 0 u 1:($3*2) t "// &
+                          "columnhead, '' i 0 u 1:3 t columnhead(9), '' index 1 u 1:""res2"" t columnhead(1)", iostat, iomsg)
+test_passed(41) = iostat == 0_I4P
+if (test_passed(41)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(41) = series(1)%title == 'the res' .and. all(series(1)%y == [10, 20]) .and. &
+                        series(2)%title == 'coef' .and. series(3)%title == '' .and. series(4)%title == 'it' .and. &
+                        all(series(4)%y == [11])
+   endassociate
+endif
+call interpreter%run_text("plot '"//csv_file//"' u 1:""nope""", iostat, iomsg)
+test_passed(42) = iostat /= 0_I4P .and. index(iomsg, 'no column with header "nope"') > 0
+call interpreter%run_text("plot x t columnhead", iostat, iomsg)
+test_passed(42) = test_passed(42) .and. iostat /= 0_I4P .and. index(iomsg, 'a function has no column header') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
+! point types: in an item, in a line style, the long form; never negative; without pt the round dot (-1)
+call interpreter%init(scratch)
+call interpreter%run_text("set style line 3 pt 6 ps 2; plot x w p pt 7, x w lp ls 3, x w p pointtype 12, x w p", &
+                          iostat, iomsg)
+test_passed(43) = iostat == 0_I4P
+if (test_passed(43)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(43) = series(1)%style%pointtype == 7_I4P .and. series(2)%style%pointtype == 6_I4P .and. &
+                        series(2)%style%pointsize == 2.0_R8P .and. series(3)%style%pointtype == 12_I4P .and. &
+                        series(4)%style%pointtype == -1_I4P
+   endassociate
+endif
+call interpreter%run_text("plot x w p pt -1", iostat, iomsg)
+test_passed(43) = test_passed(43) .and. iostat /= 0_I4P .and. index(iomsg, 'pt needs a point type >= 0') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -262,7 +339,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,38L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,43L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
