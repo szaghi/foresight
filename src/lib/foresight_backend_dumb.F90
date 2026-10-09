@@ -22,6 +22,10 @@ module foresight_backend_dumb
 !< (gnuplot's dumb uses `#`, which is also a series symbol here: a fill would hide the second curve), whatever the
 !< opacity, then draw the border with the color symbol; in the plot area they are clipped
 !< to it first (Sutherland-Hodgman). Fills go through `px_fill`, which a finer device overrides.
+!<
+!< Images (`with image`, color boxes) are drawn a character per cell, the cell taking the pixel at its centre: a
+!< character of density growing with the pixel luminance (` .:-=+*#%@`), in its color with `ansi`; transparent pixels
+!< (undefined values) are left blank.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : axes_view, backend_object
 use foresight_theme, only : theme_object
@@ -74,6 +78,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: polyline
       procedure, pass(self) :: dots
       procedure, pass(self) :: polygon
+      procedure, pass(self) :: image
       procedure, pass(self) :: text
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
@@ -81,6 +86,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
       procedure, pass(self) :: data_polygon
+      procedure, pass(self) :: data_image
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
@@ -293,6 +299,57 @@ contains
    enddo
    endsubroutine polygon
 
+   subroutine image(self, x0, y0, x1, y1, rgba)
+   !< Raster image over the box of top-left (`x0`, `y0`) and bottom-right (`x1`, `y1`) corners [px]: a character per cell
+   !< whose centre lies inside, the density of the pixel luminance, in the pixel color.
+   class(backend_dumb), intent(inout) :: self        !< Device.
+   real(R8P),           intent(in)    :: x0          !< Left [px].
+   real(R8P),           intent(in)    :: y0          !< Top [px].
+   real(R8P),           intent(in)    :: x1          !< Right [px].
+   real(R8P),           intent(in)    :: y1          !< Bottom [px].
+   integer(I4P),        intent(in)    :: rgba(:,:,:) !< Pixels.
+   character(len=*), parameter        :: RAMP = ' .:-=+*#%@' !< Characters by density.
+   real(R8P)                          :: cx          !< Cell centre abscissa [px].
+   real(R8P)                          :: cy          !< Cell centre ordinate [px].
+   real(R8P)                          :: lum         !< Pixel luminance, 0..1.
+   integer(I4P)                       :: c           !< Column.
+   integer(I4P)                       :: r           !< Row.
+   integer(I4P)                       :: i           !< Pixel column.
+   integer(I4P)                       :: j           !< Pixel row.
+   integer(I4P)                       :: k           !< Ramp index.
+
+   if (self%hidden .or. x1 <= x0 .or. y1 <= y0) return
+   do r = self%row(y0), self%row(y1)
+      cy = (real(r, R8P) - 0.5_R8P) * self%ch
+      if (cy < y0 .or. cy > y1) cycle
+      j = min(size(rgba, 3, kind=I4P), 1_I4P + int((cy - y0) / (y1 - y0) * real(size(rgba, 3), R8P), I4P))
+      do c = self%col(x0), self%col(x1)
+         cx = (real(c, R8P) - 0.5_R8P) * self%cw
+         if (cx < x0 .or. cx > x1) cycle
+         i = min(size(rgba, 2, kind=I4P), 1_I4P + int((cx - x0) / (x1 - x0) * real(size(rgba, 2), R8P), I4P))
+         if (rgba(4, i, j) == 0_I4P) cycle
+         lum = (0.299_R8P * rgba(1, i, j) + 0.587_R8P * rgba(2, i, j) + 0.114_R8P * rgba(3, i, j)) / 255.0_R8P
+         ! the darkest pixels still drawn: a blank would read as no data
+         k = max(2_I4P, min(len(RAMP, kind=I4P), 1_I4P + nint(lum * real(len(RAMP) - 1, R8P), I4P)))
+         call self%put(c, r, RAMP(k:k), self%color_index(hex_of(rgba(1:3, i, j))))
+      enddo
+   enddo
+   contains
+      pure function hex_of(v) result(hex)
+      !< `#rrggbb` of the channels `v`.
+      integer(I4P), intent(in)    :: v(3) !< Channels.
+      character(len=7)            :: hex  !< Color.
+      character(len=*), parameter :: D = '0123456789abcdef' !< Digits.
+      integer(I4P)                :: n    !< Channel counter.
+
+      hex = '#'
+      do n = 1_I4P, 3_I4P
+         hex(2 * n:2 * n) = D(v(n) / 16 + 1:v(n) / 16 + 1)
+         hex(2 * n + 1:2 * n + 1) = D(modulo(v(n), 16) + 1:modulo(v(n), 16) + 1)
+      enddo
+      endfunction hex_of
+   endsubroutine image
+
    subroutine text(self, x, y, string, anchor, sup, rotate)
    !< Text in the row of its baseline; superscripts appended after `^`; rotated text written top to bottom.
    class(backend_dumb), intent(inout)        :: self   !< Device.
@@ -420,6 +477,34 @@ contains
    call self%polygon(self%area(1) + cx * self%area(3), self%area(2) + (1.0_R8P - cy) * self%area(4), fill, opacity, &
                      stroke, line_width, ghost)
    endsubroutine data_polygon
+
+   subroutine data_image(self, x0, y0, x1, y1, rgba)
+   !< Raster image over the box of bottom-left (`x0`, `y0`) and top-right (`x1`, `y1`) corners [unit square], clipped to
+   !< the plot area: the pixels of the visible part drawn as `image`.
+   class(backend_dumb), intent(inout) :: self        !< Device.
+   real(R8P),           intent(in)    :: x0          !< Left [unit].
+   real(R8P),           intent(in)    :: y0          !< Bottom [unit].
+   real(R8P),           intent(in)    :: x1          !< Right [unit].
+   real(R8P),           intent(in)    :: y1          !< Top [unit].
+   integer(I4P),        intent(in)    :: rgba(:,:,:) !< Pixels.
+   integer(I4P)                       :: i(2)        !< Visible pixel columns.
+   integer(I4P)                       :: j(2)        !< Visible pixel rows, top to bottom.
+   real(R8P)                          :: a(2)        !< Visible box, left and right [unit].
+   real(R8P)                          :: b(2)        !< Visible box, bottom and top [unit].
+
+   if (x1 <= x0 .or. y1 <= y0) return
+   ! whole pixels inside the unit square, as a subimage
+   i = [1_I4P + max(0_I4P, int(-x0 / (x1 - x0) * size(rgba, 2), I4P)), &
+        size(rgba, 2, kind=I4P) - max(0_I4P, int((x1 - 1.0_R8P) / (x1 - x0) * size(rgba, 2), I4P))]
+   j = [1_I4P + max(0_I4P, int((y1 - 1.0_R8P) / (y1 - y0) * size(rgba, 3), I4P)), &
+        size(rgba, 3, kind=I4P) - max(0_I4P, int(-y0 / (y1 - y0) * size(rgba, 3), I4P))]
+   if (i(1) > i(2) .or. j(1) > j(2)) return
+   a = x0 + (x1 - x0) * [real(i(1) - 1_I4P, R8P), real(i(2), R8P)] / real(size(rgba, 2), R8P)
+   b = y1 - (y1 - y0) * [real(j(2), R8P), real(j(1) - 1_I4P, R8P)] / real(size(rgba, 3), R8P)
+   call self%image(self%area(1) + a(1) * self%area(3), self%area(2) + (1.0_R8P - b(2)) * self%area(4), &
+                   self%area(1) + a(2) * self%area(3), self%area(2) + (1.0_R8P - b(1)) * self%area(4), &
+                   rgba(:, i(1):i(2), j(1):j(2)))
+   endsubroutine data_image
 
    pure function text_width(self, string, sup, font_size) result(width)
    !< Width of `string` in cells [px]: superscripts take full cells after a `^`.

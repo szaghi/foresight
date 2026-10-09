@@ -64,6 +64,7 @@ type :: datafile_object
       procedure, pass(self) :: default_using !< gnuplot default columns.
       procedure, pass(self) :: header_names  !< Header names of a dataset.
       procedure, pass(self) :: load          !< Read a file.
+      procedure, pass(self) :: matrix        !< Values as a matrix (gnuplot `matrix`).
       procedure, pass(self) :: missing_name  !< A header name of the fields found nowhere.
       procedure, pass(self) :: table         !< Evaluate `using` fields.
 endtype datafile_object
@@ -451,6 +452,39 @@ contains
       if (yes .and. last >= 0_I4P) yes = k <= last
       endfunction in_loop
    endsubroutine table
+
+   pure subroutine matrix(self, index, z, message)
+   !< Values of dataset `index` (all if negative) as gnuplot `matrix` data: `z(column, row)`, the column the x index
+   !< and the row the y index, both from 0 in the file order; every row must have the same number of values.
+   class(datafile_object),  intent(in)  :: self    !< Data.
+   integer(I4P),            intent(in)  :: index   !< Dataset, 0-based; negative for all.
+   real(R8P), allocatable,  intent(out) :: z(:,:)  !< Values.
+   character(len=:), allocatable, intent(out) :: message !< Problem, empty if none.
+   integer(I4P)                         :: r       !< Row counter.
+   integer(I4P)                         :: n       !< Rows selected.
+   integer(I4P)                         :: m       !< Values per row.
+
+   message = ''
+   n = 0_I4P
+   m = -1_I4P
+   do r = 1_I4P, self%nrows
+      if (index >= 0_I4P .and. self%dataset(r) /= index) cycle
+      if (m < 0_I4P) m = self%first(r + 1_I4P) - self%first(r)
+      if (self%first(r + 1_I4P) - self%first(r) /= m) then
+         message = 'matrix: every row needs the same number of values'
+         allocate(z(0, 0))
+         return
+      endif
+      n = n + 1_I4P
+   enddo
+   allocate(z(max(0_I4P, m), n))
+   n = 0_I4P
+   do r = 1_I4P, self%nrows
+      if (index >= 0_I4P .and. self%dataset(r) /= index) cycle
+      n = n + 1_I4P
+      z(:, n) = self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P)
+   enddo
+   endsubroutine matrix
 
    pure function column_header(self, set, c) result(name)
    !< Header name of column `c` (from 1) of dataset `set` (from 0), empty if none.

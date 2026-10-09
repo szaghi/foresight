@@ -53,6 +53,7 @@ type, abstract :: backend_object
       procedure(lines_interface),           pass(self), deferred :: polyline        !< Polyline [px].
       procedure(dots_interface),            pass(self), deferred :: dots            !< Round dots or markers [px].
       procedure(polygon_interface),         pass(self), deferred :: polygon         !< Filled polygon [px].
+      procedure(image_interface),           pass(self), deferred :: image           !< Raster image [px].
       procedure(text_interface),            pass(self), deferred :: text            !< Text [px].
       procedure(begin_plot_area_interface), pass(self), deferred :: begin_plot_area !< Open the clipped plot area.
       procedure(finish_interface),          pass(self), deferred :: end_plot_area   !< Close the plot area.
@@ -60,6 +61,7 @@ type, abstract :: backend_object
       procedure(dots_interface),            pass(self), deferred :: data_dots       !< Dots or markers [unit square].
       procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
       procedure(polygon_interface),         pass(self), deferred :: data_polygon    !< Filled polygon [unit square].
+      procedure(image_interface),           pass(self), deferred :: data_image      !< Raster image [unit square].
       procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
       procedure(readout_interface),         pass(self), deferred :: readout         !< Seven-segment readout [px].
       procedure(readout_extent_interface),  pass(self), deferred :: readout_extent  !< Readout size [px].
@@ -139,6 +141,19 @@ abstract interface
    real(R8P),             intent(in)    :: line_width !< Border width [px].
    logical,               intent(in), optional :: ghost !< Unlit cell of a segmented fill.
    endsubroutine polygon_interface
+
+   subroutine image_interface(self, x0, y0, x1, y1, rgba)
+   !< Raster image `rgba(channel, column, row)` (red, green, blue, alpha 0..255; columns left to right, rows top to
+   !< bottom) stretched over the box from (`x0`, `y0`) to (`x1`, `y1`): its top-left and bottom-right corners [px] for
+   !< `image`, its bottom-left and top-right corners [unit square] for `data_image`, clipped to the plot area.
+   import :: backend_object, I4P, R8P
+   class(backend_object), intent(inout) :: self        !< Device.
+   real(R8P),             intent(in)    :: x0          !< First corner abscissa.
+   real(R8P),             intent(in)    :: y0          !< First corner ordinate.
+   real(R8P),             intent(in)    :: x1          !< Opposite corner abscissa.
+   real(R8P),             intent(in)    :: y1          !< Opposite corner ordinate.
+   integer(I4P),          intent(in)    :: rgba(:,:,:) !< Pixels.
+   endsubroutine image_interface
 
    subroutine bars_interface(self, x1, y1, x2, y2, color, line_width, cap, vertical)
    !< Error bars from (`x1`, `y1`) to (`x2`, `y2`) [unit square], with end caps `cap` px long across the bar.

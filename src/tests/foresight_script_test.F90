@@ -29,7 +29,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(55)                           !< Per-check outcome.
+logical                       :: test_passed(58)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -516,6 +516,47 @@ test_passed(55) = test_passed(55) .and. iostat /= 0_I4P .and. index(iomsg, 'whol
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! images (same() reads -1 as NaN: edges shifted off it): x:y:z gathered on a regular grid (a missing point NaN), the pixel edges; a matrix file; palette, cbrange
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 1', '2 0 2', '4 0 3', '', '0 1 4', '2 1 5'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set palette viridis maxcolors 5; set cbrange [0:10]; plot '"//data_file//"' u 1:2:3 w image", &
+                          iostat, iomsg)
+test_passed(56) = iostat == 0_I4P
+if (test_passed(56)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(56) = size(panel%series(1)%grid, 1) == 3 .and. size(panel%series(1)%grid, 2) == 2 .and. &
+                        same(panel%series(1)%x + 2.0_R8P, [1, 7]) .and. same(panel%series(1)%y * 2.0_R8P + 2.0_R8P, [1, 5]) .and. &
+                        ieee_is_nan(panel%series(1)%grid(3, 2)) .and. panel%series(1)%grid(2, 2) == 5.0_R8P .and. &
+                        panel%palette%maxcolors == 5_I4P .and. panel%cbaxis%max_fixed .and. &
+                        panel%cbaxis%max_user == 10.0_R8P
+   endassociate
+endif
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 3', '4 5 6'
+close(unit)
+call interpreter%run_text("unset colorbox; plot '"//data_file//"' matrix w image", iostat, iomsg)
+test_passed(57) = iostat == 0_I4P
+if (test_passed(57)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(57) = .not. panel%colorbox .and. size(panel%series(1)%grid, 1) == 3 .and. &
+                        panel%series(1)%grid(3, 2) == 6.0_R8P .and. same(panel%series(1)%x * 2.0_R8P + 2.0_R8P, [1, 7])
+   endassociate
+endif
+! image errors
+call interpreter%run_text("set palette cubehelix", iostat, iomsg)
+test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "cubehelix"') > 0
+call interpreter%run_text("plot '"//data_file//"' matrix w lines", iostat, iomsg)
+test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'matrix data are plotted with image') > 0
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 1', '1 0 2', '3 0 3'
+close(unit)
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w image", iostat, iomsg)
+test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'not on a regular grid') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -528,7 +569,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,55L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,58L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

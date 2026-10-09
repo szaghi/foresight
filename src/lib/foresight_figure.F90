@@ -23,6 +23,7 @@ use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_style, only : fill_style
 use foresight_theme, only : theme_named, theme_object, THEMES
+use foresight_palette, only : palette_words
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -57,17 +58,22 @@ type :: figure_object
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
    contains
       procedure, pass(self) :: clear           !< Remove the series of the current panel, keeping the settings.
+      procedure, pass(self) :: image           !< gnuplot `plot ... with image`, a grid of values.
       procedure, pass(self) :: init            !< Reset the figure, optionally resizing it.
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
       procedure, pass(self) :: set_boxwidth    !< gnuplot `set boxwidth`.
+      procedure, pass(self) :: set_cblabel     !< gnuplot `set cblabel`.
+      procedure, pass(self) :: set_cbrange     !< gnuplot `set cbrange`.
+      procedure, pass(self) :: set_colorbox    !< gnuplot `set colorbox` / `unset colorbox`.
       procedure, pass(self) :: set_format      !< gnuplot `set format`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
+      procedure, pass(self) :: set_palette     !< gnuplot `set palette`.
       procedure, pass(self) :: set_readout     !< Readouts: on/off, position, window, digit size.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
@@ -106,6 +112,33 @@ contains
       if (allocated(panel%series)) deallocate(panel%series)
    endassociate
    endsubroutine clear
+
+   subroutine image(self, z, x, y, title)
+   !< Image of the values `z(column, row)` (a heatmap), as gnuplot `plot ... with image`: pixel centres `x(column)` and
+   !< `y(row)`, evenly spaced and increasing (0, 1, ... if absent, as gnuplot `matrix`), colored by `set_palette` over
+   !< `set_cbrange`; NaN values are transparent. The x and y axes fit the pixel edges.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in)           :: z(:,:) !< Values (column, row), rows upward.
+   real(R8P),            intent(in), optional :: x(:)   !< Pixel centre abscissae.
+   real(R8P),            intent(in), optional :: y(:)   !< Pixel centre ordinates.
+   character(len=*),     intent(in), optional :: title  !< Key title.
+   real(R8P), allocatable                     :: xs(:)  !< Abscissae.
+   real(R8P), allocatable                     :: ys(:)  !< Ordinates.
+   integer(I4P)                               :: k      !< Counter.
+
+   if (present(x)) then
+      xs = x
+   else
+      xs = [(real(k, R8P), k = 0, size(z, 1) - 1)]
+   endif
+   if (present(y)) then
+      ys = y
+   else
+      ys = [(real(k, R8P), k = 0, size(z, 2) - 1)]
+   endif
+   call self%ensure_panels
+   call self%panels(self%current)%add_series(xs, ys, title=title, z=z)
+   endsubroutine image
 
    subroutine init(self, width, height, font_size)
    !< Reset the figure to gnuplot defaults, optionally resizing it.
@@ -251,6 +284,49 @@ contains
       endif
       endsubroutine text
    endsubroutine save
+
+   subroutine set_cblabel(self, label)
+   !< Color box label, as gnuplot `set cblabel`; empty for none.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: label !< Label.
+
+   call self%ensure_panels
+   self%panels(self%current)%cbaxis%label = label
+   endsubroutine set_cblabel
+
+   subroutine set_cbrange(self, min, max)
+   !< Color range of the images, as gnuplot `set cbrange [min:max]`: an absent end is autoscaled to the values.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: min  !< Value of the first palette color.
+   real(R8P),            intent(in), optional :: max  !< Value of the last palette color.
+
+   call self%ensure_panels
+   call self%panels(self%current)%cbaxis%set_range(min, max)
+   endsubroutine set_cbrange
+
+   subroutine set_colorbox(self, on)
+   !< Draw the color box of the images (`on` absent or true), as gnuplot `set colorbox`, or not.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: on   !< Color box on.
+
+   call self%ensure_panels
+   self%panels(self%current)%colorbox = .true.
+   if (present(on)) self%panels(self%current)%colorbox = on
+   endsubroutine set_colorbox
+
+   subroutine set_palette(self, words)
+   !< Palette of the images, as gnuplot `set palette`: `''` (the default, rgbformulae 7,5,15), `'rgbformulae 33,13,10'`,
+   !< `'defined (0 "blue", 1 "white", 2 "red")'`, `'gray'`, `'viridis'`, `'negative'`, `'maxcolors 8'`.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: words !< Palette words.
+   character(len=:), allocatable       :: bad   !< Unknown word.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      call palette_words(words, panel%palette, bad)
+   endassociate
+   if (len(bad) > 0) error stop 'foresight: set_palette: unsupported palette "'//bad//'"'
+   endsubroutine set_palette
 
    subroutine set_boxwidth(self, width, relative)
    !< Box width, as gnuplot `set boxwidth W [absolute|relative]`: `width` absent or 0 for the default, the boxes

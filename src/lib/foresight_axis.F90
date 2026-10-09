@@ -27,6 +27,8 @@ type :: axis_object
    real(R8P)                      :: lo        = -10.0_R8P  !< Effective value at the axis start, set by `setup`.
    real(R8P)                      :: hi        = 10.0_R8P   !< Effective value at the axis end, set by `setup`.
    type(tics_object)              :: tics                   !< User tick settings: fixed step, none, label format.
+   logical                        :: tight     = .false.    !< Autoscaled ends not extended to the ticks (images,
+                                                            !< the color axis), as gnuplot.
    type(tick_object), allocatable :: ticks(:)               !< Ticks, set by `setup`.
    type(tick_object), allocatable :: labels(:)              !< Text labels from the data, by value; none if unallocated
                                                             !< or empty.
@@ -136,9 +138,11 @@ contains
    if (self%labelled()) then
       self%ticks = pack(self%labels, self%labels%value >= min(lo, hi) .and. self%labels%value <= max(lo, hi))
    elseif (self%log) then
-      call log_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
+      call log_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
+                     self%ticks, self%tics)
    else
-      call linear_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
+      call linear_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
+                        self%ticks, self%tics)
    endif
    self%lo = lo
    self%hi = hi

@@ -10,6 +10,7 @@ module foresight_backend_svg
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
 use foresight_backend, only : axes_view, backend_object
 use foresight_format, only : fixed, int_str, real_str, xml_escape
+use foresight_png, only : png_base64
 use foresight_sys, only : rename_file
 use penf, only : I4P, I8P, R8P
 
@@ -21,6 +22,10 @@ integer(I4P),     parameter :: PX_DECIMALS    = 2_I4P                        !< 
 integer(I4P),     parameter :: UNIT_DECIMALS  = 6_I4P                        !< Decimals of unit-square coordinates.
 integer(I4P),     parameter :: PAIRS_PER_LINE = 8_I4P                        !< Coordinate pairs per output line.
 character(len=*), parameter :: FONT_FAMILY    = 'Arial,Helvetica,sans-serif' !< Default font family.
+character(len=*), parameter :: IMAGE_ATTRIBUTES = ' xmlns:xlink="http://www.w3.org/1999/xlink"'// &
+                                                 ' preserveAspectRatio="none" image-rendering="optimizeSpeed"'// &
+                                                 ' style="image-rendering:pixelated"' !< Sharp pixels, any scale;
+                                                 !< the xlink namespace declared here, the root kept unchanged.
 ! readout geometry, in digit heights
 real(R8P),        parameter :: DIGIT_WIDTH    = 0.52_R8P   !< Digit width, between the vertical segment axes.
 real(R8P),        parameter :: DIGIT_PITCH    = 0.86_R8P   !< Distance between the cells.
@@ -51,6 +56,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: polyline
       procedure, pass(self) :: dots
       procedure, pass(self) :: polygon
+      procedure, pass(self) :: image
       procedure, pass(self) :: text
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
@@ -58,6 +64,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
       procedure, pass(self) :: data_polygon
+      procedure, pass(self) :: data_image
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
@@ -236,6 +243,19 @@ contains
    call self%write_pairs(x, y, PX_DECIMALS, '', '')
    call self%put('Z"/>')
    endsubroutine polygon
+
+   subroutine image(self, x0, y0, x1, y1, rgba)
+   !< Raster image over the box of top-left (`x0`, `y0`) and bottom-right (`x1`, `y1`) corners [px], an embedded PNG.
+   class(backend_svg), intent(inout) :: self        !< Device.
+   real(R8P),          intent(in)    :: x0          !< Left [px].
+   real(R8P),          intent(in)    :: y0          !< Top [px].
+   real(R8P),          intent(in)    :: x1          !< Right [px].
+   real(R8P),          intent(in)    :: y1          !< Bottom [px].
+   integer(I4P),       intent(in)    :: rgba(:,:,:) !< Pixels.
+
+   call self%put('<image x="'//px(x0)//'" y="'//px(y0)//'" width="'//px(x1 - x0)//'" height="'//px(y1 - y0)// &
+                 '"'//IMAGE_ATTRIBUTES//' xlink:href="data:image/png;base64,'//png_base64(rgba)//'"/>')
+   endsubroutine image
 
    subroutine text(self, x, y, string, anchor, sup, rotate)
    !< Text whose baseline passes through the anchor point (`x`, `y`) [px].
@@ -425,6 +445,21 @@ contains
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
    call self%put('Z"/>')
    endsubroutine data_polygon
+
+   subroutine data_image(self, x0, y0, x1, y1, rgba)
+   !< Raster image over the box of bottom-left (`x0`, `y0`) and top-right (`x1`, `y1`) corners [unit square], an
+   !< embedded PNG in the plot area: zoomed with the data, its pixels kept sharp (`pixelated`).
+   class(backend_svg), intent(inout) :: self        !< Device.
+   real(R8P),          intent(in)    :: x0          !< Left [unit].
+   real(R8P),          intent(in)    :: y0          !< Bottom [unit].
+   real(R8P),          intent(in)    :: x1          !< Right [unit].
+   real(R8P),          intent(in)    :: y1          !< Top [unit].
+   integer(I4P),       intent(in)    :: rgba(:,:,:) !< Pixels.
+
+   call self%put('<image x="'//fixed(x0, UNIT_DECIMALS)//'" y="'//fixed(1.0_R8P - y1, UNIT_DECIMALS)//'" width="'// &
+                 fixed(x1 - x0, UNIT_DECIMALS)//'" height="'//fixed(y1 - y0, UNIT_DECIMALS)//'"'//IMAGE_ATTRIBUTES// &
+                 ' xlink:href="data:image/png;base64,'//png_base64(rgba)//'"/>')
+   endsubroutine data_image
 
    pure function text_width(self, string, sup, font_size) result(width)
    !< Estimated width of `string` with its superscript `sup` [px]: the viewer renders the glyphs, so a mean advance of

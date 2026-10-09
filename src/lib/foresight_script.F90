@@ -31,6 +31,9 @@ module foresight_script
 !< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
 !<   the labels replacing the x ticks;
+!< - `plot 'file' [matrix] with image` (`using x:y:z` on a regular grid, or the values of a `matrix` file), `set palette
+!<   [rgbformulae R,G,B|defined (v c, ...)|gray|color|viridis|positive|negative|maxcolors N]`, `set cbrange [min:max]`,
+!<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
 !< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
 !<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style); `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
@@ -42,6 +45,7 @@ module foresight_script
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_axes, only : axes_names
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
@@ -49,6 +53,7 @@ use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
+use foresight_palette, only : palette_object, palette_words
 use foresight_style, only : default_color, fill_style, style_object
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
@@ -306,6 +311,7 @@ contains
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
+   logical                                      :: is_matrix !< The item reads a `matrix` file.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -384,6 +390,7 @@ contains
       if (allocated(fields)) deallocate(fields)
       spec = ''
       label_col = 0_I4P
+      is_matrix = .false.
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       with = self%data_style
@@ -417,6 +424,12 @@ contains
             if (iostat /= 0_I4P) return
             call parse_using(spec, fields, iostat, iomsg)
             if (iostat /= 0_I4P) return
+         elseif (keyword(word, 'matrix', 3_I4P)) then
+            if (is_function) then
+               call fail('plot: matrix applies to data files, not to the function "'//written//'"', iostat, iomsg)
+               return
+            endif
+            is_matrix = .true.
          elseif (keyword(word, 'index', 1_I4P)) then
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
          elseif (keyword(word, 'every', 2_I4P)) then
@@ -428,7 +441,7 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, readout)', iostat, iomsg)
+                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, readout)', iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
@@ -563,12 +576,23 @@ contains
          cycle
       endif
       ! data
+      if (is_matrix .and. with /= 'image') then
+         call fail('plot: matrix data are plotted with image', iostat, iomsg)
+         return
+      endif
       ! reloaded to keep the text of the xtic column
       if (file /= loaded .or. (label_col > 0_I4P .and. data%label_column /= label_col)) then
          call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
+      endif
+      if (with == 'image') then
+         call image_item
+         if (iostat /= 0_I4P) return
+         if (i > size(tokens, kind=I4P)) exit
+         i = i + 1_I4P
+         cycle
       endif
       ! columns: gnuplot defaults are 1:2 (0:1 for one column), 1:2:3 for x/y error bars, 1:2:3:4 for xy error bars
       one_field = .false.
@@ -733,6 +757,48 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine image_item
+      !< An image item: the values of a `matrix` file, or `using x:y:z` (default 1:2:3) gathered on a regular grid.
+      real(R8P), allocatable        :: z(:,:)  !< Grid values.
+      real(R8P), allocatable        :: xs(:)   !< Pixel centre abscissae.
+      real(R8P), allocatable        :: ys(:)   !< Pixel centre ordinates.
+      character(len=:), allocatable :: problem !< Grid problem.
+
+      if (.not. has_title .and. self%autotitle == 'file') then
+         title = quote//written//quote
+         if (len(spec) > 0) title = title//' '//using//' '//spec
+      endif
+      if (is_matrix) then
+         if (allocated(fields)) then
+            call fail('plot: a matrix item takes no using', iostat, iomsg)
+            return
+         endif
+         call data%matrix(set_index, z, problem)
+         if (len(problem) > 0) then
+            call fail('plot: '//problem//' in "'//file//'"', iostat, iomsg)
+            return
+         endif
+         if (size(z) == 0) then
+            call fail('plot: no values in "'//file//'"', iostat, iomsg)
+            return
+         endif
+         call self%figure%image(z, title=title)
+         return
+      endif
+      if (.not. allocated(fields)) fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
+      if (size(fields) /= 3) then
+         call fail('plot: image needs using x:y:z (or a matrix file)', iostat, iomsg)
+         return
+      endif
+      call data%table(fields, set_index, every, values)
+      call regular_grid(values(:, 1), values(:, 2), values(:, 3), xs, ys, z, problem)
+      if (len(problem) > 0) then
+         call fail('plot: image of "'//file//'": '//problem, iostat, iomsg)
+         return
+      endif
+      call self%figure%image(z, xs, ys, title=title)
+      endsubroutine image_item
+
       subroutine split_xtic(spec, column, iostat, iomsg)
       !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none).
       character(len=:), allocatable, intent(inout) :: spec   !< `using` specification.
@@ -990,6 +1056,21 @@ contains
       call key_option
    elseif (option == 'readout') then
       call readout_option
+   elseif (keyword(option, 'palette', 3_I4P)) then
+      call palette_option
+   elseif (keyword(option, 'cbrange', 3_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%cbaxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
+   elseif (keyword(option, 'cblabel', 3_I4P)) then
+      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      call self%figure%set_cblabel(text)
+   elseif (keyword(option, 'colorbox', 4_I4P)) then
+      if (size(tokens) > 1) then
+         call fail('set colorbox: no options are supported (the box is at the right of the plot)', iostat, iomsg)
+         return
+      endif
+      call self%figure%set_colorbox(.true.)
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call boxwidth_option
    elseif (keyword(option, 'output', 2_I4P)) then
@@ -1243,6 +1324,25 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine palette_option
+      !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette).
+      type(palette_object)          :: probe !< Palette the words are tried on.
+      character(len=:), allocatable :: words !< Palette words.
+      character(len=:), allocatable :: bad   !< Unknown word.
+
+      words = ''
+      do i = 2_I4P, size(tokens, kind=I4P)
+         words = words//' '//tokens(i)%text
+      enddo
+      probe = self%figure%panels(self%figure%current)%palette
+      call palette_words(words, probe, bad)
+      if (len(bad) > 0) then
+         call fail('set palette: unsupported option "'//bad//'"', iostat, iomsg)
+         return
+      endif
+      call self%figure%set_palette(words)
+      endsubroutine palette_option
 
       subroutine boxwidth_option
       !< `set boxwidth [W] [absolute|relative]`: no width restores the default, boxes touching.
@@ -1694,6 +1794,10 @@ contains
       call self%figure%set_key(.false.)
    elseif (option == 'readout') then
       call self%figure%set_readout(.false.)
+   elseif (keyword(option, 'colorbox', 4_I4P)) then
+      call self%figure%set_colorbox(.false.)
+   elseif (keyword(option, 'cblabel', 3_I4P)) then
+      call self%figure%set_cblabel('')
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call self%figure%set_boxwidth()
    elseif (keyword(option, 'xtics', 3_I4P)) then
@@ -1753,6 +1857,92 @@ contains
    endif
    endfunction axes_argument
 
+   pure subroutine regular_grid(x, y, z, xs, ys, grid, problem)
+   !< Gather the points (`x`, `y`, `z`) on a regular grid: the sorted distinct finite abscissae `xs` and ordinates `ys`,
+   !< evenly spaced, and the values `grid(i, j)` at (`xs(i)`, `ys(j)`), NaN where no point lies; `problem` if the
+   !< points do not lie on such a grid.
+   real(R8P),                     intent(in)  :: x(:)      !< Abscissae.
+   real(R8P),                     intent(in)  :: y(:)      !< Ordinates.
+   real(R8P),                     intent(in)  :: z(:)      !< Values.
+   real(R8P), allocatable,        intent(out) :: xs(:)     !< Pixel centre abscissae.
+   real(R8P), allocatable,        intent(out) :: ys(:)     !< Pixel centre ordinates.
+   real(R8P), allocatable,        intent(out) :: grid(:,:) !< Values.
+   character(len=:), allocatable, intent(out) :: problem   !< Problem, empty if none.
+   logical, allocatable                       :: ok(:)     !< Placeable points.
+   integer(I4P)                               :: k         !< Point counter.
+   integer(I4P)                               :: i         !< Column.
+   integer(I4P)                               :: j         !< Row.
+
+   problem = ''
+   ok = ieee_is_finite(x) .and. ieee_is_finite(y)
+   xs = distinct(pack(x, ok))
+   ys = distinct(pack(y, ok))
+   if (size(xs) == 0 .or. size(ys) == 0) then
+      problem = 'no points'
+      allocate(grid(0, 0))
+      return
+   endif
+   if (.not. (even(xs) .and. even(ys))) then
+      problem = 'the points are not on a regular grid (evenly spaced x and y)'
+      allocate(grid(0, 0))
+      return
+   endif
+   allocate(grid(size(xs), size(ys)))
+   grid = ieee_value(1.0_R8P, ieee_quiet_nan)
+   do k = 1_I4P, size(x, kind=I4P)
+      if (.not. ok(k)) cycle
+      i = findloc(xs, x(k), dim=1)
+      j = findloc(ys, y(k), dim=1)
+      grid(i, j) = z(k)
+   enddo
+   contains
+      pure function distinct(v) result(d)
+      !< Sorted distinct values of `v`.
+      real(R8P), intent(in)  :: v(:) !< Values.
+      real(R8P), allocatable :: d(:) !< Distinct values, increasing.
+      real(R8P)              :: t    !< Swap buffer.
+      integer(I4P)           :: a    !< Counter.
+      integer(I4P)           :: b    !< Counter.
+      integer(I4P)           :: n    !< Distinct count.
+
+      allocate(d(size(v)))
+      n = 0_I4P
+      do a = 1_I4P, size(v, kind=I4P)
+         if (n > 0_I4P) then
+            if (any(d(1:n) == v(a))) cycle
+         endif
+         n = n + 1_I4P
+         d(n) = v(a)
+      enddo
+      d = d(1:n)
+      do a = 2_I4P, n
+         t = d(a)
+         b = a - 1_I4P
+         do while (b >= 1_I4P)
+            if (d(b) <= t) exit
+            d(b + 1_I4P) = d(b)
+            b = b - 1_I4P
+         enddo
+         d(b + 1_I4P) = t
+      enddo
+      endfunction distinct
+
+      pure function even(v) result(yes)
+      !< Whether the increasing `v` are evenly spaced.
+      real(R8P), intent(in) :: v(:) !< Values.
+      logical               :: yes  !< Evenly spaced.
+      real(R8P)             :: step !< Mean spacing.
+      integer(I4P)          :: a    !< Counter.
+
+      yes = .true.
+      if (size(v) < 3) return
+      step = (v(size(v)) - v(1)) / real(size(v) - 1, R8P)
+      do a = 2_I4P, size(v, kind=I4P)
+         if (abs(v(a) - v(a - 1_I4P) - step) > 1.0e-6_R8P * step) yes = .false.
+      enddo
+      endfunction even
+   endsubroutine regular_grid
+
    pure function canonical_style(word) result(style)
    !< Full gnuplot style name of `word` (full or abbreviated), empty if unsupported.
    character(len=*), intent(in)  :: word  !< Style word.
@@ -1779,6 +1969,8 @@ contains
       style = 'filledcurves'
    case ('his', 'hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
       style = 'histograms'
+   case ('ima', 'imag', 'image')
+      style = 'image'
    case default
       style = ''
    endselect
@@ -2089,7 +2281,7 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
-        keyword(word, 'fillstyle', 5_I4P)
+        keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

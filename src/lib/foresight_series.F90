@@ -21,6 +21,8 @@ type :: series_object
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    character(len=:), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
    real(R8P), allocatable        :: values(:) !< Values of a histogram, `y` being the top of its bar or stack segment.
+   real(R8P), allocatable        :: grid(:,:) !< Values of an image (column, row), rows upward; `x` and `y` are then its
+                                              !< left and right, bottom and top pixel edges.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains

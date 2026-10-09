@@ -205,6 +205,23 @@ the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled
 `rowstacked` piles the items of a row on one bar; `set boxwidth 0.6` leaves room between the stacks. See
 [Histograms](/guide/gnuplot-subset#histograms).
 
+## A heatmap
+
+<<< @/examples/snippets/cb_image.gp{gnuplot}
+
+<Plot name="cb_image" svg :width="560" :height="400" />
+
+`x:y:z` points on a regular grid, colored by the default palette; the color box at the right.
+
+## A matrix file
+
+<<< @/examples/snippets/cb_matrix.gp{gnuplot}
+
+<Plot name="cb_matrix" svg :width="560" :height="400" />
+
+`matrix` reads the values as they lie in the file: columns along x, rows along y. `maxcolors 10` quantizes the
+palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ## A band around a curve
 
 <<< @/examples/snippets/cb_filledcurves.gp{gnuplot}

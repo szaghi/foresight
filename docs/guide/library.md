@@ -41,6 +41,9 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
 | `set_style_fill(words)` | `set style fill solid 0.5 noborder`, `solid segments 10` |
+| `image(z, [x], [y], [title])` | `plot ... with image`: the values `z(column, row)` at the pixel centres `x`, `y` (evenly spaced; 0, 1, ... if absent) |
+| `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |
+| `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
 | `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
 | `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |

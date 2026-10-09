@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(32)                  !< Per-figure outcome.
+logical                     :: test_passed(38)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -52,7 +52,14 @@ test_passed(30) = check('theme_vfd_block.txt', figure_theme_block())
 test_passed(31) = check('theme_vfd_noglow.svg', figure_theme('vfd', glow=.false.))
 ! also the page of the viewer DOM test of themes (src/js/viewer_dom_test.js)
 test_passed(32) = check('theme_vfd.html', figure_theme('vfd'))
-write(output_unit, '(A,32L2)') 'foresight golden checks:', test_passed
+test_passed(33) = check('image.svg', figure_image(''))
+test_passed(34) = check('image.txt', figure_image(''))
+test_passed(35) = check('image_maxcolors.svg', figure_image('defined (0 "blue", 1 "white", 2 "red") maxcolors 6'))
+test_passed(36) = check('image_viridis.svg', figure_image('viridis'))
+test_passed(37) = check('image_vfd.svg', figure_image('maxcolors 8', theme='vfd'))
+! also the page of the viewer DOM test of images (src/js/viewer_dom_test.js)
+test_passed(38) = check('image.html', figure_image(''))
+write(output_unit, '(A,38L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -325,6 +332,34 @@ contains
    fig = figure_theme('vfd')
    call fig%set_text(charset='quadrants', colors='ansirgb')
    endfunction figure_theme_block
+
+   function figure_image(palette, theme) result(fig)
+   !< A heatmap of a 21 x 15 grid with an undefined (transparent) pixel, in the `palette`: x and y fit the pixel edges,
+   !< the color box at the right with its label.
+   character(len=*), intent(in)           :: palette !< Palette words.
+   character(len=*), intent(in), optional :: theme   !< Theme name.
+   type(figure_object)                    :: fig     !< Figure.
+   real(R8P), allocatable                 :: x(:)    !< Pixel centre abscissae.
+   real(R8P), allocatable                 :: y(:)    !< Pixel centre ordinates.
+   real(R8P), allocatable                 :: z(:,:)  !< Values.
+   integer(I4P)                           :: i       !< Column counter.
+   integer(I4P)                           :: j       !< Row counter.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   if (present(theme)) call fig%set_theme(name=theme)
+   x = [(-5.0_R8P + 0.5_R8P * real(i, R8P), i = 0, 20)]
+   y = [(-3.5_R8P + 0.5_R8P * real(j, R8P), j = 0, 14)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = exp(-(x(i)**2 + y(j)**2) / 6.0_R8P) * cos(x(i)) * cos(y(j))
+      enddo
+   enddo
+   z(1, 1) = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call fig%set_palette(palette)
+   call fig%set_cblabel('phi')
+   call fig%image(z, x, y, title='field')
+   endfunction figure_image
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

@@ -26,6 +26,11 @@ module foresight_axes
 !<
 !< Text labels of the abscissae (`xtic(N)`) of every series replace the x ticks (see foresight_axis).
 !<
+!< Images (`with image`) color a regular grid of values by the panel palette (foresight_palette) over the color axis
+!< `cbaxis`, autoscaled to the values or set (`cbrange`), its ends never extended to ticks; the x and y axes of a panel
+!< with an image fit its pixel edges, unextended, as gnuplot. The color box lies at the right of the plot area. A theme
+!< other than classic replaces the default palette with its own (dark glass to emissive colors for `vfd`).
+!<
 !< Readouts (`with readout`, see foresight_readout) show the last finite value of their series in seven-segment
 !< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
@@ -33,10 +38,11 @@ module foresight_axes
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
+use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_READOUT
+                            WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_READOUT
 use foresight_ticks, only : labels_attribute, tick_object, tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -59,6 +65,7 @@ character(len=*), parameter :: GRID_COLOR    = '#a0a0a0' !< Grid line color.
 character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array.
 character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
+real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
 
 type :: axes_object
    !< Plot panel.
@@ -86,6 +93,9 @@ type :: axes_object
    logical                          :: boxwidth_relative = .false. !< `boxwidth` scales the auto width.
    logical                          :: histogram_rowstacked = .false. !< Histograms stacked by row, else clustered.
    real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
+   type(palette_object)             :: palette          !< Palette of the images, `set palette`.
+   type(axis_object)                :: cbaxis = axis_object(tight=.true.) !< Color axis of the images, `set cbrange`.
+   logical                          :: colorbox = .true. !< Draw the color box of the images.
    logical                          :: readout = .true. !< Draw the readouts.
    character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
    character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
@@ -106,13 +116,16 @@ type :: axes_object
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
       procedure, pass(self), private :: is_readout         !< Whether a series is a readout.
+      procedure, pass(self), private :: has_image          !< Whether the panel has an image.
+      procedure, pass(self), private :: draw_colorbox      !< Draw the color box.
+      procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs, xlabels)
+                         base, fs, xlabels, z)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -143,10 +156,16 @@ contains
    real(R8P),          intent(in), optional :: base     !< Baseline of a fill.
    character(len=*),   intent(in), optional :: fs       !< Fill style words.
    character(len=*),   intent(in), optional :: xlabels(:) !< Text labels of the abscissae.
+   real(R8P),          intent(in), optional :: z(:,:)   !< Image values (column, row): `x` and `y` are then the pixel
+                                                        !< centres, evenly spaced and increasing.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
 
+   if (present(z)) then
+      call add_image
+      return
+   endif
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
    if (present(axes)) then
       if (axes /= 'x1y1' .and. axes /= 'x1y2') error stop 'foresight: plot: axes must be x1y1 or x1y2, not "'//axes//'"'
@@ -238,6 +257,40 @@ contains
    if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
                                                                      self%histogram_gap, self%boxwidth)
    contains
+      subroutine add_image
+      !< The image of the values `z` at the pixel centres `x`, `y`: its pixel edges as `x` and `y` of the series.
+      real(R8P) :: d(2) !< Pixel width and height.
+
+      if (size(z, 1) /= size(x) .or. size(z, 2) /= size(y)) &
+         error stop 'foresight: plot: an image needs size(z) = [size(x), size(y)]'
+      if (size(x) == 0 .or. size(y) == 0) error stop 'foresight: plot: an image needs values'
+      d = [spacing_of(x), spacing_of(y)]
+      if (.not. allocated(self%series)) allocate(self%series(0))
+      series%style%with = WITH_IMAGE
+      series%x = [x(1) - 0.5_R8P * d(1), x(size(x)) + 0.5_R8P * d(1)]
+      series%y = [y(1) - 0.5_R8P * d(2), y(size(y)) + 0.5_R8P * d(2)]
+      series%grid = z
+      series%title = ''
+      if (present(title)) series%title = title
+      series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P)
+      self%series = [self%series, series]
+      endsubroutine add_image
+
+      pure function spacing_of(c) result(step)
+      !< Spacing of the evenly spaced, increasing pixel centres `c` (1 for a single one).
+      real(R8P), intent(in) :: c(:) !< Pixel centres.
+      real(R8P)             :: step !< Spacing.
+      integer(I4P)          :: k    !< Counter.
+
+      step = 1.0_R8P
+      if (size(c) < 2) return
+      step = (c(size(c)) - c(1)) / real(size(c) - 1, R8P)
+      if (.not. step > 0.0_R8P) error stop 'foresight: plot: the pixel centres of an image must increase'
+      do k = 2_I4P, size(c, kind=I4P)
+         if (abs(c(k) - c(k - 1_I4P) - step) > 1.0e-6_R8P * step) &
+            error stop 'foresight: plot: the pixel centres of an image must be evenly spaced (a regular grid)'
+      enddo
+      endfunction spacing_of
       pure subroutine box_edges(left, right)
       !< Box edges: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a relative
       !< `boxwidth`; or `boxwidth` itself; or the box's own `width`.
@@ -413,6 +466,7 @@ contains
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
+   if (self%colorbox .and. self%has_image()) call self%draw_colorbox(backend, area, x0 + width, font_size)
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
@@ -828,6 +882,10 @@ contains
          u = self%xaxis%to_unit(series%x)
          v = yaxis%to_unit(series%y)
       endwhere
+      if (series%style%with == WITH_IMAGE) then
+         call draw_image
+         return
+      endif
       if (series%style%with == WITH_BOXES .or. series%style%with == WITH_HISTOGRAMS) call draw_boxes
       if (series%style%with == WITH_FILLEDCURVES) call draw_fill
       if (series%style%draws_lines()) then
@@ -878,6 +936,47 @@ contains
          enddo
       endassociate
       endsubroutine draw_boxes
+
+      subroutine draw_image
+      !< The image pixels in the palette colors over the color axis, undefined values transparent; reversed axes flip it.
+      integer(I4P), allocatable :: rgba(:,:,:) !< Pixels, rows top to bottom.
+      real(R8P)                 :: u(2)        !< Unit abscissae of the left and right edges.
+      real(R8P)                 :: w(2)        !< Unit ordinates of the bottom and top edges.
+      integer(I4P)              :: i           !< Column counter.
+      integer(I4P)              :: j           !< Row counter.
+      integer(I4P)              :: ii          !< Pixel column.
+      integer(I4P)              :: jj          !< Pixel row, top to bottom.
+
+      associate(series => self%series(s))
+         if (.not. (all(self%xaxis%accepts(series%x)) .and. all(yaxis%accepts(series%y)))) return
+         u = self%xaxis%to_unit(series%x)
+         w = yaxis%to_unit(series%y)
+         allocate(rgba(4, size(series%grid, 1), size(series%grid, 2)))
+         do j = 1_I4P, size(series%grid, 2, kind=I4P)
+            do i = 1_I4P, size(series%grid, 1, kind=I4P)
+               ii = i
+               if (u(1) > u(2)) ii = size(series%grid, 1, kind=I4P) - i + 1_I4P
+               jj = size(series%grid, 2, kind=I4P) - j + 1_I4P
+               if (w(1) > w(2)) jj = j
+               rgba(:, ii, jj) = pixel(series%grid(i, j))
+            enddo
+         enddo
+         call backend%data_image(minval(u), minval(w), maxval(u), maxval(w), rgba)
+      endassociate
+      endsubroutine draw_image
+
+      function pixel(value) result(c)
+      !< RGBA of `value` in the palette over the color axis; transparent if undefined.
+      real(R8P), intent(in) :: value !< Value.
+      integer(I4P)          :: c(4)  !< Pixel.
+      type(palette_object)  :: p     !< Effective palette.
+
+      c = 0_I4P
+      if (.not. ieee_is_finite(value)) return
+      p = effective_palette(self%palette, backend%theme%name)
+      c(1:3) = p%rgb(self%cbaxis%to_unit(value))
+      c(4) = 255_I4P
+      endfunction pixel
 
       subroutine draw_cells(u1, u2, v0, v1)
       !< The cells of a segmented column between `u1` and `u2`: N cells over the unit height, each inset by an eighth of
@@ -982,6 +1081,33 @@ contains
       endsubroutine draw_bars
    endsubroutine draw_series
 
+   pure subroutine image_range(all, zmin, zmax, found)
+   !< Range of the finite values of the images among the series `all`. A module procedure on the series array, as
+   !< `layout_histograms`: gfortran 16 debug builds misread `self%series(s)%grid` through the class dummy.
+   type(series_object), intent(in)  :: all(:) !< Series of the panel.
+   real(R8P),           intent(out) :: zmin   !< Smallest value.
+   real(R8P),           intent(out) :: zmax   !< Largest value.
+   logical,             intent(out) :: found  !< Any finite value.
+   integer(I4P)                     :: s      !< Series counter.
+   integer(I4P)                     :: i      !< Column counter.
+   integer(I4P)                     :: j      !< Row counter.
+
+   zmin = huge(1.0_R8P)
+   zmax = -huge(1.0_R8P)
+   found = .false.
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with /= WITH_IMAGE) cycle
+      do j = 1_I4P, size(all(s)%grid, 2, kind=I4P)
+         do i = 1_I4P, size(all(s)%grid, 1, kind=I4P)
+            if (.not. ieee_is_finite(all(s)%grid(i, j))) cycle
+            found = .true.
+            zmin = min(zmin, all(s)%grid(i, j))
+            zmax = max(zmax, all(s)%grid(i, j))
+         enddo
+      enddo
+   enddo
+   endsubroutine image_range
+
    subroutine layout_histograms(all, rowstacked, gap, boxwidth)
    !< Bars of every histogram series of `all` from their `values`: clustered side by side in each row, or stacked by
    !< row (positive values up from 0, negative ones down, each sign on its own stack). A module procedure on the series
@@ -1053,6 +1179,38 @@ contains
    enddo
    endsubroutine layout_histograms
 
+   pure function has_image(self) result(has)
+   !< Whether the panel has an image.
+   class(axes_object), intent(in) :: self !< Panel.
+   logical                        :: has  !< An image is plotted.
+   integer(I4P)                   :: s    !< Series counter.
+
+   has = .false.
+   if (.not. allocated(self%series)) return
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%style%with == WITH_IMAGE) has = .true.
+   enddo
+   endfunction has_image
+
+   function effective_palette(palette, theme) result(p)
+   !< `palette`, or the palette of the `theme` if it has the default colors: from the dark glass to the emissive colors
+   !< (`vfd`), from the pale glass to the dark segments (`lcd`), quantized as `palette` (`maxcolors`).
+   type(palette_object), intent(in) :: palette !< Panel palette.
+   character(len=*),     intent(in) :: theme   !< Theme name.
+   type(palette_object)             :: p       !< Palette.
+   character(len=:), allocatable    :: bad     !< Unknown word, never set.
+
+   p = palette
+   if (.not. palette%is_default()) return
+   select case (trim(theme))
+   case ('vfd')
+      call palette_words('defined (0 "#04070a", 0.55 "#3dffc6", 1 "#f5e663")', p, bad)
+   case ('lcd')
+      call palette_words('defined (0 "#c8d0b8", 1 "#0b3d2e")', p, bad)
+   endselect
+   p%maxcolors = palette%maxcolors
+   endfunction effective_palette
+
    elemental function is_readout(self, s) result(is)
    !< Whether the `s`-th series is a readout.
    class(axes_object), intent(in) :: self !< Panel.
@@ -1102,6 +1260,7 @@ contains
       if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
       margins(2) = max(margins(2), y2_margin)
    endif
+   if (self%colorbox .and. self%has_image()) margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(3) = margins(3) + above
@@ -1123,6 +1282,65 @@ contains
       endfunction labels_width
    endfunction place_plot_area
 
+   pure function colorbox_width(self, backend, font_size) result(room)
+   !< Room of the color box at the right of the plot area: a gap, the box, a gap, its tick labels, the label [px].
+   class(axes_object),    intent(in) :: self      !< Panel.
+   class(backend_object), intent(in) :: backend   !< Output device, for text widths.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: room      !< Width [px].
+   integer(I4P)                      :: k         !< Tick counter.
+
+   room = 2.0_R8P * GAP + COLORBOX_SIZE * font_size + GAP
+   if (allocated(self%cbaxis%ticks)) then
+      do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
+         room = max(room, 3.0_R8P * GAP + COLORBOX_SIZE * font_size + &
+                    backend%text_width(self%cbaxis%ticks(k)%label, self%cbaxis%ticks(k)%sup, font_size))
+      enddo
+   endif
+   if (self%cbaxis%has_label()) room = room + GAP + LINE_HEIGHT * font_size
+   endfunction colorbox_width
+
+   subroutine draw_colorbox(self, backend, area, right, font_size)
+   !< The color box: the palette gradient over the color axis (bottom to top), its frame, ticks, labels and label,
+   !< between the plot area and the panel right side `right`.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: right     !< Panel right side [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   integer(I4P), allocatable            :: rgba(:,:,:) !< Gradient, top to bottom.
+   type(palette_object)                 :: p         !< Effective palette.
+   real(R8P)                            :: left      !< Box left [px].
+   real(R8P)                            :: pos       !< Tick ordinate [px].
+   integer(I4P)                         :: n         !< Gradient steps.
+   integer(I4P)                         :: k         !< Counter.
+
+   left = right - PAD - self%colorbox_width(backend, font_size) + GAP
+   p = effective_palette(self%palette, backend%theme%name)
+   n = 256_I4P
+   if (p%maxcolors > 0_I4P) n = p%maxcolors
+   allocate(rgba(4, 1, n))
+   do k = 1_I4P, n
+      rgba(1:3, 1, k) = p%rgb(1.0_R8P - (real(k, R8P) - 0.5_R8P) / real(n, R8P))
+      rgba(4, 1, k) = 255_I4P
+   enddo
+   call backend%begin_group('fs-colorbox')
+   associate(top => area(3), bottom => area(4), box => COLORBOX_SIZE * font_size)
+      call backend%image(left, top, left + box, bottom, rgba)
+      call backend%rect(left, top, box, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+      do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
+         if (.not. self%cbaxis%ticks(k)%major) cycle
+         pos = bottom - self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * (bottom - top)
+         call backend%polyline([left + box, left + box - TICK_MAJOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+         call backend%text(left + box + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
+                           sup=self%cbaxis%ticks(k)%sup)
+      enddo
+      if (self%cbaxis%has_label()) call backend%text(right - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
+                                                     self%cbaxis%label, 'middle', rotate=-90.0_R8P)
+   endassociate
+   call backend%end_group
+   endsubroutine draw_colorbox
+
    subroutine setup_axes(self, area)
    !< Effective ranges and ticks for the plot area: x from every series, each y axis from its own series and the points
    !< inside the x range, as gnuplot. The second y axis is active when it has data or both its ends are fixed.
@@ -1137,6 +1355,9 @@ contains
    integer(I4P)                      :: k         !< y axis of the series: 1 or 2.
 
    call self%data_extent(xmin, xmax, ymin, ymax, found)
+   ! a panel with an image fits its pixel edges, as gnuplot
+   self%xaxis%tight = self%has_image()
+   self%yaxis%tight = self%has_image()
    call collect_labels
    call self%xaxis%setup(xmin, xmax, any(found), area(2) - area(1))
    xmin = huge(1.0_R8P)
@@ -1158,7 +1379,18 @@ contains
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
+   if (self%has_image()) call setup_colors
    contains
+      subroutine setup_colors
+      !< The color axis over the finite values of the images (or `cbrange`), never extended.
+      real(R8P) :: zmin  !< Smallest value.
+      real(R8P) :: zmax  !< Largest value.
+      logical   :: any_z !< Any finite value.
+
+      call image_range(self%series, zmin, zmax, any_z)
+      call self%cbaxis%setup(zmin, zmax, any_z, area(4) - area(3))
+      endsubroutine setup_colors
+
       subroutine collect_labels
       !< Text labels of the abscissae of every series, by value (the first label of a value wins), ascending.
       type(tick_object), allocatable :: labels(:) !< Labels.

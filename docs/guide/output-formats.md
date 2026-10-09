@@ -74,6 +74,11 @@ key only, as in gnuplot. A character holds one color, the last series drawn in i
 dots is a blank (gnuplot writes the empty Braille pattern), so the lines copy and trim as text; points are a dot and
 its four neighbours, clipped to the plot area.
 
+## Images
+
+`with image` writes an embedded PNG (8-bit RGBA, uncompressed: a few bytes per pixel, identical bytes for identical
+data) with `image-rendering: pixelated`, so a pixel stays a sharp square at any zoom. In text, a character per cell.
+
 ## Themes
 
 `set terminal ... theme vfd` (or `lcd`, `classic`) recolors any output as a 1980s digital dashboard: see

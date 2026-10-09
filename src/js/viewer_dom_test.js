@@ -4,7 +4,8 @@
 // panels over the same iterations, with three and one series, markers and error bar caps. Then on
 // a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
-// histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color. The page is parsed by linkedom; the SVG
+// histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
+// image.html, an image zoomed with the data, its color box not. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -183,6 +184,15 @@ check("themed ticks redrawn in the theme color", box(0)[2] < 1 &&
   Array.prototype.every.call(panel(0).querySelectorAll(".fs-xticks line"),
     function (l) { return l.getAttribute("stroke") === "#5d9cff"; }) &&
   panel(0).querySelectorAll(".fs-xticks line").length > 0);
+
+// an image: data in the plot area, zoomed with it; the color box outside, left alone
+page = strip(path.join(__dirname, "..", "tests", "golden", "image.html"));
+p = load("");
+var colorbox = panel(0).querySelector(".fs-colorbox").innerHTML;
+check("image in the plot area", panel(0).querySelector(".fs-plot image") !== null);
+wheel(0);
+check("a zoom acts on the image, not on the color box", box(0)[2] < 1 &&
+  panel(0).querySelector(".fs-colorbox").innerHTML === colorbox);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

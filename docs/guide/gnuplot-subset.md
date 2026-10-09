@@ -44,6 +44,10 @@ that did what it says.
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
+| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`gray`\|`color`\|`viridis`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`) | — |
+| **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
+| **cbl**abel `"text"` | color box label | no label |
+| **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
@@ -69,9 +73,10 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | *function* | an expression of `x`, see [below](#functions) |
 | **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below; a last field `xtic(N)` (`xticlabels(N)`) labels the points with the text of column N, see [Histograms](#histograms) |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
+| **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); `image` (`ima`), see [below](#images-and-palettes); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
@@ -93,6 +98,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | `boxes` | `x:y` or `x:y:width` |
 | `filledcurves` | `x:y` (to `y=V`, or the closed polygon), `x:y1:y2` (a band) |
 | `histograms` | `y`, the rows at the point numbers 0, 1, ... |
+| `image` | `x:y:z` on a regular grid (default `1:2:3`), or a `matrix` file |
 
 ## Expressions in `using`
 
@@ -398,6 +404,44 @@ unset multiplot
   block fills it, unless `set readout size H` fixes their height [px] (2.5 font sizes by default).
 - **In text** (`dumb`, `block`), the digits are drawn with `_` and `|`, 3 rows of 4 characters per cell, in the item
   color with `ansi`; the unlit segments are not drawn. In the HTML page, zoom and follow mode leave readouts alone.
+
+## Images and palettes
+
+```gnuplot
+set cblabel 'phi'
+plot 'field.dat' u 1:2:3 w image t 'phi(x,y)'
+```
+
+<Plot name="cb_image" svg :width="560" :height="400" />
+
+`with image` colors a regular grid of values (a heatmap): `x:y:z` points, evenly spaced in x and y (one per pixel
+centre, missing points left transparent), or a `matrix` file, the values of each row along x, the rows along y. The x
+and y axes fit the pixel edges, half a pixel beyond the first and last centres, never extended to the ticks, as
+gnuplot. Undefined values are transparent.
+
+The palette maps the values over `cbrange` (autoscaled to the values, not extended) to colors, as gnuplot 6.0 (its
+`test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
+(a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
+`#rrggbb` or gnuplot names), `gray`, `viridis`; `negative` reverses it, `maxcolors N` quantizes it to N bands. The
+color box at the right of the plot shows the palette over the range, with `cblabel`.
+
+```gnuplot
+set palette viridis maxcolors 10
+set xlabel 'sweep'; set ylabel 'block'; set cblabel 'residual'
+plot 'blocks.dat' matrix w image notitle
+```
+
+<Plot name="cb_matrix" svg :width="560" :height="400" />
+
+In SVG and HTML an image is an embedded PNG, its pixels kept sharp at any zoom; the HTML page zooms it with the data.
+In text each character takes the pixel at its centre, denser for brighter pixels (` .:-=+*#%@`), in its color with
+`ansi`. A theme other than `classic` replaces the default palette with its own: with `vfd`, the dark glass for the
+lowest values up to the emissive colors, and `maxcolors` turns the heatmap into a grid of lit levels.
+
+<Plot name="cb_image_vfd" svg :width="560" :height="400" />
+
+Not supported: `cubehelix`, `functions`, `file` palettes, `set palette model` other than RGB, `set colorbox` options
+(position, size, horizontal), `set cbtics`, `set format cb`, `set logscale cb`, `with rgbimage`, `pm3d`.
 
 ## Themes and segmented fills
 
