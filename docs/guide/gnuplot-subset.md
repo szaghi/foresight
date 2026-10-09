@@ -34,7 +34,7 @@ that did what it says.
 | **xl**abel / **yl**abel / **y2l**abel `"text"` | axis label (`y2` on the right) | no label |
 | **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2` (`y`, `xy2`), all when absent | linear axes |
-| **gr**id [**po**lar [`STEP`]] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
+| **gr**id [**po**lar [`STEP`]\|**spider**plot] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
 | `theta` [`right`\|`top`\|`left`\|`bottom`] [`clockwise`\|`cw`\|`counterclockwise`\|`ccw`] | where theta = 0 lies and its direction (right, counterclockwise by default) | right, counterclockwise |
@@ -52,6 +52,9 @@ that did what it says.
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`]\|[`transparent`] `pattern` [`N`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `pattern N` one of the 8 patterns of gnuplot's svg terminal, cycling over the filled items from N; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
+| `paxis` `N` `range [min:max]`\|`tics [...]`\|`label "text"` | parallel axis N of the [parallel axis and spider plots](#parallel-axes-and-spider-plots): its range (autoscaled to its values, not extended), ticks (off by default), label | `unset paxis N tics`: no ticks |
+| **spi**derplot | spider plot coordinates and data style | back to lines |
+| **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
 | **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`gray`\|`color`\|`viridis`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`) | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
@@ -86,7 +89,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
@@ -347,6 +350,32 @@ Arrowheads are gnuplot's (18 px, 15 degrees) and, as label texts, keep their pix
 moves them with the data. Labels are black (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike
 gnuplot, sectors widen the autoscale to their whole extent. Not supported: `arrowstyle`, variable colors and
 rotations, `units xx|yy`, label fonts and `hypertext`.
+
+## Parallel axes and spider plots
+
+```gnuplot
+plot 'scores.dat' u 2 w parallelaxes t 'speed', '' u 3 w parallelaxes t 'memory', '' u 4 w parallelaxes t 'cost'
+
+set spiderplot
+set style spiderplot fs transparent solid 0.2 border
+set paxis 1 range [0:100]; set paxis 1 tics; set grid spiderplot
+plot 'scores.dat' u 2:key(1) t 'speed', '' u 3 t 'memory', '' u 4 t 'cost'
+```
+
+As gnuplot, each item is an **axis** (a column of the data) and each **row** a line across the axes (`parallelaxes`)
+or a polygon (`spiderplot`); both are alone in their panel.
+
+- Every axis has its own scale, `set paxis N range [min:max]`, autoscaled to its values without extension (the
+  smallest at the bottom or at the centre); its ticks are off until `set paxis N tics` (the `set xtics` forms).
+- `parallelaxes`: the axes at x = 1, 2, ... (or `at X`), the x range one unit beyond them, titled below by their
+  items; the rows in the first item's style. Unlike gnuplot, no y axis is drawn: its numbers would belong to no axis.
+- `spiderplot` (after `set spiderplot`, or `with spiderplot`): the axes from the centre, the first up, the others
+  clockwise, labelled by their item titles (else `set paxis N label`); a polygon per row in its palette color and the
+  `set style spiderplot` fill, named in the key by `using ...:key(N)` (the text of column N); `set grid spiderplot` draws
+  the web at the ticks of the first axis.
+
+foresight's own [`with radar`](#gauges-radars-and-roses) is the transposed shorthand: an item per polygon, a spoke per
+row, a common scale. Not supported: `newspiderplot`, `set style parallelaxis`, `lc variable`, `keyentry`.
 
 ## Point types
 

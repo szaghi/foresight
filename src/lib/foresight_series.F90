@@ -53,6 +53,8 @@ type :: series_object
    integer(I4P)                  :: curve_side = 0_I4P !< Fill restricted where the curve is above (1) or below (-1)
                                                        !< its line or second curve; 0 both.
    real(R8P)                     :: curve_point(2) = 0.0_R8P !< Point of `xy=X,Y`.
+   real(R8P)                     :: at = 0.0_R8P  !< Position of a parallel axis (gnuplot `at`); 0 for its number.
+   logical                       :: at_set = .false. !< `at` given.
    real(R8P), allocatable        :: channels(:,:,:) !< Red, green, blue, alpha of an RGB image (4, column, row),
                                                     !< 0 to 255 (`grid` holds the red ones); unallocated for a palette
                                                     !< image.

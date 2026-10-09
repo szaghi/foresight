@@ -32,6 +32,9 @@ module foresight_script
 !< - `with vectors|arrows [head|heads|nohead|backhead] [filled|empty|nofilled]`, `with ellipses [units xy]`,
 !<   `with polygons`, `with labels [left|center|right] [rotate by A] [offset X,Y] [point] [tc "c"]` (`using x:y:N`, the
 !<   text of column N), `with sectors` (gnuplot's layouts); `unset xrange|yrange|y2range` autoscales;
+!< - `with parallelaxes [at X]`, `set|unset spiderplot`, `with spiderplot` (`using Y[:key(N)]`, an axis per item, a line or
+!<   polygon per row), `set paxis N range [min:max]|tics [...]|label "t"`, `unset paxis N tics`, `set style spiderplot
+!<   [fs FILL] [lw W] [pt N] [ps S]`, `set grid spiderplot`;
 !< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|x1|x2|y=V|xy=X,Y] [above|below]`
 !<   (`using x:y1:y2` for a band), `with rgbimage|rgbalpha` (`x:y:r:g:b[:a]`), `set|unset rgbmax V`,
 !<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `pattern [N]`,
@@ -64,7 +67,7 @@ module foresight_script
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
-use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, POLAR_STYLES
+use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
@@ -73,7 +76,7 @@ use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_object, palette_words
 use foresight_style, only : default_color, fill_style, style_name, style_object, style_with, STYLE_NAMES, WITH_GAUGE, &
-                            WITH_PIE, WITH_RADAR, WITH_ROSE
+                            WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -339,6 +342,8 @@ contains
    real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
+   logical                                      :: keyed     !< The label column is `key(N)`, row names.
+   real(R8P),        allocatable                :: at_x      !< Position of a parallel axis (`at X`).
    character(len=:), allocatable                :: label_opts !< Option words of labels.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
@@ -443,6 +448,8 @@ contains
       heads = ''
       label_opts = ''
       curve = ''
+      keyed = .false.
+      if (allocated(at_x)) deallocate(at_x)
       if (allocated(gauge_scale)) deallocate(gauge_scale)
       cells = 0_I4P
       rose_linear = .false.
@@ -465,7 +472,7 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
-            call split_xtic(spec, label_col, iostat, iomsg)
+            call split_xtic(spec, label_col, iostat, iomsg, keyed)
             if (iostat /= 0_I4P) return
             call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees)
             if (iostat /= 0_I4P) return
@@ -605,6 +612,9 @@ contains
                                                 'tc textcolor')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
             if (.not. label_option()) return
+         elseif (word == 'at' .and. with == 'parallelaxes') then
+            allocate(at_x)
+            if (.not. next_number(at_x)) return
          elseif (keyword(word, 'whiskerbars', 7_I4P)) then
             ! candlesticks crossbars, a fraction of the box width (1 by default)
             if (allocated(whisker)) deallocate(whisker)
@@ -707,6 +717,14 @@ contains
             call fail('plot: a gauge needs its scale: with gauge range [A:B]', iostat, iomsg)
             return
          endif
+      endif
+      if (allocated(at_x) .and. with /= 'parallelaxes') then
+         call fail('plot: at applies to parallelaxes only', iostat, iomsg)
+         return
+      endif
+      if (keyed .and. with /= 'spiderplot') then
+         call fail('plot: key(N) names the rows of a spider plot', iostat, iomsg)
+         return
       endif
       if (allocated(whisker) .and. with /= 'candlesticks') then
          call fail('plot: whiskerbars applies to candlesticks only', iostat, iomsg)
@@ -821,14 +839,14 @@ contains
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P, 5_I4P])
          case ('vectors', 'arrows', 'sectors')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
-         case ('histograms', 'pie', 'radar', 'rose', 'gauge')
+         case ('histograms', 'pie', 'radar', 'rose', 'gauge', 'parallelaxes', 'spiderplot')
             ! one value per row: the first column at the point numbers
             fields = plain_columns([0_I4P, 1_I4P])
          case default
             call data%default_using(ux, uy)
             fields = plain_columns([ux, uy])
          endselect
-         one_field = is_word(with, 'histograms pie radar rose gauge')
+         one_field = is_word(with, 'histograms pie radar rose gauge parallelaxes spiderplot')
       elseif (size(fields) == 1) then
          one_field = .true.
          call point%set_column(0_I4P)
@@ -846,7 +864,7 @@ contains
             call fail('plot: '//with//' needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
             return
          endif
-      case ('histograms', 'pie', 'radar', 'rose')
+      case ('histograms', 'pie', 'radar', 'rose', 'parallelaxes', 'spiderplot')
          if (.not. one_field) then
             call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
             return
@@ -1059,11 +1077,12 @@ contains
       associate(panel => self%figure%panels(self%figure%current))
          if (allocated(panel%series)) then
             if (size(panel%series) > 0) then
-               if (is_word(with, 'pie gauge radar rose') .or. &
-                   any(panel%series(1)%style%with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])) then
+               if (is_word(with, 'pie gauge radar rose parallelaxes spiderplot') .or. &
+                   any(panel%series(1)%style%with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_PARALLELAXES, &
+                                                       WITH_SPIDERPLOT])) then
                   if (with == 'pie' .or. with == 'rose' .or. panel%series(1)%style%with /= style_code(with)) then
-                     call fail('plot: a pie, gauge, radar or rose is alone in its panel (several gauges or radars '// &
-                               'side by side)', iostat, iomsg)
+                     call fail('plot: a pie, gauge, radar, rose, parallel axis or spider plot is alone in its panel '// &
+                               '(several gauges, radars or axes side by side)', iostat, iomsg)
                      return
                   endif
                endif
@@ -1144,6 +1163,21 @@ contains
       elseif (with == 'labels') then
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
                                axes=axes, labels=xlabels, label=label_opts)
+      elseif (with == 'parallelaxes' .or. with == 'spiderplot') then
+         if (keyed .and. with == 'parallelaxes') then
+            call fail('plot: key(N) names the rows of a spider plot', iostat, iomsg)
+            return
+         endif
+         if (label_col > 0_I4P .and. .not. keyed) then
+            call fail('plot: '//with//' takes key(N), not xtic(N)', iostat, iomsg)
+            return
+         endif
+         if (keyed) then
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, labels=xlabels, &
+                                  at=at_x)
+         else
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, at=at_x)
+         endif
       elseif (with == 'boxplot') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -1365,12 +1399,14 @@ contains
       call self%figure%rgbimage(c(1, :, :), c(2, :, :), c(3, :, :), xs, ys, title=title, alpha=c(4, :, :))
       endsubroutine rgb_item
 
-      subroutine split_xtic(spec, column, iostat, iomsg)
-      !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none).
+      subroutine split_xtic(spec, column, iostat, iomsg, keyed)
+      !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none); `key(N)` (the
+      !< row names of a spider plot) likewise, with `keyed` true.
       character(len=:), allocatable, intent(inout) :: spec   !< `using` specification.
       integer(I4P),                  intent(out)   :: column !< Label column, 0 for none.
       integer(I4P),                  intent(inout) :: iostat !< Status.
       character(len=:), allocatable, intent(inout) :: iomsg  !< Error message.
+      logical,                       intent(out)   :: keyed  !< The field is `key(N)`.
       character(len=:), allocatable                :: last   !< Last field.
       character(len=:), allocatable                :: inner  !< Argument of the label field.
       integer(I4P)                                 :: k      !< Character counter.
@@ -1379,6 +1415,7 @@ contains
       real(R8P)                                    :: v      !< Column number.
 
       column = 0_I4P
+      keyed = .false.
       depth = 0_I4P
       cut = 0_I4P
       do k = 1_I4P, len(spec, kind=I4P)
@@ -1392,7 +1429,8 @@ contains
          endselect
       enddo
       last = spec(cut + 1_I4P:)
-      if (index(last, 'xtic(') /= 1 .and. index(last, 'xticlabels(') /= 1) then
+      keyed = index(last, 'key(') == 1
+      if (index(last, 'xtic(') /= 1 .and. index(last, 'xticlabels(') /= 1 .and. .not. keyed) then
          if (index(last, 'ytic(') == 1 .or. index(last, 'x2tic(') == 1 .or. index(last, 'ticlabels(') > 0) &
             call fail('plot: only xtic(N) labels are supported, found "'//last//'"', iostat, iomsg)
          return
@@ -1637,6 +1675,13 @@ contains
       call self%figure%set_logscale(text)
    elseif (keyword(option, 'grid', 2_I4P)) then
       call grid_option
+   elseif (keyword(option, 'spiderplot', 3_I4P)) then
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      ! as gnuplot: spider plot coordinates and data style
+      call self%figure%set_spiderplot(.true.)
+      self%data_style = 'spiderplot'
+   elseif (option == 'paxis') then
+      call paxis_option
    elseif (option == 'rgbmax') then
       block
          real(R8P) :: v !< Full intensity.
@@ -2102,6 +2147,60 @@ contains
       endif
       endsubroutine pair_option
 
+      subroutine paxis_option
+      !< `set paxis N range [min:max]|tics [auto|STEP|START,STEP[,END]]|label "text"`.
+      real(R8P)    :: v    !< Axis number.
+      integer(I4P) :: n    !< Axis number.
+
+      if (size(tokens) < 3) then
+         call fail('set paxis: N range|tics|label expected', iostat, iomsg)
+         return
+      endif
+      if (.not. to_number(tokens(2)%text, v)) then
+         call fail('set paxis: an axis number is expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+         return
+      endif
+      if (v < 1.0_R8P .or. v > 1000.0_R8P .or. v /= aint(v)) then
+         call fail('set paxis: the axis number is 1 to 1000', iostat, iomsg)
+         return
+      endif
+      n = int(v, I4P)
+      ! the axis exists before its settings change in place
+      call self%figure%set_paxis(n)
+      associate(panel => self%figure%panels(self%figure%current))
+         if (keyword(tokens(3)%text, 'range', 3_I4P)) then
+            if (size(tokens) /= 4) then
+               call fail('set paxis: range [min:max] expected', iostat, iomsg)
+               return
+            endif
+            block
+               integer(I4P) :: colon !< Separator position.
+
+               colon = index(tokens(4)%text, ':', kind=I4P)
+               if (tokens(4)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
+                  call fail('set paxis: range [min:max] expected', iostat, iomsg)
+                  return
+               endif
+               associate(axis => panel%paxes(n)%axis)
+                  call range_end(tokens(4)%text(1:colon - 1_I4P), axis%min_fixed, axis%min_user)
+                  if (iostat /= 0_I4P) return
+                  call range_end(tokens(4)%text(colon + 1_I4P:), axis%max_fixed, axis%max_user)
+               endassociate
+            endblock
+         elseif (keyword(tokens(3)%text, 'tics', 3_I4P)) then
+            call tics_option(panel%paxes(n)%axis%tics, tokens(3:))
+         elseif (keyword(tokens(3)%text, 'label', 3_I4P)) then
+            if (size(tokens) /= 4 .or. tokens(4)%kind /= TOKEN_STRING) then
+               call fail('set paxis: label "text" expected', iostat, iomsg)
+               return
+            endif
+            panel%paxes(n)%label = tokens(4)%text
+         else
+            call fail('set paxis: unsupported option "'//tokens(3)%text//'" (range, tics, label)', iostat, iomsg)
+         endif
+      endassociate
+      endsubroutine paxis_option
+
       subroutine size_option
       !< `set size [square|nosquare|ratio R|noratio] [W,H]`: the plot area aspect, and the page fractions of the plot
       !< (no values restore 1,1).
@@ -2153,8 +2252,12 @@ contains
          call self%figure%set_grid(.true., polar=0.0_R8P)
          return
       endif
+      if (keyword(tokens(2)%text, 'spiderplot', 6_I4P) .and. size(tokens) == 2) then
+         call self%figure%set_grid(spider=.true.)
+         return
+      endif
       if (.not. keyword(tokens(2)%text, 'polar', 2_I4P) .or. tokens(2)%kind /= TOKEN_WORD .or. size(tokens) > 3) then
-         call fail('set grid: only "polar [STEP]" is supported', iostat, iomsg)
+         call fail('set grid: only "polar [STEP]" and "spiderplot" are supported', iostat, iomsg)
          return
       endif
       step = 30.0_R8P
@@ -2277,24 +2380,32 @@ contains
       endif
       endsubroutine border_option
 
-      subroutine tics_option(tics)
+      subroutine tics_option(tics, words)
       !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
-      !< the last ones are kept, turning off ticks on (gnuplot); `auto` resets them.
-      type(tics_object), intent(inout) :: tics    !< Axis tick settings.
+      !< the last ones are kept, turning off ticks on (gnuplot); `auto` resets them. `words` (the tics keyword and its
+      !< arguments) replaces the option tokens.
+      type(tics_object),  intent(inout)        :: tics     !< Axis tick settings.
+      type(token_object), intent(in), optional :: words(:) !< Option tokens, if not the command ones.
       type(token_object), allocatable  :: args(:) !< Position tokens, mirror words removed.
+      type(token_object), allocatable  :: toks(:) !< Option tokens.
       character(len=:), allocatable    :: message !< Problem.
       logical                          :: ok      !< Well formed.
       logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
       integer(I4P)                     :: n       !< Position tokens.
 
+      if (present(words)) then
+         toks = words
+      else
+         toks = tokens
+      endif
       allocate(args(0))
-      do i = 2_I4P, size(tokens, kind=I4P)
-         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'mirror', 3_I4P)) then
+      do i = 2_I4P, size(toks, kind=I4P)
+         if (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'mirror', 3_I4P)) then
             mirror = .true.
-         elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'nomirror', 4_I4P)) then
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
          else
-            args = [args, tokens(i)]
+            args = [args, toks(i)]
          endif
       enddo
       n = size(args, kind=I4P)
@@ -2447,6 +2558,31 @@ contains
             endif
             self%data_style = with
             return
+         elseif (keyword(tokens(2)%text, 'spiderplot', 6_I4P)) then
+            block
+               type(style_object)            :: probe !< Style the words are tried on.
+               character(len=:), allocatable :: words !< Option words.
+               character(len=:), allocatable :: bad   !< Problem.
+
+               words = ''
+               do s = 3_I4P, size(tokens, kind=I4P)
+                  if (tokens(s)%kind == TOKEN_STRING) then
+                     words = words//' "'//tokens(s)%text//'"'
+                  else
+                     words = words//' '//tokens(s)%text
+                  endif
+               enddo
+               associate(panel => self%figure%panels(self%figure%current))
+                  probe = panel%spider_style
+               endassociate
+               call spider_words(words, probe, bad)
+               if (len(bad) > 0) then
+                  call fail('set style spiderplot: '//bad, iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_style_spiderplot(words)
+            endblock
+            return
          elseif (tokens(2)%text == 'boxplot') then
             block
                type(boxplot_style)           :: probe !< Style the words are tried on.
@@ -2592,7 +2728,23 @@ contains
       return
    endif
    option = tokens(1)%text
-   if (keyword(option, 'logscale', 3_I4P)) then
+   if (option == 'paxis') then
+      block
+         real(R8P) :: v !< Axis number.
+
+         ok = .false.
+         if (size(tokens) == 3) then
+            if (to_number(tokens(2)%text, v) .and. keyword(tokens(3)%text, 'tics', 3_I4P)) ok = v >= 1.0_R8P .and. &
+                                                                                             v <= 1000.0_R8P .and. v == aint(v)
+         endif
+         if (.not. ok) then
+            call fail('unset paxis: N tics expected', iostat, iomsg)
+            return
+         endif
+         call self%figure%set_paxis(int(v, I4P), tics=.false.)
+      endblock
+      return
+   elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
       call self%figure%unset_logscale(axes)
       return
@@ -2640,6 +2792,9 @@ contains
       call self%figure%set_polar(.false.)
    elseif (option == 'rgbmax') then
       self%rgbmax = 255.0_R8P
+   elseif (keyword(option, 'spiderplot', 3_I4P)) then
+      call self%figure%set_spiderplot(.false.)
+      if (self%data_style == 'spiderplot') self%data_style = 'lines'
    elseif (option == 'theta') then
       call self%figure%set_theta('right', .false.)
    elseif (keyword(option, 'raxis', 3_I4P)) then

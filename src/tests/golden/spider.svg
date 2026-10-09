@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="900" height="420" fill="white" stroke="none" stroke-width="0"/>
+<text x="225" y="22" text-anchor="middle">parallelaxes</text>
+<g class="fs-parallel">
+<rect x="58" y="37" width="358" height="352" fill="none" stroke="black" stroke-width="1"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="117.67,389 177.33,37 237,389 296.67,236.47 356.33,37"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="117.67,229 177.33,261 237,280.69 296.67,37 356.33,389"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="117.67,37 177.33,389 237,37 296.67,389 356.33,242.33"/>
+<polyline fill="none" stroke="black" stroke-width="2" points="117.67,389 117.67,37"/>
+<text x="117.67" y="407" text-anchor="middle">A</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="177.33,389 177.33,37"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,389 183.33,389"/>
+<text x="171.33" y="393.2" text-anchor="end">20</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,325 183.33,325"/>
+<text x="171.33" y="329.2" text-anchor="end">30</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,261 183.33,261"/>
+<text x="171.33" y="265.2" text-anchor="end">40</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,197 183.33,197"/>
+<text x="171.33" y="201.2" text-anchor="end">50</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,133 183.33,133"/>
+<text x="171.33" y="137.2" text-anchor="end">60</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="177.33,69 183.33,69"/>
+<text x="171.33" y="73.2" text-anchor="end">70</text>
+<text x="177.33" y="407" text-anchor="middle">B</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="237,389 237,37"/>
+<text x="237" y="407" text-anchor="middle">C</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="296.67,389 296.67,37"/>
+<text x="296.67" y="407" text-anchor="middle">D</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="356.33,389 356.33,37"/>
+<text x="356.33" y="407" text-anchor="middle">E</text>
+</g>
+<text x="675" y="22" text-anchor="middle">spiderplot</text>
+<g class="fs-spider">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="621.9,155.74 683.49,200.49 659.96,272.89 583.84,272.89 560.31,200.49 621.9,155.74"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="621.9,90.98 745.08,180.48 698.03,325.28 545.77,325.28 498.72,180.48 621.9,90.98"/>
+<path fill="#9400d3" fill-opacity="0.2" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M621.9,201.07 714.29,190.48 637.13,241.46 589.16,265.56 511.04,184.48Z"/>
+<path fill="#009e73" fill-opacity="0.2" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" d="M621.9,168.69 671.17,204.49 652.35,262.41 576.22,283.37 584.95,208.49Z"/>
+<path fill="#56b4e9" fill-opacity="0.2" stroke="#56b4e9" stroke-width="1" stroke-linejoin="miter" d="M621.9,129.84 646.54,212.5 686.61,309.57 599.06,251.94 554.15,198.49Z"/>
+<polyline fill="none" stroke="black" stroke-width="2" points="621.9,220.5 621.9,90.98"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="618.9,220.5 624.9,220.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="618.9,155.74 624.9,155.74"/>
+<text x="631.5" y="159.94">50</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="618.9,90.98 624.9,90.98"/>
+<text x="631.5" y="95.18">100</text>
+<text x="621.9" y="79.64" text-anchor="middle">A</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="621.9,220.5 745.08,180.48"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="620.97,217.65 622.83,223.35"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="682.56,197.63 684.42,203.34"/>
+<text x="688.94" y="210.39">50</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="744.15,177.62 746.01,183.33"/>
+<text x="750.53" y="190.38">100</text>
+<text x="759.86" y="179.87">B</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="621.9,220.5 698.03,325.28"/>
+<text x="707.17" y="342.06">C</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="621.9,220.5 545.77,325.28"/>
+<text x="536.63" y="342.06" text-anchor="end   ">D</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="621.9,220.5 498.72,180.48"/>
+<text x="483.94" y="179.87" text-anchor="end   ">E</text>
+<path fill="#9400d3" fill-opacity="0.2" stroke="none" d="M854,48.7 890,48.7 890,40.3 854,40.3Z"/>
+<text x="848" y="48.7" text-anchor="end">George</text>
+<path fill="#009e73" fill-opacity="0.2" stroke="none" d="M854,63.7 890,63.7 890,55.3 854,55.3Z"/>
+<text x="848" y="63.7" text-anchor="end">Harriet</text>
+<path fill="#56b4e9" fill-opacity="0.2" stroke="none" d="M854,78.7 890,78.7 890,70.3 854,70.3Z"/>
+<text x="848" y="78.7" text-anchor="end">Ivan</text>
+</g>
+</svg>

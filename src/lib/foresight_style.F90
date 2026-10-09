@@ -22,7 +22,7 @@ public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMA
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
           WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
           WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
-          WITH_LABELS, WITH_SECTORS
+          WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT
 public :: STYLE_NAMES
 public :: FILL_EMPTY, FILL_PATTERN, FILL_SOLID
 public :: pattern_parts
@@ -63,11 +63,15 @@ integer(I4P), parameter :: WITH_ELLIPSES    = 32_I4P !< gnuplot `with ellipses`:
 integer(I4P), parameter :: WITH_POLYGONS    = 33_I4P !< gnuplot `with polygons`: a closed polygon per block.
 integer(I4P), parameter :: WITH_LABELS      = 34_I4P !< gnuplot `with labels`: text at each point.
 integer(I4P), parameter :: WITH_SECTORS     = 35_I4P !< gnuplot `with sectors`: annular sectors.
+integer(I4P), parameter :: WITH_PARALLELAXES = 36_I4P !< gnuplot `with parallelaxes`: an axis per item, a line per row.
+integer(I4P), parameter :: WITH_SPIDERPLOT  = 37_I4P !< gnuplot `with spiderplot`: a radial axis per item, a polygon
+                                                    !< per row.
 character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
                                              'xyerrorlines, boxes, boxerrorbars, boxxyerror, candlesticks, '// &
                                              'financebars, boxplot, vectors, arrows, ellipses, polygons, labels, '// &
-                                             'sectors, filledcurves, histograms, image, rgbimage, rgbalpha, '// &
+                                             'sectors, parallelaxes, spiderplot, filledcurves, histograms, image, '// &
+                                             'rgbimage, rgbalpha, '// &
                                              'circles, pie, '// &
                                              'gauge, radar, rose, readout' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
@@ -168,6 +172,8 @@ contains
       if (abbreviates(word, 'polygons', 4)) name = 'polygons'
       if (abbreviates(word, 'sectors', 3)) name = 'sectors'
       if (abbreviates(word, 'rgbalpha', 4)) name = 'rgbalpha'
+      if (abbreviates(word, 'parallelaxes', 8)) name = 'parallelaxes'
+      if (abbreviates(word, 'spiderplot', 6)) name = 'spiderplot'
    endselect
    contains
       pure function abbreviates(w, full, minimum) result(match)
@@ -258,6 +264,10 @@ contains
       with = WITH_LABELS
    case ('sectors')
       with = WITH_SECTORS
+   case ('parallelaxes')
+      with = WITH_PARALLELAXES
+   case ('spiderplot')
+      with = WITH_SPIDERPLOT
    case ('rgbimage', 'rgbalpha')
       error stop 'foresight: plot: RGB images are plotted by figure%rgbimage'
    case default
@@ -314,7 +324,7 @@ contains
                                     WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_IMPULSES, WITH_STEPS, &
                                     WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                                     WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, &
-                                    WITH_POLYGONS, WITH_LABELS, WITH_SECTORS])
+                                    WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)

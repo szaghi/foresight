@@ -58,7 +58,8 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
-                            WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS
+                            WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
+                            WITH_PARALLELAXES, WITH_SPIDERPLOT
 use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -67,9 +68,11 @@ private
 public :: axes_object
 public :: axes_names
 public :: boxplot_style
+public :: paxis_object
 public :: boxplot_words
 public :: curve_words
 public :: head_words
+public :: spider_words
 public :: label_words
 public :: key_position
 public :: polar_series
@@ -93,6 +96,12 @@ character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, point
                                                'sectors and readouts, on the first axes' !< Styles of a polar panel.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
+
+type :: paxis_object
+   !< A parallel axis (gnuplot `set paxis N`) of parallel axis plots and spider plots.
+   type(axis_object)             :: axis  !< Range and ticks: autoscaled to the values without extension, no ticks.
+   character(len=:), allocatable :: label !< Label of a spider plot axis, the item title if unallocated.
+endtype paxis_object
 
 type :: boxplot_style
    !< Layout of the boxplots, gnuplot `set style boxplot`.
@@ -159,6 +168,10 @@ type :: axes_object
    real(R8P)                        :: ratio = 0.0_R8P   !< Plot area height over width (`set size ratio`, `square` is
                                                          !< 1); 0 for none.
    type(boxplot_style)              :: boxplot           !< Layout of the boxplots, `set style boxplot`.
+   type(paxis_object), allocatable  :: paxes(:)          !< Parallel axes p1, p2, ... (`set paxis`), as many as set.
+   logical                          :: spiderplot = .false. !< Spider plot coordinates (`set spiderplot`).
+   type(style_object)               :: spider_style      !< Polygons of the spider plots (`set style spiderplot`).
+   logical                          :: grid_spider = .false. !< Web of the spider plot (`set grid spiderplot`).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
@@ -181,6 +194,9 @@ type :: axes_object
       procedure, pass(self), private :: draw_gauges        !< Draw a panel of gauges.
       procedure, pass(self), private :: draw_radar         !< Draw a radar panel.
       procedure, pass(self), private :: draw_rose          !< Draw a rose panel.
+      procedure, pass(self), private :: draw_parallel      !< Draw a parallel axis panel.
+      procedure, pass(self), private :: draw_spider        !< Draw a spider plot panel.
+      procedure, pass(self), private :: parallel_axis      !< A parallel axis set up for its values.
       procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
@@ -189,7 +205,7 @@ endtype axes_object
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
-                         length, angle, major, minor, labels, label, head, origins, curve, channels)
+                         length, angle, major, minor, labels, label, head, origins, curve, channels, at)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -260,6 +276,7 @@ contains
                                                          !< `xy=X,Y`, `above`, `below` (with `base` or a band).
    real(R8P),          intent(in), optional :: channels(:,:,:) !< RGB image colors (4, column, row), 0 to 255: red,
                                                                !< green, blue, alpha; `z` then its red ones.
+   real(R8P),          intent(in), optional :: at        !< Position of a parallel axis (its number if absent).
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -311,7 +328,8 @@ contains
    if (size(self%series) > 0) then
       if (is_panel_chart(self%series(1)%style%with) .or. is_panel_chart(series%style%with)) then
          if (series%style%with /= self%series(1)%style%with .or. series%style%with == WITH_PIE .or. &
-             series%style%with == WITH_ROSE) error stop 'foresight: plot: a pie, gauge, radar or rose is alone in its panel'
+             series%style%with == WITH_ROSE) error stop 'foresight: plot: a pie, gauge, radar, rose, parallel axis or '// &
+                                                        'spider plot is alone in its panel'
       endif
    endif
    if (series%style%fills()) then
@@ -455,6 +473,17 @@ contains
    case (WITH_SECTORS)
       call sector_vertices
       if (len(bad) > 0) error stop 'foresight: plot: '//bad
+   case (WITH_PARALLELAXES, WITH_SPIDERPLOT)
+      ! an axis of the values of a column; the row names (spider plot key) as labels
+      if (present(labels)) then
+         if (size(labels) /= size(x)) error stop 'foresight: plot: labels and x have different sizes'
+         series%texts = labels
+      endif
+      if (present(at)) then
+         if (series%style%with /= WITH_PARALLELAXES) error stop 'foresight: plot: at applies to parallelaxes only'
+         series%at = at
+         series%at_set = .true.
+      endif
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -487,6 +516,7 @@ contains
       if (len(bad) > 0) error stop 'foresight: plot: head: '//bad
    endif
    if (present(label) .and. series%style%with /= WITH_LABELS) error stop 'foresight: plot: label applies to labels only'
+   if (present(at) .and. series%style%with /= WITH_PARALLELAXES) error stop 'foresight: plot: at applies to parallelaxes only'
    if (present(close) .and. .not. any(series%style%with == [WITH_CANDLESTICKS, WITH_FINANCEBARS])) &
       error stop 'foresight: plot: close applies to candlesticks and financebars only'
    if (present(factors) .and. series%style%with /= WITH_BOXPLOT) error stop 'foresight: plot: factors apply to boxplots only'
@@ -984,6 +1014,10 @@ contains
             call self%draw_gauges(backend, area, font_size)
          case (WITH_RADAR)
             call self%draw_radar(backend, area, font_size)
+         case (WITH_PARALLELAXES)
+            call self%draw_parallel(backend, area, font_size)
+         case (WITH_SPIDERPLOT)
+            call self%draw_spider(backend, area, font_size)
          case default
             call self%draw_rose(backend, area, font_size)
          endselect
@@ -2974,6 +3008,58 @@ contains
    enddo
    endsubroutine curve_words
 
+   subroutine spider_words(words, style, bad)
+   !< The spider plot `style` from gnuplot `set style spiderplot` words: fill style words (after an optional `fs` or
+   !< `fillstyle`), `lw|linewidth W`, `pt|pointtype N`, `ps|pointsize S`. `bad` names the first problem.
+   character(len=*),              intent(in)    :: words !< Words.
+   type(style_object),            intent(inout) :: style !< Spider plot style.
+   character(len=:), allocatable, intent(out)   :: bad   !< Problem, empty if none.
+   character(len=:), allocatable                :: w     !< Current word.
+   character(len=:), allocatable                :: arg   !< Argument.
+   character(len=:), allocatable                :: fill  !< Fill words.
+   type(style_object)                           :: new   !< Updated style.
+   real(R8P)                                    :: r     !< Number.
+   integer(I4P)                                 :: pos   !< Scan position.
+   integer(I4P)                                 :: ios   !< Read status.
+
+   bad = ''
+   new = style
+   fill = ''
+   pos = 1_I4P
+   do
+      call scan_word(words, pos, w)
+      if (len(w) == 0) exit
+      select case (w)
+      case ('fs', 'fillstyle')
+      case ('lw', 'linewidth', 'pt', 'pointtype', 'ps', 'pointsize')
+         call scan_word(words, pos, arg)
+         read(arg, *, iostat=ios) r
+         if (len(arg) == 0 .or. ios /= 0) then
+            bad = w//' needs a number'
+            return
+         endif
+         select case (w)
+         case ('lw', 'linewidth')
+            new%linewidth = r
+         case ('pt', 'pointtype')
+            new%pointtype = int(r, I4P)
+         case default
+            new%pointsize = r
+         endselect
+      case default
+         fill = fill//' '//w
+      endselect
+   enddo
+   if (len(fill) > 0) then
+      call fill_style(fill, new, bad)
+      if (len(bad) > 0) then
+         bad = 'unsupported option "'//bad//'"'
+         return
+      endif
+   endif
+   style = new
+   endsubroutine spider_words
+
    pure subroutine head_words(words, head, filled, bad)
    !< Arrowheads from gnuplot words: `head` (at the end), `heads` (both), `nohead`, `backhead` (at the start); `filled`,
    !< `empty` or `nofilled` (open). `bad` names an unknown word, empty if none.
@@ -3135,12 +3221,246 @@ contains
    ok = ok .and. .not. series%y2
    endfunction polar_series
 
+   function parallel_axis(self, k, npx) result(axis)
+   !< The parallel axis `k` (`set paxis k`, else autoscaled without extension and without ticks) set up for the values
+   !< of the `k`-th series, `npx` pixels long.
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P),       intent(in) :: k    !< Axis number.
+   real(R8P),          intent(in) :: npx  !< Axis length [px].
+   type(axis_object)              :: axis !< Axis.
+   real(R8P), allocatable         :: v(:) !< Finite values.
+
+   axis = axis_object(tight=.true., tics=tics_object(mode=TICS_NONE))
+   if (allocated(self%paxes)) then
+      if (k <= size(self%paxes)) axis = self%paxes(k)%axis
+   endif
+   associate(series => self%series(k))
+      v = pack(series%y, ieee_is_finite(series%y))
+   endassociate
+   if (size(v) > 0) then
+      call axis%setup(minval(v), maxval(v), .true., npx)
+   else
+      call axis%setup(0.0_R8P, 1.0_R8P, .false., npx)
+   endif
+   endfunction parallel_axis
+
+   subroutine draw_parallel(self, backend, box, font_size)
+   !< A parallel axis plot in the box (left, right, top, bottom) [px], as gnuplot: a vertical axis per series at its
+   !< number (or `at`), the x range one unit beyond the first and last, each axis scaled on its own (`set paxis`) and
+   !< titled below by its series; a line per row across the axes, in the first series' style; the frame around.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(axis_object), allocatable       :: axes(:)   !< Axes.
+   real(R8P), allocatable               :: pos(:)    !< Axis positions [px].
+   real(R8P), allocatable               :: lx(:)     !< Row line abscissae [px].
+   real(R8P), allocatable               :: ly(:)     !< Row line ordinates [px].
+   real(R8P)                            :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P)                            :: xlo       !< x range start.
+   real(R8P)                            :: xhi       !< x range end.
+   real(R8P)                            :: p         !< Tick ordinate [px].
+   integer(I4P)                         :: n         !< Axes.
+   integer(I4P)                         :: m         !< Rows.
+   integer(I4P)                         :: k         !< Axis counter.
+   integer(I4P)                         :: j         !< Row counter.
+   integer(I4P)                         :: t         !< Tick counter.
+
+   n = size(self%series, kind=I4P)
+   area = [box(1) + 4.0_R8P * font_size, box(2) - 2.0_R8P * font_size, box(3) + 0.5_R8P * font_size, &
+           box(4) - LINE_HEIGHT * font_size - GAP]
+   allocate(axes(n), pos(n))
+   m = 0_I4P
+   do k = 1_I4P, n
+      axes(k) = self%parallel_axis(k, area(4) - area(3))
+      associate(series => self%series(k))
+         pos(k) = real(k, R8P)
+         if (series%at_set) pos(k) = series%at
+         m = max(m, size(series%y, kind=I4P))
+      endassociate
+   enddo
+   xlo = minval(pos) - 1.0_R8P
+   xhi = maxval(pos) + 1.0_R8P
+   pos = area(1) + (pos - xlo) / (xhi - xlo) * (area(2) - area(1))
+   call backend%begin_group('fs-parallel')
+   call backend%rect(area(1), area(3), area(2) - area(1), area(4) - area(3), FRAME_COLOR, 'none', 1.0_R8P)
+   ! a line per row, broken at undefined values
+   associate(first => self%series(1))
+      do j = 1_I4P, m
+         allocate(lx(0), ly(0))
+         do k = 1_I4P, n
+            associate(series => self%series(k))
+               if (j <= size(series%y)) then
+                  if (ieee_is_finite(series%y(j))) then
+                     lx = [lx, pos(k)]
+                     ly = [ly, area(4) - axes(k)%to_unit(series%y(j)) * (area(4) - area(3))]
+                     cycle
+                  endif
+               endif
+            endassociate
+            if (size(lx) > 1) call backend%polyline(lx, ly, first%style%color, first%style%linewidth, &
+                                                    first%style%dasharray())
+            deallocate(lx, ly)
+            allocate(lx(0), ly(0))
+         enddo
+         if (size(lx) > 1) call backend%polyline(lx, ly, first%style%color, first%style%linewidth, first%style%dasharray())
+         deallocate(lx, ly)
+      enddo
+   endassociate
+   ! the axes over the lines, as gnuplot's front parallel axis style
+   do k = 1_I4P, n
+      call backend%polyline([pos(k), pos(k)], [area(4), area(3)], FRAME_COLOR, 2.0_R8P, '')
+      do t = 1_I4P, size(axes(k)%ticks, kind=I4P)
+         p = area(4) - axes(k)%to_unit(axes(k)%ticks(t)%value) * (area(4) - area(3))
+         call backend%polyline([pos(k), pos(k) + merge(TICK_MAJOR, TICK_MINOR, axes(k)%ticks(t)%major)], [p, p], &
+                               FRAME_COLOR, 1.0_R8P, '')
+         if (axes(k)%ticks(t)%major) call backend%text(pos(k) - GAP, p + 0.35_R8P * font_size, axes(k)%ticks(t)%label, &
+                                                       'end', sup=axes(k)%ticks(t)%sup)
+      enddo
+      associate(series => self%series(k))
+         if (len(series%title) > 0) call backend%text(pos(k), area(4) + GAP + font_size, series%title, 'middle')
+      endassociate
+   enddo
+   call backend%end_group
+   endsubroutine draw_parallel
+
+   subroutine draw_spider(self, backend, box, font_size)
+   !< A spider plot in the box (left, right, top, bottom) [px], as gnuplot: a radial axis per series, the first up, the
+   !< others clockwise, each scaled on its own (`set paxis`, the smallest value at the centre by default) and labelled
+   !< outside by its series title, else by `set paxis N label`; the web (`set grid spiderplot`) at the ticks of axis 1; a
+   !< polygon per row in its palette color and the spider plot style, named in the key by the `key(N)` column.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P), parameter                 :: DEG = 4.0_R8P * atan(1.0_R8P) / 180.0_R8P !< Degrees to radians.
+   type(axis_object), allocatable       :: axes(:)   !< Axes.
+   character(len=:), allocatable        :: names(:)  !< Row names.
+   character(len=:), allocatable        :: colors(:) !< Row colors.
+   character(len=:), allocatable        :: label     !< Axis label.
+   real(R8P), allocatable               :: rx(:)     !< Polygon abscissae [px].
+   real(R8P), allocatable               :: ry(:)     !< Polygon ordinates [px].
+   real(R8P)                            :: key_width !< Key width [px].
+   real(R8P)                            :: radius    !< Axis length [px].
+   real(R8P)                            :: c(2)      !< Centre [px].
+   real(R8P)                            :: a         !< Axis angle [rad].
+   real(R8P)                            :: f         !< Radial fraction.
+   integer(I4P)                         :: n         !< Axes.
+   integer(I4P)                         :: m         !< Rows.
+   integer(I4P)                         :: k         !< Axis counter.
+   integer(I4P)                         :: j         !< Row counter.
+   integer(I4P)                         :: t         !< Tick counter.
+
+   n = size(self%series, kind=I4P)
+   m = 0_I4P
+   do k = 1_I4P, n
+      associate(series => self%series(k))
+         m = max(m, size(series%y, kind=I4P))
+      endassociate
+   enddo
+   allocate(character(len=64) :: names(0))
+   associate(first => self%series(1))
+      if (allocated(first%texts)) names = first%texts
+   endassociate
+   allocate(character(len=16) :: colors(m))
+   do j = 1_I4P, m
+      colors(j) = default_color(j)
+   enddo
+   key_width = 0.0_R8P
+   if (self%key .and. size(names) > 0) key_width = chart_key_width(backend, names, font_size)
+   radius = 0.4_R8P * min(box(2) - box(1) - key_width, box(4) - box(3) - 2.0_R8P * LINE_HEIGHT * font_size)
+   c = [0.5_R8P * (box(1) + box(2) - key_width), 0.5_R8P * (box(3) + box(4))]
+   allocate(axes(n), rx(n), ry(n))
+   do k = 1_I4P, n
+      axes(k) = self%parallel_axis(k, radius)
+   enddo
+   call backend%begin_group('fs-spider')
+   ! the web at the ticks of the first axis
+   if (self%grid_spider) then
+      do t = 1_I4P, size(axes(1)%ticks, kind=I4P)
+         if (.not. axes(1)%ticks(t)%major) cycle
+         f = axes(1)%to_unit(axes(1)%ticks(t)%value)
+         if (f <= 0.0_R8P .or. f > 1.0_R8P + 1.0e-9_R8P) cycle
+         do k = 1_I4P, n
+            a = angle(k)
+            rx(k) = c(1) + f * radius * cos(a)
+            ry(k) = c(2) - f * radius * sin(a)
+         enddo
+         call backend%polyline([rx, rx(1)], [ry, ry(1)], GRID_COLOR, 0.5_R8P, GRID_DASHES)
+      enddo
+   endif
+   ! a polygon per row, an undefined value at the centre
+   do j = 1_I4P, m
+      do k = 1_I4P, n
+         a = angle(k)
+         f = 0.0_R8P
+         associate(series => self%series(k))
+            if (j <= size(series%y)) then
+               if (ieee_is_finite(series%y(j))) f = min(1.0_R8P, max(0.0_R8P, axes(k)%to_unit(series%y(j))))
+            endif
+         endassociate
+         rx(k) = c(1) + f * radius * cos(a)
+         ry(k) = c(2) - f * radius * sin(a)
+      enddo
+      associate(st => self%spider_style)
+         call backend%polygon(rx, ry, merge(trim(colors(j)), 'none   ', st%fill /= FILL_EMPTY), st%density, &
+                              merge(trim(colors(j)), 'none   ', st%border .or. st%fill == FILL_EMPTY), &
+                              max(1.0_R8P, st%linewidth))
+         if (st%pointtype >= 0_I4P) call backend%dots(rx, ry, trim(colors(j)), st%point_diameter(), pt=st%pointtype, &
+                                                      line_width=st%linewidth)
+      endassociate
+   enddo
+   ! the axes over the polygons, their ticks and labels
+   do k = 1_I4P, n
+      a = angle(k)
+      call backend%polyline([c(1), c(1) + radius * cos(a)], [c(2), c(2) - radius * sin(a)], FRAME_COLOR, 2.0_R8P, '')
+      do t = 1_I4P, size(axes(k)%ticks, kind=I4P)
+         f = axes(k)%to_unit(axes(k)%ticks(t)%value)
+         if (f < -1.0e-9_R8P .or. f > 1.0_R8P + 1.0e-9_R8P) cycle
+         associate(px => c(1) + f * radius * cos(a), py => c(2) - f * radius * sin(a), &
+                   l => merge(TICK_MAJOR, TICK_MINOR, axes(k)%ticks(t)%major))
+            call backend%polyline([px - 0.5_R8P * l * sin(a), px + 0.5_R8P * l * sin(a)], &
+                                  [py - 0.5_R8P * l * cos(a), py + 0.5_R8P * l * cos(a)], FRAME_COLOR, 1.0_R8P, '')
+            ! no label at the centre, shared by the axes
+            if (axes(k)%ticks(t)%major .and. f > 1.0e-9_R8P) call backend%text(px + GAP * sin(a) + 0.3_R8P * font_size, &
+                                                          py + GAP * cos(a) + 0.35_R8P * font_size, &
+                                                          axes(k)%ticks(t)%label, 'start', sup=axes(k)%ticks(t)%sup)
+         endassociate
+      enddo
+      ! the item title overrides the axis label, as gnuplot
+      label = ''
+      if (allocated(self%paxes)) then
+         if (k <= size(self%paxes)) then
+            if (allocated(self%paxes(k)%label)) label = self%paxes(k)%label
+         endif
+      endif
+      associate(series => self%series(k))
+         if (len(series%title) > 0) label = series%title
+      endassociate
+      if (len(label) > 0) call backend%text(c(1) + 1.12_R8P * radius * cos(a), &
+                                            c(2) - 1.12_R8P * radius * sin(a) + 0.35_R8P * font_size, label, &
+                                            merge('start ', merge('end   ', 'middle', cos(a) < -0.2_R8P), cos(a) > 0.2_R8P))
+   enddo
+   if (self%key .and. size(names) > 0) &
+      call chart_key(backend, box(2), box(3), names, colors(1:size(names)), self%spider_style%density, font_size)
+   call backend%end_group
+   contains
+      pure function angle(axis) result(rad)
+      !< Page angle of the axis `axis`: the first up, the others clockwise [rad].
+      integer(I4P), intent(in) :: axis !< Axis number.
+      real(R8P)                :: rad  !< Angle [rad].
+
+      rad = (90.0_R8P - 360.0_R8P * real(axis - 1_I4P, R8P) / real(n, R8P)) * DEG
+      endfunction angle
+   endsubroutine draw_spider
+
    elemental function is_panel_chart(with) result(is)
-   !< Whether the style `with` is a chart alone in its panel, without axes: pie, gauge, radar, rose.
+   !< Whether the style `with` is a chart alone in its panel, without the x and y axes: pie, gauge, radar, rose, and the
+   !< parallel axis and spider plots.
    integer(I4P), intent(in) :: with !< Style code.
    logical                  :: is   !< Panel chart.
 
-   is = any(with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])
+   is = any(with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_PARALLELAXES, WITH_SPIDERPLOT])
    endfunction is_panel_chart
 
    pure function has_image(self, palette) result(has)

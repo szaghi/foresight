@@ -8,12 +8,13 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
+use foresight_ticks, only : TICS_NONE
 use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
                             WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                             WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
-                            WITH_LABELS, WITH_SECTORS, &
+                            WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT, &
                             WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
@@ -35,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(74)                           !< Per-check outcome.
+logical                       :: test_passed(76)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -597,7 +598,7 @@ close(unit)
 call interpreter%run_text("plot '"//data_file//"' u 1 w pie", iostat, iomsg)
 test_passed(61) = iostat /= 0_I4P .and. index(iomsg, 'a pie needs non-negative values') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2 w pie, '' u 2 w lines", iostat, iomsg)
-test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'a pie, gauge, radar or rose is alone in its panel') > 0
+test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'parallel axis or spider plot is alone in its panel') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2 w pie donut 1.2", iostat, iomsg)
 test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'from 0 to below 1') > 0
 open(newunit=unit, file=scratch)
@@ -865,6 +866,52 @@ call interpreter%run_text("set rgbmax 0", iostat, iomsg)
 test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'set rgbmax: a positive number') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
+
+! axis-based plots: parallel axes (at, paxis ranges and tics), a spider plot (its mode, style, web, key(N) row names)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') 'George 15 75 20', 'Harriet 40 40 40', 'Ivan 70 20 85'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set paxis 2 range [0:100]; set paxis 2 tics 25; set paxis 3 label 'third'"//new_line('a')// &
+                          "plot '"//data_file//"' u 2 w parallel t 'A', '' u 3 w parallelaxes at 4 t 'B'", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(75) = iostat == 0_I4P
+if (test_passed(75)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(75) = all(panel%series%style%with == [WITH_PARALLELAXES, WITH_PARALLELAXES]) .and. &
+                        same(panel%series(1)%y, [15, 40, 70]) .and. .not. panel%series(1)%at_set .and. &
+                        panel%series(2)%at_set .and. panel%series(2)%at == 4.0_R8P .and. size(panel%paxes) == 3 .and. &
+                        panel%paxes(2)%axis%max_fixed .and. panel%paxes(2)%axis%max_user == 100.0_R8P .and. &
+                        panel%paxes(2)%axis%tics%step == '25' .and. panel%paxes(3)%label == 'third' .and. &
+                        panel%paxes(1)%axis%tics%mode == TICS_NONE
+   endassociate
+endif
+call interpreter%run_text("set spi; set style spider fs solid 0.3 border lw 2 pt 7; set grid spider"//new_line('a')// &
+                          "plot '"//data_file//"' u 2:key(1) t 'A', '' u 3 t 'B', '' u 4 t 'C'"//new_line('a')// &
+                          "unset paxis 2 tics", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(75) = test_passed(75) .and. iostat == 0_I4P
+if (test_passed(75)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(75) = panel%spiderplot .and. panel%grid_spider .and. panel%spider_style%fill == FILL_SOLID .and. &
+                        panel%spider_style%density == 0.3_R8P .and. panel%spider_style%linewidth == 2.0_R8P .and. &
+                        panel%spider_style%pointtype == 7_I4P .and. &
+                        all(panel%series%style%with == [WITH_SPIDERPLOT, WITH_SPIDERPLOT, WITH_SPIDERPLOT]) .and. &
+                        trim(panel%series(1)%texts(2)) == 'Harriet' .and. panel%paxes(2)%axis%tics%mode == TICS_NONE
+   endassociate
+endif
+call interpreter%run_text("unset spiderplot; plot '"//data_file//"' u 2:key(1) w lines", iostat, iomsg)
+test_passed(76) = iostat /= 0_I4P .and. index(iomsg, 'key(N) names the rows of a spider plot') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2 w parallelaxes, '' u 3 w lines", iostat, iomsg)
+test_passed(76) = test_passed(76) .and. iostat /= 0_I4P .and. index(iomsg, 'is alone in its panel') > 0
+call interpreter%run_text("set paxis 0 tics", iostat, iomsg)
+test_passed(76) = test_passed(76) .and. iostat /= 0_I4P .and. index(iomsg, 'the axis number is 1 to 1000') > 0
+call interpreter%run_text("set style spiderplot lw", iostat, iomsg)
+test_passed(76) = test_passed(76) .and. iostat /= 0_I4P .and. index(iomsg, 'lw needs a number') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2 w lines at 3", iostat, iomsg)
+test_passed(76) = test_passed(76) .and. iostat /= 0_I4P
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -880,7 +927,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,74L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,76L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

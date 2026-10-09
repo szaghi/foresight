@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(66)                  !< Per-figure outcome.
+logical                     :: test_passed(68)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -87,7 +87,9 @@ test_passed(63) = check('shapes.html', figure_shapes())
 test_passed(64) = check('windrose.svg', figure_windrose())
 test_passed(65) = check('patterns.svg', figure_patterns())
 test_passed(66) = check('patterns.txt', figure_patterns())
-write(output_unit, '(A,66L2)') 'foresight golden checks:', test_passed
+test_passed(67) = check('spider.svg', figure_spider())
+test_passed(68) = check('spider.txt', figure_spider())
+write(output_unit, '(A,68L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -684,6 +686,40 @@ contains
                      reshape([0.0_R8P, 0.0_R8P, 255.0_R8P, 0.0_R8P], [2, 2]), &
                      alpha=reshape([255.0_R8P, 128.0_R8P, 255.0_R8P, 0.0_R8P], [2, 2]))
    endfunction figure_patterns
+
+   function figure_spider() result(fig)
+   !< The axis-based plots of gnuplot over five scores of three rows: parallel axes (ticks on the second) and a spider
+   !< plot (axes from 0 to 100, ticks and the web on the first, filled polygons named by the rows).
+   type(figure_object) :: fig       !< Figure.
+   real(R8P)           :: v(3, 5)   !< Scores (row, axis).
+   character(len=1)    :: names(5)  !< Axis names.
+   integer(I4P)        :: k         !< Axis counter.
+
+   v = reshape([15.0_R8P, 40.0_R8P, 70.0_R8P, 75.0_R8P, 40.0_R8P, 20.0_R8P, 20.0_R8P, 40.0_R8P, 85.0_R8P, &
+                43.0_R8P, 60.0_R8P, 30.0_R8P, 90.0_R8P, 30.0_R8P, 55.0_R8P], [3, 5])
+   names = ['A', 'B', 'C', 'D', 'E']
+   call fig%init(width=900_I4P, height=420_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_title('parallelaxes')
+   call fig%set_paxis(2_I4P, tics=.true.)
+   do k = 1, 5
+      call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], v(:, k), title=names(k), with='parallelaxes')
+   enddo
+   call fig%next_panel
+   call fig%set_title('spiderplot')
+   call fig%set_spiderplot
+   call fig%set_style_spiderplot('fs transparent solid 0.2 border')
+   do k = 1, 5
+      call fig%set_paxis(int(k, I4P), min=0.0_R8P, max=100.0_R8P)
+   enddo
+   call fig%set_paxis(1_I4P, tics=.true., label='unused')
+   call fig%set_grid(spider=.true.)
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], v(:, 1), title=names(1), with='spiderplot', &
+                 labels=['George ', 'Harriet', 'Ivan   '])
+   do k = 2, 5
+      call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], v(:, k), title=names(k), with='spiderplot')
+   enddo
+   endfunction figure_spider
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

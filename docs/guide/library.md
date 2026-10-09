@@ -33,7 +33,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2` (all when absent) |
-| `set_grid([on], [polar])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid) |
+| `set_grid([on], [polar], [spider])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid); `spider=.true.`: `set grid spiderplot` |
 | `set_key([on], [position], [box])` | `set key bottom left box`, `set key outside`, `set key below`, `unset key` |
 | `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()` | `unset xtics` |
@@ -50,6 +50,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |
 | `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
 | `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
+| `set_paxis(n, [min], [max], [step], [start], [end], [tics], [label])` | `set paxis 2 range [0:100]`, `set paxis 2 tics 25`, `set paxis 1 label "speed"` |
+| `set_spiderplot([on])`, `set_style_spiderplot(words)` | `set spiderplot`, `set style spiderplot fs transparent solid 0.2 border lw 2` |
 | `set_style_boxplot(words)` | `set style boxplot nooutliers sorted fraction 0.95` |
 | `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
@@ -62,7 +64,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Argument | Meaning | Default |
 |---|---|---|
 | `title` | key entry; empty for none | none |
-| `with` | `lines`, `points`, `linespoints`, `impulses`, `steps`, `fsteps`, `histeps`, `dots`, `yerrorbars`, `xerrorbars`, `xyerrorbars`, `yerrorlines`, `xerrorlines`, `xyerrorlines`, `boxerrorbars`, `boxxyerror`, `candlesticks`, `financebars`, `boxplot` ([Box styles](gnuplot-subset#box-finance-and-boxplot-styles)), `vectors`, `arrows`, `ellipses`, `polygons`, `labels`, `sectors` ([Shapes](gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors); abbreviated as gnuplot: `l`, `p`, `lp`, `i`, `st`, `fs`, `his`, `d`, `yerr`, ...; [Lines, steps](gnuplot-subset#lines-steps-and-impulses)); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `gauge`, `radar`, `rose` ([Gauges](gnuplot-subset#gauges-radars-and-roses)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `with` | `lines`, `points`, `linespoints`, `impulses`, `steps`, `fsteps`, `histeps`, `dots`, `yerrorbars`, `xerrorbars`, `xyerrorbars`, `yerrorlines`, `xerrorlines`, `xyerrorlines`, `boxerrorbars`, `boxxyerror`, `candlesticks`, `financebars`, `boxplot` ([Box styles](gnuplot-subset#box-finance-and-boxplot-styles)), `vectors`, `arrows`, `ellipses`, `polygons`, `labels`, `sectors` ([Shapes](gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors)), `parallelaxes`, `spiderplot` ([Parallel axes](gnuplot-subset#parallel-axes-and-spider-plots); abbreviated as gnuplot: `l`, `p`, `lp`, `i`, `st`, `fs`, `his`, `d`, `yerr`, ...; [Lines, steps](gnuplot-subset#lines-steps-and-impulses)); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `gauge`, `radar`, `rose` ([Gauges](gnuplot-subset#gauges-radars-and-roses)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
 | `radius`, `angles` | circles only: radii [x units] (NaN: the default), and `angles(2, n)` start and end of wedges [deg] | 2% of the plot width; whole circles |
 | `donut` | pie only (`with='pie'`): the hole, a fraction of the radius | 0, a pie |
 | `scale` | gauge only (`with='gauge'`): the values at the ends of the sweep, `[0._R8P, 8000._R8P]`; cells with `fs='segments N'` | required |
@@ -76,6 +78,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `major`, `minor` | ellipses: diameters in x and y units (`major` alone for both, negative for the default size) | 5% x 3% of the plot |
 | `labels`, `label` | labels: the texts, and gnuplot option words `'left rotate by 30 offset 1,0 point tc "red"'` | required, none |
 | `width`, `origins` | sectors: annular widths, and centres `(2, n)` | required, `[0, 0]` |
+| `at` | parallelaxes: the position of the axis | its number |
+| `labels` | also the row names of a spider plot (its key), on any of its items | none |
 | `curve` | filledcurves: gnuplot words `'x1'`, `'x2'`, `'xy=2,0'`, `'above'`, `'below'` (with `base` or a band `ylow`) | closed, or to `base`/`ylow` |
 | `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |

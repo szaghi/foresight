@@ -14,8 +14,9 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_names, axes_object, boxplot_words, key_position, polar_series, readout_position, &
-                           POLAR_STYLES
+use foresight_axes, only : axes_names, axes_object, boxplot_words, key_position, paxis_object, polar_series, &
+                           readout_position, spider_words, POLAR_STYLES
+use foresight_axis, only : axis_object
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
@@ -78,6 +79,7 @@ type :: figure_object
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
       procedure, pass(self) :: set_palette     !< gnuplot `set palette`.
+      procedure, pass(self) :: set_paxis       !< gnuplot `set paxis N range|tics|label`.
       procedure, pass(self) :: set_polar       !< gnuplot `set polar` / `unset polar`.
       procedure, pass(self) :: set_raxis       !< gnuplot `set raxis` / `unset raxis`.
       procedure, pass(self) :: set_readout     !< Readouts: on/off, position, window, digit size.
@@ -88,6 +90,8 @@ type :: figure_object
       procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
       procedure, pass(self) :: set_style_histogram !< gnuplot `set style histogram`.
       procedure, pass(self) :: set_style_boxplot   !< gnuplot `set style boxplot`.
+      procedure, pass(self) :: set_style_spiderplot !< gnuplot `set style spiderplot`.
+      procedure, pass(self) :: set_spiderplot  !< gnuplot `set spiderplot` / `unset spiderplot`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
@@ -243,7 +247,7 @@ contains
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
                    xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
-                   minor, labels, label, head, origins, curve)
+                   minor, labels, label, head, origins, curve, at)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -324,6 +328,7 @@ contains
    character(len=*),     intent(in), optional :: head       !< Arrowhead words.
    real(R8P),            intent(in), optional :: origins(:,:) !< Sector centres (2, point).
    character(len=*),     intent(in), optional :: curve      !< Filled curve options (`'x1'`, `'above'`, `'xy=0,1'`).
+   real(R8P),            intent(in), optional :: at         !< Position of a parallel axis.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
@@ -332,7 +337,7 @@ contains
                                              radius=radius, angles=angles, donut=donut, scale=scale, linear=linear, &
                                              close=close, whiskerbars=whiskerbars, factors=factors, dx=dx, dy=dy, &
                                              length=length, angle=angle, major=major, minor=minor, labels=labels, &
-                                             label=label, head=head, origins=origins, curve=curve)
+                                             label=label, head=head, origins=origins, curve=curve, at=at)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -551,15 +556,89 @@ contains
    endassociate
    endsubroutine set_format
 
-   subroutine set_grid(self, on, polar)
-   !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not. On a polar panel,
-   !< `polar` > 0 draws the polar grid instead (gnuplot `set grid polar STEP`): rings at the major r ticks and spokes
-   !< every `polar` degrees of theta; 0 restores the rectangular grid.
+   subroutine set_paxis(self, n, min, max, step, start, end, tics, label)
+   !< Parallel axis `n` of the parallel axis and spider plots, as gnuplot `set paxis n range [min:max]` (an absent end
+   !< autoscaled to the values, without extension), `set paxis n tics [START,]STEP[,END]` (`tics` true: automatic
+   !< ticks; false: none, the default), `set paxis n label "text"` (spider plots).
    class(figure_object), intent(inout)        :: self  !< Figure.
-   logical,              intent(in), optional :: on    !< Grid on.
-   real(R8P),            intent(in), optional :: polar !< Spoke step [deg], 0 for the rectangular grid.
+   integer(I4P),         intent(in)           :: n     !< Axis number, >= 1.
+   real(R8P),            intent(in), optional :: min   !< Range start.
+   real(R8P),            intent(in), optional :: max   !< Range end.
+   real(R8P),            intent(in), optional :: step  !< Tick step.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+   logical,              intent(in), optional :: tics  !< Ticks on (automatic) or off.
+   character(len=*),     intent(in), optional :: label !< Axis label.
+   type(paxis_object), allocatable            :: more(:) !< Grown axes.
+   integer(I4P)                               :: k     !< Counter.
+
+   if (n < 1_I4P .or. n > 1000_I4P) error stop 'foresight: set_paxis: the axis number is 1 to 1000'
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%paxes)) allocate(panel%paxes(0))
+      if (size(panel%paxes) < n) then
+         allocate(more(n))
+         do k = 1_I4P, n
+            if (k <= size(panel%paxes)) then
+               more(k) = panel%paxes(k)
+            else
+               more(k)%axis = axis_object(tight=.true., tics=tics_object(mode=TICS_NONE))
+            endif
+         enddo
+         call move_alloc(more, panel%paxes)
+      endif
+      associate(axis => panel%paxes(n)%axis)
+         if (present(min) .or. present(max)) call axis%set_range(min=min, max=max)
+         if (present(tics)) then
+            if (tics) then
+               call axis%tics%set_auto
+            else
+               axis%tics%mode = TICS_NONE
+            endif
+         endif
+         if (present(step)) call set_tics(axis%tics, 'set_paxis', step, start, end)
+      endassociate
+      if (present(label)) panel%paxes(n)%label = label
+   endassociate
+   endsubroutine set_paxis
+
+   subroutine set_spiderplot(self, on)
+   !< Spider plot coordinates (`on` absent or true), as gnuplot `set spiderplot`: the items of the panel are spider plot
+   !< axes (its data style), its key not titled by the items; false restores the data style lines.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: on   !< Spider plot on.
 
    call self%ensure_panels
+   self%panels(self%current)%spiderplot = .true.
+   if (present(on)) self%panels(self%current)%spiderplot = on
+   endsubroutine set_spiderplot
+
+   subroutine set_style_spiderplot(self, words)
+   !< Polygons of the spider plots plotted next, as gnuplot `set style spiderplot`: fill style words (`'fs transparent
+   !< solid 0.2 border'`, `fs` optional) and `lw W`, `pt N`, `ps S`.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: words !< Style words.
+   character(len=:), allocatable       :: bad   !< Problem.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      call spider_words(words, panel%spider_style, bad)
+   endassociate
+   if (len(bad) > 0) error stop 'foresight: set_style_spiderplot: '//bad
+   endsubroutine set_style_spiderplot
+
+   subroutine set_grid(self, on, polar, spider)
+   !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not. On a polar panel,
+   !< `polar` > 0 draws the polar grid instead (gnuplot `set grid polar STEP`): rings at the major r ticks and spokes
+   !< every `polar` degrees of theta; 0 restores the rectangular grid. `spider` draws the web of the spider plots
+   !< (gnuplot `set grid spiderplot`) at the ticks of their first axis.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   logical,              intent(in), optional :: on     !< Grid on.
+   real(R8P),            intent(in), optional :: polar  !< Spoke step [deg], 0 for the rectangular grid.
+   logical,              intent(in), optional :: spider !< Spider plot web.
+
+   call self%ensure_panels
+   if (present(spider)) self%panels(self%current)%grid_spider = spider
    self%panels(self%current)%grid = .true.
    if (present(on)) self%panels(self%current)%grid = on
    if (present(polar)) then
