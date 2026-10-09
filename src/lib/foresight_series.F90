@@ -29,6 +29,12 @@ type :: series_object
    real(R8P)                     :: donut = 0.0_R8P !< Inner radius of a pie, a fraction of its radius (0: a pie).
    real(R8P)                     :: scale(2) = [0.0_R8P, 1.0_R8P] !< Value range of a gauge: start and end of its sweep.
    logical                       :: linear = .false. !< Rose sectors with the radius (not the area) by value.
+   real(R8P), allocatable        :: bounds(:,:) !< Second pair of ordinates per point (2, point): the error bar ends of
+                                                !< `boxerrorbars`, the box ends of `candlesticks` (open, close) and of
+                                                !< `boxplot` (first, third quartile); unallocated otherwise.
+   real(R8P), allocatable        :: outliers(:,:) !< Outliers of a boxplot (2, outlier): abscissa, ordinate.
+   real(R8P)                     :: whiskerbars = 0.0_R8P !< Crossbars of the candlestick whiskers, a fraction of
+                                                          !< the box width; 0 for none.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains
@@ -63,6 +69,7 @@ contains
    logical,              intent(inout)        :: found      !< Set if the series has any counted point.
    real(R8P),            intent(in), optional :: xwindow(2) !< Abscissa window, in any order.
    logical, allocatable                       :: mask(:)    !< Counted points.
+   real(R8P), allocatable                     :: ends(:)    !< Bounds of the points.
    integer(I4P)                               :: i          !< Counter.
 
    mask = self%valid(xaxis, yaxis)
@@ -87,6 +94,23 @@ contains
    if (allocated(self%xhigh)) call widen(self%xhigh, xaxis, xmin, xmax)
    if (allocated(self%ylow)) call widen(self%ylow, yaxis, ymin, ymax)
    if (allocated(self%yhigh)) call widen(self%yhigh, yaxis, ymin, ymax)
+   if (allocated(self%bounds)) then
+      ! local copies: gfortran 16 debug builds misread sections of components reached through the class dummy
+      ends = self%bounds(1, :)
+      call widen(ends, yaxis, ymin, ymax)
+      ends = self%bounds(2, :)
+      call widen(ends, yaxis, ymin, ymax)
+   endif
+   if (allocated(self%outliers)) then
+      do i = 1_I4P, size(self%outliers, 2, kind=I4P)
+         if (.not. (xaxis%accepts(self%outliers(1, i)) .and. yaxis%accepts(self%outliers(2, i)))) cycle
+         if (present(xwindow)) then
+            if (self%outliers(1, i) < minval(xwindow) .or. self%outliers(1, i) > maxval(xwindow)) cycle
+         endif
+         ymin = min(ymin, self%outliers(2, i))
+         ymax = max(ymax, self%outliers(2, i))
+      enddo
+   endif
    contains
       pure subroutine widen(ends, axis, lo, hi)
       !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points.

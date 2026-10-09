@@ -56,7 +56,8 @@ use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
-                            WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS
+                            WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
+                            WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT
 use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -64,6 +65,8 @@ implicit none
 private
 public :: axes_object
 public :: axes_names
+public :: boxplot_style
+public :: boxplot_words
 public :: key_position
 public :: polar_series
 public :: readout_position
@@ -86,6 +89,19 @@ character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, point
                                                'and readouts, on the first axes' !< Styles of a polar panel.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
+
+type :: boxplot_style
+   !< Layout of the boxplots, gnuplot `set style boxplot`.
+   real(R8P)        :: range       = 1.5_R8P  !< Whiskers to the farthest point within `range` interquartile ranges.
+   real(R8P)        :: fraction    = 0.0_R8P  !< If > 0, whiskers spanning this fraction of the points instead.
+   logical          :: outliers    = .true.   !< Draw the points beyond the whiskers.
+   integer(I4P)     :: pointtype   = 7_I4P    !< Point type of the outliers.
+   logical          :: financebars = .false.  !< Drawn as finance bars, else as candlesticks.
+   real(R8P)        :: median_width = -1.0_R8P !< Median line width [px]; negative: the box line width, 0: none.
+   real(R8P)        :: separation  = 1.0_R8P  !< Distance between the boxplots of the factor levels.
+   character(len=4) :: labels      = 'auto'   !< Factor names as x tick labels: `auto` (or `x`), `off`.
+   logical          :: sorted      = .false.  !< Factor levels in sorted order, else in order of appearance.
+endtype boxplot_style
 
 type :: axes_object
    !< Plot panel.
@@ -138,6 +154,7 @@ type :: axes_object
    logical                          :: border_polar = .false. !< Circle at the largest r (`set border polar`).
    real(R8P)                        :: ratio = 0.0_R8P   !< Plot area height over width (`set size ratio`, `square` is
                                                          !< 1); 0 for none.
+   type(boxplot_style)              :: boxplot           !< Layout of the boxplots, `set style boxplot`.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
@@ -167,7 +184,7 @@ endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs, xlabels, z, radius, angles, donut, scale, linear)
+                         base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -178,6 +195,13 @@ contains
    !< `filledcurves` fill to the line y = `base`, between `ylow` and `y`, or the closed polygon of the points. `fs`
    !< (gnuplot fill style words, `'solid 0.5 noborder'`) overrides the panel fill of either; `histograms` take the fill
    !< too. `xlabels` are text labels of the abscissae (blank for none), replacing the x ticks.
+   !<
+   !< `boxerrorbars` are boxes (as `boxes`) with the y error bars `ylow`/`yhigh`; `boxxyerror` rectangles from `xlow` to
+   !< `xhigh`, `ylow` to `yhigh`; `candlesticks` and `financebars` take `y` the opening (or box start), `ylow` the low,
+   !< `yhigh` the high and `close` the closing (or box end) values, candlesticks a `width` (else `boxwidth`, else a few
+   !< pixels) and `whiskerbars`. A `boxplot` takes the values `y` at the position `x(1)`, one box per level of `factors`
+   !< if given (`separation` apart, named on the x axis), its width `width(1)` (else `boxwidth`, else 0.5); the
+   !< statistics are computed here, with the panel `boxplot` style.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -205,6 +229,11 @@ contains
    real(R8P),          intent(in), optional :: donut    !< Pie hole, a fraction of the radius (0 to below 1).
    real(R8P),          intent(in), optional :: scale(2) !< Gauge scale: the values at the start and end of the sweep.
    logical,            intent(in), optional :: linear   !< Rose sectors with the radius (not the area) by value.
+   real(R8P),          intent(in), optional :: close(:) !< Closing prices of candlesticks and finance bars (`y` the
+                                                        !< opening ones), or the box ends of a box-and-whisker plot.
+   real(R8P),          intent(in), optional :: whiskerbars !< Crossbars of the candlestick whiskers, a fraction of the
+                                                           !< box width.
+   character(len=*),   intent(in), optional :: factors(:) !< Factor level of each value of a boxplot.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -324,6 +353,52 @@ contains
       series%ylow = 0.0_R8P
    case (WITH_DOTS)
       series%style%pointtype = 0_I4P
+   case (WITH_BOXERRORBARS)
+      if (.not. (present(ylow) .and. present(yhigh))) &
+         error stop 'foresight: plot: boxerrorbars need ylow and yhigh, the error bar ends'
+      if (size(ylow) /= size(x) .or. size(yhigh) /= size(x)) error stop 'foresight: plot: ylow/yhigh sizes differ from x'
+      if (present(width)) then
+         if (size(width) /= size(x)) error stop 'foresight: plot: width and x have different sizes'
+      endif
+      allocate(series%bounds(2, size(x)))
+      series%bounds(1, :) = ylow
+      series%bounds(2, :) = yhigh
+      call box_edges(series%xlow, series%xhigh)
+      allocate(series%ylow(size(x)))
+      series%ylow = 0.0_R8P
+   case (WITH_BOXXYERROR)
+      if (.not. (present(xlow) .and. present(xhigh) .and. present(ylow) .and. present(yhigh))) &
+         error stop 'foresight: plot: boxxyerror needs xlow, xhigh, ylow and yhigh'
+      if (size(xlow) /= size(x) .or. size(xhigh) /= size(x) .or. size(ylow) /= size(x) .or. size(yhigh) /= size(x)) &
+         error stop 'foresight: plot: xlow/xhigh/ylow/yhigh sizes differ from x'
+      series%xlow = xlow
+      series%xhigh = xhigh
+      series%ylow = ylow
+      series%yhigh = yhigh
+   case (WITH_CANDLESTICKS, WITH_FINANCEBARS)
+      if (.not. (present(ylow) .and. present(yhigh) .and. present(close))) &
+         error stop 'foresight: plot: candlesticks and financebars need ylow (low), yhigh (high) and close'
+      if (size(ylow) /= size(x) .or. size(yhigh) /= size(x) .or. size(close) /= size(x)) &
+         error stop 'foresight: plot: ylow/yhigh/close sizes differ from x'
+      allocate(series%bounds(2, size(x)))
+      series%bounds(1, :) = y
+      series%bounds(2, :) = close
+      series%ylow = ylow
+      series%yhigh = yhigh
+      if (series%style%with == WITH_CANDLESTICKS) then
+         if (present(width)) then
+            if (size(width) /= size(x)) error stop 'foresight: plot: width and x have different sizes'
+         endif
+         ! a set width widens the x autoscale, the default one (pixels) does not, as gnuplot
+         if (present(width) .or. self%boxwidth > 0.0_R8P) call box_edges(series%xlow, series%xhigh)
+         if (present(whiskerbars)) then
+            if (whiskerbars < 0.0_R8P) error stop 'foresight: plot: whiskerbars must not be negative'
+            series%whiskerbars = whiskerbars
+         endif
+      endif
+   case (WITH_BOXPLOT)
+      call boxplot_stats
+      if (len(bad) > 0) error stop 'foresight: plot: '//bad
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -339,6 +414,9 @@ contains
          series%ylow = base
       endif
    endselect
+   if (present(close) .and. .not. any(series%style%with == [WITH_CANDLESTICKS, WITH_FINANCEBARS])) &
+      error stop 'foresight: plot: close applies to candlesticks and financebars only'
+   if (present(factors) .and. series%style%with /= WITH_BOXPLOT) error stop 'foresight: plot: factors apply to boxplots only'
    if (series%style%draws_xbars()) then
       if (.not. (present(xlow) .and. present(xhigh))) error stop 'foresight: plot: x error bars need xlow and xhigh'
       if (size(xlow) /= size(x) .or. size(xhigh) /= size(x)) error stop 'foresight: plot: xlow/xhigh sizes differ from x'
@@ -349,6 +427,8 @@ contains
       if (size(xlabels) /= size(x)) error stop 'foresight: plot: xlabels and x have different sizes'
       series%xlabels = xlabels
    endif
+   if (present(xlabels) .and. series%style%with == WITH_BOXPLOT) &
+      error stop 'foresight: plot: a boxplot takes factors, not xlabels'
    if (series%style%with == WITH_FILLEDCURVES .and. present(ylow)) then
       if (size(ylow) /= size(y)) error stop 'foresight: plot: ylow and y have different sizes'
       series%ylow = ylow
@@ -364,6 +444,159 @@ contains
    if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
                                                                      self%histogram_gap, self%boxwidth)
    contains
+      subroutine boxplot_stats
+      !< The boxes of a boxplot from the values `y`: one per factor level (in order of appearance, or sorted), at
+      !< x(1) + k * separation, each with its quartiles (`bounds`), median (`y`), whiskers (`ylow`, `yhigh`, the
+      !< farthest values within the whisker range) and outliers, as gnuplot. A level of fewer than 4 values has no box.
+      character(len=:), allocatable :: names(:) !< Factor levels.
+      character(len=:), allocatable :: level    !< Current level.
+      real(R8P), allocatable        :: v(:)     !< Values of a level, sorted.
+      real(R8P), allocatable        :: cx(:)    !< Box centres.
+      real(R8P)                     :: w        !< Box width.
+      real(R8P)                     :: q(3)     !< Quartiles.
+      real(R8P)                     :: lo       !< Lowest whisker limit.
+      real(R8P)                     :: hi       !< Highest whisker limit.
+      integer(I4P)                  :: nb       !< Boxes.
+      integer(I4P)                  :: k        !< Box counter.
+      integer(I4P)                  :: i        !< Value counter.
+      integer(I4P)                  :: j        !< Sort counter.
+      integer(I4P)                  :: e        !< Excluded values per side (fraction mode).
+      logical                       :: named    !< Factor names shown.
+
+      bad = ''
+      if (size(x) == 0) then
+         bad = 'a boxplot needs values'
+         return
+      endif
+      if (present(width)) then
+         if (size(width) /= size(x)) then
+            bad = 'width and x have different sizes'
+            return
+         endif
+      endif
+      ! levels
+      if (present(factors)) then
+         if (size(factors) /= size(x)) then
+            bad = 'factors and x have different sizes'
+            return
+         endif
+         allocate(character(len=len(factors)) :: names(0))
+         do i = 1_I4P, size(factors, kind=I4P)
+            if (len_trim(factors(i)) == 0) cycle
+            if (size(names) > 0) then
+               if (any(names == factors(i))) cycle
+            endif
+            names = [names, factors(i)]
+         enddo
+         if (self%boxplot%sorted) then
+            do i = 2_I4P, size(names, kind=I4P)
+               level = names(i)
+               j = i - 1_I4P
+               do while (j >= 1_I4P)
+                  if (llt(names(j), level) .or. names(j) == level) exit
+                  names(j + 1_I4P) = names(j)
+                  j = j - 1_I4P
+               enddo
+               names(j + 1_I4P) = level
+            enddo
+         endif
+      else
+         allocate(character(len=1) :: names(1))
+         names = ' '
+      endif
+      w = 0.5_R8P
+      if (self%boxwidth > 0.0_R8P .and. .not. self%boxwidth_relative) w = self%boxwidth
+      if (present(width)) then
+         if (ieee_is_finite(width(1)) .and. width(1) > 0.0_R8P) w = width(1)
+      endif
+      nb = size(names, kind=I4P)
+      allocate(cx(0))
+      series%x = [real(R8P) ::]
+      series%y = [real(R8P) ::]
+      series%xlow = [real(R8P) ::]
+      series%xhigh = [real(R8P) ::]
+      series%ylow = [real(R8P) ::]
+      series%yhigh = [real(R8P) ::]
+      allocate(series%bounds(2, 0), series%outliers(2, 0))
+      named = present(factors) .and. self%boxplot%labels /= 'off'
+      if (named) allocate(character(len=len(names)) :: series%xlabels(0))
+      do k = 1_I4P, nb
+         if (present(factors)) then
+            v = pack(y, factors == names(k) .and. ieee_is_finite(y))
+         else
+            v = pack(y, ieee_is_finite(y))
+         endif
+         if (size(v) < 4) cycle
+         call sort(v)
+         q = [quantile(v, 0.25_R8P), quantile(v, 0.5_R8P), quantile(v, 0.75_R8P)]
+         if (self%boxplot%fraction > 0.0_R8P) then
+            e = int(real(size(v), R8P) * (1.0_R8P - self%boxplot%fraction) * 0.5_R8P, I4P)
+            lo = v(1 + e)
+            hi = v(size(v) - e)
+         else
+            lo = q(1) - self%boxplot%range * (q(3) - q(1))
+            hi = q(3) + self%boxplot%range * (q(3) - q(1))
+            ! the whiskers end at data values
+            lo = minval(v, mask=v >= lo)
+            hi = maxval(v, mask=v <= hi)
+         endif
+         cx = [cx, x(1) + real(k - 1_I4P, R8P) * self%boxplot%separation]
+         series%x = [series%x, cx(size(cx))]
+         series%y = [series%y, q(2)]
+         ! the x autoscale reaches a box width beyond the box edges, as gnuplot; the box is the middle third
+         series%xlow = [series%xlow, cx(size(cx)) - 1.5_R8P * w]
+         series%xhigh = [series%xhigh, cx(size(cx)) + 1.5_R8P * w]
+         series%ylow = [series%ylow, lo]
+         series%yhigh = [series%yhigh, hi]
+         series%bounds = reshape([series%bounds, q(1), q(3)], [2, size(cx)])
+         if (named) series%xlabels = [character(len=len(names)) :: series%xlabels, names(k)]
+         if (self%boxplot%outliers) then
+            do i = 1_I4P, size(v, kind=I4P)
+               if (v(i) < lo .or. v(i) > hi) series%outliers = reshape([series%outliers, cx(size(cx)), v(i)], &
+                                                                       [2, size(series%outliers, 2) + 1])
+            enddo
+         endif
+      enddo
+      endsubroutine boxplot_stats
+
+      pure function quantile(v, p) result(value)
+      !< Quantile `p` of the sorted values `v`, as gnuplot's boxplot: the value of rank p n, the mean of ranks p n and
+      !< p n + 1 when p n is a whole number.
+      real(R8P), intent(in) :: v(:)  !< Sorted values.
+      real(R8P), intent(in) :: p     !< Probability.
+      real(R8P)             :: value !< Quantile.
+      real(R8P)             :: m     !< Rank p n.
+      integer(I4P)          :: r     !< Rank.
+
+      m = p * real(size(v), R8P)
+      r = ceiling(m, I4P)
+      if (abs(m - real(nint(m), R8P)) < 1.0e-9_R8P) then
+         r = nint(m, I4P)
+         value = 0.5_R8P * (v(r) + v(min(r + 1_I4P, size(v, kind=I4P))))
+      else
+         value = v(r)
+      endif
+      endfunction quantile
+
+      pure subroutine sort(v)
+      !< Sort `v` ascending (insertion sort: a boxplot holds few values).
+      real(R8P), intent(inout) :: v(:) !< Values.
+      real(R8P)                :: t    !< Swap buffer.
+      integer(I4P)             :: i    !< Counter.
+      integer(I4P)             :: j    !< Counter.
+
+      do i = 2_I4P, size(v, kind=I4P)
+         t = v(i)
+         j = i - 1_I4P
+         do while (j >= 1_I4P)
+            if (v(j) <= t) exit
+            v(j + 1_I4P) = v(j)
+            j = j - 1_I4P
+         enddo
+         v(j + 1_I4P) = t
+      enddo
+      endsubroutine sort
+
       subroutine add_image
       !< The image of the values `z` at the pixel centres `x`, `y`: its pixel edges as `x` and `y` of the series.
       real(R8P) :: d(2) !< Pixel width and height.
@@ -941,7 +1174,8 @@ contains
                                yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
                               self%series(s)%style%density, self%series(s)%style%stroke_color(), &
                               self%series(s)%style%linewidth)
-      if (self%series(s)%style%draws_lines() .or. self%series(s)%style%with == WITH_IMPULSES) &
+      if (self%series(s)%style%draws_lines() .or. self%series(s)%style%with == WITH_IMPULSES .or. &
+          self%series(s)%style%with == WITH_FINANCEBARS) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
       if (self%series(s)%style%draws_ybars()) &
@@ -1191,6 +1425,13 @@ contains
          return
       endif
       if (series%style%with == WITH_BOXES .or. series%style%with == WITH_HISTOGRAMS) call draw_boxes
+      if (series%style%with == WITH_BOXERRORBARS) then
+         call draw_boxes
+         call draw_box_bars
+      endif
+      if (series%style%with == WITH_BOXXYERROR) call draw_rectangles
+      if (series%style%with == WITH_CANDLESTICKS .or. series%style%with == WITH_FINANCEBARS .or. &
+          series%style%with == WITH_BOXPLOT) call draw_candles
       if (series%style%with == WITH_FILLEDCURVES) call draw_fill
       if (series%style%draws_lines()) then
          i1 = 1_I4P
@@ -1263,6 +1504,141 @@ contains
          call backend%data_polyline(pu, pv, series%style%color, series%style%linewidth, series%style%dasharray())
       endassociate
       endsubroutine draw_run
+
+      subroutine draw_box_bars
+      !< The y error bars of `boxerrorbars`, at the box centres.
+      real(R8P), allocatable :: low(:)  !< Bar starts.
+      real(R8P), allocatable :: high(:) !< Bar ends.
+
+      ! local copies: gfortran 16 debug builds misread sections of components reached through the class dummy
+      associate(series => self%series(s))
+         low = series%bounds(1, :)
+         high = series%bounds(2, :)
+      endassociate
+      call draw_bars(low, high, yaxis, .true.)
+      endsubroutine draw_box_bars
+
+      subroutine draw_rectangles
+      !< `boxxyerror`: a rectangle from xlow to xhigh, ylow to yhigh per placeable point, in the fill style.
+      integer(I4P) :: i !< Point counter.
+
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)) .and. &
+                       yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
+            call backend%data_polygon(self%xaxis%to_unit([series%xlow(i), series%xhigh(i), series%xhigh(i), &
+                                                          series%xlow(i)]), &
+                                      yaxis%to_unit([series%ylow(i), series%ylow(i), series%yhigh(i), series%yhigh(i)]), &
+                                      series%style%fill_color(), series%style%density, series%style%stroke_color(), &
+                                      series%style%linewidth)
+         enddo
+      endassociate
+      endsubroutine draw_rectangles
+
+      subroutine draw_candles
+      !< `candlesticks` (and `boxplot` boxes): a box between the two `bounds` (open and close, the quartiles), whiskers
+      !< from it to the low and high values (`ylow`, `yhigh`, swapped if reversed); its width from the box edges, else
+      !< CAP_LENGTH pixels. With an empty fill, a candlestick whose close is below its open is filled, as gnuplot.
+      !< Boxplots add capped whiskers, the median line and the outliers. `financebars` (and boxplots so styled): a line
+      !< from low to high, a tick on the left at the open, one on the right at the close.
+      real(R8P)                     :: ul      !< Box left [unit].
+      real(R8P)                     :: ur      !< Box right [unit].
+      real(R8P)                     :: b(2)    !< Box ends [unit].
+      real(R8P)                     :: wv(2)   !< Whisker ends [unit].
+      real(R8P)                     :: tick    !< Finance bar tick length [unit].
+      real(R8P)                     :: c       !< Crossbar half width [unit].
+      real(R8P)                     :: mw      !< Median line width [px].
+      real(R8P)                     :: density !< Box fill opacity.
+      character(len=:), allocatable :: fill    !< Box fill color.
+      logical                       :: finance !< Drawn as a finance bar.
+      integer(I4P)                  :: i       !< Point counter.
+
+      tick = 0.5_R8P * CAP_LENGTH / (area(2) - area(1))
+      associate(series => self%series(s))
+         finance = series%style%with == WITH_FINANCEBARS .or. &
+                   (series%style%with == WITH_BOXPLOT .and. self%boxplot%financebars)
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            if (.not. (yaxis%accepts(series%bounds(1, i)) .and. yaxis%accepts(series%bounds(2, i)) .and. &
+                       yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
+            b = yaxis%to_unit(series%bounds(:, i))
+            wv = yaxis%to_unit([min(series%ylow(i), series%yhigh(i)), max(series%ylow(i), series%yhigh(i))])
+            if (finance) then
+               call backend%data_polyline([u(i), u(i)], wv, series%style%color, series%style%linewidth, '')
+               call backend%data_polyline([u(i) - tick, u(i)], [b(1), b(1)], series%style%color, &
+                                          series%style%linewidth, '')
+               call backend%data_polyline([u(i), u(i) + tick], [b(2), b(2)], series%style%color, &
+                                          series%style%linewidth, '')
+               if (series%style%with == WITH_BOXPLOT) &
+                  call backend%data_polyline([u(i) - tick, u(i) + tick], [v(i), v(i)], series%style%color, &
+                                             series%style%linewidth, '')
+               cycle
+            endif
+            if (series%style%with == WITH_BOXPLOT) then
+               ! the box: the middle third of the autoscale extent
+               ul = self%xaxis%to_unit(series%x(i) - (series%x(i) - series%xlow(i)) / 3.0_R8P)
+               ur = self%xaxis%to_unit(series%x(i) + (series%xhigh(i) - series%x(i)) / 3.0_R8P)
+            elseif (allocated(series%xlow)) then
+               if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)))) cycle
+               ul = self%xaxis%to_unit(series%xlow(i))
+               ur = self%xaxis%to_unit(series%xhigh(i))
+            else
+               ul = u(i) - tick
+               ur = u(i) + tick
+            endif
+            fill = series%style%fill_color()
+            density = series%style%density
+            if (series%style%with == WITH_CANDLESTICKS .and. series%style%fill == FILL_EMPTY .and. &
+                series%bounds(2, i) < series%bounds(1, i)) then
+               fill = series%style%color
+               density = 1.0_R8P
+            endif
+            call backend%data_polygon([ul, ur, ur, ul], [b(1), b(1), b(2), b(2)], fill, density, &
+                                      series%style%stroke_color(), series%style%linewidth)
+            if (series%style%with == WITH_BOXPLOT) then
+               ! capped whiskers, as gnuplot's boxplots
+               call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, series%style%color, &
+                                      series%style%linewidth, CAP_LENGTH, .true.)
+               mw = self%boxplot%median_width
+               if (mw < 0.0_R8P) mw = series%style%linewidth
+               if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], series%style%color, mw, '')
+            else
+               call backend%data_polyline([u(i), u(i)], [minval(b), wv(1)], series%style%color, &
+                                          series%style%linewidth, '')
+               call backend%data_polyline([u(i), u(i)], [maxval(b), wv(2)], series%style%color, &
+                                          series%style%linewidth, '')
+               if (series%whiskerbars > 0.0_R8P) then
+                  c = 0.5_R8P * series%whiskerbars * (ur - ul)
+                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(1), wv(1)], series%style%color, &
+                                             series%style%linewidth, '')
+                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(2), wv(2)], series%style%color, &
+                                             series%style%linewidth, '')
+               endif
+            endif
+         enddo
+         if (series%style%with == WITH_BOXPLOT .and. allocated(series%outliers)) call draw_outliers
+      endassociate
+      endsubroutine draw_candles
+
+      subroutine draw_outliers
+      !< The outliers of a boxplot, in the boxplot point type.
+      real(R8P), allocatable :: ox(:) !< Outlier abscissae.
+      real(R8P), allocatable :: oy(:) !< Outlier ordinates.
+      logical, allocatable   :: ok(:) !< Placeable outliers.
+
+      associate(series => self%series(s))
+         ox = series%outliers(1, :)
+         oy = series%outliers(2, :)
+      endassociate
+      ok = self%xaxis%accepts(ox) .and. yaxis%accepts(oy)
+      if (.not. any(ok)) return
+      associate(series => self%series(s))
+         call backend%data_dots(self%xaxis%to_unit(pack(ox, ok)), yaxis%to_unit(pack(oy, ok)), series%style%color, &
+                                series%style%point_diameter(), pt=self%boxplot%pointtype, &
+                                line_width=series%style%linewidth)
+      endassociate
+      endsubroutine draw_outliers
 
       subroutine draw_impulses
       !< A segment from y = 0 (the axis bottom on a log axis) to each placeable point.
@@ -2044,6 +2420,108 @@ contains
       enddo
    enddo
    endsubroutine polar_project
+
+   pure subroutine boxplot_words(words, style, bad)
+   !< Update the boxplot `style` with gnuplot `set style boxplot` words: `range R`, `fraction F`, `[no]outliers`,
+   !< `pointtype|pt P`, `candlesticks`, `financebars`, `medianlinewidth W`, `separation S`, `labels off|auto|x`,
+   !< `sorted`, `unsorted`. `bad` names the first problem, empty if none (the style is then unchanged).
+   character(len=*),              intent(in)    :: words !< Words.
+   type(boxplot_style),           intent(inout) :: style !< Boxplot style.
+   character(len=:), allocatable, intent(out)   :: bad   !< Problem, empty if none.
+   type(boxplot_style)                          :: new   !< Updated style.
+   character(len=:), allocatable                :: w     !< Current word.
+   character(len=:), allocatable                :: arg   !< Its argument.
+   real(R8P)                                    :: r     !< Numeric argument.
+   integer(I4P)                                 :: pos   !< Scan position.
+   integer(I4P)                                 :: ios   !< Read status.
+
+   bad = ''
+   new = style
+   pos = 1_I4P
+   do
+      call next_word(pos, w)
+      if (len(w) == 0) exit
+      select case (w)
+      case ('outliers', 'nooutliers')
+         new%outliers = w == 'outliers'
+      case ('candlesticks', 'financebars')
+         new%financebars = w == 'financebars'
+      case ('sorted', 'unsorted')
+         new%sorted = w == 'sorted'
+      case ('labels')
+         call next_word(pos, arg)
+         select case (arg)
+         case ('off', 'auto', 'x')
+            new%labels = arg
+         case default
+            bad = 'labels off, auto or x expected'
+            return
+         endselect
+      case ('range', 'fraction', 'pointtype', 'pt', 'medianlinewidth', 'separation')
+         call next_word(pos, arg)
+         read(arg, *, iostat=ios) r
+         if (len(arg) == 0 .or. ios /= 0) then
+            bad = w//' needs a number'
+            return
+         endif
+         select case (w)
+         case ('range')
+            if (r < 0.0_R8P) then
+               bad = 'the range must not be negative'
+               return
+            endif
+            new%range = r
+            new%fraction = 0.0_R8P
+         case ('fraction')
+            if (r <= 0.0_R8P .or. r > 1.0_R8P) then
+               bad = 'the fraction is above 0 and up to 1'
+               return
+            endif
+            new%fraction = r
+         case ('pointtype', 'pt')
+            if (r < 0.0_R8P .or. r /= aint(r)) then
+               bad = 'the point type is an integer >= 0'
+               return
+            endif
+            new%pointtype = int(r, I4P)
+         case ('medianlinewidth')
+            if (r < 0.0_R8P) then
+               bad = 'the median line width must not be negative'
+               return
+            endif
+            new%median_width = r
+         case default
+            if (.not. r > 0.0_R8P) then
+               bad = 'the separation must be positive'
+               return
+            endif
+            new%separation = r
+         endselect
+      case default
+         bad = 'unsupported option "'//w//'"'
+         return
+      endselect
+   enddo
+   style = new
+   contains
+      pure subroutine next_word(pos, word)
+      !< Next blank separated word of `words` from `pos` (advanced past it), empty at the end.
+      integer(I4P),                  intent(inout) :: pos   !< Scan position.
+      character(len=:), allocatable, intent(out)   :: word  !< Word.
+      integer(I4P)                                 :: first !< Word start.
+
+      do while (pos <= len(words))
+         if (words(pos:pos) /= ' ') exit
+         pos = pos + 1_I4P
+      enddo
+      first = pos
+      do while (pos <= len(words))
+         if (words(pos:pos) == ' ') exit
+         pos = pos + 1_I4P
+      enddo
+      word = words(first:pos - 1_I4P)
+      endsubroutine next_word
+   endsubroutine boxplot_words
 
    elemental function polar_series(series) result(ok)
    !< Whether `series` can be drawn on a polar panel (see POLAR_STYLES).

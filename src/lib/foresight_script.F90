@@ -22,9 +22,13 @@ module foresight_script
 !<   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
 !<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
 !<   histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|xerrorlines|xyerrorlines` (error bars: `x:y:dy` or
-!<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style); `replot [items]`; a `using` field is a column number or a parenthesized expression,
+!<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style);
+!<   `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
 !<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
+!< - `with boxerrorbars|boxxyerror|candlesticks [whiskerbars [F]]|financebars|boxplot` (gnuplot's layouts), `set style
+!<   boxplot [range R|fraction F] [[no]outliers] [pointtype P] [candlesticks|financebars] [medianlinewidth W]
+!<   [separation S] [labels off|auto|x] [sorted|unsorted]`;
 !< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
 !<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `border [lc C|-1]`,
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
@@ -55,7 +59,7 @@ module foresight_script
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
-use foresight_axes, only : axes_names, polar_series, POLAR_STYLES
+use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
@@ -324,6 +328,8 @@ contains
    real(R8P),        allocatable                :: gauge_scale(:) !< Gauge scale (`range [A:B]`), unallocated for none.
    integer(I4P)                                 :: cells     !< Gauge cells (`segments N`), 0 for none.
    logical                                      :: rose_linear !< Rose radius by value (`linear`).
+   real(R8P),        allocatable                :: whisker   !< Candlestick whisker crossbars (`whiskerbars [F]`).
+   real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
@@ -423,6 +429,7 @@ contains
       filter = ''
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
+      if (allocated(whisker)) deallocate(whisker)
       if (allocated(gauge_scale)) deallocate(gauge_scale)
       cells = 0_I4P
       rose_linear = .false.
@@ -544,6 +551,22 @@ contains
          elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
             call fill_words(fs)
             if (iostat /= 0_I4P) return
+         elseif (keyword(word, 'whiskerbars', 7_I4P)) then
+            ! candlesticks crossbars, a fraction of the box width (1 by default)
+            if (allocated(whisker)) deallocate(whisker)
+            allocate(whisker)
+            whisker = 1.0_R8P
+            if (i < size(tokens, kind=I4P)) then
+               if (to_number(tokens(i + 1_I4P)%text, whisker)) then
+                  i = i + 1_I4P
+               else
+                  whisker = 1.0_R8P
+               endif
+            endif
+            if (whisker < 0.0_R8P) then
+               call fail('plot: whiskerbars takes a fraction of the box width >= 0', iostat, iomsg)
+               return
+            endif
          elseif (word == 'format') then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -631,9 +654,14 @@ contains
             return
          endif
       endif
-      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose')) then
-         call fail('plot: fs applies to boxes, filledcurves, histograms, circles and the panel charts only', iostat, &
-                   iomsg)
+      if (allocated(whisker) .and. with /= 'candlesticks') then
+         call fail('plot: whiskerbars applies to candlesticks only', iostat, iomsg)
+         return
+      endif
+      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
+                                            'boxerrorbars boxxyerror candlesticks boxplot')) then
+         call fail('plot: fs applies to boxes, filledcurves, histograms, circles, the box styles and the panel charts '// &
+                   'only', iostat, iomsg)
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
@@ -669,6 +697,22 @@ contains
          call fail('plot: matrix data are plotted with image', iostat, iomsg)
          return
       endif
+      ! a boxplot factor (fourth using field): the text of a plain column, read as the xtic labels are
+      if (with == 'boxplot' .and. allocated(fields)) then
+         if (size(fields) == 4) then
+            if (label_col > 0_I4P) then
+               call fail('plot: a boxplot takes a factor column or xtic(), not both', iostat, iomsg)
+               return
+            endif
+            word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
+            if (len(word) == 0 .or. verify(word, '0123456789') /= 0 .or. len(word) > 9) then
+               call fail('plot: the boxplot factor (4th using field) must be a column number', iostat, iomsg)
+               return
+            endif
+            read(word, *) label_col
+            fields = fields(1:3)
+         endif
+      endif
       ! reloaded to keep the text of the xtic column
       if (file /= loaded .or. (label_col > 0_I4P .and. data%label_column /= label_col)) then
          call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col)
@@ -689,8 +733,12 @@ contains
          select case (with)
          case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
-         case ('xyerrorbars', 'xyerrorlines')
+         case ('xyerrorbars', 'xyerrorlines', 'boxxyerror')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
+         case ('boxerrorbars')
+            fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
+         case ('candlesticks', 'financebars')
+            fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P, 5_I4P])
          case ('histograms', 'pie', 'radar', 'rose', 'gauge')
             ! one value per row: the first column at the point numbers
             fields = plain_columns([0_I4P, 1_I4P])
@@ -719,6 +767,27 @@ contains
       case ('histograms', 'pie', 'radar', 'rose')
          if (.not. one_field) then
             call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
+            return
+         endif
+      case ('boxerrorbars')
+         if (nbar < 1_I4P .or. nbar > 3_I4P) then
+            call fail('plot: boxerrorbars needs using x:y:ydelta[:width] or x:y:ylow:yhigh:width', iostat, iomsg)
+            return
+         endif
+      case ('boxxyerror')
+         if (nbar /= 2_I4P .and. nbar /= 4_I4P) then
+            call fail('plot: boxxyerror needs using x:y:xdelta:ydelta or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
+            return
+         endif
+      case ('candlesticks', 'financebars')
+         if (nbar /= 3_I4P .and. .not. (nbar == 4_I4P .and. with == 'candlesticks')) then
+            call fail('plot: '//with//' needs using x:open:low:high:close'// &
+                      trim(merge('[:width]', '        ', with == 'candlesticks')), iostat, iomsg)
+            return
+         endif
+      case ('boxplot')
+         if (nbar > 1_I4P .or. one_field) then
+            call fail('plot: boxplot needs using x:y[:width[:factor column]]', iostat, iomsg)
             return
          endif
       case ('circles')
@@ -806,6 +875,37 @@ contains
          if (nbar == 3_I4P) arcs = transpose(values(:, 4:5))
       case ('filledcurves')
          if (nbar == 1_I4P) ylow = values(:, 3)
+      case ('boxerrorbars')
+         if (nbar == 3_I4P) then
+            ylow = values(:, 3)
+            yhigh = values(:, 4)
+            widths = values(:, 5)
+         else
+            ylow = y - values(:, 3)
+            yhigh = y + values(:, 3)
+            if (nbar == 2_I4P) widths = values(:, 4)
+         endif
+         ! a width <= 0 means the boxwidth, as gnuplot
+         if (allocated(widths)) where (.not. widths > 0.0_R8P) widths = ieee_value(1.0_R8P, ieee_quiet_nan)
+      case ('boxxyerror')
+         if (nbar == 2_I4P) then
+            xlow = x - values(:, 3)
+            xhigh = x + values(:, 3)
+            ylow = y - values(:, 4)
+            yhigh = y + values(:, 4)
+         else
+            xlow = values(:, 3)
+            xhigh = values(:, 4)
+            ylow = values(:, 5)
+            yhigh = values(:, 6)
+         endif
+      case ('candlesticks', 'financebars')
+         ylow = values(:, 3)
+         yhigh = values(:, 4)
+         closes = values(:, 5)
+         if (nbar == 4_I4P) widths = values(:, 6)
+      case ('boxplot')
+         if (nbar >= 1_I4P) widths = values(:, 3)
       case ('yerrorbars', 'yerrorlines')
          if (nbar == 1_I4P) then
             ylow = y - values(:, 3)
@@ -886,6 +986,30 @@ contains
          endif
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, fs=fs, xlabels=xlabels, &
                                linear=rose_linear)
+      elseif (with == 'boxerrorbars' .or. with == 'boxxyerror') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, xlow=xlow, &
+                               xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, width=widths, fs=fs, xlabels=xlabels)
+      elseif (with == 'candlesticks' .or. with == 'financebars') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, &
+                               yhigh=yhigh, close=closes, axes=axes, width=widths, fs=fs, xlabels=xlabels, &
+                               whiskerbars=whisker)
+      elseif (with == 'boxplot') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         if (label_col > 0_I4P) then
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
+                                  axes=axes, width=widths, fs=fs, factors=xlabels)
+         else
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
+                                  axes=axes, width=widths, fs=fs)
+         endif
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -2057,6 +2181,27 @@ contains
             endif
             self%data_style = with
             return
+         elseif (tokens(2)%text == 'boxplot') then
+            block
+               type(boxplot_style)           :: probe !< Style the words are tried on.
+               character(len=:), allocatable :: words !< Option words.
+               character(len=:), allocatable :: bad   !< Problem.
+
+               words = ''
+               do s = 3_I4P, size(tokens, kind=I4P)
+                  words = words//' '//tokens(s)%text
+               enddo
+               associate(panel => self%figure%panels(self%figure%current))
+                  probe = panel%boxplot
+               endassociate
+               call boxplot_words(words, probe, bad)
+               if (len(bad) > 0) then
+                  call fail('set style boxplot: '//bad, iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_style_boxplot(words)
+            endblock
+            return
          elseif (keyword(tokens(2)%text, 'histogram', 4_I4P)) then
             block
                logical                :: rows !< Row stacked.
@@ -2712,7 +2857,7 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
-        keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P)
+        keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

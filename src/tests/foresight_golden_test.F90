@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(58)                  !< Per-figure outcome.
+logical                     :: test_passed(60)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -79,7 +79,9 @@ test_passed(55) = check('polar_vfd.svg', figure_polar('round', theme='vfd'))
 test_passed(56) = check('polar_rmin.svg', figure_polar('rmin'))
 test_passed(57) = check('steps.svg', figure_steps())
 test_passed(58) = check('steps.txt', figure_steps())
-write(output_unit, '(A,58L2)') 'foresight golden checks:', test_passed
+test_passed(59) = check('boxplot.svg', figure_boxplot())
+test_passed(60) = check('boxplot.txt', figure_boxplot())
+write(output_unit, '(A,60L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -515,6 +517,46 @@ contains
    call fig%next_panel
    call fig%plot(x, y, title='xyerrorlines', with='xyerrorlines', xlow=x - d, xhigh=x + d, ylow=y - d, yhigh=y + d)
    endfunction figure_steps
+
+   function figure_boxplot() result(fig)
+   !< The box styles of gnuplot: boxerrorbars and boxxyerror; candlesticks (one falling, filled; whisker crossbars)
+   !< and financebars; boxplots of two factor levels with an outlier; the same as finance bars, without outliers.
+   type(figure_object)    :: fig     !< Figure.
+   real(R8P)              :: x(4)    !< Abscissae.
+   real(R8P)              :: y(4)    !< Ordinates.
+   real(R8P)              :: d(4)    !< Errors.
+   real(R8P)              :: v(11)   !< Boxplot values.
+   character(len=1)       :: f(11)   !< Boxplot factors.
+   integer(I4P)           :: i       !< Counter.
+
+   x = [1.0_R8P, 2.0_R8P, 4.0_R8P, 5.0_R8P]
+   y = [2.0_R8P, 1.5_R8P, 3.0_R8P, 1.0_R8P]
+   d = [0.3_R8P, 0.2_R8P, 0.5_R8P, 0.1_R8P]
+   v = [1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P, 5.0_R8P, 3.0_R8P, 4.0_R8P, 6.0_R8P, 8.0_R8P, 9.0_R8P, 20.0_R8P]
+   f = ['a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'b', 'b']
+   call fig%init(width=760_I4P, height=560_I4P)
+   call fig%set_multiplot(rows=2_I4P, cols=2_I4P)
+   call fig%set_key(position='top left')
+   call fig%set_style_fill('solid 0.3')
+   call fig%plot(x, y, title='boxerrorbars', with='boxerrorbars', ylow=y - d, yhigh=y + d)
+   call fig%plot(x + 0.2_R8P, y + 1.0_R8P, title='boxxyerror', with='boxx', xlow=x - d + 0.2_R8P, &
+                 xhigh=x + d + 0.2_R8P, ylow=y + 1.0_R8P - d, yhigh=y + 1.0_R8P + d)
+   call fig%next_panel
+   call fig%set_style_fill('empty')
+   call fig%set_boxwidth(0.4_R8P)
+   call fig%plot(x, [1.5_R8P, 1.2_R8P, 3.4_R8P, 0.8_R8P], title='candlesticks', with='candlesticks', &
+                 ylow=[1.2_R8P, 1.0_R8P, 2.2_R8P, 0.5_R8P], yhigh=[2.8_R8P, 2.2_R8P, 3.9_R8P, 1.9_R8P], &
+                 close=[2.8_R8P, 1.9_R8P, 2.5_R8P, 1.6_R8P], whiskerbars=0.5_R8P)
+   call fig%plot(x + 0.4_R8P, [1.5_R8P, 1.2_R8P, 3.4_R8P, 0.8_R8P], title='financebars', with='fin', &
+                 ylow=[1.2_R8P, 1.0_R8P, 2.2_R8P, 0.5_R8P], yhigh=[2.8_R8P, 2.2_R8P, 3.9_R8P, 1.9_R8P], &
+                 close=[2.8_R8P, 1.9_R8P, 2.5_R8P, 1.6_R8P])
+   call fig%next_panel
+   call fig%set_boxwidth()
+   call fig%plot([(1.0_R8P, i = 1, 11)], v, title='boxplot', with='boxplot', factors=f)
+   call fig%next_panel
+   call fig%set_style_boxplot('nooutliers financebars')
+   call fig%plot([(1.0_R8P, i = 1, 11)], v, title='financebars', with='boxplot', factors=f)
+   endfunction figure_boxplot
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

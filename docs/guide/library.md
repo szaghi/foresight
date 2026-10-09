@@ -49,6 +49,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |
 | `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
 | `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
+| `set_style_boxplot(words)` | `set style boxplot nooutliers sorted fraction 0.95` |
 | `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
 | `set_readout([on], [position], [opaque], [size])` | `set readout top right horizontal noopaque size 30`, `unset readout` (foresight extension, see [Readouts](gnuplot-subset#readouts)) |
@@ -60,11 +61,14 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Argument | Meaning | Default |
 |---|---|---|
 | `title` | key entry; empty for none | none |
-| `with` | `lines`, `points`, `linespoints`, `impulses`, `steps`, `fsteps`, `histeps`, `dots`, `yerrorbars`, `xerrorbars`, `xyerrorbars`, `yerrorlines`, `xerrorlines`, `xyerrorlines` (abbreviated as gnuplot: `l`, `p`, `lp`, `i`, `st`, `fs`, `his`, `d`, `yerr`, ...; [Lines, steps](gnuplot-subset#lines-steps-and-impulses)); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `gauge`, `radar`, `rose` ([Gauges](gnuplot-subset#gauges-radars-and-roses)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `with` | `lines`, `points`, `linespoints`, `impulses`, `steps`, `fsteps`, `histeps`, `dots`, `yerrorbars`, `xerrorbars`, `xyerrorbars`, `yerrorlines`, `xerrorlines`, `xyerrorlines`, `boxerrorbars`, `boxxyerror`, `candlesticks`, `financebars`, `boxplot` ([Box styles](gnuplot-subset#box-finance-and-boxplot-styles); abbreviated as gnuplot: `l`, `p`, `lp`, `i`, `st`, `fs`, `his`, `d`, `yerr`, ...; [Lines, steps](gnuplot-subset#lines-steps-and-impulses)); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `gauge`, `radar`, `rose` ([Gauges](gnuplot-subset#gauges-radars-and-roses)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
 | `radius`, `angles` | circles only: radii [x units] (NaN: the default), and `angles(2, n)` start and end of wedges [deg] | 2% of the plot width; whole circles |
 | `donut` | pie only (`with='pie'`): the hole, a fraction of the radius | 0, a pie |
 | `scale` | gauge only (`with='gauge'`): the values at the ends of the sweep, `[0._R8P, 8000._R8P]`; cells with `fs='segments N'` | required |
 | `linear` | rose only (`with='rose'`): the radius, not the area, by value | `.false.` |
+| `close` | candlesticks and financebars: the closing values, `y` the opening ones, `ylow`/`yhigh` the low and high | required |
+| `whiskerbars` | candlesticks: whisker crossbars, a fraction of the box width | none |
+| `factors` | boxplot: the level of each value of `y` (one box per level, named on the x axis) | one box |
 | `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |

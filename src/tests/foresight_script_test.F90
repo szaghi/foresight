@@ -10,7 +10,8 @@ use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
 use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
-                            WITH_XERRORLINES, WITH_XYERRORLINES, &
+                            WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
+                            WITH_FINANCEBARS, WITH_BOXPLOT, &
                             WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
@@ -32,7 +33,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(68)                           !< Per-check outcome.
+logical                       :: test_passed(70)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -444,7 +445,7 @@ if (test_passed(49)) then
 endif
 ! fill errors
 call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
-test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'circles and the panel charts only') > 0
+test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'the box styles and the panel charts only') > 0
 call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
@@ -727,6 +728,55 @@ call interpreter%run_text("plot x w hi", iostat, iomsg)
 test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported style "hi"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
+
+! the box styles: column layouts, whiskerbars anywhere in the item, boxplot quartiles per factor level
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 1 3 4 0.5 p', '2 3 2 5 6 0 p', '3 4 1 5 3 0.5 p', '4 5 2 7 8 0.5 q', '5 6 3 8 7 0.5 q', &
+                   '6 7 4 9 9 0.5 q', '7 8 5 9 9 0.5 q', '8 9 1 9 9 0.5 q', '9 10 1 9 9 0.5 p', '10 30 1 9 9 0.5 p'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set style boxplot sorted pt 6 range 1.5"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:2:3 w boxer, '' u 1:2:3:4:6 w boxerrorbars, '' u 1:2:3:3 w boxx, "// &
+                          "'' u 1:2:3:4:5 w can t 'c' whiskerbars 0.5, '' u 1:2:3:4:5 w fin, "// &
+                          "'' u (1):2:(0.4):7 w boxplot", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(69) = iostat == 0_I4P
+if (test_passed(69)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(69) = all(panel%series%style%with == [WITH_BOXERRORBARS, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
+                                                         WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT]) .and. &
+                        same(panel%series(1)%ylow(1:2), [0, 0]) .and. same(panel%series(2)%xhigh(1:2) * 4.0_R8P, [5, 10]) &
+                        .and. same(panel%series(3)%xlow(1:2), [0, 0]) .and. panel%series(4)%whiskerbars == 0.5_R8P .and. &
+                        panel%boxplot%sorted .and. panel%boxplot%pointtype == 6_I4P
+      ! local copies of the bounds: gfortran 16 -fcheck=bounds misreads their sections through the associate
+      arcs = panel%series(1)%bounds
+      test_passed(69) = test_passed(69) .and. same(arcs(1, 1:2), [1, 1])
+      arcs = panel%series(2)%bounds
+      test_passed(69) = test_passed(69) .and. same(arcs(2, 1:2), [3, 5])
+      arcs = panel%series(4)%bounds
+      test_passed(69) = test_passed(69) .and. same(arcs(2, 1:2), [4, 6])
+      ! levels p (2 3 4 10 30) and q (5 6 7 8 9), sorted: p at x = 1, q at x = 2
+      test_passed(69) = test_passed(69) .and. same(panel%series(6)%x, [1, 2]) .and. same(panel%series(6)%y, [4, 7]) .and. &
+                        same(panel%series(6)%yhigh, [10, 9]) .and. &
+                        trim(panel%series(6)%xlabels(1)) == 'p' .and. trim(panel%series(6)%xlabels(2)) == 'q'
+      arcs = panel%series(6)%bounds
+      test_passed(69) = test_passed(69) .and. same(arcs(1, :), [3, 6]) .and. same(arcs(2, :), [10, 8])
+      arcs = panel%series(6)%outliers
+      test_passed(69) = test_passed(69) .and. same(arcs(2, :), [30])
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3:4 w candlesticks", iostat, iomsg)
+test_passed(70) = iostat /= 0_I4P .and. index(iomsg, 'candlesticks needs using x:open:low:high:close') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3:(2*$4) w boxplot", iostat, iomsg)
+test_passed(70) = test_passed(70) .and. iostat /= 0_I4P .and. index(iomsg, 'must be a column number') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w boxes whiskerbars", iostat, iomsg)
+test_passed(70) = test_passed(70) .and. iostat /= 0_I4P .and. index(iomsg, 'whiskerbars applies to candlesticks') > 0
+call interpreter%run_text("set style boxplot labels x2", iostat, iomsg)
+test_passed(70) = test_passed(70) .and. iostat /= 0_I4P .and. index(iomsg, 'labels off, auto or x') > 0
+call interpreter%run_text("set style boxplot fraction 2", iostat, iomsg)
+test_passed(70) = test_passed(70) .and. iostat /= 0_I4P .and. index(iomsg, 'above 0 and up to 1') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -742,7 +792,10 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,68L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,70L2)') 'foresight_script checks:', test_passed
+do i = 1, size(test_passed)
+   if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
+enddo
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

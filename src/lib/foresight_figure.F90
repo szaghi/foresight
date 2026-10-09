@@ -14,7 +14,8 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_names, axes_object, key_position, polar_series, readout_position, POLAR_STYLES
+use foresight_axes, only : axes_names, axes_object, boxplot_words, key_position, polar_series, readout_position, &
+                           POLAR_STYLES
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
@@ -85,6 +86,7 @@ type :: figure_object
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
       procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
       procedure, pass(self) :: set_style_histogram !< gnuplot `set style histogram`.
+      procedure, pass(self) :: set_style_boxplot   !< gnuplot `set style boxplot`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
@@ -197,7 +199,7 @@ contains
    endsubroutine next_panel
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
-                   xlabels, radius, angles, donut, scale, linear)
+                   xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -227,6 +229,12 @@ contains
    !< radars): `with='gauge'` shows the last finite `y` on a 270-degree sweep over `scale` (its two end values), lit
    !< in `fs='segments N'` cells if set, the value in digits of `format`; `with='radar'` a polygon over a spoke per
    !< point, named by `xlabels`; `with='rose'` equal sectors of area by value (radius by value with `linear`).
+   !<
+   !< `with='boxerrorbars'` draws boxes (as `boxes`) with y error bars from `ylow` to `yhigh`; `boxxyerror` a rectangle
+   !< from `xlow` to `xhigh`, `ylow` to `yhigh`; `candlesticks` and `financebars` take the open `y`, low `ylow`, high
+   !< `yhigh` and `close` (a box-and-whisker plot: box start, whisker ends, box end), candlesticks a `width` and
+   !< `whiskerbars` (crossbars, a fraction of the box width). `with='boxplot'` draws the quartiles, median, whiskers and
+   !< outliers of the values `y` at `x(1)`, one box per level of `factors` if given, laid out by `set_style_boxplot`.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -252,12 +260,16 @@ contains
    real(R8P),            intent(in), optional :: donut    !< Pie hole fraction.
    real(R8P),            intent(in), optional :: scale(2) !< Gauge scale: the values at the sweep ends.
    logical,              intent(in), optional :: linear   !< Rose radius by value.
+   real(R8P),            intent(in), optional :: close(:) !< Closing values of candlesticks and finance bars.
+   real(R8P),            intent(in), optional :: whiskerbars !< Candlestick whisker crossbars, a box width fraction.
+   character(len=*),     intent(in), optional :: factors(:) !< Factor level of each boxplot value.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
                                              format=format, width=width, base=base, fs=fs, xlabels=xlabels, &
-                                             radius=radius, angles=angles, donut=donut, scale=scale, linear=linear)
+                                             radius=radius, angles=angles, donut=donut, scale=scale, linear=linear, &
+                                             close=close, whiskerbars=whiskerbars, factors=factors)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -437,6 +449,21 @@ contains
       endif
    endassociate
    endsubroutine set_style_histogram
+
+   subroutine set_style_boxplot(self, words)
+   !< Layout of the boxplots plotted next, as gnuplot `set style boxplot`: `words` among `range R` (1.5), `fraction F`,
+   !< `outliers` (the default) or `nooutliers`, `pointtype P` (7), `candlesticks` (the default) or `financebars`,
+   !< `medianlinewidth W`, `separation S` (1), `labels off|auto|x`, `sorted` or `unsorted` (the default).
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: words !< Style words.
+   character(len=:), allocatable       :: bad   !< Problem.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      call boxplot_words(words, panel%boxplot, bad)
+   endassociate
+   if (len(bad) > 0) error stop 'foresight: set_style_boxplot: '//bad
+   endsubroutine set_style_boxplot
 
    subroutine set_format(self, format, axes)
    !< Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text

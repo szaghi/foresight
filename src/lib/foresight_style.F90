@@ -20,7 +20,8 @@ public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
-          WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES
+          WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
+          WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT
 public :: STYLE_NAMES
 public :: FILL_EMPTY, FILL_SOLID
 
@@ -48,9 +49,15 @@ integer(I4P), parameter :: WITH_DOTS        = 21_I4P !< gnuplot `with dots`: a t
 integer(I4P), parameter :: WITH_YERRORLINES = 22_I4P !< gnuplot `with yerrorlines`: linespoints and y error bars.
 integer(I4P), parameter :: WITH_XERRORLINES = 23_I4P !< gnuplot `with xerrorlines`: linespoints and x error bars.
 integer(I4P), parameter :: WITH_XYERRORLINES = 24_I4P !< gnuplot `with xyerrorlines`: linespoints and both bars.
+integer(I4P), parameter :: WITH_BOXERRORBARS = 25_I4P !< gnuplot `with boxerrorbars`: boxes with y error bars.
+integer(I4P), parameter :: WITH_BOXXYERROR  = 26_I4P !< gnuplot `with boxxyerror`: a rectangle per point.
+integer(I4P), parameter :: WITH_CANDLESTICKS = 27_I4P !< gnuplot `with candlesticks`: box and whiskers.
+integer(I4P), parameter :: WITH_FINANCEBARS = 28_I4P !< gnuplot `with financebars`: high-low bars, open/close ticks.
+integer(I4P), parameter :: WITH_BOXPLOT     = 29_I4P !< gnuplot `with boxplot`: quartiles of the values, outliers.
 character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
-                                             'xyerrorlines, boxes, filledcurves, histograms, image, circles, pie, '// &
+                                             'xyerrorlines, boxes, boxerrorbars, boxxyerror, candlesticks, '// &
+                                             'financebars, boxplot, filledcurves, histograms, image, circles, pie, '// &
                                              'gauge, radar, rose, readout' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
@@ -125,7 +132,7 @@ contains
       name = 'image'
    case ('cir', 'circ', 'circl', 'circle', 'circles')
       name = 'circles'
-   case ('boxes', 'readout', 'pie', 'gauge', 'radar', 'rose')
+   case ('boxes', 'boxplot', 'readout', 'pie', 'gauge', 'radar', 'rose')
       name = word
    case default
       name = ''
@@ -136,6 +143,10 @@ contains
       if (abbreviates(word, 'yerrorlines', 7)) name = 'yerrorlines'
       if (abbreviates(word, 'xerrorlines', 7)) name = 'xerrorlines'
       if (abbreviates(word, 'xyerrorlines', 8)) name = 'xyerrorlines'
+      if (abbreviates(word, 'boxerrorbars', 5)) name = 'boxerrorbars'
+      if (abbreviates(word, 'boxxyerror', 4)) name = 'boxxyerror'
+      if (abbreviates(word, 'candlesticks', 3)) name = 'candlesticks'
+      if (abbreviates(word, 'financebars', 3)) name = 'financebars'
    endselect
    contains
       pure function abbreviates(w, full, minimum) result(match)
@@ -204,6 +215,16 @@ contains
       with = WITH_XERRORLINES
    case ('xyerrorlines')
       with = WITH_XYERRORLINES
+   case ('boxerrorbars')
+      with = WITH_BOXERRORBARS
+   case ('boxxyerror')
+      with = WITH_BOXXYERROR
+   case ('candlesticks')
+      with = WITH_CANDLESTICKS
+   case ('financebars')
+      with = WITH_FINANCEBARS
+   case ('boxplot')
+      with = WITH_BOXPLOT
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)//'" (supported: '//STYLE_NAMES//')'
    endselect
@@ -256,7 +277,8 @@ contains
 
    points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, &
                                     WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_IMPULSES, WITH_STEPS, &
-                                    WITH_FSTEPS, WITH_HISTEPS])
+                                    WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
+                                    WITH_FINANCEBARS, WITH_BOXPLOT])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -282,7 +304,7 @@ contains
    logical                         :: filled !< Filled style.
 
    filled = any(self%with == [WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_CIRCLES, WITH_PIE, WITH_GAUGE, &
-                              WITH_RADAR, WITH_ROSE])
+                              WITH_RADAR, WITH_ROSE, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_BOXPLOT])
    endfunction fills
 
    pure function fill_color(self) result(color)
