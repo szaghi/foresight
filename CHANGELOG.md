@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] — 2026-10-09
+### Added
+- Add boxes, filled curves and fill styles
+
+- Add histograms and xtic category labels
+
+- Add vfd and lcd themes and segmented bar fills
+
+- Add image heatmaps, palettes and the color box
+
+- Add circles, wedges, pie and donut charts
+
+- Add gauge, radar and rose panel charts
+
+- Add polar plots with the gnuplot round-plot idiom
+
+
 ## [0.2.3] — 2026-10-09
 ### Added
 - Add seven-segment readouts for live monitoring
