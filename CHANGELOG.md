@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.3] — 2026-10-09
+### Added
+- Add seven-segment readouts for live monitoring
+
+
 ## [0.2.2] — 2026-10-08
 ### Added
 - Add block terminal, smooth filters and live-monitoring viewer keys
