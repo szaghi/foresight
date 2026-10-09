@@ -9,7 +9,7 @@ private
 public :: default_color
 public :: style_object
 public :: style_with
-public :: WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS
+public :: WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS
 
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
 integer(I4P), parameter :: WITH_POINTS      = 2_I4P !< gnuplot `with points`.
@@ -17,6 +17,7 @@ integer(I4P), parameter :: WITH_LINESPOINTS = 3_I4P !< gnuplot `with linespoints
 integer(I4P), parameter :: WITH_YERRORBARS  = 4_I4P !< gnuplot `with yerrorbars`.
 integer(I4P), parameter :: WITH_XERRORBARS  = 5_I4P !< gnuplot `with xerrorbars`.
 integer(I4P), parameter :: WITH_XYERRORBARS = 6_I4P !< gnuplot `with xyerrorbars`.
+integer(I4P), parameter :: WITH_READOUT     = 7_I4P !< foresight `with readout`: the last value in seven-segment digits.
 
 character(len=7), parameter :: PALETTE(8) = ['#9400d3', '#009e73', '#56b4e9', '#e69f00', &
                                              '#f0e442', '#0072b2', '#e51e10', '#000000'] !< gnuplot 5 line colors.
@@ -51,7 +52,8 @@ contains
    endfunction default_color
 
    function style_with(name) result(with)
-   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (`l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`).
+   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (`l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`), or
+   !< foresight's `readout` (full word only).
    character(len=*), intent(in) :: name !< gnuplot style keyword.
    integer(I4P)                 :: with !< Plotting style code.
 
@@ -68,9 +70,11 @@ contains
       with = WITH_XERRORBARS
    case ('xyerr', 'xyerrorbars')
       with = WITH_XYERRORBARS
+   case ('readout')
+      with = WITH_READOUT
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)// &
-                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars)'
+                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars, readout)'
    endselect
    endfunction style_with
 
@@ -114,11 +118,11 @@ contains
    endfunction draws_lines
 
    elemental function draws_points(self) result(points)
-   !< Whether the style draws points.
+   !< Whether the style draws points: every style but lines and readouts (error bars mark their points).
    class(style_object), intent(in) :: self   !< Style.
    logical                         :: points !< Points are drawn.
 
-   points = self%with /= WITH_LINES
+   points = self%with /= WITH_LINES .and. self%with /= WITH_READOUT
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)

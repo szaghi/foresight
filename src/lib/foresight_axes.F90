@@ -11,10 +11,16 @@ module foresight_axes
 !< as gnuplot, its ticks and labels are off until `set y2tics` (on the right border, not mirrored), and it is drawn only
 !< when it has data or a fully fixed range.
 !< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
+!<
+!< Readouts (`with readout`, see foresight_readout) show the last finite value of their series in seven-segment
+!< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
+!< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
+!< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
+use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
-use foresight_style, only : default_color, style_with
+use foresight_style, only : default_color, style_with, WITH_READOUT
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -23,6 +29,7 @@ private
 public :: axes_object
 public :: axes_names
 public :: key_position
+public :: readout_position
 
 real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
 real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [px].
@@ -34,6 +41,8 @@ real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
 character(len=*), parameter :: GRID_COLOR    = '#a0a0a0' !< Grid line color.
 character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array.
+character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
+real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 
 type :: axes_object
    !< Plot panel.
@@ -55,6 +64,13 @@ type :: axes_object
    logical                          :: key_horizontal = .false. !< Entries side by side, in rows.
    real(R8P)                        :: origin(2) = [0.0_R8P, 0.0_R8P] !< Bottom left corner, page fraction (`set origin`).
    real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
+   logical                          :: readout = .true. !< Draw the readouts.
+   character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
+   character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
+   logical                          :: readout_horizontal = .false. !< Readouts side by side, else in a column.
+   logical                          :: readout_opaque = .true. !< Window behind the readouts over a plot.
+   real(R8P)                        :: readout_size = 0.0_R8P !< Digit height [px]; 0 for the default, which fills
+                                                              !< a panel of readouts alone.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
@@ -62,20 +78,23 @@ type :: axes_object
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
       procedure, pass(self), private :: draw_key           !< Draw the key.
+      procedure, pass(self), private :: draw_readouts      !< Draw the readouts.
       procedure, pass(self), private :: key_layout         !< Key size and entry grid.
       procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
+      procedure, pass(self), private :: is_readout         !< Whether a series is a readout.
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
 
 contains
-   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt)
+   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
-   !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default) or `x1y2`, the second y axis.
+   !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default) or `x1y2`, the second y axis. A `readout` takes its `format`
+   !< (`DEFAULT_READOUT_FORMAT` if absent) and only the color among the style options.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -91,7 +110,9 @@ contains
    real(R8P),          intent(in), optional :: yhigh(:) !< Vertical error bar ends.
    character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1` or `x1y2`.
    integer(I4P),       intent(in), optional :: pt       !< gnuplot point type: 0 a dot, 1.. the shapes.
+   character(len=*),   intent(in), optional :: format   !< Readout format.
    type(series_object)                      :: series !< New series.
+   character(len=:), allocatable            :: message !< Readout format problem.
 
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
    if (present(axes)) then
@@ -112,6 +133,16 @@ contains
    if (present(pt)) then
       if (pt < 0_I4P) error stop 'foresight: plot: the point type must not be negative'
       series%style%pointtype = pt
+   endif
+   if (series%style%with == WITH_READOUT) then
+      if (present(lw) .or. present(dt) .or. present(ps) .or. present(pt) .or. present(axes)) &
+         error stop 'foresight: plot: a readout takes lc only among the style options (no lw, dt, ps, pt, axes)'
+      series%format = DEFAULT_READOUT_FORMAT
+      if (present(format)) series%format = format
+      message = readout_check(series%format)
+      if (len(message) > 0) error stop 'foresight: plot: '//message
+   elseif (present(format)) then
+      error stop 'foresight: plot: format applies to readouts only'
    endif
    if (series%style%draws_xbars()) then
       if (.not. (present(xlow) .and. present(xhigh))) error stop 'foresight: plot: x error bars need xlow and xhigh'
@@ -146,6 +177,7 @@ contains
    ymax = -huge(1.0_R8P)
    found = .false.
    do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%is_readout(s)) cycle
       k = merge(2_I4P, 1_I4P, self%series(s)%y2)
       if (k == 2_I4P) then
          call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k))
@@ -174,6 +206,18 @@ contains
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
 
    if (.not. allocated(self%series)) allocate(self%series(0))
+   if (size(self%series) > 0) then
+      if (all([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) then
+         ! readouts alone: no axes, the block fills the panel below the title
+         area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
+         if (self%has_title()) then
+            call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            area(3) = area(3) + LINE_HEIGHT * font_size + GAP
+         endif
+         if (self%readout) call self%draw_readouts(backend, area, font_size, .true.)
+         return
+      endif
+   endif
    ! an outside key takes its side of the panel box; above the plot it goes below the title, as gnuplot
    box = [x0, y0, width, height]
    above = 0.0_R8P
@@ -225,6 +269,7 @@ contains
    call backend%end_group
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)
       if (self%series(s)%y2) then
          call self%draw_series(backend, s, self%y2axis)
@@ -237,6 +282,8 @@ contains
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
+   if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
+      call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
    endsubroutine render
 
@@ -397,7 +444,7 @@ contains
    endassociate
    k = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
-      if (len(self%series(s)%title) == 0) cycle
+      if (len(self%series(s)%title) == 0 .or. self%is_readout(s)) cycle
       ! entry k (from 0) in column mod(k, columns), row k / columns
       xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
       xs(1) = xs(2) - SAMPLE_LENGTH * font_size
@@ -422,6 +469,158 @@ contains
    enddo
    endsubroutine draw_key
 
+   subroutine draw_readouts(self, backend, area, font_size, fill)
+   !< Draw the block of readouts in `area`, as the key is placed inside the plot area: a column (or a row) of readouts,
+   !< over an opaque window unless `fill`, where the readouts are alone in the panel and the digits grow until the
+   !< block fills `area` (vector devices; text has one size), unless a digit size is set.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: area(4)   !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   logical,               intent(in)    :: fill      !< Readouts alone, filling the box.
+   type :: glass_object
+      !< Readout content.
+      integer(I4P), allocatable     :: masks(:) !< Segments of each cell.
+      character(len=:), allocatable :: prefix   !< Text before the glass.
+      character(len=:), allocatable :: suffix   !< Text after the glass.
+   endtype glass_object
+   type(glass_object), allocatable      :: glasses(:) !< Readouts, in series order.
+   integer(I4P), allocatable            :: which(:)   !< Series of each readout.
+   real(R8P),    allocatable            :: sizes(:,:) !< Width and height of each readout [px].
+   real(R8P)                            :: height     !< Digit height [px].
+   real(R8P)                            :: spacing    !< Space between readouts [px].
+   real(R8P)                            :: block(2)   !< Block width and height [px].
+   real(R8P)                            :: left       !< Block left [px].
+   real(R8P)                            :: top        !< Block top [px].
+   real(R8P)                            :: p          !< Position of the next readout [px].
+   real(R8P)                            :: inset(2)   !< Block inset from the plot border, across and down [px].
+   real(R8P)                            :: pad(2)     !< Window padding, across and down [px].
+   integer(I4P)                         :: r          !< Readout counter.
+   integer(I4P)                         :: s          !< Series counter.
+   integer(I4P)                         :: along      !< Direction of the block: 1 a row, 2 a column.
+
+   which = pack([(s, s = 1_I4P, size(self%series, kind=I4P))], [(self%is_readout(s), s = 1_I4P, &
+                                                                  size(self%series, kind=I4P))])
+   allocate(glasses(size(which)))
+   do r = 1_I4P, size(which, kind=I4P)
+      associate(series => self%series(which(r)))
+         call readout_glass(series%format, last_finite(series%y), glasses(r)%masks, glasses(r)%prefix, &
+                            glasses(r)%suffix)
+      endassociate
+   enddo
+   along = merge(1_I4P, 2_I4P, self%readout_horizontal)
+   spacing = merge(2.0_R8P, 1.0_R8P, self%readout_horizontal) * font_size
+   height = DIGIT_HEIGHT * font_size
+   if (self%readout_size > 0.0_R8P) then
+      height = self%readout_size
+   elseif (fill) then
+      height = filling_height()
+   endif
+   call measure(height, sizes, block)
+   select case (trim(self%readout_h))
+   case ('right')
+      left = area(2) - block(1)
+   case ('center')
+      left = 0.5_R8P * (area(1) + area(2) - block(1))
+   case default
+      left = area(1)
+   endselect
+   select case (trim(self%readout_v))
+   case ('bottom')
+      top = area(4) - block(2)
+   case ('center')
+      top = 0.5_R8P * (area(3) + area(4) - block(2))
+   case default
+      top = area(3)
+   endselect
+   if (.not. fill) then
+      ! inside the plot area, the window clear of its border by a text cell at least: on a text device a smaller inset
+      ! puts the window on the border row or column
+      inset = [2.0_R8P * font_size, 2.0_R8P * LINE_HEIGHT * font_size]
+      left = left + merge(-inset(1), merge(0.0_R8P, inset(1), trim(self%readout_h) == 'center'), &
+                          trim(self%readout_h) == 'right')
+      top = top + merge(-inset(2), merge(0.0_R8P, inset(2), trim(self%readout_v) == 'center'), &
+                        trim(self%readout_v) == 'bottom')
+   endif
+   call backend%begin_group('fs-readouts')
+   ! the window padding, a text cell, keeps the label off the window border on a text device too
+   pad = [font_size, LINE_HEIGHT * font_size]
+   if (.not. fill .and. self%readout_opaque) call backend%rect(left - pad(1), top - pad(2), block(1) + 2.0_R8P * pad(1), &
+                                                               block(2) + 2.0_R8P * pad(2), FRAME_COLOR, WINDOW_FILL, &
+                                                               1.0_R8P)
+   p = merge(left, top, along == 1_I4P)
+   do r = 1_I4P, size(which, kind=I4P)
+      associate(series => self%series(which(r)))
+         if (along == 1_I4P) then
+            call backend%readout(p, top, height, glasses(r)%masks, series%title, glasses(r)%prefix, glasses(r)%suffix, &
+                                 series%style%color, font_size)
+         else
+            call backend%readout(left, p, height, glasses(r)%masks, series%title, glasses(r)%prefix, glasses(r)%suffix, &
+                                 series%style%color, font_size)
+         endif
+      endassociate
+      p = p + sizes(along, r) + spacing
+   enddo
+   call backend%end_group
+   contains
+      subroutine measure(h, extents, total)
+      !< Size of each readout and of the block at digit height `h`.
+      real(R8P),              intent(in)  :: h          !< Digit height [px].
+      real(R8P), allocatable, intent(out) :: extents(:,:) !< Width and height of each readout [px].
+      real(R8P),              intent(out) :: total(2)   !< Block width and height [px].
+      integer(I4P)                        :: k          !< Readout counter.
+
+      allocate(extents(2, size(which)))
+      do k = 1_I4P, size(which, kind=I4P)
+         extents(:, k) = backend%readout_extent(h, size(glasses(k)%masks, kind=I4P), self%series(which(k))%title, &
+                                                glasses(k)%prefix, glasses(k)%suffix, font_size)
+      enddo
+      total(along) = sum(extents(along, :)) + real(size(which) - 1, R8P) * spacing
+      total(3_I4P - along) = maxval(extents(3_I4P - along, :))
+      endsubroutine measure
+
+      function filling_height() result(h)
+      !< Largest digit height whose block fits `area`: readout sizes are affine in the digit height, measured at two
+      !< heights; a device whose readouts do not grow (text) keeps the default.
+      real(R8P)              :: h       !< Digit height [px].
+      real(R8P), allocatable :: e1(:,:) !< Readout sizes at a unit height [px].
+      real(R8P), allocatable :: e2(:,:) !< Readout sizes at twice the unit height [px].
+      real(R8P)              :: t1(2)   !< Block size at a unit height [px].
+      real(R8P)              :: t2(2)   !< Block size at twice the unit height [px].
+      real(R8P)              :: room(2) !< Box width and height [px].
+      integer(I4P)           :: d       !< Direction counter.
+
+      call measure(font_size, e1, t1)
+      call measure(2.0_R8P * font_size, e2, t2)
+      room = [area(2) - area(1), area(4) - area(3)]
+      h = huge(1.0_R8P)
+      do d = 1_I4P, 2_I4P
+         ! the block size along the stack is the sum of affine sizes (affine); across it, the largest one: bound each
+         if (d == along) then
+            call bound(t1(d), t2(d), room(d), h)
+         else
+            do s = 1_I4P, size(which, kind=I4P)
+               call bound(e1(d, s), e2(d, s), room(d), h)
+            enddo
+         endif
+      enddo
+      if (h == huge(1.0_R8P)) h = DIGIT_HEIGHT * font_size
+      h = max(h, font_size)
+      endfunction filling_height
+
+      pure subroutine bound(at1, at2, room, h)
+      !< Lower `h` to the height whose size, `at1` at one font size and `at2` at two, reaches `room`.
+      real(R8P), intent(in)    :: at1   !< Size at a digit height of one font size [px].
+      real(R8P), intent(in)    :: at2   !< Size at a digit height of two font sizes [px].
+      real(R8P), intent(in)    :: room  !< Room [px].
+      real(R8P), intent(inout) :: h     !< Digit height [px].
+      real(R8P)                :: slope !< Size per digit height.
+
+      slope = (at2 - at1) / font_size
+      if (slope > 0.0_R8P) h = min(h, font_size + (room - at1) / slope)
+      endsubroutine bound
+   endsubroutine draw_readouts
+
    pure subroutine key_layout(self, backend, font_size, room, grid, extent)
    !< Key grid and size: entries (titled series), columns (1, or as many as `room` holds when horizontal) and rows;
    !< each entry is the widest title, a gap and the sample, with a gap between entries.
@@ -438,7 +637,7 @@ contains
    entry = 0.0_R8P
    if (allocated(self%series)) then
       do s = 1_I4P, size(self%series, kind=I4P)
-         if (len(self%series(s)%title) == 0) cycle
+         if (len(self%series(s)%title) == 0 .or. self%is_readout(s)) cycle
          grid(1) = grid(1) + 1_I4P
          entry = max(entry, backend%text_width(self%series(s)%title, '', font_size))
       enddo
@@ -542,6 +741,15 @@ contains
       endsubroutine draw_bars
    endsubroutine draw_series
 
+   elemental function is_readout(self, s) result(is)
+   !< Whether the `s`-th series is a readout.
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P),       intent(in) :: s    !< Series index.
+   logical                        :: is   !< Readout.
+
+   is = self%series(s)%style%with == WITH_READOUT
+   endfunction is_readout
+
    pure function has_title(self) result(has)
    !< Whether the panel has a non-empty title.
    class(axes_object), intent(in) :: self !< Panel.
@@ -624,6 +832,7 @@ contains
    ymax = -huge(1.0_R8P)
    found = .false.
    do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%is_readout(s)) cycle
       k = merge(2_I4P, 1_I4P, self%series(s)%y2)
       if (k == 2_I4P) then
          call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k), &
@@ -667,6 +876,24 @@ contains
       i = i + merge(2_I4P, 1_I4P, two)
    enddo
    endsubroutine axes_names
+
+   pure subroutine readout_position(words, horizontal, vertical, layout, bad)
+   !< Update the readout block position from the `set key` position words inside the plot area (see `key_position`):
+   !< `outside`, `below` and `above` are not readout positions.
+   character(len=*),              intent(in)    :: words      !< Blank separated words.
+   character(len=6),              intent(inout) :: horizontal !< Horizontal position.
+   character(len=6),              intent(inout) :: vertical   !< Vertical position.
+   logical,                       intent(inout) :: layout     !< Readouts side by side.
+   character(len=:), allocatable, intent(out)   :: bad        !< First word not a position, empty if none.
+   logical                                      :: outside    !< Outside the plot area.
+   character(len=6)                             :: margin     !< Margin.
+
+   outside = .false.
+   margin = ''
+   call key_position(words, horizontal, vertical, outside, margin, layout, bad)
+   if (len(bad) == 0 .and. (outside .or. len_trim(margin) > 0)) &
+      bad = 'outside/above/below (readouts lie inside the plot area)'
+   endsubroutine readout_position
 
    pure subroutine key_position(words, horizontal, vertical, outside, margin, layout, bad)
    !< Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,

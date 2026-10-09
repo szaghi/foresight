@@ -43,6 +43,7 @@ that did what it says.
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
+| `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
@@ -67,7 +68,8 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`); foresight's `readout`, see [below](#readouts) |
+| `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
@@ -292,6 +294,42 @@ unset multiplot
 Panels are drawn in order, without a background: in the HTML page the mouse acts on the topmost panel under it.
 On the standard output (`set terminal dumb` or `block`), a multiplot is printed once, complete, at `unset multiplot`; files are
 rewritten at each plot, so that a watched page shows the panels done so far.
+
+## Readouts
+
+A foresight extension, not gnuplot (gnuplot rejects these scripts): `with readout` shows the last finite value of an
+item in seven-segment digits, as the digital instrument clusters of 1980s cars. It is made for live monitoring with
+[`--watch`](monitoring) and for showcase pages, not for publication figures.
+
+```gnuplot
+set multiplot title 'Run monitor'
+set origin 0,0.68; set size 1,0.32
+set readout horizontal
+plot 'run.dat' u 1 w readout format '%4.0f' t 'ITER', '' u 2 w readout format '%9.2e' t 'CONTINUITY'
+set origin 0,0; set size 1,0.68
+set readout vertical top right; unset key
+plot 'run.dat' u 1:5 w l t 'cd', '' u 1:5 w readout format '%6.4f' t 'CD'
+unset multiplot
+```
+
+<Plot name="cb_readout" svg :width="560" :height="420" />
+
+- **The value** is the last point whose y is finite, after `using`, `every`, `index` and `smooth`; ranges, log axes
+  and zoom do not apply. A readout takes no part in the autoscale and has no key entry: in a panel with curves, the
+  curves alone set the axes.
+- **The glass** is set by the format, never by the value, so a watched readout keeps its width: `format` is a
+  [tick format](#ticks-and-label-formats) with a field width (`%9.2e`, not `%.2e`), without `%h`. Each character of
+  the field is a cell, except the decimal point, a segment of the cell before it: `%9.2e` makes 8 cells. A `+` and
+  the exponent sign `+` light nothing. Unlit segments are drawn faintly, as on the real displays.
+- **No reading** (no finite value yet) or a value wider than the field lights a dash in every cell; digits are never
+  cut. The text around the conversion, `'%5.2f h'`, is printed beside the glass: a unit.
+- **The label** is the item title; `lc` colors the digits; `lw`, `dt`, `pt`, `ps` and `axes` are errors on a readout.
+- **Placement.** The readouts of a panel form a block, a column (`vertical`, the default) or a row (`horizontal`),
+  placed inside the plot area by the `set key` words (top left by default, the key being top right) over an opaque
+  window hiding the curves below (`noopaque`: none). A panel of readouts alone has no axes: the digits grow until the
+  block fills it, unless `set readout size H` fixes their height [px] (2.5 font sizes by default).
+- **In text** (`dumb`, `block`), the digits are drawn with `_` and `|`, 3 rows of 4 characters per cell, in the item
+  color with `ansi`; the unlit segments are not drawn. In the HTML page, zoom and follow mode leave readouts alone.
 
 ## Not supported
 

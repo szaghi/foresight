@@ -14,7 +14,7 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_names, axes_object, key_position
+use foresight_axes, only : axes_names, axes_object, key_position, readout_position
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
@@ -64,6 +64,7 @@ type :: figure_object
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
+      procedure, pass(self) :: set_readout     !< Readouts: on/off, position, window, digit size.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
@@ -145,7 +146,7 @@ contains
    self%panels(self%current) = settings
    endsubroutine next_panel
 
-   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt)
+   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -153,6 +154,10 @@ contains
    !< `axes='x1y2'` plots the series against the second y axis, scaled on its own. `pt` is gnuplot's point type (0 a
    !< dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond,
    !< 14-15 pentagon, odd ones from 5 filled; cycling every 15), 9 px wide at `ps` 1; without it points are round dots.
+   !<
+   !< `with='readout'` (a foresight extension) shows the last finite `y` in seven-segment digits, titled by `title`,
+   !< on a glass of `format` (a printf conversion with a field width, `'%9.2e'`; `'%10.3e'` if absent): see
+   !< foresight_readout and `set_readout`. A readout takes `lc` only among the style options.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -168,10 +173,12 @@ contains
    real(R8P),            intent(in), optional :: yhigh(:) !< Vertical error bar ends.
    character(len=*),     intent(in), optional :: axes     !< Axes of the series: `x1y1` (default) or `x1y2`.
    integer(I4P),         intent(in), optional :: pt       !< gnuplot point type, >= 0.
+   character(len=*),     intent(in), optional :: format   !< Readout format.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
-                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt)
+                                             xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
+                                             format=format)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -370,6 +377,34 @@ contains
       found = len(word) > 0 .and. index(' '//words//' ', ' '//word//' ') > 0
       endfunction is_word
    endsubroutine set_text
+
+   subroutine set_readout(self, on, position, opaque, size)
+   !< Draw the readouts (`on` absent or true) or not; `position` takes the `set key` words inside the plot area
+   !< (`left`, `right`, `center`, `top`, `bottom`; top left by default) and `horizontal` or `vertical` (the default) for
+   !< a row or a column of readouts; `opaque` draws a window behind them (default true); `size` is the digit height
+   !< [px], 0 for the default (2.5 font sizes, growing to fill a panel of readouts alone).
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   logical,              intent(in), optional :: on       !< Readouts on.
+   character(len=*),     intent(in), optional :: position !< Position words.
+   logical,              intent(in), optional :: opaque   !< Window behind the readouts.
+   real(R8P),            intent(in), optional :: size     !< Digit height [px].
+   character(len=:), allocatable              :: bad      !< Unknown position word.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%readout = .true.
+      if (present(on)) panel%readout = on
+      if (present(position)) then
+         call readout_position(position, panel%readout_h, panel%readout_v, panel%readout_horizontal, bad)
+         if (len(bad) > 0) error stop 'foresight: set_readout: unknown position "'//bad//'"'
+      endif
+      if (present(opaque)) panel%readout_opaque = opaque
+      if (present(size)) then
+         if (size < 0.0_R8P) error stop 'foresight: set_readout: the digit size must not be negative'
+         panel%readout_size = size
+      endif
+   endassociate
+   endsubroutine set_readout
 
    pure subroutine set_refresh(self, seconds)
    !< Make the HTML page reload itself every `seconds` (0 disables): live view of a file rewritten by a running job.

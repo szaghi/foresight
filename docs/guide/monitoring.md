@@ -47,6 +47,20 @@ no X forwarding, no port to open. `block braille` draws with Braille dots, 2 x 4
 series ([Output Formats](output-formats#block-characters)): the curves of a terminal plot then read almost as a
 picture.
 
+## A cockpit for a run
+
+`with readout` shows the newest value of a column in seven-segment digits, as a 1980s car dashboard: the iteration,
+the residual, a coefficient, beside or over the curves. A readout follows its file at every cycle, like any plot item.
+
+```gnuplot
+set readout horizontal
+plot 'run.dat' u 1 w readout format '%6.0f' t 'ITER', '' u 2 w readout format '%9.2e' t 'RESIDUAL'
+```
+
+The glass is fixed by the format, so the digits never jump between two reloads; a log not written yet shows dashes.
+In the terminal the digits are drawn with characters, so the cockpit works over ssh too. See
+[Readouts](gnuplot-subset#readouts) and the [cookbook](/manual/cookbook#seven-segment-readouts).
+
 ## Robustness
 
 - An error in one cycle — a data file briefly missing, a script saved with a typo — is reported and watching goes on.

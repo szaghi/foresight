@@ -17,7 +17,8 @@ type :: series_object
    real(R8P), allocatable        :: xhigh(:) !< Horizontal error bar ends, allocated for x error bars.
    real(R8P), allocatable        :: ylow(:)  !< Vertical error bar starts, allocated for y error bars.
    real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
-   character(len=:), allocatable :: title !< Key title, empty for none.
+   character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
+   character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains

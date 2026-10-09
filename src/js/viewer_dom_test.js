@@ -1,9 +1,11 @@
 // DOM tests of the viewer: key entries hiding series, linked x zoom of the panels, following the
 // end of the data, and the state kept in the URL across a reload. They run src/js/viewer.js (not
 // the copy embedded in the page) on the tutorial dashboard, docs/public/examples/ch7.html: two
-// panels over the same iterations, with three and one series, markers and error bar caps. The page
-// is parsed by linkedom; the SVG geometry the viewer asks for (bounding boxes, screen transforms)
-// is stubbed, page pixels being client coordinates.
+// panels over the same iterations, with three and one series, markers and error bar caps. Then on
+// a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
+// entry, and neither zoom nor follow mode touch it. The page is parsed by linkedom; the SVG
+// geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
+// client coordinates.
 //
 // Usage: npm ci --prefix src/js && node src/js/viewer_dom_test.js
 //        (also `fobis rule --ex test-js-dom`, or `npm test --prefix src/js` for both viewer tests)
@@ -14,8 +16,10 @@ var path = require("path");
 var parseHTML = require("linkedom").parseHTML;
 
 var examples = path.join(__dirname, "..", "..", "docs", "public", "examples");
-var page = fs.readFileSync(path.join(examples, "ch7.html"), "utf8")
-  .replace(/<script>[\s\S]*<\/script>/, "");
+function strip(file) {
+  return fs.readFileSync(file, "utf8").replace(/<script>[\s\S]*<\/script>/, "");
+}
+var page = strip(path.join(examples, "ch7.html"));
 var viewer = fs.readFileSync(path.join(__dirname, "viewer.js"), "utf8");
 var checks = [];
 
@@ -131,6 +135,22 @@ check("and its markers and caps", Array.prototype.every.call(
   function (n) { return n.getAttribute("display") === "none"; }));
 b0 = box(0);
 check("reload keeps following", close(b0[0] + b0[2], 1) && b0[2] < 1);
+
+// a readout over a curve: drawn once, outside the zoomable plot area, never a series nor a key entry
+page = strip(path.join(__dirname, "..", "tests", "golden", "readout_mixed.html"));
+p = load("");
+var readout = panel(0).querySelector(".fs-readouts"), drawn = readout.innerHTML;
+check("readout in the panel, one key entry (the curve)",
+  readout.querySelectorAll(".fs-readout").length === 1 &&
+  panel(0).querySelectorAll(".fs-key-entry").length === 1 &&
+  panel(0).querySelectorAll(".fs-series").length === 1 &&
+  readout.closest(".fs-plot") === null);
+wheel(0);
+check("zoom leaves the readout", box(0)[2] < 1 && readout.innerHTML === drawn);
+key("a");
+for (var k = 0; k < 8; k++) wheel(0, {shiftKey: true});
+key("f");
+check("follow leaves the readout", box(0)[3] < 1 && readout.innerHTML === drawn);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

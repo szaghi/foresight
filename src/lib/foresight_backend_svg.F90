@@ -21,6 +21,14 @@ integer(I4P),     parameter :: PX_DECIMALS    = 2_I4P                        !< 
 integer(I4P),     parameter :: UNIT_DECIMALS  = 6_I4P                        !< Decimals of unit-square coordinates.
 integer(I4P),     parameter :: PAIRS_PER_LINE = 8_I4P                        !< Coordinate pairs per output line.
 character(len=*), parameter :: FONT_FAMILY    = 'Arial,Helvetica,sans-serif' !< Default font family.
+! readout geometry, in digit heights
+real(R8P),        parameter :: DIGIT_WIDTH    = 0.52_R8P   !< Digit width, between the vertical segment axes.
+real(R8P),        parameter :: DIGIT_PITCH    = 0.86_R8P   !< Distance between the cells.
+real(R8P),        parameter :: SEGMENT_WIDTH  = 0.13_R8P   !< Segment thickness, also the decimal point side.
+real(R8P),        parameter :: POINT_OFFSET   = 0.64_R8P   !< Decimal point left side, from its cell.
+real(R8P),        parameter :: SLANT          = 0.14054_R8P !< Slant: tan(8 deg), the bottom shifted left.
+real(R8P),        parameter :: SEGMENT_GAP    = 0.35_R8P   !< Gap between segment ends [segment thickness].
+character(len=*), parameter :: GHOST_OPACITY  = '0.07'     !< Opacity of the unlit segments.
 
 type, extends(backend_object) :: backend_svg
    !< SVG output device.
@@ -50,6 +58,8 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
       procedure, pass(self) :: text_width
+      procedure, pass(self) :: readout
+      procedure, pass(self) :: readout_extent
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
       procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
@@ -384,6 +394,80 @@ contains
    width = 0.55_R8P * font_size * (real(len(string), R8P) + 0.75_R8P * real(len(sup), R8P))
    endfunction text_width
 
+   subroutine readout(self, x, y, height, masks, label, prefix, suffix, color, font_size)
+   !< Seven-segment readout of top-left corner (`x`, `y`) [px], a `<g class="fs-readout">`: the bold label above a
+   !< glass slanted by 8 degrees, the unlit segments drawn faintly (`GHOST_OPACITY`), the unit text beside it.
+   class(backend_svg), intent(inout) :: self      !< Device.
+   real(R8P),          intent(in)    :: x         !< Left side [px].
+   real(R8P),          intent(in)    :: y         !< Top side [px].
+   real(R8P),          intent(in)    :: height    !< Digit height [px].
+   integer(I4P),       intent(in)    :: masks(:)  !< Segments of each cell.
+   character(len=*),   intent(in)    :: label     !< Label, empty for none.
+   character(len=*),   intent(in)    :: prefix    !< Text before the glass.
+   character(len=*),   intent(in)    :: suffix    !< Text after the glass.
+   character(len=*),   intent(in)    :: color     !< Color of the lit segments.
+   real(R8P),          intent(in)    :: font_size !< Font size of the texts [px].
+   character(len=:), allocatable     :: lit       !< Path data of the lit segments.
+   character(len=:), allocatable     :: ghost     !< Path data of the unlit segments.
+   character(len=:), allocatable     :: piece     !< Path data of a segment.
+   real(R8P)                         :: geometry(5) !< Glass left, top, width; prefix width; label row [px].
+   real(R8P)                         :: ox        !< Cell left [px].
+   real(R8P)                         :: t         !< Segment thickness [px].
+   integer(I4P)                      :: k         !< Cell counter.
+   integer(I4P)                      :: b         !< Segment bit.
+
+   geometry = glass_geometry(self, x, y, height, size(masks, kind=I4P), label, prefix, font_size)
+   t = SEGMENT_WIDTH * height
+   lit = ''
+   ghost = ''
+   do k = 1_I4P, size(masks, kind=I4P)
+      ox = real(k - 1_I4P, R8P) * DIGIT_PITCH * height
+      do b = 0_I4P, 7_I4P
+         if (b < 7_I4P) then
+            piece = segment_path(ox, b, height)
+         else
+            piece = 'M'//px(ox + POINT_OFFSET * height)//','//px(height - 0.5_R8P * t)//'h'//px(t)//'v'//px(t)//'h'// &
+                    px(-t)//'Z'
+         endif
+         if (btest(masks(k), b)) then
+            lit = lit//piece
+         else
+            ghost = ghost//piece
+         endif
+      enddo
+   enddo
+   call self%put('<g class="fs-readout">')
+   if (len(label) > 0) call self%put('<text x="'//px(x)//'" y="'//px(y + font_size)//'" font-weight="bold">'// &
+                                     xml_escape(label)//'</text>')
+   call self%put('<g transform="translate('//px(geometry(1))//' '//px(geometry(2))//') skewX(-8)" fill="'//color//'">')
+   if (len(ghost) > 0) call self%put('<path fill-opacity="'//GHOST_OPACITY//'" d="'//ghost//'"/>')
+   if (len(lit) > 0) call self%put('<path d="'//lit//'"/>')
+   call self%put('</g>')
+   if (len(prefix) > 0) call self%text(x, geometry(2) + height, prefix, 'start')
+   if (len(suffix) > 0) call self%text(geometry(1) + geometry(3) + 0.5_R8P * font_size, geometry(2) + height, suffix, &
+                                       'start')
+   call self%put('</g>')
+   endsubroutine readout
+
+   pure function readout_extent(self, height, cells, label, prefix, suffix, font_size) result(extent)
+   !< Width and height [px] of a readout: label row, glass with its slant and segment overhangs, unit text.
+   class(backend_svg), intent(in) :: self      !< Device.
+   real(R8P),          intent(in) :: height    !< Digit height [px].
+   integer(I4P),       intent(in) :: cells     !< Glass cells.
+   character(len=*),   intent(in) :: label     !< Label, empty for none.
+   character(len=*),   intent(in) :: prefix    !< Text before the glass.
+   character(len=*),   intent(in) :: suffix    !< Text after the glass.
+   real(R8P),          intent(in) :: font_size !< Font size of the texts [px].
+   real(R8P)                      :: extent(2) !< Width and height [px].
+   real(R8P)                      :: geometry(5) !< Glass left, top, width; prefix width; label row [px].
+
+   geometry = glass_geometry(self, 0.0_R8P, 0.0_R8P, height, cells, label, prefix, font_size)
+   extent(1) = geometry(1) + geometry(3)
+   if (len(suffix) > 0) extent(1) = extent(1) + 0.5_R8P * font_size + self%text_width(suffix, '', font_size)
+   if (len(label) > 0) extent(1) = max(extent(1), self%text_width(label, '', font_size))
+   extent(2) = geometry(5) + (1.0_R8P + SEGMENT_WIDTH) * height
+   endfunction readout_extent
+
    ! building blocks for extending devices
    subroutine close_file(self)
    !< Close the stream and rename `<file>.tmp` over `<file>`.
@@ -585,6 +669,86 @@ contains
       p = p//'Z'
       endfunction polygon
    endfunction marker_path
+
+   pure function glass_geometry(self, x, y, height, cells, label, prefix, font_size) result(geometry)
+   !< Glass of a readout of top-left corner (`x`, `y`): origin of its first cell (left, top of the digits), width up to
+   !< the last decimal point, the prefix width and the label row height [px]. The origin leaves room for the slant of
+   !< the digit bottoms and for the half thickness of the segments.
+   class(backend_svg), intent(in) :: self        !< Device.
+   real(R8P),          intent(in) :: x           !< Left side [px].
+   real(R8P),          intent(in) :: y           !< Top side [px].
+   real(R8P),          intent(in) :: height      !< Digit height [px].
+   integer(I4P),       intent(in) :: cells       !< Glass cells.
+   character(len=*),   intent(in) :: label       !< Label, empty for none.
+   character(len=*),   intent(in) :: prefix      !< Text before the glass.
+   real(R8P),          intent(in) :: font_size   !< Font size of the texts [px].
+   real(R8P)                      :: geometry(5) !< Glass left, top, width; prefix width; label row [px].
+
+   geometry(4) = 0.0_R8P
+   if (len(prefix) > 0) geometry(4) = self%text_width(prefix, '', font_size) + 0.5_R8P * font_size
+   geometry(5) = 0.0_R8P
+   if (len(label) > 0) geometry(5) = 1.25_R8P * font_size
+   geometry(1) = x + geometry(4) + (SLANT + 0.5_R8P * SEGMENT_WIDTH) * height
+   geometry(2) = y + geometry(5) + 0.5_R8P * SEGMENT_WIDTH * height
+   geometry(3) = (real(cells - 1_I4P, R8P) * DIGIT_PITCH + POINT_OFFSET + SEGMENT_WIDTH) * height
+   endfunction glass_geometry
+
+   pure function segment_path(ox, segment, height) result(d)
+   !< Path data of the hexagon of `segment` (0-6: a, b, c, d, e, f, g) of the cell of left side `ox`, digits `height`
+   !< px high, in glass coordinates (origin at the top left of the first cell).
+   real(R8P),    intent(in)      :: ox      !< Cell left [px].
+   integer(I4P), intent(in)      :: segment !< Segment, 0-6.
+   real(R8P),    intent(in)      :: height  !< Digit height [px].
+   character(len=:), allocatable :: d       !< Path data.
+   real(R8P)                     :: w       !< Digit width [px].
+   real(R8P)                     :: g       !< Gap at segment ends [px].
+   real(R8P)                     :: m       !< Middle height [px].
+
+   w = DIGIT_WIDTH * height
+   g = SEGMENT_GAP * SEGMENT_WIDTH * height
+   m = 0.5_R8P * height
+   select case (segment)
+   case (0_I4P)
+      d = across(0.0_R8P)
+   case (1_I4P)
+      d = along(w, g, m - g)
+   case (2_I4P)
+      d = along(w, m + g, height - g)
+   case (3_I4P)
+      d = across(height)
+   case (4_I4P)
+      d = along(0.0_R8P, m + g, height - g)
+   case (5_I4P)
+      d = along(0.0_R8P, g, m - g)
+   case default
+      d = across(m)
+   endselect
+   contains
+      pure function across(v) result(p)
+      !< Horizontal hexagon at height `v`, between the vertical segments.
+      real(R8P), intent(in)         :: v !< Ordinate [px].
+      character(len=:), allocatable :: p !< Path data.
+      real(R8P)                     :: h !< Half thickness [px].
+
+      h = 0.5_R8P * SEGMENT_WIDTH * height
+      p = 'M'//px(ox + g)//','//px(v)//'L'//px(ox + g + h)//','//px(v - h)//'L'//px(ox + w - g - h)//','//px(v - h)// &
+          'L'//px(ox + w - g)//','//px(v)//'L'//px(ox + w - g - h)//','//px(v + h)//'L'//px(ox + g + h)//','// &
+          px(v + h)//'Z'
+      endfunction across
+
+      pure function along(u, v1, v2) result(p)
+      !< Vertical hexagon at `u` from `v1` to `v2`.
+      real(R8P), intent(in)         :: u  !< Abscissa in the cell [px].
+      real(R8P), intent(in)         :: v1 !< Top [px].
+      real(R8P), intent(in)         :: v2 !< Bottom [px].
+      character(len=:), allocatable :: p  !< Path data.
+      real(R8P)                     :: h  !< Half thickness [px].
+
+      h = 0.5_R8P * SEGMENT_WIDTH * height
+      p = 'M'//px(ox + u)//','//px(v1)//'L'//px(ox + u + h)//','//px(v1 + h)//'L'//px(ox + u + h)//','//px(v2 - h)// &
+          'L'//px(ox + u)//','//px(v2)//'L'//px(ox + u - h)//','//px(v2 - h)//'L'//px(ox + u - h)//','//px(v1 + h)//'Z'
+      endfunction along
+   endfunction segment_path
 
    pure function dash_attribute(dasharray) result(attribute)
    !< ` stroke-dasharray="..."` attribute, empty for solid lines.

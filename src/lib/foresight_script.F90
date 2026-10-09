@@ -25,6 +25,10 @@ module foresight_script
 !<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
 !<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
+!< - foresight extensions: `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
+!<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
+!<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
+!<   [opaque|noopaque] [size H]`, `unset readout`;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -36,6 +40,7 @@ use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
+use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_style, only : default_color
 use foresight_ticks, only : tics_object
@@ -286,6 +291,8 @@ contains
    character(len=:), allocatable                :: title     !< Item title.
    character(len=:), allocatable                :: with      !< Item style.
    character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
+   character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
+   character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -372,6 +379,8 @@ contains
       title_column = -1_I4P
       axes = 'x1y1'
       filter = ''
+      if (allocated(format)) deallocate(format)
+      shaping = ''
       line = line_style_object()
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
@@ -401,7 +410,7 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars)', iostat, iomsg)
+                         'xerrorbars, xyerrorbars, readout)', iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
@@ -418,7 +427,19 @@ contains
                call fail('plot: smooth applies to data files, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
+         elseif (word == 'format') then
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('plot: format needs a quoted string', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind /= TOKEN_STRING) then
+               call fail('plot: format needs a quoted string', iostat, iomsg)
+               return
+            endif
+            format = tokens(i)%text
          elseif (keyword(word, 'axes', 2_I4P)) then
+            shaping = word
             if (.not. next_word(tokens, i, axes, iostat, iomsg)) return
             if (axes /= 'x1y1' .and. axes /= 'x1y2') then
                call fail('plot: axes x1y1 or x1y2 expected, found "'//axes//'" (no second x axis)', iostat, iomsg)
@@ -454,6 +475,8 @@ contains
             if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
             call apply_line_style(self%line_styles, number, line)
          elseif (is_line_option(word)) then
+            if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
+                       keyword(word, 'linetype', 5_I4P))) shaping = word
             if (.not. line_option(tokens, i, line, iostat, iomsg)) then
                iomsg = 'plot: '//iomsg
                return
@@ -464,6 +487,21 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      if (with == 'readout') then
+         if (len(shaping) > 0) then
+            call fail('plot: a readout takes lc only among the style options, not "'//shaping//'"', iostat, iomsg)
+            return
+         endif
+         if (allocated(format)) then
+            if (len(readout_check(format)) > 0) then
+               call fail('plot: '//readout_check(format), iostat, iomsg)
+               return
+            endif
+         endif
+      elseif (allocated(format)) then
+         call fail('plot: format applies to readouts only (with readout)', iostat, iomsg)
+         return
+      endif
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') title = written
@@ -588,8 +626,13 @@ contains
          endif
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
-      call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
-                            xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt)
+      if (with == 'readout') then
+         ! a line style may carry widths and sizes: a readout keeps its color only
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, format=format)
+      else
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
+                               xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt)
+      endif
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
@@ -762,6 +805,8 @@ contains
       call self%figure%set_grid(.true.)
    elseif (keyword(option, 'key', 1_I4P)) then
       call key_option
+   elseif (option == 'readout') then
+      call readout_option
    elseif (keyword(option, 'output', 2_I4P)) then
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) then
@@ -999,6 +1044,55 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine readout_option
+      !< `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical] [opaque|noopaque]
+      !< [size H]`, a foresight extension.
+      character(len=:), allocatable :: words  !< Position words.
+      logical                       :: on     !< Readouts on.
+      logical, allocatable          :: opaque !< Window, unallocated if not given.
+      real(R8P), allocatable        :: digits !< Digit height, unallocated if not given.
+      real(R8P)                     :: v      !< Parsed number.
+
+      on = .true.
+      words = ''
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         select case (tokens(i)%text)
+         case ('on')
+            on = .true.
+         case ('off')
+            on = .false.
+         case ('opaque')
+            opaque = .true.
+         case ('noopaque')
+            opaque = .false.
+         case ('size')
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set readout: size needs a digit height [px]', iostat, iomsg)
+               return
+            endif
+            if (.not. to_number(tokens(i)%text, v)) then
+               call fail('set readout: size needs a digit height [px], found "'//tokens(i)%text//'"', iostat, iomsg)
+               return
+            endif
+            if (v < 0.0_R8P) then
+               call fail('set readout: size must not be negative', iostat, iomsg)
+               return
+            endif
+            digits = v
+         case ('left', 'right', 'center', 'top', 'bottom', 'horizontal', 'horiz', 'vertical', 'vert')
+            words = words//' '//tokens(i)%text
+         case default
+            call fail('set readout: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, '// &
+                      'center, top, bottom, horizontal, vertical, opaque, noopaque, size H)', iostat, iomsg)
+            return
+         endselect
+         i = i + 1_I4P
+      enddo
+      call self%figure%set_readout(on, position=words, opaque=opaque, size=digits)
+      endsubroutine readout_option
 
       subroutine pair_option(default)
       !< `set origin [X,Y]` and `set size [W,H]`, page fractions; no values restore `default`.
@@ -1315,6 +1409,8 @@ contains
       call self%figure%set_grid(.false.)
    elseif (keyword(option, 'key', 1_I4P)) then
       call self%figure%set_key(.false.)
+   elseif (option == 'readout') then
+      call self%figure%set_readout(.false.)
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then
@@ -1390,6 +1486,8 @@ contains
       style = 'xerrorbars'
    case ('xyerr', 'xyerrorbars')
       style = 'xyerrorbars'
+   case ('readout')
+      style = 'readout'
    case default
       style = ''
    endselect
@@ -1699,7 +1797,7 @@ contains
    is = keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. keyword(word, 'every', 2_I4P) .or. &
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
-        keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word)
+        keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format'
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

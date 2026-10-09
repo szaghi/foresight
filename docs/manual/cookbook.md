@@ -179,6 +179,20 @@ averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 `block` draws with Unicode characters of 2 x 4 dots (`braille`), 2 x 3 (`sextants`), 2 x 2 (`quadrants`, the default)
 or 1 x 2 (`half`). Add `ansi` (or `ansi256`, `ansirgb`) to draw each series in its color, in `dumb` as well.
 
+## Seven-segment readouts
+
+<<< @/examples/snippets/cb_readout.gp{gnuplot}
+
+<Plot name="cb_readout" svg :width="560" :height="420" />
+
+A foresight extension: the last finite value of each item in seven-segment digits, its glass fixed by the field width
+of `format`. A panel of readouts alone fills itself with digits; over a curve they lie in a window, placed as the key.
+See [Readouts](/guide/gnuplot-subset#readouts).
+
+<<< @/examples/snippets/cb_readout_dumb.gp{gnuplot}
+
+<<< @/examples/output/cb_readout_dumb.txt{text}
+
 ## From Fortran: gaps in the data
 
 NaN values are gaps, as gnuplot's undefined points; `save` writes any of the formats, `-` text on the standard output.

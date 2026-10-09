@@ -57,6 +57,8 @@ type, abstract :: backend_object
       procedure(dots_interface),            pass(self), deferred :: data_dots       !< Dots or markers [unit square].
       procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
       procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
+      procedure(readout_interface),         pass(self), deferred :: readout         !< Seven-segment readout [px].
+      procedure(readout_extent_interface),  pass(self), deferred :: readout_extent  !< Readout size [px].
 endtype backend_object
 
 abstract interface
@@ -166,6 +168,37 @@ abstract interface
    real(R8P),             intent(in) :: font_size !< Font size [px].
    real(R8P)                         :: width     !< Width [px].
    endfunction text_width_interface
+
+   subroutine readout_interface(self, x, y, height, masks, label, prefix, suffix, color, font_size)
+   !< Seven-segment readout (see foresight_readout) of top-left corner (`x`, `y`) [px]: `label` above a glass of
+   !< `size(masks)` cells of digits `height` px high, each cell lit by its mask (bits 0-6 the segments a-g, bit 7 the
+   !< decimal point) in `color`, the unit text `prefix` and `suffix` on its sides; text at `font_size`. It covers
+   !< `readout_extent`.
+   import :: backend_object, I4P, R8P
+   class(backend_object), intent(inout) :: self      !< Device.
+   real(R8P),             intent(in)    :: x         !< Left side [px].
+   real(R8P),             intent(in)    :: y         !< Top side [px].
+   real(R8P),             intent(in)    :: height    !< Digit height [px].
+   integer(I4P),          intent(in)    :: masks(:)  !< Segments of each cell.
+   character(len=*),      intent(in)    :: label     !< Label, empty for none.
+   character(len=*),      intent(in)    :: prefix    !< Text before the glass.
+   character(len=*),      intent(in)    :: suffix    !< Text after the glass.
+   character(len=*),      intent(in)    :: color     !< Color of the lit segments.
+   real(R8P),             intent(in)    :: font_size !< Font size of the texts [px].
+   endsubroutine readout_interface
+
+   pure function readout_extent_interface(self, height, cells, label, prefix, suffix, font_size) result(extent)
+   !< Width and height [px] of a readout (see `readout_interface`) of `cells` cells of digits `height` px high.
+   import :: backend_object, I4P, R8P
+   class(backend_object), intent(in) :: self      !< Device.
+   real(R8P),             intent(in) :: height    !< Digit height [px].
+   integer(I4P),          intent(in) :: cells     !< Glass cells.
+   character(len=*),      intent(in) :: label     !< Label, empty for none.
+   character(len=*),      intent(in) :: prefix    !< Text before the glass.
+   character(len=*),      intent(in) :: suffix    !< Text after the glass.
+   real(R8P),             intent(in) :: font_size !< Font size of the texts [px].
+   real(R8P)                         :: extent(2) !< Width and height [px].
+   endfunction readout_extent_interface
 
    subroutine begin_plot_area_interface(self, x, y, width, height)
    !< Open the clipped plot area of top-left corner (`x`, `y`) and size `width` x `height` [px].

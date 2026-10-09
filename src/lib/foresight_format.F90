@@ -29,6 +29,7 @@ public :: int_str
 public :: parse_decimal
 public :: real_from_decimal
 public :: real_str
+public :: split_format
 public :: xml_escape
 
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
@@ -362,31 +363,6 @@ contains
    label = prefix//sign//body//suffix
    endsubroutine format_decimal
 
-   ! private procedures
-   pure function scale10(x, e) result(y)
-   !< `x * 10**e`, in steps of at most 10**22 (exact powers of ten) to never overflow an intermediate.
-   real(R8P),    intent(in) :: x  !< Value.
-   integer(I4P), intent(in) :: e  !< Decimal exponent.
-   real(R8P)                :: y  !< Scaled value.
-   integer(I4P)             :: k  !< Remaining exponent.
-
-   y = x
-   k = e
-   do while (k > 22_I4P)
-      y = y * 1.0e22_R8P
-      k = k - 22_I4P
-   enddo
-   do while (k < -22_I4P)
-      y = y / 1.0e22_R8P
-      k = k + 22_I4P
-   enddo
-   if (k >= 0_I4P) then
-      y = y * 10.0_R8P**k
-   else
-      y = y / 10.0_R8P**(-k)
-   endif
-   endfunction scale10
-
    pure subroutine split_format(format, prefix, flags, width, prec, type, suffix, message)
    !< Split a tick format into its text around the one conversion and the conversion fields.
    character(len=*),              intent(in)  :: format  !< Format.
@@ -486,6 +462,32 @@ contains
    enddo
    if (.not. found) message = 'no conversion in "'//format//'"'
    endsubroutine split_format
+
+   ! private procedures
+   pure function scale10(x, e) result(y)
+   !< `x * 10**e`, in steps of at most 10**22 (exact powers of ten) to never overflow an intermediate.
+   real(R8P),    intent(in) :: x  !< Value.
+   integer(I4P), intent(in) :: e  !< Decimal exponent.
+   real(R8P)                :: y  !< Scaled value.
+   integer(I4P)             :: k  !< Remaining exponent.
+
+   y = x
+   k = e
+   do while (k > 22_I4P)
+      y = y * 1.0e22_R8P
+      k = k - 22_I4P
+   enddo
+   do while (k < -22_I4P)
+      y = y / 1.0e22_R8P
+      k = k + 22_I4P
+   enddo
+   if (k >= 0_I4P) then
+      y = y * 10.0_R8P**k
+   else
+      y = y / 10.0_R8P**(-k)
+   endif
+   endfunction scale10
+
 
    pure function round_digits(digits, drop) result(rounded)
    !< The decimal integer `digits` with its last `drop` digits removed, rounded half to even; `drop <= 0` appends

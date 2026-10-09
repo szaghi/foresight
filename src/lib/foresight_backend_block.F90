@@ -31,6 +31,7 @@ type, extends(backend_dumb) :: backend_block
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: cell
+      procedure, pass(self) :: clear
       procedure, pass(self) :: polyline
       procedure, pass(self) :: px_point
       procedure, pass(self) :: px_segment
@@ -116,6 +117,23 @@ contains
    text = utf8(code_point(self%charset, bits))
    endfunction cell
 
+   subroutine clear(self, x, y, width, height)
+   !< Blank the cells and the dots of the box of top-left corner (`x`, `y`) and size `width` x `height` [px].
+   class(backend_block), intent(inout) :: self   !< Device.
+   real(R8P),            intent(in)    :: x      !< Left side [px].
+   real(R8P),            intent(in)    :: y      !< Top side [px].
+   real(R8P),            intent(in)    :: width  !< Width [px].
+   real(R8P),            intent(in)    :: height !< Height [px].
+   integer(I4P)                        :: i(2)   !< First and last dot columns.
+   integer(I4P)                        :: j(2)   !< First and last dot rows.
+
+   call self%backend_dumb%clear(x, y, width, height)
+   ! whole cells, as the text grid
+   i = [(self%col(x) - 1_I4P) * self%sx + 1_I4P, self%col(x + width) * self%sx]
+   j = [(self%row(y) - 1_I4P) * self%sy + 1_I4P, self%row(y + height) * self%sy]
+   self%dots_on(i(1):i(2), j(1):j(2)) = .false.
+   endsubroutine clear
+
    subroutine polyline(self, x, y, color, line_width, dasharray)
    !< Frame lines (ticks) and key samples drawn on the bitmap, grid lines dotted (every other dot).
    class(backend_block), intent(inout) :: self       !< Device.
@@ -178,7 +196,7 @@ contains
    endsubroutine px_segment
 
    subroutine rect(self, x, y, width, height, stroke, fill, line_width)
-   !< Stroked rectangles drawn on the bitmap; fills are ignored.
+   !< Stroked rectangles drawn on the bitmap; a fill blanks the cells and dots covered.
    class(backend_block), intent(inout) :: self       !< Device.
    real(R8P),            intent(in)    :: x          !< Left side [px].
    real(R8P),            intent(in)    :: y          !< Top side [px].
@@ -188,7 +206,9 @@ contains
    character(len=*),     intent(in)    :: fill       !< Fill color.
    real(R8P),            intent(in)    :: line_width !< Stroke width [px].
 
-   if (stroke == 'none' .or. self%hidden) return
+   if (self%hidden) return
+   if (fill /= 'none') call self%clear(x, y, width, height)
+   if (stroke == 'none') return
    call self%dot_line([x, y], [x + width, y], 0_I4P, .false.)
    call self%dot_line([x + width, y], [x + width, y + height], 0_I4P, .false.)
    call self%dot_line([x + width, y + height], [x, y + height], 0_I4P, .false.)

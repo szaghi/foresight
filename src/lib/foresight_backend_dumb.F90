@@ -12,7 +12,11 @@ module foresight_backend_dumb
 !< frame, grid, text, and black, white or named series colors keep the terminal's own color.
 !<
 !< Data are drawn through `px_segment` and `px_point`, in pixels: a device drawing at a finer resolution than the cells
-!< (foresight_backend_block) overrides them, `cell`, `rect` and `polyline`, and keeps the rest.
+!< (foresight_backend_block) overrides them, `cell`, `clear`, `rect` and `polyline`, and keeps the rest.
+!<
+!< Readouts are seven-segment digits in characters, 3 rows of 4 columns per cell (` _ `, `|_|`, `|_|`, the decimal point
+!< a `.` in the fourth column); the unlit segments are not drawn, text has no faint intensity. A filled rectangle (the
+!< readout window) clears the cells it covers.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : axes_view, backend_object
 use foresight_sys, only : rename_file
@@ -69,8 +73,11 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
       procedure, pass(self) :: text_width
+      procedure, pass(self) :: readout
+      procedure, pass(self) :: readout_extent
       ! building blocks for finer devices
       procedure, pass(self) :: cell         !< Text of a cell.
+      procedure, pass(self) :: clear        !< Blank a box.
       procedure, pass(self) :: col          !< Column of an abscissa [px].
       procedure, pass(self) :: color_index  !< Index of a color in `symbols`.
       procedure, pass(self) :: px_point     !< Draw a data point [px].
@@ -178,7 +185,7 @@ contains
    endsubroutine end_group
 
    subroutine rect(self, x, y, width, height, stroke, fill, line_width)
-   !< Stroked rectangles are drawn with `-`, `|` and `+` corners; fills are ignored.
+   !< Stroked rectangles are drawn with `-`, `|` and `+` corners; a fill blanks the cells covered.
    class(backend_dumb), intent(inout) :: self       !< Device.
    real(R8P),           intent(in)    :: x          !< Left side [px].
    real(R8P),           intent(in)    :: y          !< Top side [px].
@@ -191,7 +198,9 @@ contains
    integer(I4P)                       :: r(2)       !< Side rows.
    integer(I4P)                       :: k          !< Counter.
 
-   if (stroke == 'none' .or. self%hidden) return
+   if (self%hidden) return
+   if (fill /= 'none') call self%clear(x, y, width, height)
+   if (stroke == 'none') return
    c = [self%col(x), self%col(x + width)]
    r = [self%row(y), self%row(y + height)]
    do k = c(1), c(2)
@@ -370,6 +379,99 @@ contains
    if (len(sup) > 0) width = width + CELL_WIDTH * font_size * real(len(sup) + 1, R8P)
    endfunction text_width
 
+   subroutine readout(self, x, y, height, masks, label, prefix, suffix, color, font_size)
+   !< Seven-segment readout of top-left corner (`x`, `y`) [px] in characters: the label row, then 3 rows of 4 columns
+   !< per cell, lit segments in the series color, the whole glass written so that it covers what lies below; the
+   !< digit `height` is not used, characters have one size.
+   class(backend_dumb), intent(inout) :: self      !< Device.
+   real(R8P),           intent(in)    :: x         !< Left side [px].
+   real(R8P),           intent(in)    :: y         !< Top side [px].
+   real(R8P),           intent(in)    :: height    !< Digit height [px], unused.
+   integer(I4P),        intent(in)    :: masks(:)  !< Segments of each cell.
+   character(len=*),    intent(in)    :: label     !< Label, empty for none.
+   character(len=*),    intent(in)    :: prefix    !< Text before the glass.
+   character(len=*),    intent(in)    :: suffix    !< Text after the glass.
+   character(len=*),    intent(in)    :: color     !< Color of the lit segments.
+   real(R8P),           intent(in)    :: font_size !< Font size [px], unused.
+   character(len=4)                   :: rows(3)   !< Characters of a cell.
+   integer(I4P)                       :: c0        !< Left column.
+   integer(I4P)                       :: r0        !< First glass row.
+   integer(I4P)                       :: cg        !< First glass column.
+   integer(I4P)                       :: tint      !< Color index.
+   integer(I4P)                       :: k         !< Cell counter.
+   integer(I4P)                       :: i         !< Column counter.
+   integer(I4P)                       :: j         !< Row counter.
+
+   if (self%hidden) return
+   c0 = self%col(x)
+   r0 = self%row(y)
+   if (len(label) > 0) then
+      call write_text(c0, r0, label)
+      r0 = r0 + 1_I4P
+   endif
+   cg = c0
+   if (len(prefix) > 0) then
+      call write_text(c0, r0 + 2_I4P, prefix)
+      cg = c0 + len(prefix, kind=I4P) + 1_I4P
+   endif
+   tint = self%color_index(color)
+   do k = 1_I4P, size(masks, kind=I4P)
+      rows(1) = ' '//lit(0_I4P, '_')//'  '
+      rows(2) = lit(5_I4P, '|')//lit(6_I4P, '_')//lit(1_I4P, '|')//' '
+      rows(3) = lit(4_I4P, '|')//lit(3_I4P, '_')//lit(2_I4P, '|')//lit(7_I4P, '.')
+      do j = 1_I4P, 3_I4P
+         do i = 1_I4P, 4_I4P
+            if (rows(j)(i:i) == ' ') then
+               call self%put(cg + 4_I4P * (k - 1_I4P) + i - 1_I4P, r0 + j - 1_I4P, ' ')
+            else
+               call self%put(cg + 4_I4P * (k - 1_I4P) + i - 1_I4P, r0 + j - 1_I4P, rows(j)(i:i), tint)
+            endif
+         enddo
+      enddo
+   enddo
+   if (len(suffix) > 0) call write_text(cg + 4_I4P * size(masks, kind=I4P), r0 + 2_I4P, suffix)
+   contains
+      pure function lit(segment, symbol) result(c)
+      !< `symbol` if `segment` of the cell `k` is lit, else a blank.
+      integer(I4P),     intent(in) :: segment !< Segment bit.
+      character(len=1), intent(in) :: symbol  !< Symbol.
+      character(len=1)             :: c       !< Character.
+
+      c = merge(symbol, ' ', btest(masks(k), segment))
+      endfunction lit
+
+      subroutine write_text(c, r, string)
+      !< `string` from column `c` of row `r`.
+      integer(I4P),     intent(in) :: c      !< Start column.
+      integer(I4P),     intent(in) :: r      !< Row.
+      character(len=*), intent(in) :: string !< Text.
+      integer(I4P)                 :: n      !< Counter.
+
+      do n = 1_I4P, len(string, kind=I4P)
+         call self%put(c + n - 1_I4P, r, string(n:n))
+      enddo
+      endsubroutine write_text
+   endsubroutine readout
+
+   pure function readout_extent(self, height, cells, label, prefix, suffix, font_size) result(extent)
+   !< Width and height [px] of a readout in characters: 4 columns per cell and the unit text, 3 rows and the label.
+   class(backend_dumb), intent(in) :: self      !< Device.
+   real(R8P),           intent(in) :: height    !< Digit height [px], unused.
+   integer(I4P),        intent(in) :: cells     !< Glass cells.
+   character(len=*),    intent(in) :: label     !< Label, empty for none.
+   character(len=*),    intent(in) :: prefix    !< Text before the glass.
+   character(len=*),    intent(in) :: suffix    !< Text after the glass.
+   real(R8P),           intent(in) :: font_size !< Font size [px].
+   real(R8P)                       :: extent(2) !< Width and height [px].
+   integer(I4P)                    :: columns   !< Columns.
+
+   columns = 4_I4P * cells + len(suffix, kind=I4P)
+   if (len(prefix) > 0) columns = columns + len(prefix, kind=I4P) + 1_I4P
+   columns = max(columns, len(label, kind=I4P))
+   extent = [CELL_WIDTH * font_size * real(columns, R8P), &
+             CELL_HEIGHT * font_size * real(merge(4_I4P, 3_I4P, len(label) > 0), R8P)]
+   endfunction readout_extent
+
    ! building blocks for finer devices
    pure function cell(self, c, r) result(text)
    !< Text of the cell (`c`, `r`): its character.
@@ -380,6 +482,18 @@ contains
 
    text = self%grid(c, r)
    endfunction cell
+
+   subroutine clear(self, x, y, width, height)
+   !< Blank the cells of the box of top-left corner (`x`, `y`) and size `width` x `height` [px].
+   class(backend_dumb), intent(inout) :: self   !< Device.
+   real(R8P),           intent(in)    :: x      !< Left side [px].
+   real(R8P),           intent(in)    :: y      !< Top side [px].
+   real(R8P),           intent(in)    :: width  !< Width [px].
+   real(R8P),           intent(in)    :: height !< Height [px].
+
+   self%grid(self%col(x):self%col(x + width), self%row(y):self%row(y + height)) = ' '
+   self%tint(self%col(x):self%col(x + width), self%row(y):self%row(y + height)) = 0_I4P
+   endsubroutine clear
 
    elemental function col(self, x) result(c)
    !< Column of the cell containing the abscissa `x` [px], clamped to the page.

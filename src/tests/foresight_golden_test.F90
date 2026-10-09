@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(7)                   !< Per-figure outcome.
+logical                     :: test_passed(14)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -23,7 +23,15 @@ test_passed(4) = check('semilogy.html', figure_semilogy())
 test_passed(5) = check('y2_api.svg', figure_y2())
 test_passed(6) = check('slopes.txt', figure_slopes())
 test_passed(7) = check('point_types.svg', figure_point_types())
-write(output_unit, '(A,7L2)') 'foresight golden checks:', test_passed
+test_passed(8) = check('readouts.svg', figure_readouts())
+test_passed(9) = check('readouts.txt', figure_readouts())
+test_passed(10) = check('readout_mixed.svg', figure_readout_mixed())
+test_passed(11) = check('readout_mixed.txt', figure_readout_mixed())
+test_passed(12) = check('readout_block.txt', figure_readout_block())
+test_passed(13) = check('readout_row.svg', figure_readout_row())
+! also the page of the viewer DOM test of readouts (src/js/viewer_dom_test.js)
+test_passed(14) = check('readout_mixed.html', figure_readout_mixed())
+write(output_unit, '(A,14L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -126,6 +134,60 @@ contains
    call fig%plot(x, 4.0_R8P + 0.1_R8P * x, title='pt 27: diamond', with='points', pt=27_I4P)
    call fig%plot(x, 4.5_R8P + 0.0_R8P * x, title='dot', with='points', pt=0_I4P)
    endfunction figure_point_types
+
+   function figure_readouts() result(fig)
+   !< Readouts alone: no axes, the digits grow to fill the panel; a NaN last row (the last finite value is shown), a
+   !< unit suffix, a value wider than its glass (dashes).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: it(:) !< Iterations.
+   real(R8P), allocatable :: res(:) !< Residuals.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   it = [(real(i, R8P), i = 1, 50)]
+   res = 10.0_R8P**(-0.1_R8P * it)
+   res(50) = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call fig%set_title('Run monitor')
+   call fig%plot(it, it, title='ITER', with='readout', format='%5.0f')
+   call fig%plot(it, res, title='RESIDUAL', with='readout', format='%9.2e')
+   call fig%plot(it, 0.05_R8P * it, title='WALL', with='readout', format='%5.2f h')
+   call fig%plot(it, 1.0e6_R8P * it, title='OVERFLOW', with='readout', format='%5.1f')
+   endfunction figure_readouts
+
+   function figure_readout_mixed() result(fig)
+   !< A readout over a curve: outside autoscale and key, in its opaque window at the top left, its own color.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: t(:) !< Times.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=500_I4P, height=320_I4P)
+   t = [(0.05_R8P * real(i, R8P), i = 0, 40)]
+   call fig%set_xlabel('time')
+   call fig%plot(t, 0.02_R8P * t**2 - 0.003_R8P, title='Cx')
+   call fig%plot(t, 1.0e3_R8P + t, title='CX', with='readout', format='%9.2e', lc='#e51e10')
+   endfunction figure_readout_mixed
+
+   function figure_readout_block() result(fig)
+   !< The mixed readout on the block device with ANSI colors: segments in the series color, the window clearing dots.
+   type(figure_object) :: fig !< Figure.
+
+   fig = figure_readout_mixed()
+   call fig%set_text(charset='braille', colors='ansi')
+   endfunction figure_readout_block
+
+   function figure_readout_row() result(fig)
+   !< Readouts in a row at the bottom right, fixed digit size, no window.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=500_I4P, height=320_I4P)
+   x = [(real(i, R8P), i = 1, 20)]
+   call fig%set_readout(position='bottom right horizontal', opaque=.false., size=24.0_R8P)
+   call fig%plot(x, sqrt(x), title='sqrt(x)')
+   call fig%plot(x, x, title='N', with='readout', format='%3.0f')
+   call fig%plot(x, sqrt(x), title='ROOT', with='readout', format='%6.3f')
+   endfunction figure_readout_row
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

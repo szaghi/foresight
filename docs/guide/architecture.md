@@ -16,6 +16,7 @@ flowchart TD
     FIG["foresight_figure<br/>panels, gnuplot-like API"] --> AXES
     AXES["foresight_axes<br/>layout, key, series drawing"] --> AXIS["foresight_axis<br/>ranges, autoscale"]
     AXES --> SERIES["foresight_series / _style"]
+    AXES --> READOUT["foresight_readout<br/>seven-segment glass"]
     AXIS --> TICKS["foresight_ticks<br/>nice numbers, exact labels"]
     AXES --> BACKEND
     BACKEND["foresight_backend<br/>abstract device"] --> SVG["backend_svg"]
@@ -32,9 +33,12 @@ flowchart TD
   scripts too. Errors are returned, not stopped on, which lets a watch loop survive a bad cycle.
 - **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`): panels,
   axes with gnuplot range semantics, series with their style.
-- **Rules** (`foresight_ticks`, `foresight_format`): tick placement and labels, number formatting.
+- **Rules** (`foresight_ticks`, `foresight_format`, `foresight_readout`): tick placement and labels, number formatting,
+  the seven-segment cells a readout format makes and the segments a value lights.
 - **Devices** (`foresight_backend` and its extensions): an abstract drawing interface with two coordinate spaces —
-  page pixels for decorations, the unit square of the plot area for data.
+  page pixels for decorations, the unit square of the plot area for data. Readouts are a semantic primitive
+  (`readout`, `readout_extent`), not polygons: each device draws digits its own way, hexagons in SVG, `_` and `|` in
+  text.
 
 ## Design decisions
 

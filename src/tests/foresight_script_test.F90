@@ -8,7 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : WITH_LINES, WITH_LINESPOINTS, WITH_POINTS
+use foresight_style, only : WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT
 
 implicit none
 character(len=*), parameter   :: data_file = 'foresight_script_test.dat'   !< Test data file.
@@ -27,7 +27,12 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(45)                           !< Per-check outcome.
+logical                       :: test_passed(47)                           !< Per-check outcome.
+real(R8P)                     :: xmin                                      !< Data extent start.
+real(R8P)                     :: xmax                                      !< Data extent end.
+real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
+real(R8P)                     :: ymax(2)                                   !< Data extent tops.
+logical                       :: found(2)                                  !< Data per y axis.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -357,6 +362,40 @@ test_passed(45) = test_passed(45) .and. iostat /= 0_I4P .and. index(iomsg, 'smoo
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! readouts (a foresight extension): style, format, color, set readout; outside the autoscale (x from the curve only)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 0.5', '2 0.25', '3 NaN'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set readout bottom right horizontal noopaque size 20; plot '"//data_file//"' u 1:2 w l t 'r', "// &
+                          "'' u 2 with readout format '%6.3f' title 'R' lc 'red'", iostat, iomsg)
+test_passed(46) = iostat == 0_I4P
+if (test_passed(46)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(46) = panel%series(2)%style%with == WITH_READOUT .and. panel%series(2)%format == '%6.3f' .and. &
+                        panel%series(2)%style%color == 'red' .and. panel%readout_h == 'right' .and. &
+                        panel%readout_v == 'bottom' .and. panel%readout_horizontal .and. .not. panel%readout_opaque &
+                        .and. panel%readout_size == 20.0_R8P
+      call panel%data_extent(xmin, xmax, ymin, ymax, found)
+      test_passed(46) = test_passed(46) .and. xmin == 1.0_R8P .and. xmax == 2.0_R8P .and. ymin(1) == 0.25_R8P
+   endassociate
+endif
+call interpreter%run_text('unset readout', iostat, iomsg)
+test_passed(46) = test_passed(46) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%readout
+! readout errors
+call interpreter%run_text("plot '"//data_file//"' w l format '%5.2f'", iostat, iomsg)
+test_passed(47) = iostat /= 0_I4P .and. index(iomsg, 'format applies to readouts only') > 0
+call interpreter%run_text("plot '"//data_file//"' w readout lw 2", iostat, iomsg)
+test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'a readout takes lc only') > 0
+call interpreter%run_text("plot '"//data_file//"' w readout format '%.2e'", iostat, iomsg)
+test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'needs a field width') > 0
+call interpreter%run_text("set readout outside", iostat, iomsg)
+test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'set readout: unsupported option') > 0
+call interpreter%run_text("plot x w readout", iostat, iomsg)
+test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'a function is drawn with lines') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -369,7 +408,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,45L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,47L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
