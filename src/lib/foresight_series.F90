@@ -23,6 +23,10 @@ type :: series_object
    real(R8P), allocatable        :: values(:) !< Values of a histogram, `y` being the top of its bar or stack segment.
    real(R8P), allocatable        :: grid(:,:) !< Values of an image (column, row), rows upward; `x` and `y` are then its
                                               !< left and right, bottom and top pixel edges.
+   real(R8P), allocatable        :: radius(:) !< Radii of circles [x units], NaN for the default (2% of the plot width).
+   real(R8P), allocatable        :: arcs(:,:) !< Start and end angles of wedges (2, point) [deg, counterclockwise from
+                                              !< the x direction]; unallocated for whole circles.
+   real(R8P)                     :: donut = 0.0_R8P !< Inner radius of a pie, a fraction of its radius (0: a pie).
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains

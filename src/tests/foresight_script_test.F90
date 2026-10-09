@@ -8,7 +8,8 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_LINES, &
+use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, &
+                            WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
 
@@ -29,12 +30,13 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(58)                           !< Per-check outcome.
+logical                       :: test_passed(61)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
 real(R8P)                     :: ymax(2)                                   !< Data extent tops.
 logical                       :: found(2)                                  !< Data per y axis.
+real(R8P), allocatable        :: arcs(:,:)                                 !< Wedge angles.
 
 test_passed = .false.
 open(newunit=unit, file=data_file, action='write', status='replace')
@@ -440,7 +442,7 @@ if (test_passed(49)) then
 endif
 ! fill errors
 call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
-test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes, filledcurves and histograms only') > 0
+test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes, filledcurves, histograms, circles and pie only') > 0
 call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
@@ -557,6 +559,45 @@ test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'not 
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! circles: radius column widening the x autoscale, wedges; pie: one value per row, labels, donut
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') 'a 1 2 0.5 0 90', 'b 3 1 0.25 90 300'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//data_file//"' u 2:3:4 w circles, '' u 2:3:4:5:6 w cir", iostat, iomsg)
+test_passed(59) = iostat == 0_I4P
+if (test_passed(59)) then
+   associate(panel => interpreter%figure%panels(1))
+      ! a local copy of the angles: gfortran 16 -fcheck=bounds misreads the bounds through the associate
+      arcs = panel%series(2)%arcs
+      test_passed(59) = panel%series(1)%style%with == WITH_CIRCLES .and. same(panel%series(1)%radius * 4.0_R8P, [2, 1]) &
+                        .and. .not. allocated(panel%series(1)%arcs) .and. size(arcs, 1) == 2 .and. &
+                        same(arcs(2, :), [90, 300])
+      call panel%data_extent(xmin, xmax, ymin, ymax, found)
+      test_passed(59) = test_passed(59) .and. xmin == 0.5_R8P .and. xmax == 3.25_R8P
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 4:xtic(1) w pie donut 0.5", iostat, iomsg)
+test_passed(60) = iostat == 0_I4P
+if (test_passed(60)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(60) = series%style%with == WITH_PIE .and. series%donut == 0.5_R8P .and. &
+                        same(series%values * 4.0_R8P, [2, 1]) .and. trim(series%xlabels(2)) == 'b'
+   endassociate
+endif
+! pie errors: negative values, not alone, a hole out of range
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2', '-1 3'
+close(unit)
+call interpreter%run_text("plot '"//data_file//"' u 1 w pie", iostat, iomsg)
+test_passed(61) = iostat /= 0_I4P .and. index(iomsg, 'a pie needs non-negative values') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2 w pie, '' u 2 w lines", iostat, iomsg)
+test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'a pie is alone in its panel') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2 w pie donut 1.2", iostat, iomsg)
+test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'from 0 to below 1') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -569,7 +610,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,58L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,61L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

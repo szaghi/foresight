@@ -205,6 +205,26 @@ the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled
 `rowstacked` piles the items of a row on one bar; `set boxwidth 0.6` leaves room between the stacks. See
 [Histograms](/guide/gnuplot-subset#histograms).
 
+## A bubble chart
+
+<<< @/examples/snippets/cb_circles.gp{gnuplot}
+
+<Plot name="cb_circles" svg :width="560" :height="320" />
+
+The third column is the radius, in x units. See [Circles, pies and donuts](/guide/gnuplot-subset#circles-pies-and-donuts).
+
+## A pie and a donut
+
+<<< @/examples/snippets/cb_pie.gp{gnuplot}
+
+<Plot name="cb_pie" svg :width="480" :height="320" />
+
+<<< @/examples/snippets/cb_donut_vfd.gp{gnuplot}
+
+<Plot name="cb_donut_vfd" svg :width="480" :height="320" />
+
+`xtic(1)` names the slices; the key gives their percentages.
+
 ## A heatmap
 
 <<< @/examples/snippets/cb_image.gp{gnuplot}

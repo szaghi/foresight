@@ -1,0 +1,5 @@
+# phase   seconds per step
+mesh      0.8
+fluxes    2.1
+comm      0.6
+io        0.3

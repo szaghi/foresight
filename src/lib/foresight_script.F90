@@ -34,6 +34,8 @@ module foresight_script
 !< - `plot 'file' [matrix] with image` (`using x:y:z` on a regular grid, or the values of a `matrix` file), `set palette
 !<   [rgbformulae R,G,B|defined (v c, ...)|gray|color|viridis|positive|negative|maxcolors N]`, `set cbrange [min:max]`,
 !<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
+!< - `with circles` (`using x:y[:r[:start:end]]`, wedges with angles in degrees); foresight's `with pie [donut F]`
+!<   (`using Y[:xtic(N)]`, alone in its panel);
 !< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
 !<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style); `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
@@ -54,7 +56,7 @@ use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_object, palette_words
-use foresight_style, only : default_color, fill_style, style_object
+use foresight_style, only : default_color, fill_style, style_object, WITH_PIE
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -308,6 +310,8 @@ contains
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
    real(R8P),        allocatable                :: base      !< Baseline of `filledcurves y=V`, unallocated if none.
    real(R8P),        allocatable                :: widths(:) !< Box widths, `using x:y:width`.
+   real(R8P),        allocatable                :: hole      !< Pie hole fraction (`donut F`), unallocated for none.
+   real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
@@ -401,6 +405,7 @@ contains
       axes = 'x1y1'
       filter = ''
       if (allocated(format)) deallocate(format)
+      if (allocated(hole)) deallocate(hole)
       if (allocated(fs)) deallocate(fs)
       if (allocated(base)) deallocate(base)
       shaping = ''
@@ -441,12 +446,24 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, readout)', iostat, iomsg)
+                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, circles, pie, readout)', &
+                         iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
                call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
                return
+            endif
+            if (with == 'pie' .and. i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'donut') then
+                  i = i + 1_I4P
+                  allocate(hole)
+                  if (.not. next_number(hole)) return
+                  if (hole < 0.0_R8P .or. hole >= 1.0_R8P) then
+                     call fail('plot: pie donut F needs a hole fraction from 0 to below 1', iostat, iomsg)
+                     return
+                  endif
+               endif
             endif
             if (with == 'filledcurves' .and. i < size(tokens, kind=I4P)) then
                ! the fill option: closed (the default) or y=V; gnuplot's others are not supported
@@ -557,8 +574,8 @@ contains
          call fail('plot: format applies to readouts only (with readout)', iostat, iomsg)
          return
       endif
-      if (allocated(fs) .and. with /= 'boxes' .and. with /= 'filledcurves' .and. with /= 'histograms') then
-         call fail('plot: fs applies to boxes, filledcurves and histograms only', iostat, iomsg)
+      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie')) then
+         call fail('plot: fs applies to boxes, filledcurves, histograms, circles and pie only', iostat, iomsg)
          return
       endif
       if (is_function) then
@@ -602,14 +619,14 @@ contains
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          case ('xyerrorbars')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
-         case ('histograms')
+         case ('histograms', 'pie')
             ! one value per row: the first column at the point numbers
             fields = plain_columns([0_I4P, 1_I4P])
          case default
             call data%default_using(ux, uy)
             fields = plain_columns([ux, uy])
          endselect
-         one_field = with == 'histograms'
+         one_field = with == 'histograms' .or. with == 'pie'
       elseif (size(fields) == 1) then
          one_field = .true.
          call point%set_column(0_I4P)
@@ -627,9 +644,14 @@ contains
             call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
             return
          endif
-      case ('histograms')
+      case ('histograms', 'pie')
          if (.not. one_field) then
-            call fail('plot: histograms needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
+            call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
+            return
+         endif
+      case ('circles')
+         if (nbar /= 0_I4P .and. nbar /= 1_I4P .and. nbar /= 3_I4P) then
+            call fail('plot: circles needs using x:y, x:y:radius or x:y:radius:start:end', iostat, iomsg)
             return
          endif
       case ('boxes')
@@ -702,6 +724,10 @@ contains
       select case (with)
       case ('boxes')
          if (nbar == 1_I4P) widths = values(:, 3)
+      case ('circles')
+         if (nbar >= 1_I4P) widths = values(:, 3)
+         if (allocated(arcs)) deallocate(arcs)
+         if (nbar == 3_I4P) arcs = transpose(values(:, 4:5))
       case ('filledcurves')
          if (nbar == 1_I4P) ylow = values(:, 3)
       case ('yerrorbars')
@@ -734,9 +760,41 @@ contains
          endif
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
+      ! a pie is alone in its panel
+      associate(panel => self%figure%panels(self%figure%current))
+         if (allocated(panel%series)) then
+            if (size(panel%series) > 0) then
+               if (with == 'pie' .or. panel%series(1)%style%with == WITH_PIE) then
+                  call fail('plot: a pie is alone in its panel (one item)', iostat, iomsg)
+                  return
+               endif
+               if (any(panel%series%style%with == WITH_PIE)) then
+                  call fail('plot: a pie is alone in its panel (one item)', iostat, iomsg)
+                  return
+               endif
+            endif
+         endif
+      endassociate
+      if (with == 'pie') then
+         if (any(y < 0.0_R8P)) then
+            call fail('plot: a pie needs non-negative values', iostat, iomsg)
+            return
+         endif
+      endif
       if (with == 'readout') then
          ! a line style may carry widths and sizes: a readout keeps its color only
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, format=format)
+      elseif (with == 'circles') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
+                               xlabels=xlabels, radius=widths, angles=arcs)
+      elseif (with == 'pie') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, fs=fs, xlabels=xlabels, donut=hole)
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -757,6 +815,25 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      function next_number(v) result(ok)
+      !< The number token after `i` into `v`, advancing `i`; fails the plot if there is none.
+      real(R8P), intent(out) :: v  !< Number.
+      logical                :: ok !< Read.
+
+      ok = .false.
+      v = 0.0_R8P
+      i = i + 1_I4P
+      if (i > size(tokens, kind=I4P)) then
+         call fail('plot: a number is expected after "'//tokens(i - 1_I4P)%text//'"', iostat, iomsg)
+         return
+      endif
+      if (.not. to_number(tokens(i)%text, v)) then
+         call fail('plot: a number is expected, found "'//tokens(i)%text//'"', iostat, iomsg)
+         return
+      endif
+      ok = .true.
+      endfunction next_number
+
       subroutine image_item
       !< An image item: the values of a `matrix` file, or `using x:y:z` (default 1:2:3) gathered on a regular grid.
       real(R8P), allocatable        :: z(:,:)  !< Grid values.
@@ -1971,6 +2048,10 @@ contains
       style = 'histograms'
    case ('ima', 'imag', 'image')
       style = 'image'
+   case ('cir', 'circ', 'circl', 'circle', 'circles')
+      style = 'circles'
+   case ('pie')
+      style = 'pie'
    case default
       style = ''
    endselect

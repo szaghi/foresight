@@ -16,7 +16,8 @@ public :: default_color
 public :: fill_style
 public :: style_object
 public :: style_with
-public :: WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, &
+public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
+          WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, &
           WITH_XERRORBARS, &
           WITH_XYERRORBARS, WITH_YERRORBARS
 public :: FILL_EMPTY, FILL_SOLID
@@ -32,6 +33,8 @@ integer(I4P), parameter :: WITH_BOXES       = 8_I4P !< gnuplot `with boxes`.
 integer(I4P), parameter :: WITH_FILLEDCURVES = 9_I4P !< gnuplot `with filledcurves`.
 integer(I4P), parameter :: WITH_HISTOGRAMS  = 10_I4P !< gnuplot `with histograms`.
 integer(I4P), parameter :: WITH_IMAGE       = 11_I4P !< gnuplot `with image`.
+integer(I4P), parameter :: WITH_CIRCLES     = 12_I4P !< gnuplot `with circles`: circles and wedges.
+integer(I4P), parameter :: WITH_PIE         = 13_I4P !< foresight `with pie`: a pie or donut chart.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
 
@@ -104,10 +107,14 @@ contains
       with = WITH_HISTOGRAMS
    case ('ima', 'imag', 'image')
       with = WITH_IMAGE
+   case ('cir', 'circ', 'circl', 'circle', 'circles')
+      with = WITH_CIRCLES
+   case ('pie')
+      with = WITH_PIE
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)// &
                  '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars, boxes, filledcurves, '//&
-                 'histograms, image, '//&
+                 'histograms, image, circles, pie, '//&
                  'readout)'
    endselect
    endfunction style_with
@@ -156,7 +163,8 @@ contains
    class(style_object), intent(in) :: self   !< Style.
    logical                         :: points !< Points are drawn.
 
-   points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE])
+   points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, &
+                                    WITH_CIRCLES, WITH_PIE])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -176,11 +184,11 @@ contains
    endfunction draws_ybars
 
    elemental function fills(self) result(filled)
-   !< Whether the style is a filled one: boxes, filledcurves, histograms.
+   !< Whether the style is a filled one: boxes, filledcurves, histograms, circles, pie.
    class(style_object), intent(in) :: self   !< Style.
    logical                         :: filled !< Filled style.
 
-   filled = any(self%with == [WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS])
+   filled = any(self%with == [WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_CIRCLES, WITH_PIE])
    endfunction fills
 
    pure function fill_color(self) result(color)

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="320" viewBox="0 0 500 320" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="500" height="320" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="35.8 240 16 289" data-x="0 4e0" data-y="1.4e0 2.6e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,289 35.8,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="86.85,289 86.85,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="137.9,289 137.9,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="188.95,289 188.95,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="240,289 240,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,289 240,289"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,243.5 240,243.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,198 240,198"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,152.5 240,152.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,107 240,107"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,61.5 240,61.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,16 240,16"/>
+</g>
+<svg class="fs-plot" x="35.8" y="16" width="204.2" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.325,0.5 0.324639,0.494501 0.323559,0.489056 0.321771,0.483715 0.319291,0.478532 0.316144,0.473555 0.31236,0.468833 0.307976,0.464411
+0.303033,0.460332 0.297579,0.456635 0.291668,0.453355 0.285355,0.450525 0.278701,0.448171 0.271771,0.446317 0.264632,0.444979 0.257351,0.444171
+0.25,0.443901 0.242649,0.444171 0.235368,0.444979 0.228229,0.446317 0.221299,0.448171 0.214645,0.450525 0.208332,0.453355 0.202421,0.456635
+0.196967,0.460332 0.192024,0.464411 0.18764,0.468833 0.183856,0.473555 0.180709,0.478532 0.178229,0.483715 0.176441,0.489056 0.175361,0.494501
+0.175,0.5 0.175361,0.505499 0.176441,0.510944 0.178229,0.516285 0.180709,0.521468 0.183856,0.526445 0.18764,0.531167 0.192024,0.535589
+0.196967,0.539668 0.202421,0.543365 0.208332,0.546645 0.214645,0.549475 0.221299,0.551829 0.228229,0.553683 0.235368,0.555021 0.242649,0.555829
+0.25,0.556099 0.257351,0.555829 0.264632,0.555021 0.271771,0.553683 0.278701,0.551829 0.285355,0.549475 0.291668,0.546645 0.297579,0.543365
+0.303033,0.539668 0.307976,0.535589 0.31236,0.531167 0.316144,0.526445 0.319291,0.521468 0.321771,0.516285 0.323559,0.510944 0.324639,0.505499Z"/>
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.625,0 0.624398,-0.009164 0.622598,-0.018241 0.619618,-0.027141 0.615485,-0.03578 0.61024,-0.044075 0.603934,-0.051945 0.596626,-0.059315
+0.588388,-0.066113 0.579299,-0.072275 0.569446,-0.077741 0.558925,-0.082458 0.547835,-0.086381 0.536286,-0.089472 0.524386,-0.091702 0.512252,-0.093048
+0.5,-0.093498 0.487748,-0.093048 0.475614,-0.091702 0.463714,-0.089472 0.452165,-0.086381 0.441075,-0.082458 0.430554,-0.077741 0.420701,-0.072275
+0.411612,-0.066113 0.403374,-0.059315 0.396066,-0.051945 0.38976,-0.044075 0.384515,-0.03578 0.380382,-0.027141 0.377402,-0.018241 0.375602,-0.009164
+0.375,0 0.375602,0.009164 0.377402,0.018241 0.380382,0.027141 0.384515,0.03578 0.38976,0.044075 0.396066,0.051945 0.403374,0.059315
+0.411612,0.066113 0.420701,0.072275 0.430554,0.077741 0.441075,0.082458 0.452165,0.086381 0.463714,0.089472 0.475614,0.091702 0.487748,0.093048
+0.5,0.093498 0.512252,0.093048 0.524386,0.091702 0.536286,0.089472 0.547835,0.086381 0.558925,0.082458 0.569446,0.077741 0.579299,0.072275
+0.588388,0.066113 0.596626,0.059315 0.603934,0.051945 0.61024,0.044075 0.615485,0.03578 0.619618,0.027141 0.622598,0.018241 0.624398,0.009164Z"/>
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.85,0.916667 0.849518,0.909335 0.848079,0.902074 0.845694,0.894954 0.842388,0.888043 0.838192,0.881407 0.833147,0.875111 0.827301,0.869215
+0.820711,0.863776 0.813439,0.858847 0.805557,0.854474 0.79714,0.8507 0.788268,0.847562 0.779028,0.845089 0.769509,0.843305 0.759802,0.842228
+0.75,0.841868 0.740198,0.842228 0.730491,0.843305 0.720972,0.845089 0.711732,0.847562 0.70286,0.8507 0.694443,0.854474 0.686561,0.858847
+0.679289,0.863776 0.672699,0.869215 0.666853,0.875111 0.661808,0.881407 0.657612,0.888043 0.654306,0.894954 0.651921,0.902074 0.650482,0.909335
+0.65,0.916667 0.650482,0.923998 0.651921,0.931259 0.654306,0.93838 0.657612,0.945291 0.661808,0.951926 0.666853,0.958223 0.672699,0.964118
+0.679289,0.969557 0.686561,0.974487 0.694443,0.978859 0.70286,0.982633 0.711732,0.985772 0.720972,0.988244 0.730491,0.990028 0.740198,0.991105
+0.75,0.991465 0.759802,0.991105 0.769509,0.990028 0.779028,0.988244 0.788268,0.985772 0.79714,0.982633 0.805557,0.978859 0.813439,0.974487
+0.820711,0.969557 0.827301,0.964118 0.833147,0.958223 0.838192,0.951926 0.842388,0.945291 0.845694,0.93838 0.848079,0.931259 0.849518,0.923998Z"/>
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M1.02,0.166667 1.019904,0.1652 1.019616,0.163748 1.019139,0.162324 1.018478,0.160942 1.017638,0.159615 1.016629,0.158355 1.01546,0.157176
+1.014142,0.156089 1.012688,0.155103 1.011111,0.154228 1.009428,0.153473 1.007654,0.152846 1.005806,0.152351 1.003902,0.151994 1.00196,0.151779
+1,0.151707 0.99804,0.151779 0.996098,0.151994 0.994194,0.152351 0.992346,0.152846 0.990572,0.153473 0.988889,0.154228 0.987312,0.155103
+0.985858,0.156089 0.98454,0.157176 0.983371,0.158355 0.982362,0.159615 0.981522,0.160942 0.980861,0.162324 0.980384,0.163748 0.980096,0.1652
+0.98,0.166667 0.980096,0.168133 0.980384,0.169585 0.980861,0.171009 0.981522,0.172391 0.982362,0.173719 0.983371,0.174978 0.98454,0.176157
+0.985858,0.177245 0.987312,0.178231 0.988889,0.179105 0.990572,0.17986 0.992346,0.180488 0.994194,0.180982 0.996098,0.181339 0.99804,0.181554
+1,0.181626 1.00196,0.181554 1.003902,0.181339 1.005806,0.180982 1.007654,0.180488 1.009428,0.17986 1.011111,0.179105 1.012688,0.178231
+1.014142,0.177245 1.01546,0.176157 1.016629,0.174978 1.017638,0.173719 1.018478,0.172391 1.019139,0.171009 1.019616,0.169585 1.019904,0.168133Z"/>
+</g>
+</svg>
+<rect x="35.8" y="16" width="204.2" height="273" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,289 35.8,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,16 35.8,22"/>
+<text x="35.8" y="307" text-anchor="middle">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="86.85,289 86.85,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="86.85,16 86.85,22"/>
+<text x="86.85" y="307" text-anchor="middle">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="137.9,289 137.9,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="137.9,16 137.9,22"/>
+<text x="137.9" y="307" text-anchor="middle">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="188.95,289 188.95,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="188.95,16 188.95,22"/>
+<text x="188.95" y="307" text-anchor="middle">3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,289 240,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,16 240,22"/>
+<text x="240" y="307" text-anchor="middle">4</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,289 41.8,289"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,289 234,289"/>
+<text x="29.8" y="293.2" text-anchor="end">1.4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,243.5 41.8,243.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,243.5 234,243.5"/>
+<text x="29.8" y="247.7" text-anchor="end">1.6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,198 41.8,198"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,198 234,198"/>
+<text x="29.8" y="202.2" text-anchor="end">1.8</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,152.5 41.8,152.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,152.5 234,152.5"/>
+<text x="29.8" y="156.7" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,107 41.8,107"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,107 234,107"/>
+<text x="29.8" y="111.2" text-anchor="end">2.2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,61.5 41.8,61.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,61.5 234,61.5"/>
+<text x="29.8" y="65.7" text-anchor="end">2.4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="35.8,16 41.8,16"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="240,16 234,16"/>
+<text x="29.8" y="20.2" text-anchor="end">2.6</text>
+</g>
+<g class="fs-key-entry" data-series="1">
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M194,33.7 230,33.7 230,25.3 194,25.3Z"/>
+<text x="188" y="33.7" text-anchor="end">cases</text>
+</g>
+</g>
+<g class="fs-axes" data-area="292.4 486.8 16 289" data-x="-1.2e0 1.2e0" data-y="-1.2e0 1.2e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="308.6,289 308.6,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="349.1,289 349.1,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="389.6,289 389.6,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="430.1,289 430.1,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="470.6,289 470.6,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="292.4,266.25 486.8,266.25"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="292.4,209.38 486.8,209.38"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="292.4,152.5 486.8,152.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="292.4,95.63 486.8,95.63"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="292.4,38.75 486.8,38.75"/>
+</g>
+<svg class="fs-plot" x="292.4" y="16" width="194.4" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.5,0.5 0.916667,0.5 0.91478,0.471797 0.909137,0.443849 0.899789,0.416409 0.88682,0.389727 0.870348,0.364043 0.850522,0.33959
+0.827522,0.31659 0.801556,0.295251 0.772859,0.275767 0.74169,0.258313 0.708333,0.243047Z"/>
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.5,0.5 0.708333,0.243047 0.672127,0.229797 0.634277,0.219126 0.595146,0.211136 0.555107,0.205903 0.514541,0.203477 0.473837,0.203882
+0.433383,0.207113 0.393564,0.21314 0.354762,0.221905 0.317345,0.233325 0.281673,0.24729 0.248084,0.263667 0.216899,0.2823 0.188417,0.303011
+0.16291,0.325602 0.140619,0.349858 0.121759,0.375547 0.10651,0.402424 0.095016,0.430233 0.087388,0.458707 0.083699,0.487575 0.083983,0.516562
+0.088238,0.545391 0.096424,0.573787 0.108461,0.601479Z"/>
+<path fill="#9400d3" fill-opacity="0.4" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.5,0.5 0.225923,0.571035 0.236784,0.58947 0.250083,0.607077 0.265698,0.623691 0.283484,0.639159 0.303277,0.653338 0.324891,0.666096
+0.348129,0.677315 0.372773,0.686891 0.398596,0.694736 0.425359,0.700776 0.452814,0.704956 0.480705,0.707237 0.508775,0.707598 0.536764,0.706036
+0.564413,0.702564 0.591464,0.697216 0.617669,0.69004 0.642782,0.681104 0.666573,0.670489 0.688821,0.658295 0.709319,0.644634 0.727878,0.629634
+0.744325,0.613432 0.758509,0.596179 0.770297,0.578035 0.779581,0.559168 0.786274,0.539752 0.790315,0.519969 0.791667,0.5Z"/>
+</g>
+</svg>
+<rect x="292.4" y="16" width="194.4" height="273" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="308.6,289 308.6,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="308.6,16 308.6,22"/>
+<text x="308.6" y="307" text-anchor="middle">-1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="349.1,289 349.1,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="349.1,16 349.1,22"/>
+<text x="349.1" y="307" text-anchor="middle">-0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="389.6,289 389.6,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="389.6,16 389.6,22"/>
+<text x="389.6" y="307" text-anchor="middle">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="430.1,289 430.1,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="430.1,16 430.1,22"/>
+<text x="430.1" y="307" text-anchor="middle">0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="470.6,289 470.6,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="470.6,16 470.6,22"/>
+<text x="470.6" y="307" text-anchor="middle">1</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="292.4,266.25 298.4,266.25"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="486.8,266.25 480.8,266.25"/>
+<text x="286.4" y="270.45" text-anchor="end">-1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="292.4,209.38 298.4,209.38"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="486.8,209.38 480.8,209.38"/>
+<text x="286.4" y="213.58" text-anchor="end">-0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="292.4,152.5 298.4,152.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="486.8,152.5 480.8,152.5"/>
+<text x="286.4" y="156.7" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="292.4,95.63 298.4,95.63"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="486.8,95.63 480.8,95.63"/>
+<text x="286.4" y="99.83" text-anchor="end">0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="292.4,38.75 298.4,38.75"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="486.8,38.75 480.8,38.75"/>
+<text x="286.4" y="42.95" text-anchor="end">1</text>
+</g>
+</g>
+</svg>

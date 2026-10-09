@@ -292,7 +292,8 @@ contains
       if (ghost) return
    endif
    if (fill /= 'none') call self%px_fill(x, y, fill)
-   if (stroke == 'none') return
+   ! a border in the page color (pie slices) separates fills on a page; text has no page color to draw
+   if (stroke == 'none' .or. stroke == 'white') return
    do i = 1_I4P, size(x, kind=I4P)
       call self%px_segment([x(i), y(i)], [x(modulo(i, size(x, kind=I4P)) + 1_I4P), y(modulo(i, size(x, kind=I4P)) + 1_I4P)], &
                            stroke, '')

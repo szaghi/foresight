@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(38)                  !< Per-figure outcome.
+logical                     :: test_passed(44)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -59,7 +59,13 @@ test_passed(36) = check('image_viridis.svg', figure_image('viridis'))
 test_passed(37) = check('image_vfd.svg', figure_image('maxcolors 8', theme='vfd'))
 ! also the page of the viewer DOM test of images (src/js/viewer_dom_test.js)
 test_passed(38) = check('image.html', figure_image(''))
-write(output_unit, '(A,38L2)') 'foresight golden checks:', test_passed
+test_passed(39) = check('circles.svg', figure_circles())
+test_passed(40) = check('circles.txt', figure_circles())
+test_passed(41) = check('pie.svg', figure_pie(0.0_R8P))
+test_passed(42) = check('pie.txt', figure_pie(0.0_R8P))
+test_passed(43) = check('donut.svg', figure_pie(0.55_R8P))
+test_passed(44) = check('donut_vfd.svg', figure_pie(0.6_R8P, theme='vfd'))
+write(output_unit, '(A,44L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -360,6 +366,40 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_circles() result(fig)
+   !< Circles of radii in x units (the x autoscale widened by them, round on the page), one of the default radius, and
+   !< wedges of a whole turn split in three (angles counterclockwise from the x direction, an end below its start).
+   type(figure_object) :: fig    !< Figure.
+   real(R8P)           :: nan    !< Quiet NaN.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_style_fill('solid 0.4')
+   call fig%plot([1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [2.0_R8P, 2.6_R8P, 1.5_R8P, 2.4_R8P], title='cases', &
+                 with='circles', radius=[0.3_R8P, 0.5_R8P, 0.4_R8P, nan])
+   call fig%next_panel
+   call fig%set_xrange(-1.2_R8P, 1.2_R8P)
+   call fig%set_yrange(-1.2_R8P, 1.2_R8P)
+   call fig%set_key(.false.)
+   call fig%plot([0.0_R8P, 0.0_R8P, 0.0_R8P], [0.0_R8P, 0.0_R8P, 0.0_R8P], with='circles', &
+                 radius=[1.0_R8P, 1.0_R8P, 0.7_R8P], &
+                 angles=reshape([0.0_R8P, 60.0_R8P, 60.0_R8P, 200.0_R8P, 200.0_R8P, 0.0_R8P], [2, 3]))
+   endfunction figure_circles
+
+   function figure_pie(hole, theme) result(fig)
+   !< A pie (or donut) alone in its panel: slices from 12 o'clock clockwise, the key with labels and percentages.
+   real(R8P),        intent(in)           :: hole  !< Donut hole fraction, 0 for a pie.
+   character(len=*), intent(in), optional :: theme !< Theme name.
+   type(figure_object)                    :: fig   !< Figure.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   if (present(theme)) call fig%set_theme(name=theme)
+   call fig%set_title('Time per step')
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P], [0.8_R8P, 2.1_R8P, 0.6_R8P, 0.3_R8P], with='pie', &
+                 xlabels=['mesh  ', 'fluxes', 'comm  ', 'io    '], donut=hole)
+   endfunction figure_pie
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

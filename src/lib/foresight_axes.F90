@@ -26,6 +26,11 @@ module foresight_axes
 !<
 !< Text labels of the abscissae (`xtic(N)`) of every series replace the x ticks (see foresight_axis).
 !<
+!< Circles (`with circles`, gnuplot) have their radius in x units (2% of the plot width by default) and are drawn round
+!< on the page; with two angles [deg, counterclockwise from the x direction] they are wedges. A pie (`with pie`, a
+!< foresight extension) is alone in its panel, without axes: its slices proportional to the values, from 12 o'clock
+!< clockwise, each in its palette color, a key entry per slice with its percentage; `donut` leaves a hole.
+!<
 !< Images (`with image`) color a regular grid of values by the panel palette (foresight_palette) over the color axis
 !< `cbaxis`, autoscaled to the values or set (`cbrange`), its ends never extended to ticks; the x and y axes of a panel
 !< with an image fit its pixel edges, unextended, as gnuplot. The color box lies at the right of the plot area. A theme
@@ -35,16 +40,17 @@ module foresight_axes
 !< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_axis, only : axis_object
+use foresight_format, only : int_str
 use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_READOUT
+                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_PIE, WITH_READOUT
 use foresight_ticks, only : labels_attribute, tick_object, tics_object, TICS_NONE
-use penf, only : I4P, R8P
+use penf, only : I4P, I8P, R8P
 
 implicit none
 private
@@ -118,6 +124,7 @@ type :: axes_object
       procedure, pass(self), private :: is_readout         !< Whether a series is a readout.
       procedure, pass(self), private :: has_image          !< Whether the panel has an image.
       procedure, pass(self), private :: draw_colorbox      !< Draw the color box.
+      procedure, pass(self), private :: draw_pie           !< Draw a pie panel.
       procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
@@ -125,7 +132,7 @@ endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs, xlabels, z)
+                         base, fs, xlabels, z, radius, angles, donut)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -158,6 +165,9 @@ contains
    character(len=*),   intent(in), optional :: xlabels(:) !< Text labels of the abscissae.
    real(R8P),          intent(in), optional :: z(:,:)   !< Image values (column, row): `x` and `y` are then the pixel
                                                         !< centres, evenly spaced and increasing.
+   real(R8P),          intent(in), optional :: radius(:) !< Circle radii [x units], NaN for the default.
+   real(R8P),          intent(in), optional :: angles(:,:) !< Wedge start and end angles (2, point) [deg].
+   real(R8P),          intent(in), optional :: donut    !< Pie hole, a fraction of the radius (0 to below 1).
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -196,6 +206,9 @@ contains
    elseif (present(format)) then
       error stop 'foresight: plot: format applies to readouts only'
    endif
+   if (size(self%series) > 0) then
+      if (self%series(1)%style%with == WITH_PIE) error stop 'foresight: plot: a pie is alone in its panel'
+   endif
    if (series%style%fills()) then
       series%style%fill = self%fill_default%fill
       series%style%density = self%fill_default%density
@@ -205,6 +218,11 @@ contains
       if (present(fs)) then
          call fill_style(fs, series%style, bad)
          if (len(bad) > 0) error stop 'foresight: plot: unsupported fill style "'//bad//'"'
+      endif
+      if (series%style%with == WITH_PIE .and. series%style%fill == FILL_EMPTY) then
+         ! a pie is filled, as a filled curve
+         series%style%fill = FILL_SOLID
+         series%style%density = 1.0_R8P
       endif
    elseif (present(fs) .or. present(width) .or. present(base)) then
       error stop 'foresight: plot: fs, width and base apply to boxes and filledcurves only'
@@ -218,6 +236,30 @@ contains
       call box_edges(series%xlow, series%xhigh)
       allocate(series%ylow(size(x)))
       series%ylow = 0.0_R8P
+   case (WITH_CIRCLES)
+      allocate(series%radius(size(x)))
+      series%radius = ieee_value(1.0_R8P, ieee_quiet_nan)
+      if (present(radius)) then
+         if (size(radius) /= size(x)) error stop 'foresight: plot: radius and x have different sizes'
+         series%radius = radius
+         ! the circles widen the x autoscale, as gnuplot
+         series%xlow = x - radius
+         series%xhigh = x + radius
+      endif
+      if (present(angles)) then
+         if (size(angles, 1) /= 2 .or. size(angles, 2) /= size(x)) &
+            error stop 'foresight: plot: angles must be (2, size(x)): start and end of each wedge'
+         series%arcs = angles
+      endif
+   case (WITH_PIE)
+      if (size(self%series) > 0) error stop 'foresight: plot: a pie is alone in its panel'
+      if (any(y < 0.0_R8P)) error stop 'foresight: plot: a pie needs non-negative values'
+      series%donut = 0.0_R8P
+      if (present(donut)) then
+         if (donut < 0.0_R8P .or. donut >= 1.0_R8P) error stop 'foresight: plot: the donut hole is 0 to below 1'
+         series%donut = donut
+      endif
+      series%values = y
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -390,6 +432,16 @@ contains
 
    if (.not. allocated(self%series)) allocate(self%series(0))
    if (size(self%series) > 0) then
+      if (self%series(1)%style%with == WITH_PIE) then
+         ! a pie alone: no axes, the pie and its key fill the panel below the title
+         area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
+         if (self%has_title()) then
+            call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            area(3) = area(3) + LINE_HEIGHT * font_size + GAP
+         endif
+         call self%draw_pie(backend, area, font_size)
+         return
+      endif
       if (all([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) then
          ! readouts alone: no axes, the block fills the panel below the title
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
@@ -456,9 +508,9 @@ contains
       if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)
       if (self%series(s)%y2) then
-         call self%draw_series(backend, s, self%y2axis)
+         call self%draw_series(backend, s, self%y2axis, area)
       else
-         call self%draw_series(backend, s, self%yaxis)
+         call self%draw_series(backend, s, self%yaxis, area)
       endif
       call backend%end_group
    enddo
@@ -858,13 +910,14 @@ contains
    endif
    endfunction key_place
 
-   subroutine draw_series(self, backend, s, yaxis)
+   subroutine draw_series(self, backend, s, yaxis, area)
    !< Draw the `s`-th series in the plot area against its vertical axis `yaxis`; unplaceable points (NaN, non-positive
    !< on log axes) break the line.
    class(axes_object),    intent(in)    :: self     !< Panel.
    class(backend_object), intent(inout) :: backend  !< Output device.
    integer(I4P),          intent(in)    :: s        !< Series index.
    type(axis_object),     intent(in)    :: yaxis    !< Vertical axis of the series.
+   real(R8P),             intent(in)    :: area(4)  !< Plot area: left, right, top, bottom [px].
    logical, allocatable                 :: valid(:) !< Placeable points.
    real(R8P), allocatable               :: u(:)     !< Unit abscissae.
    real(R8P), allocatable               :: v(:)     !< Unit ordinates.
@@ -884,6 +937,10 @@ contains
       endwhere
       if (series%style%with == WITH_IMAGE) then
          call draw_image
+         return
+      endif
+      if (series%style%with == WITH_CIRCLES) then
+         call draw_circles
          return
       endif
       if (series%style%with == WITH_BOXES .or. series%style%with == WITH_HISTOGRAMS) call draw_boxes
@@ -936,6 +993,37 @@ contains
          enddo
       endassociate
       endsubroutine draw_boxes
+
+      subroutine draw_circles
+      !< Each placeable point a circle (or a wedge with its angles) round on the page: its radius in x units converted
+      !< to pixels, then the outline back to the unit square of the plot area.
+      real(R8P), allocatable :: px(:) !< Outline abscissae [px from the centre].
+      real(R8P), allocatable :: py(:) !< Outline ordinates [px from the centre, upward].
+      real(R8P)              :: r     !< Radius [px].
+      real(R8P)              :: w     !< Plot area width [px].
+      real(R8P)              :: h     !< Plot area height [px].
+      integer(I4P)           :: i     !< Point counter.
+
+      w = area(2) - area(1)
+      h = area(4) - area(3)
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            r = 0.02_R8P * w
+            if (ieee_is_finite(series%radius(i))) then
+               if (.not. self%xaxis%accepts(series%x(i) + series%radius(i))) cycle
+               r = abs(self%xaxis%to_unit(series%x(i) + series%radius(i)) - u(i)) * w
+            endif
+            if (allocated(series%arcs)) then
+               call outline(r, 0.0_R8P, series%arcs(1, i), series%arcs(2, i), px, py)
+            else
+               call outline(r, 0.0_R8P, 0.0_R8P, 360.0_R8P, px, py)
+            endif
+            call backend%data_polygon(u(i) + px / w, v(i) + py / h, series%style%fill_color(), series%style%density, &
+                                      series%style%stroke_color(), series%style%linewidth)
+         enddo
+      endassociate
+      endsubroutine draw_circles
 
       subroutine draw_image
       !< The image pixels in the palette colors over the color axis, undefined values transparent; reversed axes flip it.
@@ -1081,6 +1169,42 @@ contains
       endsubroutine draw_bars
    endsubroutine draw_series
 
+   pure subroutine outline(r, r_in, a1, a2, px, py)
+   !< Outline of a circle (radius `r`, from `a1` to `a2` covering 360 degrees and no hole), a wedge (from the centre
+   !< along the arc from `a1` to `a2` [deg, counterclockwise]) or, with a hole of radius `r_in`, a ring sector: the
+   !< vertices relative to the centre [same unit as `r`, y upward]; arcs sampled every 360/64 degrees at most.
+   real(R8P),              intent(in)  :: r     !< Radius.
+   real(R8P),              intent(in)  :: r_in  !< Hole radius, 0 for none.
+   real(R8P),              intent(in)  :: a1    !< Start angle [deg].
+   real(R8P),              intent(in)  :: a2    !< End angle [deg]; below `a1`: one more turn, as gnuplot.
+   real(R8P), allocatable, intent(out) :: px(:) !< Vertex abscissae.
+   real(R8P), allocatable, intent(out) :: py(:) !< Vertex ordinates.
+   real(R8P), parameter                :: DEG = 4.0_R8P * atan(1.0_R8P) / 180.0_R8P !< Degrees to radians.
+   real(R8P)                           :: b     !< End angle, after `a1`.
+   real(R8P), allocatable              :: t(:)  !< Arc angles [rad].
+   integer(I4P)                        :: m     !< Arc steps.
+   integer(I4P)                        :: k     !< Counter.
+
+   b = a2
+   if (b < a1) b = b + 360.0_R8P
+   if (b - a1 >= 360.0_R8P .and. r_in <= 0.0_R8P) then
+      allocate(t(64))
+      t = [(real(k, R8P) * 360.0_R8P / 64.0_R8P * DEG, k = 0, 63)]
+      px = r * cos(t)
+      py = r * sin(t)
+      return
+   endif
+   m = max(2_I4P, ceiling((b - a1) / (360.0_R8P / 64.0_R8P), I4P))
+   t = [((a1 + (b - a1) * real(k, R8P) / real(m, R8P)) * DEG, k = 0, m)]
+   if (r_in > 0.0_R8P) then
+      px = [r * cos(t), r_in * cos(t(m + 1:1:-1))]
+      py = [r * sin(t), r_in * sin(t(m + 1:1:-1))]
+   else
+      px = [0.0_R8P, r * cos(t)]
+      py = [0.0_R8P, r * sin(t)]
+   endif
+   endsubroutine outline
+
    pure subroutine image_range(all, zmin, zmax, found)
    !< Range of the finite values of the images among the series `all`. A module procedure on the series array, as
    !< `layout_histograms`: gfortran 16 debug builds misread `self%series(s)%grid` through the class dummy.
@@ -1178,6 +1302,78 @@ contains
       endif
    enddo
    endsubroutine layout_histograms
+
+   subroutine draw_pie(self, backend, box, font_size)
+   !< A pie panel in the box (left, right, top, bottom) [px]: the slices of the values, from 12 o'clock clockwise in the
+   !< palette colors, a hole of the donut fraction of the radius; the key at the right, an entry per slice with its
+   !< label and percentage.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   character(len=:), allocatable        :: labels(:) !< Key entries.
+   real(R8P), allocatable               :: px(:)     !< Slice outline [px from the centre].
+   real(R8P), allocatable               :: py(:)     !< Slice outline [px from the centre, upward].
+   real(R8P)                            :: total     !< Sum of the values.
+   real(R8P)                            :: start     !< Slice start angle [deg].
+   real(R8P)                            :: span      !< Slice angle [deg].
+   real(R8P)                            :: key_width !< Key width [px].
+   real(R8P)                            :: centre(2) !< Pie centre [px].
+   real(R8P)                            :: r         !< Pie radius [px].
+   real(R8P)                            :: yk        !< Key row centre [px].
+   integer(I4P)                         :: k         !< Slice counter.
+   integer(I4P)                         :: m         !< Slices.
+
+   associate(series => self%series(1))
+      m = size(series%values, kind=I4P)
+      total = sum(series%values, mask=ieee_is_finite(series%values))
+      allocate(character(len=64) :: labels(m))
+      key_width = 0.0_R8P
+      do k = 1_I4P, m
+         labels(k) = ''
+         if (allocated(series%xlabels)) labels(k) = trim(series%xlabels(k))
+         if (total > 0.0_R8P .and. ieee_is_finite(series%values(k))) &
+            labels(k) = trim(labels(k))//' '//int_str(int(nint(100.0_R8P * series%values(k) / total), I8P))//'%'
+         labels(k) = adjustl(labels(k))
+         key_width = max(key_width, backend%text_width(trim(labels(k)), '', font_size))
+      enddo
+      key_width = key_width + font_size + GAP + SAMPLE_LENGTH * font_size + GAP
+      if (.not. self%key) key_width = 0.0_R8P
+      r = 0.45_R8P * min(box(2) - box(1) - key_width, box(4) - box(3))
+      centre = [0.5_R8P * (box(1) + box(2) - key_width), 0.5_R8P * (box(3) + box(4))]
+      call backend%begin_group('fs-pie')
+      if (total > 0.0_R8P .and. r > 0.0_R8P) then
+         start = 90.0_R8P
+         do k = 1_I4P, m
+            if (.not. ieee_is_finite(series%values(k))) cycle
+            span = 360.0_R8P * series%values(k) / total
+            if (span <= 0.0_R8P) cycle
+            call outline(r, series%donut * r, start - span, start, px, py)
+            call backend%polygon(centre(1) + px, centre(2) - py, slice_color(k), series%style%density, &
+                                 merge('white', 'none ', series%style%border), 1.0_R8P)
+            start = start - span
+         enddo
+      endif
+      if (self%key) then
+         do k = 1_I4P, m
+            yk = box(3) + GAP + (real(k, R8P) - 0.5_R8P) * LINE_HEIGHT * font_size
+            call backend%polygon([box(2) - SAMPLE_LENGTH * font_size, box(2), box(2), box(2) - SAMPLE_LENGTH * font_size], &
+                                 [yk + 0.35_R8P * font_size, yk + 0.35_R8P * font_size, yk - 0.35_R8P * font_size, &
+                                  yk - 0.35_R8P * font_size], slice_color(k), series%style%density, 'none', 0.0_R8P)
+            call backend%text(box(2) - SAMPLE_LENGTH * font_size - GAP, yk + 0.35_R8P * font_size, trim(labels(k)), 'end')
+         enddo
+      endif
+      call backend%end_group
+   endassociate
+   contains
+      pure function slice_color(k) result(color)
+      !< Color of the `k`-th slice: the palette color `k`.
+      integer(I4P), intent(in)      :: k     !< Slice.
+      character(len=:), allocatable :: color !< SVG color.
+
+      color = default_color(k)
+      endfunction slice_color
+   endsubroutine draw_pie
 
    pure function has_image(self) result(has)
    !< Whether the panel has an image.

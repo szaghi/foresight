@@ -76,7 +76,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); `image` (`ima`), see [below](#images-and-palettes); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); `image` (`ima`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
@@ -99,6 +99,8 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | `filledcurves` | `x:y` (to `y=V`, or the closed polygon), `x:y1:y2` (a band) |
 | `histograms` | `y`, the rows at the point numbers 0, 1, ... |
 | `image` | `x:y:z` on a regular grid (default `1:2:3`), or a `matrix` file |
+| `circles` | `x:y` (default radius), `x:y:radius`, `x:y:radius:start:end` (wedges, degrees) |
+| `pie` | `y`, one slice per row; `y:xtic(N)` names the slices |
 
 ## Expressions in `using`
 
@@ -442,6 +444,35 @@ lowest values up to the emissive colors, and `maxcolors` turns the heatmap into 
 
 Not supported: `cubehelix`, `functions`, `file` palettes, `set palette model` other than RGB, `set colorbox` options
 (position, size, horizontal), `set cbtics`, `set format cb`, `set logscale cb`, `with rgbimage`, `pm3d`.
+
+## Circles, pies and donuts
+
+```gnuplot
+set style fill solid 0.4
+plot 'scaling.dat' u 2:3:4 w circles t 'memory [GB] as radius'
+```
+
+<Plot name="cb_circles" svg :width="560" :height="320" />
+
+`with circles` draws a circle per point, as gnuplot: its radius in x-axis units (the third column; 2% of the plot
+width without it), round on the page whatever the axis scales, filled with the fill style. The x autoscale widens to
+the circles, the y one does not (gnuplot's choice: their height in y units depends on the page). With two more
+columns, a start and an end angle in degrees counterclockwise from the x direction, it draws wedges.
+
+```gnuplot
+set title 'Time per step'
+plot 'phases.dat' u 2:xtic(1) w pie
+```
+
+<Plot name="cb_pie" svg :width="480" :height="320" />
+
+`with pie` is a foresight extension (gnuplot draws pies only through `circles` and computed angles): one slice per row,
+proportional to the values, from 12 o'clock clockwise, each in its palette color; the key lists the slices with their
+`xtic` names and percentages. `donut F` leaves a hole of F times the radius. A pie is alone in its panel, without axes,
+and takes non-negative values only: slices compare parts of a whole, which a signed quantity is not. Angles read less
+precisely than lengths: for comparing the parts, [histograms](#histograms) are the better chart.
+
+<Plot name="cb_donut_vfd" svg :width="480" :height="320" />
 
 ## Themes and segmented fills
 
