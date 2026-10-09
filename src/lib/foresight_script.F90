@@ -31,7 +31,8 @@ module foresight_script
 !< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
 !<   the labels replacing the x ticks;
-!< - foresight extensions: `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
+!< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
+!<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style); `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
 !<   [opaque|noopaque] [size H]`, `unset readout`;
@@ -798,10 +799,11 @@ contains
              ((prev == 'lc' .or. prev == 'linecolor') .and. w /= 'rgb' .and. w /= 'rgbcolor')) then
             ! a color: only after lc or rgb
             if (.not. (prev == 'lc' .or. prev == 'linecolor' .or. prev == 'rgb' .or. prev == 'rgbcolor')) exit
-         elseif (is_word(w, 'empty transparent solid border noborder pattern')) then
+         elseif (is_word(w, 'empty transparent solid border noborder pattern segments')) then
          elseif ((w == 'lc' .or. w == 'linecolor') .and. prev == 'border') then
          elseif ((w == 'rgb' .or. w == 'rgbcolor') .and. (prev == 'lc' .or. prev == 'linecolor')) then
-         elseif (to_number(w, v) .and. (prev == 'solid' .or. prev == 'border' .or. prev == 'pattern')) then
+         elseif (to_number(w, v) .and. (prev == 'solid' .or. prev == 'border' .or. prev == 'pattern' .or. &
+                                         prev == 'segments')) then
          else
             exit
          endif
@@ -1048,6 +1050,20 @@ contains
          elseif (keyword(tokens(i)%text, 'refresh', 3_I4P)) then
             if (.not. next_integer(tokens, i, seconds, iostat, iomsg)) return
             call self%figure%set_refresh(seconds)
+         elseif (tokens(i)%text == 'theme') then
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set terminal: theme needs a name (classic, vfd, lcd)', iostat, iomsg)
+               return
+            endif
+            if (.not. is_word(tokens(i)%text, 'classic vfd lcd')) then
+               call fail('set terminal: unknown theme "'//tokens(i)%text//'" (supported: classic, vfd, lcd)', iostat, &
+                         iomsg)
+               return
+            endif
+            call self%figure%set_theme(name=tokens(i)%text)
+         elseif (tokens(i)%text == 'glow' .or. tokens(i)%text == 'noglow') then
+            call self%figure%set_theme(glow=tokens(i)%text == 'glow')
          else
             call fail('set terminal: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
             return

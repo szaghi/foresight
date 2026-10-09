@@ -40,7 +40,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
-| `set_style_fill(words)` | `set style fill solid 0.5 noborder` |
+| `set_style_fill(words)` | `set style fill solid 0.5 noborder`, `solid segments 10` |
+| `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
 | `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
 | `set_readout([on], [position], [opaque], [size])` | `set readout top right horizontal noopaque size 30`, `unset readout` (foresight extension, see [Readouts](gnuplot-subset#readouts)) |

@@ -213,6 +213,16 @@ the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled
 
 `x:y1:y2` fills between two columns; `filledcurves y=0` fills down to a line.
 
+## An 1980s dashboard
+
+<<< @/examples/snippets/cb_vfd.gp{gnuplot}
+
+<Plot name="cb_vfd" svg :width="640" :height="440" />
+
+`theme vfd` turns the page into a vacuum fluorescent display; `theme lcd` into a backlit LCD. `segments 10` cuts the
+bars into cells over the y range, the unlit ones drawn faintly. See
+[Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
+
 ## Seven-segment readouts
 
 <<< @/examples/snippets/cb_readout.gp{gnuplot}

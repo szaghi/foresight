@@ -24,6 +24,7 @@ module foresight_backend_dumb
 !< to it first (Sutherland-Hodgman). Fills go through `px_fill`, which a finer device overrides.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : axes_view, backend_object
+use foresight_theme, only : theme_object
 use foresight_sys, only : rename_file
 use penf, only : I4P, R8P
 
@@ -151,7 +152,7 @@ contains
       do c = 1_I4P, last
          if (self%colors /= 'mono' .and. self%tint(c, r) /= color .and. self%cell(c, r) /= ' ') then
             color = self%tint(c, r)
-            line = line//ansi_escape(self%colors, color_rgb(self%symbols, color))
+            line = line//ansi_escape(self%colors, color_rgb(self%symbols, color, self%theme))
          endif
          line = line//self%cell(c, r)
       enddo
@@ -267,9 +268,9 @@ contains
    enddo
    endsubroutine dots
 
-   subroutine polygon(self, x, y, fill, opacity, stroke, line_width)
+   subroutine polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon [px]: its inside filled (`px_fill`) unless `fill` is `none`, then its border with the symbol of
-   !< `stroke` unless `none`; the opacity has no meaning in text.
+   !< `stroke` unless `none`; the opacity has no meaning in text, a ghost (unlit cell) is not drawn.
    class(backend_dumb), intent(inout) :: self       !< Device.
    real(R8P),           intent(in)    :: x(:)       !< Vertex abscissae [px].
    real(R8P),           intent(in)    :: y(:)       !< Vertex ordinates [px].
@@ -277,9 +278,13 @@ contains
    real(R8P),           intent(in)    :: opacity    !< Fill opacity, unused.
    character(len=*),    intent(in)    :: stroke     !< Border color.
    real(R8P),           intent(in)    :: line_width !< Border width, unused.
+   logical,             intent(in), optional :: ghost !< Unlit cell of a segmented fill.
    integer(I4P)                       :: i          !< Vertex counter.
 
    if (self%hidden .or. size(x) < 2) return
+   if (present(ghost)) then
+      if (ghost) return
+   endif
    if (fill /= 'none') call self%px_fill(x, y, fill)
    if (stroke == 'none') return
    do i = 1_I4P, size(x, kind=I4P)
@@ -397,7 +402,7 @@ contains
    enddo
    endsubroutine data_bars
 
-   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width)
+   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon [unit square] clipped to the plot area, then drawn in it as `polygon`.
    class(backend_dumb), intent(inout) :: self       !< Device.
    real(R8P),           intent(in)    :: x(:)       !< Vertex abscissae [unit].
@@ -406,13 +411,14 @@ contains
    real(R8P),           intent(in)    :: opacity    !< Fill opacity.
    character(len=*),    intent(in)    :: stroke     !< Border color.
    real(R8P),           intent(in)    :: line_width !< Border width [px].
+   logical,             intent(in), optional :: ghost !< Unlit cell of a segmented fill.
    real(R8P), allocatable             :: cx(:)      !< Clipped abscissae [unit].
    real(R8P), allocatable             :: cy(:)      !< Clipped ordinates [unit].
 
    call clip_unit(x, y, cx, cy)
    if (size(cx) < 3) return
    call self%polygon(self%area(1) + cx * self%area(3), self%area(2) + (1.0_R8P - cy) * self%area(4), fill, opacity, &
-                     stroke, line_width)
+                     stroke, line_width, ghost)
    endsubroutine data_polygon
 
    pure function text_width(self, string, sup, font_size) result(width)
@@ -848,27 +854,29 @@ contains
       endfunction inside
    endsubroutine clip_unit
 
-   pure function color_rgb(symbols, k) result(rgb)
-   !< Red, green, blue (0-255) of the color `k` of `symbols`; -1 for the terminal's own color: index 0, a color that is
-   !< not `#rrggbb`, black or white (unreadable on one of the backgrounds).
+   pure function color_rgb(symbols, k, theme) result(rgb)
+   !< Red, green, blue (0-255) of the color `k` of `symbols` in the `theme`; -1 for the terminal's own color: index 0, a
+   !< color that is not `#rrggbb`, black or white (unreadable on one of the backgrounds).
    type(color_symbol), intent(in) :: symbols(:) !< Symbols in use.
    integer(I4P),       intent(in) :: k          !< Index, 0 for the default.
+   type(theme_object), intent(in) :: theme      !< Output theme.
    integer(I4P)                   :: rgb(3)     !< Color.
    integer(I4P)                   :: i          !< Component counter.
    integer(I4P)                   :: ios        !< Conversion status.
+   character(len=:), allocatable  :: color      !< Theme color.
 
    rgb = -1_I4P
    if (k < 1_I4P) return
-   associate(color => symbols(k)%color)
-      if (len(color) /= 7 .or. color(1:1) /= '#') return
-      do i = 1_I4P, 3_I4P
-         read(color(2 * i:2 * i + 1), '(Z2)', iostat=ios) rgb(i)
-         if (ios /= 0_I4P) then
-            rgb = -1_I4P
-            return
-         endif
-      enddo
-   endassociate
+   ! a local copy, not an associate: gfortran 16 aborts leaving an associate of a function result by return
+   color = theme%map(symbols(k)%color)
+   if (len(color) /= 7 .or. color(1:1) /= '#') return
+   do i = 1_I4P, 3_I4P
+      read(color(2 * i:2 * i + 1), '(Z2)', iostat=ios) rgb(i)
+      if (ios /= 0_I4P) then
+         rgb = -1_I4P
+         return
+      endif
+   enddo
    if (all(rgb == 0_I4P) .or. all(rgb == 255_I4P)) rgb = -1_I4P
    endfunction color_rgb
 

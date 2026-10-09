@@ -74,6 +74,12 @@ key only, as in gnuplot. A character holds one color, the last series drawn in i
 dots is a blank (gnuplot writes the empty Braille pattern), so the lines copy and trim as text; points are a dot and
 its four neighbours, clipped to the plot area.
 
+## Themes
+
+`set terminal ... theme vfd` (or `lcd`, `classic`) recolors any output as a 1980s digital dashboard: see
+[Themes and segmented fills](gnuplot-subset#themes-and-segmented-fills). SVG and HTML take the page, frame, grid and
+series colors and, for `vfd`, a glow; text takes the series colors only.
+
 ## Atomic writes
 
 Every file output is written to `<file>.tmp` and renamed over `<file>` when complete (POSIX `rename`), so a browser,

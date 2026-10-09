@@ -22,6 +22,7 @@ use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_style, only : fill_style
+use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -45,6 +46,7 @@ type :: figure_object
                                                               !< `braille` (gnuplot `block` terminal).
    character(len=7)               :: text_colors  = 'mono'    !< Text output colors: `mono`, `ansi`, `ansi256`,
                                                               !< `ansirgb`.
+   type(theme_object)             :: theme                    !< Output theme (foresight_theme), `classic` by default.
    integer(I4P)                   :: rows         = 1_I4P     !< Panel grid rows.
    integer(I4P)                   :: cols         = 1_I4P     !< Panel grid columns.
    integer(I4P)                   :: current      = 1_I4P     !< Current panel, filled row by row.
@@ -72,6 +74,7 @@ type :: figure_object
       procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
       procedure, pass(self) :: set_style_histogram !< gnuplot `set style histogram`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
+      procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
@@ -119,6 +122,7 @@ contains
    self%clear_screen = fresh%clear_screen
    self%text_charset = fresh%text_charset
    self%text_colors = fresh%text_colors
+   self%theme = fresh%theme
    self%rows = fresh%rows
    self%cols = fresh%cols
    self%current = fresh%current
@@ -211,6 +215,8 @@ contains
       call text(self%clear_screen)
       return
    endif
+   svg%theme = self%theme
+   html%theme = self%theme
    select case (extension(file))
    case ('svg')
       call self%render(svg, file)
@@ -231,6 +237,8 @@ contains
       type(backend_dumb)  :: dumb         !< Text device.
       type(backend_block) :: blocks       !< Block character text device.
 
+      dumb%theme = self%theme
+      blocks%theme = self%theme
       if (self%text_charset == 'dumb') then
          dumb%clear_screen = clear_screen
          dumb%colors = self%text_colors
@@ -499,6 +507,22 @@ contains
       panel%size = [width, height]
    endassociate
    endsubroutine set_size
+
+   subroutine set_theme(self, name, glow)
+   !< Output theme (a foresight extension): `name` `classic` (the default), `vfd` (a vacuum fluorescent display: black
+   !< glass, emissive colors, glowing data) or `lcd` (a backlit liquid crystal display); `glow` overrides the theme's
+   !< glow (on in `vfd`). Text output takes the theme colors of the series only (`ansi` colors).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   character(len=*),     intent(in), optional :: name !< Theme name.
+   logical,              intent(in), optional :: glow !< Glowing data.
+
+   if (present(name)) then
+      if (index(' '//THEMES//' ', ' '//trim(name)//' ') == 0) &
+         error stop 'foresight: set_theme: unknown theme "'//trim(name)//'" (supported: '//THEMES//')'
+      self%theme = theme_named(name)
+   endif
+   if (present(glow)) self%theme%glow = glow
+   endsubroutine set_theme
 
    subroutine set_title(self, title)
    !< Set the title of the current panel, empty for none.

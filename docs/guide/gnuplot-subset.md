@@ -43,12 +43,12 @@ that did what it says.
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
-| **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`] [`border` [`lc C`\|`-1`]\|`noborder`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default | — |
+| **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
-| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
+| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`theme classic`\|`vfd`\|`lcd`] [`glow`\|`noglow`] | output format, size in px, HTML reload period; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
@@ -398,6 +398,40 @@ unset multiplot
   block fills it, unless `set readout size H` fixes their height [px] (2.5 font sizes by default).
 - **In text** (`dumb`, `block`), the digits are drawn with `_` and `|`, 3 rows of 4 characters per cell, in the item
   color with `ansi`; the unlit segments are not drawn. In the HTML page, zoom and follow mode leave readouts alone.
+
+## Themes and segmented fills
+
+Foresight extensions: the look of the digital dashboards of 1980s cars, for monitoring and showcase pages.
+
+```gnuplot
+set terminal svg size 640,440 theme vfd
+set multiplot title 'RUN MONITOR'
+set origin 0,0.62; set size 0.4,0.38; set readout vertical
+plot 'run.dat' u 1 w readout format '%4.0f' t 'ITER', '' u 5 w readout format '%6.4f' t 'CD'
+set origin 0.4,0.62; set size 0.6,0.38; set key top left
+set style fill solid segments 10
+plot 'timings.dat' u 2:xtic(1) w hist t 'mesh', '' u 3 w hist t 'fluxes'
+set origin 0,0; set size 1,0.62; set key top right
+set logscale y; set grid
+plot 'run.dat' u 1:2 w l lw 2 t 'continuity', '' u 1:3 w l lw 2 t 'momentum'
+unset multiplot
+```
+
+<Plot name="cb_vfd" svg :width="640" :height="440" />
+
+**Themes** recolor the output, never the figure: `classic` (the default) changes nothing; `vfd` is a vacuum
+fluorescent display, black glass, emissive series colors (cyan-green, amber, red, ...), the frame and labels printed in
+blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments. The gnuplot palette
+colors, the frame, grid and page become the theme ones; a color you give (`lc '#123456'`) is kept. `glow` and
+`noglow` override the theme (only `vfd` glows by default); the glow is an SVG filter, so converters that do not render
+filters (some PDF ones) drop or rasterize it. In the HTML page, the ticks and grid redrawn by a zoom take the theme
+colors. In text the theme only recolors the series, with `ansi`, `ansi256` or `ansirgb`: the terminal background is
+not foresight's.
+
+**Segmented fills**, `fs solid segments N` (boxes, histograms): the y range is cut into N cells, the same for every
+bar, as on a fixed-segment display. A bar lights the cells it covers at least half (it reads to the nearest cell: a
+quantization, a display choice, not a measurement), the other cells of its column are drawn faintly (not drawn in
+text). Zooming magnifies the cells with the data.
 
 ## Not supported
 

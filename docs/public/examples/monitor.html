@@ -273,6 +273,7 @@
   var TOL = 1e-9, TICK_SPACING = 50, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
   var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
+  // frame and grid colors; a themed page overrides them (data-frame, data-grid-color of its svg)
   var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
   var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
   var NS = "http://www.w3.org/2000/svg";
@@ -1083,6 +1084,8 @@
   function start() {
     var svg = document.querySelector("svg");
     if (!svg || !svg.querySelector(".fs-axes")) return;
+    if (svg.hasAttribute("data-frame")) FRAME_COLOR = svg.getAttribute("data-frame");
+    if (svg.hasAttribute("data-grid-color")) GRID_COLOR = svg.getAttribute("data-grid-color");
     svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
       panels.push(new Panel(svg, group, k));
     });

@@ -28,7 +28,6 @@ real(R8P),        parameter :: SEGMENT_WIDTH  = 0.13_R8P   !< Segment thickness,
 real(R8P),        parameter :: POINT_OFFSET   = 0.64_R8P   !< Decimal point left side, from its cell.
 real(R8P),        parameter :: SLANT          = 0.14054_R8P !< Slant: tan(8 deg), the bottom shifted left.
 real(R8P),        parameter :: SEGMENT_GAP    = 0.35_R8P   !< Gap between segment ends [segment thickness].
-character(len=*), parameter :: GHOST_OPACITY  = '0.07'     !< Opacity of the unlit segments.
 
 type, extends(backend_object) :: backend_svg
    !< SVG output device.
@@ -179,7 +178,8 @@ contains
    real(R8P),          intent(in)    :: line_width !< Stroke width [px].
 
    call self%put('<rect x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
-                 '" fill="'//fill//'" stroke="'//stroke//'" stroke-width="'//px(line_width)//'"/>')
+                 '" fill="'//self%theme%map(fill)//'" stroke="'//self%theme%map(stroke)//'" stroke-width="'// &
+                 px(line_width)//'"/>')
    endsubroutine rect
 
    subroutine polyline(self, x, y, color, line_width, dasharray)
@@ -191,7 +191,7 @@ contains
    real(R8P),          intent(in)    :: line_width !< Stroke width [px].
    character(len=*),   intent(in)    :: dasharray  !< SVG dash array, empty for solid.
 
-   write(self%unit, '(A)', advance='no') '<polyline fill="none" stroke="'//color//'" stroke-width="'// &
+   write(self%unit, '(A)', advance='no') '<polyline fill="none" stroke="'//self%theme%map(color)//'" stroke-width="'// &
                                          px(line_width)//'"'//dash_attribute(dasharray)//' points="'
    call self%write_pairs(x, y, PX_DECIMALS, '', '')
    call self%put('"/>')
@@ -209,19 +209,20 @@ contains
 
    if (present(pt)) then
       if (pt >= 0_I4P) then
-         call self%put(marker_element(x, y, color, diameter, pt, line_width))
+         call self%put(marker_element(x, y, self%theme%map(color), diameter, pt, line_width))
          return
       endif
    endif
    ! a zero-length subpath with round caps renders as a dot of diameter stroke-width
-   write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//color//'" stroke-width="'//px(diameter)// &
+   write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//self%theme%map(color)//'" stroke-width="'// &
+                                         px(diameter)// &
                                          '" stroke-linecap="round" d="'
    call self%write_pairs(x, y, PX_DECIMALS, 'M', 'h0')
    call self%put('"/>')
    endsubroutine dots
 
-   subroutine polygon(self, x, y, fill, opacity, stroke, line_width)
-   !< Closed polygon of the vertices (`x`, `y`) [px], filled and stroked.
+   subroutine polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
+   !< Closed polygon of the vertices (`x`, `y`) [px], filled and stroked; a ghost faintly filled only.
    class(backend_svg), intent(inout) :: self       !< Device.
    real(R8P),          intent(in)    :: x(:)       !< Vertex abscissae [px].
    real(R8P),          intent(in)    :: y(:)       !< Vertex ordinates [px].
@@ -229,8 +230,9 @@ contains
    real(R8P),          intent(in)    :: opacity    !< Fill opacity.
    character(len=*),   intent(in)    :: stroke     !< Border color.
    real(R8P),          intent(in)    :: line_width !< Border width [px].
+   logical,            intent(in), optional :: ghost !< Unlit cell of a segmented fill.
 
-   write(self%unit, '(A)', advance='no') '<path'//paint(fill, opacity, stroke, line_width)//' d="M'
+   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, fill, opacity, stroke, line_width, ghost)//' d="M'
    call self%write_pairs(x, y, PX_DECIMALS, '', '')
    call self%put('Z"/>')
    endsubroutine polygon
@@ -267,6 +269,8 @@ contains
    self%area = [x, y, width, height]
    self%caps = ''
    self%marks = ''
+   ! the glow is applied in page pixels, around the plot area and its overlays: inside, the unit square would scale it
+   if (self%theme%glow) call self%put('<g class="fs-glow" filter="url(#fs-glow)">')
    call self%put('<svg class="fs-plot" x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
                  '" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">')
    endsubroutine begin_plot_area
@@ -279,6 +283,7 @@ contains
    call self%put('</svg>')
    call overlay('fs-caps', self%caps)
    call overlay('fs-marks', self%marks)
+   if (self%theme%glow) call self%put('</g>')
    self%caps = ''
    self%marks = ''
    contains
@@ -304,7 +309,7 @@ contains
    real(R8P),          intent(in)    :: line_width !< Stroke width [px].
    character(len=*),   intent(in)    :: dasharray  !< SVG dash array, empty for solid.
 
-   write(self%unit, '(A)', advance='no') '<polyline fill="none" stroke="'//color//'" stroke-width="'// &
+   write(self%unit, '(A)', advance='no') '<polyline fill="none" stroke="'//self%theme%map(color)//'" stroke-width="'// &
                                          px(line_width)//'" stroke-linejoin="round" '// &
                                          'vector-effect="non-scaling-stroke"'//dash_attribute(dasharray)//' points="'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
@@ -332,15 +337,17 @@ contains
          if (present(line_width)) width = line_width
          write(self%unit, '(A)', advance='no') '<path class="fs-pts" data-pt="'//int_str(int(pt, I8P))// &
                                                '" data-size="'//px(diameter)//'" data-lw="'//px(width)// &
-                                               '" data-color="'//color//'" fill="none" stroke="none" d="'
+                                               '" data-color="'//self%theme%map(color)//'" fill="none" stroke="none" d="'
          call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', '')
          call self%put('"/>')
-         self%marks = self%marks//marker_element(x * self%area(3), (1.0_R8P - y) * self%area(4), color, diameter, &
+         self%marks = self%marks//marker_element(x * self%area(3), (1.0_R8P - y) * self%area(4), &
+                                                 self%theme%map(color), diameter, &
                                                  pt, width, self%series)//new_line('a')
          return
       endif
    endif
-   write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//color//'" stroke-width="'//px(diameter)// &
+   write(self%unit, '(A)', advance='no') '<path fill="none" stroke="'//self%theme%map(color)//'" stroke-width="'// &
+                                         px(diameter)// &
                                          '" stroke-linecap="round" vector-effect="non-scaling-stroke" d="'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', 'h0')
    call self%put('"/>')
@@ -367,7 +374,7 @@ contains
    if (size(x1) == 0) return
    kind = merge('fs-ybars', 'fs-xbars', vertical)
    write(self%unit, '(A)', advance='no') '<path class="'//kind//'" data-cap="'//px(cap)//'" fill="none" stroke="'// &
-                                         color//'" stroke-width="'//px(line_width)// &
+                                         self%theme%map(color)//'" stroke-width="'//px(line_width)// &
                                          '" vector-effect="non-scaling-stroke" d="'
    do i = 1_I4P, size(x1, kind=I4P)
       if (i > 1_I4P) then
@@ -389,17 +396,19 @@ contains
          endif
          if (vertical) then
             self%caps = self%caps//'<line x1="'//px(p(1) - h)//'" y1="'//px(p(2))//'" x2="'//px(p(1) + h)// &
-                        '" y2="'//px(p(2))//'" stroke="'//color//'" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+                        '" y2="'//px(p(2))//'" stroke="'//self%theme%map(color)//'" stroke-width="'//px(line_width)// &
+                       '"/>'//new_line('a')
          else
             self%caps = self%caps//'<line x1="'//px(p(1))//'" y1="'//px(p(2) - h)//'" x2="'//px(p(1))// &
-                        '" y2="'//px(p(2) + h)//'" stroke="'//color//'" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+                        '" y2="'//px(p(2) + h)//'" stroke="'//self%theme%map(color)//'" stroke-width="'// &
+                       px(line_width)//'"/>'//new_line('a')
          endif
       enddo
    enddo
    if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
 
-   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width)
+   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon of the vertices (`x`, `y`) [unit square], clipped by the plot area; its border keeps its pixel width
    !< under zoom.
    class(backend_svg), intent(inout) :: self       !< Device.
@@ -409,8 +418,9 @@ contains
    real(R8P),          intent(in)    :: opacity    !< Fill opacity.
    character(len=*),   intent(in)    :: stroke     !< Border color.
    real(R8P),          intent(in)    :: line_width !< Border width [px].
+   logical,            intent(in), optional :: ghost !< Unlit cell of a segmented fill.
 
-   write(self%unit, '(A)', advance='no') '<path'//paint(fill, opacity, stroke, line_width)// &
+   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, fill, opacity, stroke, line_width, ghost)// &
                                          ' vector-effect="non-scaling-stroke" d="M'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
    call self%put('Z"/>')
@@ -473,9 +483,10 @@ contains
    call self%put('<g class="fs-readout">')
    if (len(label) > 0) call self%put('<text x="'//px(x)//'" y="'//px(y + font_size)//'" font-weight="bold">'// &
                                      xml_escape(label)//'</text>')
-   call self%put('<g transform="translate('//px(geometry(1))//' '//px(geometry(2))//') skewX(-8)" fill="'//color//'">')
-   if (len(ghost) > 0) call self%put('<path fill-opacity="'//GHOST_OPACITY//'" d="'//ghost//'"/>')
-   if (len(lit) > 0) call self%put('<path d="'//lit//'"/>')
+   call self%put('<g transform="translate('//px(geometry(1))//' '//px(geometry(2))//') skewX(-8)" fill="'// &
+                 self%theme%map(color)//'">')
+   if (len(ghost) > 0) call self%put('<path fill-opacity="'//fixed(self%theme%ghost, 2_I4P)//'" d="'//ghost//'"/>')
+   if (len(lit) > 0) call self%put('<path'//glow_attribute(self)//' d="'//lit//'"/>')
    call self%put('</g>')
    if (len(prefix) > 0) call self%text(x, geometry(2) + height, prefix, 'start')
    if (len(suffix) > 0) call self%text(geometry(1) + geometry(3) + 0.5_R8P * font_size, geometry(2) + height, suffix, &
@@ -537,9 +548,18 @@ contains
 
    extra = ''
    if (present(attributes)) extra = attributes
+   ! a theme colors the text (inherited) and tells the viewer the colors of the ticks and grid it redraws
+   if (.not. self%theme%is_classic()) extra = extra//' fill="'//trim(self%theme%frame)//'" data-theme="'// &
+                                              trim(self%theme%name)//'" data-frame="'//trim(self%theme%frame)// &
+                                              '" data-grid-color="'//trim(self%theme%grid)//'"'
    call self%put('<svg xmlns="http://www.w3.org/2000/svg" width="'//px(width)//'" height="'//px(height)// &
                  '" viewBox="0 0 '//px(width)//' '//px(height)//'" font-family="'//FONT_FAMILY// &
                  '" font-size="'//px(font_size)//'"'//extra//'>')
+   ! the filter region in page pixels: a bounding box relative region fails on the nested plot area viewports
+   if (self%theme%glow) call self%put('<defs><filter id="fs-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="'// &
+                                      px(width)//'" height="'//px(height)//'">'// &
+                                      '<feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/>'// &
+                                      '<feMergeNode in="SourceGraphic"/></feMerge></filter></defs>')
    endsubroutine open_svg
 
    pure function output_unit(self) result(unit)
@@ -783,6 +803,35 @@ contains
           'L'//px(ox + u)//','//px(v2)//'L'//px(ox + u - h)//','//px(v2 - h)//'L'//px(ox + u - h)//','//px(v1 + h)//'Z'
       endfunction along
    endfunction segment_path
+
+   pure function polygon_paint(self, fill, opacity, stroke, line_width, ghost) result(attributes)
+   !< Paint attributes of a polygon in the theme colors; a ghost (an unlit cell) at the theme ghost opacity, no border.
+   class(backend_svg), intent(in)           :: self       !< Device.
+   character(len=*),   intent(in)           :: fill       !< Fill color.
+   real(R8P),          intent(in)           :: opacity    !< Fill opacity.
+   character(len=*),   intent(in)           :: stroke     !< Border color.
+   real(R8P),          intent(in)           :: line_width !< Border width [px].
+   logical,            intent(in), optional :: ghost      !< Unlit cell.
+   character(len=:), allocatable            :: attributes !< Attributes, a leading space included.
+   logical                                  :: faint      !< Ghost.
+
+   faint = .false.
+   if (present(ghost)) faint = ghost
+   if (faint) then
+      attributes = ' fill="'//self%theme%map(fill)//'" fill-opacity="'//fixed(self%theme%ghost, 3_I4P)//'" stroke="none"'
+   else
+      attributes = paint(self%theme%map(fill), opacity, self%theme%map(stroke), line_width)
+   endif
+   endfunction polygon_paint
+
+   pure function glow_attribute(self) result(attribute)
+   !< ` filter="url(#fs-glow)"` with a glowing theme, else nothing.
+   class(backend_svg), intent(in) :: self      !< Device.
+   character(len=:), allocatable  :: attribute !< Attribute text.
+
+   attribute = ''
+   if (self%theme%glow) attribute = ' filter="url(#fs-glow)"'
+   endfunction glow_attribute
 
    pure function paint(fill, opacity, stroke, line_width) result(attributes)
    !< Fill and stroke attributes of a polygon: `fill-opacity` only below 1, the stroke width only with a stroke.

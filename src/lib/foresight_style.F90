@@ -5,6 +5,8 @@ module foresight_style
 !< Filled styles (`boxes`, `filledcurves`) take gnuplot's fill style: `empty` (the default, the border only), `solid D`
 !< (the line color at opacity D, 1 by default; `transparent` before it changes nothing in SVG, as gnuplot's svg
 !< terminal), with a `border` in the line color, another color (`border lc "c"`, `border -1` black) or `noborder`.
+!< foresight adds `segments N` (boxes and histograms): the y range cut into N cells, a bar lighting the cells it covers
+!< at least half, the others drawn faintly, as the bar graphs of a 1980s display.
 use penf, only : I4P, R8P
 use foresight_format, only : fixed, real_from_decimal
 
@@ -50,6 +52,7 @@ type :: style_object
    real(R8P)                     :: density   = 1.0_R8P    !< Fill opacity, solid fills.
    logical                       :: border    = .true.     !< Border of filled styles.
    character(len=:), allocatable :: border_color           !< Border color, empty for the line color.
+   integer(I4P)                  :: segments  = 0_I4P      !< Cells over the y range of a segmented fill, 0 for none.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
@@ -201,8 +204,8 @@ contains
 
    subroutine fill_style(words, style, bad)
    !< Update the fill of `style` from gnuplot fill style words, blank separated: `empty`, `solid [D]`,
-   !< `transparent solid [D]`, `border [lc [rgb] COLOR | -1]` (COLOR quoted or not), `noborder`; `bad` is the first word
-   !< not understood.
+   !< `transparent solid [D]`, `border [lc [rgb] COLOR | -1]` (COLOR quoted or not), `noborder`, and foresight's
+   !< `segments N` (N from 1 to 1000; `segments 0` for none); `bad` is the first word not understood.
    character(len=*),              intent(in)    :: words !< Fill style words.
    type(style_object),            intent(inout) :: style !< Style updated.
    character(len=:), allocatable, intent(out)   :: bad   !< First word not understood, empty if none.
@@ -256,6 +259,19 @@ contains
          endif
       case ('noborder')
          style%border = .false.
+      case ('segments')
+         ok = .false.
+         if (k < size(list, kind=I4P)) call real_from_decimal(trim(list(k + 1_I4P)), v, ok)
+         if (.not. ok) then
+            bad = 'segments (a number of cells is expected)'
+            return
+         endif
+         if (v < 0.0_R8P .or. v > 1000.0_R8P .or. v /= aint(v)) then
+            bad = trim(list(k + 1_I4P))//' (segments takes a whole number of cells, 0 to 1000)'
+            return
+         endif
+         style%segments = int(v, I4P)
+         k = k + 1_I4P
       case ('pattern')
          bad = 'pattern (fill patterns are not supported)'
          return

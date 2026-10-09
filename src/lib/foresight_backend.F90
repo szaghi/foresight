@@ -11,6 +11,7 @@ module foresight_backend
 !< redrawable decorations (grid, ticks) by named `begin_group`/`end_group`: an interactive device regenerates them after
 !< a zoom, a static one just writes them.
 use penf, only : I4P, R8P
+use foresight_theme, only : theme_object
 
 implicit none
 private
@@ -40,6 +41,7 @@ endtype axes_view
 
 type, abstract :: backend_object
    !< Abstract output device.
+   type(theme_object) :: theme !< Output theme: colors the layout's ones are mapped to (foresight_theme).
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.
@@ -122,10 +124,11 @@ abstract interface
    character(len=*),      intent(in)    :: dasharray  !< SVG dash array, empty for solid.
    endsubroutine lines_interface
 
-   subroutine polygon_interface(self, x, y, fill, opacity, stroke, line_width)
+   subroutine polygon_interface(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon of the vertices (`x`, `y`): filled with `fill` at `opacity` (0..1), its border stroked with `stroke`
    !< `line_width` px wide; `fill` and `stroke` are SVG colors or `none`. In unit-square coordinates (`data_polygon`)
-   !< it is clipped to the plot area.
+   !< it is clipped to the plot area. A `ghost` is an unlit cell of a segmented fill: drawn faintly (the theme ghost
+   !< opacity, no border), or not at all on a device without faint intensity (text).
    import :: backend_object, R8P
    class(backend_object), intent(inout) :: self       !< Device.
    real(R8P),             intent(in)    :: x(:)       !< Vertex abscissae.
@@ -134,6 +137,7 @@ abstract interface
    real(R8P),             intent(in)    :: opacity    !< Fill opacity.
    character(len=*),      intent(in)    :: stroke     !< Border color.
    real(R8P),             intent(in)    :: line_width !< Border width [px].
+   logical,               intent(in), optional :: ghost !< Unlit cell of a segmented fill.
    endsubroutine polygon_interface
 
    subroutine bars_interface(self, x1, y1, x2, y2, color, line_width, cap, vertical)

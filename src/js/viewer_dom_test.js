@@ -4,7 +4,7 @@
 // panels over the same iterations, with three and one series, markers and error bar caps. Then on
 // a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
-// histograms.html, text labels of the data as x ticks. The page is parsed by linkedom; the SVG
+// histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -174,6 +174,15 @@ check("labels as x ticks", xlabels().join("|") === "Xall GPU|Xall CPU|ADAM");
 wheel(0);
 check("a zoom keeps labels, not numbers", box(0)[2] < 1 && xlabels().length > 0 &&
   xlabels().every(function (t) { return /^(Xall GPU|Xall CPU|ADAM)$/.test(t); }));
+
+// a themed page: the ticks the viewer redraws take the theme frame color, not black
+page = strip(path.join(__dirname, "..", "tests", "golden", "theme_vfd.html"));
+p = load("");
+wheel(0);
+check("themed ticks redrawn in the theme color", box(0)[2] < 1 &&
+  Array.prototype.every.call(panel(0).querySelectorAll(".fs-xticks line"),
+    function (l) { return l.getAttribute("stroke") === "#5d9cff"; }) &&
+  panel(0).querySelectorAll(".fs-xticks line").length > 0);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(25)                  !< Per-figure outcome.
+logical                     :: test_passed(32)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -44,7 +44,15 @@ test_passed(23) = check('histograms.txt', figure_histograms(.false.))
 test_passed(24) = check('histograms_rowstacked.svg', figure_histograms(.true.))
 ! also the page of the viewer DOM test of text labels (src/js/viewer_dom_test.js)
 test_passed(25) = check('histograms.html', figure_histograms(.false.))
-write(output_unit, '(A,25L2)') 'foresight golden checks:', test_passed
+test_passed(26) = check('segments.svg', figure_segments())
+test_passed(27) = check('segments.txt', figure_segments())
+test_passed(28) = check('theme_vfd.svg', figure_theme('vfd'))
+test_passed(29) = check('theme_lcd.svg', figure_theme('lcd'))
+test_passed(30) = check('theme_vfd_block.txt', figure_theme_block())
+test_passed(31) = check('theme_vfd_noglow.svg', figure_theme('vfd', glow=.false.))
+! also the page of the viewer DOM test of themes (src/js/viewer_dom_test.js)
+test_passed(32) = check('theme_vfd.html', figure_theme('vfd'))
+write(output_unit, '(A,32L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -271,6 +279,52 @@ contains
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [2.0_R8P, 1.0_R8P, 4.0_R8P], title='io', with='histograms')
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [1.0_R8P, 2.0_R8P, -1.0_R8P], title='comm', with='histograms')
    endfunction figure_histograms
+
+   function figure_segments() result(fig)
+   !< Segmented boxes (classic theme): 10 cells over the y range, lit when covered at least half, the others ghosts
+   !< (not drawn in text); a negative box lights the cells below 0.
+   type(figure_object) :: fig !< Figure.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   call fig%set_yrange(min=-2.0_R8P, max=8.0_R8P)
+   call fig%plot([1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [3.2_R8P, 7.0_R8P, -1.4_R8P, 5.6_R8P], title='level', &
+                 with='boxes', fs='solid segments 10')
+   endfunction figure_segments
+
+   function figure_theme(name, glow) result(fig)
+   !< A 1980s display: a log curve with a readout, segmented histograms, in the theme `name` (classic otherwise).
+   character(len=*), intent(in)           :: name !< Theme name.
+   logical,          intent(in), optional :: glow !< Glow override.
+   type(figure_object)                    :: fig  !< Figure.
+   real(R8P), allocatable                 :: it(:) !< Iterations.
+   integer(I4P)                           :: i    !< Counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   call fig%set_theme(name=name, glow=glow)
+   it = [(real(i, R8P), i = 1, 60)]
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P, title='RUN 42')
+   call fig%set_logscale('y')
+   call fig%set_grid
+   call fig%plot(it, 10.0_R8P**(-0.08_R8P * it) * (1.0_R8P + 0.3_R8P * sin(it / 3.0_R8P)), title='residual', lw=2.0_R8P)
+   call fig%plot(it, 10.0_R8P**(-0.08_R8P * it) * (1.0_R8P + 0.3_R8P * sin(it / 3.0_R8P)), title='RES', &
+                 with='readout', format='%9.2e')
+   call fig%next_panel
+   call fig%unset_logscale
+   call fig%set_grid(.false.)
+   call fig%set_readout(position='top right')
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [3.0_R8P, 5.0_R8P, 2.0_R8P], title='mesh', with='histograms', &
+                 fs='solid segments 12', xlabels=['GPU', 'CPU', 'MIX'])
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [2.0_R8P, 1.0_R8P, 4.0_R8P], title='io', with='histograms', &
+                 fs='solid segments 12')
+   endfunction figure_theme
+
+   function figure_theme_block() result(fig)
+   !< The vfd display on the block device in true colors: the theme recolors the series only.
+   type(figure_object) :: fig !< Figure.
+
+   fig = figure_theme('vfd')
+   call fig%set_text(charset='quadrants', colors='ansirgb')
+   endfunction figure_theme_block
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

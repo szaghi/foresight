@@ -42,7 +42,8 @@ contains
    call self%put('<head>')
    call self%put('<meta charset="utf-8">')
    call self%put('<title>'//xml_escape(title)//'</title>')
-   call self%put('<style>body{margin:0;background:#fff}svg{display:block;user-select:none}</style>')
+   call self%put('<style>body{margin:0;background:'//trim(merge('#fff   ', self%theme%background, self%theme%is_classic()))// &
+                 '}svg{display:block;user-select:none}</style>')
    call self%put('</head>')
    call self%put('<body>')
    call self%open_svg(width, height, font_size, ' data-refresh="'//int_str(int(self%refresh, I8P))//'"')

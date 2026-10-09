@@ -29,7 +29,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(53)                           !< Per-check outcome.
+logical                       :: test_passed(55)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -499,6 +499,23 @@ test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'only
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! themes and segmented fills (foresight extensions)
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg theme vfd noglow; set style fill solid segments 12", iostat, iomsg)
+test_passed(54) = iostat == 0_I4P
+if (test_passed(54)) test_passed(54) = interpreter%figure%theme%name == 'vfd' .and. &
+                                       .not. interpreter%figure%theme%glow .and. &
+                                       interpreter%figure%panels(1)%fill_default%segments == 12_I4P
+call interpreter%run_text("set terminal block theme lcd glow", iostat, iomsg)
+test_passed(54) = test_passed(54) .and. iostat == 0_I4P .and. interpreter%figure%theme%name == 'lcd' .and. &
+                  interpreter%figure%theme%glow
+call interpreter%run_text("set terminal svg theme neon", iostat, iomsg)
+test_passed(55) = iostat /= 0_I4P .and. index(iomsg, 'unknown theme "neon"') > 0
+call interpreter%run_text("set style fill solid segments 2.5", iostat, iomsg)
+test_passed(55) = test_passed(55) .and. iostat /= 0_I4P .and. index(iomsg, 'whole number of cells') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -511,7 +528,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,53L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,55L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

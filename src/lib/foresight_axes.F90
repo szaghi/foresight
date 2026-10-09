@@ -181,6 +181,7 @@ contains
       series%style%fill = self%fill_default%fill
       series%style%density = self%fill_default%density
       series%style%border = self%fill_default%border
+      series%style%segments = self%fill_default%segments
       if (allocated(self%fill_default%border_color)) series%style%border_color = self%fill_default%border_color
       if (present(fs)) then
          call fill_style(fs, series%style, bad)
@@ -854,7 +855,9 @@ contains
    endassociate
    contains
       subroutine draw_boxes
-      !< One polygon per placeable box, from its baseline (0, or the axis bottom on a log axis) to its value.
+      !< One polygon per placeable box, from its baseline (0, or the axis bottom on a log axis) to its value; with
+      !< `segments N`, the column of N cells over the y range, the ones the box covers at least half lit, the others
+      !< ghosts.
       real(R8P) :: v0 !< Unit ordinate of the baseline.
       integer(I4P) :: i !< Box counter.
 
@@ -864,6 +867,10 @@ contains
             if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)))) cycle
             v0 = -1.0_R8P
             if (yaxis%accepts(series%ylow(i))) v0 = yaxis%to_unit(series%ylow(i))
+            if (series%style%segments > 0_I4P) then
+               call draw_cells(self%xaxis%to_unit(series%xlow(i)), self%xaxis%to_unit(series%xhigh(i)), v0, v(i))
+               cycle
+            endif
             call backend%data_polygon([self%xaxis%to_unit(series%xlow(i)), self%xaxis%to_unit(series%xhigh(i)), &
                                        self%xaxis%to_unit(series%xhigh(i)), self%xaxis%to_unit(series%xlow(i))], &
                                       [v0, v0, v(i), v(i)], series%style%fill_color(), series%style%density, &
@@ -871,6 +878,42 @@ contains
          enddo
       endassociate
       endsubroutine draw_boxes
+
+      subroutine draw_cells(u1, u2, v0, v1)
+      !< The cells of a segmented column between `u1` and `u2`: N cells over the unit height, each inset by an eighth of
+      !< its height top and bottom and a tenth of the column on each side (touching boxes stay apart columns); lit when
+      !< the box from `v0` to `v1` covers at least half of it, else a ghost.
+      real(R8P), intent(in) :: u1   !< Column left [unit].
+      real(R8P), intent(in) :: u2   !< Column right [unit].
+      real(R8P), intent(in) :: v0   !< Box base [unit].
+      real(R8P), intent(in) :: v1   !< Box top [unit].
+      real(R8P)             :: h    !< Cell height [unit].
+      real(R8P)             :: c0   !< Cell bottom [unit].
+      real(R8P)             :: c1   !< Cell top [unit].
+      real(R8P)             :: inset !< Cell inset, top and bottom [unit].
+      real(R8P)             :: a    !< Cell left [unit].
+      real(R8P)             :: b    !< Cell right [unit].
+      integer(I4P)          :: c    !< Cell counter.
+
+      associate(series => self%series(s))
+         h = 1.0_R8P / real(series%style%segments, R8P)
+         inset = 0.125_R8P * h
+         a = u1 + 0.1_R8P * (u2 - u1)
+         b = u2 - 0.1_R8P * (u2 - u1)
+         do c = 0_I4P, series%style%segments - 1_I4P
+            c0 = real(c, R8P) * h
+            c1 = c0 + h
+            if (min(max(v0, v1), c1) - max(min(v0, v1), c0) >= 0.5_R8P * h) then
+               call backend%data_polygon([a, b, b, a], [c0 + inset, c0 + inset, c1 - inset, c1 - inset], &
+                                         series%style%fill_color(), series%style%density, series%style%stroke_color(), &
+                                         series%style%linewidth)
+            else
+               call backend%data_polygon([a, b, b, a], [c0 + inset, c0 + inset, c1 - inset, c1 - inset], &
+                                         series%style%color, 1.0_R8P, 'none', 0.0_R8P, ghost=.true.)
+            endif
+         enddo
+      endassociate
+      endsubroutine draw_cells
 
       subroutine draw_fill
       !< One polygon per run of placeable points: the curve and back along the baseline or the lower curve, or the
