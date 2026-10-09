@@ -45,6 +45,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_rtics([step], [start], [end], [on])`, `set_ttics([step], [start], [format], [on])`, `set_raxis([on])` | `set rtics`, `set ttics 0,30 format "%g"`, `set raxis`; `on=.false.`: `unset ...` |
 | `set_border([mask], [polar])` | `set border 3`, `set border polar`, `unset border` (`mask=0`) |
 | `set_style_fill(words)` | `set style fill solid 0.5 noborder`, `solid segments 10` |
+| `rgbimage(red, green, blue, [x], [y], [title], [alpha])` | `plot ... with rgbimage` / `rgbalpha`: colors 0 to 255 per pixel (column, row) |
 | `image(z, [x], [y], [title])` | `plot ... with image`: the values `z(column, row)` at the pixel centres `x`, `y` (evenly spaced; 0, 1, ... if absent) |
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |
 | `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
@@ -75,6 +76,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `major`, `minor` | ellipses: diameters in x and y units (`major` alone for both, negative for the default size) | 5% x 3% of the plot |
 | `labels`, `label` | labels: the texts, and gnuplot option words `'left rotate by 30 offset 1,0 point tc "red"'` | required, none |
 | `width`, `origins` | sectors: annular widths, and centres `(2, n)` | required, `[0, 0]` |
+| `curve` | filledcurves: gnuplot words `'x1'`, `'x2'`, `'xy=2,0'`, `'above'`, `'below'` (with `base` or a band `ylow`) | closed, or to `base`/`ylow` |
 | `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |

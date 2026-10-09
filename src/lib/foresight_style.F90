@@ -24,7 +24,9 @@ public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMA
           WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
           WITH_LABELS, WITH_SECTORS
 public :: STYLE_NAMES
-public :: FILL_EMPTY, FILL_SOLID
+public :: FILL_EMPTY, FILL_PATTERN, FILL_SOLID
+public :: pattern_parts
+public :: PATTERNS
 
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
 integer(I4P), parameter :: WITH_POINTS      = 2_I4P !< gnuplot `with points`.
@@ -65,10 +67,15 @@ character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impuls
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
                                              'xyerrorlines, boxes, boxerrorbars, boxxyerror, candlesticks, '// &
                                              'financebars, boxplot, vectors, arrows, ellipses, polygons, labels, '// &
-                                             'sectors, filledcurves, histograms, image, circles, pie, '// &
+                                             'sectors, filledcurves, histograms, image, rgbimage, rgbalpha, '// &
+                                             'circles, pie, '// &
                                              'gauge, radar, rose, readout' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
+integer(I4P), parameter :: FILL_PATTERN     = 2_I4P !< gnuplot `set style fill pattern N`.
+integer(I4P), parameter :: PATTERNS         = 8_I4P !< Fill patterns of gnuplot's svg terminal, cycling: 0 empty, 1
+                                                    !< crosshatch, 2 dense crosshatch, 3 solid, 4 and 7 lines down,
+                                                    !< 5 and 6 lines up (6, 7 steeper).
 
 character(len=7), parameter :: PALETTE(8) = ['#9400d3', '#009e73', '#56b4e9', '#e69f00', &
                                              '#f0e442', '#0072b2', '#e51e10', '#000000'] !< gnuplot 5 line colors.
@@ -89,6 +96,7 @@ type :: style_object
    logical                       :: border    = .true.     !< Border of filled styles.
    character(len=:), allocatable :: border_color           !< Border color, empty for the line color.
    integer(I4P)                  :: segments  = 0_I4P      !< Cells over the y range of a segmented fill, 0 for none.
+   integer(I4P)                  :: pattern   = 0_I4P      !< Fill pattern (FILL_PATTERN), cycling every PATTERNS.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
@@ -140,7 +148,7 @@ contains
       name = 'image'
    case ('cir', 'circ', 'circl', 'circle', 'circles')
       name = 'circles'
-   case ('boxes', 'boxplot', 'arrows', 'labels', 'readout', 'pie', 'gauge', 'radar', 'rose')
+   case ('boxes', 'boxplot', 'arrows', 'labels', 'rgbimage', 'readout', 'pie', 'gauge', 'radar', 'rose')
       name = word
    case default
       name = ''
@@ -159,6 +167,7 @@ contains
       if (abbreviates(word, 'ellipses', 3)) name = 'ellipses'
       if (abbreviates(word, 'polygons', 4)) name = 'polygons'
       if (abbreviates(word, 'sectors', 3)) name = 'sectors'
+      if (abbreviates(word, 'rgbalpha', 4)) name = 'rgbalpha'
    endselect
    contains
       pure function abbreviates(w, full, minimum) result(match)
@@ -249,6 +258,8 @@ contains
       with = WITH_LABELS
    case ('sectors')
       with = WITH_SECTORS
+   case ('rgbimage', 'rgbalpha')
+      error stop 'foresight: plot: RGB images are plotted by figure%rgbimage'
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)//'" (supported: '//STYLE_NAMES//')'
    endselect
@@ -338,8 +349,19 @@ contains
    class(style_object), intent(in) :: self  !< Style.
    character(len=:), allocatable   :: color !< SVG color or `none`.
 
+   !< A pattern fill is `pattern:N:color` (see `pattern_parts`), N from 1 to PATTERNS - 1 but 3, the solid one, given
+   !< as its color; pattern 0 is empty.
    color = 'none'
    if (self%fill == FILL_SOLID) color = self%color
+   if (self%fill == FILL_PATTERN) then
+      select case (modulo(self%pattern, PATTERNS))
+      case (0_I4P)
+      case (3_I4P)
+         color = self%color
+      case default
+         color = 'pattern:'//achar(iachar('0') + modulo(self%pattern, PATTERNS))//':'//self%color
+      endselect
+   endif
    endfunction fill_color
 
    pure function stroke_color(self) result(color)
@@ -354,6 +376,21 @@ contains
       if (len(self%border_color) > 0) color = self%border_color
    endif
    endfunction stroke_color
+
+   pure subroutine pattern_parts(fill, pattern, color)
+   !< The pattern (1 to PATTERNS - 1) and color of a pattern fill `pattern:N:color` (`fill_color`); `pattern` 0 and
+   !< `color` the fill itself for any other fill.
+   character(len=*),              intent(in)  :: fill    !< Fill color.
+   integer(I4P),                  intent(out) :: pattern !< Pattern, 0 for none.
+   character(len=:), allocatable, intent(out) :: color   !< Color.
+
+   pattern = 0_I4P
+   color = fill
+   if (len(fill) < 11) return
+   if (fill(1:8) /= 'pattern:' .or. fill(10:10) /= ':') return
+   pattern = iachar(fill(9:9)) - iachar('0')
+   color = fill(11:)
+   endsubroutine pattern_parts
 
    subroutine fill_style(words, style, bad)
    !< Update the fill of `style` from gnuplot fill style words, blank separated: `empty`, `solid [D]`,
@@ -426,8 +463,20 @@ contains
          style%segments = int(v, I4P)
          k = k + 1_I4P
       case ('pattern')
-         bad = 'pattern (fill patterns are not supported)'
-         return
+         style%fill = FILL_PATTERN
+         style%density = 1.0_R8P
+         style%pattern = 0_I4P
+         if (k < size(list, kind=I4P)) then
+            call real_from_decimal(trim(list(k + 1_I4P)), v, ok)
+            if (ok) then
+               if (v < 0.0_R8P .or. v /= aint(v) .or. v > 1000.0_R8P) then
+                  bad = trim(list(k + 1_I4P))//' (the pattern is a whole number >= 0)'
+                  return
+               endif
+               style%pattern = int(v, I4P)
+               k = k + 1_I4P
+            endif
+         endif
       case default
          bad = trim(list(k))
          return

@@ -32,8 +32,10 @@ module foresight_script
 !< - `with vectors|arrows [head|heads|nohead|backhead] [filled|empty|nofilled]`, `with ellipses [units xy]`,
 !<   `with polygons`, `with labels [left|center|right] [rotate by A] [offset X,Y] [point] [tc "c"]` (`using x:y:N`, the
 !<   text of column N), `with sectors` (gnuplot's layouts); `unset xrange|yrange|y2range` autoscales;
-!< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
-!<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `border [lc C|-1]`,
+!< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|x1|x2|y=V|xy=X,Y] [above|below]`
+!<   (`using x:y1:y2` for a band), `with rgbimage|rgbalpha` (`x:y:r:g:b[:a]`), `set|unset rgbmax V`,
+!<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `pattern [N]`,
+!<   `border [lc C|-1]`,
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
 !< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
@@ -114,6 +116,7 @@ type :: script_object
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
+   real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -148,6 +151,7 @@ contains
    allocate(self%line_styles(0))
    self%separator = ''
    self%samples = 100_I4P
+   self%rgbmax = 255.0_R8P
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -334,6 +338,7 @@ contains
    real(R8P),        allocatable                :: whisker   !< Candlestick whisker crossbars (`whiskerbars [F]`).
    real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
+   character(len=:), allocatable                :: curve     !< Filled curve option words.
    character(len=:), allocatable                :: label_opts !< Option words of labels.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
@@ -437,6 +442,7 @@ contains
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
       label_opts = ''
+      curve = ''
       if (allocated(gauge_scale)) deallocate(gauge_scale)
       cells = 0_I4P
       rose_linear = .false.
@@ -546,25 +552,41 @@ contains
                endif
             endif
             if (with == 'filledcurves' .and. i < size(tokens, kind=I4P)) then
-               ! the fill option: closed (the default) or y=V; gnuplot's others are not supported
-               if (tokens(i + 1_I4P)%kind == TOKEN_WORD) then
+               ! the fill options: closed (the default), x1, x2, y=V (y1=V), xy=X,Y, above, below
+               do while (i < size(tokens, kind=I4P))
+                  if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
                   word = tokens(i + 1_I4P)%text
-                  if (word == 'closed') then
+                  if (is_word(word, 'closed x1 x2 above below')) then
                      i = i + 1_I4P
-                  elseif (index(word, 'y=') == 1) then
+                     curve = curve//' '//word
+                  elseif (index(word, 'y=') == 1 .or. index(word, 'y1=') == 1) then
                      i = i + 1_I4P
                      allocate(base)
-                     if (.not. to_number(word(3:), base)) then
+                     if (.not. to_number(word(index(word, '=') + 1:), base)) then
                         call fail('plot: filledcurves y=V needs a number, found "'//word//'"', iostat, iomsg)
                         return
                      endif
-                  elseif (is_word(word, 'x1 x2 y1 y2 above below') .or. index(word, 'x=') == 1 .or. &
-                          index(word, 'xy=') == 1 .or. index(word, 'y1=') == 1 .or. index(word, 'y2=') == 1) then
-                     call fail('plot: filledcurves '//word//' is not supported (closed, y=V or a band x:y1:y2 are)', &
-                               iostat, iomsg)
+                  elseif (index(word, 'xy=') == 1) then
+                     ! xy=X,Y: the comma is a token of its own
+                     if (i + 3_I4P > size(tokens, kind=I4P)) then
+                        call fail('plot: filledcurves xy=X,Y expected', iostat, iomsg)
+                        return
+                     endif
+                     if (tokens(i + 2_I4P)%kind /= TOKEN_COMMA) then
+                        call fail('plot: filledcurves xy=X,Y expected', iostat, iomsg)
+                        return
+                     endif
+                     curve = curve//' '//word//','//tokens(i + 3_I4P)%text
+                     i = i + 3_I4P
+                  elseif (is_word(word, 'y1 y2 r') .or. index(word, 'x=') == 1 .or. index(word, 'x1=') == 1 .or. &
+                          index(word, 'x2=') == 1 .or. index(word, 'y2=') == 1 .or. index(word, 'r=') == 1) then
+                     call fail('plot: filledcurves '//word//' is not supported (closed, x1, x2, y=V, xy=X,Y, above, '// &
+                               'below and a band x:y1:y2 are)', iostat, iomsg)
                      return
+                  else
+                     exit
                   endif
-               endif
+               enddo
             endif
          elseif (keyword(word, 'smooth', 1_I4P)) then
             if (.not. next_word(tokens, i, filter, iostat, iomsg)) return
@@ -726,6 +748,11 @@ contains
       endif
       ! data
       if (is_matrix .and. with /= 'image') then
+         if (with == 'rgbimage' .or. with == 'rgbalpha') then
+            call fail('plot: '//with//' takes using x:y:r:g:b'//trim(merge(':a', '  ', with == 'rgbalpha'))// &
+                      ', not a matrix', iostat, iomsg)
+            return
+         endif
          call fail('plot: matrix data are plotted with image', iostat, iomsg)
          return
       endif
@@ -773,7 +800,7 @@ contains
          loaded = file
          call self%register_file(file)
       endif
-      if (with == 'image') then
+      if (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha') then
          call image_item
          if (iostat /= 0_I4P) return
          if (i > size(tokens, kind=I4P)) exit
@@ -1128,6 +1155,24 @@ contains
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                   axes=axes, width=widths, fs=fs)
          endif
+      elseif (with == 'filledcurves' .and. len(curve) > 0) then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         ! the library stops on these: a script fails gracefully
+         if ((index(curve, 'x1') > 0 .or. index(curve, 'x2') > 0 .or. index(curve, 'xy=') > 0) .and. &
+             (allocated(base) .or. allocated(ylow))) then
+            call fail('plot: filledcurves x1, x2, xy= fill to the plot or a point: not with y=V nor a band', iostat, &
+                      iomsg)
+            return
+         endif
+         if ((index(curve, 'above') > 0 .or. index(curve, 'below') > 0) .and. &
+             .not. (allocated(base) .or. allocated(ylow))) then
+            call fail('plot: filledcurves above and below need y=V or a band x:y1:y2', iostat, iomsg)
+            return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
+                               base=base, fs=fs, xlabels=xlabels, curve=curve)
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -1268,6 +1313,10 @@ contains
          call self%figure%image(z, title=title)
          return
       endif
+      if (with /= 'image') then
+         call rgb_item
+         return
+      endif
       if (.not. allocated(fields)) fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
       if (size(fields) /= 3) then
          call fail('plot: image needs using x:y:z (or a matrix file)', iostat, iomsg)
@@ -1281,6 +1330,40 @@ contains
       endif
       call self%figure%image(z, xs, ys, title=title)
       endsubroutine image_item
+
+      subroutine rgb_item
+      !< An `rgbimage` (`using x:y:r:g:b`) or `rgbalpha` (`x:y:r:g:b:a`) item on a regular grid, the components scaled
+      !< from [0:rgbmax] to [0:255].
+      real(R8P), allocatable        :: c(:,:,:) !< Channels on the grid (4, column, row).
+      real(R8P), allocatable        :: z(:,:)   !< One channel on the grid.
+      real(R8P), allocatable        :: xs(:)    !< Pixel centre abscissae.
+      real(R8P), allocatable        :: ys(:)    !< Pixel centre ordinates.
+      character(len=:), allocatable :: problem  !< Grid problem.
+      integer(I4P)                  :: m        !< Channels read.
+      integer(I4P)                  :: k        !< Channel counter.
+
+      m = merge(4_I4P, 3_I4P, with == 'rgbalpha')
+      if (.not. allocated(fields)) fields = plain_columns([(k, k = 1_I4P, m + 2_I4P)])
+      if (size(fields) /= m + 2_I4P) then
+         call fail('plot: '//with//' needs using x:y:r:g:b'//trim(merge(':a', '  ', m == 4_I4P)), iostat, iomsg)
+         return
+      endif
+      call data%table(fields, set_index, every, values)
+      do k = 1_I4P, m
+         call regular_grid(values(:, 1), values(:, 2), values(:, 2_I4P + k) * (255.0_R8P / self%rgbmax), xs, ys, z, &
+                           problem)
+         if (len(problem) > 0) then
+            call fail('plot: '//with//' of "'//file//'": '//problem, iostat, iomsg)
+            return
+         endif
+         if (k == 1_I4P) then
+            allocate(c(4, size(z, 1), size(z, 2)))
+            c(4, :, :) = 255.0_R8P
+         endif
+         c(k, :, :) = z
+      enddo
+      call self%figure%rgbimage(c(1, :, :), c(2, :, :), c(3, :, :), xs, ys, title=title, alpha=c(4, :, :))
+      endsubroutine rgb_item
 
       subroutine split_xtic(spec, column, iostat, iomsg)
       !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none).
@@ -1554,6 +1637,24 @@ contains
       call self%figure%set_logscale(text)
    elseif (keyword(option, 'grid', 2_I4P)) then
       call grid_option
+   elseif (option == 'rgbmax') then
+      block
+         real(R8P) :: v !< Full intensity.
+
+         if (size(tokens) /= 2) then
+            call fail('set rgbmax: a positive number expected', iostat, iomsg)
+            return
+         endif
+         if (.not. to_number(tokens(2)%text, v)) then
+            call fail('set rgbmax: a positive number expected', iostat, iomsg)
+            return
+         endif
+         if (.not. v > 0.0_R8P) then
+            call fail('set rgbmax: a positive number expected', iostat, iomsg)
+            return
+         endif
+         self%rgbmax = v
+      endblock
    elseif (keyword(option, 'polar', 3_I4P)) then
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
       associate(panel => self%figure%panels(self%figure%current))
@@ -2537,6 +2638,8 @@ contains
       call self%figure%set_grid(.false., polar=0.0_R8P)
    elseif (keyword(option, 'polar', 3_I4P)) then
       call self%figure%set_polar(.false.)
+   elseif (option == 'rgbmax') then
+      self%rgbmax = 255.0_R8P
    elseif (option == 'theta') then
       call self%figure%set_theta('right', .false.)
    elseif (keyword(option, 'raxis', 3_I4P)) then

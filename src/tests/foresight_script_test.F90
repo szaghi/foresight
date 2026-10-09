@@ -8,7 +8,8 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
+use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
+                            WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
                             WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                             WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
@@ -34,7 +35,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(72)                           !< Per-check outcome.
+logical                       :: test_passed(74)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -447,10 +448,10 @@ endif
 ! fill errors
 call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
 test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'the box styles and the panel charts only') > 0
-call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
-test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
+call interpreter%run_text("set style fill pattern 2.5", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'the pattern is a whole number') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
-test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves above is not supported') > 0
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'above and below need y=V or a band') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3:3 w boxes", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes needs using x:y or x:y:width') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves y=0", iostat, iomsg)
@@ -822,6 +823,48 @@ call interpreter%run_text("unset xrange; unset yrange; unset y2range", iostat, i
 test_passed(72) = test_passed(72) .and. iostat == 0_I4P
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
+
+! fills: the default pattern cycling, an item's own pattern, filledcurves options, rgb images over rgbmax
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 1 0 0 1', '1 0 0 1 0 0.5', '0 1 0 0 1 1', '1 1 1 1 0 0'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set style fill pattern 2"//new_line('a')// &
+                          "plot '"//data_file//"' w boxes, '' w boxes, '' w boxes fs pattern 6, "// &
+                          "'' w filledcurves x2, '' w filledc below y1=0.5, '' u 1:2:3 w filledcurves above, "// &
+                          "'' w filledcurves xy=0.5,0.5", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(73) = iostat == 0_I4P
+if (test_passed(73)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(73) = panel%series(1)%style%fill == FILL_PATTERN .and. panel%series(1)%style%pattern == 2_I4P .and. &
+                        panel%series(2)%style%pattern == 3_I4P .and. panel%series(3)%style%pattern == 6_I4P .and. &
+                        panel%series(4)%curve_to == 2_I4P .and. panel%series(5)%curve_side == -1_I4P .and. &
+                        same(panel%series(5)%ylow * 2.0_R8P, [1, 1, 1, 1]) .and. panel%series(6)%curve_side == 1_I4P &
+                        .and. panel%series(7)%curve_to == 3_I4P .and. same(panel%series(7)%curve_point * 2.0_R8P, [1, 1])
+   endassociate
+endif
+call interpreter%run_text("set rgbmax 1"//new_line('a')//"plot '"//data_file//"' u 1:2:3:4:5:6 w rgba", iostat, iomsg)
+test_passed(73) = test_passed(73) .and. iostat == 0_I4P
+if (test_passed(73)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(73) = panel%series(1)%style%with == WITH_IMAGE .and. same((panel%series(1)%x + 1.0_R8P) * 2.0_R8P, [1, 5])
+      arcs = panel%series(1)%channels(:, :, 1)
+      ! pixel (0,0): 255, 0, 0, 255; pixel (1,0): 0, 255, 0, 128 (alpha 0.5 of rgbmax 1)
+      test_passed(73) = test_passed(73) .and. same(arcs(:, 1), [255, 0, 0, 255]) .and. same(arcs(1:3, 2), [0, 255, 0]) &
+                        .and. abs(arcs(4, 2) - 127.5_R8P) < 1.0e-9_R8P
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3:4 w rgbimage", iostat, iomsg)
+test_passed(74) = iostat /= 0_I4P .and. index(iomsg, 'rgbimage needs using x:y:r:g:b') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves x1 above", iostat, iomsg)
+test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'not with y=V nor a band') > 0
+call interpreter%run_text("plot '"//data_file//"' w filledcurves r=1", iostat, iomsg)
+test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves r=1 is not supported') > 0
+call interpreter%run_text("set rgbmax 0", iostat, iomsg)
+test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'set rgbmax: a positive number') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -837,7 +880,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,72L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,74L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

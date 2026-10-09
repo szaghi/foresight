@@ -53,7 +53,7 @@ use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
-use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
+use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
@@ -68,6 +68,7 @@ public :: axes_object
 public :: axes_names
 public :: boxplot_style
 public :: boxplot_words
+public :: curve_words
 public :: head_words
 public :: label_words
 public :: key_position
@@ -188,7 +189,7 @@ endtype axes_object
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
-                         length, angle, major, minor, labels, label, head, origins)
+                         length, angle, major, minor, labels, label, head, origins, curve, channels)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -255,9 +256,14 @@ contains
    character(len=*),   intent(in), optional :: head      !< Arrowhead words: `head`, `heads`, `nohead`, `backhead`,
                                                          !< `filled`, `empty`, `nofilled`.
    real(R8P),          intent(in), optional :: origins(:,:) !< Sector centres (2, point), [0, 0] if absent.
+   character(len=*),   intent(in), optional :: curve     !< Filled curve options: gnuplot `closed`, `x1`, `x2`,
+                                                         !< `xy=X,Y`, `above`, `below` (with `base` or a band).
+   real(R8P),          intent(in), optional :: channels(:,:,:) !< RGB image colors (4, column, row), 0 to 255: red,
+                                                               !< green, blue, alpha; `z` then its red ones.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
+   integer(I4P)                             :: k       !< Series counter.
 
    if (present(z)) then
       call add_image
@@ -313,6 +319,9 @@ contains
       series%style%density = self%fill_default%density
       series%style%border = self%fill_default%border
       series%style%segments = self%fill_default%segments
+      ! the default pattern cycles over the patterned items of the panel, as gnuplot
+      series%style%pattern = self%fill_default%pattern + &
+                             count([(self%series(k)%style%fill == FILL_PATTERN, k = 1_I4P, size(self%series, kind=I4P))])
       if (allocated(self%fill_default%border_color)) series%style%border_color = self%fill_default%border_color
       if (present(fs)) then
          call fill_style(fs, series%style, bad)
@@ -453,14 +462,24 @@ contains
    case (WITH_FILLEDCURVES)
       ! gnuplot fills a curve even with an empty fill style, and never draws its border
       if (series%style%fill == FILL_EMPTY) series%style%density = 1.0_R8P
-      series%style%fill = FILL_SOLID
+      if (series%style%fill /= FILL_PATTERN) series%style%fill = FILL_SOLID
       series%style%border = .false.
       if (present(base) .and. present(ylow)) error stop 'foresight: plot: a fill takes base or ylow, not both'
       if (present(base)) then
          allocate(series%ylow(size(x)))
          series%ylow = base
       endif
+      if (present(curve)) then
+         call curve_words(curve, series, bad)
+         if (len(bad) > 0) error stop 'foresight: plot: filledcurves '//bad
+         if (series%curve_to > 0_I4P .and. (present(base) .or. present(ylow))) &
+            error stop 'foresight: plot: filledcurves x1, x2, xy= take no base nor ylow'
+         if (series%curve_side /= 0_I4P .and. .not. (present(base) .or. present(ylow))) &
+            error stop 'foresight: plot: filledcurves above and below need a line (base) or a band (ylow)'
+      endif
    endselect
+   if (present(curve) .and. series%style%with /= WITH_FILLEDCURVES) &
+      error stop 'foresight: plot: curve applies to filledcurves only'
    if (present(head)) then
       if (.not. any(series%style%with == [WITH_VECTORS, WITH_ARROWS])) error stop 'foresight: plot: head applies to '// &
                                                                                   'vectors and arrows only'
@@ -804,6 +823,11 @@ contains
       series%x = [x(1) - 0.5_R8P * d(1), x(size(x)) + 0.5_R8P * d(1)]
       series%y = [y(1) - 0.5_R8P * d(2), y(size(y)) + 0.5_R8P * d(2)]
       series%grid = z
+      if (present(channels)) then
+         if (size(channels, 1) /= 4 .or. size(channels, 2) /= size(z, 1) .or. size(channels, 3) /= size(z, 2)) &
+            error stop 'foresight: plot: RGB image channels must be (4, columns, rows)'
+         series%channels = channels
+      endif
       series%title = ''
       if (present(title)) series%title = title
       series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P)
@@ -1061,7 +1085,7 @@ contains
    endif
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
-   if (self%colorbox .and. self%has_image()) call self%draw_colorbox(backend, area, x0 + width, font_size)
+   if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, x0 + width, font_size)
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
@@ -2067,7 +2091,16 @@ contains
                if (u(1) > u(2)) ii = size(series%grid, 1, kind=I4P) - i + 1_I4P
                jj = size(series%grid, 2, kind=I4P) - j + 1_I4P
                if (w(1) > w(2)) jj = j
-               rgba(:, ii, jj) = pixel(series%grid(i, j))
+               if (allocated(series%channels)) then
+                  ! RGB colors, an undefined channel making the pixel transparent
+                  if (all(ieee_is_finite(series%channels(:, i, j)))) then
+                     rgba(:, ii, jj) = nint(min(255.0_R8P, max(0.0_R8P, series%channels(:, i, j))), I4P)
+                  else
+                     rgba(:, ii, jj) = 0_I4P
+                  endif
+               else
+                  rgba(:, ii, jj) = pixel(series%grid(i, j))
+               endif
             enddo
          enddo
          call backend%data_image(minval(u), minval(w), maxval(u), maxval(w), rgba)
@@ -2124,20 +2157,35 @@ contains
       endsubroutine draw_cells
 
       subroutine draw_fill
-      !< One polygon per run of placeable points: the curve and back along the baseline or the lower curve, or the
-      !< curve closed on itself.
-      logical, allocatable   :: ok(:) !< Points placeable with their lower end.
-      real(R8P), allocatable :: w(:)  !< Unit ordinates of the lower ends.
-      integer(I4P)           :: a     !< First point of a run.
-      integer(I4P)           :: b     !< Last point of a run.
+      !< One polygon per run of placeable points: the curve and back along its baseline (a line, the lower curve of a
+      !< band, the bottom or top of the plot), or the curve closed on itself, or closed on a point; `above` and `below`
+      !< keep the parts where the curve is above or below the baseline, the crossings inserted.
+      logical, allocatable   :: ok(:)  !< Points placeable with their lower end.
+      real(R8P), allocatable :: w(:)   !< Unit ordinates of the baseline.
+      real(R8P), allocatable :: pu(:)  !< Run abscissae, crossings inserted [unit].
+      real(R8P), allocatable :: pv(:)  !< Run ordinates [unit].
+      real(R8P), allocatable :: pw(:)  !< Run baseline [unit].
+      real(R8P)              :: p(2)   !< Point of `xy=` [unit].
+      real(R8P)              :: t      !< Crossing parameter.
+      integer(I4P)           :: a      !< First point of a run.
+      integer(I4P)           :: b      !< Last point of a run.
+      integer(I4P)           :: k      !< Point counter.
+      logical                :: based  !< Filled to a baseline.
 
       associate(series => self%series(s))
          ok = valid
          allocate(w(n))
          w = 0.0_R8P
+         based = allocated(series%ylow) .or. series%curve_to == 1_I4P .or. series%curve_to == 2_I4P
          if (allocated(series%ylow)) then
             ok = ok .and. yaxis%accepts(series%ylow)
             where (ok) w = yaxis%to_unit(series%ylow)
+         elseif (series%curve_to == 2_I4P) then
+            w = 1.0_R8P
+         endif
+         if (series%curve_to == 3_I4P) then
+            if (.not. (self%xaxis%accepts(series%curve_point(1)) .and. yaxis%accepts(series%curve_point(2)))) return
+            p = [self%xaxis%to_unit(series%curve_point(1)), yaxis%to_unit(series%curve_point(2))]
          endif
          a = 1_I4P
          do while (a <= n)
@@ -2151,8 +2199,28 @@ contains
                b = b + 1_I4P
             enddo
             if (b > a) then
-               if (allocated(series%ylow)) then
-                  call backend%data_polygon([u(a:b), u(b:a:-1)], [v(a:b), w(b:a:-1)], series%style%fill_color(), &
+               if (based) then
+                  ! the run with the crossings of its baseline, then each side kept or flattened onto the baseline
+                  pu = [u(a)]
+                  pv = [v(a)]
+                  pw = [w(a)]
+                  do k = a, b - 1_I4P
+                     if (series%curve_side /= 0_I4P .and. (v(k) - w(k)) * (v(k + 1_I4P) - w(k + 1_I4P)) < 0.0_R8P) then
+                        t = (v(k) - w(k)) / ((v(k) - w(k)) - (v(k + 1_I4P) - w(k + 1_I4P)))
+                        pu = [pu, u(k) + t * (u(k + 1_I4P) - u(k))]
+                        pw = [pw, w(k) + t * (w(k + 1_I4P) - w(k))]
+                        pv = [pv, pw(size(pw))]
+                     endif
+                     pu = [pu, u(k + 1_I4P)]
+                     pv = [pv, v(k + 1_I4P)]
+                     pw = [pw, w(k + 1_I4P)]
+                  enddo
+                  if (series%curve_side > 0_I4P) pv = max(pv, pw)
+                  if (series%curve_side < 0_I4P) pv = min(pv, pw)
+                  call backend%data_polygon([pu, pu(size(pu):1:-1)], [pv, pw(size(pw):1:-1)], &
+                                            series%style%fill_color(), series%style%density, 'none', 0.0_R8P)
+               elseif (series%curve_to == 3_I4P) then
+                  call backend%data_polygon([u(a:b), p(1)], [v(a:b), p(2)], series%style%fill_color(), &
                                             series%style%density, 'none', 0.0_R8P)
                else
                   call backend%data_polygon(u(a:b), v(a:b), series%style%fill_color(), series%style%density, 'none', &
@@ -2241,7 +2309,7 @@ contains
    zmax = -huge(1.0_R8P)
    found = .false.
    do s = 1_I4P, size(all, kind=I4P)
-      if (all(s)%style%with /= WITH_IMAGE) cycle
+      if (all(s)%style%with /= WITH_IMAGE .or. allocated(all(s)%channels)) cycle
       do j = 1_I4P, size(all(s)%grid, 2, kind=I4P)
          do i = 1_I4P, size(all(s)%grid, 1, kind=I4P)
             if (.not. ieee_is_finite(all(s)%grid(i, j))) cycle
@@ -2858,6 +2926,54 @@ contains
       endsubroutine next_word
    endsubroutine boxplot_words
 
+   pure subroutine curve_words(words, series, bad)
+   !< Filled curve options of `series` from gnuplot words: `closed`, `x1` (to the bottom), `x2` (to the top), `xy=X,Y`
+   !< (to a point), `above`, `below` (where the curve is above or below its line or second curve). `bad` names the
+   !< first problem.
+   character(len=*),              intent(in)    :: words  !< Words.
+   type(series_object),           intent(inout) :: series !< Filled curve series.
+   character(len=:), allocatable, intent(out)   :: bad    !< Problem, empty if none.
+   character(len=:), allocatable                :: w      !< Current word.
+   integer(I4P)                                 :: pos    !< Scan position.
+   integer(I4P)                                 :: comma  !< Comma position.
+   integer(I4P)                                 :: ios    !< Read status.
+
+   bad = ''
+   pos = 1_I4P
+   do
+      call scan_word(words, pos, w)
+      if (len(w) == 0) exit
+      select case (w)
+      case ('closed')
+         series%curve_to = 0_I4P
+      case ('x1')
+         series%curve_to = 1_I4P
+      case ('x2')
+         series%curve_to = 2_I4P
+      case ('above')
+         series%curve_side = 1_I4P
+      case ('below')
+         series%curve_side = -1_I4P
+      case default
+         if (index(w, 'xy=') /= 1) then
+            bad = 'option "'//w//'" is not supported (closed, x1, x2, xy=X,Y, above, below)'
+            return
+         endif
+         comma = index(w, ',', kind=I4P)
+         ios = 1
+         if (comma > 4_I4P) then
+            read(w(4:comma - 1_I4P), *, iostat=ios) series%curve_point(1)
+            if (ios == 0) read(w(comma + 1_I4P:), *, iostat=ios) series%curve_point(2)
+         endif
+         if (ios /= 0) then
+            bad = 'xy=X,Y expected, found "'//w//'"'
+            return
+         endif
+         series%curve_to = 3_I4P
+      endselect
+   enddo
+   endsubroutine curve_words
+
    pure subroutine head_words(words, head, filled, bad)
    !< Arrowheads from gnuplot words: `head` (at the end), `heads` (both), `nohead`, `backhead` (at the start); `filled`,
    !< `empty` or `nofilled` (open). `bad` names an unknown word, empty if none.
@@ -3027,18 +3143,36 @@ contains
    is = any(with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])
    endfunction is_panel_chart
 
-   pure function has_image(self) result(has)
-   !< Whether the panel has an image.
-   class(axes_object), intent(in) :: self !< Panel.
-   logical                        :: has  !< An image is plotted.
-   integer(I4P)                   :: s    !< Series counter.
+   pure function has_image(self, palette) result(has)
+   !< Whether the panel has an image; with `palette` true, an image of values colored by the palette (not RGB).
+   class(axes_object), intent(in)           :: self    !< Panel.
+   logical,            intent(in), optional :: palette !< Palette images only.
+   logical                                  :: has     !< An image is plotted.
+   logical                                  :: only    !< Palette images only.
 
    has = .false.
+   only = .false.
+   if (present(palette)) only = palette
    if (.not. allocated(self%series)) return
-   do s = 1_I4P, size(self%series, kind=I4P)
-      if (self%series(s)%style%with == WITH_IMAGE) has = .true.
-   enddo
+   has = any_image(self%series, only)
    endfunction has_image
+
+   pure function any_image(all, palette) result(has)
+   !< Whether the series `all` hold an image, a palette one (not RGB) if `palette`. A module procedure on the series
+   !< array, as `image_range`: gfortran 16 debug builds misread the components of `self%series(s)` through the class
+   !< dummy.
+   type(series_object), intent(in) :: all(:)  !< Series of the panel.
+   logical,             intent(in) :: palette !< Palette images only.
+   logical                         :: has     !< An image is plotted.
+   integer(I4P)                    :: s       !< Series counter.
+
+   has = .false.
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with /= WITH_IMAGE) cycle
+      if (palette .and. allocated(all(s)%channels)) cycle
+      has = .true.
+   enddo
+   endfunction any_image
 
    function effective_palette(palette, theme) result(p)
    !< `palette`, or the palette of the `theme` if it has the default colors: from the dark glass to the emissive colors
@@ -3108,7 +3242,8 @@ contains
       if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
       margins(2) = max(margins(2), y2_margin)
    endif
-   if (self%colorbox .and. self%has_image()) margins(2) = margins(2) + self%colorbox_width(backend, font_size)
+   if (self%colorbox .and. self%has_image(palette=.true.)) margins(2) = margins(2) + &
+                                                              self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(3) = margins(3) + above
@@ -3263,7 +3398,7 @@ contains
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
-   if (self%has_image()) call setup_colors
+   if (self%has_image(palette=.true.)) call setup_colors
    contains
       subroutine setup_polar
       !< The r axis from the largest |r| of the series (the pole at r = 0 unless set), extended to the r ticks; the

@@ -60,6 +60,7 @@ type :: figure_object
    contains
       procedure, pass(self) :: clear           !< Remove the series of the current panel, keeping the settings.
       procedure, pass(self) :: image           !< gnuplot `plot ... with image`, a grid of values.
+      procedure, pass(self) :: rgbimage        !< gnuplot `plot ... with rgbimage|rgbalpha`, a grid of colors.
       procedure, pass(self) :: init            !< Reset the figure, optionally resizing it.
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
@@ -123,6 +124,48 @@ contains
       if (allocated(panel%series)) deallocate(panel%series)
    endassociate
    endsubroutine clear
+
+   subroutine rgbimage(self, red, green, blue, x, y, title, alpha)
+   !< Image of the colors `red`, `green`, `blue` (and `alpha`, opaque if absent) per pixel (column, row), 0 to 255, as
+   !< gnuplot `plot ... with rgbimage` (`rgbalpha`): pixel centres `x(column)`, `y(row)` as `image`; a NaN component
+   !< makes its pixel transparent. No palette nor color box.
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   real(R8P),            intent(in)           :: red(:,:)   !< Red components (column, row), rows upward.
+   real(R8P),            intent(in)           :: green(:,:) !< Green components.
+   real(R8P),            intent(in)           :: blue(:,:)  !< Blue components.
+   real(R8P),            intent(in), optional :: x(:)       !< Pixel centre abscissae.
+   real(R8P),            intent(in), optional :: y(:)       !< Pixel centre ordinates.
+   character(len=*),     intent(in), optional :: title      !< Key title.
+   real(R8P),            intent(in), optional :: alpha(:,:) !< Opacities, 0 (transparent) to 255.
+   real(R8P), allocatable                     :: c(:,:,:)   !< Channels.
+   real(R8P), allocatable                     :: xs(:)      !< Abscissae.
+   real(R8P), allocatable                     :: ys(:)      !< Ordinates.
+   integer(I4P)                               :: k          !< Counter.
+
+   if (any(shape(green) /= shape(red)) .or. any(shape(blue) /= shape(red))) &
+      error stop 'foresight: rgbimage: red, green and blue have different shapes'
+   allocate(c(4, size(red, 1), size(red, 2)))
+   c(1, :, :) = red
+   c(2, :, :) = green
+   c(3, :, :) = blue
+   c(4, :, :) = 255.0_R8P
+   if (present(alpha)) then
+      if (any(shape(alpha) /= shape(red))) error stop 'foresight: rgbimage: alpha and red have different shapes'
+      c(4, :, :) = alpha
+   endif
+   if (present(x)) then
+      xs = x
+   else
+      xs = [(real(k, R8P), k = 0, size(red, 1) - 1)]
+   endif
+   if (present(y)) then
+      ys = y
+   else
+      ys = [(real(k, R8P), k = 0, size(red, 2) - 1)]
+   endif
+   call self%ensure_panels
+   call self%panels(self%current)%add_series(xs, ys, title=title, z=red, channels=c)
+   endsubroutine rgbimage
 
    subroutine image(self, z, x, y, title)
    !< Image of the values `z(column, row)` (a heatmap), as gnuplot `plot ... with image`: pixel centres `x(column)` and
@@ -200,7 +243,7 @@ contains
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
                    xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
-                   minor, labels, label, head, origins)
+                   minor, labels, label, head, origins, curve)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -280,6 +323,7 @@ contains
    character(len=*),     intent(in), optional :: label      !< Label option words.
    character(len=*),     intent(in), optional :: head       !< Arrowhead words.
    real(R8P),            intent(in), optional :: origins(:,:) !< Sector centres (2, point).
+   character(len=*),     intent(in), optional :: curve      !< Filled curve options (`'x1'`, `'above'`, `'xy=0,1'`).
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
@@ -288,7 +332,7 @@ contains
                                              radius=radius, angles=angles, donut=donut, scale=scale, linear=linear, &
                                              close=close, whiskerbars=whiskerbars, factors=factors, dx=dx, dy=dy, &
                                              length=length, angle=angle, major=major, minor=minor, labels=labels, &
-                                             label=label, head=head, origins=origins)
+                                             label=label, head=head, origins=origins, curve=curve)
    endsubroutine plot
 
    subroutine save(self, file)

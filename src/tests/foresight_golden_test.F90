@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(64)                  !< Per-figure outcome.
+logical                     :: test_passed(66)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -85,7 +85,9 @@ test_passed(61) = check('shapes.svg', figure_shapes())
 test_passed(62) = check('shapes.txt', figure_shapes())
 test_passed(63) = check('shapes.html', figure_shapes())
 test_passed(64) = check('windrose.svg', figure_windrose())
-write(output_unit, '(A,64L2)') 'foresight golden checks:', test_passed
+test_passed(65) = check('patterns.svg', figure_patterns())
+test_passed(66) = check('patterns.txt', figure_patterns())
+write(output_unit, '(A,66L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -628,6 +630,60 @@ contains
    call fig%plot(t, [(0.0_R8P, k = 1, 8)], title='< 5 m/s', with='sectors', angle=[(40.0_R8P, k = 1, 8)], width=low)
    call fig%plot(t, low, title='>= 5 m/s', with='sectors', angle=[(40.0_R8P, k = 1, 8)], width=high)
    endfunction figure_windrose
+
+   function figure_patterns() result(fig)
+   !< The fills of gnuplot: the 8 patterns of its svg terminal cycling from `set style fill pattern 1`; filledcurves
+   !< to the bottom (x1) and top (x2), above and below a line, to a point (xy=), a band where its first curve is above;
+   !< an RGB image with an alpha channel.
+   type(figure_object) :: fig     !< Figure.
+   real(R8P)           :: x(5)    !< Abscissae.
+   real(R8P)           :: y(5)    !< Ordinates.
+   real(R8P)           :: y2(5)   !< Second curve.
+   integer(I4P)        :: k       !< Counter.
+
+   x = [0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P]
+   y = [1.0_R8P, 3.0_R8P, 0.5_R8P, 2.0_R8P, 1.0_R8P]
+   y2 = [2.0_R8P, 1.0_R8P, 1.5_R8P, 0.5_R8P, 2.5_R8P]
+   call fig%init(width=900_I4P, height=600_I4P)
+   call fig%set_multiplot(rows=2_I4P, cols=3_I4P)
+   call fig%set_key(.false.)
+   call fig%set_title('patterns')
+   call fig%set_boxwidth(0.8_R8P)
+   call fig%set_style_fill('pattern 1')
+   do k = 0, 7
+      call fig%plot([real(k, R8P)], [1.0_R8P], with='boxes')
+   enddo
+   call fig%next_panel
+   call fig%set_boxwidth()
+   call fig%set_style_fill('solid 0.4')
+   call fig%set_xrange(-1.0_R8P, 5.0_R8P)
+   call fig%set_yrange(-1.0_R8P, 4.0_R8P)
+   call fig%set_title('x1, x2')
+   call fig%plot(x, y, with='filledcurves', curve='x1')
+   call fig%plot(x, y + 1.0_R8P, with='filledcurves', curve='x2')
+   call fig%next_panel
+   call fig%set_title('above, below y=1.5')
+   call fig%plot(x, y, with='filledcurves', base=1.5_R8P, curve='above')
+   call fig%plot(x, y, with='filledcurves', base=1.5_R8P, curve='below')
+   call fig%plot(x, y, lc='black')
+   call fig%next_panel
+   call fig%set_title('xy=2,0')
+   call fig%plot(x, y, with='filledcurves', curve='xy=2,0')
+   call fig%plot(x, y, lc='black')
+   call fig%next_panel
+   call fig%set_title('band above')
+   call fig%plot(x, y, with='filledcurves', ylow=y2, curve='above')
+   call fig%plot(x, y, lc='black')
+   call fig%plot(x, y2, lc='blue')
+   call fig%next_panel
+   call fig%set_xrange()
+   call fig%set_yrange()
+   call fig%set_title('rgbalpha')
+   call fig%rgbimage(reshape([255.0_R8P, 0.0_R8P, 0.0_R8P, 255.0_R8P], [2, 2]), &
+                     reshape([0.0_R8P, 255.0_R8P, 0.0_R8P, 255.0_R8P], [2, 2]), &
+                     reshape([0.0_R8P, 0.0_R8P, 255.0_R8P, 0.0_R8P], [2, 2]), &
+                     alpha=reshape([255.0_R8P, 128.0_R8P, 255.0_R8P, 0.0_R8P], [2, 2]))
+   endfunction figure_patterns
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

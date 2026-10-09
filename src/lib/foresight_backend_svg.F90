@@ -11,6 +11,7 @@ module foresight_backend_svg
 use foresight_backend, only : arrow_head, axes_view, backend_object
 use foresight_format, only : fixed, int_str, real_str, xml_escape
 use foresight_png, only : png_base64
+use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
 use penf, only : I4P, I8P, R8P
 
@@ -45,6 +46,8 @@ type, extends(backend_object) :: backend_svg
    character(len=:), allocatable :: marks         !< Point type markers of the current plot area, pixel overlay.
    character(len=:), allocatable :: heads         !< Arrowheads of the current plot area, pixel overlay.
    character(len=:), allocatable :: labels        !< Text labels of the data of the current plot area, pixel overlay.
+   integer(I4P)                  :: patterns = 0_I4P !< Fill pattern definitions written.
+   character(len=:), allocatable :: pattern_key   !< Key of the last pattern definition (pattern, color, space).
    integer(I4P)                  :: series = 0_I4P !< Series of the open group, 0 for none.
    contains
       ! deferred bindings
@@ -71,6 +74,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
       procedure, pass(self) :: data_arrows
+      procedure, pass(self), private :: pattern_fill !< Fill of a polygon, a pattern defined if needed.
       procedure, pass(self) :: data_label
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
@@ -243,7 +247,11 @@ contains
    real(R8P),          intent(in)    :: line_width !< Border width [px].
    logical,            intent(in), optional :: ghost !< Unlit cell of a segmented fill.
 
-   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, fill, opacity, stroke, line_width, ghost)//' d="M'
+   character(len=:), allocatable     :: paint      !< Fill paint.
+
+   ! the pattern definition, if any, is written first
+   paint = self%pattern_fill(fill, .false.)
+   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, paint, opacity, stroke, line_width, ghost)//' d="M'
    call self%write_pairs(x, y, PX_DECIMALS, '', '')
    call self%put('Z"/>')
    endsubroutine polygon
@@ -438,6 +446,59 @@ contains
    if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
 
+   function pattern_fill(self, fill, unit) result(paint)
+   !< Paint of the `fill` of a polygon: the fill itself, or for a pattern fill (foresight_style `fill_color`) a
+   !< reference to its definition, written before the polygon (once while pattern, color and space do not change): an
+   !< 8 px tile of gnuplot's svg terminal, in page pixels or (`unit`) mapped to the unit square of the plot area.
+   class(backend_svg), intent(inout) :: self    !< Device.
+   character(len=*),   intent(in)    :: fill    !< Fill color, or pattern fill.
+   logical,            intent(in)    :: unit    !< The polygon is in the unit square of the plot area.
+   character(len=:), allocatable     :: paint   !< Fill paint.
+   character(len=:), allocatable     :: color   !< Pattern color.
+   character(len=:), allocatable     :: key     !< Definition key.
+   character(len=:), allocatable     :: lines   !< Pattern path.
+   integer(I4P)                      :: pattern !< Pattern number.
+
+   call pattern_parts(fill, pattern, color)
+   paint = fill
+   if (pattern == 0_I4P) return
+   key = int_str(int(pattern, I8P))//color
+   if (unit) key = key//px(self%area(3))//px(self%area(4))
+   if (allocated(self%pattern_key)) then
+      if (self%pattern_key == key) then
+         paint = 'url(#fs-pattern-'//int_str(int(self%patterns, I8P))//')'
+         return
+      endif
+   endif
+   select case (pattern)
+   case (1_I4P)
+      lines = 'M0,0 L8,8 M0,8 L8,0'
+   case (2_I4P)
+      lines = 'M0,0 L8,8 M0,8 L8,0 M0,4 L4,8 L8,4 L4,0 L0,4'
+   case (4_I4P)
+      lines = 'M-4,0 L8,12 M0,-4 L12,8'
+   case (5_I4P)
+      lines = 'M-4,8 L8,-4 M0,12 L12,0'
+   case (6_I4P)
+      lines = 'M-2,8 L4,-4 M0,12 L8,-4 M4,12 L10,0'
+   case default
+      lines = 'M-2,0 L4,12 M0,-4 L8,12 M4,-4 L10,8'
+   endselect
+   self%patterns = self%patterns + 1_I4P
+   self%pattern_key = key
+   paint = 'url(#fs-pattern-'//int_str(int(self%patterns, I8P))//')'
+   if (unit) then
+      call self%put('<defs><pattern id="fs-pattern-'//int_str(int(self%patterns, I8P))//'" patternUnits="userSpaceOnUse" '// &
+                    'width="8" height="8" patternTransform="scale('//fixed(1.0_R8P / self%area(3), UNIT_DECIMALS)//' '// &
+                    fixed(1.0_R8P / self%area(4), UNIT_DECIMALS)//')"><path d="'//lines//'" fill="none" stroke="'// &
+                    self%theme%map(color)//'" stroke-width="1"/></pattern></defs>')
+   else
+      call self%put('<defs><pattern id="fs-pattern-'//int_str(int(self%patterns, I8P))//'" patternUnits="userSpaceOnUse" '// &
+                    'width="8" height="8"><path d="'//lines//'" fill="none" stroke="'//self%theme%map(color)// &
+                    '" stroke-width="1"/></pattern></defs>')
+   endif
+   endfunction pattern_fill
+
    subroutine data_arrows(self, x1, y1, x2, y2, color, line_width, head, filled)
    !< Arrows [unit square]: the shafts as one path of `Mx1,y1Lx2,y2` segments classed `fs-vectors` (the heads as
    !< `data-head`, `data-filled`), the heads queued for the pixel overlay written by `end_plot_area`, which the
@@ -538,7 +599,11 @@ contains
    real(R8P),          intent(in)    :: line_width !< Border width [px].
    logical,            intent(in), optional :: ghost !< Unlit cell of a segmented fill.
 
-   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, fill, opacity, stroke, line_width, ghost)// &
+   character(len=:), allocatable     :: paint      !< Fill paint.
+
+   ! the pattern definition, if any, is written first
+   paint = self%pattern_fill(fill, .true.)
+   write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, paint, opacity, stroke, line_width, ghost)// &
                                          ' vector-effect="non-scaling-stroke" d="M'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
    call self%put('Z"/>')
@@ -679,6 +744,8 @@ contains
    character(len=*),   intent(in), optional :: attributes !< Extra attributes.
    character(len=:), allocatable            :: extra      !< Extra attributes or empty.
 
+   self%patterns = 0_I4P
+   self%pattern_key = ''
    extra = ''
    if (present(attributes)) extra = attributes
    ! a theme colors the text (inherited) and tells the viewer the colors of the ticks and grid it redraws

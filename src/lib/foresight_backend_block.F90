@@ -8,6 +8,7 @@ module foresight_backend_block
 !< or `braille` (2x4). Text is written over the graphics. Unlike gnuplot, a cell without dots is a blank, Braille
 !< included, so rows trim and copy as text; a point is its dot and the four neighbours. A cell takes the color of the
 !< last series drawn in it.
+use foresight_style, only : pattern_parts
 use foresight_backend_dumb, only : backend_dumb, FRAME_COLOR, GRID_COLOR, scanline
 use penf, only : I4P, R8P
 
@@ -168,8 +169,12 @@ contains
    integer(I4P)                        :: i     !< Dot column.
    integer(I4P)                        :: j     !< Dot row.
    integer(I4P)                        :: k     !< Crossing pair counter.
+   integer(I4P)                        :: pattern !< Fill pattern, 0 for none.
+   character(len=:), allocatable       :: paint !< Fill color, a pattern's color.
 
-   tint = self%color_index(color)
+   ! a pattern fill sets the dots of its hatches: lines down (4, 7), up (5, 6), both (1, 2)
+   call pattern_parts(color, pattern, paint)
+   tint = self%color_index(paint)
    dw = self%cw / real(self%sx, R8P)
    dh = self%ch / real(self%sy, R8P)
    do j = dot_index(minval(y), self%ch, self%sy, size(self%dots_on, 2, kind=I4P)), &
@@ -178,11 +183,30 @@ contains
       do k = 1_I4P, size(xs, kind=I4P) - 1_I4P, 2_I4P
          do i = dot_index(xs(k), self%cw, self%sx, size(self%dots_on, 1, kind=I4P)), &
                 dot_index(xs(k + 1_I4P), self%cw, self%sx, size(self%dots_on, 1, kind=I4P))
-            if ((real(i, R8P) - 0.5_R8P) * dw >= xs(k) .and. (real(i, R8P) - 0.5_R8P) * dw <= xs(k + 1_I4P)) &
-               call self%dot(i, j, tint)
+            if ((real(i, R8P) - 0.5_R8P) * dw >= xs(k) .and. (real(i, R8P) - 0.5_R8P) * dw <= xs(k + 1_I4P)) then
+               if (hatched(i, j)) call self%dot(i, j, tint)
+            endif
          enddo
       enddo
    enddo
+   contains
+      pure function hatched(i, j) result(on)
+      !< Whether the dot (`i`, `j`) belongs to the fill pattern.
+      integer(I4P), intent(in) :: i  !< Dot column.
+      integer(I4P), intent(in) :: j  !< Dot row.
+      logical                  :: on !< Set.
+
+      select case (pattern)
+      case (1_I4P, 2_I4P)
+         on = modulo(i - j, 3_I4P) == 0_I4P .or. modulo(i + j, 3_I4P) == 0_I4P
+      case (4_I4P, 7_I4P)
+         on = modulo(i - j, 3_I4P) == 0_I4P
+      case (5_I4P, 6_I4P)
+         on = modulo(i + j, 3_I4P) == 0_I4P
+      case default
+         on = .true.
+      endselect
+      endfunction hatched
    endsubroutine px_fill
 
    subroutine px_point(self, p, color)

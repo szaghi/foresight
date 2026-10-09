@@ -28,6 +28,7 @@ module foresight_backend_dumb
 !< (undefined values) are left blank.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : arrow_head, axes_view, backend_object
+use foresight_style, only : pattern_parts
 use foresight_theme, only : theme_object
 use foresight_sys, only : rename_file
 use penf, only : I4P, R8P
@@ -43,6 +44,7 @@ public :: scanline
 character(len=*), parameter :: SYMBOLS     = '*#$%@&=+' !< Series symbols, cycled.
 character(len=*), parameter :: FRAME_COLOR = 'black'    !< Frame color, drawn as ticks.
 character(len=*), parameter :: GRID_COLOR  = '#a0a0a0'  !< Grid color, drawn as dots on blank cells.
+character(len=*), parameter :: PATTERN_SYMBOLS = 'xX#\//\' !< Cell symbols of the fill patterns 1 to 7.
 real(R8P),        parameter :: CELL_WIDTH  = 0.55_R8P   !< Cell width [font size].
 real(R8P),        parameter :: CELL_HEIGHT = 1.25_R8P   !< Cell height [font size].
 character(len=*), parameter :: TEXT_COLORS = 'mono ansi ansi256 ansirgb' !< Color modes (gnuplot names).
@@ -761,9 +763,14 @@ contains
    integer(I4P)                       :: c       !< Column counter.
    integer(I4P)                       :: k       !< Crossing pair counter.
    character(len=1)                   :: symbol  !< Fill symbol.
+   character(len=:), allocatable      :: paint   !< Fill color, a pattern's color.
+   integer(I4P)                       :: pattern !< Fill pattern, 0 for none.
 
-   tint = self%color_index(color)
-   symbol = self%symbol_of(color)
+   call pattern_parts(color, pattern, paint)
+   tint = self%color_index(paint)
+   symbol = self%symbol_of(paint)
+   ! a pattern fill drawn with its pattern character
+   if (pattern > 0_I4P) symbol = PATTERN_SYMBOLS(pattern:pattern)
    do r = self%row(minval(y)), self%row(maxval(y))
       xs = scanline(x, y, (real(r, R8P) - 0.5_R8P) * self%ch)
       do k = 1_I4P, size(xs, kind=I4P) - 1_I4P, 2_I4P

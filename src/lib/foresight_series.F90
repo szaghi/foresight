@@ -47,6 +47,15 @@ type :: series_object
    real(R8P)                     :: text_offset(2) = 0.0_R8P !< Label offset [characters, y upward].
    character(len=:), allocatable :: text_color !< Label color, the frame color if unallocated.
    logical                       :: text_point = .false. !< Labels mark their point.
+   integer(I4P)                  :: curve_to = 0_I4P  !< Fill of `filledcurves`: 0 closed, to `ylow` (a line or a
+                                                      !< band); 1 to the bottom (gnuplot `x1`), 2 to the top (`x2`),
+                                                      !< 3 to the point `curve_point` (`xy=`).
+   integer(I4P)                  :: curve_side = 0_I4P !< Fill restricted where the curve is above (1) or below (-1)
+                                                       !< its line or second curve; 0 both.
+   real(R8P)                     :: curve_point(2) = 0.0_R8P !< Point of `xy=X,Y`.
+   real(R8P), allocatable        :: channels(:,:,:) !< Red, green, blue, alpha of an RGB image (4, column, row),
+                                                    !< 0 to 255 (`grid` holds the red ones); unallocated for a palette
+                                                    !< image.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains
