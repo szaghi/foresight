@@ -3,7 +3,8 @@
 // the copy embedded in the page) on the tutorial dashboard, docs/public/examples/ch7.html: two
 // panels over the same iterations, with three and one series, markers and error bar caps. Then on
 // a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
-// entry, and neither zoom nor follow mode touch it; and boxes.html, boxes hidden by their key entry. The page is parsed by linkedom; the SVG
+// entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
+// histograms.html, text labels of the data as x ticks. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -161,6 +162,18 @@ fire(entry(0, 1).querySelector("text"), "mousedown", {});
 check("a key entry hides its boxes", series(0, 1).getAttribute("display") === "none");
 wheel(0);
 check("zoom acts on the boxes panel", box(0)[2] < 1);
+
+// text labels from the data: the x ticks are the labels, kept as text by a zoom
+page = strip(path.join(__dirname, "..", "tests", "golden", "histograms.html"));
+p = load("");
+function xlabels() {
+  return Array.prototype.map.call(panel(0).querySelectorAll(".fs-xticks text"),
+    function (t) { return t.textContent; });
+}
+check("labels as x ticks", xlabels().join("|") === "Xall GPU|Xall CPU|ADAM");
+wheel(0);
+check("a zoom keeps labels, not numbers", box(0)[2] < 1 && xlabels().length > 0 &&
+  xlabels().every(function (t) { return /^(Xall GPU|Xall CPU|ADAM)$/.test(t); }));
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

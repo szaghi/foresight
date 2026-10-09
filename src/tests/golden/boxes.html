@@ -318,11 +318,19 @@
     return {label: (n < 0 ? "-" : "") + label + "x10", sup: String(ee + digits.length - 1)};
   }
 
-  // user tick settings from the panel attributes: {mode, start, step, end, format}
+  // user tick settings from the panel attributes: {mode, start, step, end, format}; text labels
+  // from the data ("labels v:text ...", texts percent-encoded) give mode "labels" and {labels}
   function readTics(positions, format) {
     var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""}, p;
     if (positions === "none") tics.mode = "none";
-    else if (positions) {
+    else if (positions && positions.indexOf("labels") === 0) {
+      tics.mode = "labels";
+      tics.labels = positions.split(" ").slice(1).map(function (item) {
+        var colon = item.indexOf(":");
+        return {value: Number(item.slice(0, colon)),
+          label: decodeURIComponent(item.slice(colon + 1))};
+      });
+    } else if (positions) {
       p = positions.split(" ");
       tics.mode = "fixed";
       tics.start = p[0] === "*" ? "" : p[0];
@@ -413,8 +421,16 @@
   }
 
   // major ticks of a linear axis spanning [lo, hi] (either order) over npx pixels, no extension
+  // the data labels inside [lo, hi], in either order: the range is never extended to them
+  function labelTicks(lo, hi, tics) {
+    var a = Math.min(lo, hi), b = Math.max(lo, hi);
+    return tics.labels.filter(function (t) { return t.value >= a && t.value <= b; })
+      .map(function (t) { return {value: t.value, major: true, label: t.label, sup: ""}; });
+  }
+
   function linearTicks(lo, hi, npx, tics) {
     if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLinearTicks(lo, hi, tics);
     var ns = niceStep(Math.abs(hi - lo) / Math.max(2, npx / TICK_SPACING));
     var step = scale10(ns.m, ns.e), ticks = [], k, t;
@@ -432,6 +448,7 @@
   // ticks of a base-10 log axis spanning [lo, hi] (either order, > 0) over npx pixels
   function logTicks(lo, hi, npx, tics) {
     if (tics && tics.mode === "none") return [];
+    if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLogTicks(lo, hi, tics);
     var ta = Math.log10(Math.min(lo, hi)), tb = Math.log10(Math.max(lo, hi));
     var ns = niceStep((tb - ta) / Math.max(2, npx / TICK_SPACING));

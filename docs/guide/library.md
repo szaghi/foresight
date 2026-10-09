@@ -27,7 +27,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
@@ -41,6 +41,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
 | `set_style_fill(words)` | `set style fill solid 0.5 noborder` |
+| `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
 | `set_readout([on], [position], [opaque], [size])` | `set readout top right horizontal noopaque size 30`, `unset readout` (foresight extension, see [Readouts](gnuplot-subset#readouts)) |
 | `set_refresh(seconds)` | reload period of the HTML page |
@@ -51,7 +52,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Argument | Meaning | Default |
 |---|---|---|
 | `title` | key entry; empty for none | none |
-| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |
 | `fs` | boxes and filledcurves: gnuplot fill style words, `'solid 0.5 noborder'` | `set_style_fill` |

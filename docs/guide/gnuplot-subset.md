@@ -45,6 +45,7 @@ that did what it says.
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`] [`border` [`lc C`\|`-1`]\|`noborder`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default | — |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
+| **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
@@ -66,11 +67,11 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 |---|---|
 | `'file'` | data file; `''` repeats the previous one |
 | *function* | an expression of `x`, see [below](#functions) |
-| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below |
+| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below; a last field `xtic(N)` (`xticlabels(N)`) labels the points with the text of column N, see [Histograms](#histograms) |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
@@ -91,6 +92,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | `xyerrorbars` | `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh` |
 | `boxes` | `x:y` or `x:y:width` |
 | `filledcurves` | `x:y` (to `y=V`, or the closed polygon), `x:y1:y2` (a band) |
+| `histograms` | `y`, the rows at the point numbers 0, 1, ... |
 
 ## Expressions in `using`
 
@@ -336,6 +338,31 @@ Two deliberate differences from gnuplot, so that a bar is never misread:
 
 In text a fill is drawn with the symbol of its series (`block`: whole dots), whatever its opacity.
 
+## Histograms
+
+```gnuplot
+set style fill solid 0.6 border -1
+plot 'timings.dat' u 2:xtic(1) w histograms t 'mesh', '' u 3 w hist t 'fluxes', '' u 4 w hist t 'comm'
+```
+
+<Plot name="cb_histograms" svg :width="560" :height="320" />
+
+Each `histograms` item gives one bar per row of its file, the rows at 0, 1, 2, ...; the items of a panel are laid out
+together, as gnuplot:
+
+- `set style histogram clustered gap G` (the default, gap 2): the k items of a row side by side, each bar 1/(k + G)
+  wide, the cluster centred on its row;
+- `set style histogram rowstacked`: one stack per row, 1 wide; positive values pile up from 0, negative ones down
+  from 0, each sign on its own stack.
+
+`set boxwidth F` scales every bar. The x autoscale goes one unit beyond the first and last rows, as gnuplot; the y one
+reaches 0 for clustered bars too (gnuplot leaves it out, as for [boxes](#boxes-and-filled-curves)). The fill is
+`set style fill` or the item's `fs`.
+
+`using Y:xtic(N)` labels each row with the text of column N (quoted, it may hold blanks): when any item has labels,
+they replace the x ticks, at their rows, as gnuplot; the HTML page keeps them through a zoom. `xtic` works with any
+style, `using 0:2:xtic(1) w boxes` too.
+
 ## Readouts
 
 A foresight extension, not gnuplot (gnuplot rejects these scripts): `with readout` shows the last finite value of an
@@ -379,7 +406,9 @@ x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size r
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
 at a position (`at`) or in a named margin (`lmargin`, ...); fill patterns (`fs pattern N`), `filledcurves above`,
-`below`, `x1`, `x2`, `xy=`, and the styles `boxerrorbars`, `boxxyerror`, `candlesticks`, `histograms`; `pointinterval` (`pi`); the `smooth` filters other than
+`below`, `x1`, `x2`, `xy=`, and the styles `boxerrorbars`, `boxxyerror`, `candlesticks`; `set style histogram
+columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name, `set xtics
+add`; `pointinterval` (`pi`); the `smooth` filters other than
 `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal` (`csplines`, `acsplines`, `mcsplines`, `bezier`,
 `sbezier`, `kdensity`, `unwrap`, `path`) and `bins`; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

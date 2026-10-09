@@ -8,7 +8,8 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LINES, WITH_LINESPOINTS, &
+use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_LINES, &
+                            WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
 
 implicit none
@@ -28,7 +29,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(50)                           !< Per-check outcome.
+logical                       :: test_passed(53)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -439,7 +440,7 @@ if (test_passed(49)) then
 endif
 ! fill errors
 call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
-test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes and filledcurves only') > 0
+test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes, filledcurves and histograms only') > 0
 call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
@@ -455,6 +456,49 @@ test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'dens
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! histograms with xtic labels (same() reads -1 as NaN: values are shifted off it): clustered slots 1/(k+gap) centred on the rows 0, 1, 2; x one unit beyond, y to 0
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '"Xall GPU" 3 -2', 'B 5 1', 'C -2 4'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//data_file//"' u 2:xtic(1) w hist, '' u 3 w histograms", iostat, iomsg)
+test_passed(51) = iostat == 0_I4P
+if (test_passed(51)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(51) = series(1)%style%with == WITH_HISTOGRAMS .and. trim(series(1)%xlabels(1)) == 'Xall GPU' .and. &
+                        trim(series(1)%xlabels(3)) == 'C' .and. same(series(1)%x, [0, 1, 2]) .and. &
+                        same(series(1)%xlow * 4.0_R8P + 4.0_R8P, [3, 7, 11]) .and. same(series(2)%xlow * 4.0_R8P, [0, 4, 8]) .and. &
+                        same(series(2)%xhigh * 4.0_R8P, [1, 5, 9]) .and. .not. allocated(series(2)%xlabels)
+      call interpreter%figure%panels(1)%data_extent(xmin, xmax, ymin, ymax, found)
+      test_passed(51) = test_passed(51) .and. xmin == -1.0_R8P .and. xmax == 3.0_R8P .and. ymin(1) == -2.0_R8P
+   endassociate
+endif
+! rowstacked: positive values up from 0, negative ones down, each row 1 wide; a gap on clusters
+call interpreter%run_text("set style histogram rowstacked; plot '"//data_file//"' u 2:xtic(1) w hist, '' u 3 w hist", &
+                          iostat, iomsg)
+test_passed(52) = iostat == 0_I4P
+if (test_passed(52)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(52) = same(series(2)%ylow, [0, 5, 0]) .and. same(series(2)%y, [-2, 6, 4]) .and. &
+                        same(series(1)%y, [3, 5, -2]) .and. same(series(1)%xlow * 2.0_R8P + 2.0_R8P, [1, 3, 5])
+   endassociate
+endif
+call interpreter%run_text("set style histogram clustered gap 1; plot '"//data_file//"' u 2 w hist, '' u 3 w hist", &
+                          iostat, iomsg)
+test_passed(52) = test_passed(52) .and. iostat == 0_I4P
+if (test_passed(52)) test_passed(52) = same(interpreter%figure%panels(1)%series(2)%xhigh * 3.0_R8P, [1, 4, 7])
+! histogram and label errors
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w hist", iostat, iomsg)
+test_passed(53) = iostat /= 0_I4P .and. index(iomsg, 'histograms needs using Y or Y:xtic(N)') > 0
+call interpreter%run_text("set style histogram columnstacked", iostat, iomsg)
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "columnstacked"') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2:xtic(a) w hist", iostat, iomsg)
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'xtic needs a column number') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2:ytic(1) w hist", iostat, iomsg)
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'only xtic(N) labels are supported') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -467,7 +511,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,50L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,53L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

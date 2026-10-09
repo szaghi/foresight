@@ -70,6 +70,7 @@ type :: figure_object
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
       procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
+      procedure, pass(self) :: set_style_histogram !< gnuplot `set style histogram`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
@@ -149,7 +150,8 @@ contains
    self%panels(self%current) = settings
    endsubroutine next_panel
 
-   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs)
+   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
+                   xlabels)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -165,6 +167,10 @@ contains
    !< `with='boxes'` draws a bar from y = 0 to each `y`, `width` wide (per box; NaN or absent: `set_boxwidth`, else
    !< the boxes touch); `with='filledcurves'` fills down to `base`, between `ylow` and `y`, or the closed polygon of
    !< the points. `fs` takes gnuplot fill style words (`'solid 0.5 noborder'`), over `set_style_fill`.
+   !<
+   !< `with='histograms'` draws a bar per `y` in the row at `x` (0, 1, 2, ... as gnuplot), laid out with the other
+   !< histograms of the panel by `set_style_histogram`. `xlabels` label the abscissae (gnuplot `xtic(N)`): text labels
+   !< then replace the x ticks.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -184,11 +190,12 @@ contains
    real(R8P),            intent(in), optional :: width(:) !< Box widths.
    real(R8P),            intent(in), optional :: base     !< Baseline of a fill.
    character(len=*),     intent(in), optional :: fs       !< Fill style words.
+   character(len=*),     intent(in), optional :: xlabels(:) !< Text labels of the abscissae.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
-                                             format=format, width=width, base=base, fs=fs)
+                                             format=format, width=width, base=base, fs=fs, xlabels=xlabels)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -269,6 +276,25 @@ contains
    endassociate
    if (len(bad) > 0) error stop 'foresight: set_style_fill: unsupported fill style "'//bad//'"'
    endsubroutine set_style_fill
+
+   subroutine set_style_histogram(self, style, gap)
+   !< Layout of the histograms plotted next, as gnuplot `set style histogram clustered [gap G]|rowstacked`: `style`
+   !< `clustered` (the default) or `rowstacked`; `gap` the space between clusters, in bar widths (2 by default).
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   character(len=*),     intent(in)           :: style !< `clustered` or `rowstacked`.
+   real(R8P),            intent(in), optional :: gap   !< Gap between clusters [bars].
+
+   if (style /= 'clustered' .and. style /= 'rowstacked') &
+      error stop 'foresight: set_style_histogram: clustered or rowstacked expected, not "'//style//'"'
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%histogram_rowstacked = style == 'rowstacked'
+      if (present(gap)) then
+         if (gap < 0.0_R8P) error stop 'foresight: set_style_histogram: the gap must not be negative'
+         panel%histogram_gap = gap
+      endif
+   endassociate
+   endsubroutine set_style_histogram
 
    subroutine set_format(self, format, axes)
    !< Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text

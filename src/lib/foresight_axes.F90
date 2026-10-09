@@ -17,6 +17,15 @@ module foresight_axes
 !< which leaves zero out of the y autoscale of boxes and the auto-width edges out of the x one, bars are drawn whole
 !< and with lengths proportional to their values.
 !<
+!< Histograms (`with histograms`) lay out their bars from all the histogram series of the panel, as gnuplot: rows at
+!< their abscissae (the point numbers 0, 1, ... from a script), `clustered` the k series side by side in slots
+!< 1/(k + gap) wide centred on the row, `rowstacked` one stack per row, 1 wide, positive values up from 0 and negative
+!< ones down from 0; `boxwidth` scales each bar. The layout is redone at every histogram added, the original values
+!< kept in `values`; the x autoscale reaches one unit beyond the first and last rows, as gnuplot. Unlike gnuplot,
+!< clustered bars reach 0 in the y autoscale, as boxes.
+!<
+!< Text labels of the abscissae (`xtic(N)`) of every series replace the x ticks (see foresight_axis).
+!<
 !< Readouts (`with readout`, see foresight_readout) show the last finite value of their series in seven-segment
 !< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
@@ -27,8 +36,8 @@ use foresight_backend, only : axes_view, backend_object
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_FILLEDCURVES, WITH_READOUT
-use foresight_ticks, only : tics_object, TICS_NONE
+                            WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_READOUT
+use foresight_ticks, only : labels_attribute, tick_object, tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
@@ -75,6 +84,8 @@ type :: axes_object
                                                         !< components only).
    real(R8P)                        :: boxwidth = 0.0_R8P !< Box width, `set boxwidth`; 0 for auto (boxes touching).
    logical                          :: boxwidth_relative = .false. !< `boxwidth` scales the auto width.
+   logical                          :: histogram_rowstacked = .false. !< Histograms stacked by row, else clustered.
+   real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
    logical                          :: readout = .true. !< Draw the readouts.
    character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
    character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
@@ -101,7 +112,7 @@ endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs)
+                         base, fs, xlabels)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -110,7 +121,8 @@ contains
    !<
    !< `boxes` take the box widths `width` (NaN for the default), else the panel `boxwidth`, else touching boxes;
    !< `filledcurves` fill to the line y = `base`, between `ylow` and `y`, or the closed polygon of the points. `fs`
-   !< (gnuplot fill style words, `'solid 0.5 noborder'`) overrides the panel fill of either.
+   !< (gnuplot fill style words, `'solid 0.5 noborder'`) overrides the panel fill of either; `histograms` take the fill
+   !< too. `xlabels` are text labels of the abscissae (blank for none), replacing the x ticks.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -130,6 +142,7 @@ contains
    real(R8P),          intent(in), optional :: width(:) !< Box widths.
    real(R8P),          intent(in), optional :: base     !< Baseline of a fill.
    character(len=*),   intent(in), optional :: fs       !< Fill style words.
+   character(len=*),   intent(in), optional :: xlabels(:) !< Text labels of the abscissae.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -185,6 +198,10 @@ contains
       call box_edges(series%xlow, series%xhigh)
       allocate(series%ylow(size(x)))
       series%ylow = 0.0_R8P
+   case (WITH_HISTOGRAMS)
+      if (present(base) .or. present(ylow) .or. present(width)) &
+         error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
+      series%values = y
    case (WITH_FILLEDCURVES)
       ! gnuplot fills a curve even with an empty fill style, and never draws its border
       if (series%style%fill == FILL_EMPTY) series%style%density = 1.0_R8P
@@ -202,6 +219,10 @@ contains
       series%xlow = xlow
       series%xhigh = xhigh
    endif
+   if (present(xlabels)) then
+      if (size(xlabels) /= size(x)) error stop 'foresight: plot: xlabels and x have different sizes'
+      series%xlabels = xlabels
+   endif
    if (series%style%with == WITH_FILLEDCURVES .and. present(ylow)) then
       if (size(ylow) /= size(y)) error stop 'foresight: plot: ylow and y have different sizes'
       series%ylow = ylow
@@ -213,6 +234,8 @@ contains
       series%yhigh = yhigh
    endif
    self%series = [self%series, series]
+   if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
+                                                                     self%histogram_gap, self%boxwidth)
    contains
       pure subroutine box_edges(left, right)
       !< Box edges: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a relative
@@ -354,6 +377,7 @@ contains
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
    view%xtics = self%xaxis%tics%attribute()
+   if (self%xaxis%labelled()) view%xtics = labels_attribute(self%xaxis%labels)
    view%ytics = self%yaxis%tics%attribute()
    view%xformat = ''
    view%yformat = ''
@@ -803,7 +827,7 @@ contains
          u = self%xaxis%to_unit(series%x)
          v = yaxis%to_unit(series%y)
       endwhere
-      if (series%style%with == WITH_BOXES) call draw_boxes
+      if (series%style%with == WITH_BOXES .or. series%style%with == WITH_HISTOGRAMS) call draw_boxes
       if (series%style%with == WITH_FILLEDCURVES) call draw_fill
       if (series%style%draws_lines()) then
          i1 = 1_I4P
@@ -915,6 +939,77 @@ contains
       endsubroutine draw_bars
    endsubroutine draw_series
 
+   subroutine layout_histograms(all, rowstacked, gap, boxwidth)
+   !< Bars of every histogram series of `all` from their `values`: clustered side by side in each row, or stacked by
+   !< row (positive values up from 0, negative ones down, each sign on its own stack). A module procedure on the series
+   !< array, not a binding: gfortran 16 corrupts the descriptor of `self%series` reached through the class dummy after
+   !< its reallocation by `add_series`.
+   type(series_object), intent(inout) :: all(:)     !< Series of the panel.
+   logical,             intent(in)    :: rowstacked !< Stacked by row, else clustered.
+   real(R8P),           intent(in)    :: gap        !< Gap between clusters [bar slots].
+   real(R8P),           intent(in)    :: boxwidth   !< Bar width factor, 0 for 1.
+   real(R8P), allocatable             :: up(:)      !< Top of the positive stack of each row.
+   real(R8P), allocatable             :: down(:)    !< Bottom of the negative stack of each row.
+   real(R8P)                          :: slot       !< Clustered slot width.
+   real(R8P)                          :: scale      !< Bar width factor.
+   real(R8P)                          :: centre     !< Bar centre offset from its row.
+   integer(I4P)                       :: k          !< Histogram series.
+   integer(I4P)                       :: j          !< Histogram series counter.
+   integer(I4P)                       :: s          !< Series counter.
+   integer(I4P)                       :: i          !< Row counter.
+   integer(I4P)                       :: n          !< Rows.
+
+   k = 0_I4P
+   n = 0_I4P
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with /= WITH_HISTOGRAMS) cycle
+      k = k + 1_I4P
+      n = max(n, size(all(s)%values, kind=I4P))
+   enddo
+   allocate(up(n), down(n))
+   up = 0.0_R8P
+   down = 0.0_R8P
+   scale = 1.0_R8P
+   if (boxwidth > 0.0_R8P) scale = boxwidth
+   slot = 1.0_R8P / (real(k, R8P) + gap)
+   j = 0_I4P
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with /= WITH_HISTOGRAMS) cycle
+      j = j + 1_I4P
+      n = size(all(s)%values, kind=I4P)
+      if (allocated(all(s)%xlow)) deallocate(all(s)%xlow)
+      if (allocated(all(s)%xhigh)) deallocate(all(s)%xhigh)
+      if (allocated(all(s)%ylow)) deallocate(all(s)%ylow)
+      allocate(all(s)%xlow(n), all(s)%xhigh(n), all(s)%ylow(n))
+      if (rowstacked) then
+         do i = 1_I4P, n
+            all(s)%xlow(i) = all(s)%x(i) - 0.5_R8P * scale
+            all(s)%xhigh(i) = all(s)%x(i) + 0.5_R8P * scale
+            all(s)%ylow(i) = 0.0_R8P
+            all(s)%y(i) = all(s)%values(i)
+            if (.not. ieee_is_finite(all(s)%values(i))) cycle
+            if (all(s)%values(i) >= 0.0_R8P) then
+               all(s)%ylow(i) = up(i)
+               up(i) = up(i) + all(s)%values(i)
+               all(s)%y(i) = up(i)
+            else
+               all(s)%ylow(i) = down(i)
+               down(i) = down(i) + all(s)%values(i)
+               all(s)%y(i) = down(i)
+            endif
+         enddo
+      else
+         centre = (real(j, R8P) - 0.5_R8P * real(k + 1_I4P, R8P)) * slot
+         do i = 1_I4P, n
+            all(s)%xlow(i) = all(s)%x(i) + centre - 0.5_R8P * slot * scale
+            all(s)%xhigh(i) = all(s)%x(i) + centre + 0.5_R8P * slot * scale
+            all(s)%ylow(i) = 0.0_R8P
+            all(s)%y(i) = all(s)%values(i)
+         enddo
+      endif
+   enddo
+   endsubroutine layout_histograms
+
    elemental function is_readout(self, s) result(is)
    !< Whether the `s`-th series is a readout.
    class(axes_object), intent(in) :: self !< Panel.
@@ -999,6 +1094,7 @@ contains
    integer(I4P)                      :: k         !< y axis of the series: 1 or 2.
 
    call self%data_extent(xmin, xmax, ymin, ymax, found)
+   call collect_labels
    call self%xaxis%setup(xmin, xmax, any(found), area(2) - area(1))
    xmin = huge(1.0_R8P)
    xmax = -huge(1.0_R8P)
@@ -1019,6 +1115,41 @@ contains
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
+   contains
+      subroutine collect_labels
+      !< Text labels of the abscissae of every series, by value (the first label of a value wins), ascending.
+      type(tick_object), allocatable :: labels(:) !< Labels.
+      type(tick_object)              :: t         !< Swap buffer.
+      integer(I4P)                   :: i         !< Point counter.
+      integer(I4P)                   :: j         !< Sort counter.
+      integer(I4P)                   :: n         !< Labels.
+
+      allocate(labels(0))
+      do s = 1_I4P, size(self%series, kind=I4P)
+         if (.not. allocated(self%series(s)%xlabels)) cycle
+         associate(series => self%series(s))
+            do i = 1_I4P, size(series%x, kind=I4P)
+               if (len_trim(series%xlabels(i)) == 0 .or. .not. ieee_is_finite(series%x(i))) cycle
+               if (size(labels) > 0) then
+                  if (any(labels%value == series%x(i))) cycle
+               endif
+               labels = [labels, tick_object(value=series%x(i), major=.true., label=trim(series%xlabels(i)), sup='')]
+            enddo
+         endassociate
+      enddo
+      n = size(labels, kind=I4P)
+      do i = 2_I4P, n
+         t = labels(i)
+         j = i - 1_I4P
+         do while (j >= 1_I4P)
+            if (labels(j)%value <= t%value) exit
+            labels(j + 1_I4P) = labels(j)
+            j = j - 1_I4P
+         enddo
+         labels(j + 1_I4P) = t
+      enddo
+      call move_alloc(labels, self%xaxis%labels)
+      endsubroutine collect_labels
    endsubroutine setup_axes
 
    pure subroutine axes_names(names, x, y, y2, bad)

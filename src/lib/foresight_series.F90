@@ -3,7 +3,7 @@ module foresight_series
 !< foresight_series, a plotted data series.
 use penf, only : I4P, R8P
 use foresight_axis, only : axis_object
-use foresight_style, only : style_object
+use foresight_style, only : style_object, WITH_HISTOGRAMS
 
 implicit none
 private
@@ -19,6 +19,8 @@ type :: series_object
    real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
+   character(len=:), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
+   real(R8P), allocatable        :: values(:) !< Values of a histogram, `y` being the top of its bar or stack segment.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains
@@ -41,7 +43,8 @@ contains
    !< Widen the extent (`xmin`, `xmax`, `ymin`, `ymax`) to the placeable points of the series.
    !<
    !< With `xwindow` only the points whose abscissa lies inside it count: gnuplot autoscales y on the points inside the
-   !< x range only. Error bar ends placeable on their axis widen the extent too, as in gnuplot.
+   !< x range only. Error bar ends placeable on their axis widen the extent too, as in gnuplot; histogram rows widen the
+   !< x extent by one unit on each side, as gnuplot.
    class(series_object), intent(in)           :: self       !< Series.
    type(axis_object),    intent(in)           :: xaxis      !< Horizontal axis.
    type(axis_object),    intent(in)           :: yaxis      !< Vertical axis.
@@ -67,6 +70,11 @@ contains
    xmax = max(xmax, maxval(self%x, mask=mask))
    ymin = min(ymin, minval(self%y, mask=mask))
    ymax = max(ymax, maxval(self%y, mask=mask))
+   ! histograms: one unit beyond the first and last rows, as gnuplot
+   if (self%style%with == WITH_HISTOGRAMS .and. .not. present(xwindow)) then
+      xmin = min(xmin, minval(self%x, mask=mask) - 1.0_R8P)
+      xmax = max(xmax, maxval(self%x, mask=mask) + 1.0_R8P)
+   endif
    if (allocated(self%xlow)) call widen(self%xlow, xaxis, xmin, xmax)
    if (allocated(self%xhigh)) call widen(self%xhigh, xaxis, xmin, xmax)
    if (allocated(self%ylow)) call widen(self%ylow, yaxis, ymin, ymax)

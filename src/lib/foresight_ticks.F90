@@ -12,7 +12,7 @@ module foresight_ticks
 !<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
-use foresight_format, only : decimal_of, decimal_str, format_decimal, int_str, parse_decimal
+use foresight_format, only : decimal_of, decimal_str, format_decimal, int_str, parse_decimal, real_str
 
 implicit none
 private
@@ -22,6 +22,7 @@ public :: nice_step
 public :: tick_object
 public :: tics_object
 public :: TICS_AUTO, TICS_FIXED, TICS_NONE
+public :: labels_attribute
 
 type :: tick_object
    !< Axis tick.
@@ -82,6 +83,30 @@ contains
       if (len(t) == 0) t = '*'
       endfunction or_star
    endfunction attribute
+
+   pure function labels_attribute(labels) result(text)
+   !< Text labels for the viewer: `labels` then `value:label` pairs, blank separated, each label percent-encoded (every
+   !< byte but letters, digits and `-._~`), so blanks and colons in a label never split it.
+   type(tick_object), intent(in) :: labels(:) !< Labelled values.
+   character(len=:), allocatable :: text      !< Attribute text.
+   character(len=*), parameter   :: HEX = '0123456789ABCDEF' !< Hexadecimal digits.
+   integer(I4P)                  :: k         !< Label counter.
+   integer(I4P)                  :: i         !< Byte counter.
+   integer(I4P)                  :: b         !< Byte value.
+
+   text = 'labels'
+   do k = 1_I4P, size(labels, kind=I4P)
+      text = text//' '//real_str(labels(k)%value)//':'
+      do i = 1_I4P, len(labels(k)%label, kind=I4P)
+         b = ichar(labels(k)%label(i:i))
+         if (verify(labels(k)%label(i:i), 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') == 0) then
+            text = text//labels(k)%label(i:i)
+         else
+            text = text//'%'//HEX(b / 16 + 1:b / 16 + 1)//HEX(modulo(b, 16) + 1:modulo(b, 16) + 1)
+         endif
+      enddo
+   enddo
+   endfunction labels_attribute
 
    pure subroutine enable(self)
    !< Turn off ticks on again at their last positions, as gnuplot `set xtics` without positions: the fixed step if one

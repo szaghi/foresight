@@ -28,6 +28,9 @@ module foresight_script
 !< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
 !<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `border [lc C|-1]`,
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
+!< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
+!<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
+!<   the labels replacing the x ticks;
 !< - foresight extensions: `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
@@ -299,6 +302,9 @@ contains
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
    real(R8P),        allocatable                :: base      !< Baseline of `filledcurves y=V`, unallocated if none.
    real(R8P),        allocatable                :: widths(:) !< Box widths, `using x:y:width`.
+   integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
+   character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
+   logical                                      :: one_field !< `using` gives one field (before the point number).
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -376,6 +382,7 @@ contains
       ! modifiers
       if (allocated(fields)) deallocate(fields)
       spec = ''
+      label_col = 0_I4P
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       with = self%data_style
@@ -405,6 +412,8 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+            call split_xtic(spec, label_col, iostat, iomsg)
+            if (iostat /= 0_I4P) return
             call parse_using(spec, fields, iostat, iomsg)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'index', 1_I4P)) then
@@ -418,7 +427,7 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, boxes, filledcurves, readout)', iostat, iomsg)
+                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, readout)', iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
@@ -534,8 +543,8 @@ contains
          call fail('plot: format applies to readouts only (with readout)', iostat, iomsg)
          return
       endif
-      if (allocated(fs) .and. with /= 'boxes' .and. with /= 'filledcurves') then
-         call fail('plot: fs applies to boxes and filledcurves only', iostat, iomsg)
+      if (allocated(fs) .and. with /= 'boxes' .and. with /= 'filledcurves' .and. with /= 'histograms') then
+         call fail('plot: fs applies to boxes, filledcurves and histograms only', iostat, iomsg)
          return
       endif
       if (is_function) then
@@ -553,24 +562,31 @@ contains
          cycle
       endif
       ! data
-      if (file /= loaded) then
-         call data%load(file, iostat, iomsg, separator=self%separator)
+      ! reloaded to keep the text of the xtic column
+      if (file /= loaded .or. (label_col > 0_I4P .and. data%label_column /= label_col)) then
+         call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
       endif
       ! columns: gnuplot defaults are 1:2 (0:1 for one column), 1:2:3 for x/y error bars, 1:2:3:4 for xy error bars
+      one_field = .false.
       if (.not. allocated(fields)) then
          select case (with)
          case ('yerrorbars', 'xerrorbars')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          case ('xyerrorbars')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
+         case ('histograms')
+            ! one value per row: the first column at the point numbers
+            fields = plain_columns([0_I4P, 1_I4P])
          case default
             call data%default_using(ux, uy)
             fields = plain_columns([ux, uy])
          endselect
+         one_field = with == 'histograms'
       elseif (size(fields) == 1) then
+         one_field = .true.
          call point%set_column(0_I4P)
          fields = [point, fields(1)]
       endif
@@ -584,6 +600,11 @@ contains
       case ('xyerrorbars')
          if (nbar /= 2_I4P .and. nbar /= 4_I4P) then
             call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
+            return
+         endif
+      case ('histograms')
+         if (.not. one_field) then
+            call fail('plot: histograms needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
             return
          endif
       case ('boxes')
@@ -631,7 +652,12 @@ contains
          endif
          if (title_column >= 0_I4P) title = header_title(max(0_I4P, set_index))
       endif
-      call data%table(fields, set_index, every, values, header=headed)
+      if (label_col > 0_I4P) then
+         call data%table(fields, set_index, every, values, header=headed, labels=xlabels)
+      else
+         call data%table(fields, set_index, every, values, header=headed)
+         if (allocated(xlabels)) deallocate(xlabels)
+      endif
       x = values(:, 1)
       y = values(:, 2)
       if (len(filter) > 0) then
@@ -686,15 +712,15 @@ contains
       if (with == 'readout') then
          ! a line style may carry widths and sizes: a readout keeps its color only
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, format=format)
-      elseif (with == 'boxes' .or. with == 'filledcurves') then
+      elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
-                               width=widths, base=base, fs=fs)
+                               width=widths, base=base, fs=fs, xlabels=xlabels)
       else
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
-                               xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt)
+                               xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels)
       endif
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
@@ -706,6 +732,55 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine split_xtic(spec, column, iostat, iomsg)
+      !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none).
+      character(len=:), allocatable, intent(inout) :: spec   !< `using` specification.
+      integer(I4P),                  intent(out)   :: column !< Label column, 0 for none.
+      integer(I4P),                  intent(inout) :: iostat !< Status.
+      character(len=:), allocatable, intent(inout) :: iomsg  !< Error message.
+      character(len=:), allocatable                :: last   !< Last field.
+      character(len=:), allocatable                :: inner  !< Argument of the label field.
+      integer(I4P)                                 :: k      !< Character counter.
+      integer(I4P)                                 :: depth  !< Parenthesis depth.
+      integer(I4P)                                 :: cut    !< Last top-level colon, 0 for none.
+      real(R8P)                                    :: v      !< Column number.
+
+      column = 0_I4P
+      depth = 0_I4P
+      cut = 0_I4P
+      do k = 1_I4P, len(spec, kind=I4P)
+         select case (spec(k:k))
+         case ('(')
+            depth = depth + 1_I4P
+         case (')')
+            depth = depth - 1_I4P
+         case (':')
+            if (depth == 0_I4P) cut = k
+         endselect
+      enddo
+      last = spec(cut + 1_I4P:)
+      if (index(last, 'xtic(') /= 1 .and. index(last, 'xticlabels(') /= 1) then
+         if (index(last, 'ytic(') == 1 .or. index(last, 'x2tic(') == 1 .or. index(last, 'ticlabels(') > 0) &
+            call fail('plot: only xtic(N) labels are supported, found "'//last//'"', iostat, iomsg)
+         return
+      endif
+      inner = last(index(last, '(') + 1:len(last) - 1)
+      if (last(len(last):len(last)) /= ')' .or. .not. to_number(inner, v)) then
+         call fail('plot: xtic needs a column number, xtic(1), found "'//last//'"', iostat, iomsg)
+         return
+      endif
+      if (v < 1.0_R8P .or. v /= aint(v)) then
+         call fail('plot: xtic needs a column number, xtic(1), found "'//last//'"', iostat, iomsg)
+         return
+      endif
+      column = int(v, I4P)
+      if (cut == 0_I4P) then
+         call fail('plot: xtic(N) labels a value: using Y:xtic(N) or X:Y:xtic(N)', iostat, iomsg)
+         return
+      endif
+      spec = spec(1:cut - 1_I4P)
+      endsubroutine split_xtic
+
       subroutine fill_words(words)
       !< Fill style words of an item after `fs`, up to the next item option or comma: `empty`, `transparent`, `solid`
       !< and its density, `border` and its color (`lc [rgb] C`, `-1`), `noborder`, `pattern` (refused later).
@@ -1431,6 +1506,44 @@ contains
             endif
             self%data_style = with
             return
+         elseif (keyword(tokens(2)%text, 'histogram', 4_I4P)) then
+            block
+               logical                :: rows !< Row stacked.
+               real(R8P), allocatable :: gap  !< Cluster gap.
+               real(R8P)              :: v    !< Number.
+
+               rows = .false.
+               s = 3_I4P
+               do while (s <= size(tokens, kind=I4P))
+                  if (tokens(s)%text == 'clustered') then
+                     rows = .false.
+                  elseif (keyword(tokens(s)%text, 'rowstacked', 4_I4P)) then
+                     rows = .true.
+                  elseif (tokens(s)%text == 'gap') then
+                     s = s + 1_I4P
+                     if (s > size(tokens, kind=I4P)) then
+                        call fail('set style histogram: gap needs a number', iostat, iomsg)
+                        return
+                     endif
+                     if (.not. to_number(tokens(s)%text, v)) then
+                        call fail('set style histogram: gap needs a number', iostat, iomsg)
+                        return
+                     endif
+                     if (v < 0.0_R8P) then
+                        call fail('set style histogram: the gap must not be negative', iostat, iomsg)
+                        return
+                     endif
+                     gap = v
+                  else
+                     call fail('set style histogram: unsupported option "'//tokens(s)%text//'" (clustered [gap G] '// &
+                               'and rowstacked are supported)', iostat, iomsg)
+                     return
+                  endif
+                  s = s + 1_I4P
+               enddo
+               call self%figure%set_style_histogram(merge('rowstacked', 'clustered ', rows), gap)
+            endblock
+            return
          elseif (keyword(tokens(2)%text, 'fill', 2_I4P)) then
             block
                type(style_object)            :: probe !< Style the words are tried on.
@@ -1495,8 +1608,8 @@ contains
             return
          endif
       endif
-      call fail('set style: only "data STYLE", "function STYLE", "line N ..." and "fill ..." are supported', iostat, &
-                iomsg)
+      call fail('set style: only "data STYLE", "function STYLE", "line N ...", "fill ..." and "histogram ..." are '// &
+                'supported', iostat, iomsg)
       endsubroutine style_option
    endsubroutine set_command
 
@@ -1648,6 +1761,8 @@ contains
       style = 'boxes'
    case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
       style = 'filledcurves'
+   case ('his', 'hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
+      style = 'histograms'
    case default
       style = ''
    endselect

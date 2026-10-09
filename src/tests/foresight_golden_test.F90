@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(21)                  !< Per-figure outcome.
+logical                     :: test_passed(25)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -39,7 +39,12 @@ test_passed(19) = check('fills.txt', figure_fills())
 test_passed(20) = check('fills_block.txt', figure_fills_block())
 ! also the page of the viewer DOM test of boxes (src/js/viewer_dom_test.js)
 test_passed(21) = check('boxes.html', figure_boxes())
-write(output_unit, '(A,21L2)') 'foresight golden checks:', test_passed
+test_passed(22) = check('histograms.svg', figure_histograms(.false.))
+test_passed(23) = check('histograms.txt', figure_histograms(.false.))
+test_passed(24) = check('histograms_rowstacked.svg', figure_histograms(.true.))
+! also the page of the viewer DOM test of text labels (src/js/viewer_dom_test.js)
+test_passed(25) = check('histograms.html', figure_histograms(.false.))
+write(output_unit, '(A,25L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -248,6 +253,24 @@ contains
    fig = figure_fills()
    call fig%set_text(charset='quadrants', colors='ansi')
    endfunction figure_fills_block
+
+   function figure_histograms(stacked) result(fig)
+   !< Histograms of three series over three labelled rows, a negative value: clustered (gap 2, y from 0, x one unit
+   !< beyond the rows) or row-stacked (negative values stacked down from 0); text labels replace the x ticks.
+   logical, intent(in) :: stacked !< Row-stacked, else clustered.
+   type(figure_object) :: fig     !< Figure.
+   character(len=8)    :: names(3) !< Row labels.
+
+   names = ['Xall GPU', 'Xall CPU', 'ADAM    ']
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_title('Time per step')
+   call fig%set_style_fill('solid 0.6 border lc "black"')
+   if (stacked) call fig%set_style_histogram('rowstacked')
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [3.0_R8P, 5.0_R8P, 2.0_R8P], title='mesh', with='histograms', &
+                 xlabels=names)
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [2.0_R8P, 1.0_R8P, 4.0_R8P], title='io', with='histograms')
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [1.0_R8P, 2.0_R8P, -1.0_R8P], title='comm', with='histograms')
+   endfunction figure_histograms
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

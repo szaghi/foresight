@@ -7,6 +7,9 @@ module foresight_datafile
 !< are `?`, `NaN`, `inf`, empty or not numbers are missing values (gaps). Pseudo-column 0 numbers the selected points of
 !< each dataset from 0 (with `every`, only the points it keeps are counted, as gnuplot).
 !<
+!< With `label_column` N, the text of column N of every row is kept too (`labels`, `table(..., labels=...)`): the text
+!< labels of `using ...:xtic(N)`; blanks around a cell and double quotes are removed, a missing cell is blank.
+!<
 !< The first row of each dataset is kept as text too: with headers in use (`table(..., header=.true.)`) it names the
 !< columns, for `using 1:"name"` and `title columnhead`, and is not data; else it is a row as any other.
 !<
@@ -51,6 +54,8 @@ type :: datafile_object
    integer(I4P), allocatable     :: dataset(:)        !< Dataset (0-based) of each row.
    integer(I4P), allocatable     :: block(:)          !< Block (global counter) of each row.
    type(header_object), allocatable :: headers(:)     !< First row of each dataset as text, by dataset from 1.
+   integer(I4P)                     :: label_column = 0_I4P !< Column kept as text in `labels`, 0 for none.
+   type(text_object), allocatable   :: labels(:)       !< Text of column `label_column` of each row.
    integer(I4P)                  :: nrows   = 0_I4P   !< Number of data rows.
    integer(I4P)                  :: nvalues = 0_I4P   !< Number of stored values.
    contains
@@ -64,14 +69,15 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg, separator)
+   subroutine load(self, file, iostat, iomsg, separator, label_column)
    !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
-   !< characters when given and not empty.
+   !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept.
    class(datafile_object),        intent(inout)        :: self      !< Data.
    character(len=*),              intent(in)           :: file      !< File name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
    character(len=*),              intent(in), optional :: separator !< Cell separator characters.
+   integer(I4P),                  intent(in), optional :: label_column !< Column kept as text, 0 for none.
    character(len=:), allocatable                       :: line      !< Current line.
    character(len=:), allocatable                       :: sep       !< Cell separator characters, empty for whitespace.
    character(len=256)                                  :: message   !< I/O message.
@@ -85,6 +91,7 @@ contains
    logical                                             :: quoted    !< Inside double quotes.
    logical                                             :: eof       !< End of file reached.
    logical                                             :: recording !< Recording the header of a dataset.
+   integer(I4P)                                        :: cell      !< Cell number in the row.
 
    self%file = file
    sep = ''
@@ -96,7 +103,10 @@ contains
    if (allocated(self%dataset)) deallocate(self%dataset)
    if (allocated(self%block)) deallocate(self%block)
    if (allocated(self%headers)) deallocate(self%headers)
-   allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256), self%headers(0))
+   if (allocated(self%labels)) deallocate(self%labels)
+   self%label_column = 0_I4P
+   if (present(label_column)) self%label_column = max(0_I4P, label_column)
+   allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256), self%headers(0), self%labels(0))
    self%first(1) = 1_I4P
    iomsg = ''
    open(newunit=unit, file=file, action='read', status='old', form='formatted', access='sequential', &
@@ -127,6 +137,7 @@ contains
          endif
          blanks = 0_I4P
          call new_row(dset, blk)
+         cell = 0_I4P
          i = 1_I4P
          if (len(sep) == 0) then
             ! whitespace separated: runs of blanks between cells, a quoted cell may hold blanks
@@ -144,6 +155,8 @@ contains
                enddo
                call add_value(to_real(line(i:j)))
                if (recording) call record(line(i:j))
+               cell = cell + 1_I4P
+               if (cell == self%label_column) self%labels(self%nrows)%text = clean(line(i:j))
                i = j + 1_I4P
             enddo
          else
@@ -158,6 +171,8 @@ contains
                enddo
                call add_value(cell_value(line(i:j - 1_I4P)))
                if (recording) call record(line(i:j - 1_I4P))
+               cell = cell + 1_I4P
+               if (cell == self%label_column) self%labels(self%nrows)%text = clean(line(i:j - 1_I4P))
                if (j > n) exit
                i = j + 1_I4P
             enddo
@@ -187,6 +202,10 @@ contains
          call move_alloc(iwork, self%first)
       endif
       self%nrows = self%nrows + 1_I4P
+      if (self%label_column > 0_I4P) then
+         if (self%nrows > size(self%labels)) call grow_labels
+         self%labels(self%nrows)%text = ''
+      endif
       self%dataset(self%nrows) = dset
       self%block(self%nrows) = blk
       self%first(self%nrows + 1_I4P) = self%nvalues + 1_I4P
@@ -198,23 +217,24 @@ contains
 
       subroutine record(cell)
       !< Append `cell` to the header of the current dataset: blanks around it and double quotes removed.
-      character(len=*), intent(in) :: cell  !< Cell text.
-      integer(I4P)                 :: first !< First character kept.
-      integer(I4P)                 :: last  !< Last character kept.
+      character(len=*), intent(in)  :: cell !< Cell text.
+      character(len=:), allocatable :: text !< Clean text (a temporary: gfortran 16 crashes on the function result
+                                            !< in the constructor).
 
-      first = verify(cell, ' '//TAB, kind=I4P)
-      last = verify(cell, ' '//TAB, back=.true., kind=I4P)
-      if (first == 0_I4P) then
-         first = 1_I4P
-         last = 0_I4P
-      elseif (last > first .and. cell(first:first) == '"' .and. cell(last:last) == '"') then
-         first = first + 1_I4P
-         last = last - 1_I4P
-      endif
+      text = clean(cell)
       associate(header => self%headers(size(self%headers)))
-         header%cells = [header%cells, text_object(cell(first:last))]
+         header%cells = [header%cells, text_object(text)]
       endassociate
       endsubroutine record
+
+      subroutine grow_labels
+      !< Double the row labels.
+      type(text_object), allocatable :: work(:) !< Growth buffer.
+
+      allocate(work(max(256_I4P, 2_I4P * size(self%labels, kind=I4P))))
+      work(1:size(self%labels)) = self%labels
+      call move_alloc(work, self%labels)
+      endsubroutine grow_labels
 
       subroutine add_value(v)
       !< Append a value to the current row, doubling the storage when full.
@@ -267,12 +287,13 @@ contains
    y = values(:, 2)
    endsubroutine columns
 
-   subroutine table(self, fields, index, every, values, header)
+   subroutine table(self, fields, index, every, values, header, labels)
    !< Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
    !< `values(point, field)`.
    !<
    !< With `header` the first row of each dataset names the columns: it is skipped, neither a point nor counted, and
-   !< the column header names of the fields are resolved on the header of each dataset.
+   !< the column header names of the fields are resolved on the header of each dataset. `labels` returns the text of
+   !< the label column (see `load`) of each point, blank for breaks or without a label column.
    !<
    !< `every` is gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, an end negative for
    !< none. Points are numbered within their block, blocks within their dataset, from 0.
@@ -285,11 +306,25 @@ contains
    integer(I4P),            intent(in)  :: every(6)    !< gnuplot `every` fields.
    real(R8P), allocatable,  intent(out) :: values(:,:) !< Points.
    logical,                 intent(in), optional :: header !< The first row of each dataset is a header.
+   character(len=:), allocatable, intent(out), optional :: labels(:) !< Text labels of the points.
    logical                              :: headed      !< Headers in use.
+   integer(I4P)                         :: width       !< Label length.
+   integer(I4P)                         :: r           !< Row counter.
 
    headed = .false.
    if (present(header)) headed = header
    allocate(values(count_points(), size(fields)))
+   if (present(labels)) then
+      ! the longest row label, at least 1
+      width = 1_I4P
+      if (self%label_column > 0_I4P) then
+         do r = 1_I4P, self%nrows
+            width = max(width, len(self%labels(r)%text, kind=I4P))
+         enddo
+      endif
+      allocate(character(len=width) :: labels(size(values, 1)))
+      labels = ''
+   endif
    call store_points
    contains
       pure function is_header(r) result(yes)
@@ -370,6 +405,7 @@ contains
          do f = 1_I4P, size(fields, kind=I4P)
             values(k, f) = resolved(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), picked)
          enddo
+         if (present(labels) .and. self%label_column > 0_I4P) labels(k) = self%labels(r)%text
       enddo
       endsubroutine store_points
 
@@ -488,6 +524,25 @@ contains
    endfunction missing_name
 
    ! private procedures
+   pure function clean(cell) result(text)
+   !< `cell` without the blanks around it and its double quotes.
+   character(len=*), intent(in)  :: cell  !< Cell text.
+   character(len=:), allocatable :: text  !< Clean text.
+   integer(I4P)                  :: first !< First character kept.
+   integer(I4P)                  :: last  !< Last character kept.
+
+   first = verify(cell, ' '//TAB, kind=I4P)
+   last = verify(cell, ' '//TAB, back=.true., kind=I4P)
+   if (first == 0_I4P) then
+      first = 1_I4P
+      last = 0_I4P
+   elseif (last > first .and. cell(first:first) == '"' .and. cell(last:last) == '"') then
+      first = first + 1_I4P
+      last = last - 1_I4P
+   endif
+   text = cell(first:last)
+   endfunction clean
+
    subroutine read_line(unit, line, eof, iostat)
    !< Read a whole line of any length; `eof` is set on the last one, which may still carry text.
    integer(I4P),                  intent(in)  :: unit   !< File unit.

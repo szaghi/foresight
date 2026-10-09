@@ -188,6 +188,23 @@ or 1 x 2 (`half`). Add `ansi` (or `ansi256`, `ansirgb`) to draw each series in i
 Boxes stand on y = 0 and the autoscale reaches 0 and the box edges, unlike gnuplot: bar lengths are proportional to
 the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
 
+## Grouped bars with category labels
+
+<<< @/examples/snippets/cb_histograms.gp{gnuplot}
+
+<Plot name="cb_histograms" svg :width="560" :height="320" />
+
+`xtic(1)` labels each row with the text of column 1; the labels replace the x ticks.
+
+## Stacked bars
+
+<<< @/examples/snippets/cb_rowstacked.gp{gnuplot}
+
+<Plot name="cb_rowstacked" svg :width="560" :height="320" />
+
+`rowstacked` piles the items of a row on one bar; `set boxwidth 0.6` leaves room between the stacks. See
+[Histograms](/guide/gnuplot-subset#histograms).
+
 ## A band around a curve
 
 <<< @/examples/snippets/cb_filledcurves.gp{gnuplot}

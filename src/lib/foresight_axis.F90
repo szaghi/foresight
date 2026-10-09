@@ -4,9 +4,13 @@ module foresight_axis
 !<
 !< Range semantics follow gnuplot `set xrange [min:max]`: `min` is the value at the axis start and `max` at its end
 !< (`min > max` reverses the axis); an unset end is autoscaled to the data and extended outward to the tick grid.
+!<
+!< Text labels from the data (`using ...:xtic(1)`), when any, replace the ticks, as gnuplot: a tick at each labelled
+!< value inside the range, the range itself not extended. They are derived per rendering (`labels`), never stored in
+!< the user settings `tics`, so a multiplot does not carry the categories of a panel into the next one.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use penf, only : R8P
-use foresight_ticks, only : linear_ticks, log_ticks, tick_object, tics_object
+use foresight_ticks, only : linear_ticks, log_ticks, tick_object, tics_object, TICS_NONE
 
 implicit none
 private
@@ -24,9 +28,12 @@ type :: axis_object
    real(R8P)                      :: hi        = 10.0_R8P   !< Effective value at the axis end, set by `setup`.
    type(tics_object)              :: tics                   !< User tick settings: fixed step, none, label format.
    type(tick_object), allocatable :: ticks(:)               !< Ticks, set by `setup`.
+   type(tick_object), allocatable :: labels(:)              !< Text labels from the data, by value; none if unallocated
+                                                            !< or empty.
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
       procedure, pass(self) :: has_label !< Whether the axis has a label.
+      procedure, pass(self) :: labelled  !< Whether text labels from the data replace the ticks.
       procedure, pass(self) :: range_of  !< Range before the tick extension.
       procedure, pass(self) :: set_range !< Set the range, gnuplot style.
       procedure, pass(self) :: setup     !< Compute effective range and ticks.
@@ -52,6 +59,15 @@ contains
    has = .false.
    if (allocated(self%label)) has = len(self%label) > 0
    endfunction has_label
+
+   pure function labelled(self) result(yes)
+   !< Whether text labels from the data replace the ticks: some are set and the ticks are not turned off.
+   class(axis_object), intent(in) :: self !< Axis.
+   logical                        :: yes  !< Labelled axis.
+
+   yes = .false.
+   if (allocated(self%labels)) yes = size(self%labels) > 0 .and. self%tics%mode /= TICS_NONE
+   endfunction labelled
 
    pure subroutine set_range(self, min, max)
    !< Set the range as gnuplot `set xrange [min:max]`: an absent end is autoscaled.
@@ -117,7 +133,9 @@ contains
    call self%range_of(dmin, dmax, has_data, lo, hi)
    if (self%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) error stop 'foresight: log scale needs a positive range'
    if (lo == hi) error stop 'foresight: empty axis range'
-   if (self%log) then
+   if (self%labelled()) then
+      self%ticks = pack(self%labels, self%labels%value >= min(lo, hi) .and. self%labels%value <= max(lo, hi))
+   elseif (self%log) then
       call log_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
    else
       call linear_ticks(lo, hi, npx, .not. self%min_fixed, .not. self%max_fixed, self%ticks, self%tics)
