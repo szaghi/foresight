@@ -27,7 +27,7 @@ module foresight_backend_dumb
 !< character of density growing with the pixel luminance (` .:-=+*#%@`), in its color with `ansi`; transparent pixels
 !< (undefined values) are left blank.
 use, intrinsic :: iso_fortran_env, only : output_unit
-use foresight_backend, only : axes_view, backend_object
+use foresight_backend, only : arrow_head, axes_view, backend_object
 use foresight_theme, only : theme_object
 use foresight_sys, only : rename_file
 use penf, only : I4P, R8P
@@ -90,6 +90,8 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
+      procedure, pass(self) :: data_arrows
+      procedure, pass(self) :: data_label
       ! building blocks for finer devices
       procedure, pass(self) :: cell         !< Text of a cell.
       procedure, pass(self) :: clear        !< Blank a box.
@@ -407,6 +409,69 @@ contains
    !< Nothing to close in text.
    class(backend_dumb), intent(inout) :: self !< Device.
    endsubroutine end_plot_area
+
+   subroutine data_arrows(self, x1, y1, x2, y2, color, line_width, head, filled)
+   !< Arrows [unit square]: shafts clipped to the plot area with the color symbol, heads (at a tip inside the plot area)
+   !< as two short segments, filled or not.
+   class(backend_dumb), intent(inout) :: self        !< Device.
+   real(R8P),           intent(in)    :: x1(:)       !< Tail abscissae [unit].
+   real(R8P),           intent(in)    :: y1(:)       !< Tail ordinates [unit].
+   real(R8P),           intent(in)    :: x2(:)       !< Tip abscissae [unit].
+   real(R8P),           intent(in)    :: y2(:)       !< Tip ordinates [unit].
+   character(len=*),    intent(in)    :: color       !< Stroke color.
+   real(R8P),           intent(in)    :: line_width  !< Stroke width [px].
+   integer(I4P),        intent(in)    :: head        !< Heads: 0 none, 1 end, 2 start, 3 both.
+   logical,             intent(in)    :: filled      !< Filled heads.
+   real(R8P)                          :: p(2, 2)     !< Tail and tip [px].
+   integer(I4P)                       :: i           !< Counter.
+
+   if (self%hidden) return
+   do i = 1_I4P, size(x1, kind=I4P)
+      call self%unit_segment(x1(i), y1(i), x2(i), y2(i), color, '')
+      p(:, 1) = [self%area(1) + x1(i) * self%area(3), self%area(2) + (1.0_R8P - y1(i)) * self%area(4)]
+      p(:, 2) = [self%area(1) + x2(i) * self%area(3), self%area(2) + (1.0_R8P - y2(i)) * self%area(4)]
+      if ((head == 1_I4P .or. head == 3_I4P) .and. inside(x2(i), y2(i))) call head_at(p(:, 1), p(:, 2))
+      if ((head == 2_I4P .or. head == 3_I4P) .and. inside(x1(i), y1(i))) call head_at(p(:, 2), p(:, 1))
+   enddo
+   contains
+      pure function inside(u, v) result(yes)
+      !< Whether the unit point (`u`, `v`) lies in the plot area.
+      real(R8P), intent(in) :: u   !< Abscissa [unit].
+      real(R8P), intent(in) :: v   !< Ordinate [unit].
+      logical               :: yes !< Inside.
+
+      yes = u >= 0.0_R8P .and. u <= 1.0_R8P .and. v >= 0.0_R8P .and. v <= 1.0_R8P
+      endfunction inside
+
+      subroutine head_at(tail, tip)
+      !< The head at `tip` of the shaft from `tail`.
+      real(R8P), intent(in) :: tail(2)     !< Tail [px].
+      real(R8P), intent(in) :: tip(2)      !< Tip [px].
+      real(R8P)             :: barbs(2, 2) !< Barb ends [px].
+
+      call arrow_head(tail, tip, barbs)
+      call self%px_segment(tip, barbs(:, 1), color, '')
+      call self%px_segment(tip, barbs(:, 2), color, '')
+      if (filled) call self%px_segment(barbs(:, 1), barbs(:, 2), color, '')
+      endsubroutine head_at
+   endsubroutine data_arrows
+
+   subroutine data_label(self, x, y, string, anchor, rotate, color, dx, dy)
+   !< Text at a data point [unit square] inside the plot area, moved by the offset; unrotated in text.
+   class(backend_dumb), intent(inout) :: self   !< Device.
+   real(R8P),           intent(in)    :: x      !< Anchor abscissa [unit].
+   real(R8P),           intent(in)    :: y      !< Anchor ordinate [unit].
+   character(len=*),    intent(in)    :: string !< Text.
+   character(len=*),    intent(in)    :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   real(R8P),           intent(in)    :: rotate !< Rotation [deg, counterclockwise], ignored.
+   character(len=*),    intent(in)    :: color  !< Text color, ignored.
+   real(R8P),           intent(in)    :: dx     !< Horizontal offset [px].
+   real(R8P),           intent(in)    :: dy     !< Vertical offset [px, downward].
+
+   if (self%hidden) return
+   if (x < 0.0_R8P .or. x > 1.0_R8P .or. y < 0.0_R8P .or. y > 1.0_R8P) return
+   call self%text(self%area(1) + x * self%area(3) + dx, self%area(2) + (1.0_R8P - y) * self%area(4) + dy, string, anchor)
+   endsubroutine data_label
 
    subroutine data_polyline(self, x, y, color, line_width, dasharray)
    !< Polyline [unit square] drawn with the color symbol, clipped to the plot area; grid lines (the polar grid) with

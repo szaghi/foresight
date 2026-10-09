@@ -8,7 +8,7 @@ module foresight_backend_svg
 !< Panels are `<g class="fs-axes">` carrying their geometry and axis ranges as `data-*` attributes; decorations the
 !< interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
-use foresight_backend, only : axes_view, backend_object
+use foresight_backend, only : arrow_head, axes_view, backend_object
 use foresight_format, only : fixed, int_str, real_str, xml_escape
 use foresight_png, only : png_base64
 use foresight_sys, only : rename_file
@@ -43,6 +43,8 @@ type, extends(backend_object) :: backend_svg
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
    character(len=:), allocatable :: caps          !< Error bar caps of the current plot area, pixel overlay.
    character(len=:), allocatable :: marks         !< Point type markers of the current plot area, pixel overlay.
+   character(len=:), allocatable :: heads         !< Arrowheads of the current plot area, pixel overlay.
+   character(len=:), allocatable :: labels        !< Text labels of the data of the current plot area, pixel overlay.
    integer(I4P)                  :: series = 0_I4P !< Series of the open group, 0 for none.
    contains
       ! deferred bindings
@@ -68,6 +70,8 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
+      procedure, pass(self) :: data_arrows
+      procedure, pass(self) :: data_label
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
       procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
@@ -289,6 +293,8 @@ contains
    self%area = [x, y, width, height]
    self%caps = ''
    self%marks = ''
+   self%heads = ''
+   self%labels = ''
    ! the glow is applied in page pixels, around the plot area and its overlays: inside, the unit square would scale it
    if (self%theme%glow) call self%put('<g class="fs-glow" filter="url(#fs-glow)">')
    call self%put('<svg class="fs-plot" x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
@@ -303,9 +309,13 @@ contains
    call self%put('</svg>')
    call overlay('fs-caps', self%caps)
    call overlay('fs-marks', self%marks)
+   call overlay('fs-heads', self%heads)
+   call overlay('fs-labels', self%labels)
    if (self%theme%glow) call self%put('</g>')
    self%caps = ''
    self%marks = ''
+   self%heads = ''
+   self%labels = ''
    contains
       subroutine overlay(name, content)
       !< Overlay `name` holding `content`, nothing if empty.
@@ -427,6 +437,94 @@ contains
    enddo
    if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
+
+   subroutine data_arrows(self, x1, y1, x2, y2, color, line_width, head, filled)
+   !< Arrows [unit square]: the shafts as one path of `Mx1,y1Lx2,y2` segments classed `fs-vectors` (the heads as
+   !< `data-head`, `data-filled`), the heads queued for the pixel overlay written by `end_plot_area`, which the
+   !< interactive viewer regenerates after a zoom.
+   class(backend_svg), intent(inout) :: self       !< Device.
+   real(R8P),          intent(in)    :: x1(:)      !< Tail abscissae [unit].
+   real(R8P),          intent(in)    :: y1(:)      !< Tail ordinates [unit].
+   real(R8P),          intent(in)    :: x2(:)      !< Tip abscissae [unit].
+   real(R8P),          intent(in)    :: y2(:)      !< Tip ordinates [unit].
+   character(len=*),   intent(in)    :: color      !< Stroke color.
+   real(R8P),          intent(in)    :: line_width !< Stroke width [px].
+   integer(I4P),       intent(in)    :: head       !< Heads: 0 none, 1 end, 2 start, 3 both.
+   logical,            intent(in)    :: filled     !< Filled heads.
+   real(R8P)                         :: p(2, 2)    !< Tail and tip [px in the overlay].
+   integer(I4P)                      :: i          !< Counter.
+
+   if (size(x1) == 0) return
+   write(self%unit, '(A)', advance='no') '<path class="fs-vectors" data-head="'//int_str(int(head, I8P))// &
+                                         '" data-filled="'//flag(filled)//'" fill="none" stroke="'// &
+                                         self%theme%map(color)//'" stroke-width="'//px(line_width)// &
+                                         '" vector-effect="non-scaling-stroke" d="'
+   do i = 1_I4P, size(x1, kind=I4P)
+      if (i > 1_I4P) then
+         if (modulo(i - 1_I4P, PAIRS_PER_LINE / 2_I4P) == 0_I4P) write(self%unit, '(A)') ''
+      endif
+      write(self%unit, '(A)', advance='no') 'M'//fixed(x1(i), UNIT_DECIMALS)//','// &
+                                            fixed(1.0_R8P - y1(i), UNIT_DECIMALS)//'L'//fixed(x2(i), UNIT_DECIMALS)// &
+                                            ','//fixed(1.0_R8P - y2(i), UNIT_DECIMALS)
+   enddo
+   call self%put('"/>')
+   if (head == 0_I4P) return
+   if (self%series > 0_I4P) self%heads = self%heads//'<g'//series_attribute(self%series)//'>'//new_line('a')
+   do i = 1_I4P, size(x1, kind=I4P)
+      p(:, 1) = [x1(i) * self%area(3), (1.0_R8P - y1(i)) * self%area(4)]
+      p(:, 2) = [x2(i) * self%area(3), (1.0_R8P - y2(i)) * self%area(4)]
+      if (head == 1_I4P .or. head == 3_I4P) call add_head(p(:, 1), p(:, 2))
+      if (head == 2_I4P .or. head == 3_I4P) call add_head(p(:, 2), p(:, 1))
+   enddo
+   if (self%series > 0_I4P) self%heads = self%heads//'</g>'//new_line('a')
+   contains
+      subroutine add_head(tail, tip)
+      !< Queue the head at `tip` of the shaft from `tail`.
+      real(R8P), intent(in) :: tail(2)     !< Tail [px].
+      real(R8P), intent(in) :: tip(2)      !< Tip [px].
+      real(R8P)             :: barbs(2, 2) !< Barb ends [px].
+      character(len=:), allocatable :: points !< Vertices.
+
+      call arrow_head(tail, tip, barbs)
+      points = px(barbs(1, 1))//','//px(barbs(2, 1))//' '//px(tip(1))//','//px(tip(2))//' '//px(barbs(1, 2))//','// &
+               px(barbs(2, 2))
+      if (filled) then
+         self%heads = self%heads//'<polygon points="'//points//'" fill="'//self%theme%map(color)//'" stroke="'// &
+                      self%theme%map(color)//'" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+      else
+         self%heads = self%heads//'<polyline points="'//points//'" fill="none" stroke="'//self%theme%map(color)// &
+                      '" stroke-width="'//px(line_width)//'"/>'//new_line('a')
+      endif
+      endsubroutine add_head
+   endsubroutine data_arrows
+
+   subroutine data_label(self, x, y, string, anchor, rotate, color, dx, dy)
+   !< Text anchored at a data point [unit square], queued for the pixel overlay of the labels: each `fs-label` text
+   !< carries its anchor (`data-u`, `data-v`, unit square, y downward) and offset (`data-dx`, `data-dy`) for the
+   !< interactive viewer to move it after a zoom.
+   class(backend_svg), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Anchor abscissa [unit].
+   real(R8P),          intent(in)    :: y      !< Anchor ordinate [unit].
+   character(len=*),   intent(in)    :: string !< Text.
+   character(len=*),   intent(in)    :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   real(R8P),          intent(in)    :: rotate !< Rotation [deg, counterclockwise].
+   character(len=*),   intent(in)    :: color  !< Text color.
+   real(R8P),          intent(in)    :: dx     !< Horizontal offset [px].
+   real(R8P),          intent(in)    :: dy     !< Vertical offset [px, downward].
+   character(len=:), allocatable     :: line   !< Element.
+   real(R8P)                         :: p(2)   !< Text position [px in the overlay].
+
+   p = [x * self%area(3) + dx, (1.0_R8P - y) * self%area(4) + dy]
+   line = '<text class="fs-label"'
+   if (self%series > 0_I4P) line = line//series_attribute(self%series)
+   line = line//' data-u="'//fixed(x, UNIT_DECIMALS)//'" data-v="'//fixed(1.0_R8P - y, UNIT_DECIMALS)//'" data-dx="'// &
+          px(dx)//'" data-dy="'//px(dy)//'" x="'//px(p(1))//'" y="'//px(p(2))//'"'
+   if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
+   if (rotate /= 0.0_R8P) line = line//' data-rotate="'//px(-rotate)//'" transform="rotate('//px(-rotate)//' '// &
+                                 px(p(1))//' '//px(p(2))//')"'
+   line = line//' fill="'//self%theme%map(color)//'">'//xml_escape(string)//'</text>'
+   self%labels = self%labels//line//new_line('a')
+   endsubroutine data_label
 
    subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon of the vertices (`x`, `y`) [unit square], clipped by the plot area; its border keeps its pixel width

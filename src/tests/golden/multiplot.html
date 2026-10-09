@@ -263,6 +263,7 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
   var TOL = 1e-9, TICK_SPACING = 50, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
   var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
+  var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // arrowheads, as arrow_head in foresight_backend
   // frame and grid colors; a themed page overrides them (data-frame, data-grid-color of its svg)
   var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
   var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
@@ -710,10 +711,14 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.marks = group.querySelector(".fs-marks");
+    this.heads = group.querySelector(".fs-heads");
+    this.vectors = readVectors(group);
+    this.labels = group.querySelector(".fs-labels");
     this.points = readPoints(group);
     this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
       this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : "",
-      this.marks ? this.marks.innerHTML : ""];
+      this.marks ? this.marks.innerHTML : "", this.heads ? this.heads.innerHTML : "",
+      this.labels ? this.labels.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
     this.hidden = {};  // series numbers hidden by a click on their key entry
@@ -739,6 +744,31 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       }
     });
     return bars;
+  }
+
+  // arrows (vectors) of the plot area: shafts in viewBox coordinates (unit square, y downward)
+  function readVectors(group) {
+    var vectors = [], pattern = /M([^,]+),([^L]+)L([^,]+),([^M]+)/g;
+    group.querySelectorAll(".fs-vectors").forEach(function (path) {
+      var d = path.getAttribute("d").replace(/\s+/g, ""), m;
+      var style = {head: Number(path.getAttribute("data-head")), series: seriesOf(path),
+        filled: path.getAttribute("data-filled") === "1", color: path.getAttribute("stroke"),
+        width: path.getAttribute("stroke-width")};
+      while ((m = pattern.exec(d)) !== null) {
+        vectors.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
+      }
+    });
+    return vectors;
+  }
+
+  // barbs of an arrowhead at tip, pointing away from tail (mirror of arrow_head)
+  function arrowHead(tail, tip) {
+    var a = Math.PI, h = HEAD_ANGLE * Math.PI / 180;
+    if (tail[0] !== tip[0] || tail[1] !== tip[1]) {
+      a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
+    }
+    return [[tip[0] + HEAD_LENGTH * Math.cos(a + h), tip[1] + HEAD_LENGTH * Math.sin(a + h)],
+      [tip[0] + HEAD_LENGTH * Math.cos(a - h), tip[1] + HEAD_LENGTH * Math.sin(a - h)]];
   }
 
   // point type markers: centres in viewBox coordinates (unit square, y downward) and the marker
@@ -828,10 +858,14 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       if (this.caps) this.caps.innerHTML = this.original[3];
       if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
       if (this.marks) this.marks.innerHTML = this.original[5];
+      if (this.heads) this.heads.innerHTML = this.original[6];
+      if (this.labels) this.labels.innerHTML = this.original[7];
     } else {
       this.drawTicks();
       this.drawCaps();
       this.drawMarks();
+      this.drawHeads();
+      this.drawLabels();
     }
     this.showSeries();
   };
@@ -839,7 +873,8 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
   // hidden series: their plot elements and overlays not displayed, their key entries dimmed
   Panel.prototype.showSeries = function () {
     var self = this;
-    this.group.querySelectorAll(".fs-series, .fs-marks [data-series], .fs-caps [data-series]")
+    this.group.querySelectorAll(".fs-series, .fs-marks [data-series], .fs-caps [data-series], " +
+      ".fs-heads [data-series], .fs-labels [data-series]")
       .forEach(function (node) {
         node.setAttribute("display", self.hidden[seriesOf(node)] ? "none" : "inline");
       });
@@ -870,6 +905,48 @@ M0.75,0.481481h0 M0.833333,0.483333h0 M0.916667,0.484848h0 M1,0.486111h0"/>
       });
       element(self.marks, "path", {"data-series": p.series, fill: filled ? p.color : "none",
         stroke: p.color, "stroke-width": p.lw, d: d.join("")});
+    });
+  };
+
+  // arrowheads keep their pixel size: redrawn in the pixel overlay from the shafts in the view
+  Panel.prototype.drawHeads = function () {
+    var self = this, v = this.view;
+    var w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.heads) return;
+    clear(this.heads);
+    this.vectors.forEach(function (vec) {
+      var s = vec.style, p = vec.ends.map(function (e) {
+        return [(e[0] - v.u0) / (v.u1 - v.u0) * w, (e[1] - (1 - v.v1)) / (v.v1 - v.v0) * h];
+      });
+      var draw = function (tail, tip) {
+        var b = arrowHead(tail, tip);
+        element(self.heads, s.filled ? "polygon" : "polyline", {"data-series": s.series,
+          points: [b[0], tip, b[1]].map(function (q) {
+            return px(q[0]) + "," + px(q[1]);
+          }).join(" "),
+          fill: s.filled ? s.color : "none", stroke: s.color, "stroke-width": s.width});
+      };
+      if (self.hidden[s.series]) return;
+      if (s.head === 1 || s.head === 3) draw(p[0], p[1]);
+      if (s.head === 2 || s.head === 3) draw(p[1], p[0]);
+    });
+  };
+
+  // data labels keep their pixel size: their anchors move with the view
+  Panel.prototype.drawLabels = function () {
+    var v = this.view, w = this.right - this.left, h = this.bottom - this.top;
+    if (!this.labels) return;
+    this.labels.querySelectorAll(".fs-label").forEach(function (t) {
+      var x = (Number(t.getAttribute("data-u")) - v.u0) / (v.u1 - v.u0) * w +
+        Number(t.getAttribute("data-dx"));
+      var y = (Number(t.getAttribute("data-v")) - (1 - v.v1)) / (v.v1 - v.v0) * h +
+        Number(t.getAttribute("data-dy"));
+      t.setAttribute("x", px(x));
+      t.setAttribute("y", px(y));
+      if (t.hasAttribute("data-rotate")) {
+        t.setAttribute("transform", "rotate(" + t.getAttribute("data-rotate") + " " + px(x) + " " +
+          px(y) + ")");
+      }
     });
   };
 

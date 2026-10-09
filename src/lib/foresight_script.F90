@@ -29,6 +29,9 @@ module foresight_script
 !< - `with boxerrorbars|boxxyerror|candlesticks [whiskerbars [F]]|financebars|boxplot` (gnuplot's layouts), `set style
 !<   boxplot [range R|fraction F] [[no]outliers] [pointtype P] [candlesticks|financebars] [medianlinewidth W]
 !<   [separation S] [labels off|auto|x] [sorted|unsorted]`;
+!< - `with vectors|arrows [head|heads|nohead|backhead] [filled|empty|nofilled]`, `with ellipses [units xy]`,
+!<   `with polygons`, `with labels [left|center|right] [rotate by A] [offset X,Y] [point] [tc "c"]` (`using x:y:N`, the
+!<   text of column N), `with sectors` (gnuplot's layouts); `unset xrange|yrange|y2range` autoscales;
 !< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
 !<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `border [lc C|-1]`,
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
@@ -330,6 +333,8 @@ contains
    logical                                      :: rose_linear !< Rose radius by value (`linear`).
    real(R8P),        allocatable                :: whisker   !< Candlestick whisker crossbars (`whiskerbars [F]`).
    real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
+   character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
+   character(len=:), allocatable                :: label_opts !< Option words of labels.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
@@ -430,6 +435,8 @@ contains
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
+      heads = ''
+      label_opts = ''
       if (allocated(gauge_scale)) deallocate(gauge_scale)
       cells = 0_I4P
       rose_linear = .false.
@@ -500,6 +507,27 @@ contains
                   endif
                enddo
             endif
+            if (with == 'vectors' .or. with == 'arrows') then
+               ! arrow style words right after the style, as gnuplot
+               do while (i < size(tokens, kind=I4P))
+                  if (.not. is_word(tokens(i + 1_I4P)%text, 'head heads nohead backhead filled empty nofilled')) exit
+                  i = i + 1_I4P
+                  heads = heads//' '//tokens(i)%text
+               enddo
+            endif
+            if (with == 'ellipses' .and. i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'units') then
+                  i = i + 2_I4P
+                  if (i > size(tokens, kind=I4P)) then
+                     call fail('plot: ellipses units xy expected', iostat, iomsg)
+                     return
+                  endif
+                  if (tokens(i)%text /= 'xy') then
+                     call fail('plot: ellipses take units xy only (diameters in x and y units)', iostat, iomsg)
+                     return
+                  endif
+               endif
+            endif
             if (with == 'rose' .and. i < size(tokens, kind=I4P)) then
                if (tokens(i + 1_I4P)%text == 'linear') then
                   i = i + 1_I4P
@@ -551,6 +579,10 @@ contains
          elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
             call fill_words(fs)
             if (iostat /= 0_I4P) return
+         elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
+                                                'tc textcolor')) then
+            ! label options, in any order among the item options (pt, ps, lc are line options)
+            if (.not. label_option()) return
          elseif (keyword(word, 'whiskerbars', 7_I4P)) then
             ! candlesticks crossbars, a fraction of the box width (1 by default)
             if (allocated(whisker)) deallocate(whisker)
@@ -659,14 +691,14 @@ contains
          return
       endif
       if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
-                                            'boxerrorbars boxxyerror candlesticks boxplot')) then
+                                            'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors')) then
          call fail('plot: fs applies to boxes, filledcurves, histograms, circles, the box styles and the panel charts '// &
                    'only', iostat, iomsg)
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
-            polar_ok = is_word(with, 'lines points linespoints filledcurves readout') .and. .not. allocated(base)
+            polar_ok = is_word(with, 'lines points linespoints filledcurves sectors readout') .and. .not. allocated(base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes /= 'x1y2'
             if (.not. polar_ok) then
                call fail('plot: '//POLAR_STYLES, iostat, iomsg)
@@ -696,6 +728,27 @@ contains
       if (is_matrix .and. with /= 'image') then
          call fail('plot: matrix data are plotted with image', iostat, iomsg)
          return
+      endif
+      ! the text of labels (third using field, a plain column; 3 by default), read as the xtic labels are
+      if (with == 'labels') then
+         if (label_col > 0_I4P) then
+            call fail('plot: labels take their text column, not xtic()', iostat, iomsg)
+            return
+         endif
+         if (.not. allocated(fields)) then
+            label_col = 3_I4P
+         elseif (size(fields) == 3) then
+            word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
+            if (len(word) == 0 .or. verify(word, '0123456789') /= 0 .or. len(word) > 9) then
+               call fail('plot: the labels text (3rd using field) must be a column number', iostat, iomsg)
+               return
+            endif
+            read(word, *) label_col
+            fields = fields(1:2)
+         else
+            call fail('plot: labels needs using x:y:text_column', iostat, iomsg)
+            return
+         endif
       endif
       ! a boxplot factor (fourth using field): the text of a plain column, read as the xtic labels are
       if (with == 'boxplot' .and. allocated(fields)) then
@@ -739,6 +792,8 @@ contains
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          case ('candlesticks', 'financebars')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P, 5_I4P])
+         case ('vectors', 'arrows', 'sectors')
+            fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
          case ('histograms', 'pie', 'radar', 'rose', 'gauge')
             ! one value per row: the first column at the point numbers
             fields = plain_columns([0_I4P, 1_I4P])
@@ -783,6 +838,28 @@ contains
          if (nbar /= 3_I4P .and. .not. (nbar == 4_I4P .and. with == 'candlesticks')) then
             call fail('plot: '//with//' needs using x:open:low:high:close'// &
                       trim(merge('[:width]', '        ', with == 'candlesticks')), iostat, iomsg)
+            return
+         endif
+      case ('vectors', 'arrows')
+         if (nbar /= 2_I4P) then
+            call fail('plot: '//with//' needs using x:y:'//trim(merge('xdelta:ydelta', 'length:angle ', with == 'vectors')), &
+                      iostat, iomsg)
+            return
+         endif
+      case ('ellipses')
+         if (nbar > 3_I4P) then
+            call fail('plot: ellipses needs using x:y[:diameter|:major:minor[:angle]]', iostat, iomsg)
+            return
+         endif
+      case ('sectors')
+         if (nbar /= 2_I4P .and. nbar /= 4_I4P) then
+            call fail('plot: sectors needs using azimuth:radius:angle:width[:x0:y0]', iostat, iomsg)
+            return
+         endif
+      case ('polygons', 'labels')
+         if (nbar /= 0_I4P) then
+            call fail('plot: '//with//' needs using x:y'//trim(merge(':text_column', '            ', with == 'labels')), &
+                      iostat, iomsg)
             return
          endif
       case ('boxplot')
@@ -906,6 +983,21 @@ contains
          if (nbar == 4_I4P) widths = values(:, 6)
       case ('boxplot')
          if (nbar >= 1_I4P) widths = values(:, 3)
+      case ('vectors', 'arrows')
+         xlow = values(:, 3)
+         xhigh = values(:, 4)
+      case ('ellipses')
+         if (nbar >= 1_I4P) xlow = values(:, 3)
+         if (nbar == 1_I4P) xhigh = values(:, 3)
+         if (nbar >= 2_I4P) xhigh = values(:, 4)
+         if (nbar == 3_I4P) ylow = values(:, 5)
+      case ('sectors')
+         xlow = values(:, 3)
+         xhigh = values(:, 4)
+         if (nbar == 4_I4P) then
+            if (allocated(arcs)) deallocate(arcs)
+            arcs = transpose(values(:, 5:6))
+         endif
       case ('yerrorbars', 'yerrorlines')
          if (nbar == 1_I4P) then
             ylow = y - values(:, 3)
@@ -999,6 +1091,32 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, &
                                yhigh=yhigh, close=closes, axes=axes, width=widths, fs=fs, xlabels=xlabels, &
                                whiskerbars=whisker)
+      elseif (with == 'vectors') then
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, dx=xlow, &
+                               dy=xhigh, head=heads)
+      elseif (with == 'arrows') then
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
+                               length=xlow, angle=xhigh, head=heads)
+      elseif (with == 'ellipses' .or. with == 'polygons') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
+                               major=xlow, minor=xhigh, angle=ylow)
+      elseif (with == 'sectors') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         if (nbar == 4_I4P) then
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
+                                  angle=xlow, width=xhigh, origins=arcs)
+         else
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
+                                  angle=xlow, width=xhigh)
+         endif
+      elseif (with == 'labels') then
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
+                               axes=axes, labels=xlabels, label=label_opts)
       elseif (with == 'boxplot') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -1055,6 +1173,53 @@ contains
       gauge_scale = v
       ok = .true.
       endfunction gauge_range
+
+      function label_option() result(ok)
+      !< The label option at `tokens(i)` into `label_opts`, leaving `i` on its last token; fails the plot if malformed.
+      logical :: ok !< Parsed.
+
+      ok = .false.
+      select case (tokens(i)%text)
+      case ('rotate')
+         if (i + 2_I4P > size(tokens, kind=I4P)) then
+            call fail('plot: labels rotate by A expected', iostat, iomsg)
+            return
+         endif
+         label_opts = label_opts//' rotate '//tokens(i + 1_I4P)%text//' '//tokens(i + 2_I4P)%text
+         i = i + 2_I4P
+      case ('offset')
+         if (i < size(tokens, kind=I4P)) then
+            if (keyword(tokens(i + 1_I4P)%text, 'character', 4_I4P)) i = i + 1_I4P
+         endif
+         if (i + 3_I4P > size(tokens, kind=I4P)) then
+            call fail('plot: labels offset X,Y expected', iostat, iomsg)
+            return
+         endif
+         if (tokens(i + 2_I4P)%kind /= TOKEN_COMMA) then
+            call fail('plot: labels offset X,Y expected', iostat, iomsg)
+            return
+         endif
+         label_opts = label_opts//' offset '//tokens(i + 1_I4P)%text//','//tokens(i + 3_I4P)%text
+         i = i + 3_I4P
+      case ('tc', 'textcolor')
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%text == 'rgb') i = i + 1_I4P
+         endif
+         if (i >= size(tokens, kind=I4P)) then
+            call fail('plot: labels tc "color" expected', iostat, iomsg)
+            return
+         endif
+         if (tokens(i + 1_I4P)%kind /= TOKEN_STRING) then
+            call fail('plot: labels tc "color" expected', iostat, iomsg)
+            return
+         endif
+         label_opts = label_opts//' tc "'//tokens(i + 1_I4P)%text//'"'
+         i = i + 1_I4P
+      case default
+         label_opts = label_opts//' '//tokens(i)%text
+      endselect
+      ok = .true.
+      endfunction label_option
 
       function next_number(v) result(ok)
       !< The number token after `i` into `v`, advancing `i`; fails the plot if there is none.
@@ -2392,6 +2557,12 @@ contains
       call self%figure%set_cblabel('')
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call self%figure%set_boxwidth()
+   elseif (keyword(option, 'xrange', 2_I4P)) then
+      call self%figure%set_xrange()
+   elseif (keyword(option, 'yrange', 2_I4P)) then
+      call self%figure%set_yrange()
+   elseif (keyword(option, 'y2range', 3_I4P)) then
+      call self%figure%set_y2range()
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then

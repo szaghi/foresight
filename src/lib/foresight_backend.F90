@@ -17,6 +17,11 @@ implicit none
 private
 public :: axes_view
 public :: backend_object
+public :: arrow_head
+public :: HEAD_ANGLE, HEAD_LENGTH
+
+real(R8P), parameter :: HEAD_LENGTH = 18.0_R8P !< Arrowhead barb length [px], gnuplot svg default.
+real(R8P), parameter :: HEAD_ANGLE  = 15.0_R8P !< Arrowhead barb angle off the shaft [deg], gnuplot default.
 
 type :: axes_view
    !< Geometry and axis ranges of a plot panel.
@@ -65,6 +70,8 @@ type, abstract :: backend_object
       procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
       procedure(readout_interface),         pass(self), deferred :: readout         !< Seven-segment readout [px].
       procedure(readout_extent_interface),  pass(self), deferred :: readout_extent  !< Readout size [px].
+      procedure(arrows_interface),          pass(self), deferred :: data_arrows     !< Arrows [unit square].
+      procedure(label_interface),           pass(self), deferred :: data_label      !< Text at a point [unit square].
 endtype backend_object
 
 abstract interface
@@ -235,6 +242,37 @@ abstract interface
    real(R8P)                         :: extent(2) !< Width and height [px].
    endfunction readout_extent_interface
 
+   subroutine arrows_interface(self, x1, y1, x2, y2, color, line_width, head, filled)
+   !< Arrows from (`x1`, `y1`) to (`x2`, `y2`) [unit square]: the shafts are data, the heads (`arrow_head`) keep their
+   !< pixel size; `head` 0 none, 1 at the end, 2 at the start (gnuplot `backhead`), 3 both; `filled` heads are
+   !< triangles, else open.
+   import :: backend_object, I4P, R8P
+   class(backend_object), intent(inout) :: self       !< Device.
+   real(R8P),             intent(in)    :: x1(:)      !< Tail abscissae.
+   real(R8P),             intent(in)    :: y1(:)      !< Tail ordinates.
+   real(R8P),             intent(in)    :: x2(:)      !< Tip abscissae.
+   real(R8P),             intent(in)    :: y2(:)      !< Tip ordinates.
+   character(len=*),      intent(in)    :: color      !< Stroke color.
+   real(R8P),             intent(in)    :: line_width !< Stroke width [px].
+   integer(I4P),          intent(in)    :: head       !< Heads: 0 none, 1 end, 2 start, 3 both.
+   logical,               intent(in)    :: filled     !< Filled heads.
+   endsubroutine arrows_interface
+
+   subroutine label_interface(self, x, y, string, anchor, rotate, color, dx, dy)
+   !< Text anchored at the point (`x`, `y`) [unit square] moved by (`dx`, `dy`) [px, y down]: it keeps its pixel size,
+   !< only its anchor moves with the data.
+   import :: backend_object, R8P
+   class(backend_object), intent(inout) :: self   !< Device.
+   real(R8P),             intent(in)    :: x      !< Anchor abscissa [unit].
+   real(R8P),             intent(in)    :: y      !< Anchor ordinate [unit].
+   character(len=*),      intent(in)    :: string !< Text.
+   character(len=*),      intent(in)    :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   real(R8P),             intent(in)    :: rotate !< Rotation [deg, counterclockwise].
+   character(len=*),      intent(in)    :: color  !< Text color.
+   real(R8P),             intent(in)    :: dx     !< Horizontal offset [px].
+   real(R8P),             intent(in)    :: dy     !< Vertical offset [px, downward].
+   endsubroutine label_interface
+
    subroutine begin_plot_area_interface(self, x, y, width, height)
    !< Open the clipped plot area of top-left corner (`x`, `y`) and size `width` x `height` [px].
    import :: backend_object, R8P
@@ -245,5 +283,24 @@ abstract interface
    real(R8P),             intent(in)    :: height !< Height [px].
    endsubroutine begin_plot_area_interface
 endinterface
+
+contains
+   pure subroutine arrow_head(tail, tip, barbs)
+   !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation]: HEAD_LENGTH px long,
+   !< HEAD_ANGLE degrees off the shaft, as gnuplot's default head; `barbs(:, 1)` and `barbs(:, 2)`. A zero length
+   !< shaft points right.
+   real(R8P), intent(in)  :: tail(2)     !< Tail [px].
+   real(R8P), intent(in)  :: tip(2)      !< Tip [px].
+   real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
+   real(R8P)              :: a           !< Shaft direction, tip to tail [rad].
+   real(R8P)              :: h           !< Barb half angle [rad].
+
+   a = 0.0_R8P
+   if (any(tip /= tail)) a = atan2(tail(2) - tip(2), tail(1) - tip(1))
+   if (all(tip == tail)) a = 4.0_R8P * atan(1.0_R8P)
+   h = HEAD_ANGLE * atan(1.0_R8P) / 45.0_R8P
+   barbs(:, 1) = tip + HEAD_LENGTH * [cos(a + h), sin(a + h)]
+   barbs(:, 2) = tip + HEAD_LENGTH * [cos(a - h), sin(a - h)]
+   endsubroutine arrow_head
 
 endmodule foresight_backend

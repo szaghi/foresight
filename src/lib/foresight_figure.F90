@@ -199,7 +199,8 @@ contains
    endsubroutine next_panel
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
-                   xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors)
+                   xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
+                   minor, labels, label, head, origins)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -235,6 +236,12 @@ contains
    !< `yhigh` and `close` (a box-and-whisker plot: box start, whisker ends, box end), candlesticks a `width` and
    !< `whiskerbars` (crossbars, a fraction of the box width). `with='boxplot'` draws the quartiles, median, whiskers and
    !< outliers of the values `y` at `x(1)`, one box per level of `factors` if given, laid out by `set_style_boxplot`.
+   !<
+   !< `with='vectors'` draws arrows from the points by `dx`, `dy`; `arrows` by `length` (> 0 x units, kept at any angle;
+   !< in (-1, 0) a fraction of the plot width) and `angle` [deg]; `head` takes gnuplot's words (`'heads filled'`).
+   !< `ellipses` take `major`, `minor` diameters (x and y units) and `angle` [deg]; `polygons` fill each NaN-separated
+   !< run of points; `labels` write `labels(i)` at the points with the `label` words (`'left offset 1,0 point'`);
+   !< `sectors` draw the annular sectors from azimuth `x`, radius `y` by `angle` (the angle unit) and `width`.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -263,13 +270,25 @@ contains
    real(R8P),            intent(in), optional :: close(:) !< Closing values of candlesticks and finance bars.
    real(R8P),            intent(in), optional :: whiskerbars !< Candlestick whisker crossbars, a box width fraction.
    character(len=*),     intent(in), optional :: factors(:) !< Factor level of each boxplot value.
+   real(R8P),            intent(in), optional :: dx(:)      !< Vector extents along x.
+   real(R8P),            intent(in), optional :: dy(:)      !< Vector extents along y.
+   real(R8P),            intent(in), optional :: length(:)  !< Arrow lengths.
+   real(R8P),            intent(in), optional :: angle(:)   !< Arrow or ellipse angles [deg], sector extents.
+   real(R8P),            intent(in), optional :: major(:)   !< Ellipse major diameters.
+   real(R8P),            intent(in), optional :: minor(:)   !< Ellipse minor diameters.
+   character(len=*),     intent(in), optional :: labels(:)  !< Texts of labels.
+   character(len=*),     intent(in), optional :: label      !< Label option words.
+   character(len=*),     intent(in), optional :: head       !< Arrowhead words.
+   real(R8P),            intent(in), optional :: origins(:,:) !< Sector centres (2, point).
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
                                              format=format, width=width, base=base, fs=fs, xlabels=xlabels, &
                                              radius=radius, angles=angles, donut=donut, scale=scale, linear=linear, &
-                                             close=close, whiskerbars=whiskerbars, factors=factors)
+                                             close=close, whiskerbars=whiskerbars, factors=factors, dx=dx, dy=dy, &
+                                             length=length, angle=angle, major=major, minor=minor, labels=labels, &
+                                             label=label, head=head, origins=origins)
    endsubroutine plot
 
    subroutine save(self, file)

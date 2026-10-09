@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(60)                  !< Per-figure outcome.
+logical                     :: test_passed(64)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -81,7 +81,11 @@ test_passed(57) = check('steps.svg', figure_steps())
 test_passed(58) = check('steps.txt', figure_steps())
 test_passed(59) = check('boxplot.svg', figure_boxplot())
 test_passed(60) = check('boxplot.txt', figure_boxplot())
-write(output_unit, '(A,60L2)') 'foresight golden checks:', test_passed
+test_passed(61) = check('shapes.svg', figure_shapes())
+test_passed(62) = check('shapes.txt', figure_shapes())
+test_passed(63) = check('shapes.html', figure_shapes())
+test_passed(64) = check('windrose.svg', figure_windrose())
+write(output_unit, '(A,64L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -557,6 +561,73 @@ contains
    call fig%set_style_boxplot('nooutliers financebars')
    call fig%plot([(1.0_R8P, i = 1, 11)], v, title='financebars', with='boxplot', factors=f)
    endfunction figure_boxplot
+
+   function figure_shapes() result(fig)
+   !< The geometric styles of gnuplot: vectors (open and filled heads) with labels marking their points; arrows by
+   !< length and angle, ellipses (sized and default); polygons of two blocks; sectors about the origin and off centre.
+   type(figure_object) :: fig  !< Figure.
+   real(R8P)           :: x(3) !< Abscissae.
+   real(R8P)           :: y(3) !< Ordinates.
+   real(R8P)           :: nan  !< Block separator.
+
+   x = [1.0_R8P, 2.0_R8P, 4.0_R8P]
+   y = [1.0_R8P, 3.0_R8P, 2.0_R8P]
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call fig%init(width=760_I4P, height=560_I4P)
+   call fig%set_multiplot(rows=2_I4P, cols=2_I4P)
+   call fig%set_key(position='top left')
+   call fig%set_xrange(0.0_R8P, 6.0_R8P)
+   call fig%set_yrange(0.0_R8P, 6.0_R8P)
+   call fig%plot(x, y, title='vectors', with='vec', dx=[2.0_R8P, -1.0_R8P, 1.0_R8P], dy=[1.0_R8P, 2.0_R8P, -1.0_R8P])
+   call fig%plot(x + 0.5_R8P, y, title='heads filled', with='vectors', dx=[2.0_R8P, -1.0_R8P, 1.0_R8P], &
+                 dy=[1.0_R8P, 2.0_R8P, -1.0_R8P], head='heads filled')
+   call fig%plot(x, y, with='labels', labels=['a ', 'bb', 'c '], label='left offset 1,0 point', pt=7_I4P)
+   call fig%next_panel
+   call fig%plot(x, y, title='arrows', with='arrows', length=[1.5_R8P, 1.5_R8P, 1.5_R8P], &
+                 angle=[0.0_R8P, 30.0_R8P, 60.0_R8P])
+   call fig%plot(x + 1.0_R8P, y + 2.0_R8P, title='ellipses', with='ell', major=[2.0_R8P, -1.0_R8P, 1.0_R8P], &
+                 minor=[1.0_R8P, 1.0_R8P, -1.0_R8P], angle=[30.0_R8P, 30.0_R8P, 30.0_R8P])
+   call fig%next_panel
+   call fig%set_xrange()
+   call fig%set_yrange()
+   call fig%set_style_fill('solid 0.4')
+   call fig%plot([0.0_R8P, 1.0_R8P, 1.0_R8P, nan, 2.0_R8P, 3.0_R8P, 2.5_R8P], &
+                 [0.0_R8P, 0.0_R8P, 1.0_R8P, nan, 2.0_R8P, 2.0_R8P, 3.0_R8P], title='polygons', with='poly')
+   call fig%next_panel
+   call fig%set_angles('degrees')
+   call fig%set_size(ratio=1.0_R8P)
+   call fig%plot([0.0_R8P, 60.0_R8P, 180.0_R8P], [1.0_R8P, 1.0_R8P, 1.0_R8P], title='sectors', with='sectors', &
+                 angle=[60.0_R8P, 120.0_R8P, 180.0_R8P], width=[0.5_R8P, 0.8_R8P, 0.3_R8P])
+   call fig%plot([90.0_R8P], [0.5_R8P], title='off centre', with='sectors', angle=[90.0_R8P], width=[0.4_R8P], &
+                 origins=reshape([1.0_R8P, 1.0_R8P], [2, 1]))
+   endfunction figure_shapes
+
+   function figure_windrose() result(fig)
+   !< A wind rose of sectors on a polar panel: eight directions from the top clockwise, two speed classes stacked.
+   type(figure_object) :: fig    !< Figure.
+   real(R8P)           :: t(8)   !< Directions [deg].
+   real(R8P)           :: low(8) !< Frequencies of the low speeds.
+   real(R8P)           :: high(8) !< Frequencies of the high speeds.
+   integer(I4P)        :: k      !< Counter.
+
+   t = [(45.0_R8P * real(k, R8P) - 20.0_R8P, k = 0, 7)]
+   low = [4.0_R8P, 2.0_R8P, 1.5_R8P, 3.0_R8P, 5.0_R8P, 6.0_R8P, 3.5_R8P, 2.5_R8P]
+   high = [2.0_R8P, 1.0_R8P, 0.5_R8P, 1.5_R8P, 3.0_R8P, 4.0_R8P, 2.0_R8P, 1.0_R8P]
+   call fig%init(width=520_I4P, height=420_I4P)
+   call fig%set_polar
+   call fig%set_angles('degrees')
+   call fig%set_theta('top', clockwise=.true.)
+   call fig%set_size(ratio=1.0_R8P)
+   call fig%set_border(0_I4P, polar=.true.)
+   call fig%unset_xtics
+   call fig%unset_ytics
+   call fig%set_grid(polar=45.0_R8P)
+   call fig%set_ttics(step=45.0_R8P)
+   call fig%set_key(position='outside')
+   call fig%set_style_fill('solid 0.6 border lc "white"')
+   call fig%plot(t, [(0.0_R8P, k = 1, 8)], title='< 5 m/s', with='sectors', angle=[(40.0_R8P, k = 1, 8)], width=low)
+   call fig%plot(t, low, title='>= 5 m/s', with='sectors', angle=[(40.0_R8P, k = 1, 8)], width=high)
+   endfunction figure_windrose
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

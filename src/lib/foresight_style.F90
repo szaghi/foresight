@@ -21,7 +21,8 @@ public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMA
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
           WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
-          WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT
+          WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
+          WITH_LABELS, WITH_SECTORS
 public :: STYLE_NAMES
 public :: FILL_EMPTY, FILL_SOLID
 
@@ -54,10 +55,17 @@ integer(I4P), parameter :: WITH_BOXXYERROR  = 26_I4P !< gnuplot `with boxxyerror
 integer(I4P), parameter :: WITH_CANDLESTICKS = 27_I4P !< gnuplot `with candlesticks`: box and whiskers.
 integer(I4P), parameter :: WITH_FINANCEBARS = 28_I4P !< gnuplot `with financebars`: high-low bars, open/close ticks.
 integer(I4P), parameter :: WITH_BOXPLOT     = 29_I4P !< gnuplot `with boxplot`: quartiles of the values, outliers.
+integer(I4P), parameter :: WITH_VECTORS     = 30_I4P !< gnuplot `with vectors`: arrows from x:y by dx:dy.
+integer(I4P), parameter :: WITH_ARROWS      = 31_I4P !< gnuplot `with arrows`: arrows from x:y by length and angle.
+integer(I4P), parameter :: WITH_ELLIPSES    = 32_I4P !< gnuplot `with ellipses`: an ellipse per point.
+integer(I4P), parameter :: WITH_POLYGONS    = 33_I4P !< gnuplot `with polygons`: a closed polygon per block.
+integer(I4P), parameter :: WITH_LABELS      = 34_I4P !< gnuplot `with labels`: text at each point.
+integer(I4P), parameter :: WITH_SECTORS     = 35_I4P !< gnuplot `with sectors`: annular sectors.
 character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
                                              'xyerrorlines, boxes, boxerrorbars, boxxyerror, candlesticks, '// &
-                                             'financebars, boxplot, filledcurves, histograms, image, circles, pie, '// &
+                                             'financebars, boxplot, vectors, arrows, ellipses, polygons, labels, '// &
+                                             'sectors, filledcurves, histograms, image, circles, pie, '// &
                                              'gauge, radar, rose, readout' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
@@ -132,7 +140,7 @@ contains
       name = 'image'
    case ('cir', 'circ', 'circl', 'circle', 'circles')
       name = 'circles'
-   case ('boxes', 'boxplot', 'readout', 'pie', 'gauge', 'radar', 'rose')
+   case ('boxes', 'boxplot', 'arrows', 'labels', 'readout', 'pie', 'gauge', 'radar', 'rose')
       name = word
    case default
       name = ''
@@ -147,6 +155,10 @@ contains
       if (abbreviates(word, 'boxxyerror', 4)) name = 'boxxyerror'
       if (abbreviates(word, 'candlesticks', 3)) name = 'candlesticks'
       if (abbreviates(word, 'financebars', 3)) name = 'financebars'
+      if (abbreviates(word, 'vectors', 3)) name = 'vectors'
+      if (abbreviates(word, 'ellipses', 3)) name = 'ellipses'
+      if (abbreviates(word, 'polygons', 4)) name = 'polygons'
+      if (abbreviates(word, 'sectors', 3)) name = 'sectors'
    endselect
    contains
       pure function abbreviates(w, full, minimum) result(match)
@@ -225,6 +237,18 @@ contains
       with = WITH_FINANCEBARS
    case ('boxplot')
       with = WITH_BOXPLOT
+   case ('vectors')
+      with = WITH_VECTORS
+   case ('arrows')
+      with = WITH_ARROWS
+   case ('ellipses')
+      with = WITH_ELLIPSES
+   case ('polygons')
+      with = WITH_POLYGONS
+   case ('labels')
+      with = WITH_LABELS
+   case ('sectors')
+      with = WITH_SECTORS
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)//'" (supported: '//STYLE_NAMES//')'
    endselect
@@ -278,7 +302,8 @@ contains
    points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, &
                                     WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_IMPULSES, WITH_STEPS, &
                                     WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
-                                    WITH_FINANCEBARS, WITH_BOXPLOT])
+                                    WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, &
+                                    WITH_POLYGONS, WITH_LABELS, WITH_SECTORS])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -304,7 +329,8 @@ contains
    logical                         :: filled !< Filled style.
 
    filled = any(self%with == [WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_CIRCLES, WITH_PIE, WITH_GAUGE, &
-                              WITH_RADAR, WITH_ROSE, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_BOXPLOT])
+                              WITH_RADAR, WITH_ROSE, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_BOXPLOT, &
+                              WITH_ELLIPSES, WITH_POLYGONS, WITH_SECTORS])
    endfunction fills
 
    pure function fill_color(self) result(color)

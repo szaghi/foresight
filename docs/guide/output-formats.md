@@ -25,7 +25,9 @@ A standalone SVG document, 600 x 480 px by default (`set terminal svg size W,H`)
 - Panels are `<g class="fs-axes">` groups carrying their geometry and axis ranges as `data-*` attributes; the grid and
   the ticks are the groups `fs-grid`, `fs-xticks`, `fs-yticks`, error bar caps an `fs-caps` overlay. The viewer
   regenerates these; for a static SVG they are ordinary drawing. A polar panel adds its grid as `fs-pgrid` in the
-  plot area (zoomed with the data) and its r tick labels and theta labels as `fs-polar`, hidden while zoomed.
+  plot area (zoomed with the data) and its r tick labels and theta labels as `fs-polar`, hidden while zoomed. Arrow
+  shafts are `fs-vectors` paths, their heads and the text of `labels` the pixel overlays `fs-heads` and `fs-labels`
+  (each text carrying its data anchor), redrawn by the viewer after a zoom.
 - Each series is a group `fs-series` and its key entry a group `fs-key-entry`, both numbered by `data-series` (from 1,
   in plot order): the viewer hides a series when its entry is clicked.
 - All numbers are formatted by integer arithmetic, identically on every compiler: the same figure gives the same

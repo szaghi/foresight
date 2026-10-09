@@ -6,7 +6,8 @@
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
-// with the data, its labels hidden while zoomed. The page is parsed by linkedom; the SVG
+// with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom. The page
+// is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -214,6 +215,23 @@ check("a zoom hides the polar labels, draws no rectangular grid", box(0)[2] < 1 
 key("a");
 check("autoscale shows the polar labels again", box(0)[2] === 1 &&
   plabels.getAttribute("display") === "inline");
+
+// arrows and labels: the shafts are data; the heads and the label texts keep their pixel size, redrawn and moved
+// from their data anchors by a zoom, back to the original at autoscale
+page = strip(path.join(__dirname, "..", "tests", "golden", "shapes.html"));
+p = load("");
+var heads = panel(0).querySelector(".fs-heads"), labels = panel(0).querySelector(".fs-labels");
+var headsHome = heads.innerHTML, label0 = labels.querySelector(".fs-label");
+var x0 = Number(label0.getAttribute("x"));
+check("arrow shafts in the plot area, heads and labels in pixel overlays",
+  panel(0).querySelector(".fs-plot .fs-vectors") !== null && heads.querySelectorAll("polyline, polygon").length > 0 &&
+  labels.querySelectorAll(".fs-label").length === 3);
+wheel(0);
+check("a zoom redraws the heads and moves the labels", box(0)[2] < 1 && heads.innerHTML !== headsHome &&
+  heads.querySelectorAll("polyline, polygon").length > 0 && Number(label0.getAttribute("x")) !== x0);
+key("a");
+check("autoscale restores heads and labels", heads.innerHTML === headsHome &&
+  Number(labels.querySelector(".fs-label").getAttribute("x")) === x0);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

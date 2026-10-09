@@ -11,7 +11,8 @@ use foresight, only : I4P, R8P, script_object
 use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
                             WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
-                            WITH_FINANCEBARS, WITH_BOXPLOT, &
+                            WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
+                            WITH_LABELS, WITH_SECTORS, &
                             WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
@@ -33,7 +34,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(70)                           !< Per-check outcome.
+logical                       :: test_passed(72)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -777,6 +778,50 @@ call interpreter%run_text("set style boxplot fraction 2", iostat, iomsg)
 test_passed(70) = test_passed(70) .and. iostat /= 0_I4P .and. index(iomsg, 'above 0 and up to 1') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
+
+! the geometric styles: vectors and arrows with head words, ellipses, polygons by blocks, labels, sectors
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 1 3 0.5 alpha', '2 3 2 -1 2 beta', '', '4 1 1 1 -1 "c d"'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set angles degrees"//new_line('a')// &
+                          "plot '"//data_file//"' w vec heads filled, '' u 1:2:3:4 w arrows nohead, "// &
+                          "'' u 1:2:5:3:(30) w ell, '' w poly fs solid 0.3, '' u 1:2:6 w labels right rotate by 45 "// &
+                          "offset 1,2 point pt 7 tc 'red', '' u 1:2:3:5 w sec", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(71) = iostat == 0_I4P
+if (test_passed(71)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(71) = all(panel%series%style%with == [WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
+                                                         WITH_LABELS, WITH_SECTORS]) .and. &
+                        panel%series(1)%head == 3_I4P .and. panel%series(1)%head_filled .and. &
+                        panel%series(2)%head == 0_I4P .and. &
+                        trim(panel%series(5)%texts(1)) == 'alpha' .and. trim(panel%series(5)%texts(4)) == 'c d' .and. &
+                        panel%series(5)%text_anchor == 'end' .and. panel%series(5)%text_rotate == 45.0_R8P .and. &
+                        panel%series(5)%text_point .and. panel%series(5)%text_color == 'red' .and. &
+                        panel%series(5)%style%pointtype == 7_I4P .and. same(panel%series(5)%text_offset, [1, 2])
+      arcs = panel%series(1)%tips
+      test_passed(71) = test_passed(71) .and. same(arcs(1, :), [2, 4, -1, 5]) .and. same(arcs(2, :), [5, 2, -1, 2])
+      arcs = panel%series(3)%shape
+      ! the third ellipse has a negative diameter: the default size (NaN)
+      test_passed(71) = test_passed(71) .and. same(arcs(1, 1:2) * 2.0_R8P, [1, 4]) .and. same(arcs(2, 1:2), [1, 2]) &
+                        .and. same(arcs(3, 1:2), [30, 30])
+      ! a sector of 1 degree: an arc of 2 vertices out, 2 back, a NaN
+      test_passed(71) = test_passed(71) .and. size(panel%series(6)%x) > 6
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w vectors", iostat, iomsg)
+test_passed(72) = iostat /= 0_I4P .and. index(iomsg, 'vectors needs using x:y:xdelta:ydelta') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:($3) w labels", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'must be a column number') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w ellipses units xx", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'units xy only') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w sectors", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'sectors needs using') > 0
+call interpreter%run_text("unset xrange; unset yrange; unset y2range", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat == 0_I4P
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -792,7 +837,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,70L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,72L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

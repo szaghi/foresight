@@ -57,7 +57,8 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, s
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
-                            WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT
+                            WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
+                            WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS
 use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -67,6 +68,8 @@ public :: axes_object
 public :: axes_names
 public :: boxplot_style
 public :: boxplot_words
+public :: head_words
+public :: label_words
 public :: key_position
 public :: polar_series
 public :: readout_position
@@ -85,8 +88,8 @@ character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array
 character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
-character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, closed filledcurves '// &
-                                               'and readouts, on the first axes' !< Styles of a polar panel.
+character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, closed filledcurves, '// &
+                                               'sectors and readouts, on the first axes' !< Styles of a polar panel.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
 
@@ -184,7 +187,8 @@ endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors)
+                         base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
+                         length, angle, major, minor, labels, label, head, origins)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -202,6 +206,11 @@ contains
    !< pixels) and `whiskerbars`. A `boxplot` takes the values `y` at the position `x(1)`, one box per level of `factors`
    !< if given (`separation` apart, named on the x axis), its width `width(1)` (else `boxwidth`, else 0.5); the
    !< statistics are computed here, with the panel `boxplot` style.
+   !<
+   !< `vectors` go from each point by `dx`, `dy`; `arrows` by `length` and `angle`; both with `head` words. `ellipses`
+   !< take `major` (both diameters if alone), `minor` and `angle` (the default 5% x 3% of the plot without diameters);
+   !< `polygons` close each NaN-separated run of points; `labels` write `labels` with the `label` options; `sectors`
+   !< are the annular sectors from azimuth `x` and radius `y` by `angle` and `width`, about `origins`.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -234,6 +243,18 @@ contains
    real(R8P),          intent(in), optional :: whiskerbars !< Crossbars of the candlestick whiskers, a fraction of the
                                                            !< box width.
    character(len=*),   intent(in), optional :: factors(:) !< Factor level of each value of a boxplot.
+   real(R8P),          intent(in), optional :: dx(:)     !< Vector extents along x.
+   real(R8P),          intent(in), optional :: dy(:)     !< Vector extents along y.
+   real(R8P),          intent(in), optional :: length(:) !< Arrow lengths (> 0 x units, in (-1, 0) plot width fraction).
+   real(R8P),          intent(in), optional :: angle(:)  !< Arrow or ellipse angles, sector angular extents [the angle
+                                                         !< unit for sectors, else deg].
+   real(R8P),          intent(in), optional :: major(:)  !< Ellipse major diameters [x units].
+   real(R8P),          intent(in), optional :: minor(:)  !< Ellipse minor diameters [y units].
+   character(len=*),   intent(in), optional :: labels(:) !< Texts of `labels`.
+   character(len=*),   intent(in), optional :: label     !< Label options: gnuplot `with labels` words.
+   character(len=*),   intent(in), optional :: head      !< Arrowhead words: `head`, `heads`, `nohead`, `backhead`,
+                                                         !< `filled`, `empty`, `nofilled`.
+   real(R8P),          intent(in), optional :: origins(:,:) !< Sector centres (2, point), [0, 0] if absent.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -399,6 +420,32 @@ contains
    case (WITH_BOXPLOT)
       call boxplot_stats
       if (len(bad) > 0) error stop 'foresight: plot: '//bad
+   case (WITH_VECTORS)
+      if (.not. (present(dx) .and. present(dy))) error stop 'foresight: plot: vectors need dx and dy'
+      if (size(dx) /= size(x) .or. size(dy) /= size(x)) error stop 'foresight: plot: dx/dy sizes differ from x'
+      allocate(series%tips(2, size(x)))
+      series%tips(1, :) = x + dx
+      series%tips(2, :) = y + dy
+   case (WITH_ARROWS)
+      if (.not. (present(length) .and. present(angle))) error stop 'foresight: plot: arrows need length and angle'
+      if (size(length) /= size(x) .or. size(angle) /= size(x)) error stop 'foresight: plot: length/angle sizes differ from x'
+      allocate(series%tips(2, size(x)))
+      series%tips(1, :) = length
+      series%tips(2, :) = angle
+   case (WITH_ELLIPSES)
+      call ellipse_shapes
+      if (len(bad) > 0) error stop 'foresight: plot: '//bad
+   case (WITH_LABELS)
+      if (.not. present(labels)) error stop 'foresight: plot: labels need their texts'
+      if (size(labels) /= size(x)) error stop 'foresight: plot: labels and x have different sizes'
+      series%texts = labels
+      if (present(label)) then
+         call label_words(label, series, bad)
+         if (len(bad) > 0) error stop 'foresight: plot: label: '//bad
+      endif
+   case (WITH_SECTORS)
+      call sector_vertices
+      if (len(bad) > 0) error stop 'foresight: plot: '//bad
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -414,6 +461,13 @@ contains
          series%ylow = base
       endif
    endselect
+   if (present(head)) then
+      if (.not. any(series%style%with == [WITH_VECTORS, WITH_ARROWS])) error stop 'foresight: plot: head applies to '// &
+                                                                                  'vectors and arrows only'
+      call head_words(head, series%head, series%head_filled, bad)
+      if (len(bad) > 0) error stop 'foresight: plot: head: '//bad
+   endif
+   if (present(label) .and. series%style%with /= WITH_LABELS) error stop 'foresight: plot: label applies to labels only'
    if (present(close) .and. .not. any(series%style%with == [WITH_CANDLESTICKS, WITH_FINANCEBARS])) &
       error stop 'foresight: plot: close applies to candlesticks and financebars only'
    if (present(factors) .and. series%style%with /= WITH_BOXPLOT) error stop 'foresight: plot: factors apply to boxplots only'
@@ -444,6 +498,146 @@ contains
    if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
                                                                      self%histogram_gap, self%boxwidth)
    contains
+      subroutine ellipse_shapes
+      !< Ellipse diameters and angles: `major` alone for both diameters, a negative one (or none) for the default size;
+      !< the extents of the sized ones widen the autoscale.
+      real(R8P) :: a  !< Semi-major axis.
+      real(R8P) :: b  !< Semi-minor axis.
+      real(R8P) :: c  !< Angle cosine.
+      real(R8P) :: sn !< Angle sine.
+      integer(I4P) :: i !< Point counter.
+
+      bad = ''
+      allocate(series%shape(3, size(x)))
+      series%shape = ieee_value(1.0_R8P, ieee_quiet_nan)
+      series%shape(3, :) = 0.0_R8P
+      if (present(angle)) then
+         if (size(angle) /= size(x)) then
+            bad = 'angle and x have different sizes'
+            return
+         endif
+         series%shape(3, :) = angle
+      endif
+      if (present(minor) .and. .not. present(major)) then
+         bad = 'ellipses take minor with major'
+         return
+      endif
+      if (.not. present(major)) return
+      if (size(major) /= size(x)) then
+         bad = 'major and x have different sizes'
+         return
+      endif
+      series%shape(1, :) = major
+      series%shape(2, :) = major
+      if (present(minor)) then
+         if (size(minor) /= size(x)) then
+            bad = 'minor and x have different sizes'
+            return
+         endif
+         series%shape(2, :) = minor
+      endif
+      allocate(series%xlow(size(x)), series%xhigh(size(x)), series%ylow(size(x)), series%yhigh(size(x)))
+      do i = 1_I4P, size(x, kind=I4P)
+         ! a negative (or undefined) diameter: the default size, out of the autoscale
+         if (.not. (ieee_is_finite(series%shape(1, i)) .and. ieee_is_finite(series%shape(2, i)) .and. &
+                    ieee_is_finite(series%shape(3, i)))) then
+            series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+            if (.not. ieee_is_finite(series%shape(3, i))) series%shape(3, i) = 0.0_R8P
+         elseif (series%shape(1, i) < 0.0_R8P .or. series%shape(2, i) < 0.0_R8P) then
+            series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         endif
+         if (.not. ieee_is_finite(series%shape(1, i))) then
+            series%xlow(i) = series%shape(1, i)
+            series%xhigh(i) = series%shape(1, i)
+            series%ylow(i) = series%shape(1, i)
+            series%yhigh(i) = series%shape(1, i)
+            cycle
+         endif
+         a = 0.5_R8P * series%shape(1, i)
+         b = 0.5_R8P * series%shape(2, i)
+         c = cos(series%shape(3, i) * (PI_R8 / 180.0_R8P))
+         sn = sin(series%shape(3, i) * (PI_R8 / 180.0_R8P))
+         ! the bounding box of the rotated ellipse (NaN for the default size: not counted)
+         series%xlow(i) = x(i) - sqrt((a * c)**2 + (b * sn)**2)
+         series%xhigh(i) = x(i) + sqrt((a * c)**2 + (b * sn)**2)
+         series%ylow(i) = y(i) - sqrt((a * sn)**2 + (b * c)**2)
+         series%yhigh(i) = y(i) + sqrt((a * sn)**2 + (b * c)**2)
+      enddo
+      endsubroutine ellipse_shapes
+
+      subroutine sector_vertices
+      !< The outline of each sector as a run of vertices (runs separated by NaN): the arc at the outer radius from the
+      !< azimuth `x` over `angle`, back along the inner radius `y`. Angles in the panel angle unit, oriented by its
+      !< theta origin and direction, as gnuplot. On a polar panel the vertices are theta:r (no `origins`), else x:y.
+      real(R8P), allocatable :: vx(:)  !< Vertex abscissae.
+      real(R8P), allocatable :: vy(:)  !< Vertex ordinates.
+      real(R8P)              :: unit   !< Angle unit [rad].
+      real(R8P)              :: t      !< Vertex azimuth [angle unit].
+      real(R8P)              :: r      !< Vertex radius.
+      real(R8P)              :: phi    !< Vertex page angle [rad].
+      real(R8P)              :: c(2)   !< Centre.
+      real(R8P)              :: nan    !< Separator.
+      integer(I4P)           :: m      !< Arc steps.
+      integer(I4P)           :: i      !< Sector counter.
+      integer(I4P)           :: k      !< Vertex counter.
+      integer(I4P)           :: side   !< Outer (1) and inner (2) arc.
+
+      bad = ''
+      if (.not. (present(angle) .and. present(width))) then
+         bad = 'sectors need angle (the angular extents) and width (the annular widths)'
+         return
+      endif
+      if (size(angle) /= size(x) .or. size(width) /= size(x)) then
+         bad = 'angle/width sizes differ from x'
+         return
+      endif
+      if (present(origins)) then
+         if (size(origins, 1) /= 2 .or. size(origins, 2) /= size(x)) then
+            bad = 'origins must be (2, size(x))'
+            return
+         endif
+         if (self%polar) then
+            bad = 'sectors on a polar panel take no origins'
+            return
+         endif
+      endif
+      unit = merge(PI_R8 / 180.0_R8P, 1.0_R8P, self%degrees)
+      nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+      allocate(vx(0), vy(0))
+      do i = 1_I4P, size(x, kind=I4P)
+         if (.not. (ieee_is_finite(x(i)) .and. ieee_is_finite(y(i)) .and. ieee_is_finite(angle(i)) .and. &
+                    ieee_is_finite(width(i)))) cycle
+         c = 0.0_R8P
+         if (present(origins)) c = origins(:, i)
+         ! an arc vertex every 5 degrees at most
+         m = max(1_I4P, ceiling(abs(angle(i) * unit) / (5.0_R8P * PI_R8 / 180.0_R8P), I4P))
+         do side = 1_I4P, 2_I4P
+            do k = 0_I4P, m
+               if (side == 1_I4P) then
+                  t = x(i) + angle(i) * real(k, R8P) / real(m, R8P)
+                  r = y(i) + width(i)
+               else
+                  t = x(i) + angle(i) * real(m - k, R8P) / real(m, R8P)
+                  r = y(i)
+               endif
+               if (self%polar) then
+                  vx = [vx, t]
+                  vy = [vy, r]
+               else
+                  phi = (self%theta_origin * (PI_R8 / 180.0_R8P)) + merge(-1.0_R8P, 1.0_R8P, self%theta_clockwise) * &
+                        t * unit
+                  vx = [vx, c(1) + r * cos(phi)]
+                  vy = [vy, c(2) + r * sin(phi)]
+               endif
+            enddo
+         enddo
+         vx = [vx, nan]
+         vy = [vy, nan]
+      enddo
+      series%x = vx
+      series%y = vy
+      endsubroutine sector_vertices
+
       subroutine boxplot_stats
       !< The boxes of a boxplot from the values `y`: one per factor level (in order of appearance, or sorted), at
       !< x(1) + k * separation, each with its quartiles (`bounds`), median (`y`), whiskers (`ylow`, `yhigh`, the
@@ -844,9 +1038,9 @@ contains
       if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)
       if (self%series(s)%y2) then
-         call self%draw_series(backend, s, self%y2axis, area)
+         call self%draw_series(backend, s, self%y2axis, area, font_size)
       else
-         call self%draw_series(backend, s, self%yaxis, area)
+         call self%draw_series(backend, s, self%yaxis, area, font_size)
       endif
       call backend%end_group
    enddo
@@ -1174,8 +1368,8 @@ contains
                                yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
                               self%series(s)%style%density, self%series(s)%style%stroke_color(), &
                               self%series(s)%style%linewidth)
-      if (self%series(s)%style%draws_lines() .or. self%series(s)%style%with == WITH_IMPULSES .or. &
-          self%series(s)%style%with == WITH_FINANCEBARS) &
+      if (self%series(s)%style%draws_lines() .or. any(self%series(s)%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, &
+                                                                                   WITH_VECTORS, WITH_ARROWS])) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
       if (self%series(s)%style%draws_ybars()) &
@@ -1391,7 +1585,7 @@ contains
    endif
    endfunction key_place
 
-   subroutine draw_series(self, backend, s, yaxis, area)
+   subroutine draw_series(self, backend, s, yaxis, area, font_size)
    !< Draw the `s`-th series in the plot area against its vertical axis `yaxis`; unplaceable points (NaN, non-positive
    !< on log axes) break the line.
    class(axes_object),    intent(in)    :: self     !< Panel.
@@ -1399,6 +1593,7 @@ contains
    integer(I4P),          intent(in)    :: s        !< Series index.
    type(axis_object),     intent(in)    :: yaxis    !< Vertical axis of the series.
    real(R8P),             intent(in)    :: area(4)  !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px], for the label offsets.
    logical, allocatable                 :: valid(:) !< Placeable points.
    real(R8P), allocatable               :: u(:)     !< Unit abscissae.
    real(R8P), allocatable               :: v(:)     !< Unit ordinates.
@@ -1430,6 +1625,16 @@ contains
          call draw_box_bars
       endif
       if (series%style%with == WITH_BOXXYERROR) call draw_rectangles
+      select case (series%style%with)
+      case (WITH_VECTORS, WITH_ARROWS)
+         call draw_arrows
+      case (WITH_ELLIPSES)
+         call draw_ellipses
+      case (WITH_POLYGONS, WITH_SECTORS)
+         call draw_polygons
+      case (WITH_LABELS)
+         call draw_labels
+      endselect
       if (series%style%with == WITH_CANDLESTICKS .or. series%style%with == WITH_FINANCEBARS .or. &
           series%style%with == WITH_BOXPLOT) call draw_candles
       if (series%style%with == WITH_FILLEDCURVES) call draw_fill
@@ -1504,6 +1709,136 @@ contains
          call backend%data_polyline(pu, pv, series%style%color, series%style%linewidth, series%style%dasharray())
       endassociate
       endsubroutine draw_run
+
+      subroutine draw_arrows
+      !< `vectors` from each placeable point to its tip; `arrows` of a length (> 0: x units, kept whatever the angle;
+      !< in (-1, 0): a fraction of the plot width) and an angle [deg], as gnuplot.
+      real(R8P), allocatable :: tu(:) !< Tip abscissae [unit].
+      real(R8P), allocatable :: tv(:) !< Tip ordinates [unit].
+      logical, allocatable   :: ok(:) !< Drawn arrows.
+      real(R8P)              :: w     !< Plot width [px].
+      real(R8P)              :: h     !< Plot height [px].
+      real(R8P)              :: l     !< Arrow length [px].
+      real(R8P)              :: a     !< Arrow angle [rad].
+      integer(I4P)           :: i     !< Point counter.
+
+      w = area(2) - area(1)
+      h = area(4) - area(3)
+      allocate(tu(n), tv(n), ok(n))
+      tu = 0.0_R8P
+      tv = 0.0_R8P
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            ok(i) = valid(i) .and. ieee_is_finite(series%tips(1, i)) .and. ieee_is_finite(series%tips(2, i))
+            if (.not. ok(i)) cycle
+            if (series%style%with == WITH_VECTORS) then
+               ok(i) = self%xaxis%accepts(series%tips(1, i)) .and. yaxis%accepts(series%tips(2, i))
+               if (.not. ok(i)) cycle
+               tu(i) = self%xaxis%to_unit(series%tips(1, i))
+               tv(i) = yaxis%to_unit(series%tips(2, i))
+            else
+               l = series%tips(1, i)
+               if (l > 0.0_R8P) then
+                  l = l * w / abs(self%xaxis%hi - self%xaxis%lo)
+               else
+                  l = abs(l) * w
+               endif
+               a = series%tips(2, i) * (PI_R8 / 180.0_R8P)
+               tu(i) = u(i) + l * cos(a) / w
+               tv(i) = v(i) + l * sin(a) / h
+            endif
+         enddo
+         if (any(ok)) call backend%data_arrows(pack(u, ok), pack(v, ok), pack(tu, ok), pack(tv, ok), series%style%color, &
+                                               series%style%linewidth, series%head, series%head_filled)
+      endassociate
+      endsubroutine draw_arrows
+
+      subroutine draw_ellipses
+      !< An ellipse per placeable point, as gnuplot `units xy`: the major diameter in x units and the minor one in y units,
+      !< converted to pixels, then rotated by its angle on the page; with no diameters, the default 5% x 3% of the plot
+      !< area. (On log axes the diameters are taken at the centre.)
+      real(R8P)    :: t(65)  !< Vertex parameters [rad].
+      real(R8P)    :: ex(65) !< Vertex abscissae.
+      real(R8P)    :: ey(65) !< Vertex ordinates.
+      real(R8P)    :: phi    !< Angle [rad].
+      real(R8P)    :: a      !< Semi-major axis [px].
+      real(R8P)    :: b      !< Semi-minor axis [px].
+      real(R8P)    :: w      !< Plot width [px].
+      real(R8P)    :: h      !< Plot height [px].
+      integer(I4P) :: k      !< Vertex counter.
+      integer(I4P) :: i      !< Point counter.
+
+      t = [(2.0_R8P * PI_R8 * real(k, R8P) / 64.0_R8P, k = 0_I4P, 64_I4P)]
+      w = area(2) - area(1)
+      h = area(4) - area(3)
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            phi = series%shape(3, i) * (PI_R8 / 180.0_R8P)
+            if (ieee_is_finite(series%shape(1, i))) then
+               ! semi-axes in pixels: the unit extents of the diameters about the centre
+               if (.not. (self%xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
+                          yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(2, i)))) cycle
+               a = abs(self%xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
+               b = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(2, i)) - v(i)) * h
+            else
+               a = 0.025_R8P * w
+               b = 0.015_R8P * h
+            endif
+            ex = u(i) + (a * cos(t) * cos(phi) - b * sin(t) * sin(phi)) / w
+            ey = v(i) + (a * cos(t) * sin(phi) + b * sin(t) * cos(phi)) / h
+            call backend%data_polygon(ex, ey, series%style%fill_color(), series%style%density, &
+                                      series%style%stroke_color(), series%style%linewidth)
+         enddo
+      endassociate
+      endsubroutine draw_ellipses
+
+      subroutine draw_polygons
+      !< `polygons` and `sectors`: each run of placeable points (blocks of the data, or the vertices of a sector) a
+      !< closed polygon in the fill style.
+      integer(I4P) :: i1 !< First point of a run.
+      integer(I4P) :: i2 !< Last point of a run.
+
+      associate(series => self%series(s))
+         i1 = 1_I4P
+         do while (i1 <= n)
+            if (.not. valid(i1)) then
+               i1 = i1 + 1_I4P
+               cycle
+            endif
+            i2 = i1
+            do while (i2 < n)
+               if (.not. valid(i2 + 1_I4P)) exit
+               i2 = i2 + 1_I4P
+            enddo
+            if (i2 > i1 + 1_I4P) call backend%data_polygon(u(i1:i2), v(i1:i2), series%style%fill_color(), &
+                                                         series%style%density, series%style%stroke_color(), &
+                                                         series%style%linewidth)
+            i1 = i2 + 1_I4P
+         enddo
+      endassociate
+      endsubroutine draw_polygons
+
+      subroutine draw_labels
+      !< The text of each placeable point at it, moved by the offset [characters]; its point marked if so set.
+      character(len=:), allocatable :: color !< Text color.
+      integer(I4P)                  :: i     !< Point counter.
+
+      associate(series => self%series(s))
+         color = FRAME_COLOR
+         if (allocated(series%text_color)) color = series%text_color
+         if (series%text_point .and. any(valid)) &
+            call backend%data_dots(pack(u, valid), pack(v, valid), color, series%style%point_diameter(), &
+                                   pt=series%style%pointtype, line_width=series%style%linewidth)
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            if (len_trim(series%texts(i)) == 0) cycle
+            call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), series%text_rotate, &
+                                    color, series%text_offset(1) * 0.6_R8P * font_size, &
+                                    -series%text_offset(2) * font_size + 0.35_R8P * font_size)
+         enddo
+      endassociate
+      endsubroutine draw_labels
 
       subroutine draw_box_bars
       !< The y error bars of `boxerrorbars`, at the box centres.
@@ -2523,13 +2858,158 @@ contains
       endsubroutine next_word
    endsubroutine boxplot_words
 
+   pure subroutine head_words(words, head, filled, bad)
+   !< Arrowheads from gnuplot words: `head` (at the end), `heads` (both), `nohead`, `backhead` (at the start); `filled`,
+   !< `empty` or `nofilled` (open). `bad` names an unknown word, empty if none.
+   character(len=*),              intent(in)    :: words  !< Words.
+   integer(I4P),                  intent(inout) :: head   !< Heads: 0 none, 1 end, 2 start, 3 both.
+   logical,                       intent(inout) :: filled !< Filled heads.
+   character(len=:), allocatable, intent(out)   :: bad    !< Unknown word, empty if none.
+   character(len=:), allocatable                :: w      !< Current word.
+   integer(I4P)                                 :: pos    !< Scan position.
+
+   bad = ''
+   pos = 1_I4P
+   do
+      call scan_word(words, pos, w)
+      if (len(w) == 0) exit
+      select case (w)
+      case ('head')
+         head = 1_I4P
+      case ('heads')
+         head = 3_I4P
+      case ('nohead')
+         head = 0_I4P
+      case ('backhead')
+         head = 2_I4P
+      case ('filled')
+         filled = .true.
+      case ('empty', 'nofilled')
+         filled = .false.
+      case default
+         bad = 'unsupported arrow option "'//w//'" (head, heads, nohead, backhead, filled, empty, nofilled)'
+         return
+      endselect
+   enddo
+   endsubroutine head_words
+
+   pure subroutine label_words(words, series, bad)
+   !< Label options of `series` from gnuplot `with labels` words: `left`, `center`, `right`, `rotate by A`, `norotate`,
+   !< `offset X,Y` [characters], `point` / `nopoint`, `tc|textcolor [rgb] "color"`. `bad` names the first problem.
+   character(len=*),              intent(in)    :: words  !< Words.
+   type(series_object),           intent(inout) :: series !< Labels series.
+   character(len=:), allocatable, intent(out)   :: bad    !< Problem, empty if none.
+   character(len=:), allocatable                :: w      !< Current word.
+   character(len=:), allocatable                :: arg    !< Argument.
+   real(R8P)                                    :: r(2)   !< Numbers.
+   integer(I4P)                                 :: pos    !< Scan position.
+   integer(I4P)                                 :: comma  !< Comma position.
+   integer(I4P)                                 :: ios    !< Read status.
+
+   bad = ''
+   pos = 1_I4P
+   do
+      call scan_word(words, pos, w)
+      if (len(w) == 0) exit
+      select case (w)
+      case ('left')
+         series%text_anchor = 'start'
+      case ('center', 'centre')
+         series%text_anchor = 'middle'
+      case ('right')
+         series%text_anchor = 'end'
+      case ('norotate')
+         series%text_rotate = 0.0_R8P
+      case ('rotate')
+         call scan_word(words, pos, arg)
+         if (arg /= 'by') then
+            bad = 'rotate by A expected'
+            return
+         endif
+         call scan_word(words, pos, arg)
+         read(arg, *, iostat=ios) r(1)
+         if (len(arg) == 0 .or. ios /= 0) then
+            bad = 'rotate by A expected'
+            return
+         endif
+         series%text_rotate = r(1)
+      case ('offset')
+         call scan_word(words, pos, arg)
+         comma = index(arg, ',', kind=I4P)
+         ios = 1
+         if (comma > 1_I4P) then
+            read(arg(1:comma - 1_I4P), *, iostat=ios) r(1)
+            if (ios == 0) read(arg(comma + 1_I4P:), *, iostat=ios) r(2)
+         endif
+         if (ios /= 0) then
+            bad = 'offset X,Y expected'
+            return
+         endif
+         series%text_offset = r
+      case ('point')
+         series%text_point = .true.
+      case ('nopoint')
+         series%text_point = .false.
+      case ('tc', 'textcolor')
+         call scan_word(words, pos, arg)
+         if (arg == 'rgb') call scan_word(words, pos, arg)
+         if (len(arg) < 3) then
+            bad = 'tc "color" expected'
+            return
+         endif
+         if (.not. ((arg(1:1) == '"' .and. arg(len(arg):) == '"') .or. (arg(1:1) == "'" .and. arg(len(arg):) == "'"))) &
+            then
+            bad = 'tc "color" expected'
+            return
+         endif
+         series%text_color = arg(2:len(arg) - 1)
+      case default
+         bad = 'unsupported option "'//w//'"'
+         return
+      endselect
+   enddo
+   endsubroutine label_words
+
+   pure subroutine scan_word(text, pos, word)
+   !< Next blank separated word of `text` from `pos`, advanced past it; a quoted word may hold blanks. Empty at the end.
+   character(len=*),              intent(in)    :: text !< Text.
+   integer(I4P),                  intent(inout) :: pos  !< Scan position.
+   character(len=:), allocatable, intent(out)   :: word !< Word.
+   integer(I4P)                                 :: first !< Word start.
+   character(len=1)                             :: q     !< Open quote.
+
+   do while (pos <= len(text))
+      if (text(pos:pos) /= ' ') exit
+      pos = pos + 1_I4P
+   enddo
+   first = pos
+   if (pos <= len(text)) then
+      if (text(pos:pos) == '"' .or. text(pos:pos) == "'") then
+         q = text(pos:pos)
+         pos = pos + 1_I4P
+         do while (pos <= len(text))
+            if (text(pos:pos) == q) exit
+            pos = pos + 1_I4P
+         enddo
+         pos = min(pos + 1_I4P, len(text) + 1_I4P)
+         word = text(first:pos - 1_I4P)
+         return
+      endif
+   endif
+   do while (pos <= len(text))
+      if (text(pos:pos) == ' ') exit
+      pos = pos + 1_I4P
+   enddo
+   word = text(first:pos - 1_I4P)
+   endsubroutine scan_word
+
    elemental function polar_series(series) result(ok)
    !< Whether `series` can be drawn on a polar panel (see POLAR_STYLES).
    type(series_object), intent(in) :: series !< Series.
    logical                         :: ok     !< Polar series.
 
    select case (series%style%with)
-   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT)
+   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS)
       ok = .true.
    case (WITH_FILLEDCURVES)
       ok = .not. allocated(series%ylow)

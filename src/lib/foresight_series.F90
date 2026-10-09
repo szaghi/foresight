@@ -3,7 +3,7 @@ module foresight_series
 !< foresight_series, a plotted data series.
 use penf, only : I4P, R8P
 use foresight_axis, only : axis_object
-use foresight_style, only : style_object, WITH_HISTOGRAMS
+use foresight_style, only : style_object, WITH_HISTOGRAMS, WITH_VECTORS
 
 implicit none
 private
@@ -35,6 +35,18 @@ type :: series_object
    real(R8P), allocatable        :: outliers(:,:) !< Outliers of a boxplot (2, outlier): abscissa, ordinate.
    real(R8P)                     :: whiskerbars = 0.0_R8P !< Crossbars of the candlestick whiskers, a fraction of
                                                           !< the box width; 0 for none.
+   real(R8P), allocatable        :: tips(:,:)  !< Second number pair per point (2, point): the tips of `vectors`, the
+                                               !< length and angle [deg] of `arrows`.
+   real(R8P), allocatable        :: shape(:,:) !< Ellipse major, minor diameter and angle [deg] (3, point); NaN
+                                               !< diameters for the default size.
+   integer(I4P)                  :: head = 1_I4P     !< Arrowheads: 0 none, 1 end, 2 start, 3 both.
+   logical                       :: head_filled = .false. !< Filled arrowheads.
+   character(len=:), allocatable :: texts(:)   !< Texts of `labels`, one per point.
+   character(len=6)              :: text_anchor = 'middle' !< Label anchor: start, middle, end.
+   real(R8P)                     :: text_rotate = 0.0_R8P  !< Label rotation [deg, counterclockwise].
+   real(R8P)                     :: text_offset(2) = 0.0_R8P !< Label offset [characters, y upward].
+   character(len=:), allocatable :: text_color !< Label color, the frame color if unallocated.
+   logical                       :: text_point = .false. !< Labels mark their point.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains
@@ -99,6 +111,12 @@ contains
       ends = self%bounds(1, :)
       call widen(ends, yaxis, ymin, ymax)
       ends = self%bounds(2, :)
+      call widen(ends, yaxis, ymin, ymax)
+   endif
+   if (allocated(self%tips) .and. self%style%with == WITH_VECTORS) then
+      ends = self%tips(1, :)
+      call widen(ends, xaxis, xmin, xmax)
+      ends = self%tips(2, :)
       call widen(ends, yaxis, ymin, ymax)
    endif
    if (allocated(self%outliers)) then
