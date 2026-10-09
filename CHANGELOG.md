@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] — 2026-10-09
+### Added
+- Add steps, impulses, dots and error-line styles
+
+- Add box, candlestick, finance and boxplot styles
+
+- Add vectors, arrows, ellipses, polygons, labels and sectors
+
+- Add fill patterns, filledcurves modes and rgb images
+
+- Add parallel axis and spider plots
+
+
+### Documentation
+- Cover every feature in the cookbook and the landing gallery
+
+
 ## [0.3.0] — 2026-10-09
 ### Added
 - Add boxes, filled curves and fill styles
