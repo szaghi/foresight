@@ -20,9 +20,9 @@ module foresight_script
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
 !<   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
-!<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|
-!<   yerrorbars|xerrorbars|xyerrorbars` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or
-!<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
+!<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
+!<   histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|xerrorlines|xyerrorlines` (error bars: `x:y:dy` or
+!<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style); `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
 !<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
 !< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
@@ -63,8 +63,8 @@ use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_object, palette_words
-use foresight_style, only : default_color, fill_style, style_object, style_with, WITH_GAUGE, WITH_PIE, WITH_RADAR, &
-                            WITH_ROSE
+use foresight_style, only : default_color, fill_style, style_name, style_object, style_with, STYLE_NAMES, WITH_GAUGE, &
+                            WITH_PIE, WITH_RADAR, WITH_ROSE
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -75,6 +75,8 @@ private
 public :: script_object
 
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
+character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps or dots' !< Styles
+                                                 !< drawing functions.
 
 type :: line_style_object
    !< Line properties: a `set style line`, or the options of a plot item; unallocated means the default.
@@ -463,14 +465,11 @@ contains
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             with = canonical_style(word)
             if (len(with) == 0) then
-               call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, circles, pie, gauge, radar, '// &
-                         'rose, readout)', &
-                         iostat, iomsg)
+               call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
-               call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
+               call fail('plot: a function is drawn with '//FUNCTION_STYLES//', not '//with, iostat, iomsg)
                return
             endif
             if (with == 'gauge') then
@@ -688,9 +687,9 @@ contains
       one_field = .false.
       if (.not. allocated(fields)) then
          select case (with)
-         case ('yerrorbars', 'xerrorbars')
+         case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
-         case ('xyerrorbars')
+         case ('xyerrorbars', 'xyerrorlines')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
          case ('histograms', 'pie', 'radar', 'rose', 'gauge')
             ! one value per row: the first column at the point numbers
@@ -707,14 +706,14 @@ contains
       endif
       nbar = size(fields, kind=I4P) - 2_I4P
       select case (with)
-      case ('yerrorbars', 'xerrorbars')
+      case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
          if (nbar /= 1_I4P .and. nbar /= 2_I4P) then
             call fail('plot: '//with//' needs using x:y:delta or x:y:low:high', iostat, iomsg)
             return
          endif
-      case ('xyerrorbars')
+      case ('xyerrorbars', 'xyerrorlines')
          if (nbar /= 2_I4P .and. nbar /= 4_I4P) then
-            call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
+            call fail('plot: '//with//' needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
             return
          endif
       case ('histograms', 'pie', 'radar', 'rose')
@@ -807,7 +806,7 @@ contains
          if (nbar == 3_I4P) arcs = transpose(values(:, 4:5))
       case ('filledcurves')
          if (nbar == 1_I4P) ylow = values(:, 3)
-      case ('yerrorbars')
+      case ('yerrorbars', 'yerrorlines')
          if (nbar == 1_I4P) then
             ylow = y - values(:, 3)
             yhigh = y + values(:, 3)
@@ -815,7 +814,7 @@ contains
             ylow = values(:, 3)
             yhigh = values(:, 4)
          endif
-      case ('xerrorbars')
+      case ('xerrorbars', 'xerrorlines')
          if (nbar == 1_I4P) then
             xlow = x - values(:, 3)
             xhigh = x + values(:, 3)
@@ -823,7 +822,7 @@ contains
             xlow = values(:, 3)
             xhigh = values(:, 4)
          endif
-      case ('xyerrorbars')
+      case ('xyerrorbars', 'xyerrorlines')
          if (nbar == 2_I4P) then
             xlow = x - values(:, 3)
             xhigh = x + values(:, 3)
@@ -2125,8 +2124,8 @@ contains
                return
             endif
             if (.not. function_drawable(with)) then
-               call fail('set style function: '//with//' is not usable for function plots (lines, points, '// &
-                         'linespoints are)', iostat, iomsg)
+               call fail('set style function: '//with//' is not usable for function plots ('//FUNCTION_STYLES// &
+                         ' are)', iostat, iomsg)
                return
             endif
             self%function_style = with
@@ -2404,36 +2403,7 @@ contains
    character(len=*), intent(in)  :: word  !< Style word.
    character(len=:), allocatable :: style !< Full style name.
 
-   select case (word)
-   case ('l', 'lines')
-      style = 'lines'
-   case ('p', 'points')
-      style = 'points'
-   case ('lp', 'linespoints')
-      style = 'linespoints'
-   case ('yerr', 'yerrorbars')
-      style = 'yerrorbars'
-   case ('xerr', 'xerrorbars')
-      style = 'xerrorbars'
-   case ('xyerr', 'xyerrorbars')
-      style = 'xyerrorbars'
-   case ('readout')
-      style = 'readout'
-   case ('boxes')
-      style = 'boxes'
-   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
-      style = 'filledcurves'
-   case ('his', 'hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
-      style = 'histograms'
-   case ('ima', 'imag', 'image')
-      style = 'image'
-   case ('cir', 'circ', 'circl', 'circle', 'circles')
-      style = 'circles'
-   case ('pie', 'gauge', 'radar', 'rose')
-      style = word
-   case default
-      style = ''
-   endselect
+   style = style_name(word)
    endfunction canonical_style
 
    pure function change_extension(file, ext) result(renamed)
@@ -2726,11 +2696,11 @@ contains
    endfunction columnhead_title
 
    pure function function_drawable(with) result(yes)
-   !< Whether the style `with` draws a function: lines, points or linespoints, not error bars.
+   !< Whether the style `with` draws a function (FUNCTION_STYLES): not error bars, nor the filled and panel styles.
    character(len=*), intent(in) :: with !< Full style name.
    logical                      :: yes  !< Usable for functions.
 
-   yes = with == 'lines' .or. with == 'points' .or. with == 'linespoints'
+   yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots')
    endfunction function_drawable
 
    pure function is_item_option(word) result(is)

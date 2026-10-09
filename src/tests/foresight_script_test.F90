@@ -9,7 +9,8 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
 use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
-                            WITH_ROSE, &
+                            WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
+                            WITH_XERRORLINES, WITH_XYERRORLINES, &
                             WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
@@ -31,7 +32,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(66)                           !< Per-check outcome.
+logical                       :: test_passed(68)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -166,7 +167,7 @@ test_passed(23) = iostat /= 0_I4P .and. index(iomsg, '"u" applies to data files,
 call interpreter%run_text('plot $1', iostat, iomsg)
 test_passed(24) = iostat /= 0_I4P .and. index(iomsg, 'columns are only valid in using') > 0
 call interpreter%run_text('plot x w yerr', iostat, iomsg)
-test_passed(25) = iostat /= 0_I4P .and. index(iomsg, 'a function is drawn with lines, points or linespoints') > 0
+test_passed(25) = iostat /= 0_I4P .and. index(iomsg, 'a function is drawn with lines, points, linespoints, impulses') > 0
 call interpreter%run_text('set samples 1', iostat, iomsg)
 test_passed(26) = iostat /= 0_I4P .and. index(iomsg, 'the sampling rate must be > 1') > 0 .and. &
                   interpreter%samples == 5_I4P
@@ -694,6 +695,38 @@ call interpreter%run_text("set grid polar 400", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'below a full turn') > 0
 call interpreter%run_text("set logscale y; plot '"//data_file//"' u 1:2", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'linear x and y axes') > 0
+
+! the lines family, with gnuplot's abbreviations: his is histeps, hist histograms
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 0.5', '2 3 0.25', '4 5 0.5'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//data_file//"' w i, '' w st, '' w fs, '' w his, '' w d, '' u 1:2:3 w yerrorl, "// &
+                          "'' u 1:2:3 w xerrorl, '' u 1:2:3:3 w xyerrorl, x w steps", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(67) = iostat == 0_I4P
+if (test_passed(67)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(67) = all(panel%series%style%with == [WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
+                                                         WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, &
+                                                         WITH_XYERRORLINES, WITH_STEPS]) .and. &
+                        same(panel%series(1)%ylow, [0, 0, 0]) .and. same(panel%series(4)%xlow * 2.0_R8P, [1, 3, 6]) &
+                        .and. same(panel%series(4)%xhigh * 2.0_R8P, [3, 6, 10]) .and. panel%series(5)%style%pointtype == 0 &
+                        .and. same(panel%series(6)%ylow * 4.0_R8P, [6, 11, 18]) .and. &
+                        same(panel%series(8)%xhigh * 4.0_R8P, [6, 9, 18]) .and. same(panel%series(8)%yhigh * 4.0_R8P, [10, 13, 22])
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 2 w hist", iostat, iomsg)
+test_passed(67) = test_passed(67) .and. iostat == 0_I4P
+if (test_passed(67)) test_passed(67) = interpreter%figure%panels(1)%series(1)%style%with == WITH_HISTOGRAMS
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w yerrorl", iostat, iomsg)
+test_passed(68) = iostat /= 0_I4P .and. index(iomsg, 'yerrorlines needs using x:y:delta') > 0
+call interpreter%run_text("plot x w xyerrorlines", iostat, iomsg)
+test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'impulses, steps, fsteps, histeps or dots') > 0
+call interpreter%run_text("plot x w hi", iostat, iomsg)
+test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported style "hi"') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -709,7 +742,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,66L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,68L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

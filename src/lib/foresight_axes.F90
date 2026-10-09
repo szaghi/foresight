@@ -54,8 +54,9 @@ use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_GAUGE, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, &
-                            WITH_LINESPOINTS, WITH_PIE, WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE
+                            WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
+                            WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
+                            WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS
 use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -312,6 +313,17 @@ contains
       if (any(y < 0.0_R8P)) error stop 'foresight: plot: a rose needs non-negative values'
       series%values = y
       if (present(linear)) series%linear = linear
+   case (WITH_IMPULSES)
+      ! from y = 0, which the y autoscale includes, as gnuplot
+      allocate(series%ylow(size(x)))
+      series%ylow = 0.0_R8P
+   case (WITH_HISTEPS)
+      ! steps around the points from y = 0: their edges and 0 widen the autoscale, as the boxes ones
+      call histep_edges(series%xlow, series%xhigh)
+      allocate(series%ylow(size(x)))
+      series%ylow = 0.0_R8P
+   case (WITH_DOTS)
+      series%style%pointtype = 0_I4P
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -386,6 +398,26 @@ contains
             error stop 'foresight: plot: the pixel centres of an image must be evenly spaced (a regular grid)'
       enddo
       endfunction spacing_of
+      pure subroutine histep_edges(left, right)
+      !< Edges of the steps of `histeps`: halfway to the neighbours, the end steps symmetric (gnuplot), in data space.
+      real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
+      real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
+      integer(I4P)                        :: n        !< Points.
+
+      n = size(x, kind=I4P)
+      allocate(left(n), right(n))
+      if (n == 0_I4P) return
+      if (n == 1_I4P) then
+         left = x - 0.5_R8P
+         right = x + 0.5_R8P
+         return
+      endif
+      left(2:n) = 0.5_R8P * (x(1:n - 1) + x(2:n))
+      right(1:n - 1) = left(2:n)
+      left(1) = x(1) - (left(2) - x(1))
+      right(n) = x(n) + (x(n) - right(n - 1))
+      endsubroutine histep_edges
+
       pure subroutine box_edges(left, right)
       !< Box edges: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a relative
       !< `boxwidth`; or `boxwidth` itself; or the box's own `width`.
@@ -909,7 +941,7 @@ contains
                                yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
                               self%series(s)%style%density, self%series(s)%style%stroke_color(), &
                               self%series(s)%style%linewidth)
-      if (self%series(s)%style%draws_lines()) &
+      if (self%series(s)%style%draws_lines() .or. self%series(s)%style%with == WITH_IMPULSES) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
       if (self%series(s)%style%draws_ybars()) &
@@ -1172,11 +1204,11 @@ contains
                if (.not. valid(i2 + 1_I4P)) exit
                i2 = i2 + 1_I4P
             enddo
-            if (i2 > i1) call backend%data_polyline(u(i1:i2), v(i1:i2), series%style%color, series%style%linewidth, &
-                                                    series%style%dasharray())
+            if (i2 > i1 .or. series%style%with == WITH_HISTEPS) call draw_run(i1, i2)
             i1 = i2 + 1_I4P
          enddo
       endif
+      if (series%style%with == WITH_IMPULSES) call draw_impulses
       if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
       if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) &
@@ -1184,6 +1216,69 @@ contains
                                 pt=series%style%pointtype, line_width=series%style%linewidth)
    endassociate
    contains
+      subroutine draw_run(i1, i2)
+      !< The line through the run of placeable points `i1` to `i2`: straight segments, or the steps of `steps`
+      !< (horizontal first), `fsteps` (vertical first), `histeps` (around the points, from and back to y = 0).
+      integer(I4P), intent(in) :: i1    !< First point.
+      integer(I4P), intent(in) :: i2    !< Last point.
+      real(R8P), allocatable   :: pu(:) !< Vertex abscissae [unit].
+      real(R8P), allocatable   :: pv(:) !< Vertex ordinates [unit].
+      real(R8P)                :: v0    !< Unit ordinate of y = 0.
+      integer(I4P)             :: k     !< Point counter.
+      integer(I4P)             :: m     !< Points of the run.
+
+      m = i2 - i1 + 1_I4P
+      associate(series => self%series(s))
+         select case (series%style%with)
+         case (WITH_STEPS, WITH_FSTEPS)
+            allocate(pu(2_I4P * m - 1_I4P), pv(2_I4P * m - 1_I4P))
+            pu(1::2) = u(i1:i2)
+            pv(1::2) = v(i1:i2)
+            if (series%style%with == WITH_STEPS) then
+               pu(2::2) = u(i1 + 1_I4P:i2)
+               pv(2::2) = v(i1:i2 - 1_I4P)
+            else
+               pu(2::2) = u(i1:i2 - 1_I4P)
+               pv(2::2) = v(i1 + 1_I4P:i2)
+            endif
+         case (WITH_HISTEPS)
+            if (.not. (all(self%xaxis%accepts(series%xlow(i1:i2))) .and. all(self%xaxis%accepts(series%xhigh(i1:i2))))) &
+               return
+            v0 = -1.0_R8P
+            if (yaxis%accepts(0.0_R8P)) v0 = yaxis%to_unit(0.0_R8P)
+            allocate(pu(2_I4P * m + 2_I4P), pv(2_I4P * m + 2_I4P))
+            do k = 1_I4P, m
+               pu(2_I4P * k) = self%xaxis%to_unit(series%xlow(i1 + k - 1_I4P))
+               pu(2_I4P * k + 1_I4P) = self%xaxis%to_unit(series%xhigh(i1 + k - 1_I4P))
+               pv(2_I4P * k : 2_I4P * k + 1_I4P) = v(i1 + k - 1_I4P)
+            enddo
+            pu(1) = pu(2)
+            pv(1) = v0
+            pu(2_I4P * m + 2_I4P) = pu(2_I4P * m + 1_I4P)
+            pv(2_I4P * m + 2_I4P) = v0
+         case default
+            pu = u(i1:i2)
+            pv = v(i1:i2)
+         endselect
+         call backend%data_polyline(pu, pv, series%style%color, series%style%linewidth, series%style%dasharray())
+      endassociate
+      endsubroutine draw_run
+
+      subroutine draw_impulses
+      !< A segment from y = 0 (the axis bottom on a log axis) to each placeable point.
+      real(R8P)    :: v0 !< Unit ordinate of y = 0.
+      integer(I4P) :: i  !< Point counter.
+
+      v0 = -1.0_R8P
+      if (yaxis%accepts(0.0_R8P)) v0 = yaxis%to_unit(0.0_R8P)
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (valid(i)) call backend%data_polyline([u(i), u(i)], [v0, v(i)], series%style%color, &
+                                                     series%style%linewidth, series%style%dasharray())
+         enddo
+      endassociate
+      endsubroutine draw_impulses
+
       subroutine draw_boxes
       !< One polygon per placeable box, from its baseline (0, or the axis bottom on a log axis) to its value; with
       !< `segments N`, the column of N cells over the y range, the ones the box covers at least half lit, the others

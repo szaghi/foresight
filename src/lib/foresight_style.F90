@@ -15,11 +15,13 @@ private
 public :: default_color
 public :: fill_style
 public :: style_object
+public :: style_name
 public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
-          WITH_XERRORBARS, &
-          WITH_XYERRORBARS, WITH_YERRORBARS
+          WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
+          WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES
+public :: STYLE_NAMES
 public :: FILL_EMPTY, FILL_SOLID
 
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
@@ -38,6 +40,18 @@ integer(I4P), parameter :: WITH_PIE         = 13_I4P !< foresight `with pie`: a 
 integer(I4P), parameter :: WITH_GAUGE       = 14_I4P !< foresight `with gauge`: the last value on a sweep gauge.
 integer(I4P), parameter :: WITH_RADAR       = 15_I4P !< foresight `with radar`: a polygon over the spokes of the rows.
 integer(I4P), parameter :: WITH_ROSE        = 16_I4P !< foresight `with rose`: equal sectors, area or radius by value.
+integer(I4P), parameter :: WITH_IMPULSES    = 17_I4P !< gnuplot `with impulses`: a segment from y = 0 to each point.
+integer(I4P), parameter :: WITH_STEPS       = 18_I4P !< gnuplot `with steps`: horizontal, then vertical.
+integer(I4P), parameter :: WITH_FSTEPS      = 19_I4P !< gnuplot `with fsteps`: vertical, then horizontal.
+integer(I4P), parameter :: WITH_HISTEPS     = 20_I4P !< gnuplot `with histeps`: steps around the points, from y = 0.
+integer(I4P), parameter :: WITH_DOTS        = 21_I4P !< gnuplot `with dots`: a tiny dot per point.
+integer(I4P), parameter :: WITH_YERRORLINES = 22_I4P !< gnuplot `with yerrorlines`: linespoints and y error bars.
+integer(I4P), parameter :: WITH_XERRORLINES = 23_I4P !< gnuplot `with xerrorlines`: linespoints and x error bars.
+integer(I4P), parameter :: WITH_XYERRORLINES = 24_I4P !< gnuplot `with xyerrorlines`: linespoints and both bars.
+character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
+                                             'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
+                                             'xyerrorlines, boxes, filledcurves, histograms, image, circles, pie, '// &
+                                             'gauge, radar, rose, readout' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
 
@@ -81,36 +95,90 @@ contains
    color = PALETTE(modulo(index - 1_I4P, size(PALETTE, kind=I4P)) + 1_I4P)
    endfunction default_color
 
+   pure function style_name(word) result(name)
+   !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot accepts it (`l`, `p`, `lp`, `i`, `st`, `fs`,
+   !< `his`, `d`, `yerr`, `yerrorl`, ...), or foresight's `readout`, `pie`, `gauge`, `radar`, `rose` (full words only);
+   !< empty if unsupported. As gnuplot, `his` is histeps and histograms need `hist`.
+   character(len=*), intent(in)  :: word !< Style word.
+   character(len=:), allocatable :: name !< Full style name.
+
+   select case (word)
+   case ('l', 'lines')
+      name = 'lines'
+   case ('p', 'points')
+      name = 'points'
+   case ('lp', 'linespoints')
+      name = 'linespoints'
+   case ('yerr', 'yerrorbars')
+      name = 'yerrorbars'
+   case ('xerr', 'xerrorbars')
+      name = 'xerrorbars'
+   case ('xyerr', 'xyerrorbars')
+      name = 'xyerrorbars'
+   case ('his', 'histe', 'histep', 'histeps')
+      name = 'histeps'
+   case ('hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
+      name = 'histograms'
+   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
+      name = 'filledcurves'
+   case ('ima', 'imag', 'image')
+      name = 'image'
+   case ('cir', 'circ', 'circl', 'circle', 'circles')
+      name = 'circles'
+   case ('boxes', 'readout', 'pie', 'gauge', 'radar', 'rose')
+      name = word
+   case default
+      name = ''
+      if (abbreviates(word, 'impulses', 1)) name = 'impulses'
+      if (abbreviates(word, 'steps', 2)) name = 'steps'
+      if (abbreviates(word, 'fsteps', 2)) name = 'fsteps'
+      if (abbreviates(word, 'dots', 1)) name = 'dots'
+      if (abbreviates(word, 'yerrorlines', 7)) name = 'yerrorlines'
+      if (abbreviates(word, 'xerrorlines', 7)) name = 'xerrorlines'
+      if (abbreviates(word, 'xyerrorlines', 8)) name = 'xyerrorlines'
+   endselect
+   contains
+      pure function abbreviates(w, full, minimum) result(match)
+      !< Whether `w` abbreviates `full` with at least `minimum` characters.
+      character(len=*), intent(in) :: w       !< Word.
+      character(len=*), intent(in) :: full    !< Full name.
+      integer,          intent(in) :: minimum !< Shortest abbreviation.
+      logical                      :: match   !< Match.
+
+      match = len(w) >= minimum .and. len(w) <= len(full)
+      if (match) match = full(1:len(w)) == w
+      endfunction abbreviates
+   endfunction style_name
+
    function style_with(name) result(with)
-   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (`l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`), or
-   !< foresight's `readout` (full word only).
+   !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (see `style_name`).
    character(len=*), intent(in) :: name !< gnuplot style keyword.
    integer(I4P)                 :: with !< Plotting style code.
 
-   select case (trim(adjustl(name)))
-   case ('l', 'lines')
+   select case (style_name(trim(adjustl(name))))
+   case ('lines')
       with = WITH_LINES
-   case ('p', 'points')
+   case ('points')
       with = WITH_POINTS
-   case ('lp', 'linespoints')
+   case ('linespoints')
       with = WITH_LINESPOINTS
-   case ('yerr', 'yerrorbars')
+   case ('yerrorbars')
       with = WITH_YERRORBARS
-   case ('xerr', 'xerrorbars')
+   case ('xerrorbars')
       with = WITH_XERRORBARS
-   case ('xyerr', 'xyerrorbars')
+   case ('xyerrorbars')
       with = WITH_XYERRORBARS
    case ('readout')
       with = WITH_READOUT
    case ('boxes')
       with = WITH_BOXES
-   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
+   case ('filledcurves')
       with = WITH_FILLEDCURVES
-   case ('his', 'hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
+   case ('histograms')
       with = WITH_HISTOGRAMS
-   case ('ima', 'imag', 'image')
+   case ('image')
       with = WITH_IMAGE
-   case ('cir', 'circ', 'circl', 'circle', 'circles')
+   case ('circles')
       with = WITH_CIRCLES
    case ('pie')
       with = WITH_PIE
@@ -120,11 +188,24 @@ contains
       with = WITH_RADAR
    case ('rose')
       with = WITH_ROSE
+   case ('impulses')
+      with = WITH_IMPULSES
+   case ('steps')
+      with = WITH_STEPS
+   case ('fsteps')
+      with = WITH_FSTEPS
+   case ('histeps')
+      with = WITH_HISTEPS
+   case ('dots')
+      with = WITH_DOTS
+   case ('yerrorlines')
+      with = WITH_YERRORLINES
+   case ('xerrorlines')
+      with = WITH_XERRORLINES
+   case ('xyerrorlines')
+      with = WITH_XYERRORLINES
    case default
-      error stop 'foresight: unsupported plotting style "'//trim(name)// &
-                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars, boxes, filledcurves, '//&
-                 'histograms, image, circles, pie, gauge, radar, rose, '//&
-                 'readout)'
+      error stop 'foresight: unsupported plotting style "'//trim(name)//'" (supported: '//STYLE_NAMES//')'
    endselect
    endfunction style_with
 
@@ -164,7 +245,8 @@ contains
    class(style_object), intent(in) :: self  !< Style.
    logical                         :: lines !< Lines are drawn.
 
-   lines = self%with == WITH_LINES .or. self%with == WITH_LINESPOINTS
+   lines = any(self%with == [WITH_LINES, WITH_LINESPOINTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, &
+                             WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS])
    endfunction draws_lines
 
    elemental function draws_points(self) result(points)
@@ -173,7 +255,8 @@ contains
    logical                         :: points !< Points are drawn.
 
    points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, &
-                                    WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])
+                                    WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_IMPULSES, WITH_STEPS, &
+                                    WITH_FSTEPS, WITH_HISTEPS])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -181,7 +264,7 @@ contains
    class(style_object), intent(in) :: self !< Style.
    logical                         :: bars !< Bars are drawn.
 
-   bars = self%with == WITH_XERRORBARS .or. self%with == WITH_XYERRORBARS
+   bars = any(self%with == [WITH_XERRORBARS, WITH_XYERRORBARS, WITH_XERRORLINES, WITH_XYERRORLINES])
    endfunction draws_xbars
 
    elemental function draws_ybars(self) result(bars)
@@ -189,7 +272,7 @@ contains
    class(style_object), intent(in) :: self !< Style.
    logical                         :: bars !< Bars are drawn.
 
-   bars = self%with == WITH_YERRORBARS .or. self%with == WITH_XYERRORBARS
+   bars = any(self%with == [WITH_YERRORBARS, WITH_XYERRORBARS, WITH_YERRORLINES, WITH_XYERRORLINES])
    endfunction draws_ybars
 
    elemental function fills(self) result(filled)

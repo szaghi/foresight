@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(56)                  !< Per-figure outcome.
+logical                     :: test_passed(58)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -77,7 +77,9 @@ test_passed(53) = check('polar_round.txt', figure_polar('round'))
 test_passed(54) = check('polar_round.html', figure_polar('round'))
 test_passed(55) = check('polar_vfd.svg', figure_polar('round', theme='vfd'))
 test_passed(56) = check('polar_rmin.svg', figure_polar('rmin'))
-write(output_unit, '(A,56L2)') 'foresight golden checks:', test_passed
+test_passed(57) = check('steps.svg', figure_steps())
+test_passed(58) = check('steps.txt', figure_steps())
+write(output_unit, '(A,58L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -486,6 +488,33 @@ contains
                  [1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P], title='pentagon', with='filledcurves', &
                  fs='transparent solid 0.3')
    endfunction figure_polar
+
+   function figure_steps() result(fig)
+   !< The lines family of gnuplot over four points: steps, fsteps and histeps; impulses and dots; y and x error lines;
+   !< xy error lines.
+   type(figure_object) :: fig    !< Figure.
+   real(R8P)           :: x(4)   !< Abscissae.
+   real(R8P)           :: y(4)   !< Ordinates.
+   real(R8P)           :: d(4)   !< Errors.
+
+   x = [1.0_R8P, 2.0_R8P, 4.0_R8P, 5.0_R8P]
+   y = [2.0_R8P, 1.5_R8P, 3.0_R8P, 1.0_R8P]
+   d = [0.3_R8P, 0.2_R8P, 0.5_R8P, 0.1_R8P]
+   call fig%init(width=700_I4P, height=500_I4P)
+   call fig%set_multiplot(rows=2_I4P, cols=2_I4P)
+   call fig%set_key(position='top left')
+   call fig%plot(x, y, title='steps', with='steps')
+   call fig%plot(x, y, title='fsteps', with='fs')
+   call fig%plot(x, y, title='histeps', with='his')
+   call fig%next_panel
+   call fig%plot(x, y, title='impulses', with='impulses', lw=2.0_R8P)
+   call fig%plot(x, y + 0.5_R8P, title='dots', with='dots')
+   call fig%next_panel
+   call fig%plot(x, y, title='yerrorlines', with='yerrorlines', ylow=y - d, yhigh=y + d)
+   call fig%plot(x, y + 1.0_R8P, title='xerrorlines', with='xerrorl', xlow=x - d, xhigh=x + d)
+   call fig%next_panel
+   call fig%plot(x, y, title='xyerrorlines', with='xyerrorlines', xlow=x - d, xhigh=x + d, ylow=y - d, yhigh=y + d)
+   endfunction figure_steps
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.
