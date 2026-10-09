@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(44)                  !< Per-figure outcome.
+logical                     :: test_passed(50)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -65,7 +65,13 @@ test_passed(41) = check('pie.svg', figure_pie(0.0_R8P))
 test_passed(42) = check('pie.txt', figure_pie(0.0_R8P))
 test_passed(43) = check('donut.svg', figure_pie(0.55_R8P))
 test_passed(44) = check('donut_vfd.svg', figure_pie(0.6_R8P, theme='vfd'))
-write(output_unit, '(A,44L2)') 'foresight golden checks:', test_passed
+test_passed(45) = check('gauges.svg', figure_gauges())
+test_passed(46) = check('gauges.txt', figure_gauges())
+test_passed(47) = check('gauges_vfd.svg', figure_gauges(theme='vfd'))
+test_passed(48) = check('radar.svg', figure_radar())
+test_passed(49) = check('rose.svg', figure_rose(.false.))
+test_passed(50) = check('rose_linear.svg', figure_rose(.true.))
+write(output_unit, '(A,50L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -400,6 +406,45 @@ contains
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P], [0.8_R8P, 2.1_R8P, 0.6_R8P, 0.3_R8P], with='pie', &
                  xlabels=['mesh  ', 'fluxes', 'comm  ', 'io    '], donut=hole)
    endfunction figure_pie
+
+   function figure_gauges(theme) result(fig)
+   !< Three gauges side by side: continuous, segmented (cells lit when covered half), beyond its scale (the track full,
+   !< the digits true); the last finite value of each series.
+   character(len=*), intent(in), optional :: theme !< Theme name.
+   type(figure_object)                    :: fig   !< Figure.
+   real(R8P), allocatable                 :: t(:)  !< Steps.
+   integer(I4P)                           :: i     !< Counter.
+
+   call fig%init(width=600_I4P, height=240_I4P)
+   if (present(theme)) call fig%set_theme(name=theme)
+   t = [(real(i, R8P), i = 1, 10)]
+   call fig%plot(t, 600.0_R8P * t, title='RPM', with='gauge', scale=[0.0_R8P, 8000.0_R8P], format='%5.0f')
+   call fig%plot(t, 0.07_R8P * t, title='LOAD', with='gauge', scale=[0.0_R8P, 1.0_R8P], format='%4.2f', &
+                 fs='solid segments 20')
+   call fig%plot(t, 22.0_R8P * t, title='TEMP', with='gauge', scale=[0.0_R8P, 200.0_R8P], format='%3.0f')
+   endfunction figure_gauges
+
+   function figure_radar() result(fig)
+   !< A radar of two series over five named spokes, filled at 0.3: rings at the ticks of the common scale from 0.
+   type(figure_object) :: fig !< Figure.
+
+   call fig%init(width=460_I4P, height=320_I4P)
+   call fig%set_style_fill('solid 0.3')
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [8.0_R8P, 5.0_R8P, 7.0_R8P, 4.0_R8P, 9.0_R8P], &
+                 title='gpu', with='radar', xlabels=['speed  ', 'memory ', 'energy ', 'cost   ', 'scaling'])
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [4.0_R8P, 9.0_R8P, 3.0_R8P, 8.0_R8P, 5.0_R8P], &
+                 title='cpu', with='radar')
+   endfunction figure_radar
+
+   function figure_rose(linear) result(fig)
+   !< A rose of four named sectors, the area (or the radius, `linear`) by value, rings at the ticks of the scale.
+   logical, intent(in) :: linear !< Radius by value.
+   type(figure_object) :: fig    !< Figure.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P], [0.8_R8P, 2.1_R8P, 0.6_R8P, 0.3_R8P], with='rose', &
+                 xlabels=['mesh  ', 'fluxes', 'comm  ', 'io    '], linear=linear)
+   endfunction figure_rose
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

@@ -36,6 +36,8 @@ module foresight_script
 !<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
 !< - `with circles` (`using x:y[:r[:start:end]]`, wedges with angles in degrees); foresight's `with pie [donut F]`
 !<   (`using Y[:xtic(N)]`, alone in its panel);
+!< - foresight's panel charts: `with gauge range [A:B] [segments N] [format "fmt"]`, `with radar`, `with rose [linear]`
+!<   (`using Y[:xtic(N)]`), alone in their panel (several gauges or radars side by side);
 !< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
 !<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style); `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
@@ -56,7 +58,8 @@ use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_object, palette_words
-use foresight_style, only : default_color, fill_style, style_object, WITH_PIE
+use foresight_style, only : default_color, fill_style, style_object, style_with, WITH_GAUGE, WITH_PIE, WITH_RADAR, &
+                            WITH_ROSE
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -311,6 +314,9 @@ contains
    real(R8P),        allocatable                :: base      !< Baseline of `filledcurves y=V`, unallocated if none.
    real(R8P),        allocatable                :: widths(:) !< Box widths, `using x:y:width`.
    real(R8P),        allocatable                :: hole      !< Pie hole fraction (`donut F`), unallocated for none.
+   real(R8P),        allocatable                :: gauge_scale(:) !< Gauge scale (`range [A:B]`), unallocated for none.
+   integer(I4P)                                 :: cells     !< Gauge cells (`segments N`), 0 for none.
+   logical                                      :: rose_linear !< Rose radius by value (`linear`).
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
@@ -406,6 +412,9 @@ contains
       filter = ''
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
+      if (allocated(gauge_scale)) deallocate(gauge_scale)
+      cells = 0_I4P
+      rose_linear = .false.
       if (allocated(fs)) deallocate(fs)
       if (allocated(base)) deallocate(base)
       shaping = ''
@@ -446,13 +455,41 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, circles, pie, readout)', &
+                         'xerrorbars, xyerrorbars, boxes, filledcurves, histograms, image, circles, pie, gauge, radar, '// &
+                         'rose, readout)', &
                          iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
                call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
                return
+            endif
+            if (with == 'gauge') then
+               do while (i < size(tokens, kind=I4P))
+                  if (tokens(i + 1_I4P)%text == 'range') then
+                     i = i + 2_I4P
+                     if (i > size(tokens, kind=I4P)) then
+                        call fail('plot: gauge range needs [A:B]', iostat, iomsg)
+                        return
+                     endif
+                     if (.not. gauge_range(tokens(i))) return
+                  elseif (tokens(i + 1_I4P)%text == 'segments') then
+                     i = i + 1_I4P
+                     if (.not. next_integer(tokens, i, cells, iostat, iomsg)) return
+                     if (cells < 1_I4P .or. cells > 1000_I4P) then
+                        call fail('plot: gauge segments takes 1 to 1000 cells', iostat, iomsg)
+                        return
+                     endif
+                  else
+                     exit
+                  endif
+               enddo
+            endif
+            if (with == 'rose' .and. i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'linear') then
+                  i = i + 1_I4P
+                  rose_linear = .true.
+               endif
             endif
             if (with == 'pie' .and. i < size(tokens, kind=I4P)) then
                if (tokens(i + 1_I4P)%text == 'donut') then
@@ -570,12 +607,25 @@ contains
                return
             endif
          endif
-      elseif (allocated(format)) then
-         call fail('plot: format applies to readouts only (with readout)', iostat, iomsg)
+      elseif (allocated(format) .and. with /= 'gauge') then
+         call fail('plot: format applies to readouts and gauges only', iostat, iomsg)
          return
       endif
-      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie')) then
-         call fail('plot: fs applies to boxes, filledcurves, histograms, circles and pie only', iostat, iomsg)
+      if (with == 'gauge') then
+         if (allocated(format)) then
+            if (len(readout_check(format)) > 0) then
+               call fail('plot: '//readout_check(format), iostat, iomsg)
+               return
+            endif
+         endif
+         if (.not. allocated(gauge_scale)) then
+            call fail('plot: a gauge needs its scale: with gauge range [A:B]', iostat, iomsg)
+            return
+         endif
+      endif
+      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose')) then
+         call fail('plot: fs applies to boxes, filledcurves, histograms, circles and the panel charts only', iostat, &
+                   iomsg)
          return
       endif
       if (is_function) then
@@ -619,14 +669,14 @@ contains
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          case ('xyerrorbars')
             fields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
-         case ('histograms', 'pie')
+         case ('histograms', 'pie', 'radar', 'rose', 'gauge')
             ! one value per row: the first column at the point numbers
             fields = plain_columns([0_I4P, 1_I4P])
          case default
             call data%default_using(ux, uy)
             fields = plain_columns([ux, uy])
          endselect
-         one_field = with == 'histograms' .or. with == 'pie'
+         one_field = is_word(with, 'histograms pie radar rose gauge')
       elseif (size(fields) == 1) then
          one_field = .true.
          call point%set_column(0_I4P)
@@ -644,7 +694,7 @@ contains
             call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
             return
          endif
-      case ('histograms', 'pie')
+      case ('histograms', 'pie', 'radar', 'rose')
          if (.not. one_field) then
             call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
             return
@@ -760,24 +810,24 @@ contains
          endif
       endselect
       ! unallocated optional arguments are absent: gnuplot defaults apply
-      ! a pie is alone in its panel
+      ! the panel charts are alone in their panel: several gauges or radars side by side, one pie or rose
       associate(panel => self%figure%panels(self%figure%current))
          if (allocated(panel%series)) then
             if (size(panel%series) > 0) then
-               if (with == 'pie' .or. panel%series(1)%style%with == WITH_PIE) then
-                  call fail('plot: a pie is alone in its panel (one item)', iostat, iomsg)
-                  return
-               endif
-               if (any(panel%series%style%with == WITH_PIE)) then
-                  call fail('plot: a pie is alone in its panel (one item)', iostat, iomsg)
-                  return
+               if (is_word(with, 'pie gauge radar rose') .or. &
+                   any(panel%series(1)%style%with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])) then
+                  if (with == 'pie' .or. with == 'rose' .or. panel%series(1)%style%with /= style_code(with)) then
+                     call fail('plot: a pie, gauge, radar or rose is alone in its panel (several gauges or radars '// &
+                               'side by side)', iostat, iomsg)
+                     return
+                  endif
                endif
             endif
          endif
       endassociate
-      if (with == 'pie') then
+      if (with == 'pie' .or. with == 'rose') then
          if (any(y < 0.0_R8P)) then
-            call fail('plot: a pie needs non-negative values', iostat, iomsg)
+            call fail('plot: a '//with//' needs non-negative values', iostat, iomsg)
             return
          endif
       endif
@@ -795,6 +845,21 @@ contains
             if (.not. fill_ok(fs)) return
          endif
          call self%figure%plot(x, y, title=title, with=with, fs=fs, xlabels=xlabels, donut=hole)
+      elseif (with == 'gauge') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         if (cells > 0_I4P) then
+            if (.not. allocated(fs)) fs = 'solid'
+            fs = fs//' segments '//int_str(int(cells, I8P))
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, fs=fs, format=format, scale=gauge_scale)
+      elseif (with == 'radar' .or. with == 'rose') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, fs=fs, xlabels=xlabels, &
+                               linear=rose_linear)
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -815,6 +880,32 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      function gauge_range(token) result(ok)
+      !< The gauge scale of the range token `[A:B]`, both ends numbers; fails the plot if not.
+      type(token_object), intent(in) :: token !< Range token.
+      logical                        :: ok    !< Read.
+      real(R8P)                      :: v(2)  !< Ends.
+      integer(I4P)                   :: colon !< Separator position.
+
+      ok = .false.
+      colon = index(token%text, ':', kind=I4P)
+      if (token%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
+         call fail('plot: gauge range needs [A:B], found "'//token%text//'"', iostat, iomsg)
+         return
+      endif
+      if (.not. (to_number(trim(adjustl(token%text(1:colon - 1_I4P))), v(1)) .and. &
+                 to_number(trim(adjustl(token%text(colon + 1_I4P:))), v(2)))) then
+         call fail('plot: gauge range needs two numbers [A:B], found "['//token%text//']"', iostat, iomsg)
+         return
+      endif
+      if (v(1) == v(2)) then
+         call fail('plot: the gauge range ends must differ', iostat, iomsg)
+         return
+      endif
+      gauge_scale = v
+      ok = .true.
+      endfunction gauge_range
+
       function next_number(v) result(ok)
       !< The number token after `i` into `v`, advancing `i`; fails the plot if there is none.
       real(R8P), intent(out) :: v  !< Number.
@@ -2020,6 +2111,14 @@ contains
       endfunction even
    endsubroutine regular_grid
 
+   function style_code(name) result(code)
+   !< Style code of a full style name.
+   character(len=*), intent(in) :: name !< Full style name.
+   integer(I4P)                 :: code !< Style code.
+
+   code = style_with(name)
+   endfunction style_code
+
    pure function canonical_style(word) result(style)
    !< Full gnuplot style name of `word` (full or abbreviated), empty if unsupported.
    character(len=*), intent(in)  :: word  !< Style word.
@@ -2050,8 +2149,8 @@ contains
       style = 'image'
    case ('cir', 'circ', 'circl', 'circle', 'circles')
       style = 'circles'
-   case ('pie')
-      style = 'pie'
+   case ('pie', 'gauge', 'radar', 'rose')
+      style = word
    case default
       style = ''
    endselect

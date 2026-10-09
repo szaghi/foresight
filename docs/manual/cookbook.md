@@ -225,6 +225,25 @@ The third column is the radius, in x units. See [Circles, pies and donuts](/guid
 
 `xtic(1)` names the slices; the key gives their percentages.
 
+## A cluster of gauges
+
+<<< @/examples/snippets/cb_gauges.gp{gnuplot}
+
+<Plot name="cb_gauges" svg :width="600" :height="240" />
+
+Each gauge shows the last value of its column over a fixed `range`, lit in cells; with `--watch` the needle-less
+gauges follow the run. See [Gauges, radars and roses](/guide/gnuplot-subset#gauges-radars-and-roses).
+
+## A radar and a rose
+
+<<< @/examples/snippets/cb_radar.gp{gnuplot}
+
+<Plot name="cb_radar" svg :width="480" :height="320" />
+
+<<< @/examples/snippets/cb_rose.gp{gnuplot}
+
+<Plot name="cb_rose" svg :width="480" :height="320" />
+
 ## A heatmap
 
 <<< @/examples/snippets/cb_image.gp{gnuplot}

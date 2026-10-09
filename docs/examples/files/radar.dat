@@ -1,0 +1,6 @@
+# metric   gpu  cpu
+speed      8    4
+memory     5    9
+energy     7    3
+cost       4    8
+scaling    9    5

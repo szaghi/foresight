@@ -76,9 +76,9 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); `image` (`ima`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); `histograms` (`his`), see [below](#histograms); `image` (`ima`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
-| `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
+| `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
@@ -101,6 +101,8 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | `image` | `x:y:z` on a regular grid (default `1:2:3`), or a `matrix` file |
 | `circles` | `x:y` (default radius), `x:y:radius`, `x:y:radius:start:end` (wedges, degrees) |
 | `pie` | `y`, one slice per row; `y:xtic(N)` names the slices |
+| `gauge` | `y` (the last finite value), or `x:y` |
+| `radar`, `rose` | `y`, one spoke or sector per row; `y:xtic(N)` names them |
 
 ## Expressions in `using`
 
@@ -473,6 +475,45 @@ and takes non-negative values only: slices compare parts of a whole, which a sig
 precisely than lengths: for comparing the parts, [histograms](#histograms) are the better chart.
 
 <Plot name="cb_donut_vfd" svg :width="480" :height="320" />
+
+## Gauges, radars and roses
+
+Foresight extensions, charts alone in their panel like the pie (several gauges or radar items side by side).
+
+```gnuplot
+set terminal svg size 600,240 theme vfd
+plot 'run.dat' u 1 w gauge range [0:150] segments 24 format '%3.0f' t 'ITER', \
+     ''        u 5 w gauge range [0:0.6] segments 24 format '%5.3f' t 'CD'
+```
+
+<Plot name="cb_gauges" svg :width="600" :height="240" />
+
+**A gauge** shows the last finite value of its item, as a [readout](#readouts), on a 270-degree track from 7:30
+clockwise to 4:30 over `range [A:B]` (required: a dashboard scale is fixed). The track is drawn faintly and lit up to
+the value, in `segments N` cells if set (a cell lit when covered at least half); the scale ticks lie outside, the value
+in seven-segment digits of `format` under the centre, titled by the item. A value beyond the range fills the track,
+the digits still give it.
+
+```gnuplot
+set style fill solid 0.3
+plot 'radar.dat' u 2:xtic(1) w radar t 'gpu', '' u 3 w radar t 'cpu'
+```
+
+<Plot name="cb_radar" svg :width="480" :height="320" />
+
+**A radar** (spider) chart has a spoke per row, from 12 o'clock clockwise, named by the `xtic` labels; every item is a
+polygon over the spokes on a common radial scale from 0 (or the smallest value, if negative), its rings at the ticks.
+
+```gnuplot
+plot 'phases.dat' u 2:xtic(1) w rose
+```
+
+<Plot name="cb_rose" svg :width="480" :height="320" />
+
+**A rose** (Nightingale) chart has equal sectors, one per row in the palette colors, named in the key. A sector's
+**area** is proportional to its value, so twice the value looks twice as large; `rose linear` makes the radius
+proportional instead, the common but exaggerating choice (twice the value, four times the area). The rings mark the
+values of the scale.
 
 ## Themes and segmented fills
 

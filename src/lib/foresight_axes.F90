@@ -48,8 +48,9 @@ use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_PIE, WITH_READOUT
-use foresight_ticks, only : labels_attribute, tick_object, tics_object, TICS_NONE
+                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_GAUGE, WITH_HISTOGRAMS, WITH_IMAGE, WITH_PIE, &
+                            WITH_RADAR, WITH_READOUT, WITH_ROSE
+use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -125,6 +126,9 @@ type :: axes_object
       procedure, pass(self), private :: has_image          !< Whether the panel has an image.
       procedure, pass(self), private :: draw_colorbox      !< Draw the color box.
       procedure, pass(self), private :: draw_pie           !< Draw a pie panel.
+      procedure, pass(self), private :: draw_gauges        !< Draw a panel of gauges.
+      procedure, pass(self), private :: draw_radar         !< Draw a radar panel.
+      procedure, pass(self), private :: draw_rose          !< Draw a rose panel.
       procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
@@ -132,7 +136,7 @@ endtype axes_object
 
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
-                         base, fs, xlabels, z, radius, angles, donut)
+                         base, fs, xlabels, z, radius, angles, donut, scale, linear)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -168,6 +172,8 @@ contains
    real(R8P),          intent(in), optional :: radius(:) !< Circle radii [x units], NaN for the default.
    real(R8P),          intent(in), optional :: angles(:,:) !< Wedge start and end angles (2, point) [deg].
    real(R8P),          intent(in), optional :: donut    !< Pie hole, a fraction of the radius (0 to below 1).
+   real(R8P),          intent(in), optional :: scale(2) !< Gauge scale: the values at the start and end of the sweep.
+   logical,            intent(in), optional :: linear   !< Rose sectors with the radius (not the area) by value.
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -203,11 +209,23 @@ contains
       if (present(format)) series%format = format
       message = readout_check(series%format)
       if (len(message) > 0) error stop 'foresight: plot: '//message
+   elseif (series%style%with == WITH_GAUGE) then
+      series%format = DEFAULT_READOUT_FORMAT
+      if (present(format)) series%format = format
+      message = readout_check(series%format)
+      if (len(message) > 0) error stop 'foresight: plot: '//message
+      if (.not. present(scale)) error stop 'foresight: plot: a gauge needs its scale, the values of its sweep ends'
+      if (.not. (scale(2) /= scale(1))) error stop 'foresight: plot: the gauge scale ends must differ'
+      series%scale = scale
    elseif (present(format)) then
-      error stop 'foresight: plot: format applies to readouts only'
+      error stop 'foresight: plot: format applies to readouts and gauges only'
    endif
+   ! the panel charts are alone in their panel: several gauges or radars side by side, one pie or rose
    if (size(self%series) > 0) then
-      if (self%series(1)%style%with == WITH_PIE) error stop 'foresight: plot: a pie is alone in its panel'
+      if (is_panel_chart(self%series(1)%style%with) .or. is_panel_chart(series%style%with)) then
+         if (series%style%with /= self%series(1)%style%with .or. series%style%with == WITH_PIE .or. &
+             series%style%with == WITH_ROSE) error stop 'foresight: plot: a pie, gauge, radar or rose is alone in its panel'
+      endif
    endif
    if (series%style%fills()) then
       series%style%fill = self%fill_default%fill
@@ -219,8 +237,8 @@ contains
          call fill_style(fs, series%style, bad)
          if (len(bad) > 0) error stop 'foresight: plot: unsupported fill style "'//bad//'"'
       endif
-      if (series%style%with == WITH_PIE .and. series%style%fill == FILL_EMPTY) then
-         ! a pie is filled, as a filled curve
+      if (any(series%style%with == [WITH_PIE, WITH_GAUGE, WITH_ROSE]) .and. series%style%fill == FILL_EMPTY) then
+         ! a pie, a gauge, a rose are filled, as a filled curve
          series%style%fill = FILL_SOLID
          series%style%density = 1.0_R8P
       endif
@@ -260,6 +278,10 @@ contains
          series%donut = donut
       endif
       series%values = y
+   case (WITH_ROSE)
+      if (any(y < 0.0_R8P)) error stop 'foresight: plot: a rose needs non-negative values'
+      series%values = y
+      if (present(linear)) series%linear = linear
    case (WITH_HISTOGRAMS)
       if (present(base) .or. present(ylow) .or. present(width)) &
          error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
@@ -432,14 +454,23 @@ contains
 
    if (.not. allocated(self%series)) allocate(self%series(0))
    if (size(self%series) > 0) then
-      if (self%series(1)%style%with == WITH_PIE) then
-         ! a pie alone: no axes, the pie and its key fill the panel below the title
+      if (is_panel_chart(self%series(1)%style%with)) then
+         ! a panel chart alone: no axes, the chart and its key fill the panel below the title
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
             call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
             area(3) = area(3) + LINE_HEIGHT * font_size + GAP
          endif
-         call self%draw_pie(backend, area, font_size)
+         select case (self%series(1)%style%with)
+         case (WITH_PIE)
+            call self%draw_pie(backend, area, font_size)
+         case (WITH_GAUGE)
+            call self%draw_gauges(backend, area, font_size)
+         case (WITH_RADAR)
+            call self%draw_radar(backend, area, font_size)
+         case default
+            call self%draw_rose(backend, area, font_size)
+         endselect
          return
       endif
       if (all([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) then
@@ -1374,6 +1405,314 @@ contains
       color = default_color(k)
       endfunction slice_color
    endsubroutine draw_pie
+
+   subroutine draw_gauges(self, backend, box, font_size)
+   !< Gauges side by side in the box (left, right, top, bottom) [px], one per series: a track of 270 degrees from 7:30
+   !< clockwise to 4:30, faint, lit from its start to the last finite value over the gauge scale (in `segments` cells
+   !< if set, a cell lit when covered at least half); the scale ticks outside, the value in seven-segment digits under
+   !< the centre, titled by the series.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P), parameter                 :: START = 225.0_R8P !< Sweep start [deg, counterclockwise from 3 o'clock].
+   real(R8P), parameter                 :: SWEEP = 270.0_R8P !< Sweep [deg], clockwise.
+   real(R8P), parameter                 :: DEG = 4.0_R8P * atan(1.0_R8P) / 180.0_R8P !< Degrees to radians.
+   type(tick_object), allocatable       :: ticks(:)  !< Scale ticks.
+   integer(I4P), allocatable            :: masks(:)  !< Digit cells.
+   character(len=:), allocatable        :: prefix    !< Text before the digits.
+   character(len=:), allocatable        :: suffix    !< Text after the digits.
+   real(R8P), allocatable               :: px(:)     !< Outline [px from the centre].
+   real(R8P), allocatable               :: py(:)     !< Outline [px from the centre, upward].
+   real(R8P)                            :: cell      !< Width of a gauge [px].
+   real(R8P)                            :: r         !< Track outer radius [px].
+   real(R8P)                            :: c(2)      !< Gauge centre [px].
+   real(R8P)                            :: t         !< Lit fraction of the sweep.
+   real(R8P)                            :: value     !< Reading.
+   real(R8P)                            :: a         !< Angle [deg].
+   real(R8P)                            :: lo        !< Scale start.
+   real(R8P)                            :: hi        !< Scale end.
+   real(R8P)                            :: ext(2)    !< Digits size [px].
+   real(R8P)                            :: hd        !< Digit height [px].
+   real(R8P)                            :: gap       !< Gap between cells [deg].
+   integer(I4P)                         :: g         !< Gauge counter.
+   integer(I4P)                         :: k         !< Counter.
+
+   cell = (box(2) - box(1)) / real(size(self%series), R8P)
+   r = min(0.36_R8P * cell, (box(4) - box(3)) / 2.6_R8P)
+   call backend%begin_group('fs-gauges')
+   do g = 1_I4P, size(self%series, kind=I4P)
+      associate(series => self%series(g))
+         c = [box(1) + (real(g, R8P) - 0.5_R8P) * cell, box(3) + 1.35_R8P * r]
+         lo = series%scale(1)
+         hi = series%scale(2)
+         value = last_finite(series%y)
+         t = 0.0_R8P
+         if (ieee_is_finite(value)) t = min(1.0_R8P, max(0.0_R8P, (value - lo) / (hi - lo)))
+         if (series%style%segments > 0_I4P) then
+            gap = 0.08_R8P * SWEEP / real(series%style%segments, R8P)
+            do k = 0_I4P, series%style%segments - 1_I4P
+               call outline(r, 0.78_R8P * r, START - SWEEP * real(k + 1_I4P, R8P) / real(series%style%segments, R8P) + gap, &
+                            START - SWEEP * real(k, R8P) / real(series%style%segments, R8P) - gap, px, py)
+               if (t * real(series%style%segments, R8P) >= real(k, R8P) + 0.5_R8P) then
+                  call backend%polygon(c(1) + px, c(2) - py, series%style%fill_color(), series%style%density, 'none', &
+                                       0.0_R8P)
+               else
+                  call backend%polygon(c(1) + px, c(2) - py, series%style%color, 1.0_R8P, 'none', 0.0_R8P, ghost=.true.)
+               endif
+            enddo
+         else
+            call outline(r, 0.78_R8P * r, START - SWEEP, START, px, py)
+            call backend%polygon(c(1) + px, c(2) - py, series%style%color, 1.0_R8P, 'none', 0.0_R8P, ghost=.true.)
+            if (t > 0.0_R8P) then
+               call outline(r, 0.78_R8P * r, START - SWEEP * t, START, px, py)
+               call backend%polygon(c(1) + px, c(2) - py, series%style%fill_color(), series%style%density, 'none', 0.0_R8P)
+            endif
+         endif
+         ! the scale: ticks outside the track, never extended beyond its ends
+         a = min(lo, hi)
+         t = max(lo, hi)
+         call linear_ticks(a, t, SWEEP * DEG * r, .false., .false., ticks)
+         do k = 1_I4P, size(ticks, kind=I4P)
+            a = (START - SWEEP * (ticks(k)%value - lo) / (hi - lo)) * DEG
+            call backend%polyline([c(1) + 1.03_R8P * r * cos(a), c(1) + 1.12_R8P * r * cos(a)], &
+                                  [c(2) - 1.03_R8P * r * sin(a), c(2) - 1.12_R8P * r * sin(a)], FRAME_COLOR, 1.0_R8P, '')
+            call backend%text(c(1) + 1.3_R8P * r * cos(a), c(2) - 1.3_R8P * r * sin(a) + 0.35_R8P * font_size, &
+                              ticks(k)%label, 'middle', sup=ticks(k)%sup)
+         enddo
+         ! the reading in digits under the centre, titled by the series
+         call readout_glass(series%format, value, masks, prefix, suffix)
+         hd = max(font_size, 0.24_R8P * r)
+         ext = backend%readout_extent(hd, size(masks, kind=I4P), series%title, prefix, suffix, font_size)
+         call backend%readout(c(1) - 0.5_R8P * ext(1), c(2) - 0.15_R8P * r, hd, masks, series%title, prefix, suffix, &
+                              series%style%color, font_size)
+      endassociate
+   enddo
+   call backend%end_group
+   endsubroutine draw_gauges
+
+   subroutine draw_radar(self, backend, box, font_size)
+   !< A radar (spider) chart in the box (left, right, top, bottom) [px]: a spoke per row, from 12 o'clock clockwise,
+   !< named by the `xtic` labels of the first series having them; rings at the ticks of the common radial scale (from 0,
+   !< or the smallest value if negative, extended to a tick); a polygon per series; the key at the right.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P), parameter                 :: DEG = 4.0_R8P * atan(1.0_R8P) / 180.0_R8P !< Degrees to radians.
+   type(tick_object), allocatable       :: ticks(:)  !< Radial ticks.
+   character(len=:), allocatable        :: names(:)  !< Spoke names.
+   character(len=:), allocatable        :: labels(:) !< Key entries.
+   character(len=:), allocatable        :: colors(:) !< Key colors.
+   real(R8P), allocatable               :: rx(:)     !< Polygon abscissae [px].
+   real(R8P), allocatable               :: ry(:)     !< Polygon ordinates [px].
+   real(R8P)                            :: lo        !< Radial scale start.
+   real(R8P)                            :: hi        !< Radial scale end.
+   real(R8P)                            :: key_width !< Key width [px].
+   real(R8P)                            :: radius    !< Chart radius [px].
+   real(R8P)                            :: c(2)      !< Centre [px].
+   real(R8P)                            :: a         !< Spoke angle [rad].
+   real(R8P)                            :: f         !< Radial fraction.
+   integer(I4P)                         :: m         !< Spokes.
+   integer(I4P)                         :: s         !< Series counter.
+   integer(I4P)                         :: k         !< Counter.
+
+   m = 0_I4P
+   lo = 0.0_R8P
+   hi = -huge(1.0_R8P)
+   allocate(character(len=1) :: names(0))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      associate(series => self%series(s))
+         m = max(m, size(series%y, kind=I4P))
+         if (any(ieee_is_finite(series%y))) then
+            lo = min(lo, minval(series%y, mask=ieee_is_finite(series%y)))
+            hi = max(hi, maxval(series%y, mask=ieee_is_finite(series%y)))
+         endif
+         if (size(names) == 0 .and. allocated(series%xlabels)) names = series%xlabels
+      endassociate
+   enddo
+   if (hi <= lo) hi = lo + 1.0_R8P
+   radius = 0.4_R8P * min(box(2) - box(1), box(4) - box(3))
+   call linear_ticks(lo, hi, radius, .false., .true., ticks)
+   allocate(character(len=64) :: labels(size(self%series)), colors(size(self%series)))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      labels(s) = self%series(s)%title
+      colors(s) = self%series(s)%style%color
+   enddo
+   key_width = 0.0_R8P
+   if (self%key) key_width = chart_key_width(backend, labels, font_size)
+   radius = 0.4_R8P * min(box(2) - box(1) - key_width, box(4) - box(3) - 2.0_R8P * LINE_HEIGHT * font_size)
+   c = [0.5_R8P * (box(1) + box(2) - key_width), 0.5_R8P * (box(3) + box(4))]
+   call backend%begin_group('fs-radar')
+   allocate(rx(m), ry(m))
+   ! the web: a ring per tick, a spoke per row with its name
+   do k = 1_I4P, size(ticks, kind=I4P)
+      f = (ticks(k)%value - lo) / (hi - lo)
+      if (f <= 0.0_R8P) cycle
+      call spokes(f * radius)
+      call backend%polygon(rx, ry, 'none', 1.0_R8P, GRID_COLOR, 0.5_R8P)
+      call backend%text(c(1) + 0.3_R8P * font_size, c(2) - f * radius - 0.2_R8P * font_size, ticks(k)%label, 'start', &
+                        sup=ticks(k)%sup)
+   enddo
+   do k = 1_I4P, m
+      a = (90.0_R8P - 360.0_R8P * real(k - 1_I4P, R8P) / real(m, R8P)) * DEG
+      call backend%polyline([c(1), c(1) + radius * cos(a)], [c(2), c(2) - radius * sin(a)], GRID_COLOR, 0.5_R8P, '')
+      if (k <= size(names)) call backend%text(c(1) + 1.18_R8P * radius * cos(a), &
+                                              c(2) - 1.18_R8P * radius * sin(a) + 0.35_R8P * font_size, trim(names(k)), &
+                                              merge('start ', merge('end   ', 'middle', cos(a) < -0.2_R8P), &
+                                                    cos(a) > 0.2_R8P))
+   enddo
+   ! a polygon per series, its undefined values at the centre
+   do s = 1_I4P, size(self%series, kind=I4P)
+      associate(series => self%series(s))
+         do k = 1_I4P, m
+            a = (90.0_R8P - 360.0_R8P * real(k - 1_I4P, R8P) / real(m, R8P)) * DEG
+            f = 0.0_R8P
+            if (k <= size(series%y)) then
+               if (ieee_is_finite(series%y(k))) f = (series%y(k) - lo) / (hi - lo)
+            endif
+            rx(k) = c(1) + f * radius * cos(a)
+            ry(k) = c(2) - f * radius * sin(a)
+         enddo
+         call backend%polygon(rx, ry, series%style%fill_color(), series%style%density, series%style%color, &
+                              max(1.0_R8P, series%style%linewidth))
+      endassociate
+   enddo
+   if (self%key) call chart_key(backend, box(2), box(3), labels, colors, 1.0_R8P, font_size)
+   call backend%end_group
+   contains
+      subroutine spokes(rr)
+      !< The ring of radius `rr` through the spokes, into `rx`, `ry`.
+      real(R8P), intent(in) :: rr !< Ring radius [px].
+      integer(I4P)          :: j  !< Spoke counter.
+
+      do j = 1_I4P, m
+         a = (90.0_R8P - 360.0_R8P * real(j - 1_I4P, R8P) / real(m, R8P)) * DEG
+         rx(j) = c(1) + rr * cos(a)
+         ry(j) = c(2) - rr * sin(a)
+      enddo
+      endsubroutine spokes
+   endsubroutine draw_radar
+
+   subroutine draw_rose(self, backend, box, font_size)
+   !< A rose (Nightingale) chart in the box (left, right, top, bottom) [px]: equal sectors from 12 o'clock clockwise, one
+   !< per row in the palette colors, the sector area proportional to the value (its radius with `linear`); rings at the
+   !< ticks of the value scale; the key at the right, the sector names.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(tick_object), allocatable       :: ticks(:)  !< Value ticks.
+   character(len=:), allocatable        :: labels(:) !< Key entries.
+   character(len=:), allocatable        :: colors(:) !< Key colors.
+   real(R8P), allocatable               :: px(:)     !< Outline [px from the centre].
+   real(R8P), allocatable               :: py(:)     !< Outline [px from the centre, upward].
+   real(R8P)                            :: lo        !< Scale start (0).
+   real(R8P)                            :: hi        !< Scale end.
+   real(R8P)                            :: key_width !< Key width [px].
+   real(R8P)                            :: radius    !< Chart radius [px].
+   real(R8P)                            :: c(2)      !< Centre [px].
+   real(R8P)                            :: span      !< Sector angle [deg].
+   integer(I4P)                         :: m         !< Sectors.
+   integer(I4P)                         :: k         !< Counter.
+
+   associate(series => self%series(1))
+      m = size(series%values, kind=I4P)
+      lo = 0.0_R8P
+      hi = 1.0_R8P
+      if (any(ieee_is_finite(series%values))) hi = max(hi * tiny(1.0_R8P), maxval(series%values, &
+                                                                                  mask=ieee_is_finite(series%values)))
+      call linear_ticks(lo, hi, 100.0_R8P, .false., .true., ticks)
+      allocate(character(len=64) :: labels(m), colors(m))
+      do k = 1_I4P, m
+         labels(k) = ''
+         if (allocated(series%xlabels)) labels(k) = trim(series%xlabels(k))
+         colors(k) = default_color(k)
+      enddo
+      key_width = 0.0_R8P
+      if (self%key .and. allocated(series%xlabels)) key_width = chart_key_width(backend, labels, font_size)
+      radius = 0.45_R8P * min(box(2) - box(1) - key_width, box(4) - box(3))
+      c = [0.5_R8P * (box(1) + box(2) - key_width), 0.5_R8P * (box(3) + box(4))]
+      call backend%begin_group('fs-rose')
+      span = 360.0_R8P / real(max(1_I4P, m), R8P)
+      do k = 1_I4P, m
+         if (.not. ieee_is_finite(series%values(k))) cycle
+         if (series%values(k) <= 0.0_R8P) cycle
+         call outline(radius * fraction(series%values(k)), 0.0_R8P, 90.0_R8P - span * real(k, R8P), &
+                      90.0_R8P - span * real(k - 1_I4P, R8P), px, py)
+         call backend%polygon(c(1) + px, c(2) - py, default_color(k), series%style%density, &
+                              merge('white', 'none ', series%style%border), 1.0_R8P)
+      enddo
+      ! the scale over the sectors: rings and their values on the 12 o'clock line
+      do k = 1_I4P, size(ticks, kind=I4P)
+         if (ticks(k)%value <= 0.0_R8P) cycle
+         call outline(radius * fraction(ticks(k)%value), 0.0_R8P, 0.0_R8P, 360.0_R8P, px, py)
+         call backend%polygon(c(1) + px, c(2) - py, 'none', 1.0_R8P, GRID_COLOR, 0.5_R8P)
+         call backend%text(c(1) + 0.3_R8P * font_size, c(2) - radius * fraction(ticks(k)%value) - 0.2_R8P * font_size, &
+                           ticks(k)%label, 'start', sup=ticks(k)%sup)
+      enddo
+      if (self%key .and. allocated(series%xlabels)) call chart_key(backend, box(2), box(3), labels, colors, &
+                                                                   series%style%density, font_size)
+      call backend%end_group
+   endassociate
+   contains
+      pure function fraction(v) result(f)
+      !< Radius fraction of the value `v`: its square root over the scale (the area by value), or linear.
+      real(R8P), intent(in) :: v !< Value.
+      real(R8P)             :: f !< Fraction of the radius.
+
+      if (self%series(1)%linear) then
+         f = v / hi
+      else
+         f = sqrt(max(0.0_R8P, v) / hi)
+      endif
+      endfunction fraction
+   endsubroutine draw_rose
+
+   pure function chart_key_width(backend, labels, font_size) result(width)
+   !< Width of a chart key [px]: the widest entry, a gap, the sample.
+   class(backend_object), intent(in) :: backend   !< Output device.
+   character(len=*),      intent(in) :: labels(:) !< Entries.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: width     !< Width [px].
+   integer(I4P)                      :: k         !< Counter.
+
+   width = 0.0_R8P
+   do k = 1_I4P, size(labels, kind=I4P)
+      width = max(width, backend%text_width(trim(labels(k)), '', font_size))
+   enddo
+   width = width + font_size + GAP + SAMPLE_LENGTH * font_size + GAP
+   endfunction chart_key_width
+
+   subroutine chart_key(backend, right, top, labels, colors, density, font_size)
+   !< A chart key at the top right: an entry per label, a filled sample in its color on the right of its text.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: right     !< Key right side [px].
+   real(R8P),             intent(in)    :: top       !< Key top [px].
+   character(len=*),      intent(in)    :: labels(:) !< Entries.
+   character(len=*),      intent(in)    :: colors(:) !< Sample colors.
+   real(R8P),             intent(in)    :: density   !< Sample opacity.
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P)                            :: yk        !< Row centre [px].
+   integer(I4P)                         :: k         !< Counter.
+
+   do k = 1_I4P, size(labels, kind=I4P)
+      if (len_trim(labels(k)) == 0) cycle
+      yk = top + GAP + (real(k, R8P) - 0.5_R8P) * LINE_HEIGHT * font_size
+      call backend%polygon([right - SAMPLE_LENGTH * font_size, right, right, right - SAMPLE_LENGTH * font_size], &
+                           [yk + 0.35_R8P * font_size, yk + 0.35_R8P * font_size, yk - 0.35_R8P * font_size, &
+                            yk - 0.35_R8P * font_size], trim(colors(k)), density, 'none', 0.0_R8P)
+      call backend%text(right - SAMPLE_LENGTH * font_size - GAP, yk + 0.35_R8P * font_size, trim(labels(k)), 'end')
+   enddo
+   endsubroutine chart_key
+
+   elemental function is_panel_chart(with) result(is)
+   !< Whether the style `with` is a chart alone in its panel, without axes: pie, gauge, radar, rose.
+   integer(I4P), intent(in) :: with !< Style code.
+   logical                  :: is   !< Panel chart.
+
+   is = any(with == [WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE])
+   endfunction is_panel_chart
 
    pure function has_image(self) result(has)
    !< Whether the panel has an image.

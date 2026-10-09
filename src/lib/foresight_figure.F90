@@ -188,7 +188,7 @@ contains
    endsubroutine next_panel
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
-                   xlabels, radius, angles, donut)
+                   xlabels, radius, angles, donut, scale, linear)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -213,6 +213,11 @@ contains
    !< with `angles(:, i)` = start and end [deg, counterclockwise from the x direction]. `with='pie'` (a foresight
    !< extension, alone in its panel) draws the `y` as slices from 12 o'clock clockwise, labelled by `xlabels` with
    !< their percentage in the key; `donut` (0 to below 1) leaves a hole of that fraction of the radius.
+   !<
+   !< Panel charts (foresight extensions, alone in their panel, several of the same kind side by side for gauges and
+   !< radars): `with='gauge'` shows the last finite `y` on a 270-degree sweep over `scale` (its two end values), lit
+   !< in `fs='segments N'` cells if set, the value in digits of `format`; `with='radar'` a polygon over a spoke per
+   !< point, named by `xlabels`; `with='rose'` equal sectors of area by value (radius by value with `linear`).
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -236,12 +241,14 @@ contains
    real(R8P),            intent(in), optional :: radius(:) !< Circle radii [x units].
    real(R8P),            intent(in), optional :: angles(:,:) !< Wedge angles (2, point) [deg].
    real(R8P),            intent(in), optional :: donut    !< Pie hole fraction.
+   real(R8P),            intent(in), optional :: scale(2) !< Gauge scale: the values at the sweep ends.
+   logical,              intent(in), optional :: linear   !< Rose radius by value.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
                                              format=format, width=width, base=base, fs=fs, xlabels=xlabels, &
-                                             radius=radius, angles=angles, donut=donut)
+                                             radius=radius, angles=angles, donut=donut, scale=scale, linear=linear)
    endsubroutine plot
 
    subroutine save(self, file)

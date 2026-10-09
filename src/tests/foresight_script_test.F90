@@ -8,7 +8,8 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, &
+use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
+                            WITH_ROSE, &
                             WITH_HISTOGRAMS, WITH_LINES, &
                             WITH_LINESPOINTS, &
                             WITH_POINTS, WITH_READOUT
@@ -30,7 +31,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(61)                           !< Per-check outcome.
+logical                       :: test_passed(63)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -388,7 +389,7 @@ call interpreter%run_text('unset readout', iostat, iomsg)
 test_passed(46) = test_passed(46) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%readout
 ! readout errors
 call interpreter%run_text("plot '"//data_file//"' w l format '%5.2f'", iostat, iomsg)
-test_passed(47) = iostat /= 0_I4P .and. index(iomsg, 'format applies to readouts only') > 0
+test_passed(47) = iostat /= 0_I4P .and. index(iomsg, 'format applies to readouts and gauges only') > 0
 call interpreter%run_text("plot '"//data_file//"' w readout lw 2", iostat, iomsg)
 test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'a readout takes lc only') > 0
 call interpreter%run_text("plot '"//data_file//"' w readout format '%.2e'", iostat, iomsg)
@@ -442,7 +443,7 @@ if (test_passed(49)) then
 endif
 ! fill errors
 call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
-test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes, filledcurves, histograms, circles and pie only') > 0
+test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'circles and the panel charts only') > 0
 call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
@@ -592,9 +593,40 @@ close(unit)
 call interpreter%run_text("plot '"//data_file//"' u 1 w pie", iostat, iomsg)
 test_passed(61) = iostat /= 0_I4P .and. index(iomsg, 'a pie needs non-negative values') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2 w pie, '' u 2 w lines", iostat, iomsg)
-test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'a pie is alone in its panel') > 0
+test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'a pie, gauge, radar or rose is alone in its panel') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2 w pie donut 1.2", iostat, iomsg)
 test_passed(61) = test_passed(61) .and. iostat /= 0_I4P .and. index(iomsg, 'from 0 to below 1') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
+! panel charts: gauges side by side (range, cells, format), a radar, a rose by radius
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') 'a 1 2', 'b 3 4', 'c 5 6'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot '"//data_file//"' u 2 w gauge range [0:10] segments 12 format '%4.1f' t 'A', "// &
+                          "'' u 3 w gauge range [0:8] t 'B'", iostat, iomsg)
+test_passed(62) = iostat == 0_I4P
+if (test_passed(62)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(62) = panel%series(1)%style%with == WITH_GAUGE .and. same(panel%series(1)%scale, [0, 10]) .and. &
+                        panel%series(1)%style%segments == 12_I4P .and. panel%series(1)%format == '%4.1f' .and. &
+                        same(panel%series(2)%scale, [0, 8]) .and. panel%series(2)%style%segments == 0_I4P
+   endassociate
+endif
+call interpreter%run_text("plot '"//data_file//"' u 2:xtic(1) w rose linear", iostat, iomsg)
+test_passed(62) = test_passed(62) .and. iostat == 0_I4P
+if (test_passed(62)) test_passed(62) = interpreter%figure%panels(1)%series(1)%style%with == WITH_ROSE .and. &
+                                       interpreter%figure%panels(1)%series(1)%linear
+call interpreter%run_text("plot '"//data_file//"' u 2:xtic(1) w radar, '' u 3 w radar", iostat, iomsg)
+test_passed(62) = test_passed(62) .and. iostat == 0_I4P
+! panel chart errors
+call interpreter%run_text("plot '"//data_file//"' u 2 w gauge", iostat, iomsg)
+test_passed(63) = iostat /= 0_I4P .and. index(iomsg, 'a gauge needs its scale') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2 w gauge range [0:1], '' u 3 w radar", iostat, iomsg)
+test_passed(63) = test_passed(63) .and. iostat /= 0_I4P .and. index(iomsg, 'is alone in its panel') > 0
+call interpreter%run_text("plot '"//data_file//"' u (-$2) w rose", iostat, iomsg)
+test_passed(63) = test_passed(63) .and. iostat /= 0_I4P .and. index(iomsg, 'a rose needs non-negative values') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -610,7 +642,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,61L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,63L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

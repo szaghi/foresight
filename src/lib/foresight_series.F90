@@ -27,6 +27,8 @@ type :: series_object
    real(R8P), allocatable        :: arcs(:,:) !< Start and end angles of wedges (2, point) [deg, counterclockwise from
                                               !< the x direction]; unallocated for whole circles.
    real(R8P)                     :: donut = 0.0_R8P !< Inner radius of a pie, a fraction of its radius (0: a pie).
+   real(R8P)                     :: scale(2) = [0.0_R8P, 1.0_R8P] !< Value range of a gauge: start and end of its sweep.
+   logical                       :: linear = .false. !< Rose sectors with the radius (not the area) by value.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    contains

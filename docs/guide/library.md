@@ -27,7 +27,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels], [radius], [angles], [donut])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels], [radius], [angles], [donut], [scale], [linear])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
@@ -56,9 +56,11 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Argument | Meaning | Default |
 |---|---|---|
 | `title` | key entry; empty for none | none |
-| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `circles`, `pie` ([Circles and pies](gnuplot-subset#circles-pies-and-donuts)); `gauge`, `radar`, `rose` ([Gauges](gnuplot-subset#gauges-radars-and-roses)); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `histograms` ([Histograms](gnuplot-subset#histograms)), the rows at `x`; `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
 | `radius`, `angles` | circles only: radii [x units] (NaN: the default), and `angles(2, n)` start and end of wedges [deg] | 2% of the plot width; whole circles |
 | `donut` | pie only (`with='pie'`): the hole, a fraction of the radius | 0, a pie |
+| `scale` | gauge only (`with='gauge'`): the values at the ends of the sweep, `[0._R8P, 8000._R8P]`; cells with `fs='segments N'` | required |
+| `linear` | rose only (`with='rose'`): the radius, not the area, by value | `.false.` |
 | `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |
