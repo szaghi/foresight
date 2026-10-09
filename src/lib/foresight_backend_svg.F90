@@ -51,12 +51,14 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: rect
       procedure, pass(self) :: polyline
       procedure, pass(self) :: dots
+      procedure, pass(self) :: polygon
       procedure, pass(self) :: text
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
+      procedure, pass(self) :: data_polygon
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
@@ -217,6 +219,21 @@ contains
    call self%write_pairs(x, y, PX_DECIMALS, 'M', 'h0')
    call self%put('"/>')
    endsubroutine dots
+
+   subroutine polygon(self, x, y, fill, opacity, stroke, line_width)
+   !< Closed polygon of the vertices (`x`, `y`) [px], filled and stroked.
+   class(backend_svg), intent(inout) :: self       !< Device.
+   real(R8P),          intent(in)    :: x(:)       !< Vertex abscissae [px].
+   real(R8P),          intent(in)    :: y(:)       !< Vertex ordinates [px].
+   character(len=*),   intent(in)    :: fill       !< Fill color.
+   real(R8P),          intent(in)    :: opacity    !< Fill opacity.
+   character(len=*),   intent(in)    :: stroke     !< Border color.
+   real(R8P),          intent(in)    :: line_width !< Border width [px].
+
+   write(self%unit, '(A)', advance='no') '<path'//paint(fill, opacity, stroke, line_width)//' d="M'
+   call self%write_pairs(x, y, PX_DECIMALS, '', '')
+   call self%put('Z"/>')
+   endsubroutine polygon
 
    subroutine text(self, x, y, string, anchor, sup, rotate)
    !< Text whose baseline passes through the anchor point (`x`, `y`) [px].
@@ -381,6 +398,23 @@ contains
    enddo
    if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
+
+   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width)
+   !< Closed polygon of the vertices (`x`, `y`) [unit square], clipped by the plot area; its border keeps its pixel width
+   !< under zoom.
+   class(backend_svg), intent(inout) :: self       !< Device.
+   real(R8P),          intent(in)    :: x(:)       !< Vertex abscissae [unit].
+   real(R8P),          intent(in)    :: y(:)       !< Vertex ordinates [unit].
+   character(len=*),   intent(in)    :: fill       !< Fill color.
+   real(R8P),          intent(in)    :: opacity    !< Fill opacity.
+   character(len=*),   intent(in)    :: stroke     !< Border color.
+   real(R8P),          intent(in)    :: line_width !< Border width [px].
+
+   write(self%unit, '(A)', advance='no') '<path'//paint(fill, opacity, stroke, line_width)// &
+                                         ' vector-effect="non-scaling-stroke" d="M'
+   call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
+   call self%put('Z"/>')
+   endsubroutine data_polygon
 
    pure function text_width(self, string, sup, font_size) result(width)
    !< Estimated width of `string` with its superscript `sup` [px]: the viewer renders the glyphs, so a mean advance of
@@ -617,17 +651,17 @@ contains
    case (3_I4P)
       d = plus()//cross()
    case (4_I4P, 5_I4P)
-      d = polygon([-1.0_R8P, 1.0_R8P, 1.0_R8P, -1.0_R8P], [-1.0_R8P, -1.0_R8P, 1.0_R8P, 1.0_R8P])
+      d = outline([-1.0_R8P, 1.0_R8P, 1.0_R8P, -1.0_R8P], [-1.0_R8P, -1.0_R8P, 1.0_R8P, 1.0_R8P])
    case (6_I4P, 7_I4P)
       d = circle(r)
    case (8_I4P, 9_I4P)
-      d = polygon([0.0_R8P, -1.33_R8P, 1.33_R8P], [-1.33_R8P, 0.67_R8P, 0.67_R8P])
+      d = outline([0.0_R8P, -1.33_R8P, 1.33_R8P], [-1.33_R8P, 0.67_R8P, 0.67_R8P])
    case (10_I4P, 11_I4P)
-      d = polygon([0.0_R8P, -1.33_R8P, 1.33_R8P], [1.33_R8P, -0.67_R8P, -0.67_R8P])
+      d = outline([0.0_R8P, -1.33_R8P, 1.33_R8P], [1.33_R8P, -0.67_R8P, -0.67_R8P])
    case (12_I4P, 13_I4P)
-      d = polygon([0.0_R8P, 1.414_R8P, 0.0_R8P, -1.414_R8P], [-1.414_R8P, 0.0_R8P, 1.414_R8P, 0.0_R8P])
+      d = outline([0.0_R8P, 1.414_R8P, 0.0_R8P, -1.414_R8P], [-1.414_R8P, 0.0_R8P, 1.414_R8P, 0.0_R8P])
    case default
-      d = polygon([0.0_R8P, 1.265_R8P, 0.782_R8P, -0.782_R8P, -1.265_R8P], &
+      d = outline([0.0_R8P, 1.265_R8P, 0.782_R8P, -0.782_R8P, -1.265_R8P], &
                   [1.33_R8P, 0.411_R8P, -1.067_R8P, -1.067_R8P, 0.411_R8P])
    endselect
    contains
@@ -655,7 +689,7 @@ contains
           'A'//px(radius)//','//px(radius)//' 0 1 0 '//px(x - radius)//','//px(y)//'Z'
       endfunction circle
 
-      pure function polygon(px_, py_) result(p)
+      pure function outline(px_, py_) result(p)
       !< Closed polygon of the vertices (`px_`, `py_`), in half widths from the centre.
       real(R8P), intent(in)         :: px_(:) !< Vertex abscissae [half width].
       real(R8P), intent(in)         :: py_(:) !< Vertex ordinates [half width].
@@ -667,7 +701,7 @@ contains
          p = p//'L'//px(x + r * px_(k))//','//px(y + r * py_(k))
       enddo
       p = p//'Z'
-      endfunction polygon
+      endfunction outline
    endfunction marker_path
 
    pure function glass_geometry(self, x, y, height, cells, label, prefix, font_size) result(geometry)
@@ -749,6 +783,20 @@ contains
           'L'//px(ox + u)//','//px(v2)//'L'//px(ox + u - h)//','//px(v2 - h)//'L'//px(ox + u - h)//','//px(v1 + h)//'Z'
       endfunction along
    endfunction segment_path
+
+   pure function paint(fill, opacity, stroke, line_width) result(attributes)
+   !< Fill and stroke attributes of a polygon: `fill-opacity` only below 1, the stroke width only with a stroke.
+   character(len=*), intent(in)  :: fill       !< Fill color.
+   real(R8P),        intent(in)  :: opacity    !< Fill opacity.
+   character(len=*), intent(in)  :: stroke     !< Border color.
+   real(R8P),        intent(in)  :: line_width !< Border width [px].
+   character(len=:), allocatable :: attributes !< Attributes, a leading space included.
+
+   attributes = ' fill="'//fill//'"'
+   if (fill /= 'none' .and. opacity < 1.0_R8P) attributes = attributes//' fill-opacity="'//fixed(opacity, 3_I4P)//'"'
+   attributes = attributes//' stroke="'//stroke//'"'
+   if (stroke /= 'none') attributes = attributes//' stroke-width="'//px(line_width)//'" stroke-linejoin="miter"'
+   endfunction paint
 
    pure function dash_attribute(dasharray) result(attribute)
    !< ` stroke-dasharray="..."` attribute, empty for solid lines.

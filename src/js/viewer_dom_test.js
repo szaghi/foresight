@@ -3,7 +3,7 @@
 // the copy embedded in the page) on the tutorial dashboard, docs/public/examples/ch7.html: two
 // panels over the same iterations, with three and one series, markers and error bar caps. Then on
 // a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
-// entry, and neither zoom nor follow mode touch it. The page is parsed by linkedom; the SVG
+// entry, and neither zoom nor follow mode touch it; and boxes.html, boxes hidden by their key entry. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -151,6 +151,16 @@ key("a");
 for (var k = 0; k < 8; k++) wheel(0, {shiftKey: true});
 key("f");
 check("follow leaves the readout", box(0)[3] < 1 && readout.innerHTML === drawn);
+
+// boxes: data geometry like lines; a key entry hides its boxes, a zoom transforms them with the plot
+page = strip(path.join(__dirname, "..", "tests", "golden", "boxes.html"));
+p = load("");
+check("boxes are series paths in the plot area",
+  series(0, 1).querySelectorAll("path").length === 4 && series(0, 1).closest(".fs-plot") !== null);
+fire(entry(0, 1).querySelector("text"), "mousedown", {});
+check("a key entry hides its boxes", series(0, 1).getAttribute("display") === "none");
+wheel(0);
+check("zoom acts on the boxes panel", box(0)[2] < 1);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

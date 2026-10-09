@@ -179,6 +179,23 @@ averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 `block` draws with Unicode characters of 2 x 4 dots (`braille`), 2 x 3 (`sextants`), 2 x 2 (`quadrants`, the default)
 or 1 x 2 (`half`). Add `ansi` (or `ansi256`, `ansirgb`) to draw each series in its color, in `dumb` as well.
 
+## A bar chart
+
+<<< @/examples/snippets/cb_boxes.gp{gnuplot}
+
+<Plot name="cb_boxes" svg :width="560" :height="320" />
+
+Boxes stand on y = 0 and the autoscale reaches 0 and the box edges, unlike gnuplot: bar lengths are proportional to
+the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+
+## A band around a curve
+
+<<< @/examples/snippets/cb_filledcurves.gp{gnuplot}
+
+<Plot name="cb_filledcurves" svg :width="560" :height="320" />
+
+`x:y1:y2` fills between two columns; `filledcurves y=0` fills down to a line.
+
 ## Seven-segment readouts
 
 <<< @/examples/snippets/cb_readout.gp{gnuplot}

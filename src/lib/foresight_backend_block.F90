@@ -8,7 +8,7 @@ module foresight_backend_block
 !< or `braille` (2x4). Text is written over the graphics. Unlike gnuplot, a cell without dots is a blank, Braille
 !< included, so rows trim and copy as text; a point is its dot and the four neighbours. A cell takes the color of the
 !< last series drawn in it.
-use foresight_backend_dumb, only : backend_dumb, FRAME_COLOR, GRID_COLOR
+use foresight_backend_dumb, only : backend_dumb, FRAME_COLOR, GRID_COLOR, scanline
 use penf, only : I4P, R8P
 
 implicit none
@@ -33,6 +33,7 @@ type, extends(backend_dumb) :: backend_block
       procedure, pass(self) :: cell
       procedure, pass(self) :: clear
       procedure, pass(self) :: polyline
+      procedure, pass(self) :: px_fill
       procedure, pass(self) :: px_point
       procedure, pass(self) :: px_segment
       procedure, pass(self) :: rect
@@ -153,6 +154,36 @@ contains
       endif
    enddo
    endsubroutine polyline
+
+   subroutine px_fill(self, x, y, color)
+   !< Fill the dots whose centre lies inside the polygon (`x`, `y`) [px], coloring their cells (even-odd rule).
+   class(backend_block), intent(inout) :: self  !< Device.
+   real(R8P),            intent(in)    :: x(:)  !< Vertex abscissae [px].
+   real(R8P),            intent(in)    :: y(:)  !< Vertex ordinates [px].
+   character(len=*),     intent(in)    :: color !< Fill color.
+   real(R8P), allocatable              :: xs(:) !< Crossings of a dot row.
+   real(R8P)                           :: dw    !< Dot width [px].
+   real(R8P)                           :: dh    !< Dot height [px].
+   integer(I4P)                        :: tint  !< Color index.
+   integer(I4P)                        :: i     !< Dot column.
+   integer(I4P)                        :: j     !< Dot row.
+   integer(I4P)                        :: k     !< Crossing pair counter.
+
+   tint = self%color_index(color)
+   dw = self%cw / real(self%sx, R8P)
+   dh = self%ch / real(self%sy, R8P)
+   do j = dot_index(minval(y), self%ch, self%sy, size(self%dots_on, 2, kind=I4P)), &
+          dot_index(maxval(y), self%ch, self%sy, size(self%dots_on, 2, kind=I4P))
+      xs = scanline(x, y, (real(j, R8P) - 0.5_R8P) * dh)
+      do k = 1_I4P, size(xs, kind=I4P) - 1_I4P, 2_I4P
+         do i = dot_index(xs(k), self%cw, self%sx, size(self%dots_on, 1, kind=I4P)), &
+                dot_index(xs(k + 1_I4P), self%cw, self%sx, size(self%dots_on, 1, kind=I4P))
+            if ((real(i, R8P) - 0.5_R8P) * dw >= xs(k) .and. (real(i, R8P) - 0.5_R8P) * dw <= xs(k + 1_I4P)) &
+               call self%dot(i, j, tint)
+         enddo
+      enddo
+   enddo
+   endsubroutine px_fill
 
    subroutine px_point(self, p, color)
    !< A data point at `p` [px]: its dot and the four neighbours, inside the plot area when in one.

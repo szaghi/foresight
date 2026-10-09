@@ -25,6 +25,9 @@ module foresight_script
 !<   `x:y:xlow:xhigh:ylow:yhigh`); `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
 !<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
+!< - `with boxes` (`using x:y[:width]`, from y = 0), `with filledcurves [closed|y=V]` (`using x:y1:y2` for a band),
+!<   `fs|fillstyle FILL` in an item, `set style fill FILL` (FILL: `empty`, `[transparent] solid [D]`, `border [lc C|-1]`,
+!<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
 !< - foresight extensions: `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
@@ -42,7 +45,7 @@ use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
-use foresight_style, only : default_color
+use foresight_style, only : default_color, fill_style, style_object
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -293,6 +296,9 @@ contains
    character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
+   character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
+   real(R8P),        allocatable                :: base      !< Baseline of `filledcurves y=V`, unallocated if none.
+   real(R8P),        allocatable                :: widths(:) !< Box widths, `using x:y:width`.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -380,6 +386,8 @@ contains
       axes = 'x1y1'
       filter = ''
       if (allocated(format)) deallocate(format)
+      if (allocated(fs)) deallocate(fs)
+      if (allocated(base)) deallocate(base)
       shaping = ''
       line = line_style_object()
       i = i + 1_I4P
@@ -410,12 +418,33 @@ contains
             with = canonical_style(word)
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: lines, points, linespoints, yerrorbars, '// &
-                         'xerrorbars, xyerrorbars, readout)', iostat, iomsg)
+                         'xerrorbars, xyerrorbars, boxes, filledcurves, readout)', iostat, iomsg)
                return
             endif
             if (is_function .and. .not. function_drawable(with)) then
                call fail('plot: a function is drawn with lines, points or linespoints, not '//with, iostat, iomsg)
                return
+            endif
+            if (with == 'filledcurves' .and. i < size(tokens, kind=I4P)) then
+               ! the fill option: closed (the default) or y=V; gnuplot's others are not supported
+               if (tokens(i + 1_I4P)%kind == TOKEN_WORD) then
+                  word = tokens(i + 1_I4P)%text
+                  if (word == 'closed') then
+                     i = i + 1_I4P
+                  elseif (index(word, 'y=') == 1) then
+                     i = i + 1_I4P
+                     allocate(base)
+                     if (.not. to_number(word(3:), base)) then
+                        call fail('plot: filledcurves y=V needs a number, found "'//word//'"', iostat, iomsg)
+                        return
+                     endif
+                  elseif (is_word(word, 'x1 x2 y1 y2 above below') .or. index(word, 'x=') == 1 .or. &
+                          index(word, 'xy=') == 1 .or. index(word, 'y1=') == 1 .or. index(word, 'y2=') == 1) then
+                     call fail('plot: filledcurves '//word//' is not supported (closed, y=V or a band x:y1:y2 are)', &
+                               iostat, iomsg)
+                     return
+                  endif
+               endif
             endif
          elseif (keyword(word, 'smooth', 1_I4P)) then
             if (.not. next_word(tokens, i, filter, iostat, iomsg)) return
@@ -427,6 +456,9 @@ contains
                call fail('plot: smooth applies to data files, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
+         elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
+            call fill_words(fs)
+            if (iostat /= 0_I4P) return
          elseif (word == 'format') then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -502,6 +534,10 @@ contains
          call fail('plot: format applies to readouts only (with readout)', iostat, iomsg)
          return
       endif
+      if (allocated(fs) .and. with /= 'boxes' .and. with /= 'filledcurves') then
+         call fail('plot: fs applies to boxes and filledcurves only', iostat, iomsg)
+         return
+      endif
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') title = written
@@ -550,6 +586,21 @@ contains
             call fail('plot: xyerrorbars needs using x:y:dx:dy or x:y:xlow:xhigh:ylow:yhigh', iostat, iomsg)
             return
          endif
+      case ('boxes')
+         if (nbar > 1_I4P) then
+            call fail('plot: boxes needs using x:y or x:y:width', iostat, iomsg)
+            return
+         endif
+      case ('filledcurves')
+         if (nbar > 1_I4P) then
+            call fail('plot: filledcurves needs using x:y or x:y1:y2', iostat, iomsg)
+            return
+         endif
+         if (nbar == 1_I4P .and. allocated(base)) then
+            call fail('plot: filledcurves y=V fills to a line, a band x:y1:y2 between two curves: not both', &
+                      iostat, iomsg)
+            return
+         endif
       case default
          if (nbar /= 0_I4P) then
             call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
@@ -594,8 +645,14 @@ contains
          endassociate
       endif
       if (allocated(xlow)) deallocate(xlow, xhigh)
-      if (allocated(ylow)) deallocate(ylow, yhigh)
+      if (allocated(ylow)) deallocate(ylow)
+      if (allocated(yhigh)) deallocate(yhigh)
+      if (allocated(widths)) deallocate(widths)
       select case (with)
+      case ('boxes')
+         if (nbar == 1_I4P) widths = values(:, 3)
+      case ('filledcurves')
+         if (nbar == 1_I4P) ylow = values(:, 3)
       case ('yerrorbars')
          if (nbar == 1_I4P) then
             ylow = y - values(:, 3)
@@ -629,6 +686,12 @@ contains
       if (with == 'readout') then
          ! a line style may carry widths and sizes: a readout keeps its color only
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, format=format)
+      elseif (with == 'boxes' .or. with == 'filledcurves') then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
+                               width=widths, base=base, fs=fs)
       else
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt)
@@ -643,6 +706,49 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine fill_words(words)
+      !< Fill style words of an item after `fs`, up to the next item option or comma: `empty`, `transparent`, `solid`
+      !< and its density, `border` and its color (`lc [rgb] C`, `-1`), `noborder`, `pattern` (refused later).
+      character(len=:), allocatable, intent(out) :: words !< Fill style words.
+      character(len=:), allocatable              :: w     !< Current word.
+      character(len=:), allocatable              :: prev  !< Previous word.
+      real(R8P)                                  :: v     !< Number.
+
+      words = ''
+      prev = ''
+      do while (i < size(tokens, kind=I4P))
+         if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) exit
+         w = tokens(i + 1_I4P)%text
+         if (tokens(i + 1_I4P)%kind == TOKEN_STRING .or. prev == 'rgb' .or. prev == 'rgbcolor' .or. &
+             ((prev == 'lc' .or. prev == 'linecolor') .and. w /= 'rgb' .and. w /= 'rgbcolor')) then
+            ! a color: only after lc or rgb
+            if (.not. (prev == 'lc' .or. prev == 'linecolor' .or. prev == 'rgb' .or. prev == 'rgbcolor')) exit
+         elseif (is_word(w, 'empty transparent solid border noborder pattern')) then
+         elseif ((w == 'lc' .or. w == 'linecolor') .and. prev == 'border') then
+         elseif ((w == 'rgb' .or. w == 'rgbcolor') .and. (prev == 'lc' .or. prev == 'linecolor')) then
+         elseif (to_number(w, v) .and. (prev == 'solid' .or. prev == 'border' .or. prev == 'pattern')) then
+         else
+            exit
+         endif
+         words = words//' '//w
+         prev = w
+         i = i + 1_I4P
+      enddo
+      if (len(words) == 0) call fail('plot: fs needs a fill style (empty, solid D, border, noborder)', iostat, iomsg)
+      endsubroutine fill_words
+
+      function fill_ok(words) result(ok)
+      !< Whether the fill style `words` are understood; fails the plot if not.
+      character(len=*), intent(in)  :: words !< Fill style words.
+      logical                       :: ok    !< Understood.
+      type(style_object)            :: probe !< Style the words are tried on.
+      character(len=:), allocatable :: bad   !< Unknown word.
+
+      call fill_style(words, probe, bad)
+      ok = len(bad) == 0
+      if (.not. ok) call fail('plot: unsupported fill style "'//bad//'"', iostat, iomsg)
+      endfunction fill_ok
+
       function header_title(set) result(name)
       !< Header of the column titling the item in dataset `set`: `title_column`, or the first column the y field reads;
       !< empty if none, as gnuplot.
@@ -807,6 +913,8 @@ contains
       call key_option
    elseif (option == 'readout') then
       call readout_option
+   elseif (keyword(option, 'boxwidth', 3_I4P)) then
+      call boxwidth_option
    elseif (keyword(option, 'output', 2_I4P)) then
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) then
@@ -1044,6 +1152,33 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine boxwidth_option
+      !< `set boxwidth [W] [absolute|relative]`: no width restores the default, boxes touching.
+      real(R8P), allocatable :: width    !< Width.
+      logical                :: relative !< Relative width.
+      real(R8P)              :: v        !< Parsed number.
+
+      relative = .false.
+      do i = 2_I4P, size(tokens, kind=I4P)
+         if (keyword(tokens(i)%text, 'absolute', 1_I4P)) then
+            relative = .false.
+         elseif (keyword(tokens(i)%text, 'relative', 1_I4P)) then
+            relative = .true.
+         elseif (i == 2_I4P .and. to_number(tokens(i)%text, v)) then
+            if (v < 0.0_R8P) then
+               call fail('set boxwidth: the width must not be negative', iostat, iomsg)
+               return
+            endif
+            width = v
+         else
+            call fail('set boxwidth: unsupported option "'//tokens(i)%text//'" (W [absolute|relative] expected)', &
+                      iostat, iomsg)
+            return
+         endif
+      enddo
+      call self%figure%set_boxwidth(width, relative)
+      endsubroutine boxwidth_option
 
       subroutine readout_option
       !< `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical] [opaque|noopaque]
@@ -1296,6 +1431,24 @@ contains
             endif
             self%data_style = with
             return
+         elseif (keyword(tokens(2)%text, 'fill', 2_I4P)) then
+            block
+               type(style_object)            :: probe !< Style the words are tried on.
+               character(len=:), allocatable :: words !< Fill style words.
+               character(len=:), allocatable :: bad   !< Unknown word.
+
+               words = ''
+               do s = 3_I4P, size(tokens, kind=I4P)
+                  words = words//' '//tokens(s)%text
+               enddo
+               call fill_style(words, probe, bad)
+               if (len(bad) > 0) then
+                  call fail('set style fill: unsupported option "'//bad//'"', iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_style_fill(words)
+            endblock
+            return
          elseif (keyword(tokens(2)%text, 'function', 1_I4P)) then
             if (size(tokens) /= 3) then
                call fail('set style function: one style is expected', iostat, iomsg)
@@ -1342,7 +1495,8 @@ contains
             return
          endif
       endif
-      call fail('set style: only "data STYLE", "function STYLE" and "line N ..." are supported', iostat, iomsg)
+      call fail('set style: only "data STYLE", "function STYLE", "line N ..." and "fill ..." are supported', iostat, &
+                iomsg)
       endsubroutine style_option
    endsubroutine set_command
 
@@ -1411,6 +1565,8 @@ contains
       call self%figure%set_key(.false.)
    elseif (option == 'readout') then
       call self%figure%set_readout(.false.)
+   elseif (keyword(option, 'boxwidth', 3_I4P)) then
+      call self%figure%set_boxwidth()
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then
@@ -1488,6 +1644,10 @@ contains
       style = 'xyerrorbars'
    case ('readout')
       style = 'readout'
+   case ('boxes')
+      style = 'boxes'
+   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
+      style = 'filledcurves'
    case default
       style = ''
    endselect
@@ -1797,7 +1957,8 @@ contains
    is = keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. keyword(word, 'every', 2_I4P) .or. &
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
-        keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format'
+        keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
+        keyword(word, 'fillstyle', 5_I4P)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

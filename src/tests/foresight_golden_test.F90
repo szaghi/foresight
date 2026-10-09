@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(14)                  !< Per-figure outcome.
+logical                     :: test_passed(21)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -31,7 +31,15 @@ test_passed(12) = check('readout_block.txt', figure_readout_block())
 test_passed(13) = check('readout_row.svg', figure_readout_row())
 ! also the page of the viewer DOM test of readouts (src/js/viewer_dom_test.js)
 test_passed(14) = check('readout_mixed.html', figure_readout_mixed())
-write(output_unit, '(A,14L2)') 'foresight golden checks:', test_passed
+test_passed(15) = check('boxes.svg', figure_boxes())
+test_passed(16) = check('boxes.txt', figure_boxes())
+test_passed(17) = check('boxes_relative.svg', figure_boxes_relative())
+test_passed(18) = check('fills.svg', figure_fills())
+test_passed(19) = check('fills.txt', figure_fills())
+test_passed(20) = check('fills_block.txt', figure_fills_block())
+! also the page of the viewer DOM test of boxes (src/js/viewer_dom_test.js)
+test_passed(21) = check('boxes.html', figure_boxes())
+write(output_unit, '(A,21L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -188,6 +196,58 @@ contains
    call fig%plot(x, x, title='N', with='readout', format='%3.0f')
    call fig%plot(x, sqrt(x), title='ROOT', with='readout', format='%6.3f')
    endfunction figure_readout_row
+
+   function figure_boxes() result(fig)
+   !< Boxes: touching (auto width, uneven x), from y = 0 with a negative value, x autoscaled to the box edges (unlike
+   !< gnuplot), y to 0; a second series with its own widths, solid without border; key samples.
+   type(figure_object) :: fig !< Figure.
+
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_title('Boxes')
+   call fig%plot([1.0_R8P, 2.0_R8P, 4.0_R8P, 5.0_R8P], [3.0_R8P, 5.0_R8P, -2.0_R8P, 4.0_R8P], title='auto', &
+                 with='boxes', fs='solid 0.4')
+   call fig%plot([1.3_R8P, 2.3_R8P, 4.3_R8P, 5.3_R8P], [1.5_R8P, 2.5_R8P, -1.0_R8P, 2.0_R8P], title='width', &
+                 with='boxes', width=[0.3_R8P, 0.3_R8P, 0.3_R8P, 0.3_R8P], fs='solid noborder')
+   endfunction figure_boxes
+
+   function figure_boxes_relative() result(fig)
+   !< Boxes at 60% of the auto width, positive values only (y still from 0), empty with a black border.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=420_I4P, height=300_I4P)
+   x = [(real(i, R8P), i = 1, 6)]
+   call fig%set_boxwidth(0.6_R8P, relative=.true.)
+   call fig%set_style_fill('empty border lc "black"')
+   call fig%plot(x, 10.0_R8P + x, title='counts', with='boxes')
+   endfunction figure_boxes_relative
+
+   function figure_fills() result(fig)
+   !< filledcurves: down to y = 0.5, a band split by a NaN, a closed polygon; never a border, filled even when the fill
+   !< style is empty (as gnuplot).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   real(R8P), allocatable :: lo(:) !< Band lower curve.
+   integer(I4P)           :: i    !< Counter.
+
+   call fig%init(width=500_I4P, height=320_I4P)
+   x = [(0.25_R8P * real(i, R8P), i = 0, 40)]
+   lo = sin(x) + 2.0_R8P
+   lo(20) = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call fig%plot(x, sin(x), title='to 0.5', with='filledcurves', base=0.5_R8P, fs='solid 0.3')
+   call fig%plot(x, lo + 0.5_R8P, ylow=lo, title='band', with='filledcurves')
+   call fig%plot([7.0_R8P, 9.0_R8P, 8.0_R8P], [-1.0_R8P, -1.0_R8P, 0.5_R8P], title='closed', with='filledc', &
+                 fs='transparent solid 0.5')
+   endfunction figure_fills
+
+   function figure_fills_block() result(fig)
+   !< The fills on the block device with ANSI colors.
+   type(figure_object) :: fig !< Figure.
+
+   fig = figure_fills()
+   call fig%set_text(charset='quadrants', colors='ansi')
+   endfunction figure_fills_block
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

@@ -1,15 +1,22 @@
-!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`).
+!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`, `fs`).
 module foresight_style
-!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`).
+!< foresight_style, series drawing style (gnuplot `with`, `lc`, `lw`, `dt`, `pt`, `ps`, `fs`).
+!<
+!< Filled styles (`boxes`, `filledcurves`) take gnuplot's fill style: `empty` (the default, the border only), `solid D`
+!< (the line color at opacity D, 1 by default; `transparent` before it changes nothing in SVG, as gnuplot's svg
+!< terminal), with a `border` in the line color, another color (`border lc "c"`, `border -1` black) or `noborder`.
 use penf, only : I4P, R8P
-use foresight_format, only : fixed
+use foresight_format, only : fixed, real_from_decimal
 
 implicit none
 private
 public :: default_color
+public :: fill_style
 public :: style_object
 public :: style_with
-public :: WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS
+public :: WITH_BOXES, WITH_FILLEDCURVES, WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_XERRORBARS, &
+          WITH_XYERRORBARS, WITH_YERRORBARS
+public :: FILL_EMPTY, FILL_SOLID
 
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
 integer(I4P), parameter :: WITH_POINTS      = 2_I4P !< gnuplot `with points`.
@@ -18,6 +25,10 @@ integer(I4P), parameter :: WITH_YERRORBARS  = 4_I4P !< gnuplot `with yerrorbars`
 integer(I4P), parameter :: WITH_XERRORBARS  = 5_I4P !< gnuplot `with xerrorbars`.
 integer(I4P), parameter :: WITH_XYERRORBARS = 6_I4P !< gnuplot `with xyerrorbars`.
 integer(I4P), parameter :: WITH_READOUT     = 7_I4P !< foresight `with readout`: the last value in seven-segment digits.
+integer(I4P), parameter :: WITH_BOXES       = 8_I4P !< gnuplot `with boxes`.
+integer(I4P), parameter :: WITH_FILLEDCURVES = 9_I4P !< gnuplot `with filledcurves`.
+integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
+integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
 
 character(len=7), parameter :: PALETTE(8) = ['#9400d3', '#009e73', '#56b4e9', '#e69f00', &
                                              '#f0e442', '#0072b2', '#e51e10', '#000000'] !< gnuplot 5 line colors.
@@ -33,9 +44,16 @@ type :: style_object
    real(R8P)                     :: pointsize = 1.0_R8P    !< Point size scale factor.
    integer(I4P)                  :: pointtype = -1_I4P     !< gnuplot point type: 0 a dot, 1.. the shapes (cycling every
                                                            !< 15); negative for foresight's round dot.
+   integer(I4P)                  :: fill      = FILL_EMPTY !< Fill of filled styles.
+   real(R8P)                     :: density   = 1.0_R8P    !< Fill opacity, solid fills.
+   logical                       :: border    = .true.     !< Border of filled styles.
+   character(len=:), allocatable :: border_color           !< Border color, empty for the line color.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
+      procedure, pass(self) :: fills          !< Whether the style is a filled one.
+      procedure, pass(self) :: fill_color     !< Fill color, `none` if empty.
+      procedure, pass(self) :: stroke_color   !< Border color of a filled style, `none` if no border.
       procedure, pass(self) :: draws_ybars    !< Whether vertical error bars are drawn.
       procedure, pass(self) :: draws_lines    !< Whether lines are drawn.
       procedure, pass(self) :: draws_points   !< Whether points are drawn.
@@ -72,9 +90,14 @@ contains
       with = WITH_XYERRORBARS
    case ('readout')
       with = WITH_READOUT
+   case ('boxes')
+      with = WITH_BOXES
+   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
+      with = WITH_FILLEDCURVES
    case default
       error stop 'foresight: unsupported plotting style "'//trim(name)// &
-                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars, readout)'
+                 '" (supported: lines, points, linespoints, yerrorbars, xerrorbars, xyerrorbars, boxes, filledcurves, '//&
+                 'readout)'
    endselect
    endfunction style_with
 
@@ -122,7 +145,7 @@ contains
    class(style_object), intent(in) :: self   !< Style.
    logical                         :: points !< Points are drawn.
 
-   points = self%with /= WITH_LINES .and. self%with /= WITH_READOUT
+   points = .not. any(self%with == [WITH_LINES, WITH_READOUT, WITH_BOXES, WITH_FILLEDCURVES])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -140,6 +163,143 @@ contains
 
    bars = self%with == WITH_YERRORBARS .or. self%with == WITH_XYERRORBARS
    endfunction draws_ybars
+
+   elemental function fills(self) result(filled)
+   !< Whether the style is a filled one: boxes, filledcurves.
+   class(style_object), intent(in) :: self   !< Style.
+   logical                         :: filled !< Filled style.
+
+   filled = self%with == WITH_BOXES .or. self%with == WITH_FILLEDCURVES
+   endfunction fills
+
+   pure function fill_color(self) result(color)
+   !< Fill color of a filled style: the line color when solid, `none` when empty.
+   class(style_object), intent(in) :: self  !< Style.
+   character(len=:), allocatable   :: color !< SVG color or `none`.
+
+   color = 'none'
+   if (self%fill == FILL_SOLID) color = self%color
+   endfunction fill_color
+
+   pure function stroke_color(self) result(color)
+   !< Border color of a filled style: its own, the line color, or `none` without border.
+   class(style_object), intent(in) :: self  !< Style.
+   character(len=:), allocatable   :: color !< SVG color or `none`.
+
+   color = 'none'
+   if (.not. self%border) return
+   color = self%color
+   if (allocated(self%border_color)) then
+      if (len(self%border_color) > 0) color = self%border_color
+   endif
+   endfunction stroke_color
+
+   subroutine fill_style(words, style, bad)
+   !< Update the fill of `style` from gnuplot fill style words, blank separated: `empty`, `solid [D]`,
+   !< `transparent solid [D]`, `border [lc [rgb] COLOR | -1]` (COLOR quoted or not), `noborder`; `bad` is the first word
+   !< not understood.
+   character(len=*),              intent(in)    :: words !< Fill style words.
+   type(style_object),            intent(inout) :: style !< Style updated.
+   character(len=:), allocatable, intent(out)   :: bad   !< First word not understood, empty if none.
+   character(len=:), allocatable                :: list(:) !< Words.
+   real(R8P)                                    :: v     !< Density.
+   logical                                      :: ok    !< Number read.
+   integer(I4P)                                 :: k     !< Word counter.
+
+   bad = ''
+   list = split(words)
+   k = 1_I4P
+   do while (k <= size(list, kind=I4P))
+      select case (trim(list(k)))
+      case ('empty')
+         style%fill = FILL_EMPTY
+      case ('transparent')
+      case ('solid')
+         style%fill = FILL_SOLID
+         style%density = 1.0_R8P
+         if (k < size(list, kind=I4P)) then
+            call real_from_decimal(trim(list(k + 1_I4P)), v, ok)
+            if (ok) then
+               if (v < 0.0_R8P .or. v > 1.0_R8P) then
+                  bad = trim(list(k + 1_I4P))//' (the density is between 0 and 1)'
+                  return
+               endif
+               style%density = v
+               k = k + 1_I4P
+            endif
+         endif
+      case ('border')
+         style%border = .true.
+         style%border_color = ''
+         if (k < size(list, kind=I4P)) then
+            select case (trim(list(k + 1_I4P)))
+            case ('-1')
+               style%border_color = 'black'
+               k = k + 1_I4P
+            case ('lc', 'linecolor')
+               k = k + 1_I4P
+               if (k < size(list, kind=I4P)) then
+                  if (trim(list(k + 1_I4P)) == 'rgb' .or. trim(list(k + 1_I4P)) == 'rgbcolor') k = k + 1_I4P
+               endif
+               if (k >= size(list, kind=I4P)) then
+                  bad = 'border lc (a color is expected)'
+                  return
+               endif
+               k = k + 1_I4P
+               style%border_color = unquoted(trim(list(k)))
+            endselect
+         endif
+      case ('noborder')
+         style%border = .false.
+      case ('pattern')
+         bad = 'pattern (fill patterns are not supported)'
+         return
+      case default
+         bad = trim(list(k))
+         return
+      endselect
+      k = k + 1_I4P
+   enddo
+   contains
+      pure function unquoted(word) result(text)
+      !< `word` without the quotes around it, if any: `"black"` and `'black'` are `black`.
+      character(len=*), intent(in)  :: word !< Word.
+      character(len=:), allocatable :: text !< Text.
+
+      text = word
+      if (len(word) >= 2) then
+         if ((word(1:1) == '"' .or. word(1:1) == "'") .and. word(len(word):len(word)) == word(1:1)) &
+            text = word(2:len(word) - 1)
+      endif
+      endfunction unquoted
+
+      pure function split(text) result(parts)
+      !< Blank separated words of `text`.
+      character(len=*), intent(in)  :: text     !< Text.
+      character(len=:), allocatable :: parts(:) !< Words.
+      integer(I4P)                  :: i        !< Character counter.
+      integer(I4P)                  :: start    !< Word start.
+      integer(I4P)                  :: n        !< Words.
+
+      n = 0_I4P
+      allocate(character(len=max(1, len(text))) :: parts(len(text) / 2 + 1))
+      i = 1_I4P
+      do while (i <= len(text))
+         if (text(i:i) == ' ') then
+            i = i + 1_I4P
+            cycle
+         endif
+         start = i
+         do while (i <= len(text))
+            if (text(i:i) == ' ') exit
+            i = i + 1_I4P
+         enddo
+         n = n + 1_I4P
+         parts(n) = text(start:i - 1_I4P)
+      enddo
+      parts = parts(1:n)
+      endfunction split
+   endsubroutine fill_style
 
    elemental function point_diameter(self) result(diameter)
    !< Point size [px]: the round dot diameter, or the width of a point type shape (gnuplot svg scale).

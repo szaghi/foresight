@@ -8,7 +8,8 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_style, only : WITH_LINES, WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT
+use foresight_style, only : FILL_EMPTY, FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LINES, WITH_LINESPOINTS, &
+                            WITH_POINTS, WITH_READOUT
 
 implicit none
 character(len=*), parameter   :: data_file = 'foresight_script_test.dat'   !< Test data file.
@@ -27,7 +28,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(47)                           !< Per-check outcome.
+logical                       :: test_passed(50)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -396,6 +397,64 @@ test_passed(47) = test_passed(47) .and. iostat /= 0_I4P .and. index(iomsg, 'a fu
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! boxes: auto edges halfway to the neighbours, relative and absolute widths, a width column; base 0; fill styles
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 3 0.2', '2 5 0.2', '4 -2 0.2'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set style fill solid 0.5 noborder; plot '"//data_file//"' w boxes, '' u 1:2:3 w boxes "// &
+                          "fs empty border lc 'red'", iostat, iomsg)
+test_passed(48) = iostat == 0_I4P
+if (test_passed(48)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(48) = series(1)%style%with == WITH_BOXES .and. same(series(1)%xlow * 2.0_R8P, [1, 3, 6]) .and. &
+                        same(series(1)%xhigh * 2.0_R8P, [3, 6, 10]) .and. same(series(1)%ylow, [0, 0, 0]) .and. &
+                        series(1)%style%fill == FILL_SOLID .and. series(1)%style%density == 0.5_R8P .and. &
+                        .not. series(1)%style%border .and. same(series(2)%xlow * 10.0_R8P, [9, 19, 39]) .and. &
+                        series(2)%style%fill == FILL_EMPTY .and. series(2)%style%stroke_color() == 'red'
+      ! the autoscale reaches the box edges and 0
+      call interpreter%figure%panels(1)%data_extent(xmin, xmax, ymin, ymax, found)
+      test_passed(48) = test_passed(48) .and. xmin == 0.5_R8P .and. xmax == 5.0_R8P .and. ymin(1) == -2.0_R8P
+   endassociate
+endif
+call interpreter%run_text("set boxwidth 0.5 relative; plot '"//data_file//"' w boxes", iostat, iomsg)
+test_passed(49) = iostat == 0_I4P
+if (test_passed(49)) test_passed(49) = same(interpreter%figure%panels(1)%series(1)%xlow * 4.0_R8P, [3, 7, 14]) .and. &
+                                       same(interpreter%figure%panels(1)%series(1)%xhigh * 4.0_R8P, [5, 10, 18])
+call interpreter%run_text("set boxwidth 0.5; plot '"//data_file//"' w boxes; unset boxwidth", iostat, iomsg)
+test_passed(49) = test_passed(49) .and. iostat == 0_I4P .and. &
+                  same(interpreter%figure%panels(1)%series(1)%xlow * 4.0_R8P, [3, 7, 15])
+! filledcurves: y=V baseline in the autoscale, a band, the closed default; always solid, no border
+call interpreter%run_text("plot '"//data_file//"' w filledc y=10, '' u 1:2:3 w filledcurves, '' w filledcurves closed", &
+                          iostat, iomsg)
+test_passed(49) = test_passed(49) .and. iostat == 0_I4P
+if (test_passed(49)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(49) = series(1)%style%with == WITH_FILLEDCURVES .and. same(series(1)%ylow, [10, 10, 10]) .and. &
+                        same(series(2)%ylow * 10.0_R8P, [2, 2, 2]) .and. .not. allocated(series(3)%ylow) .and. &
+                        series(3)%style%fill == FILL_SOLID .and. .not. series(3)%style%border
+      call interpreter%figure%panels(1)%data_extent(xmin, xmax, ymin, ymax, found)
+      test_passed(49) = test_passed(49) .and. ymax(1) == 10.0_R8P
+   endassociate
+endif
+! fill errors
+call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
+test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'fs applies to boxes and filledcurves only') > 0
+call interpreter%run_text("set style fill pattern 2", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'patterns are not supported') > 0
+call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves above is not supported') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3:3 w boxes", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes needs using x:y or x:y:width') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves y=0", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'not both') > 0
+call interpreter%run_text("set boxwidth wide", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'set boxwidth: unsupported option') > 0
+call interpreter%run_text("plot '"//data_file//"' w boxes fs solid 2", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'density is between 0 and 1') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -408,7 +467,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,47L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,50L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

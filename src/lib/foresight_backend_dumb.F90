@@ -17,6 +17,11 @@ module foresight_backend_dumb
 !< Readouts are seven-segment digits in characters, 3 rows of 4 columns per cell (` _ `, `|_|`, `|_|`, the decimal point
 !< a `.` in the fourth column); the unlit segments are not drawn, text has no faint intensity. A filled rectangle (the
 !< readout window) clears the cells it covers.
+!<
+!< Filled polygons (boxes, filledcurves) fill the cells whose centre lies inside with the symbol of the fill color
+!< (gnuplot's dumb uses `#`, which is also a series symbol here: a fill would hide the second curve), whatever the
+!< opacity, then draw the border with the color symbol; in the plot area they are clipped
+!< to it first (Sutherland-Hodgman). Fills go through `px_fill`, which a finer device overrides.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : axes_view, backend_object
 use foresight_sys, only : rename_file
@@ -28,6 +33,7 @@ public :: backend_dumb
 public :: FRAME_COLOR
 public :: GRID_COLOR
 public :: TEXT_COLORS
+public :: scanline
 
 character(len=*), parameter :: SYMBOLS     = '*#$%@&=+' !< Series symbols, cycled.
 character(len=*), parameter :: FRAME_COLOR = 'black'    !< Frame color, drawn as ticks.
@@ -66,12 +72,14 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: rect
       procedure, pass(self) :: polyline
       procedure, pass(self) :: dots
+      procedure, pass(self) :: polygon
       procedure, pass(self) :: text
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
       procedure, pass(self) :: data_dots
       procedure, pass(self) :: data_bars
+      procedure, pass(self) :: data_polygon
       procedure, pass(self) :: text_width
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
@@ -80,6 +88,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: clear        !< Blank a box.
       procedure, pass(self) :: col          !< Column of an abscissa [px].
       procedure, pass(self) :: color_index  !< Index of a color in `symbols`.
+      procedure, pass(self) :: px_fill      !< Fill a polygon [px].
       procedure, pass(self) :: px_point     !< Draw a data point [px].
       procedure, pass(self) :: px_segment   !< Draw a data segment [px].
       procedure, pass(self) :: row          !< Row of an ordinate [px].
@@ -258,6 +267,27 @@ contains
    enddo
    endsubroutine dots
 
+   subroutine polygon(self, x, y, fill, opacity, stroke, line_width)
+   !< Closed polygon [px]: its inside filled (`px_fill`) unless `fill` is `none`, then its border with the symbol of
+   !< `stroke` unless `none`; the opacity has no meaning in text.
+   class(backend_dumb), intent(inout) :: self       !< Device.
+   real(R8P),           intent(in)    :: x(:)       !< Vertex abscissae [px].
+   real(R8P),           intent(in)    :: y(:)       !< Vertex ordinates [px].
+   character(len=*),    intent(in)    :: fill       !< Fill color.
+   real(R8P),           intent(in)    :: opacity    !< Fill opacity, unused.
+   character(len=*),    intent(in)    :: stroke     !< Border color.
+   real(R8P),           intent(in)    :: line_width !< Border width, unused.
+   integer(I4P)                       :: i          !< Vertex counter.
+
+   if (self%hidden .or. size(x) < 2) return
+   if (fill /= 'none') call self%px_fill(x, y, fill)
+   if (stroke == 'none') return
+   do i = 1_I4P, size(x, kind=I4P)
+      call self%px_segment([x(i), y(i)], [x(modulo(i, size(x, kind=I4P)) + 1_I4P), y(modulo(i, size(x, kind=I4P)) + 1_I4P)], &
+                           stroke, '')
+   enddo
+   endsubroutine polygon
+
    subroutine text(self, x, y, string, anchor, sup, rotate)
    !< Text in the row of its baseline; superscripts appended after `^`; rotated text written top to bottom.
    class(backend_dumb), intent(inout)        :: self   !< Device.
@@ -366,6 +396,24 @@ contains
       call self%unit_segment(x1(i), y1(i), x2(i), y2(i), color, merge('|', '-', vertical))
    enddo
    endsubroutine data_bars
+
+   subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width)
+   !< Closed polygon [unit square] clipped to the plot area, then drawn in it as `polygon`.
+   class(backend_dumb), intent(inout) :: self       !< Device.
+   real(R8P),           intent(in)    :: x(:)       !< Vertex abscissae [unit].
+   real(R8P),           intent(in)    :: y(:)       !< Vertex ordinates [unit].
+   character(len=*),    intent(in)    :: fill       !< Fill color.
+   real(R8P),           intent(in)    :: opacity    !< Fill opacity.
+   character(len=*),    intent(in)    :: stroke     !< Border color.
+   real(R8P),           intent(in)    :: line_width !< Border width [px].
+   real(R8P), allocatable             :: cx(:)      !< Clipped abscissae [unit].
+   real(R8P), allocatable             :: cy(:)      !< Clipped ordinates [unit].
+
+   call clip_unit(x, y, cx, cy)
+   if (size(cx) < 3) return
+   call self%polygon(self%area(1) + cx * self%area(3), self%area(2) + (1.0_R8P - cy) * self%area(4), fill, opacity, &
+                     stroke, line_width)
+   endsubroutine data_polygon
 
    pure function text_width(self, string, sup, font_size) result(width)
    !< Width of `string` in cells [px]: superscripts take full cells after a `^`.
@@ -531,6 +579,32 @@ contains
    self%symbols = [self%symbols, entry]
    endfunction color_index
 
+   subroutine px_fill(self, x, y, color)
+   !< Fill the cells whose centre lies inside the polygon (`x`, `y`) [px] with the symbol of `color` (even-odd rule).
+   class(backend_dumb), intent(inout) :: self    !< Device.
+   real(R8P),           intent(in)    :: x(:)    !< Vertex abscissae [px].
+   real(R8P),           intent(in)    :: y(:)    !< Vertex ordinates [px].
+   character(len=*),    intent(in)    :: color   !< Fill color.
+   real(R8P), allocatable             :: xs(:)   !< Crossings of a row.
+   integer(I4P)                       :: tint    !< Color index.
+   integer(I4P)                       :: r       !< Row counter.
+   integer(I4P)                       :: c       !< Column counter.
+   integer(I4P)                       :: k       !< Crossing pair counter.
+   character(len=1)                   :: symbol  !< Fill symbol.
+
+   tint = self%color_index(color)
+   symbol = self%symbol_of(color)
+   do r = self%row(minval(y)), self%row(maxval(y))
+      xs = scanline(x, y, (real(r, R8P) - 0.5_R8P) * self%ch)
+      do k = 1_I4P, size(xs, kind=I4P) - 1_I4P, 2_I4P
+         do c = self%col(xs(k)), self%col(xs(k + 1_I4P))
+            if ((real(c, R8P) - 0.5_R8P) * self%cw >= xs(k) .and. (real(c, R8P) - 0.5_R8P) * self%cw <= xs(k + 1_I4P)) &
+               call self%put(c, r, symbol, tint)
+         enddo
+      enddo
+   enddo
+   endsubroutine px_fill
+
    subroutine px_point(self, p, color)
    !< A data point at `p` [px]: the color symbol in its cell.
    class(backend_dumb), intent(inout) :: self  !< Device.
@@ -671,6 +745,108 @@ contains
    b = [self%area(1) + (u1 + t1 * (u2 - u1)) * self%area(3), self%area(2) + (1.0_R8P - v1 - t1 * (v2 - v1)) * self%area(4)]
    call self%px_segment(a, b, color, symbol)
    endsubroutine unit_segment
+
+   pure function scanline(x, y, yc) result(xs)
+   !< Sorted abscissae where the horizontal line `yc` crosses the edges of the closed polygon (`x`, `y`): pairs bound its
+   !< inside (even-odd rule). An edge counts its lower end and not its upper one, so a vertex on the line counts once.
+   real(R8P), intent(in)  :: x(:)  !< Vertex abscissae.
+   real(R8P), intent(in)  :: y(:)  !< Vertex ordinates.
+   real(R8P), intent(in)  :: yc    !< Line ordinate.
+   real(R8P), allocatable :: xs(:) !< Crossings, increasing.
+   real(R8P)              :: t     !< Swap buffer.
+   integer(I4P)           :: i     !< Vertex counter.
+   integer(I4P)           :: j     !< Next vertex.
+   integer(I4P)           :: n     !< Crossings.
+
+   allocate(xs(size(x)))
+   n = 0_I4P
+   do i = 1_I4P, size(x, kind=I4P)
+      j = modulo(i, size(x, kind=I4P)) + 1_I4P
+      if ((y(i) <= yc .and. yc < y(j)) .or. (y(j) <= yc .and. yc < y(i))) then
+         n = n + 1_I4P
+         xs(n) = x(i) + (yc - y(i)) / (y(j) - y(i)) * (x(j) - x(i))
+      endif
+   enddo
+   xs = xs(1:n)
+   ! insertion sort: a few crossings per line
+   do i = 2_I4P, n
+      t = xs(i)
+      j = i - 1_I4P
+      do while (j >= 1_I4P)
+         if (xs(j) <= t) exit
+         xs(j + 1_I4P) = xs(j)
+         j = j - 1_I4P
+      enddo
+      xs(j + 1_I4P) = t
+   enddo
+   endfunction scanline
+
+   pure subroutine clip_unit(x, y, cx, cy)
+   !< The polygon (`x`, `y`) clipped to the unit square (Sutherland-Hodgman, one side at a time).
+   real(R8P),              intent(in)  :: x(:)  !< Vertex abscissae.
+   real(R8P),              intent(in)  :: y(:)  !< Vertex ordinates.
+   real(R8P), allocatable, intent(out) :: cx(:) !< Clipped abscissae.
+   real(R8P), allocatable, intent(out) :: cy(:) !< Clipped ordinates.
+   real(R8P), allocatable              :: ox(:) !< Output abscissae of a side.
+   real(R8P), allocatable              :: oy(:) !< Output ordinates of a side.
+   real(R8P)                           :: t     !< Crossing parameter on the edge.
+   logical                             :: now   !< Current vertex inside the side.
+   logical                             :: was   !< Previous vertex inside the side.
+   integer(I4P)                        :: side  !< Side: x >= 0, x <= 1, y >= 0, y <= 1.
+   integer(I4P)                        :: i     !< Vertex counter.
+   integer(I4P)                        :: j     !< Previous vertex.
+   integer(I4P)                        :: n     !< Output vertices.
+
+   cx = x
+   cy = y
+   do side = 1_I4P, 4_I4P
+      if (size(cx) == 0) return
+      allocate(ox(2 * size(cx)), oy(2 * size(cx)))
+      n = 0_I4P
+      do i = 1_I4P, size(cx, kind=I4P)
+         j = modulo(i - 2_I4P, size(cx, kind=I4P)) + 1_I4P
+         now = inside(cx(i), cy(i))
+         was = inside(cx(j), cy(j))
+         if (now .neqv. was) then
+            ! the edge from j to i crosses the side: add the crossing
+            if (side <= 2_I4P) then
+               t = (merge(0.0_R8P, 1.0_R8P, side == 1_I4P) - cx(j)) / (cx(i) - cx(j))
+            else
+               t = (merge(0.0_R8P, 1.0_R8P, side == 3_I4P) - cy(j)) / (cy(i) - cy(j))
+            endif
+            n = n + 1_I4P
+            ox(n) = cx(j) + t * (cx(i) - cx(j))
+            oy(n) = cy(j) + t * (cy(i) - cy(j))
+         endif
+         if (now) then
+            n = n + 1_I4P
+            ox(n) = cx(i)
+            oy(n) = cy(i)
+         endif
+      enddo
+      cx = ox(1:n)
+      cy = oy(1:n)
+      deallocate(ox, oy)
+   enddo
+   contains
+      pure function inside(u, v) result(is)
+      !< Whether (`u`, `v`) lies inside the current side.
+      real(R8P), intent(in) :: u  !< Abscissa.
+      real(R8P), intent(in) :: v  !< Ordinate.
+      logical               :: is !< Inside.
+
+      select case (side)
+      case (1_I4P)
+         is = u >= 0.0_R8P
+      case (2_I4P)
+         is = u <= 1.0_R8P
+      case (3_I4P)
+         is = v >= 0.0_R8P
+      case default
+         is = v <= 1.0_R8P
+      endselect
+      endfunction inside
+   endsubroutine clip_unit
 
    pure function color_rgb(symbols, k) result(rgb)
    !< Red, green, blue (0-255) of the color `k` of `symbols`; -1 for the terminal's own color: index 0, a color that is

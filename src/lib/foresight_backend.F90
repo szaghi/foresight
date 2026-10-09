@@ -50,12 +50,14 @@ type, abstract :: backend_object
       procedure(rect_interface),            pass(self), deferred :: rect            !< Rectangle [px].
       procedure(lines_interface),           pass(self), deferred :: polyline        !< Polyline [px].
       procedure(dots_interface),            pass(self), deferred :: dots            !< Round dots or markers [px].
+      procedure(polygon_interface),         pass(self), deferred :: polygon         !< Filled polygon [px].
       procedure(text_interface),            pass(self), deferred :: text            !< Text [px].
       procedure(begin_plot_area_interface), pass(self), deferred :: begin_plot_area !< Open the clipped plot area.
       procedure(finish_interface),          pass(self), deferred :: end_plot_area   !< Close the plot area.
       procedure(lines_interface),           pass(self), deferred :: data_polyline   !< Polyline [unit square].
       procedure(dots_interface),            pass(self), deferred :: data_dots       !< Dots or markers [unit square].
       procedure(bars_interface),            pass(self), deferred :: data_bars       !< Error bars [unit square].
+      procedure(polygon_interface),         pass(self), deferred :: data_polygon    !< Filled polygon [unit square].
       procedure(text_width_interface),      pass(self), deferred :: text_width      !< Text width [px].
       procedure(readout_interface),         pass(self), deferred :: readout         !< Seven-segment readout [px].
       procedure(readout_extent_interface),  pass(self), deferred :: readout_extent  !< Readout size [px].
@@ -119,6 +121,20 @@ abstract interface
    real(R8P),             intent(in)    :: line_width !< Stroke width [px].
    character(len=*),      intent(in)    :: dasharray  !< SVG dash array, empty for solid.
    endsubroutine lines_interface
+
+   subroutine polygon_interface(self, x, y, fill, opacity, stroke, line_width)
+   !< Closed polygon of the vertices (`x`, `y`): filled with `fill` at `opacity` (0..1), its border stroked with `stroke`
+   !< `line_width` px wide; `fill` and `stroke` are SVG colors or `none`. In unit-square coordinates (`data_polygon`)
+   !< it is clipped to the plot area.
+   import :: backend_object, R8P
+   class(backend_object), intent(inout) :: self       !< Device.
+   real(R8P),             intent(in)    :: x(:)       !< Vertex abscissae.
+   real(R8P),             intent(in)    :: y(:)       !< Vertex ordinates.
+   character(len=*),      intent(in)    :: fill       !< Fill color.
+   real(R8P),             intent(in)    :: opacity    !< Fill opacity.
+   character(len=*),      intent(in)    :: stroke     !< Border color.
+   real(R8P),             intent(in)    :: line_width !< Border width [px].
+   endsubroutine polygon_interface
 
    subroutine bars_interface(self, x1, y1, x2, y2, color, line_width, cap, vertical)
    !< Error bars from (`x1`, `y1`) to (`x2`, `y2`) [unit square], with end caps `cap` px long across the bar.

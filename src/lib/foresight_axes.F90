@@ -12,15 +12,22 @@ module foresight_axes
 !< when it has data or a fully fixed range.
 !< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 !<
+!< Boxes stand on y = 0 (`boxes`) and fills reach their baseline (`filledcurves y=V`): the box edges and the baselines
+!< are stored as the bar ends `xlow`/`xhigh` and `ylow`, so they widen the autoscale as error bars do. Unlike gnuplot,
+!< which leaves zero out of the y autoscale of boxes and the auto-width edges out of the x one, bars are drawn whole
+!< and with lengths proportional to their values.
+!<
 !< Readouts (`with readout`, see foresight_readout) show the last finite value of their series in seven-segment
 !< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use foresight_axis, only : axis_object
 use foresight_backend, only : axes_view, backend_object
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
-use foresight_style, only : default_color, style_with, WITH_READOUT
+use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
+                            WITH_FILLEDCURVES, WITH_READOUT
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -64,6 +71,10 @@ type :: axes_object
    logical                          :: key_horizontal = .false. !< Entries side by side, in rows.
    real(R8P)                        :: origin(2) = [0.0_R8P, 0.0_R8P] !< Bottom left corner, page fraction (`set origin`).
    real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
+   type(style_object)               :: fill_default     !< Fill of the filled styles, `set style fill` (its fill
+                                                        !< components only).
+   real(R8P)                        :: boxwidth = 0.0_R8P !< Box width, `set boxwidth`; 0 for auto (boxes touching).
+   logical                          :: boxwidth_relative = .false. !< `boxwidth` scales the auto width.
    logical                          :: readout = .true. !< Draw the readouts.
    character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
    character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
@@ -89,12 +100,17 @@ type :: axes_object
 endtype axes_object
 
 contains
-   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format)
+   subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
+                         base, fs)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
    !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default) or `x1y2`, the second y axis. A `readout` takes its `format`
    !< (`DEFAULT_READOUT_FORMAT` if absent) and only the color among the style options.
+   !<
+   !< `boxes` take the box widths `width` (NaN for the default), else the panel `boxwidth`, else touching boxes;
+   !< `filledcurves` fill to the line y = `base`, between `ylow` and `y`, or the closed polygon of the points. `fs`
+   !< (gnuplot fill style words, `'solid 0.5 noborder'`) overrides the panel fill of either.
    class(axes_object), intent(inout)        :: self   !< Panel.
    real(R8P),          intent(in)           :: x(:)   !< Abscissae.
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
@@ -111,7 +127,11 @@ contains
    character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1` or `x1y2`.
    integer(I4P),       intent(in), optional :: pt       !< gnuplot point type: 0 a dot, 1.. the shapes.
    character(len=*),   intent(in), optional :: format   !< Readout format.
+   real(R8P),          intent(in), optional :: width(:) !< Box widths.
+   real(R8P),          intent(in), optional :: base     !< Baseline of a fill.
+   character(len=*),   intent(in), optional :: fs       !< Fill style words.
    type(series_object)                      :: series !< New series.
+   character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
 
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
@@ -144,11 +164,47 @@ contains
    elseif (present(format)) then
       error stop 'foresight: plot: format applies to readouts only'
    endif
+   if (series%style%fills()) then
+      series%style%fill = self%fill_default%fill
+      series%style%density = self%fill_default%density
+      series%style%border = self%fill_default%border
+      if (allocated(self%fill_default%border_color)) series%style%border_color = self%fill_default%border_color
+      if (present(fs)) then
+         call fill_style(fs, series%style, bad)
+         if (len(bad) > 0) error stop 'foresight: plot: unsupported fill style "'//bad//'"'
+      endif
+   elseif (present(fs) .or. present(width) .or. present(base)) then
+      error stop 'foresight: plot: fs, width and base apply to boxes and filledcurves only'
+   endif
+   select case (series%style%with)
+   case (WITH_BOXES)
+      if (present(base) .or. present(ylow)) error stop 'foresight: plot: boxes stand on y = 0 (no base, no ylow)'
+      if (present(width)) then
+         if (size(width) /= size(x)) error stop 'foresight: plot: width and x have different sizes'
+      endif
+      call box_edges(series%xlow, series%xhigh)
+      allocate(series%ylow(size(x)))
+      series%ylow = 0.0_R8P
+   case (WITH_FILLEDCURVES)
+      ! gnuplot fills a curve even with an empty fill style, and never draws its border
+      if (series%style%fill == FILL_EMPTY) series%style%density = 1.0_R8P
+      series%style%fill = FILL_SOLID
+      series%style%border = .false.
+      if (present(base) .and. present(ylow)) error stop 'foresight: plot: a fill takes base or ylow, not both'
+      if (present(base)) then
+         allocate(series%ylow(size(x)))
+         series%ylow = base
+      endif
+   endselect
    if (series%style%draws_xbars()) then
       if (.not. (present(xlow) .and. present(xhigh))) error stop 'foresight: plot: x error bars need xlow and xhigh'
       if (size(xlow) /= size(x) .or. size(xhigh) /= size(x)) error stop 'foresight: plot: xlow/xhigh sizes differ from x'
       series%xlow = xlow
       series%xhigh = xhigh
+   endif
+   if (series%style%with == WITH_FILLEDCURVES .and. present(ylow)) then
+      if (size(ylow) /= size(y)) error stop 'foresight: plot: ylow and y have different sizes'
+      series%ylow = ylow
    endif
    if (series%style%draws_ybars()) then
       if (.not. (present(ylow) .and. present(yhigh))) error stop 'foresight: plot: y error bars need ylow and yhigh'
@@ -157,6 +213,56 @@ contains
       series%yhigh = yhigh
    endif
    self%series = [self%series, series]
+   contains
+      pure subroutine box_edges(left, right)
+      !< Box edges: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a relative
+      !< `boxwidth`; or `boxwidth` itself; or the box's own `width`.
+      real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
+      real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
+      real(R8P)                           :: dl       !< Distance to the previous point.
+      real(R8P)                           :: dr       !< Distance to the next point.
+      integer(I4P)                        :: n        !< Points.
+      integer(I4P)                        :: i        !< Counter.
+
+      n = size(x, kind=I4P)
+      allocate(left(n), right(n))
+      do i = 1_I4P, n
+         dl = huge(1.0_R8P)
+         dr = huge(1.0_R8P)
+         if (i > 1_I4P) then
+            if (ieee_is_finite(x(i - 1_I4P)) .and. ieee_is_finite(x(i))) dl = x(i) - x(i - 1_I4P)
+         endif
+         if (i < n) then
+            if (ieee_is_finite(x(i + 1_I4P)) .and. ieee_is_finite(x(i))) dr = x(i + 1_I4P) - x(i)
+         endif
+         if (dl == huge(1.0_R8P)) dl = dr
+         if (dr == huge(1.0_R8P)) dr = dl
+         ! a single box: unit width
+         if (dl == huge(1.0_R8P)) then
+            dl = 1.0_R8P
+            dr = 1.0_R8P
+         endif
+         dl = 0.5_R8P * dl
+         dr = 0.5_R8P * dr
+         if (self%boxwidth > 0.0_R8P) then
+            if (self%boxwidth_relative) then
+               dl = self%boxwidth * dl
+               dr = self%boxwidth * dr
+            else
+               dl = 0.5_R8P * self%boxwidth
+               dr = dl
+            endif
+         endif
+         if (present(width)) then
+            if (ieee_is_finite(width(i))) then
+               dl = 0.5_R8P * width(i)
+               dr = dl
+            endif
+         endif
+         left(i) = x(i) - dl
+         right(i) = x(i) + dr
+      enddo
+      endsubroutine box_edges
    endsubroutine add_series
 
    pure subroutine data_extent(self, xmin, xmax, ymin, ymax, found)
@@ -451,6 +557,12 @@ contains
       yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
       k = k + 1_I4P
       call backend%begin_group('fs-key-entry', series=s)
+      if (self%series(s)%style%fills()) &
+         call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
+                              [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
+                               yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
+                              self%series(s)%style%density, self%series(s)%style%stroke_color(), &
+                              self%series(s)%style%linewidth)
       if (self%series(s)%style%draws_lines()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
@@ -691,6 +803,8 @@ contains
          u = self%xaxis%to_unit(series%x)
          v = yaxis%to_unit(series%y)
       endwhere
+      if (series%style%with == WITH_BOXES) call draw_boxes
+      if (series%style%with == WITH_FILLEDCURVES) call draw_fill
       if (series%style%draws_lines()) then
          i1 = 1_I4P
          do while (i1 <= n)
@@ -715,6 +829,66 @@ contains
                                 pt=series%style%pointtype, line_width=series%style%linewidth)
    endassociate
    contains
+      subroutine draw_boxes
+      !< One polygon per placeable box, from its baseline (0, or the axis bottom on a log axis) to its value.
+      real(R8P) :: v0 !< Unit ordinate of the baseline.
+      integer(I4P) :: i !< Box counter.
+
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)))) cycle
+            v0 = -1.0_R8P
+            if (yaxis%accepts(series%ylow(i))) v0 = yaxis%to_unit(series%ylow(i))
+            call backend%data_polygon([self%xaxis%to_unit(series%xlow(i)), self%xaxis%to_unit(series%xhigh(i)), &
+                                       self%xaxis%to_unit(series%xhigh(i)), self%xaxis%to_unit(series%xlow(i))], &
+                                      [v0, v0, v(i), v(i)], series%style%fill_color(), series%style%density, &
+                                      series%style%stroke_color(), series%style%linewidth)
+         enddo
+      endassociate
+      endsubroutine draw_boxes
+
+      subroutine draw_fill
+      !< One polygon per run of placeable points: the curve and back along the baseline or the lower curve, or the
+      !< curve closed on itself.
+      logical, allocatable   :: ok(:) !< Points placeable with their lower end.
+      real(R8P), allocatable :: w(:)  !< Unit ordinates of the lower ends.
+      integer(I4P)           :: a     !< First point of a run.
+      integer(I4P)           :: b     !< Last point of a run.
+
+      associate(series => self%series(s))
+         ok = valid
+         allocate(w(n))
+         w = 0.0_R8P
+         if (allocated(series%ylow)) then
+            ok = ok .and. yaxis%accepts(series%ylow)
+            where (ok) w = yaxis%to_unit(series%ylow)
+         endif
+         a = 1_I4P
+         do while (a <= n)
+            if (.not. ok(a)) then
+               a = a + 1_I4P
+               cycle
+            endif
+            b = a
+            do while (b < n)
+               if (.not. ok(b + 1_I4P)) exit
+               b = b + 1_I4P
+            enddo
+            if (b > a) then
+               if (allocated(series%ylow)) then
+                  call backend%data_polygon([u(a:b), u(b:a:-1)], [v(a:b), w(b:a:-1)], series%style%fill_color(), &
+                                            series%style%density, 'none', 0.0_R8P)
+               else
+                  call backend%data_polygon(u(a:b), v(a:b), series%style%fill_color(), series%style%density, 'none', &
+                                            0.0_R8P)
+               endif
+            endif
+            a = b + 1_I4P
+         enddo
+      endassociate
+      endsubroutine draw_fill
+
       subroutine draw_bars(low, high, axis, vertical)
       !< Error bars of the placeable points whose both ends are placeable on `axis`.
       real(R8P),         intent(in) :: low(:)   !< Bar starts.

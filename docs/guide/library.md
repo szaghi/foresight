@@ -27,7 +27,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
@@ -40,6 +40,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
+| `set_style_fill(words)` | `set style fill solid 0.5 noborder` |
+| `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
 | `set_readout([on], [position], [opaque], [size])` | `set readout top right horizontal noopaque size 30`, `unset readout` (foresight extension, see [Readouts](gnuplot-subset#readouts)) |
 | `set_refresh(seconds)` | reload period of the HTML page |
 | `set_text([charset], [colors])` | text output (`.txt`, `-`): `charset` `dumb` (default) or `half`, `quadrants`, `sextants`, `braille`, the `set terminal block` sets; `colors` `mono` (default), `ansi`, `ansi256`, `ansirgb` |
@@ -49,7 +51,10 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Argument | Meaning | Default |
 |---|---|---|
 | `title` | key entry; empty for none | none |
-| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `with` | `lines`, `points`, `linespoints`, `yerrorbars`, `xerrorbars`, `xyerrorbars` (or `l`, `p`, `lp`, `yerr`, `xerr`, `xyerr`); `boxes`, `filledcurves` ([Boxes](gnuplot-subset#boxes-and-filled-curves)); `readout`, the last finite `y` in seven-segment digits ([Readouts](gnuplot-subset#readouts)) | `lines` |
+| `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
+| `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |
+| `fs` | boxes and filledcurves: gnuplot fill style words, `'solid 0.5 noborder'` | `set_style_fill` |
 | `format` | readouts only: printf format with a field width, `'%9.2e'`; a readout takes `lc`, no other style option | `'%10.3e'` |
 | `lc` | color, any SVG color (`'#e51e10'`, `'red'`) | gnuplot palette, by series |
 | `lw` | line width [px] | 1 |

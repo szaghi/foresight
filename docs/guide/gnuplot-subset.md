@@ -43,6 +43,8 @@ that did what it says.
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
+| **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`] [`border` [`lc C`\|`-1`]\|`noborder`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default | — |
+| **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] | output format, size in px, HTML reload period | — |
@@ -68,7 +70,8 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `boxes`, `filledcurves` (`filledc`) [`closed`\|`y=V`], see [below](#boxes-and-filled-curves); foresight's `readout`, see [below](#readouts) |
+| **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts only: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
@@ -86,6 +89,8 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | `yerrorbars` | `x:y:dy` or `x:y:ylow:yhigh` |
 | `xerrorbars` | `x:y:dx` or `x:y:xlow:xhigh` |
 | `xyerrorbars` | `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh` |
+| `boxes` | `x:y` or `x:y:width` |
+| `filledcurves` | `x:y` (to `y=V`, or the closed polygon), `x:y1:y2` (a band) |
 
 ## Expressions in `using`
 
@@ -295,6 +300,42 @@ Panels are drawn in order, without a background: in the HTML page the mouse acts
 On the standard output (`set terminal dumb` or `block`), a multiplot is printed once, complete, at `unset multiplot`; files are
 rewritten at each plot, so that a watched page shows the panels done so far.
 
+## Boxes and filled curves
+
+```gnuplot
+set style fill solid 0.5
+set boxwidth 0.8 relative
+plot 'run.dat' every 10 u 1:5 w boxes t 'cd every 10 iterations'
+```
+
+<Plot name="cb_boxes" svg :width="560" :height="320" />
+
+A box stands on y = 0, down for a negative value. By default the boxes touch: each edge lies halfway to the next
+point, the end boxes symmetric. `set boxwidth W` gives them the width W, `set boxwidth F relative` the fraction F of
+the default, a third `using` column each its own width. The fill is the item color: `empty` draws the border only,
+`solid D` fills at opacity D (`transparent` changes nothing in SVG, as in gnuplot's svg terminal); `border lc C`
+colors the border, `noborder` drops it.
+
+```gnuplot
+plot 'run.dat' u 1:($5-$6):($5+$6) w filledcurves fs transparent solid 0.3 t 'cd +/- dcd', \
+     ''        u 1:5 w l t 'cd'
+```
+
+<Plot name="cb_filledcurves" svg :width="560" :height="320" />
+
+`filledcurves` fills the band between two columns (`x:y1:y2`), the area down to the line `y=V`, or the polygon of the
+points (`closed`, the default with two columns). As gnuplot, it fills even with an `empty` fill style and draws no
+border: plot the curve too for an outline. Undefined points split the fill as they split a line.
+
+Two deliberate differences from gnuplot, so that a bar is never misread:
+
+- **The y autoscale of boxes reaches 0** (and that of `filledcurves y=V` reaches V). gnuplot autoscales to the values
+  only and draws the bars from the bottom of the plot: with values 3, 5, 2 it draws the 3 a third as long as the 5.
+- **The x autoscale reaches the box edges** whatever the width. With touching boxes gnuplot leaves them out and cuts
+  the first and last bar in half.
+
+In text a fill is drawn with the symbol of its series (`block`: whole dots), whatever its opacity.
+
 ## Readouts
 
 A foresight extension, not gnuplot (gnuplot rejects these scripts): `with readout` shows the last finite value of an
@@ -337,7 +378,8 @@ User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`)
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
-at a position (`at`) or in a named margin (`lmargin`, ...); `pointinterval` (`pi`); the `smooth` filters other than
+at a position (`at`) or in a named margin (`lmargin`, ...); fill patterns (`fs pattern N`), `filledcurves above`,
+`below`, `x1`, `x2`, `xy=`, and the styles `boxerrorbars`, `boxxyerror`, `candlesticks`, `histograms`; `pointinterval` (`pi`); the `smooth` filters other than
 `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal` (`csplines`, `acsplines`, `mcsplines`, `bezier`,
 `sbezier`, `kdensity`, `unwrap`, `path`) and `bins`; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

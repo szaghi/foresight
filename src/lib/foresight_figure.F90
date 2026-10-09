@@ -21,6 +21,7 @@ use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
+use foresight_style, only : fill_style
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -58,6 +59,7 @@ type :: figure_object
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
+      procedure, pass(self) :: set_boxwidth    !< gnuplot `set boxwidth`.
       procedure, pass(self) :: set_format      !< gnuplot `set format`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
@@ -67,6 +69,7 @@ type :: figure_object
       procedure, pass(self) :: set_readout     !< Readouts: on/off, position, window, digit size.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
+      procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
@@ -146,7 +149,7 @@ contains
    self%panels(self%current) = settings
    endsubroutine next_panel
 
-   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format)
+   subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`.
    !<
@@ -158,6 +161,10 @@ contains
    !< `with='readout'` (a foresight extension) shows the last finite `y` in seven-segment digits, titled by `title`,
    !< on a glass of `format` (a printf conversion with a field width, `'%9.2e'`; `'%10.3e'` if absent): see
    !< foresight_readout and `set_readout`. A readout takes `lc` only among the style options.
+   !<
+   !< `with='boxes'` draws a bar from y = 0 to each `y`, `width` wide (per box; NaN or absent: `set_boxwidth`, else
+   !< the boxes touch); `with='filledcurves'` fills down to `base`, between `ylow` and `y`, or the closed polygon of
+   !< the points. `fs` takes gnuplot fill style words (`'solid 0.5 noborder'`), over `set_style_fill`.
    class(figure_object), intent(inout)        :: self     !< Figure.
    real(R8P),            intent(in)           :: x(:)     !< Abscissae.
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
@@ -174,11 +181,14 @@ contains
    character(len=*),     intent(in), optional :: axes     !< Axes of the series: `x1y1` (default) or `x1y2`.
    integer(I4P),         intent(in), optional :: pt       !< gnuplot point type, >= 0.
    character(len=*),     intent(in), optional :: format   !< Readout format.
+   real(R8P),            intent(in), optional :: width(:) !< Box widths.
+   real(R8P),            intent(in), optional :: base     !< Baseline of a fill.
+   character(len=*),     intent(in), optional :: fs       !< Fill style words.
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
-                                             format=format)
+                                             format=format, width=width, base=base, fs=fs)
    endsubroutine plot
 
    subroutine save(self, file)
@@ -226,6 +236,39 @@ contains
       endif
       endsubroutine text
    endsubroutine save
+
+   subroutine set_boxwidth(self, width, relative)
+   !< Box width, as gnuplot `set boxwidth W [absolute|relative]`: `width` absent or 0 for the default, the boxes
+   !< touching; `relative` scales that default instead of setting the width.
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   real(R8P),            intent(in), optional :: width    !< Width, or fraction of the default with `relative`.
+   logical,              intent(in), optional :: relative !< Relative width.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%boxwidth = 0.0_R8P
+      if (present(width)) then
+         if (width < 0.0_R8P) error stop 'foresight: set_boxwidth: the width must not be negative'
+         panel%boxwidth = width
+      endif
+      panel%boxwidth_relative = .false.
+      if (present(relative)) panel%boxwidth_relative = relative
+   endassociate
+   endsubroutine set_boxwidth
+
+   subroutine set_style_fill(self, words)
+   !< Fill of the boxes and filled curves plotted next, as gnuplot `set style fill`: `'empty'`, `'solid 0.5'`,
+   !< `'transparent solid 0.3 noborder'`, `'solid border lc "black"'`.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: words !< Fill style words.
+   character(len=:), allocatable       :: bad   !< Unknown word.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      call fill_style(words, panel%fill_default, bad)
+   endassociate
+   if (len(bad) > 0) error stop 'foresight: set_style_fill: unsupported fill style "'//bad//'"'
+   endsubroutine set_style_fill
 
    subroutine set_format(self, format, axes)
    !< Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text
