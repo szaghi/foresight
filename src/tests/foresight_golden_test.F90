@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(50)                  !< Per-figure outcome.
+logical                     :: test_passed(56)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -71,7 +71,13 @@ test_passed(47) = check('gauges_vfd.svg', figure_gauges(theme='vfd'))
 test_passed(48) = check('radar.svg', figure_radar())
 test_passed(49) = check('rose.svg', figure_rose(.false.))
 test_passed(50) = check('rose_linear.svg', figure_rose(.true.))
-write(output_unit, '(A,50L2)') 'foresight golden checks:', test_passed
+test_passed(51) = check('polar.svg', figure_polar('plain'))
+test_passed(52) = check('polar_round.svg', figure_polar('round'))
+test_passed(53) = check('polar_round.txt', figure_polar('round'))
+test_passed(54) = check('polar_round.html', figure_polar('round'))
+test_passed(55) = check('polar_vfd.svg', figure_polar('round', theme='vfd'))
+test_passed(56) = check('polar_rmin.svg', figure_polar('rmin'))
+write(output_unit, '(A,56L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -445,6 +451,41 @@ contains
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P], [0.8_R8P, 2.1_R8P, 0.6_R8P, 0.3_R8P], with='rose', &
                  xlabels=['mesh  ', 'fluxes', 'comm  ', 'io    '], linear=linear)
    endfunction figure_rose
+
+   function figure_polar(kind, theme) result(fig)
+   !< Polar plots of a cardioid r = 1 + cos(theta) (lines) and a filled pentagon, theta in degrees: `plain` keeps the
+   !< rectangular frame, as gnuplot `set polar` alone; `round` is gnuplot's round idiom (square, polar border and grid,
+   !< no x and y ticks, theta labels); `rmin` sets the pole at r = 0.5 (points below it undefined), theta from the
+   !< top, clockwise.
+   character(len=*), intent(in)           :: kind  !< `plain`, `round` or `rmin`.
+   character(len=*), intent(in), optional :: theme !< Output theme.
+   type(figure_object)                    :: fig   !< Figure.
+   real(R8P)                              :: t(73) !< Theta [deg].
+   integer(I4P)                           :: i     !< Counter.
+
+   call fig%init(width=520_I4P, height=400_I4P)
+   if (present(theme)) call fig%set_theme(name=theme)
+   call fig%set_polar
+   call fig%set_angles('degrees')
+   if (kind /= 'plain') then
+      call fig%set_size(ratio=1.0_R8P)
+      call fig%set_border(0_I4P, polar=.true.)
+      call fig%unset_xtics
+      call fig%unset_ytics
+      call fig%set_grid(polar=30.0_R8P)
+      call fig%set_ttics(step=30.0_R8P)
+      call fig%set_key(position='outside')
+   endif
+   if (kind == 'rmin') then
+      call fig%set_rrange(min=0.5_R8P)
+      call fig%set_theta('top', clockwise=.true.)
+   endif
+   t = [(5.0_R8P * real(i, R8P), i = 0, 72)]
+   call fig%plot(t, 1.0_R8P + cos(t * (4.0_R8P * atan(1.0_R8P) / 180.0_R8P)), title='cardioid')
+   call fig%plot([90.0_R8P, 162.0_R8P, 234.0_R8P, 306.0_R8P, 18.0_R8P, 90.0_R8P], &
+                 [1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P, 1.2_R8P], title='pentagon', with='filledcurves', &
+                 fs='transparent solid 0.3')
+   endfunction figure_polar
 
    function check(name, fig) result(passed)
    !< Render `fig` and compare it with its reference file, or rewrite the reference in update mode.

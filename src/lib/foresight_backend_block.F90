@@ -216,14 +216,15 @@ contains
    endsubroutine px_point
 
    subroutine px_segment(self, a, b, color, symbol)
-   !< A data segment from `a` to `b` [px] on the bitmap; `symbol` (the error bar character in text) is not used.
+   !< A data segment from `a` to `b` [px] on the bitmap; `symbol` (the error bar character in text) is not used, but
+   !< for the grid one `.`: a dotted line.
    class(backend_block), intent(inout) :: self   !< Device.
    real(R8P),            intent(in)    :: a(2)   !< Start [px].
    real(R8P),            intent(in)    :: b(2)   !< End [px].
    character(len=*),     intent(in)    :: color  !< Color.
-   character(len=*),     intent(in)    :: symbol !< Symbol, unused.
+   character(len=*),     intent(in)    :: symbol !< Symbol: `.` dots the line.
 
-   call self%dot_line(a, b, self%color_index(color), .false.)
+   call self%dot_line(a, b, self%color_index(color), symbol == '.')
    endsubroutine px_segment
 
    subroutine rect(self, x, y, width, height, stroke, fill, line_width)

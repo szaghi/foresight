@@ -31,7 +31,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(63)                           !< Per-check outcome.
+logical                       :: test_passed(66)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -630,6 +630,73 @@ test_passed(63) = test_passed(63) .and. iostat /= 0_I4P .and. index(iomsg, 'a ro
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
+! polar: the settings of the round idiom, with abbreviations
+call interpreter%init(scratch)
+call interpreter%run_text("set pol; set an d; set theta t cw; set rr [1:*]; set tr [0:180]; set grid pol 45"// &
+                          new_line('a')//"unset bor; set bor polar; set size sq; set tti 0,30 format '%g deg'"// &
+                          new_line('a')//"set rti 0.5; unset rax", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(64) = iostat == 0_I4P
+if (test_passed(64)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(64) = panel%polar .and. panel%degrees .and. panel%theta_origin == 90.0_R8P .and. &
+                        panel%theta_clockwise .and. panel%raxis%min_fixed .and. panel%raxis%min_user == 1.0_R8P .and. &
+                        .not. panel%raxis%max_fixed .and. panel%taxis%max_user == 180.0_R8P .and. panel%grid .and. &
+                        panel%grid_polar == 45.0_R8P .and. panel%border == 0_I4P .and. panel%border_polar .and. &
+                        panel%ratio == 1.0_R8P .and. panel%ttics%format == '%g deg' .and. panel%raxis%tics%step == '0.5' &
+                        .and. .not. panel%raxis_on
+   endassociate
+endif
+call interpreter%run_text("set angles radians; set grid polar 0.5; set border 3 polar; set size ratio 0.5 0.8,0.9"// &
+                          new_line('a')//"unset theta; unset polar", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(64) = test_passed(64) .and. iostat == 0_I4P
+if (test_passed(64)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(64) = abs(panel%grid_polar - 28.64788975654116_R8P) < 1.0e-9_R8P .and. panel%border == 3_I4P .and. &
+                        panel%border_polar .and. panel%ratio == 0.5_R8P .and. same(panel%size * 10.0_R8P, [8, 9]) .and. &
+                        panel%theta_origin == 0.0_R8P .and. .not. panel%theta_clockwise .and. .not. panel%polar
+   endassociate
+endif
+! polar plots: data theta:r as given (projected at rendering only), a function of t over trange in degrees
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 1', '90 2', '180 3'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set polar; set angles degrees; set trange [0:90]; set samples 3"//new_line('a')// &
+                          "plot '"//data_file//"' u 1:2 w lp, 2*sin(t) w l", iostat, iomsg)
+test_passed(65) = iostat == 0_I4P
+if (test_passed(65)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(65) = same(panel%series(1)%x, [0, 90, 180]) .and. same(panel%series(1)%y, [1, 2, 3]) .and. &
+                        same(panel%series(2)%x, [0, 45, 90]) .and. abs(panel%series(2)%y(3) - 2.0_R8P) < 1.0e-12_R8P &
+                        .and. abs(panel%series(2)%y(2) - sqrt(2.0_R8P)) < 1.0e-12_R8P
+   endassociate
+endif
+! polar errors: a style without polar form, the second axes, a band, a bad rrange, ttics, size ratio, border, angles
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w boxes", iostat, iomsg)
+test_passed(66) = iostat /= 0_I4P .and. index(iomsg, 'a polar panel takes lines, points') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 axes x1y2", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'a polar panel takes') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:(2*$2) w filledcurves", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'a polar panel takes') > 0
+call interpreter%run_text("set rrange [3:1]", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'max must exceed min') > 0
+call interpreter%run_text("set ttics 0,-30", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'set ttics: supported forms') > 0
+call interpreter%run_text("set size ratio -1", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'negative ratios are not supported') > 0
+call interpreter%run_text("set border 2.5", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'the mask is an integer') > 0
+call interpreter%run_text("set angles gradians", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'degrees or radians expected') > 0
+call interpreter%run_text("set grid polar 400", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'below a full turn') > 0
+call interpreter%run_text("set logscale y; plot '"//data_file//"' u 1:2", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'linear x and y axes') > 0
+open(newunit=unit, file=scratch)
+close(unit, status='delete')
+
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
@@ -642,7 +709,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,63L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,66L2)') 'foresight_script checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

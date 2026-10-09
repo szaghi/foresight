@@ -567,6 +567,10 @@
     this.grid = group.getAttribute("data-grid") === "1";
     this.plot = group.querySelector(".fs-plot");
     this.gridGroup = group.querySelector(".fs-grid");
+    // polar panel: its grid is data geometry (zoomed with the series), its r tick labels and
+    // theta labels page geometry, hidden while zoomed
+    this.polarGrid = group.querySelector(".fs-pgrid");
+    this.polarLabels = group.querySelector(".fs-polar");
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
     this.y2ticks = group.querySelector(".fs-y2ticks");
@@ -680,6 +684,10 @@
     var v = this.view;
     this.plot.setAttribute("viewBox", [v.u0, 1 - v.v1, v.u1 - v.u0, v.v1 - v.v0].join(" "));
     this.gridGroup.setAttribute("display", this.grid ? "inline" : "none");
+    if (this.polarGrid) this.polarGrid.setAttribute("display", this.grid ? "inline" : "none");
+    if (this.polarLabels) {
+      this.polarLabels.setAttribute("display", this.isHome() ? "inline" : "none");
+    }
     if (this.isHome()) {
       this.gridGroup.innerHTML = this.original[0];
       this.xticks.innerHTML = this.original[1];
@@ -768,6 +776,7 @@
       if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + length, FRAME_COLOR, 1);
       if (!t.major) return;
       label(self.xticks, p, self.bottom + GAP + fs, t, "middle");
+      if (self.polarGrid) return;
       line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
     });
     this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
@@ -778,6 +787,7 @@
       if (self.mirror[1]) line(self.yticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
       if (!t.major) return;
       label(self.yticks, self.left - GAP, p + 0.35 * fs, t, "end");
+      if (self.polarGrid) return;
       line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
     });
     if (!this.y2ticks) return;

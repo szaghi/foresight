@@ -14,7 +14,9 @@ module foresight_expression
 !< - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
 !<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
 !< - a missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the whole value
-!<   undefined: NaN, a gap in the plot, as gnuplot's `1/0`.
+!<   undefined: NaN, a gap in the plot, as gnuplot's `1/0`;
+!< - compiled with `degrees` (gnuplot `set angles degrees`), `sin`, `cos`, `tan` take degrees and `asin`, `acos`,
+!<   `atan`, `atan2` return them.
 !<
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
@@ -96,6 +98,8 @@ type :: expression_object
    type(instruction_object), allocatable :: code(:)       !< Stack code.
    type(name_object),        allocatable :: names(:)      !< Column header names, `column("name")`.
    integer(I4P)                          :: depth = 0_I4P !< Stack size needed.
+   logical                               :: degrees = .false. !< Angles of the trigonometric functions in degrees
+                                                              !< (gnuplot `set angles degrees`), else radians.
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
       procedure, pass(self) :: evaluate     !< Value on a data row.
@@ -109,16 +113,18 @@ type :: expression_object
 endtype expression_object
 
 contains
-   subroutine compile(self, text, iostat, iomsg, variable)
+   subroutine compile(self, text, iostat, iomsg, variable, degrees)
    !< Compile `text`; on error `iostat` is not 0 and `iomsg` names the problem and its position.
    !<
    !< With `variable` (gnuplot's dummy `x`) the expression is a function of it, evaluated by `value_at`; columns are
-   !< then errors. The variable is held as the only cell of the row `evaluate` receives.
+   !< then errors. The variable is held as the only cell of the row `evaluate` receives. With `degrees` true the
+   !< trigonometric functions work in degrees.
    class(expression_object),      intent(inout)        :: self     !< Expression.
    character(len=*),              intent(in)           :: text     !< Source text.
    integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg    !< Error message.
    character(len=*),              intent(in), optional :: variable !< Dummy variable name, for a function.
+   logical,                       intent(in), optional :: degrees  !< Angles in degrees.
    integer(I4P), parameter                      :: T_END = 0_I4P      !< End of text.
    integer(I4P), parameter                      :: T_NUMBER = 1_I4P   !< Number.
    integer(I4P), parameter                      :: T_COLUMN = 2_I4P   !< `$N`.
@@ -139,6 +145,8 @@ contains
    if (allocated(self%names)) deallocate(self%names)
    allocate(self%names(0))
    self%depth = 0_I4P
+   self%degrees = .false.
+   if (present(degrees)) self%degrees = degrees
    iostat = 0_I4P
    iomsg = ''
    pos = 1_I4P
@@ -563,10 +571,15 @@ contains
             stack(sp) = logical_value(truth(stack(sp)))
          case (OP_ADD:OP_NE)
             call binary(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok)
+            if (self%degrees .and. instruction%op == OP_ATAN2 .and. ok) result%r = result%r * (180.0_R8P / PI)
             sp = sp - 1_I4P
             stack(sp) = result
          case (OP_FUNCTION)
-            call unary(instruction%arg, stack(sp), result, ok)
+            if (self%degrees) then
+               call unary_degrees(instruction%arg, stack(sp), result, ok)
+            else
+               call unary(instruction%arg, stack(sp), result, ok)
+            endif
             stack(sp) = result
          case (OP_JUMP)
             pc = instruction%arg
@@ -931,6 +944,24 @@ contains
       yes = abs(i) <= MOST / abs(j)
    endif
    endfunction fits_product
+
+   pure subroutine unary_degrees(f, a, c, ok)
+   !< c = FUNCTIONS(f)(a) with the angles of the trigonometric functions in degrees; `ok` false if undefined.
+   integer(I4P),       intent(in)    :: f  !< Function index.
+   type(value_object), intent(in)    :: a  !< Argument.
+   type(value_object), intent(out)   :: c  !< Result.
+   logical,            intent(inout) :: ok !< Defined.
+
+   select case (trim(FUNCTIONS(f)))
+   case ('sin', 'cos', 'tan')
+      call unary(f, value_object(r=real_of(a) * (PI / 180.0_R8P)), c, ok)
+   case ('asin', 'acos', 'atan')
+      call unary(f, a, c, ok)
+      if (ok) c%r = c%r * (180.0_R8P / PI)
+   case default
+      call unary(f, a, c, ok)
+   endselect
+   endsubroutine unary_degrees
 
    pure subroutine unary(f, a, c, ok)
    !< c = FUNCTIONS(f)(a); `ok` false if undefined.

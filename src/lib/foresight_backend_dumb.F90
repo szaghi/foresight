@@ -409,17 +409,30 @@ contains
    endsubroutine end_plot_area
 
    subroutine data_polyline(self, x, y, color, line_width, dasharray)
-   !< Polyline [unit square] drawn with the color symbol, clipped to the plot area.
+   !< Polyline [unit square] drawn with the color symbol, clipped to the plot area; grid lines (the polar grid) with
+   !< `.`, frame lines (the polar border, the r axis) with `-`, `|` or `+` by their slope, as gnuplot's dumb.
    class(backend_dumb), intent(inout) :: self       !< Device.
    real(R8P),           intent(in)    :: x(:)       !< Abscissae [unit].
    real(R8P),           intent(in)    :: y(:)       !< Ordinates [unit].
    character(len=*),    intent(in)    :: color      !< Stroke color.
    real(R8P),           intent(in)    :: line_width !< Stroke width [px].
    character(len=*),    intent(in)    :: dasharray  !< SVG dash array.
+   character(len=:), allocatable      :: symbol     !< Segment symbol, empty for the color one.
+   real(R8P)                          :: dc         !< Segment width [cells].
+   real(R8P)                          :: dr         !< Segment height [cells].
    integer(I4P)                       :: i          !< Counter.
 
    do i = 1_I4P, size(x, kind=I4P) - 1_I4P
-      call self%unit_segment(x(i), y(i), x(i + 1), y(i + 1), color, '')
+      symbol = ''
+      if (color == GRID_COLOR) symbol = '.'
+      if (color == FRAME_COLOR) then
+         dc = abs(x(i + 1) - x(i)) * self%area(3) / self%cw
+         dr = abs(y(i + 1) - y(i)) * self%area(4) / self%ch
+         symbol = '+'
+         if (dr < 0.4_R8P * dc) symbol = '-'
+         if (dc < 0.4_R8P * dr) symbol = '|'
+      endif
+      call self%unit_segment(x(i), y(i), x(i + 1), y(i + 1), color, symbol)
    enddo
    endsubroutine data_polyline
 

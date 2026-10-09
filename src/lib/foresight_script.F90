@@ -38,6 +38,11 @@ module foresight_script
 !<   (`using Y[:xtic(N)]`, alone in its panel);
 !< - foresight's panel charts: `with gauge range [A:B] [segments N] [format "fmt"]`, `with radar`, `with rose [linear]`
 !<   (`using Y[:xtic(N)]`), alone in their panel (several gauges or radars side by side);
+!< - `set|unset polar` (items theta:r, functions of `t` over `set trange [min:max]`), `set angles degrees|radians`
+!<   (also the trigonometric functions of the expressions), `set|unset theta [right|top|left|bottom] [clockwise|cw|
+!<   counterclockwise|ccw]`, `set rrange [min:max]`, `set|unset rtics [...]` (as xtics), `set|unset ttics [[START,]STEP]
+!<   [format "fmt"]`, `set|unset raxis`, `set grid [polar [STEP]]`, `set border [MASK] [polar]`, `unset border`,
+!<   `set size [square|nosquare|ratio R|noratio] [W,H]`;
 !< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
 !<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style); `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
@@ -50,7 +55,7 @@ module foresight_script
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
-use foresight_axes, only : axes_names
+use foresight_axes, only : axes_names, polar_series, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object
 use foresight_figure, only : figure_object
@@ -342,6 +347,7 @@ contains
    integer(I4P)                                 :: head      !< First token of a function.
    logical                                      :: has_title !< Title given (or notitle).
    logical                                      :: is_function !< The item is a function, else a data file.
+   logical                                      :: polar_ok !< The item can be drawn on a polar panel.
    logical                                      :: headed    !< The first row of each dataset is a header.
    integer(I4P)                                 :: title_column !< Header column titling the item: 0 the y one,
                                                                 !< negative for none (gnuplot `title columnhead(N)`).
@@ -380,7 +386,10 @@ contains
             i = i + 1_I4P
          enddo
          written = text(tokens(head)%first:tokens(i)%last)
-         call func%compile(written, iostat, iomsg, variable='x')
+         ! gnuplot's dummy variable is t in polar mode
+         associate(panel => self%figure%panels(self%figure%current))
+            call func%compile(written, iostat, iomsg, variable=merge('t', 'x', panel%polar), degrees=panel%degrees)
+         endassociate
          if (iostat /= 0_I4P) then
             iomsg = 'plot: '//iomsg
             return
@@ -436,7 +445,7 @@ contains
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
             call split_xtic(spec, label_col, iostat, iomsg)
             if (iostat /= 0_I4P) return
-            call parse_using(spec, fields, iostat, iomsg)
+            call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'matrix', 3_I4P)) then
             if (is_function) then
@@ -628,6 +637,20 @@ contains
                    iomsg)
          return
       endif
+      associate(panel => self%figure%panels(self%figure%current))
+         if (panel%polar) then
+            polar_ok = is_word(with, 'lines points linespoints filledcurves readout') .and. .not. allocated(base)
+            if (allocated(axes)) polar_ok = polar_ok .and. axes /= 'x1y2'
+            if (.not. polar_ok) then
+               call fail('plot: '//POLAR_STYLES, iostat, iomsg)
+               return
+            endif
+            if (panel%xaxis%log .or. panel%yaxis%log) then
+               call fail('plot: a polar panel has linear x and y axes (unset logscale)', iostat, iomsg)
+               return
+            endif
+         endif
+      endassociate
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') title = written
@@ -712,6 +735,10 @@ contains
       case ('filledcurves')
          if (nbar > 1_I4P) then
             call fail('plot: filledcurves needs using x:y or x:y1:y2', iostat, iomsg)
+            return
+         endif
+         if (nbar == 1_I4P .and. self%figure%panels(self%figure%current)%polar) then
+            call fail('plot: '//POLAR_STYLES, iostat, iomsg)
             return
          endif
          if (nbar == 1_I4P .and. allocated(base)) then
@@ -1098,6 +1125,26 @@ contains
 
       n = self%samples
       associate(panel => self%figure%panels(self%figure%current))
+         if (panel%polar) then
+            ! over trange, a full turn by default, as gnuplot
+            lo = 0.0_R8P
+            hi = merge(360.0_R8P, 2.0_R8P * acos(-1.0_R8P), panel%degrees)
+            if (panel%taxis%min_fixed) lo = panel%taxis%min_user
+            if (panel%taxis%max_fixed) hi = panel%taxis%max_user
+            allocate(xs(n), ys(n))
+            do j = 1_I4P, n
+               xs(j) = lo + real(j - 1_I4P, R8P) * ((hi - lo) / real(n - 1_I4P, R8P))
+            enddo
+            xs(n) = hi
+            do f = 1_I4P, size(functions, kind=I4P)
+               do j = 1_I4P, n
+                  ys(j) = functions(f)%value_at(xs(j))
+               enddo
+               panel%series(slots(f))%x = xs
+               panel%series(slots(f))%y = ys
+            enddo
+            return
+         endif
          ! the functions are still empty: the extent is the data one
          call panel%data_extent(xmin, xmax, ymin, ymax, found)
          call panel%xaxis%range_of(xmin, xmax, any(found), lo, hi)
@@ -1218,8 +1265,51 @@ contains
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_logscale(text)
    elseif (keyword(option, 'grid', 2_I4P)) then
+      call grid_option
+   elseif (keyword(option, 'polar', 3_I4P)) then
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
-      call self%figure%set_grid(.true.)
+      associate(panel => self%figure%panels(self%figure%current))
+         if (allocated(panel%series)) then
+            if (.not. all(polar_series(panel%series))) then
+               call fail('set polar: '//POLAR_STYLES, iostat, iomsg)
+               return
+            endif
+         endif
+      endassociate
+      call self%figure%set_polar(.true.)
+   elseif (keyword(option, 'angles', 2_I4P)) then
+      if (size(tokens) == 2) then
+         if (keyword(tokens(2)%text, 'degrees', 1_I4P)) then
+            call self%figure%set_angles('degrees')
+            return
+         elseif (keyword(tokens(2)%text, 'radians', 1_I4P)) then
+            call self%figure%set_angles('radians')
+            return
+         endif
+      endif
+      call fail('set angles: degrees or radians expected', iostat, iomsg)
+   elseif (option == 'theta') then
+      call theta_option
+   elseif (keyword(option, 'rrange', 2_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%raxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         if (iostat == 0_I4P .and. axis%min_fixed .and. axis%max_fixed) then
+            if (.not. axis%max_user > axis%min_user) call fail('set rrange: max must exceed min', iostat, iomsg)
+         endif
+      endassociate
+   elseif (keyword(option, 'trange', 2_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%taxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
+   elseif (keyword(option, 'rtics', 3_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%raxis%tics)
+   elseif (keyword(option, 'ttics', 3_I4P)) then
+      call ttics_option
+   elseif (keyword(option, 'raxis', 3_I4P)) then
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      call self%figure%set_raxis(.true.)
+   elseif (keyword(option, 'border', 3_I4P)) then
+      call border_option
    elseif (keyword(option, 'key', 1_I4P)) then
       call key_option
    elseif (option == 'readout') then
@@ -1344,9 +1434,9 @@ contains
    elseif (keyword(option, 'format', 3_I4P)) then
       call format_option
    elseif (keyword(option, 'origin', 2_I4P)) then
-      call pair_option([0.0_R8P, 0.0_R8P])
+      call pair_option([0.0_R8P, 0.0_R8P], tokens)
    elseif (keyword(option, 'size', 2_I4P)) then
-      call pair_option([1.0_R8P, 1.0_R8P])
+      call size_option
    elseif (keyword(option, 'multiplot', 5_I4P)) then
       rows = 0_I4P
       cols = 0_I4P
@@ -1588,11 +1678,14 @@ contains
       call self%figure%set_readout(on, position=words, opaque=opaque, size=digits)
       endsubroutine readout_option
 
-      subroutine pair_option(default)
+      subroutine pair_option(default, words)
       !< `set origin [X,Y]` and `set size [W,H]`, page fractions; no values restore `default`.
-      real(R8P), intent(in) :: default(2) !< Default values.
-      real(R8P)             :: pair(2)    !< Values.
+      real(R8P),          intent(in) :: default(2) !< Default values.
+      type(token_object), intent(in) :: words(:)   !< Option tokens (of size, without the aspect words).
+      type(token_object), allocatable :: tokens(:) !< Option tokens.
+      real(R8P)                       :: pair(2)   !< Values.
 
+      tokens = words
       if (self%figure%layout) then
          call fail('set '//option//': not supported with a multiplot layout', iostat, iomsg)
          return
@@ -1601,7 +1694,7 @@ contains
       if (size(tokens) > 1) then
          if (size(tokens) /= 4 .or. tokens(2)%kind /= TOKEN_WORD .or. tokens(3)%kind /= TOKEN_COMMA .or. &
              tokens(4)%kind /= TOKEN_WORD) then
-            call fail('set '//option//': two numbers X,Y expected (ratio, square are not supported)', iostat, iomsg)
+            call fail('set '//option//': two numbers X,Y expected', iostat, iomsg)
             return
          endif
          if (.not. (to_number(tokens(2)%text, pair(1)) .and. to_number(tokens(4)%text, pair(2)))) then
@@ -1619,6 +1712,181 @@ contains
          call self%figure%set_origin(pair(1), pair(2))
       endif
       endsubroutine pair_option
+
+      subroutine size_option
+      !< `set size [square|nosquare|ratio R|noratio] [W,H]`: the plot area aspect, and the page fractions of the plot
+      !< (no values restore 1,1).
+      type(token_object), allocatable :: rest(:) !< Size tokens, aspect words removed.
+      real(R8P)                       :: ratio   !< Height over width.
+      logical                         :: aspect  !< An aspect word given.
+
+      allocate(rest(1))
+      rest(1) = tokens(1)
+      aspect = .false.
+      ratio = 0.0_R8P
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'square', 2_I4P)) then
+            aspect = .true.
+            ratio = 1.0_R8P
+         elseif (tokens(i)%kind == TOKEN_WORD .and. (keyword(tokens(i)%text, 'nosquare', 4_I4P) .or. &
+                                                     keyword(tokens(i)%text, 'noratio', 4_I4P))) then
+            aspect = .true.
+            ratio = 0.0_R8P
+         elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'ratio', 2_I4P)) then
+            aspect = .true.
+            i = i + 1_I4P
+            ok_ratio: block
+               if (i <= size(tokens, kind=I4P)) then
+                  if (to_number(tokens(i)%text, ratio)) then
+                     if (ratio > 0.0_R8P) exit ok_ratio
+                  endif
+               endif
+               call fail('set size: ratio needs a positive number (negative ratios are not supported)', iostat, iomsg)
+               return
+            endblock ok_ratio
+         else
+            rest = [rest, tokens(i)]
+         endif
+         i = i + 1_I4P
+      enddo
+      if (aspect) call self%figure%set_size(ratio=ratio)
+      if (aspect .and. size(rest) == 1) return
+      call pair_option([1.0_R8P, 1.0_R8P], rest)
+      endsubroutine size_option
+
+      subroutine grid_option
+      !< `set grid [polar [STEP]]`: the rectangular grid, or the polar one with spokes every STEP (30 by default) in
+      !< the angle unit.
+      real(R8P) :: step !< Spoke step.
+
+      if (size(tokens) == 1) then
+         call self%figure%set_grid(.true., polar=0.0_R8P)
+         return
+      endif
+      if (.not. keyword(tokens(2)%text, 'polar', 2_I4P) .or. tokens(2)%kind /= TOKEN_WORD .or. size(tokens) > 3) then
+         call fail('set grid: only "polar [STEP]" is supported', iostat, iomsg)
+         return
+      endif
+      step = 30.0_R8P
+      if (size(tokens) == 3) then
+         if (.not. to_number(tokens(3)%text, step)) then
+            call fail('set grid polar: "'//tokens(3)%text//'" is not a number', iostat, iomsg)
+            return
+         endif
+         ! in the angle unit
+         if (.not. self%figure%panels(self%figure%current)%degrees) step = step * (180.0_R8P / acos(-1.0_R8P))
+      endif
+      if (.not. (step > 0.0_R8P .and. step < 360.0_R8P)) then
+         call fail('set grid polar: the step must be positive and below a full turn', iostat, iomsg)
+         return
+      endif
+      call self%figure%set_grid(.true., polar=step)
+      endsubroutine grid_option
+
+      subroutine theta_option
+      !< `set theta [right|top|left|bottom] [clockwise|cw|counterclockwise|ccw]`; no words restore right ccw.
+      character(len=6) :: origin    !< Direction of theta = 0.
+      logical          :: clockwise !< Theta grows clockwise.
+
+      origin = 'right'
+      clockwise = .false.
+      do i = 2_I4P, size(tokens, kind=I4P)
+         if (keyword(tokens(i)%text, 'right', 1_I4P)) then
+            origin = 'right'
+         elseif (keyword(tokens(i)%text, 'top', 1_I4P)) then
+            origin = 'top'
+         elseif (keyword(tokens(i)%text, 'left', 1_I4P)) then
+            origin = 'left'
+         elseif (keyword(tokens(i)%text, 'bottom', 1_I4P)) then
+            origin = 'bottom'
+         elseif (tokens(i)%text == 'clockwise' .or. tokens(i)%text == 'cw') then
+            clockwise = .true.
+         elseif (tokens(i)%text == 'counterclockwise' .or. tokens(i)%text == 'ccw') then
+            clockwise = .false.
+         else
+            call fail('set theta: unsupported option "'//tokens(i)%text//'" (right, top, left, bottom, clockwise, '// &
+                      'counterclockwise)', iostat, iomsg)
+            return
+         endif
+      enddo
+      call self%figure%set_theta(trim(origin), clockwise)
+      endsubroutine theta_option
+
+      subroutine ttics_option
+      !< `set ttics [[START,]STEP] [format "fmt"]`: theta labels [deg]; no step: every 45 degrees.
+      character(len=:), allocatable :: format  !< Label format.
+      character(len=:), allocatable :: message !< Format problem.
+      real(R8P)                     :: v(2)    !< Start, step.
+      integer(I4P)                  :: n       !< Position tokens.
+
+      n = size(tokens, kind=I4P) - 1_I4P
+      if (n >= 2_I4P) then
+         if (keyword(tokens(n)%text, 'format', 1_I4P) .and. tokens(n)%kind == TOKEN_WORD .and. &
+             tokens(n + 1_I4P)%kind == TOKEN_STRING) then
+            format = tokens(n + 1_I4P)%text
+            message = format_check(format)
+            if (len(message) > 0) then
+               call fail('set ttics: '//message, iostat, iomsg)
+               return
+            endif
+            n = n - 2_I4P
+         endif
+      endif
+      select case (n)
+      case (0_I4P)
+         call self%figure%set_ttics(format=format)
+      case (1_I4P)
+         if (.not. to_number(tokens(2)%text, v(2))) n = -1_I4P
+         if (n > 0_I4P) then
+            if (.not. v(2) > 0.0_R8P) n = -1_I4P
+         endif
+         if (n > 0_I4P) call self%figure%set_ttics(step=v(2), format=format)
+      case (3_I4P)
+         if (tokens(3)%kind /= TOKEN_COMMA .or. .not. to_number(tokens(2)%text, v(1)) .or. &
+             .not. to_number(tokens(4)%text, v(2))) n = -1_I4P
+         if (n > 0_I4P) then
+            if (.not. v(2) > 0.0_R8P) n = -1_I4P
+         endif
+         if (n > 0_I4P) call self%figure%set_ttics(step=v(2), start=v(1), format=format)
+      case default
+         n = -1_I4P
+      endselect
+      if (n < 0_I4P) call fail('set ttics: supported forms are STEP and START,STEP (degrees, step > 0), with '// &
+                               'format "fmt"', iostat, iomsg)
+      endsubroutine ttics_option
+
+      subroutine border_option
+      !< `set border [MASK] [polar]`: the sides of the frame (1 bottom, 2 left, 4 top, 8 right; 31 by default) and the
+      !< circle of the largest r on a polar panel.
+      integer(I4P) :: mask  !< Sides, -1 if not given.
+      logical      :: polar !< Polar border.
+      real(R8P)    :: v     !< Mask value.
+
+      mask = -1_I4P
+      polar = .false.
+      do i = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'polar', 2_I4P)) then
+            polar = .true.
+         elseif (to_number(tokens(i)%text, v)) then
+            if (v < 0.0_R8P .or. v > 4095.0_R8P .or. v /= aint(v)) then
+               call fail('set border: the mask is an integer 0 to 4095', iostat, iomsg)
+               return
+            endif
+            mask = int(v, I4P)
+         else
+            call fail('set border: only a MASK and "polar" are supported', iostat, iomsg)
+            return
+         endif
+      enddo
+      if (mask >= 0_I4P) then
+         call self%figure%set_border(mask, polar)
+      elseif (polar) then
+         call self%figure%set_border(polar=.true.)
+      else
+         call self%figure%set_border()
+      endif
+      endsubroutine border_option
 
       subroutine tics_option(tics)
       !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
@@ -1957,7 +2225,19 @@ contains
    elseif (keyword(option, 'y2label', 3_I4P)) then
       call self%figure%set_y2label('')
    elseif (keyword(option, 'grid', 2_I4P)) then
-      call self%figure%set_grid(.false.)
+      call self%figure%set_grid(.false., polar=0.0_R8P)
+   elseif (keyword(option, 'polar', 3_I4P)) then
+      call self%figure%set_polar(.false.)
+   elseif (option == 'theta') then
+      call self%figure%set_theta('right', .false.)
+   elseif (keyword(option, 'raxis', 3_I4P)) then
+      call self%figure%set_raxis(.false.)
+   elseif (keyword(option, 'rtics', 3_I4P)) then
+      call self%figure%set_rtics(on=.false.)
+   elseif (keyword(option, 'ttics', 3_I4P)) then
+      call self%figure%set_ttics(on=.false.)
+   elseif (keyword(option, 'border', 3_I4P)) then
+      call self%figure%set_border(0_I4P, .false.)
    elseif (keyword(option, 'key', 1_I4P)) then
       call self%figure%set_key(.false.)
    elseif (option == 'readout') then
@@ -2306,13 +2586,14 @@ contains
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
 
-   subroutine parse_using(spec, fields, iostat, iomsg)
+   subroutine parse_using(spec, fields, iostat, iomsg, degrees)
    !< `using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a
    !< parenthesized expression, as in gnuplot.
    character(len=*),                     intent(in)  :: spec      !< Specification.
    type(expression_object), allocatable, intent(out) :: fields(:) !< Fields.
    character(len=:), allocatable,        intent(out) :: iomsg     !< Error message.
    integer(I4P),                         intent(out) :: iostat    !< 0 on success.
+   logical,                              intent(in)  :: degrees   !< Angles of the expressions in degrees.
    type(expression_object)                           :: field     !< Current field.
    integer(I4P)                                      :: start     !< Field start.
    integer(I4P)                                      :: finish    !< Field end.
@@ -2350,7 +2631,7 @@ contains
             call field%set_name(text(2:len(text) - 1))
          elseif (text(1:min(1, len(text))) == '(') then
             ! compiled first, so that an unbalanced expression gets the precise syntax error
-            call field%compile(text, iostat, iomsg)
+            call field%compile(text, iostat, iomsg, degrees=degrees)
             if (iostat /= 0_I4P) then
                iomsg = 'using: '//iomsg
                return

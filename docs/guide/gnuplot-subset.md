@@ -34,7 +34,15 @@ that did what it says.
 | **xl**abel / **yl**abel / **y2l**abel `"text"` | axis label (`y2` on the right) | no label |
 | **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | — |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2` (`y`, `xy2`), all when absent | linear axes |
-| **gr**id | grid at major ticks | no grid |
+| **gr**id [**po**lar [`STEP`]] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
+| **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
+| **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
+| `theta` [`right`\|`top`\|`left`\|`bottom`] [`clockwise`\|`cw`\|`counterclockwise`\|`ccw`] | where theta = 0 lies and its direction (right, counterclockwise by default) | right, counterclockwise |
+| **rr**ange / **tr**ange `[min:max]` | r range (`min` at the pole, 0 when autoscaled) and theta range of the functions (a full turn by default) | — |
+| **rti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] | ticks of the r axis (automatic by default) | no r ticks |
+| **tti**cs [[`START,`]`STEP`] [`format "fmt"`] | theta labels around the polar plot, in degrees; every 45 degrees without `STEP` (gnuplot: none) | no theta labels (the default) |
+| **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
+| **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
 | **xti**cs / **yti**cs / **y2ti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis) | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
@@ -57,7 +65,7 @@ that did what it says.
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
 | **or**igin [`X,Y`] | bottom left corner of the plot, page fractions (default `0,0`); not with a layout | — |
-| **si**ze [`W,H`] | plot size, page fractions (default `1,1`); not with a layout | — |
+| **si**ze [**sq**uare\|**nosq**uare\|**ra**tio `R`\|**nora**tio] [`W,H`] | plot size, page fractions (default `1,1`; not with a layout); `square`, `ratio R` (> 0): the plot area height over width | — |
 
 ## `plot` items
 
@@ -157,6 +165,9 @@ by default whatever `set style data` says; `set style function points` (or `line
 not usable. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
 
 In the HTML page a zoom does not resample: the samples are those of the original range.
+
+On a [polar](#polar-plots) panel a function is r of `t`, sampled over `trange` (a full turn by default) as gnuplot:
+`plot 1 + cos(t)`.
 
 ## Smoothing
 
@@ -515,6 +526,36 @@ plot 'phases.dat' u 2:xtic(1) w rose
 proportional instead, the common but exaggerating choice (twice the value, four times the area). The rings mark the
 values of the scale.
 
+## Polar plots
+
+gnuplot's `set polar`: the items are theta:r, drawn at x = (r - rmin) cos(theta), y = (r - rmin) sin(theta) and joined
+by straight segments, functions are r of `t`. As in gnuplot, `set polar` alone keeps the rectangular frame and the x
+and y ticks, the r axis running from the pole to the right; the round plot is gnuplot's usual idiom:
+
+```gnuplot
+set terminal svg size 520,400 theme vfd
+set polar; set angles degrees
+set size square; unset border; set border polar; unset xtics; unset ytics
+set grid polar 30; set ttics 0,30; set key outside
+plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
+```
+
+<Plot name="cb_polar" svg :width="520" :height="400" />
+
+- theta is in radians unless `set angles degrees` (which also makes `sin`, `cos`, `tan` take degrees and `asin`, `acos`,
+  `atan`, `atan2` return them); `set theta top clockwise` puts theta = 0 at the top, growing clockwise;
+- the r range starts at 0 at the pole and ends at the largest |r| extended to the r ticks; `set rrange [1:*]` puts
+  r = 1 at the pole, the points below it undefined; with an autoscaled pole a negative r lies across it, as gnuplot;
+- x and y autoscale to the disc, [-R:R] for R = rmax - rmin, extended to their ticks when these are on;
+- `set grid polar` draws rings at the r ticks and spokes, `set border polar` the circle of rmax, `set ttics` the theta
+  labels outside it (always in degrees), `set size square` keeps the circle round;
+- the items are `lines`, `points`, `linespoints`, closed `filledcurves` (`using theta:r`) or readouts (of r), on the
+  first axes; x and y stay linear.
+
+In the HTML page a polar panel zooms as any other: the curves, rings, spokes and border are data, the r tick labels
+and theta labels are hidden while zoomed. Unlike gnuplot, points beyond rmax are clipped at the plot area as the lines
+(gnuplot hides them), and the autoscale takes the largest |r| (gnuplot: the largest r, degenerate when all are negative).
+
 ## Themes and segmented fills
 
 Foresight extensions: the look of the digital dashboards of 1980s cars, for monitoring and showcase pages.
@@ -552,7 +593,8 @@ text). Zooming magnifies the cells with the data.
 ## Not supported
 
 User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`), the second
-x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, `set size ratio` and `square`; in `set xtics`,
+x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
+`mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
 at a position (`at`) or in a named margin (`lmargin`, ...); fill patterns (`fs pattern N`), `filledcurves above`,

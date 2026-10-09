@@ -244,6 +244,15 @@ gauges follow the run. See [Gauges, radars and roses](/guide/gnuplot-subset#gaug
 
 <Plot name="cb_rose" svg :width="480" :height="320" />
 
+## A polar plot
+
+<<< @/examples/snippets/cb_polar.gp{gnuplot}
+
+<Plot name="cb_polar" svg :width="520" :height="400" />
+
+A probe's directivity against a cardioid model, theta in degrees, in gnuplot's round idiom: square plot, polar border
+and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+
 ## A heatmap
 
 <<< @/examples/snippets/cb_image.gp{gnuplot}

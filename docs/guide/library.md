@@ -33,13 +33,17 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2` (all when absent) |
-| `set_grid([on])` | `set grid`, `unset grid` |
+| `set_grid([on], [polar])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid) |
 | `set_key([on], [position], [box])` | `set key bottom left box`, `set key outside`, `set key below`, `unset key` |
 | `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()` | `unset xtics` |
 | `set_format(format, [axes])` | `set format y "%.1e"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
-| `set_origin(x, y)`, `set_size(width, height)` | `set origin`, `set size`: page fractions, not with a layout |
+| `set_origin(x, y)`, `set_size([width, height], [ratio])` | `set origin`, `set size`: page fractions, not with a layout; `ratio=1._R8P`: `set size square` (0: `noratio`) |
+| `set_polar([on])`, `set_angles(unit)`, `set_theta([origin], [clockwise])` | `set polar`, `set angles degrees`, `set theta top clockwise` ([Polar plots](gnuplot-subset#polar-plots)): `plot(theta, r)` |
+| `set_rrange([min], [max])`, `set_trange([min], [max])` | `set rrange [1:*]`, `set trange` |
+| `set_rtics([step], [start], [end], [on])`, `set_ttics([step], [start], [format], [on])`, `set_raxis([on])` | `set rtics`, `set ttics 0,30 format "%g"`, `set raxis`; `on=.false.`: `unset ...` |
+| `set_border([mask], [polar])` | `set border 3`, `set border polar`, `unset border` (`mask=0`) |
 | `set_style_fill(words)` | `set style fill solid 0.5 noborder`, `solid segments 10` |
 | `image(z, [x], [y], [title])` | `plot ... with image`: the values `z(column, row)` at the pixel centres `x`, `y` (evenly spaced; 0, 1, ... if absent) |
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |

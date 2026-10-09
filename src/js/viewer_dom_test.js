@@ -5,7 +5,8 @@
 // a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
-// image.html, an image zoomed with the data, its color box not. The page is parsed by linkedom; the SVG
+// image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
+// with the data, its labels hidden while zoomed. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -193,6 +194,26 @@ check("image in the plot area", panel(0).querySelector(".fs-plot image") !== nul
 wheel(0);
 check("a zoom acts on the image, not on the color box", box(0)[2] < 1 &&
   panel(0).querySelector(".fs-colorbox").innerHTML === colorbox);
+
+// a polar plot: grid rings and spokes are data, zoomed with the series; the r tick labels and theta
+// labels are page geometry, hidden while zoomed; no rectangular grid is drawn over the polar one
+page = strip(path.join(__dirname, "..", "tests", "golden", "polar_round.html"));
+p = load("");
+var pgrid = panel(0).querySelector(".fs-pgrid"), plabels = panel(0).querySelector(".fs-polar");
+check("polar grid in the plot area, labels outside it",
+  pgrid !== null && pgrid.closest(".fs-plot") !== null && plabels !== null &&
+  plabels.closest(".fs-plot") === null && plabels.querySelectorAll("text").length > 0);
+key("g");
+var hidden = pgrid.getAttribute("display") === "none";
+key("g");
+check("the grid key toggles the polar grid", hidden && pgrid.getAttribute("display") === "inline");
+wheel(0);
+check("a zoom hides the polar labels, draws no rectangular grid", box(0)[2] < 1 &&
+  plabels.getAttribute("display") === "none" &&
+  panel(0).querySelectorAll(".fs-grid line").length === 0);
+key("a");
+check("autoscale shows the polar labels again", box(0)[2] === 1 &&
+  plabels.getAttribute("display") === "inline");
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

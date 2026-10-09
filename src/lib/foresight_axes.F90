@@ -36,6 +36,12 @@ module foresight_axes
 !< with an image fit its pixel edges, unextended, as gnuplot. The color box lies at the right of the plot area. A theme
 !< other than classic replaces the default palette with its own (dark glass to emissive colors for `vfd`).
 !<
+!< A polar panel (`polar`, gnuplot `set polar`) keeps its series as theta:r and projects them at each rendering about
+!< the pole at r = rmin (the r axis start), x and y autoscaling to the disc of the largest radius; the frame stays
+!< rectangular unless set otherwise (`border`, `border_polar`, `ratio`, the x and y ticks off), as gnuplot. Its polar
+!< grid, border and r axis line are data geometry (zoomed by a viewer); the r tick labels and theta labels (`ttics`)
+!< are page geometry, in the group `fs-polar`.
+!<
 !< Readouts (`with readout`, see foresight_readout) show the last finite value of their series in seven-segment
 !< digits. They take no part in autoscale, the key or the plot area: they form a block of readouts, in a column or a
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
@@ -48,9 +54,9 @@ use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_SOLID, style_object, style_with, WITH_BOXES, &
-                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_GAUGE, WITH_HISTOGRAMS, WITH_IMAGE, WITH_PIE, &
-                            WITH_RADAR, WITH_READOUT, WITH_ROSE
-use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_NONE
+                            WITH_CIRCLES, WITH_FILLEDCURVES, WITH_GAUGE, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, &
+                            WITH_LINESPOINTS, WITH_PIE, WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE
+use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -58,7 +64,9 @@ private
 public :: axes_object
 public :: axes_names
 public :: key_position
+public :: polar_series
 public :: readout_position
+public :: POLAR_STYLES
 
 real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
 real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [px].
@@ -73,6 +81,10 @@ character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array
 character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
+character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, closed filledcurves '// &
+                                               'and readouts, on the first axes' !< Styles of a polar panel.
+integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
+real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
 
 type :: axes_object
    !< Plot panel.
@@ -110,12 +122,30 @@ type :: axes_object
    logical                          :: readout_opaque = .true. !< Window behind the readouts over a plot.
    real(R8P)                        :: readout_size = 0.0_R8P !< Digit height [px]; 0 for the default, which fills
                                                               !< a panel of readouts alone.
+   logical                          :: polar = .false.   !< Polar coordinates (`set polar`): the series are theta:r.
+   logical                          :: degrees = .false. !< Angles in degrees (`set angles degrees`), else radians.
+   real(R8P)                        :: theta_origin = 0.0_R8P !< Direction of theta = 0 (`set theta`) [deg,
+                                                              !< counterclockwise from the right].
+   logical                          :: theta_clockwise = .false. !< Theta grows clockwise.
+   type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
+   logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
+   type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.
+   type(tics_object)                :: ttics = tics_object(mode=TICS_NONE) !< Theta labels around the polar plot.
+   real(R8P)                        :: grid_polar = 0.0_R8P !< Spoke step of the polar grid [deg]; 0: rectangular grid.
+   integer(I4P)                     :: border = 31_I4P   !< Border sides (gnuplot mask): 1 bottom, 2 left, 4 top, 8
+                                                         !< right.
+   logical                          :: border_polar = .false. !< Circle at the largest r (`set border polar`).
+   real(R8P)                        :: ratio = 0.0_R8P   !< Plot area height over width (`set size ratio`, `square` is
+                                                         !< 1); 0 for none.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
       procedure, pass(self) :: render                      !< Render the panel.
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
+      procedure, pass(self), private :: draw_polar_axes    !< Draw the radial axis and the theta labels.
+      procedure, pass(self), private :: draw_polar_grid    !< Draw the polar grid.
+      procedure, pass(self), private :: page_angle         !< Page angle of a theta.
       procedure, pass(self), private :: draw_key           !< Draw the key.
       procedure, pass(self), private :: draw_readouts      !< Draw the readouts.
       procedure, pass(self), private :: key_layout         !< Key size and entry grid.
@@ -317,6 +347,7 @@ contains
       series%ylow = ylow
       series%yhigh = yhigh
    endif
+   if (self%polar .and. .not. polar_series(series)) error stop 'foresight: plot: '//POLAR_STYLES
    self%series = [self%series, series]
    if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
                                                                      self%histogram_gap, self%boxwidth)
@@ -449,6 +480,8 @@ contains
    real(R8P)                            :: key(2)    !< Key width and height [px].
    real(R8P)                            :: above     !< Room for a key above the plot [px].
    type(axes_view)                      :: view      !< Panel geometry and ranges for the device.
+   type(series_object), allocatable     :: raw(:)    !< Series of a polar panel as given (theta:r), restored after
+                                                     !< the drawing of their projection.
    integer(I4P)                         :: s         !< Series counter.
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
 
@@ -501,13 +534,14 @@ contains
          above = key(2) + GAP
       endselect
    endif
+   if (self%polar) raw = self%series
    ! ticks depend on the plot area size, margins on the tick labels: refine a first guess twice
    associate(bx => box(1), by => box(2), bw => box(3), bh => box(4))
       area = [bx + 6.0_R8P * font_size, bx + bw - 2.0_R8P * font_size, &
               by + 2.0_R8P * font_size + above, by + bh - 4.0_R8P * font_size]
-      call self%setup_axes(area)
+      call self%setup_axes(area, raw)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
-      call self%setup_axes(area)
+      call self%setup_axes(area, raw)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
 
@@ -535,6 +569,12 @@ contains
    call self%draw_grid(backend, area)
    call backend%end_group
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
+   ! the polar grid and border are data geometry, zoomed with the series
+   if (self%polar .and. self%grid_polar > 0.0_R8P) then
+      call backend%begin_group('fs-pgrid', visible=self%grid)
+      call self%draw_polar_grid(backend)
+      call backend%end_group
+   endif
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)
@@ -545,14 +585,48 @@ contains
       endif
       call backend%end_group
    enddo
+   if (self%polar) then
+      associate(radius => self%raxis%hi - self%raxis%lo)
+         if (self%border_polar) call backend%data_polyline(circle_u(radius), circle_v(radius), FRAME_COLOR, 1.0_R8P, '')
+         ! the r axis towards the right of the page, as gnuplot
+         if (self%raxis_on) call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius]), &
+                                                       self%yaxis%to_unit([0.0_R8P, 0.0_R8P]), FRAME_COLOR, 1.0_R8P, '')
+      endassociate
+   endif
    call backend%end_plot_area
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   if (self%polar) then
+      call backend%begin_group('fs-polar')
+      call self%draw_polar_axes(backend, area, font_size)
+      call backend%end_group
+   endif
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
    if (self%colorbox .and. self%has_image()) call self%draw_colorbox(backend, area, x0 + width, font_size)
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
+   if (self%polar) call move_alloc(raw, self%series)
+   contains
+      pure function circle_u(rho) result(u)
+      !< Unit abscissae of the circle of radius `rho` [r units] about the pole.
+      real(R8P), intent(in)  :: rho  !< Radius.
+      real(R8P), allocatable :: u(:) !< Unit abscissae.
+      integer(I4P)           :: k    !< Vertex counter.
+
+      u = self%xaxis%to_unit([(rho * cos(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), &
+                               k = 0_I4P, CIRCLE_SIDES)])
+      endfunction circle_u
+
+      pure function circle_v(rho) result(v)
+      !< Unit ordinates of the circle of radius `rho` [r units] about the pole.
+      real(R8P), intent(in)  :: rho  !< Radius.
+      real(R8P), allocatable :: v(:) !< Unit ordinates.
+      integer(I4P)           :: k    !< Vertex counter.
+
+      v = self%yaxis%to_unit([(rho * sin(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), &
+                               k = 0_I4P, CIRCLE_SIDES)])
+      endfunction circle_v
    endsubroutine render
 
    ! private procedures
@@ -570,7 +644,14 @@ contains
    integer(I4P)                         :: t         !< Tick counter.
 
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
-      call backend%rect(left, top, right - left, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+      if (iand(self%border, 15_I4P) == 15_I4P) then
+         call backend%rect(left, top, right - left, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+      else
+         if (btest(self%border, 0)) call backend%polyline([left, right], [bottom, bottom], FRAME_COLOR, 1.0_R8P, '')
+         if (btest(self%border, 1)) call backend%polyline([left, left], [bottom, top], FRAME_COLOR, 1.0_R8P, '')
+         if (btest(self%border, 2)) call backend%polyline([left, right], [top, top], FRAME_COLOR, 1.0_R8P, '')
+         if (btest(self%border, 3)) call backend%polyline([right, right], [bottom, top], FRAME_COLOR, 1.0_R8P, '')
+      endif
       call backend%begin_group('fs-xticks')
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
@@ -624,6 +705,8 @@ contains
    real(R8P)                            :: p       !< Tick position [px].
    integer(I4P)                         :: t       !< Tick counter.
 
+   ! a polar grid replaces the rectangular one, as gnuplot
+   if (self%polar .and. self%grid_polar > 0.0_R8P) return
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
          if (.not. self%xaxis%ticks(t)%major) cycle
@@ -637,6 +720,107 @@ contains
       enddo
    endassociate
    endsubroutine draw_grid
+
+   subroutine draw_polar_grid(self, backend)
+   !< Draw the polar grid in the plot area: rings at the major r ticks, spokes every `grid_polar` degrees of theta.
+   class(axes_object),    intent(in)    :: self    !< Panel.
+   class(backend_object), intent(inout) :: backend !< Output device.
+   real(R8P)                            :: radius  !< Largest radius [r units from the pole].
+   real(R8P)                            :: rho     !< Ring radius [r units from the pole].
+   real(R8P)                            :: a       !< Page angle [rad].
+   real(R8P)                            :: turn(CIRCLE_SIDES + 1) !< Angles of the circle vertices [rad].
+   integer(I4P)                         :: t       !< Tick counter.
+   integer(I4P)                         :: k       !< Vertex or spoke counter.
+
+   turn = [(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P), k = 0_I4P, CIRCLE_SIDES)]
+   radius = self%raxis%hi - self%raxis%lo
+   do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
+      if (.not. self%raxis%ticks(t)%major) cycle
+      rho = self%raxis%ticks(t)%value - self%raxis%lo
+      if (rho <= 0.0_R8P .or. rho > radius * (1.0_R8P + 1.0e-9_R8P)) cycle
+      call backend%data_polyline(self%xaxis%to_unit(rho * cos(turn)), self%yaxis%to_unit(rho * sin(turn)), GRID_COLOR, &
+                                 0.5_R8P, GRID_DASHES)
+   enddo
+   k = 0_I4P
+   do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P)
+      a = self%page_angle(real(k, R8P) * self%grid_polar)
+      call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius * cos(a)]), &
+                                 self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), GRID_COLOR, 0.5_R8P, GRID_DASHES)
+      k = k + 1_I4P
+   enddo
+   endsubroutine draw_polar_grid
+
+   subroutine draw_polar_axes(self, backend, area, font_size)
+   !< Draw the ticks of the radial axis (a line from the pole to the largest r towards the right of the page whatever
+   !< the theta origin, drawn with the data) and their labels below it, as gnuplot; and the theta labels (`ttics`)
+   !< outside the largest r, with ticks on the polar border. Page geometry: hidden by the viewer while zoomed.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(tick_object), allocatable       :: thetas(:) !< Theta labels.
+   type(tics_object)                    :: tics      !< Theta label settings.
+   character(len=:), allocatable        :: message   !< Settings problem.
+   character(len=6)                     :: anchor    !< Label anchor.
+   real(R8P)                            :: cx        !< Pole abscissa [px].
+   real(R8P)                            :: cy        !< Pole ordinate [px].
+   real(R8P)                            :: sx        !< Horizontal scale [px per r unit].
+   real(R8P)                            :: sy        !< Vertical scale [px per r unit].
+   real(R8P)                            :: radius    !< Largest radius [r units from the pole].
+   real(R8P)                            :: p         !< Tick abscissa [px].
+   real(R8P)                            :: a         !< Page angle [rad].
+   real(R8P)                            :: lo        !< Theta range start [deg].
+   real(R8P)                            :: hi        !< Theta range end [deg].
+   real(R8P)                            :: length    !< Tick length [px].
+   integer(I4P)                         :: t         !< Tick counter.
+
+   associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
+      cx = left + self%xaxis%to_unit(0.0_R8P) * (right - left)
+      cy = bottom - self%yaxis%to_unit(0.0_R8P) * (bottom - top)
+      sx = (right - left) / (self%xaxis%hi - self%xaxis%lo)
+      sy = (bottom - top) / (self%yaxis%hi - self%yaxis%lo)
+   endassociate
+   radius = self%raxis%hi - self%raxis%lo
+   if (self%raxis_on) then
+      do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
+         p = cx + (self%raxis%ticks(t)%value - self%raxis%lo) * sx
+         length = merge(TICK_MAJOR, TICK_MINOR, self%raxis%ticks(t)%major)
+         call backend%polyline([p, p], [cy, cy - length], FRAME_COLOR, 1.0_R8P, '')
+         if (self%raxis%ticks(t)%major) call backend%text(p, cy + GAP + font_size, self%raxis%ticks(t)%label, &
+                                                          'middle', sup=self%raxis%ticks(t)%sup)
+      enddo
+   endif
+   if (self%ttics%mode == TICS_NONE) return
+   tics = self%ttics
+   ! automatic: every 45 degrees from 0 (gnuplot draws none)
+   if (tics%mode /= TICS_FIXED) call tics%set_fixed('45', '0', '', message)
+   lo = 0.0_R8P
+   hi = 360.0_R8P
+   call linear_ticks(lo, hi, 1.0_R8P, .false., .false., thetas, tics)
+   do t = 1_I4P, size(thetas, kind=I4P)
+      ! a full turn names the start direction again
+      if (thetas(t)%value >= 360.0_R8P - 1.0e-9_R8P .and. any(thetas%value <= 1.0e-9_R8P)) cycle
+      a = self%page_angle(thetas(t)%value)
+      if (self%border_polar) call backend%polyline([cx + radius * sx * cos(a), cx + (radius * sx - TICK_MAJOR) * cos(a)], &
+                                                   [cy - radius * sy * sin(a), cy - (radius * sy - TICK_MAJOR) * sin(a)], &
+                                                   FRAME_COLOR, 1.0_R8P, '')
+      anchor = 'middle'
+      if (cos(a) > 0.3_R8P) anchor = 'start'
+      if (cos(a) < -0.3_R8P) anchor = 'end'
+      call backend%text(cx + (radius * sx + GAP) * cos(a), &
+                        cy - (radius * sy + GAP + 0.5_R8P * font_size) * sin(a) + 0.35_R8P * font_size, &
+                        thetas(t)%label, trim(anchor), sup=thetas(t)%sup)
+   enddo
+   endsubroutine draw_polar_axes
+
+   elemental function page_angle(self, theta) result(a)
+   !< Page angle of the theta `theta` [deg] (counterclockwise from the right) [rad], after `set theta`.
+   class(axes_object), intent(in) :: self  !< Panel.
+   real(R8P),          intent(in) :: theta !< Theta [deg].
+   real(R8P)                      :: a     !< Page angle [rad].
+
+   a = (self%theta_origin + merge(-theta, theta, self%theta_clockwise)) * (PI_R8 / 180.0_R8P)
+   endfunction page_angle
 
    subroutine draw_key(self, backend, area, box, font_size, grid, extent)
    !< Draw the key at its place (`key_place`): right-aligned titles, style samples on their right; entries in a column,
@@ -1706,6 +1890,82 @@ contains
    enddo
    endsubroutine chart_key
 
+   pure subroutine polar_extent(all, rmax, found)
+   !< Largest |r| of the points of the series `all` (theta:r) drawn on a polar panel, readouts aside.
+   type(series_object), intent(in)  :: all(:) !< Series, theta:r.
+   real(R8P),           intent(out) :: rmax   !< Largest |r|.
+   logical,             intent(out) :: found  !< Any point.
+   integer(I4P)                     :: s      !< Series counter.
+   integer(I4P)                     :: i      !< Point counter.
+
+   rmax = 0.0_R8P
+   found = .false.
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with == WITH_READOUT) cycle
+      do i = 1_I4P, size(all(s)%x, kind=I4P)
+         if (.not. (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i)))) cycle
+         rmax = max(rmax, abs(all(s)%y(i)))
+         found = .true.
+      enddo
+   enddo
+   endsubroutine polar_extent
+
+   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise)
+   !< Project the series `all` from theta:r to x:y about the pole at r = `rmin`, as gnuplot: x = (r - rmin) cos(phi),
+   !< y = (r - rmin) sin(phi), phi the page angle of theta; with `cut` (a fixed `rmin`) a point with r below `rmin` is
+   !< undefined, else it lies across the pole. Readouts kept.
+   !< (A module procedure, not a binding: gfortran 16 debug builds misread the components of `self%series` reached
+   !< through the class dummy after their reallocation.)
+   type(series_object), intent(inout) :: all(:)    !< Series: theta:r in, x:y out.
+   real(R8P),           intent(in)    :: rmin      !< r at the pole.
+   logical,             intent(in)    :: cut       !< Points below `rmin` undefined.
+   logical,             intent(in)    :: degrees   !< Theta in degrees, else radians.
+   real(R8P),           intent(in)    :: origin    !< Page angle of theta = 0 [deg].
+   logical,             intent(in)    :: clockwise !< Theta grows clockwise.
+   real(R8P)                          :: nan       !< Undefined value.
+   real(R8P)                          :: phi       !< Page angle [rad].
+   real(R8P)                          :: rho       !< Distance from the pole [r units].
+   integer(I4P)                       :: s         !< Series counter.
+   integer(I4P)                       :: i         !< Point counter.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with == WITH_READOUT) cycle
+      do i = 1_I4P, size(all(s)%x, kind=I4P)
+         if (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i))) then
+            if (all(s)%y(i) >= rmin .or. .not. cut) then
+               phi = all(s)%x(i)
+               if (degrees) phi = phi * (PI_R8 / 180.0_R8P)
+               if (clockwise) phi = -phi
+               phi = phi + origin * (PI_R8 / 180.0_R8P)
+               rho = all(s)%y(i) - rmin
+               all(s)%x(i) = rho * cos(phi)
+               all(s)%y(i) = rho * sin(phi)
+               cycle
+            endif
+         endif
+         all(s)%x(i) = nan
+         all(s)%y(i) = nan
+      enddo
+   enddo
+   endsubroutine polar_project
+
+   elemental function polar_series(series) result(ok)
+   !< Whether `series` can be drawn on a polar panel (see POLAR_STYLES).
+   type(series_object), intent(in) :: series !< Series.
+   logical                         :: ok     !< Polar series.
+
+   select case (series%style%with)
+   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT)
+      ok = .true.
+   case (WITH_FILLEDCURVES)
+      ok = .not. allocated(series%ylow)
+   case default
+      ok = .false.
+   endselect
+   ok = ok .and. .not. series%y2
+   endfunction polar_series
+
    elemental function is_panel_chart(with) result(is)
    !< Whether the style `with` is a chart alone in its panel, without axes: pie, gauge, radar, rose.
    integer(I4P), intent(in) :: with !< Style code.
@@ -1801,8 +2061,30 @@ contains
    margins(3) = margins(3) + above
    margins(4) = PAD + GAP + LINE_HEIGHT * font_size
    if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
+   if (self%polar .and. self%ttics%mode /= TICS_NONE) then
+      ! theta labels outside the disc, as wide as "360"
+      margins(1:2) = max(margins(1:2), PAD + GAP + backend%text_width('360', '', font_size))
+      margins(3:4) = max(margins(3:4), [PAD, PAD] + GAP + LINE_HEIGHT * font_size + [above, 0.0_R8P])
+   endif
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
+   if (self%ratio > 0.0_R8P) call fit_ratio
    contains
+      pure subroutine fit_ratio
+      !< Shrink the plot area to the height over width `ratio`, centred, as gnuplot `set size ratio`.
+      real(R8P) :: w !< Width [px].
+      real(R8P) :: h !< Height [px].
+
+      w = area(2) - area(1)
+      h = area(4) - area(3)
+      if (h > self%ratio * w) then
+         area(3) = area(3) + 0.5_R8P * (h - self%ratio * w)
+         area(4) = area(3) + self%ratio * w
+      else
+         area(1) = area(1) + 0.5_R8P * (w - h / self%ratio)
+         area(2) = area(1) + h / self%ratio
+      endif
+      endsubroutine fit_ratio
+
       pure function labels_width(axis) result(widest)
       !< Width of the widest major tick label of a vertical `axis` [px], measured by the device.
       type(axis_object), intent(in) :: axis   !< Axis.
@@ -1876,11 +2158,16 @@ contains
    call backend%end_group
    endsubroutine draw_colorbox
 
-   subroutine setup_axes(self, area)
+   subroutine setup_axes(self, area, raw)
    !< Effective ranges and ticks for the plot area: x from every series, each y axis from its own series and the points
    !< inside the x range, as gnuplot. The second y axis is active when it has data or both its ends are fixed.
-   class(axes_object), intent(inout) :: self      !< Panel.
-   real(R8P),          intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   !<
+   !< A polar panel sets up its r axis from the series as given (`raw`, theta:r), projects them into its series, and
+   !< autoscales x and y to the disc of the largest radius, as gnuplot.
+   class(axes_object),  intent(inout)        :: self    !< Panel.
+   real(R8P),           intent(in)           :: area(4) !< Plot area: left, right, top, bottom [px].
+   type(series_object), intent(in), optional :: raw(:)  !< Series of a polar panel, theta:r.
+   real(R8P)                         :: radius    !< Disc radius of a polar panel [r units from the pole].
    real(R8P)                         :: xmin      !< Smallest abscissa.
    real(R8P)                         :: xmax      !< Largest abscissa.
    real(R8P)                         :: ymin(2)   !< Smallest ordinate, per y axis.
@@ -1889,7 +2176,11 @@ contains
    integer(I4P)                      :: s         !< Series counter.
    integer(I4P)                      :: k         !< y axis of the series: 1 or 2.
 
-   call self%data_extent(xmin, xmax, ymin, ymax, found)
+   if (self%polar) then
+      call setup_polar
+   else
+      call self%data_extent(xmin, xmax, ymin, ymax, found)
+   endif
    ! a panel with an image fits its pixel edges, as gnuplot
    self%xaxis%tight = self%has_image()
    self%yaxis%tight = self%has_image()
@@ -1900,8 +2191,13 @@ contains
    ymin = huge(1.0_R8P)
    ymax = -huge(1.0_R8P)
    found = .false.
+   if (self%polar) then
+      ymin(1) = -radius
+      ymax(1) = radius
+      found(1) = .true.
+   endif
    do s = 1_I4P, size(self%series, kind=I4P)
-      if (self%is_readout(s)) cycle
+      if (self%is_readout(s) .or. self%polar) cycle
       k = merge(2_I4P, 1_I4P, self%series(s)%y2)
       if (k == 2_I4P) then
          call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k), &
@@ -1916,6 +2212,27 @@ contains
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
    if (self%has_image()) call setup_colors
    contains
+      subroutine setup_polar
+      !< The r axis from the largest |r| of the series (the pole at r = 0 unless set), extended to the r ticks; the
+      !< series projected; x and y over the disc.
+      real(R8P) :: rmax  !< Largest |r|.
+      real(R8P) :: rmin  !< r at the pole.
+      logical   :: any_r !< Any point.
+
+      call polar_extent(raw, rmax, any_r)
+      rmin = 0.0_R8P
+      if (self%raxis%min_fixed) rmin = self%raxis%min_user
+      if (.not. any_r .or. .not. rmax > rmin) rmax = rmin + 1.0_R8P
+      call self%raxis%setup(0.0_R8P, rmax, .true., 0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
+      radius = self%raxis%hi - self%raxis%lo
+      self%series = raw
+      call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed, self%degrees, self%theta_origin, &
+                         self%theta_clockwise)
+      xmin = -radius
+      xmax = radius
+      found = [.true., .false.]
+      endsubroutine setup_polar
+
       subroutine setup_colors
       !< The color axis over the finite values of the images (or `cbrange`), never extended.
       real(R8P) :: zmin  !< Smallest value.

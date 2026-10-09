@@ -14,7 +14,7 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_names, axes_object, key_position, readout_position
+use foresight_axes, only : axes_names, axes_object, key_position, polar_series, readout_position, POLAR_STYLES
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
@@ -63,6 +63,8 @@ type :: figure_object
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
+      procedure, pass(self) :: set_angles      !< gnuplot `set angles`.
+      procedure, pass(self) :: set_border      !< gnuplot `set border` / `unset border`.
       procedure, pass(self) :: set_boxwidth    !< gnuplot `set boxwidth`.
       procedure, pass(self) :: set_cblabel     !< gnuplot `set cblabel`.
       procedure, pass(self) :: set_cbrange     !< gnuplot `set cbrange`.
@@ -74,14 +76,21 @@ type :: figure_object
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
       procedure, pass(self) :: set_palette     !< gnuplot `set palette`.
+      procedure, pass(self) :: set_polar       !< gnuplot `set polar` / `unset polar`.
+      procedure, pass(self) :: set_raxis       !< gnuplot `set raxis` / `unset raxis`.
       procedure, pass(self) :: set_readout     !< Readouts: on/off, position, window, digit size.
       procedure, pass(self) :: set_refresh     !< HTML page reload period, for live monitoring.
+      procedure, pass(self) :: set_rrange      !< gnuplot `set rrange`.
+      procedure, pass(self) :: set_rtics       !< gnuplot `set rtics` / `unset rtics`.
       procedure, pass(self) :: set_size        !< gnuplot `set size`.
       procedure, pass(self) :: set_style_fill  !< gnuplot `set style fill`.
       procedure, pass(self) :: set_style_histogram !< gnuplot `set style histogram`.
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
+      procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
+      procedure, pass(self) :: set_trange      !< gnuplot `set trange`.
+      procedure, pass(self) :: set_ttics       !< gnuplot `set ttics` / `unset ttics`.
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
       procedure, pass(self) :: set_xtics       !< gnuplot `set xtics`.
@@ -344,6 +353,39 @@ contains
    if (len(bad) > 0) error stop 'foresight: set_palette: unsupported palette "'//bad//'"'
    endsubroutine set_palette
 
+   subroutine set_angles(self, unit)
+   !< Unit of the angles, as gnuplot `set angles degrees|radians` (radians by default): theta of a polar panel and
+   !< the trigonometric functions of its expressions (`set_angles` affects the script interpreter's compilation).
+   class(figure_object), intent(inout) :: self !< Figure.
+   character(len=*),     intent(in)    :: unit !< `degrees` or `radians`.
+
+   if (unit /= 'degrees' .and. unit /= 'radians') error stop 'foresight: set_angles: degrees or radians, not "'// &
+                                                             unit//'"'
+   call self%ensure_panels
+   self%panels(self%current)%degrees = unit == 'degrees'
+   endsubroutine set_angles
+
+   subroutine set_border(self, mask, polar)
+   !< Border sides, as gnuplot `set border MASK [polar]` (`unset border` is mask 0): 1 bottom, 2 left, 4 top, 8 right
+   !< (31 by default, the full frame); `polar` adds the circle of the largest r on a polar panel. Without `mask`,
+   !< `polar` keeps the sides (gnuplot: `unset border; set border polar` draws the circle alone), else the full frame
+   !< is restored.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   integer(I4P),         intent(in), optional :: mask  !< Sides; 31 if absent.
+   logical,              intent(in), optional :: polar !< Polar border.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. present(polar)) panel%border = 31_I4P
+      if (present(mask)) then
+         if (mask < 0_I4P) error stop 'foresight: set_border: the mask must not be negative'
+         panel%border = mask
+      endif
+      panel%border_polar = .false.
+      if (present(polar)) panel%border_polar = polar
+   endassociate
+   endsubroutine set_border
+
    subroutine set_boxwidth(self, width, relative)
    !< Box width, as gnuplot `set boxwidth W [absolute|relative]`: `width` absent or 0 for the default, the boxes
    !< touching; `relative` scales that default instead of setting the width.
@@ -419,14 +461,21 @@ contains
    endassociate
    endsubroutine set_format
 
-   subroutine set_grid(self, on)
-   !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not.
-   class(figure_object), intent(inout)        :: self !< Figure.
-   logical,              intent(in), optional :: on   !< Grid on.
+   subroutine set_grid(self, on, polar)
+   !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not. On a polar panel,
+   !< `polar` > 0 draws the polar grid instead (gnuplot `set grid polar STEP`): rings at the major r ticks and spokes
+   !< every `polar` degrees of theta; 0 restores the rectangular grid.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   logical,              intent(in), optional :: on    !< Grid on.
+   real(R8P),            intent(in), optional :: polar !< Spoke step [deg], 0 for the rectangular grid.
 
    call self%ensure_panels
    self%panels(self%current)%grid = .true.
    if (present(on)) self%panels(self%current)%grid = on
+   if (present(polar)) then
+      if (polar < 0.0_R8P .or. polar >= 360.0_R8P) error stop 'foresight: set_grid: the polar step is 0 to below 360'
+      self%panels(self%current)%grid_polar = polar
+   endif
    endsubroutine set_grid
 
    subroutine set_key(self, on, position, box)
@@ -547,6 +596,34 @@ contains
       endfunction is_word
    endsubroutine set_text
 
+   subroutine set_polar(self, on)
+   !< Polar coordinates (`on` absent or true), as gnuplot `set polar`: the series of the panel are theta:r (theta in
+   !< `set_angles` units, from the `set_theta` origin), drawn at x = (r - rmin) cos(theta), y = (r - rmin) sin(theta)
+   !< joined by straight segments; x and y autoscale to the disc of the largest r. The frame stays rectangular, as
+   !< gnuplot: a round plot sets the polar border, the polar grid, the square size and turns the x and y ticks off.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: on   !< Polar on.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%polar = .true.
+      if (present(on)) panel%polar = on
+      if (panel%polar .and. allocated(panel%series)) then
+         if (.not. all(polar_series(panel%series))) error stop 'foresight: set_polar: '//POLAR_STYLES
+      endif
+   endassociate
+   endsubroutine set_polar
+
+   subroutine set_raxis(self, on)
+   !< Draw the radial axis of a polar panel (`on` absent or true; the default), as gnuplot `set raxis`, or not.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: on   !< Axis on.
+
+   call self%ensure_panels
+   self%panels(self%current)%raxis_on = .true.
+   if (present(on)) self%panels(self%current)%raxis_on = on
+   endsubroutine set_raxis
+
    subroutine set_readout(self, on, position, opaque, size)
    !< Draw the readouts (`on` absent or true) or not; `position` takes the `set key` words inside the plot area
    !< (`left`, `right`, `center`, `top`, `bottom`; top left by default) and `horizontal` or `vertical` (the default) for
@@ -585,18 +662,60 @@ contains
    self%refresh = max(0_I4P, seconds)
    endsubroutine set_refresh
 
-   subroutine set_size(self, width, height)
-   !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
-   !< multiplot (not with a layout).
-   class(figure_object), intent(inout) :: self   !< Figure.
-   real(R8P),            intent(in)    :: width  !< Width, page width fraction, > 0.
-   real(R8P),            intent(in)    :: height !< Height, page height fraction, > 0.
+   subroutine set_rrange(self, min, max)
+   !< r range of a polar panel, as gnuplot `set rrange [min:max]`: `min` lies at the pole (0 when absent), the points
+   !< below it are undefined; an absent `max` autoscales to the largest |r|, extended to the r ticks.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: min  !< r at the pole.
+   real(R8P),            intent(in), optional :: max  !< Largest r.
 
-   if (self%layout) error stop 'foresight: set_size: not with a multiplot layout'
-   if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
+   if (present(min) .and. present(max)) then
+      if (.not. max > min) error stop 'foresight: set_rrange: max must exceed min'
+   endif
+   call self%ensure_panels
+   call self%panels(self%current)%raxis%set_range(min=min, max=max)
+   endsubroutine set_rrange
+
+   subroutine set_rtics(self, step, start, end, on)
+   !< r ticks of a polar panel every `step` from `start` to `end`, automatic without `step` (the default), as gnuplot
+   !< `set rtics`; `on` false turns them off (`unset rtics`).
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in), optional :: step  !< Tick step.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+   logical,              intent(in), optional :: on    !< Ticks on.
+
+   call self%ensure_panels
+   if (present(on)) then
+      if (.not. on) then
+         self%panels(self%current)%raxis%tics%mode = TICS_NONE
+         return
+      endif
+   endif
+   call set_tics(self%panels(self%current)%raxis%tics, 'set_rtics', step, start, end)
+   endsubroutine set_rtics
+
+   subroutine set_size(self, width, height, ratio)
+   !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
+   !< multiplot (not with a layout). `ratio` > 0 fixes the plot area height over width (gnuplot `set size ratio R`,
+   !< `square` is 1), 0 frees it (`noratio`).
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: width  !< Width, page width fraction, > 0.
+   real(R8P),            intent(in), optional :: height !< Height, page height fraction, > 0.
+   real(R8P),            intent(in), optional :: ratio  !< Plot area height over width, 0 for none.
+
+   if (present(width) .neqv. present(height)) error stop 'foresight: set_size: width and height go together'
+   if (present(width)) then
+      if (self%layout) error stop 'foresight: set_size: not with a multiplot layout'
+      if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
+   endif
+   if (present(ratio)) then
+      if (ratio < 0.0_R8P) error stop 'foresight: set_size: the ratio must not be negative'
+   endif
    call self%ensure_panels
    associate(panel => self%panels(self%current))
-      panel%size = [width, height]
+      if (present(width)) panel%size = [width, height]
+      if (present(ratio)) panel%ratio = ratio
    endassociate
    endsubroutine set_size
 
@@ -616,6 +735,33 @@ contains
    if (present(glow)) self%theme%glow = glow
    endsubroutine set_theme
 
+   subroutine set_theta(self, origin, clockwise)
+   !< Where theta = 0 lies on a polar panel, `right` (the default), `top`, `left` or `bottom`, and whether theta grows
+   !< `clockwise` (default counterclockwise), as gnuplot `set theta`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   character(len=*),     intent(in), optional :: origin    !< Direction of theta = 0.
+   logical,              intent(in), optional :: clockwise !< Theta grows clockwise.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(origin)) then
+         select case (origin)
+         case ('right')
+            panel%theta_origin = 0.0_R8P
+         case ('top')
+            panel%theta_origin = 90.0_R8P
+         case ('left')
+            panel%theta_origin = 180.0_R8P
+         case ('bottom')
+            panel%theta_origin = 270.0_R8P
+         case default
+            error stop 'foresight: set_theta: right, top, left or bottom, not "'//origin//'"'
+         endselect
+      endif
+      if (present(clockwise)) panel%theta_clockwise = clockwise
+   endassociate
+   endsubroutine set_theta
+
    subroutine set_title(self, title)
    !< Set the title of the current panel, empty for none.
    class(figure_object), intent(inout) :: self  !< Figure.
@@ -624,6 +770,48 @@ contains
    call self%ensure_panels
    self%panels(self%current)%title = title
    endsubroutine set_title
+
+   subroutine set_trange(self, min, max)
+   !< Angle range the script functions of a polar panel are sampled over, as gnuplot `set trange [min:max]` (in
+   !< `set_angles` units; a full turn from 0 when absent).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: min  !< First angle.
+   real(R8P),            intent(in), optional :: max  !< Last angle.
+
+   call self%ensure_panels
+   call self%panels(self%current)%taxis%set_range(min=min, max=max)
+   endsubroutine set_trange
+
+   subroutine set_ttics(self, step, start, format, on)
+   !< Theta labels of a polar panel outside its largest r, every `step` degrees from `start` (0), whatever the angle
+   !< unit, as gnuplot `set ttics START,STEP`; every 45 degrees without `step` (gnuplot draws none); `format` the label
+   !< format; `on` false turns them off (the default, `unset ttics`).
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: step   !< Label step [deg].
+   real(R8P),            intent(in), optional :: start  !< First label [deg].
+   character(len=*),     intent(in), optional :: format !< Label format.
+   logical,              intent(in), optional :: on     !< Labels on.
+   character(len=:), allocatable              :: message !< Format problem.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(on)) then
+         if (.not. on) then
+            panel%ttics%mode = TICS_NONE
+            return
+         endif
+      endif
+      if (present(step)) then
+         if (.not. step > 0.0_R8P) error stop 'foresight: set_ttics: the step must be positive'
+      endif
+      call set_tics(panel%ttics, 'set_ttics', step, start)
+      if (present(format)) then
+         message = format_check(format)
+         if (len(message) > 0) error stop 'foresight: set_ttics: '//message
+         panel%ttics%format = format
+      endif
+   endassociate
+   endsubroutine set_ttics
 
    subroutine set_xlabel(self, label)
    !< Set the x axis label of the current panel, empty for none.
