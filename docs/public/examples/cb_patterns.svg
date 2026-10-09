@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="560" height="320" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="29.2 540.2 16 289" data-x="-1e0 3e0" data-y="0 1e1" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="labels 0:GPU%204x 1e0:GPU%201x 2e0:CPU%2064">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="156.95,289 156.95,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="284.7,289 284.7,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="412.45,289 412.45,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,289 540.2,289"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,234.4 540.2,234.4"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,179.8 540.2,179.8"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,125.2 540.2,125.2"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,70.6 540.2,70.6"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,16 540.2,16"/>
+</g>
+<svg class="fs-plot" x="29.2" y="16" width="511" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<defs><pattern id="fs-pattern-1" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="scale(0.001957 0.003663)"><path d="M-4,0 L8,12 M0,-4 L12,8" fill="none" stroke="#9400d3" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-1)" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.175,1 0.225,1 0.225,0.92 0.175,0.92Z"/>
+<path fill="url(#fs-pattern-1)" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.425,1 0.475,1 0.475,0.81 0.425,0.81Z"/>
+<path fill="url(#fs-pattern-1)" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.675,1 0.725,1 0.725,0.69 0.675,0.69Z"/>
+</g>
+<g class="fs-series" data-series="2">
+<defs><pattern id="fs-pattern-2" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="scale(0.001957 0.003663)"><path d="M-4,8 L8,-4 M0,12 L12,0" fill="none" stroke="#009e73" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-2)" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.225,1 0.275,1 0.275,0.79 0.225,0.79Z"/>
+<path fill="url(#fs-pattern-2)" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.475,1 0.525,1 0.525,0.48 0.475,0.48Z"/>
+<path fill="url(#fs-pattern-2)" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.725,1 0.775,1 0.775,0.02 0.725,0.02Z"/>
+</g>
+<g class="fs-series" data-series="3">
+<defs><pattern id="fs-pattern-3" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="scale(0.001957 0.003663)"><path d="M-2,8 L4,-4 M0,12 L8,-4 M4,12 L10,0" fill="none" stroke="#56b4e9" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-3)" stroke="#56b4e9" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.275,1 0.325,1 0.325,0.94 0.275,0.94Z"/>
+<path fill="url(#fs-pattern-3)" stroke="#56b4e9" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.525,1 0.575,1 0.575,0.99 0.525,0.99Z"/>
+<path fill="url(#fs-pattern-3)" stroke="#56b4e9" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.775,1 0.825,1 0.825,0.86 0.775,0.86Z"/>
+</g>
+</svg>
+<rect x="29.2" y="16" width="511" height="273" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="156.95,289 156.95,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="156.95,16 156.95,22"/>
+<text x="156.95" y="307" text-anchor="middle">GPU 4x</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="284.7,289 284.7,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="284.7,16 284.7,22"/>
+<text x="284.7" y="307" text-anchor="middle">GPU 1x</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="412.45,289 412.45,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="412.45,16 412.45,22"/>
+<text x="412.45" y="307" text-anchor="middle">CPU 64</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,289 35.2,289"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,289 534.2,289"/>
+<text x="23.2" y="293.2" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,234.4 35.2,234.4"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,234.4 534.2,234.4"/>
+<text x="23.2" y="238.6" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,179.8 35.2,179.8"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,179.8 534.2,179.8"/>
+<text x="23.2" y="184" text-anchor="end">4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,125.2 35.2,125.2"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,125.2 534.2,125.2"/>
+<text x="23.2" y="129.4" text-anchor="end">6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,70.6 35.2,70.6"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,70.6 534.2,70.6"/>
+<text x="23.2" y="74.8" text-anchor="end">8</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,16 35.2,16"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,16 534.2,16"/>
+<text x="23.2" y="20.2" text-anchor="end">10</text>
+</g>
+<g class="fs-key-entry" data-series="1">
+<defs><pattern id="fs-pattern-4" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-4,0 L8,12 M0,-4 L12,8" fill="none" stroke="#9400d3" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-4)" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M96.8,33.7 132.8,33.7 132.8,25.3 96.8,25.3Z"/>
+<text x="90.8" y="33.7" text-anchor="end">mesh</text>
+</g>
+<g class="fs-key-entry" data-series="2">
+<defs><pattern id="fs-pattern-5" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-4,8 L8,-4 M0,12 L12,0" fill="none" stroke="#009e73" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-5)" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" d="M96.8,48.7 132.8,48.7 132.8,40.3 96.8,40.3Z"/>
+<text x="90.8" y="48.7" text-anchor="end">fluxes</text>
+</g>
+<g class="fs-key-entry" data-series="3">
+<defs><pattern id="fs-pattern-6" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-2,8 L4,-4 M0,12 L8,-4 M4,12 L10,0" fill="none" stroke="#56b4e9" stroke-width="1"/></pattern></defs>
+<path fill="url(#fs-pattern-6)" stroke="#56b4e9" stroke-width="1" stroke-linejoin="miter" d="M96.8,63.7 132.8,63.7 132.8,55.3 96.8,55.3Z"/>
+<text x="90.8" y="63.7" text-anchor="end">comm</text>
+</g>
+</g>
+</svg>

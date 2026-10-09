@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="560" height="320" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="22.6 550 16 289" data-x="0 8e0" data-y="0 4e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,289 22.6,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="88.53,289 88.53,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="154.45,289 154.45,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="220.37,289 220.37,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="286.3,289 286.3,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="352.23,289 352.23,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="418.15,289 418.15,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="484.08,289 484.08,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="550,289 550,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,289 550,289"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,220.75 550,220.75"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,152.5 550,152.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,84.25 550,84.25"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="22.6,16 550,16"/>
+</g>
+<svg class="fs-plot" x="22.6" y="16" width="527.4" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0,1 0.375,1 0.375,0.5 0,0.5Z"/>
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0,0.5 0.375,0.5 0.375,0 0,0Z"/>
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.375,1 0.625,1 0.625,0.5 0.375,0.5Z"/>
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.375,0.5 0.625,0.5 0.625,0 0.375,0Z"/>
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.625,1 1,1 1,0.5 0.625,0.5Z"/>
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.625,0.5 1,0.5 1,0 0.625,0Z"/>
+</g>
+<g class="fs-series" data-series="2">
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#009e73" fill="none" stroke="none" d="M0.1875,0.75 M0.1875,0.25 M0.5,0.75 M0.5,0.25 M0.8125,0.75 M0.8125,0.25"/>
+</g>
+</svg>
+<svg class="fs-marks" x="22.6" y="16" width="527.4" height="273" viewBox="0 0 527.4 273" overflow="hidden">
+<path data-series="2" fill="#009e73" stroke="#009e73" stroke-width="1" d="M94.39,204.75A4.5,4.5 0 1 0 103.39,204.75A4.5,4.5 0 1 0 94.39,204.75ZM94.39,68.25A4.5,4.5 0 1 0 103.39,68.25A4.5,4.5 0 1 0 94.39,68.25ZM259.2,204.75A4.5,4.5 0 1 0 268.2,204.75A4.5,4.5 0 1 0 259.2,204.75ZM259.2,68.25A4.5,4.5 0 1 0 268.2,68.25A4.5,4.5 0 1 0 259.2,68.25ZM424.01,204.75A4.5,4.5 0 1 0 433.01,204.75A4.5,4.5 0 1 0 424.01,204.75ZM424.01,68.25A4.5,4.5 0 1 0 433.01,68.25A4.5,4.5 0 1 0 424.01,68.25Z"/>
+</svg>
+<rect x="22.6" y="16" width="527.4" height="273" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,289 22.6,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,16 22.6,22"/>
+<text x="22.6" y="307" text-anchor="middle">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="88.53,289 88.53,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="88.53,16 88.53,22"/>
+<text x="88.53" y="307" text-anchor="middle">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="154.45,289 154.45,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="154.45,16 154.45,22"/>
+<text x="154.45" y="307" text-anchor="middle">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="220.37,289 220.37,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="220.37,16 220.37,22"/>
+<text x="220.37" y="307" text-anchor="middle">3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="286.3,289 286.3,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="286.3,16 286.3,22"/>
+<text x="286.3" y="307" text-anchor="middle">4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="352.23,289 352.23,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="352.23,16 352.23,22"/>
+<text x="352.23" y="307" text-anchor="middle">5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="418.15,289 418.15,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="418.15,16 418.15,22"/>
+<text x="418.15" y="307" text-anchor="middle">6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="484.08,289 484.08,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="484.08,16 484.08,22"/>
+<text x="484.08" y="307" text-anchor="middle">7</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,289 550,283"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,16 550,22"/>
+<text x="550" y="307" text-anchor="middle">8</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,289 28.6,289"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,289 544,289"/>
+<text x="16.6" y="293.2" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,220.75 28.6,220.75"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,220.75 544,220.75"/>
+<text x="16.6" y="224.95" text-anchor="end">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,152.5 28.6,152.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,152.5 544,152.5"/>
+<text x="16.6" y="156.7" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,84.25 28.6,84.25"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,84.25 544,84.25"/>
+<text x="16.6" y="88.45" text-anchor="end">3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="22.6,16 28.6,16"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="550,16 544,16"/>
+<text x="16.6" y="20.2" text-anchor="end">4</text>
+</g>
+<g class="fs-key-entry" data-series="1">
+<path fill="#9400d3" fill-opacity="0.25" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
+<text x="498" y="33.7" text-anchor="end">blocks</text>
+</g>
+<g class="fs-key-entry" data-series="2">
+<path fill="#009e73" stroke="#009e73" stroke-width="1" d="M517.5,44.5A4.5,4.5 0 1 0 526.5,44.5A4.5,4.5 0 1 0 517.5,44.5Z"/>
+<text x="498" y="48.7" text-anchor="end">centres</text>
+</g>
+</g>
+</svg>

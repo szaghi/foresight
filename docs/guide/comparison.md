@@ -19,6 +19,7 @@ none of them covers: pure Fortran, interactive pages that need nothing to view, 
 | Terminal output | characters, Unicode blocks, Braille, ANSI colors | `dumb`, `block`, sixel graphics | through gnuplot | through gnuplot | no | no | ASCII |
 | Static formats | SVG | many | through gnuplot | through gnuplot | through matplotlib | SVG, PNG, PDF, EPS, GIF | PNG, PDF; video through ffmpeg |
 | Functions of x (`plot sin(x)`) | yes | yes | yes (`--equation`) | yes | no | no | no |
+| 2D plot styles | every gnuplot 2D style (lines to spider plots, heatmaps, polar); pies, gauges, readouts | all | through gnuplot | through gnuplot | through matplotlib | many | many |
 | Smoothing, histograms | `smooth`, 5 filters | `smooth`, 13 filters; `bins` | through gnuplot | through gnuplot | histograms | histograms | histograms |
 | 3D, contours, fitting | no | yes | through gnuplot | through gnuplot | contours, 3D; no fit | contours, 3D axes; no fit | contours, 3D lines; no fit |
 
@@ -35,12 +36,12 @@ The rows on other projects summarise their documentation as of October 2026
 - **feedgnuplot** is the closest to `--watch`: it pipes a stream into gnuplot and redraws it, with a scrolling window
   of the recent past. foresight watches files rather than a pipe — the job writes its log as it would anyway — and the
   viewer's follow mode (`f`) gives the same scrolling window in the page.
-- **fplotlib** and **fortplot** are pure Fortran like foresight, with many more plot types and raster output; they
-  write images, not interactive pages, and read no gnuplot.
+- **fplotlib** and **fortplot** are pure Fortran like foresight, with raster output and 3D; they write images, not
+  interactive pages, and read no gnuplot.
 
 ## When to use something else
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.
-- **Raster output** (PNG) or plot types beyond curves (contours, maps, 3D) from pure Fortran: fplotlib, fortplot.
+- **Raster output** (PNG), contours, maps or 3D from pure Fortran: fplotlib, fortplot.
 - **The full gnuplot language** (user functions and variables, `fit`, `splot`, splines): gnuplot itself.
 - **Fields on meshes**: ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran).

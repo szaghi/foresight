@@ -35,9 +35,19 @@ features:
     linkText: Watch a run
   - icon: 📜
     title: The gnuplot language
-    details: using expressions, index and every, CSV with column headers, two y axes, functions, smooth, styles, point types, multiplot, error bars — the subset monitoring scripts use.
+    details: using expressions, index and every, CSV with column headers, two y axes, functions, smooth, styles, point types, multiplot, polar plots, palettes — the gnuplot scripts you already have.
     link: /guide/gnuplot-subset
     linkText: The subset
+  - icon: 📊
+    title: Every 2D plot style
+    details: Lines, steps, impulses, error bars and lines; boxes, histograms, box plots, candlesticks; filled curves and patterns; vectors, ellipses, polygons, labels; heatmaps and RGB images; polar plots, sectors, parallel axes and spider plots.
+    link: /manual/cookbook
+    linkText: The cookbook
+  - icon: 🕹️
+    title: 1980s dashboards
+    details: Seven-segment readouts, sweep gauges, radars and roses, pies and donuts, segmented bars, in the vacuum-fluorescent or liquid-crystal colors of an old car dashboard — a cockpit for a running job.
+    link: /guide/gnuplot-subset#themes-and-segmented-fills
+    linkText: Themes
   - icon: 🧩
     title: Library and command line
     details: Call fig%plot from your solver, or run scripts from the shell. The command line is a thin shell over the interpreter the library exposes.
@@ -87,14 +97,89 @@ foresight --watch residuals.gp                # re-render while the solver write
 <p class="fs-lead">Every image here is an actual foresight output, regenerated from the
 <a href="./manual/cookbook">cookbook</a> recipes and checked by the CI.</p>
 
+### Lines, points and error bars
+
 <div class="fs-gallery">
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
+  <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
   <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
+  <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
+  <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
-  <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
 </div>
+
+### Bars and statistics
+
+<div class="fs-gallery">
+  <Plot name="cb_histograms" svg :width="560" :height="320" caption="grouped bars with category labels" />
+  <Plot name="cb_rowstacked" svg :width="560" :height="320" caption="stacked bars" />
+  <Plot name="cb_boxerrorbars" svg :width="560" :height="320" caption="bars with error bars" />
+  <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />
+  <Plot name="cb_boxplot" svg :width="560" :height="320" caption="box plots by category" />
+  <Plot name="cb_candlesticks" svg :width="560" :height="320" caption="candlesticks and finance bars" />
+</div>
+
+### Areas and shapes
+
+<div class="fs-gallery">
+  <Plot name="cb_filledcurves" svg :width="560" :height="320" caption="a band around a curve" />
+  <Plot name="cb_fill_above" svg :width="560" :height="320" caption="fill above and below a line" />
+  <Plot name="cb_vectors" svg :width="560" :height="400" caption="a vector field with labels" />
+  <Plot name="cb_arrows" svg :width="560" :height="320" caption="arrows by length and angle" />
+  <Plot name="cb_ellipses" svg :width="560" :height="320" caption="uncertainty ellipses" />
+  <Plot name="cb_polygons" svg :width="560" :height="320" caption="polygons" />
+  <Plot name="cb_boxxyerror" svg :width="560" :height="320" caption="rectangles" />
+  <Plot name="cb_circles" svg :width="560" :height="320" caption="a bubble chart" />
+</div>
+
+### Heatmaps and images
+
+<div class="fs-gallery">
+  <Plot name="cb_image" svg :width="560" :height="400" caption="a heatmap with its color box" />
+  <Plot name="cb_matrix" svg :width="560" :height="400" caption="a matrix file" />
+  <Plot name="cb_palettes" svg :width="760" :height="300" caption="palettes" />
+  <Plot name="cb_rgbimage" svg :width="560" :height="400" caption="an RGB image" />
+</div>
+
+### Polar and radial charts
+
+<div class="fs-gallery">
+  <Plot name="cb_polar" svg :width="520" :height="400" caption="a polar plot" />
+  <Plot name="cb_windrose" svg :width="520" :height="420" caption="a wind rose of sectors" />
+  <Plot name="cb_spider" svg :width="560" :height="400" caption="a spider plot" />
+  <Plot name="cb_parallel" svg :width="560" :height="320" caption="parallel axes" />
+  <Plot name="cb_radar" svg :width="480" :height="320" caption="a radar" />
+  <Plot name="cb_rose" svg :width="480" :height="320" caption="a rose" />
+  <Plot name="cb_pie" svg :width="480" :height="320" caption="a pie" />
+</div>
+
+### Dashboards of the 1980s
+
+<div class="fs-gallery">
+  <Plot name="cb_vfd" svg :width="640" :height="440" caption="a vacuum-fluorescent run monitor" />
+  <Plot name="cb_lcd" svg :width="640" :height="300" caption="a liquid-crystal dashboard" />
+  <Plot name="cb_gauges" svg :width="600" :height="240" caption="sweep gauges" />
+  <Plot name="cb_donut_vfd" svg :width="480" :height="320" caption="a glowing donut" />
+  <Plot name="cb_image_vfd" svg :width="560" :height="400" caption="a heatmap of lit levels" />
+  <Plot name="cb_readout" svg :width="560" :height="420" caption="seven-segment readouts over a curve" />
+</div>
+
+### In the terminal
+
+<p class="fs-lead">The same scripts over ssh: characters, Unicode blocks or Braille dots, in ANSI colors, redrawn in place by
+<code>--watch</code>.</p>
+
+::: code-group
+
+<<< @/examples/output/cb_block.txt{text} [block characters]
+
+<<< @/examples/output/cb_readout_dumb.txt{text} [readouts in dumb]
+
+<<< @/examples/output/cb_dumb.txt{text} [dumb]
+
+:::
 
 ## Authors
 

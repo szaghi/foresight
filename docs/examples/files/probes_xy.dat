@@ -1,0 +1,5 @@
+# x y name: the probes of the run
+-2.0 0.0 inlet
+1.4 0.9 wake-top
+1.4 -0.9 wake-bottom
+2.6 0.0 far-wake

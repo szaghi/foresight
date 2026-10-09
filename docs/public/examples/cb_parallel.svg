@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="560" height="320" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-parallel">
+<rect x="58" y="16" width="468" height="273" fill="none" stroke="black" stroke-width="1"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="2" points="136,43.3 214,125.2 292,70.6 370,43.3 448,97.9"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="2" points="136,97.9 214,70.6 292,43.3 370,125.2 448,70.6"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="2" points="136,179.8 214,152.5 292,97.9 370,207.1 448,43.3"/>
+<polyline fill="none" stroke="black" stroke-width="2" points="136,289 136,16"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,289 142,289"/>
+<text x="130" y="293.2" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,234.4 142,234.4"/>
+<text x="130" y="238.6" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,179.8 142,179.8"/>
+<text x="130" y="184" text-anchor="end">4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,125.2 142,125.2"/>
+<text x="130" y="129.4" text-anchor="end">6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,70.6 142,70.6"/>
+<text x="130" y="74.8" text-anchor="end">8</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="136,16 142,16"/>
+<text x="130" y="20.2" text-anchor="end">10</text>
+<text x="136" y="307" text-anchor="middle">speed</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="214,289 214,16"/>
+<text x="214" y="307" text-anchor="middle">memory</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="292,289 292,16"/>
+<text x="292" y="307" text-anchor="middle">accuracy</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="370,289 370,16"/>
+<text x="370" y="307" text-anchor="middle">scaling</text>
+<polyline fill="none" stroke="black" stroke-width="2" points="448,289 448,16"/>
+<text x="448" y="307" text-anchor="middle">robustness</text>
+</g>
+</svg>

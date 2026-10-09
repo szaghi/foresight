@@ -6,8 +6,9 @@ title: About foresight
 
 **foresight** (FORtran Easy Svg Interactive Gnuplot-like Html Tool) is a Fortran library and command line tool for the
 small graphical work that surrounds scientific computing: convergence histories, monitored quantities of a running job,
-quick looks at output files. It renders gnuplot-style plots to self-contained interactive HTML pages, static SVG, or
-text, and needs nothing but a Fortran compiler.
+quick looks at output files, benchmark charts. It renders gnuplot's 2D plot styles (curves, bars, box plots, heatmaps,
+vector fields, polar and spider plots) and dashboard charts (readouts, gauges, pies) to self-contained interactive
+HTML pages, static SVG, or text, and needs nothing but a Fortran compiler.
 
 ## Why
 
