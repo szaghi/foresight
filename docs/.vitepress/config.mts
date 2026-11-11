@@ -59,6 +59,16 @@ export default withMermaid({
   title: 'foresight',
   description: 'gnuplot-like interactive plots from pure Fortran',
   base: '/foresight/',
+  // VitePress does not add the base to head hrefs, so they carry /foresight/ explicitly
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/foresight/favicon.svg', media: '(prefers-color-scheme: light)' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/foresight/favicon-dark.svg', media: '(prefers-color-scheme: dark)' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/foresight/favicon-32.png' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/foresight/favicon-16.png' }],
+    ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: '/foresight/apple-touch-icon.png' }],
+    ['meta', { name: 'theme-color', content: '#f3ede1', media: '(prefers-color-scheme: light)' }],
+    ['meta', { name: 'theme-color', content: '#130d0f', media: '(prefers-color-scheme: dark)' }],
+  ],
   // ford.md is the formal project file, not a page
   srcExclude: ['ford.md'],
 
@@ -75,6 +85,8 @@ export default withMermaid({
   },
 
   themeConfig: {
+    logo: { light: '/logo-nav.svg', dark: '/logo-nav-dark.svg', alt: 'FORESIGHT' },
+    siteTitle: 'FORESIGHT',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install)?$' },
