@@ -1,0 +1,79 @@
+name = "foresight"
+version = "0.4.0"
+author = "Stefano Zaghi"
+description = "FORtran Easy Svg Interactive Gnuplot-like Html Tool"
+homepage = "https://github.com/szaghi/foresight"
+
+[library]
+source-dir = "src/lib"
+
+[build]
+auto-executables = false
+auto-tests = false
+auto-examples = false
+
+[[executable]]
+name = "foresight"
+source-dir = "src/app"
+main = "foresight_cli.F90"
+
+[dependencies]
+BeFoR64 = { git = "https://github.com/szaghi/BeFoR64", branch = "master" }
+FACE = { git = "https://github.com/szaghi/FACE", branch = "master" }
+PENF = { git = "https://github.com/szaghi/PENF", branch = "master" }
+StringiFor = { git = "https://github.com/szaghi/StringiFor", branch = "master" }
+
+[[test]]
+name = "foresight_datafile_test"
+source-dir = "src/tests"
+main = "foresight_datafile_test.F90"
+
+[[test]]
+name = "foresight_expression_test"
+source-dir = "src/tests"
+main = "foresight_expression_test.F90"
+
+[[test]]
+name = "foresight_fingerprint_test"
+source-dir = "src/tests"
+main = "foresight_fingerprint_test.F90"
+
+[[test]]
+name = "foresight_format_test"
+source-dir = "src/tests"
+main = "foresight_format_test.F90"
+
+[[test]]
+name = "foresight_golden_test"
+source-dir = "src/tests"
+main = "foresight_golden_test.F90"
+
+[[test]]
+name = "foresight_multiplot_test"
+source-dir = "src/tests"
+main = "foresight_multiplot_test.F90"
+
+[[test]]
+name = "foresight_palette_test"
+source-dir = "src/tests"
+main = "foresight_palette_test.F90"
+
+[[test]]
+name = "foresight_readout_test"
+source-dir = "src/tests"
+main = "foresight_readout_test.F90"
+
+[[test]]
+name = "foresight_script_test"
+source-dir = "src/tests"
+main = "foresight_script_test.F90"
+
+[[test]]
+name = "foresight_sys_test"
+source-dir = "src/tests"
+main = "foresight_sys_test.F90"
+
+[[test]]
+name = "foresight_ticks_test"
+source-dir = "src/tests"
+main = "foresight_ticks_test.F90"
