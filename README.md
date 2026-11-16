@@ -73,6 +73,21 @@ foresight --watch -e "set terminal dumb" residuals.gp   # the same, as text in t
 
 ## Install
 
+### One-line install
+
+```bash
+curl -fsSL https://github.com/szaghi/foresight/releases/latest/download/install.sh | bash
+```
+
+It installs the latest release of the library into `~/.local` with the build system you choose among those foresight
+ships (`--build fobis|fpm`: a menu asks when you do not say), the compiler you name (`--fc`, `--gnu`, `--intel`), one
+install per compiler (`lib/foresight/<compiler>-<version>/`, `include/foresight/<compiler>-<version>/`), and makes it
+usable through pkg-config (`pkg-config --cflags --libs foresight`, with `PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig`).
+The release carries foresight's dependencies (PENF, BeFoR64, FACE, StringiFor). The fpm build also installs the
+command line tool, `bin/foresight`; the fobis build installs the library only. Pass options after `bash -s --`, e.g.
+`... | bash -s -- --build fpm --prefix /opt/foresight`; `--help` lists them all, `--uninstall` removes the install.
+The installer is FoBiS's ([One-line installer](https://szaghi.github.io/FoBiS/cookbook/installer)).
+
 ### FoBiS
 
 **Standalone** — clone, fetch dependencies, and build:
