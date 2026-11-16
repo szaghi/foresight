@@ -12,6 +12,10 @@ auto-executables = false
 auto-tests = false
 auto-examples = false
 
+# fpm install installs the library and its modules too (by default only the executable)
+[install]
+library = true
+
 [[executable]]
 name = "foresight"
 source-dir = "src/app"
