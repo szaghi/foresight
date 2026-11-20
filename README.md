@@ -6,6 +6,7 @@
 [![GitHub tag](https://img.shields.io/github/v/tag/szaghi/foresight)](https://github.com/szaghi/foresight/tags)
 [![GitHub issues](https://img.shields.io/github/issues/szaghi/foresight)](https://github.com/szaghi/foresight/issues)
 [![CI](https://github.com/szaghi/foresight/actions/workflows/ci.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
+[![Matrix](https://github.com/szaghi/foresight/actions/workflows/matrix.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/matrix.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://szaghi.github.io/foresight/coverage.json)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPLv3%20%7C%20BSD%20%7C%20MIT-blue.svg)](#copyrights)
 

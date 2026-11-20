@@ -6,7 +6,8 @@ title: Installation
 
 ## Requirements
 
-- A Fortran 2018 compiler. Tested with gfortran 16; the Intel `ifx` build modes exist but are not yet verified.
+- A Fortran 2018 compiler. The CI runs the tests with gfortran 16.2, ifx 2026.2 and nvfortran 26.9. nvfortran 26.9
+  miscompiles some valid Fortran: foresight works around what it meets ([#3](https://github.com/szaghi/foresight/issues/3)).
 - A POSIX system (Linux, macOS): `rename` and `nanosleep` are called through `bind(C)`.
 - [FoBiS](https://github.com/szaghi/FoBiS) 3.8+ to build.
 - Optionally [Node.js](https://nodejs.org), only to run the viewer tests and to build this documentation.
@@ -42,8 +43,8 @@ fobis build --mode foresight-static-gnu      # library: lib/libforesight.a, modu
 |---|---|
 | `foresight-gnu`, `foresight-intel` | the `foresight` command line tool in `bin/` |
 | `foresight-static-gnu`, `foresight-static-intel` | the static library `libforesight.a` in `lib/` |
-| `tests-gnu`, `tests-intel` | the test programs in `exe/` |
-| `tests-gnu-debug`, `tests-intel-debug` | the tests with runtime checks and floating point traps |
+| `tests-gnu`, `tests-intel`, `tests-nvf` | the test programs in `exe/` |
+| `tests-gnu-debug`, `tests-intel-debug`, `tests-nvf-debug` | the tests with runtime checks and floating point traps |
 
 ## Test
 

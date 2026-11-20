@@ -10,6 +10,8 @@ authors    = Stefano Zaghi
 [scaffold]
 toolchain = linux-gnu
 fpm       = true
+# the suite on the other compilers of the fortran-toolchains images (scripts/ci/matrix.sh)
+matrix    = linux-nvhpc linux-oneapi
 
 # the one-line installer, scripts/install.sh (FoBiS#217): foresight's static library modes for the fobis build
 [installer]
