@@ -86,7 +86,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |
 | `fs` | boxes and filledcurves: gnuplot fill style words, `'solid 0.5 noborder'` | `set_style_fill` |
 | `format` | readouts only: printf format with a field width, `'%9.2e'`; a readout takes `lc`, no other style option | `'%10.3e'` |
-| `lc` | color, any SVG color (`'#e51e10'`, `'red'`) | gnuplot palette, by series |
+| `lc` | color, any SVG color (`'#e51e10'`, `'red'`) | the linetype colors, by series |
 | `lw` | line width [px] | 1 |
 | `dt` | dash type 1..5 | 1 (solid) |
 | `ps` | point size factor | 1 |

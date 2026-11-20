@@ -294,7 +294,7 @@ contains
    real(R8P),            intent(in)           :: y(:)     !< Ordinates.
    character(len=*),     intent(in), optional :: title    !< Key title, empty or absent for none.
    character(len=*),     intent(in), optional :: with     !< Plotting style: `lines` (default), `points`, ....
-   character(len=*),     intent(in), optional :: lc       !< Line color (SVG color); default from the gnuplot palette.
+   character(len=*),     intent(in), optional :: lc       !< Line color (SVG color); default from the linetype colors.
    real(R8P),            intent(in), optional :: lw       !< Line width [px].
    integer(I4P),         intent(in), optional :: dt       !< Dash type, 1..5.
    real(R8P),            intent(in), optional :: ps       !< Point size scale factor.

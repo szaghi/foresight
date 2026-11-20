@@ -95,7 +95,7 @@ plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [l
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
-| `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the `N`-th palette color |
+| `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the color of linetype `N` |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
@@ -284,7 +284,7 @@ set style line 1 lc rgb '#e51e10' lw 2 dt 2
 plot 'run.dat' u 1:2 ls 1 t 'residual', '' u 1:3 lt 3 t 'momentum'
 ```
 
-`ls N` of an undefined style uses the palette color `N`, as gnuplot's linetype.
+`ls N` of an undefined style takes the color of linetype `N`, as gnuplot.
 
 ## Lines, steps and impulses
 
@@ -370,7 +370,7 @@ or a polygon (`spiderplot`); both are alone in their panel.
 - `parallelaxes`: the axes at x = 1, 2, ... (or `at X`), the x range one unit beyond them, titled below by their
   items; the rows in the first item's style. Unlike gnuplot, no y axis is drawn: its numbers would belong to no axis.
 - `spiderplot` (after `set spiderplot`, or `with spiderplot`): the axes from the centre, the first up, the others
-  clockwise, labelled by their item titles (else `set paxis N label`); a polygon per row in its palette color and the
+  clockwise, labelled by their item titles (else `set paxis N label`); a polygon per row in its linetype color and the
   `set style spiderplot` fill, named in the key by `using ...:key(N)` (the text of column N); `set grid spiderplot` draws
   the web at the ticks of the first axis.
 
@@ -540,8 +540,10 @@ gnuplot. Undefined values are transparent.
 The palette maps the values over `cbrange` (autoscaled to the values, not extended) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
-`#rrggbb` or gnuplot names), `gray`, `viridis`; `negative` reverses it, `maxcolors N` quantizes it to N bands. The
-color box at the right of the plot shows the palette over the range, with `cblabel`.
+`#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
+purple, dark-green, dark-blue, brown, violet, navy), `gray`, `viridis`; `negative` reverses it, `maxcolors N`
+quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
+The palette colors only images and the color box: the series colors (`lc N`) are the linetype colors.
 
 ```gnuplot
 set palette viridis maxcolors 10
@@ -587,7 +589,7 @@ plot 'phases.dat' u 2:xtic(1) w pie
 <Plot name="cb_pie" svg :width="480" :height="320" />
 
 `with pie` is a foresight extension (gnuplot draws pies only through `circles` and computed angles): one slice per row,
-proportional to the values, from 12 o'clock clockwise, each in its palette color; the key lists the slices with their
+proportional to the values, from 12 o'clock clockwise, each in its linetype color; the key lists the slices with their
 `xtic` names and percentages. `donut F` leaves a hole of F times the radius. A pie is alone in its panel, without axes,
 and takes non-negative values only: slices compare parts of a whole, which a signed quantity is not. Angles read less
 precisely than lengths: for comparing the parts, [histograms](#histograms) are the better chart.
@@ -628,7 +630,7 @@ plot 'phases.dat' u 2:xtic(1) w rose
 
 <Plot name="cb_rose" svg :width="480" :height="320" />
 
-**A rose** (Nightingale) chart has equal sectors, one per row in the palette colors, named in the key. A sector's
+**A rose** (Nightingale) chart has equal sectors, one per row in the linetype colors, named in the key. A sector's
 **area** is proportional to its value, so twice the value looks twice as large; `rose linear` makes the radius
 proportional instead, the common but exaggerating choice (twice the value, four times the area). The rings mark the
 values of the scale.
@@ -685,7 +687,7 @@ unset multiplot
 
 **Themes** recolor the output, never the figure: `classic` (the default) changes nothing; `vfd` is a vacuum
 fluorescent display, black glass, emissive series colors (cyan-green, amber, red, ...), the frame and labels printed in
-blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments. The gnuplot palette
+blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments. The default linetype
 colors, the frame, grid and page become the theme ones; a color you give (`lc '#123456'`) is kept. `glow` and
 `noglow` override the theme (only `vfd` glows by default); the glow is an SVG filter, so converters that do not render
 filters (some PDF ones) drop or rasterize it. In the HTML page, the ticks and grid redrawn by a zoom take the theme

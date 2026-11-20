@@ -29,7 +29,7 @@ module foresight_axes
 !< Circles (`with circles`, gnuplot) have their radius in x units (2% of the plot width by default) and are drawn round
 !< on the page; with two angles [deg, counterclockwise from the x direction] they are wedges. A pie (`with pie`, a
 !< foresight extension) is alone in its panel, without axes: its slices proportional to the values, from 12 o'clock
-!< clockwise, each in its palette color, a key entry per slice with its percentage; `donut` leaves a hole.
+!< clockwise, each in its linetype color, a key entry per slice with its percentage; `donut` leaves a hole.
 !<
 !< Images (`with image`) color a regular grid of values by the panel palette (foresight_palette) over the color axis
 !< `cbaxis`, autoscaled to the values or set (`cbrange`), its ends never extended to ticks; the x and y axes of a panel
@@ -233,7 +233,7 @@ contains
    real(R8P),          intent(in)           :: y(:)   !< Ordinates.
    character(len=*),   intent(in), optional :: title  !< Key title, empty or absent for none.
    character(len=*),   intent(in), optional :: with   !< Plotting style: `lines` (default), `points`, `linespoints`.
-   character(len=*),   intent(in), optional :: lc     !< Line color (SVG color); default from the gnuplot palette.
+   character(len=*),   intent(in), optional :: lc     !< Line color (SVG color); default from the linetype colors.
    real(R8P),          intent(in), optional :: lw     !< Line width [px].
    integer(I4P),       intent(in), optional :: dt     !< Dash type, 1..5.
    real(R8P),          intent(in), optional :: ps     !< Point size scale factor.
@@ -2428,7 +2428,7 @@ contains
 
    subroutine draw_pie(self, backend, box, font_size)
    !< A pie panel in the box (left, right, top, bottom) [px]: the slices of the values, from 12 o'clock clockwise in the
-   !< palette colors, a hole of the donut fraction of the radius; the key at the right, an entry per slice with its
+   !< linetype colors, a hole of the donut fraction of the radius; the key at the right, an entry per slice with its
    !< label and percentage.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
@@ -2490,7 +2490,7 @@ contains
    endassociate
    contains
       pure function slice_color(k) result(color)
-      !< Color of the `k`-th slice: the palette color `k`.
+      !< Color of the `k`-th slice: the linetype color `k`.
       integer(I4P), intent(in)      :: k     !< Slice.
       character(len=:), allocatable :: color !< SVG color.
 
@@ -2688,7 +2688,7 @@ contains
 
    subroutine draw_rose(self, backend, box, font_size)
    !< A rose (Nightingale) chart in the box (left, right, top, bottom) [px]: equal sectors from 12 o'clock clockwise, one
-   !< per row in the palette colors, the sector area proportional to the value (its radius with `linear`); rings at the
+   !< per row in the linetype colors, the sector area proportional to the value (its radius with `linear`); rings at the
    !< ticks of the value scale; the key at the right, the sector names.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
@@ -3328,7 +3328,7 @@ contains
    !< A spider plot in the box (left, right, top, bottom) [px], as gnuplot: a radial axis per series, the first up, the
    !< others clockwise, each scaled on its own (`set paxis`, the smallest value at the centre by default) and labelled
    !< outside by its series title, else by `set paxis N label`; the web (`set grid spiderplot`) at the ticks of axis 1; a
-   !< polygon per row in its palette color and the spider plot style, named in the key by the `key(N)` column.
+   !< polygon per row in its linetype color and the spider plot style, named in the key by the `key(N)` column.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: box(4)    !< Box: left, right, top, bottom [px].

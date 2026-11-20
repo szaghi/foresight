@@ -115,7 +115,7 @@ endtype style_object
 
 contains
    pure function default_color(index) result(color)
-   !< Default color of the `index`-th series, cycling the gnuplot 5 palette.
+   !< Default color of the `index`-th series, cycling gnuplot 5's linetype colors.
    integer(I4P), intent(in)      :: index !< Series index, from 1.
    character(len=:), allocatable :: color !< SVG color.
 

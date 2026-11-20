@@ -10,7 +10,7 @@ Three residuals on one plot must be told apart at a glance — also in grayscale
 
 <Plot name="ch2" />
 
-- Each series takes the next color of gnuplot's palette, unless `lc` sets one (any SVG color: `'#e51e10'`, `'red'`).
+- Each series takes the next of gnuplot's linetype colors, unless `lc` sets one (any SVG color: `'#e51e10'`, `'red'`).
 - `lw` is the line width [px], `dt` the dash type (1 solid, 2–5 dash patterns).
 - `with='linespoints'` draws the points on the line; `with='points'` the points only. `pt` picks the point type, as
   gnuplot: 1 plus, 2 cross, 4 square, 6 circle, 8 triangle, … the odd ones from 5 filled; `ps` scales it.

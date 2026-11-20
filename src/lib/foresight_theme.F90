@@ -3,7 +3,7 @@ module foresight_theme
 !< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`).
 !<
 !< A theme recolors the output, never the figure: the layout draws with gnuplot's colors (black frame and text, grey
-!< grid, white page, the gnuplot palette) and the devices map them through `map` as they write. `classic` maps nothing,
+!< grid, white page, the linetype colors) and the devices map them through `map` as they write. `classic` maps nothing,
 !< so the default output is unchanged; `vfd` is a vacuum fluorescent display (black glass, emissive colors, labels
 !< printed in blue, glowing data); `lcd` a backlit liquid crystal display (pale green glass, dark segments). Colors
 !< other than the frame, grid, page and palette ones (an `lc '#123456'` of the user) are kept.
@@ -24,7 +24,7 @@ type :: theme_object
    character(len=7) :: background = '#ffffff' !< Page and window background.
    character(len=7) :: frame      = 'black'   !< Border, ticks and text.
    character(len=7) :: grid       = '#a0a0a0' !< Grid lines.
-   character(len=7) :: palette(8) = ''        !< Series colors replacing the gnuplot palette; blank: kept.
+   character(len=7) :: palette(8) = ''        !< Series colors replacing the linetype colors; blank: kept.
    logical          :: glow       = .false.   !< Data drawn with a glow.
    real(R8P)        :: ghost      = 0.07_R8P  !< Opacity of the unlit segments and cells.
    contains
@@ -66,7 +66,7 @@ contains
    endfunction is_classic
 
    pure function map(self, color) result(mapped)
-   !< Theme color of the layout `color`: the frame (`black`), grid (`#a0a0a0`), page (`white`) and gnuplot palette
+   !< Theme color of the layout `color`: the frame (`black`), grid (`#a0a0a0`), page (`white`) and linetype
    !< colors become the theme ones, any other color is kept.
    class(theme_object), intent(in) :: self   !< Theme.
    character(len=*),    intent(in) :: color  !< Layout color.

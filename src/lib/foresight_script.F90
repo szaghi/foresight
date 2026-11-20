@@ -25,7 +25,7 @@ module foresight_script
 !<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style);
 !<   `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
-!<   item with a column header; `ls N`, `lt N` in an item apply a line style, a palette color;
+!<   item with a column header; `ls N`, `lt N` in an item apply a line style, a linetype color;
 !< - `with boxerrorbars|boxxyerror|candlesticks [whiskerbars [F]]|financebars|boxplot` (gnuplot's layouts), `set style
 !<   boxplot [range R|fraction F] [[no]outliers] [pointtype P] [candlesticks|financebars] [medianlinewidth W]
 !<   [separation S] [labels off|auto|x] [sorted|unsorted]`;
@@ -3301,7 +3301,7 @@ contains
 
    function line_option(tokens, i, line, iostat, iomsg) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
-   !< `lc [rgb] "color"`, `lc N`, `lt N` (palette color N), `lw W`, `dt N`, `ps S`, `pt N`.
+   !< `lc [rgb] "color"`, `lc N`, `lt N` (linetype color N), `lw W`, `dt N`, `ps S`, `pt N`.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
    type(line_style_object),       intent(inout) :: line      !< Line properties.
