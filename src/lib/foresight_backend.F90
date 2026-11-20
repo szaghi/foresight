@@ -72,6 +72,7 @@ type, abstract :: backend_object
       procedure(readout_extent_interface),  pass(self), deferred :: readout_extent  !< Readout size [px].
       procedure(arrows_interface),          pass(self), deferred :: data_arrows     !< Arrows [unit square].
       procedure(label_interface),           pass(self), deferred :: data_label      !< Text at a point [unit square].
+      procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
 endtype backend_object
 
 abstract interface
@@ -285,6 +286,15 @@ abstract interface
 endinterface
 
 contains
+   pure function rotates_text(self) result(rotates)
+   !< Whether the device draws text rotated, as tick labels `rotate`d by gnuplot: true but on text devices, which
+   !< write them horizontally, as gnuplot's dumb terminal.
+   class(backend_object), intent(in) :: self    !< Device.
+   logical                           :: rotates !< Rotated text.
+
+   rotates = .true.
+   endfunction rotates_text
+
    pure subroutine arrow_head(tail, tip, barbs)
    !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation]: HEAD_LENGTH px long,
    !< HEAD_ANGLE degrees off the shaft, as gnuplot's default head; `barbs(:, 1)` and `barbs(:, 2)`. A zero length

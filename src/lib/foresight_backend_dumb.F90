@@ -96,6 +96,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_polygon
       procedure, pass(self) :: data_image
       procedure, pass(self) :: text_width
+      procedure, pass(self) :: rotates_text
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
       procedure, pass(self) :: data_arrows
@@ -1116,6 +1117,14 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_symbol
+
+   pure function rotates_text(self) result(rotates)
+   !< Tick labels stay horizontal on text devices, as on gnuplot's dumb terminal.
+   class(backend_dumb), intent(in) :: self    !< Device.
+   logical                         :: rotates !< Rotated text.
+
+   rotates = .false.
+   endfunction rotates_text
 
    pure function segment_char(mask, segment, symbol) result(c)
    !< `symbol` if `segment` of the seven-segment cell `mask` is lit, else a blank.

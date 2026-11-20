@@ -326,15 +326,25 @@
   // ("labels v:text ...", texts percent-encoded, "^sup" a superscript, "v!" a minor tick), from
   // the data or an explicit list, give mode "labels" and {labels}; after "auto" or a step they are
   // added to those ticks ({add}), as gnuplot `set xtics add`; "minor auto|N" sets {minor}: "auto",
-  // N intervals, or "" by default
+  // N intervals, or "" by default; "out" outward ticks ({out}); "rotate A ANCHOR" rotated labels
+  // ({rotate: degrees counterclockwise, anchor})
   function readTics(positions, format) {
-    var tics = {mode: "auto", start: "", step: "", end: "", format: format || "", minor: ""};
+    var tics = {mode: "auto", start: "", step: "", end: "", format: format || "", minor: "",
+      out: false, rotate: 0, anchor: "middle"};
     var words = positions ? positions.split(" ") : [], k = words.indexOf("labels");
-    var series = k < 0 ? words : words.slice(0, k), m = series.indexOf("minor");
-    if (m >= 0) {
-      tics.minor = series[m + 1] === "auto" ? "auto" : Number(series[m + 1]);
-      series = series.slice(0, m);
+    var series = k < 0 ? words : words.slice(0, k), j, w, cut = series.length;
+    for (j = 0; j < series.length; j++) {
+      w = series[j];
+      if (w !== "minor" && w !== "out" && w !== "rotate") continue;
+      cut = Math.min(cut, j);
+      if (w === "minor") tics.minor = series[j + 1] === "auto" ? "auto" : Number(series[j + 1]);
+      if (w === "out") tics.out = true;
+      if (w === "rotate") {
+        tics.rotate = Number(series[j + 1]);
+        tics.anchor = series[j + 2];
+      }
     }
+    series = series.slice(0, cut);
     if (k >= 0) {
       tics.labels = words.slice(k + 1).map(function (item) {
         var colon = item.indexOf(":"), caret, text;
@@ -635,8 +645,10 @@
     return element(parent, "line", attributes);
   }
 
-  function label(parent, x, y, tick, anchor) {
-    var node = element(parent, "text", {x: x, y: y, "text-anchor": anchor});
+  function label(parent, x, y, tick, anchor, rotate) {
+    var attributes = {x: x, y: y, "text-anchor": anchor};
+    if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
+    var node = element(parent, "text", attributes);
     node.appendChild(document.createTextNode(tick.label));
     if (tick.sup) {
       element(node, "tspan", {dy: "-0.45em", "font-size": "0.75em"}).textContent = tick.sup;
@@ -951,14 +963,23 @@
     clear(this.gridGroup);
     clear(this.xticks);
     clear(this.yticks);
+    var xt = this.x.tics || {}, yt = this.y.tics || {}, angle = xt.rotate || 0;
+    var rad = angle * Math.PI / 180;
+    var xs = xt.out ? -1 : 1, shift = xt.out ? TICK_MAJOR : 0;
     this.x.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
       var length = t.major ? TICK_MAJOR : TICK_MINOR;
       if (p < self.left - 0.5 || p > self.right + 0.5) return;
-      line(self.xticks, p, self.bottom, p, self.bottom - length, FRAME_COLOR, 1);
-      if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + length, FRAME_COLOR, 1);
+      line(self.xticks, p, self.bottom, p, self.bottom - xs * length, FRAME_COLOR, 1);
+      if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + xs * length, FRAME_COLOR, 1);
       if (!t.major) return;
-      label(self.xticks, p, self.bottom + GAP + fs, t, "middle");
+      // rotated: the glyph band centred on the tick (mirror of rotated_anchor)
+      if (angle) {
+        label(self.xticks, p + 0.35 * fs * Math.sin(rad),
+          self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle);
+      } else {
+        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle");
+      }
       if (self.polarGrid) return;
       line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
     });
@@ -966,10 +987,14 @@
       var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
       var length = t.major ? TICK_MAJOR : TICK_MINOR;
       if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
-      line(self.yticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
-      if (self.mirror[1]) line(self.yticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
+      var ys = yt.out ? -1 : 1;
+      line(self.yticks, self.left, p, self.left + ys * length, p, FRAME_COLOR, 1);
+      if (self.mirror[1]) {
+        line(self.yticks, self.right, p, self.right - ys * length, p, FRAME_COLOR, 1);
+      }
       if (!t.major) return;
-      label(self.yticks, self.left - GAP, p + 0.35 * fs, t, "end");
+      label(self.yticks, self.left - GAP - (yt.out ? TICK_MAJOR : 0), p + 0.35 * fs, t,
+        "end");
       if (self.polarGrid) return;
       line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
     });
@@ -979,9 +1004,15 @@
       var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
       var length = t.major ? TICK_MAJOR : TICK_MINOR;
       if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
-      line(self.y2ticks, self.right, p, self.right - length, p, FRAME_COLOR, 1);
-      if (self.mirror[2]) line(self.y2ticks, self.left, p, self.left + length, p, FRAME_COLOR, 1);
-      if (t.major) label(self.y2ticks, self.right + GAP, p + 0.35 * fs, t, "start");
+      var y2t = self.y2.tics || {}, s2 = y2t.out ? -1 : 1;
+      line(self.y2ticks, self.right, p, self.right - s2 * length, p, FRAME_COLOR, 1);
+      if (self.mirror[2]) {
+        line(self.y2ticks, self.left, p, self.left + s2 * length, p, FRAME_COLOR, 1);
+      }
+      if (t.major) {
+        label(self.y2ticks, self.right + GAP + (y2t.out ? TICK_MAJOR : 0), p + 0.35 * fs, t,
+          "start");
+      }
     });
   };
 

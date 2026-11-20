@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(80)                  !< Per-figure outcome.
+logical                     :: test_passed(82)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -103,7 +103,9 @@ test_passed(77) = check('colorbox_modes.svg', figure_colorbox_modes())
 test_passed(78) = check('tics_list.svg', figure_tics_list())
 test_passed(79) = check('tics_list.txt', figure_tics_list())
 test_passed(80) = check('mtics.svg', figure_mtics())
-write(output_unit, '(A,80L2)') 'foresight golden checks:', test_passed
+test_passed(81) = check('tics_rotate.svg', figure_tics_rotate())
+test_passed(82) = check('tics_rotate.txt', figure_tics_rotate())
+write(output_unit, '(A,82L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -372,6 +374,32 @@ contains
    z = reshape([((real(i * j, R8P), i = 1, 6), j = 1, 4)], [6, 4])
    call fig%image(z, title='')
    endfunction figure_mtics
+
+   function figure_tics_rotate() result(fig)
+   !< Rotated x tick labels and outward ticks, gnuplot `set xtics rotate [by A] [right]` and `out`: by 90 degrees
+   !< right-justified, by 45 right-justified, by -30 left-justified (the default of rotate by), and outward ticks on x
+   !< and y; the labels hang below the axis, the margins fit them. Text devices keep them upright, as gnuplot's dumb.
+   type(figure_object)         :: fig        !< Figure.
+   character(len=8), parameter :: MONTHS(4) = ['January ', 'February', 'March   ', 'April   '] !< Labels.
+   real(R8P),        parameter :: X(4) = [1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P] !< Months.
+   real(R8P),        parameter :: Y(4) = [3.0_R8P, 5.0_R8P, 4.0_R8P, 6.0_R8P] !< Values.
+
+   call fig%init(width=700_I4P, height=500_I4P)
+   call fig%set_multiplot(rows=2_I4P, cols=2_I4P)
+   call fig%set_xtics(positions=X, labels=MONTHS, rotate=90.0_R8P, justify='right')
+   call fig%set_xlabel('month')
+   call fig%plot(X, Y, title='rotate', with='linespoints')
+   call fig%next_panel
+   call fig%set_xtics(rotate=45.0_R8P, justify='right')
+   call fig%plot(X, Y, title='by 45 right', with='linespoints')
+   call fig%next_panel
+   call fig%set_xtics(rotate=-30.0_R8P)
+   call fig%plot(X, Y, title='by -30', with='linespoints')
+   call fig%next_panel
+   call fig%set_xtics(rotate=0.0_R8P, out=.true.)
+   call fig%set_ytics(out=.true.)
+   call fig%plot(X, Y, title='out', with='linespoints')
+   endfunction figure_tics_rotate
 
    function figure_segments() result(fig)
    !< Segmented boxes (classic theme): 10 cells over the y range, lit when covered at least half, the others ghosts

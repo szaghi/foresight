@@ -2718,7 +2718,9 @@ contains
 
       subroutine tics_option(tics, words)
       !< `set xtics|ytics|y2tics|cbtics [add] [auto|autofreq|STEP|START,STEP|START,STEP,END|("label" pos level, ...)]
-      !< [mirror|nomirror]`: without positions the last ones are kept, turning off ticks on (gnuplot); `auto` resets them.
+      !< [mirror|nomirror] [in|out] [rotate [by ANGLE]|norotate] [left|right|center]`: without positions the last ones
+      !< are kept, turning off ticks on (gnuplot); `auto` resets them. `out` (x, y, y2) points the ticks outward; `rotate`
+      !< (x only) turns the labels, by 90 degrees right-justified, `rotate by ANGLE` left-justified unless justified.
       !< An explicit list replaces the ticks, with `add` it extends them (and an earlier list); positions without `add`
       !< forget an earlier list. `words` (the tics keyword and its arguments) replaces the option tokens.
       type(tics_object),  intent(inout)        :: tics     !< Axis tick settings.
@@ -2730,6 +2732,8 @@ contains
       character(len=:), allocatable    :: list    !< Explicit list, `(...)`, empty if none.
       logical                          :: ok      !< Well formed.
       logical                          :: add     !< `add`: extend the ticks.
+      character(len=6)                 :: justify !< Justification given, blank if none.
+      real(R8P)                        :: angle   !< Rotation angle [deg].
       logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
       integer(I4P)                     :: n       !< Position tokens.
 
@@ -2741,8 +2745,51 @@ contains
       allocate(args(0))
       add = .false.
       list = ''
-      do i = 2_I4P, size(toks, kind=I4P)
-         if (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'mirror', 3_I4P)) then
+      justify = ''
+      i = 2_I4P
+      do while (i <= size(toks, kind=I4P))
+         if (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['in      ', 'out     ', 'rotate  ', 'norotate'])) then
+            if (.not. keyword(option, 'xtics', 3_I4P) .and. (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
+               call fail('set '//option//': rotate is supported on xtics only', iostat, iomsg)
+               return
+            endif
+            if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P)]) &
+                .and. (toks(i)%text == 'in' .or. toks(i)%text == 'out')) then
+               call fail('set '//option//': in and out are supported on xtics, ytics and y2tics only', iostat, iomsg)
+               return
+            endif
+            select case (toks(i)%text)
+            case ('in')
+               tics%out = .false.
+            case ('out')
+               tics%out = .true.
+            case ('norotate')
+               tics%rotate = 0.0_R8P
+               tics%justify = ''
+            case default
+               ! rotate: 90 degrees right-justified; rotate by ANGLE: left-justified (gnuplot)
+               tics%rotate = 90.0_R8P
+               tics%justify = 'right'
+               if (i < size(toks, kind=I4P)) then
+                  if (toks(i + 1_I4P)%text == 'by') then
+                     if (i + 2_I4P > size(toks, kind=I4P)) then
+                        call fail('set '//option//': rotate by needs an angle', iostat, iomsg)
+                        return
+                     endif
+                     if (.not. to_number(toks(i + 2_I4P)%text, angle)) then
+                        call fail('set '//option//': rotate by needs an angle, not "'//toks(i + 2_I4P)%text//'"', &
+                                  iostat, iomsg)
+                        return
+                     endif
+                     tics%rotate = angle
+                     tics%justify = ''
+                     i = i + 2_I4P
+                  endif
+               endif
+            endselect
+         elseif (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['left  ', 'right ', 'center'])) then
+            justify = toks(i)%text
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'mirror', 3_I4P)) then
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
@@ -2757,7 +2804,15 @@ contains
          else
             call push(args, toks(i))
          endif
+         i = i + 1_I4P
       enddo
+      if (len_trim(justify) > 0) then
+         if (tics%rotate == 0.0_R8P) then
+            call fail('set '//option//': '//trim(justify)//' justifies rotated labels (with rotate)', iostat, iomsg)
+            return
+         endif
+         tics%justify = justify
+      endif
       n = size(args, kind=I4P)
       if (len(list) > 0) then
          if (n > 0_I4P) then

@@ -105,6 +105,15 @@ An explicit list replaces the ticks: names at chosen positions, `""` with level 
 
 `set mxtics 4` divides each step of x in 4; `set mytics` alone takes gnuplot's count, 9 per decade on a log axis.
 
+### Rotated labels and outward ticks
+
+<<< @/examples/snippets/cb_tics_rotate.gp{gnuplot}
+
+<Plot name="cb_tics_rotate" svg :width="560" :height="320" />
+
+Long category names fit rotated: `rotate by 30 right` ends each label at its tick, below the axis. `out` points the
+ticks away from the plot; `nomirror` leaves the opposite border bare.
+
 ### Two y axes
 
 <<< @/examples/snippets/cb_y2.gp{gnuplot}

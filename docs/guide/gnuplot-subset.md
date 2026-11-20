@@ -46,7 +46,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
@@ -311,6 +311,18 @@ majors are several decades apart: foresight does not); `unset mxtics` removes th
 set mxtics               # gnuplot's count: 5 per step of 1
 set mytics 4             # 4 intervals between major ticks
 unset mytics             # none, also the 2..9 of a log axis
+```
+
+`out` points the ticks (and their mirrors) outward, the plot area making room for them, `in` back inward (x, y and y2
+ticks). `rotate` turns the x tick labels by 90 degrees, reading upward and right-justified; `rotate by A` by `A`
+degrees counterclockwise, left-justified unless `left`, `right` or `center` follows; `norotate` restores them. As in
+gnuplot, the glyphs of a rotated label are centred on its tick and a left-justified one at a positive angle runs up
+into the plot: give it `right`, or a negative angle. The bottom margin grows to the labels that hang below the axis.
+Text devices write the labels upright, as gnuplot's dumb terminal.
+
+```gnuplot
+set xtics rotate by 30 right out nomirror   # long category names, outward ticks
+set ytics out
 ```
 
 All these settings follow the zoom in the HTML page: the viewer places and formats the ticks by the same rules, the
@@ -856,7 +868,8 @@ text). Zooming magnifies the cells with the data.
 Recursive user functions, inline ranges (`plot [0:1] sin(x)`), the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
-(`set xtics 0,1 ("a" 2)`), and the `rotate`, `out` options; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
+(`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
+`scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; variable colors (`lc variable`), `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters other than

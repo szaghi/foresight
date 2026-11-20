@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="560" height="320" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="132.43 546.4 16 218.26" data-x="-6e-1 4.6e0" data-y="0 8e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="labels 0:mesh%20partitioning 1e0:boundary%20exchange 2e0:flux%20reconstruction 3e0:linear%20solve 4e0:output%20and%20checkpoint" data-ytics="auto out" data-mirror="0 0 0">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="180.2,218.26 180.2,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="259.81,218.26 259.81,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="339.42,218.26 339.42,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="419.02,218.26 419.02,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="498.63,218.26 498.63,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,218.26 546.4,218.26"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,192.98 546.4,192.98"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,167.7 546.4,167.7"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,142.42 546.4,142.42"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,117.13 546.4,117.13"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,91.85 546.4,91.85"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,66.57 546.4,66.57"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,41.28 546.4,41.28"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="132.43,16 546.4,16"/>
+</g>
+<svg class="fs-plot" x="132.43" y="16" width="413.97" height="202.26" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.057692,1 0.173077,1 0.173077,0.775 0.057692,0.775Z"/>
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.25,1 0.365385,1 0.365385,0.8875 0.25,0.8875Z"/>
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.442308,1 0.557692,1 0.557692,0.425 0.442308,0.425Z"/>
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.634615,1 0.75,1 0.75,0.1 0.634615,0.1Z"/>
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.826923,1 0.942308,1 0.942308,0.7125 0.826923,0.7125Z"/>
+</g>
+</svg>
+<rect x="132.43" y="16" width="413.97" height="202.26" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="180.2,218.26 180.2,224.26"/>
+<text x="182.3" y="238.1" text-anchor="end" transform="rotate(-30 182.3 238.1)">mesh partitioning</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="259.81,218.26 259.81,224.26"/>
+<text x="261.91" y="238.1" text-anchor="end" transform="rotate(-30 261.91 238.1)">boundary exchange</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="339.42,218.26 339.42,224.26"/>
+<text x="341.52" y="238.1" text-anchor="end" transform="rotate(-30 341.52 238.1)">flux reconstruction</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="419.02,218.26 419.02,224.26"/>
+<text x="421.12" y="238.1" text-anchor="end" transform="rotate(-30 421.12 238.1)">linear solve</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="498.63,218.26 498.63,224.26"/>
+<text x="500.73" y="238.1" text-anchor="end" transform="rotate(-30 500.73 238.1)">output and checkpoint</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,218.26 126.43,218.26"/>
+<text x="120.43" y="222.46" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,192.98 126.43,192.98"/>
+<text x="120.43" y="197.18" text-anchor="end">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,167.7 126.43,167.7"/>
+<text x="120.43" y="171.9" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,142.42 126.43,142.42"/>
+<text x="120.43" y="146.62" text-anchor="end">3</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,117.13 126.43,117.13"/>
+<text x="120.43" y="121.33" text-anchor="end">4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,91.85 126.43,91.85"/>
+<text x="120.43" y="96.05" text-anchor="end">5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,66.57 126.43,66.57"/>
+<text x="120.43" y="70.77" text-anchor="end">6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,41.28 126.43,41.28"/>
+<text x="120.43" y="45.48" text-anchor="end">7</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="132.43,16 126.43,16"/>
+<text x="120.43" y="20.2" text-anchor="end">8</text>
+</g>
+<g class="fs-key-entry" data-series="1">
+<path fill="#9400d3" fill-opacity="0.6" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M500.4,33.7 536.4,33.7 536.4,25.3 500.4,25.3Z"/>
+<text x="494.4" y="33.7" text-anchor="end">time [s]</text>
+</g>
+</g>
+</svg>

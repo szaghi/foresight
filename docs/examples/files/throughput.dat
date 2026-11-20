@@ -1,0 +1,6 @@
+# step  phase                    time [s]
+0  "mesh partitioning"       1.8
+1  "boundary exchange"       0.9
+2  "flux reconstruction"     4.6
+3  "linear solve"            7.2
+4  "output and checkpoint"   2.3

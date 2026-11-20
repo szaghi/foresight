@@ -81,6 +81,10 @@ type :: tics_object
    logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
    logical                       :: series = .true.  !< The automatic or fixed ticks, else the explicit list alone.
    integer(I4P)                  :: minor = MINOR_DEFAULT !< Minor ticks: MINOR_DEFAULT, MINOR_AUTO, MINOR_NONE or N.
+   real(R8P)                     :: rotate = 0.0_R8P  !< Label angle [deg, counterclockwise], gnuplot `rotate by`.
+   character(len=6)              :: justify = ''      !< Label justification of rotated labels: `left`, `right`,
+                                                      !< `center`, or blank for gnuplot's (`right` for `rotate`).
+   logical                       :: out = .false.     !< Ticks outward, gnuplot `out`.
    type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
@@ -89,6 +93,7 @@ type :: tics_object
       procedure, pass(self) :: enable     !< Turn the ticks on, keeping their positions.
       procedure, pass(self) :: has_format !< Whether a label format is set.
       procedure, pass(self) :: has_list   !< Whether an explicit list is set.
+      procedure, pass(self) :: anchor     !< Text anchor of the rotated labels.
       procedure, pass(self) :: set_auto   !< Automatic ticks, forgetting a fixed step.
       procedure, pass(self) :: set_fixed  !< Set fixed ticks, validated.
       procedure, pass(self) :: set_list   !< Set or extend the explicit list.
@@ -103,7 +108,8 @@ integer(I8P), parameter :: MAX_POWER = 10000_I8P  !< Largest power of a fixed lo
 contains
    pure function attribute(self, lo, hi) result(text)
    !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end, then
-   !< `minor auto|N` unless minor ticks are by default (`auto` first if automatic). With an explicit list (and the axis
+   !< `minor auto|N` unless minor ticks are by default (`auto` first if automatic), `out` for outward ticks and
+   !< `rotate ANGLE ANCHOR` for rotated labels. With an explicit list (and the axis
    !< range [`lo`, `hi`], for the default labels of its items): `labels` and its items (see `labels_attribute`), after
    !< `auto` or the step when the list is added to them.
    class(tics_object), intent(in)           :: self  !< Settings.
@@ -129,6 +135,11 @@ contains
       case default
          text = text//' minor '//int_str(int(self%minor, I8P))
       endselect
+   endif
+   if (self%out .or. self%rotate /= 0.0_R8P) then
+      if (len(text) == 0) text = 'auto'
+      if (self%out) text = text//' out'
+      if (self%rotate /= 0.0_R8P) text = text//' rotate '//real_str(self%rotate)//' '//trim(self%anchor())
    endif
    if (.not. (self%has_list() .and. present(lo) .and. present(hi))) return
    call list_ticks(self, lo, hi, .true., items)
@@ -227,6 +238,21 @@ contains
    self%mode = TICS_NONE
    call self%clear_list
    endsubroutine disable
+
+   pure function anchor(self) result(text_anchor)
+   !< Text anchor of the rotated labels, as gnuplot: by their justification, else `start` (gnuplot `rotate by`).
+   class(tics_object), intent(in) :: self        !< Settings.
+   character(len=6)               :: text_anchor !< `start`, `end` or `middle`.
+
+   select case (trim(self%justify))
+   case ('right')
+      text_anchor = 'end'
+   case ('center')
+      text_anchor = 'middle'
+   case default
+      text_anchor = 'start'
+   endselect
+   endfunction anchor
 
    pure function has_list(self) result(has)
    !< Whether an explicit list is set.

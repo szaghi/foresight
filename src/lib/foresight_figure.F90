@@ -1110,13 +1110,15 @@ contains
    call self%panels(self%current)%cbaxis%tics%disable
    endsubroutine unset_cbtics
 
-   subroutine set_xtics(self, step, start, end, mirror, positions, labels, minor, add)
+   subroutine set_xtics(self, step, start, end, mirror, positions, labels, minor, add, rotate, justify, out)
    !< x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
    !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
    !< the bottom border only (gnuplot `nomirror`).
    !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
    !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
    !< as gnuplot `set xtics [add] ("label" pos level, ...)`.
+   !< `rotate` turns the labels [deg, counterclockwise], left-justified unless `justify` (gnuplot `rotate by A`; `rotate`
+   !< is 90 with `justify='right'`); `out` points the ticks outward. Alone they keep the tick positions.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
@@ -1126,10 +1128,13 @@ contains
    character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
    logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
    logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
+   real(R8P),            intent(in), optional :: rotate       !< Label angle [deg, counterclockwise], gnuplot `rotate by`.
+   character(len=*),     intent(in), optional :: justify      !< Rotated label justification: left, right, center.
+   logical,              intent(in), optional :: out          !< Ticks outward, gnuplot `out`.
 
    call self%ensure_panels
    call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end, mirror, positions, labels, minor, &
-                 add)
+                 add, rotate, justify, out)
    endsubroutine set_xtics
 
    subroutine set_mxtics(self, intervals)
@@ -1207,13 +1212,14 @@ contains
    call self%panels(self%current)%yaxis%set_range(min=min, max=max)
    endsubroutine set_yrange
 
-   subroutine set_ytics(self, step, start, end, mirror, positions, labels, minor, add)
+   subroutine set_ytics(self, step, start, end, mirror, positions, labels, minor, add, out)
    !< y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
    !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
    !< the left border only (gnuplot `nomirror`), leaving the right one to the second y axis.
    !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
    !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
    !< as gnuplot `set ytics [add] ("label" pos level, ...)`.
+   !< `out` points the ticks outward (gnuplot `out`); alone it keeps the tick positions.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
@@ -1223,10 +1229,11 @@ contains
    character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
    logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
    logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
+   logical,              intent(in), optional :: out          !< Ticks outward, gnuplot `out`.
 
    call self%ensure_panels
    call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end, mirror, positions, labels, minor, &
-                 add)
+                 add, out=out)
    endsubroutine set_ytics
 
    subroutine set_y2label(self, label)
@@ -1248,12 +1255,13 @@ contains
    call self%panels(self%current)%y2axis%set_range(min=min, max=max)
    endsubroutine set_y2range
 
-   subroutine set_y2tics(self, step, start, end, mirror, positions, labels, minor, add)
+   subroutine set_y2tics(self, step, start, end, mirror, positions, labels, minor, add, out)
    !< Ticks and labels of the second y axis on the right border, as gnuplot `set y2tics START,STEP,END` (automatic
    !< without `step`); off by default, as in gnuplot. `mirror` true draws the ticks on the left border too.
    !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
    !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
    !< as gnuplot `set y2tics [add] ("label" pos level, ...)`.
+   !< `out` points the ticks outward (gnuplot `out`); alone it keeps the tick positions.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
@@ -1263,10 +1271,11 @@ contains
    character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
    logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
    logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
+   logical,              intent(in), optional :: out          !< Ticks outward, gnuplot `out`.
 
    call self%ensure_panels
    call set_tics(self%panels(self%current)%y2axis%tics, 'set_y2tics', step, start, end, mirror, positions, labels, minor, &
-                 add)
+                 add, out=out)
    endsubroutine set_y2tics
 
    subroutine unset_logscale(self, axes)
@@ -1416,12 +1425,14 @@ contains
    enddo
    endfunction extension
 
-   subroutine set_tics(tics, caller, step, start, end, mirror, positions, labels, minor, add)
+   subroutine set_tics(tics, caller, step, start, end, mirror, positions, labels, minor, add, rotate, justify, out)
    !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop. `mirror` alone (no
    !< step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on at their last
    !< positions. `positions` is an explicit list (gnuplot `set xtics ("label" pos level, ...)`), with `labels` (each
    !< printed as written, a format if it has a conversion; the axis labels without them) and `minor` (level 1);
-   !< `add` adds the list to the ticks, or a step to the list, instead of replacing them.
+   !< `add` adds the list to the ticks, or a step to the list, instead of replacing them. `rotate` turns the labels by
+   !< that angle [deg, counterclockwise; 0 upright], `justify` (`left`, `right`, `center`) anchors them (left by
+   !< default, gnuplot `rotate by`), `out` points the ticks outward; alone, like `mirror`, they keep the positions.
    type(tics_object),   intent(inout)        :: tics         !< Axis tick settings.
    character(len=*),    intent(in)           :: caller       !< Procedure name, for messages.
    real(R8P),           intent(in), optional :: step         !< Tick step.
@@ -1432,6 +1443,9 @@ contains
    character(len=*),    intent(in), optional :: labels(:)    !< Explicit list labels.
    logical,             intent(in), optional :: minor(:)     !< Explicit list minor ticks.
    logical,             intent(in), optional :: add          !< Add to the ticks.
+   real(R8P),           intent(in), optional :: rotate       !< Label angle [deg, counterclockwise].
+   character(len=*),    intent(in), optional :: justify      !< Rotated label justification.
+   logical,             intent(in), optional :: out          !< Ticks outward.
    type(tic_item), allocatable               :: items(:)     !< Explicit list.
    character(len=:), allocatable             :: first        !< Start text.
    character(len=:), allocatable             :: last         !< End text.
@@ -1441,6 +1455,22 @@ contains
 
    adding = .false.
    if (present(add)) adding = add
+   if (present(rotate)) then
+      tics%rotate = rotate
+      tics%justify = ''
+   endif
+   if (present(justify)) then
+      if (.not. any(trim(justify) == ['left  ', 'right ', 'center'])) &
+         error stop 'foresight: '//caller//': justify must be left, right or center, not "'//trim(justify)//'"'
+      tics%justify = trim(justify)
+   endif
+   if (present(out)) tics%out = out
+   if ((present(rotate) .or. present(justify) .or. present(out)) .and. .not. (present(step) .or. present(start) .or. &
+       present(end) .or. present(positions))) then
+      if (present(mirror)) tics%mirror = mirror
+      call tics%enable
+      return
+   endif
    if (present(positions)) then
       if (present(step) .or. present(start) .or. present(end)) &
          error stop 'foresight: '//caller//': positions and a step together (set them apart, with add)'

@@ -97,6 +97,12 @@ check("minor log none",
   counts(viewer.logTicks(1, 1000, 400, viewer.readTics("auto minor 0", ""))) === "4+0");
 check("minor log factor",
   counts(viewer.logTicks(1, 1e6, 400, viewer.readTics("* 100 * minor 4", ""))) === "4+9");
+// outward ticks and rotated labels (set xtics out rotate by A right)
+tics = viewer.readTics("0 2 * minor 4 out rotate 4.5e1 end labels 3e0:c", "");
+check("out and rotate", tics.mode === "fixed" && tics.step === "2" && tics.minor === 4 &&
+  tics.out && tics.rotate === 45 && tics.anchor === "end" && tics.add && tics.labels.length === 1);
+tics = viewer.readTics("auto rotate 9e1 end", "");
+check("rotate alone", tics.mode === "auto" && !tics.out && tics.rotate === 90);
 check("minor log wide",
   counts(viewer.logTicks(1, 1e20, 400, viewer.readTics("auto minor 2", ""))) === "5+4");
 

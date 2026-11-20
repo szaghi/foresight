@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(83)                           !< Per-check outcome.
+logical                       :: test_passed(84)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1172,6 +1172,31 @@ call interpreter%run_text('set mxtics 0', iostat, iomsg)
 test_passed(83) = test_passed(83) .and. iostat /= 0_I4P .and. index(iomsg, 'set mxtics: a number of intervals') > 0
 call interpreter%run_text('set mxtics 2.5', iostat, iomsg)
 test_passed(83) = test_passed(83) .and. iostat /= 0_I4P .and. index(iomsg, 'set mxtics: a number of intervals') > 0
+
+! rotated x labels and outward ticks, as gnuplot 6.0: rotate is by 90 right-justified, rotate by A left-justified
+! unless justified; they persist with new positions, until norotate and in
+call interpreter%init(scratch)
+associate(tics => interpreter%figure%panels(1)%xaxis%tics)
+   call interpreter%run_text('set xtics rotate', iostat, iomsg)
+   test_passed(84) = iostat == 0_I4P .and. tics%attribute() == 'auto rotate 9e1 end'
+   call interpreter%run_text('set xtics 2 rotate by 45 right out', iostat, iomsg)
+   test_passed(84) = test_passed(84) .and. tics%attribute() == '* 2 * out rotate 4.5e1 end'
+   call interpreter%run_text('set xtics 5; set xtics rotate by -30', iostat, iomsg)
+   test_passed(84) = test_passed(84) .and. tics%attribute() == '* 5 * out rotate -3e1 start'
+   call interpreter%run_text('set xtics norotate in', iostat, iomsg)
+   test_passed(84) = test_passed(84) .and. tics%attribute() == '* 5 *'
+endassociate
+call interpreter%run_text('set ytics out; set y2tics out', iostat, iomsg)
+test_passed(84) = test_passed(84) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%yaxis%tics%out .and. &
+                  interpreter%figure%panels(1)%y2axis%tics%out
+call interpreter%run_text('set ytics rotate', iostat, iomsg)
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics only') > 0
+call interpreter%run_text('set cbtics out', iostat, iomsg)
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'in and out are supported on xtics') > 0
+call interpreter%run_text('set xtics right', iostat, iomsg)
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'right justifies rotated labels') > 0
+call interpreter%run_text('set xtics rotate by', iostat, iomsg)
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate by needs an angle') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1189,7 +1214,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,83L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,84L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
