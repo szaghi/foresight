@@ -16,6 +16,13 @@ public :: split_statements
 public :: token_object
 public :: tokenize
 public :: TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
+public :: push
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_token
+endinterface push
 
 integer(I4P), parameter :: TOKEN_WORD   = 1_I4P !< Bare word: keyword, number, column spec.
 integer(I4P), parameter :: TOKEN_STRING = 2_I4P !< Quoted string, quotes removed.
@@ -76,7 +83,7 @@ contains
 
       if (len_trim(statement) == 0) return
       token%text = trim(adjustl(statement))
-      statements = [statements, token]
+      call push(statements, token)
       endsubroutine add
    endsubroutine split_statements
 
@@ -192,7 +199,7 @@ contains
          i = j + 1_I4P
       endselect
       token%last = i - 1_I4P
-      tokens = [tokens, token]
+      call push(tokens, token)
    enddo
    contains
       pure function closing_quote(open) result(close)
@@ -223,4 +230,19 @@ contains
       if (c == ')') new_depth = max(0_I4P, depth - 1_I4P)
       endfunction count_parentheses
    endsubroutine tokenize
+
+   pure subroutine push_token(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(token_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(token_object),              intent(in)    :: item     !< New item.
+   type(token_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                   :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_token
 endmodule foresight_tokens

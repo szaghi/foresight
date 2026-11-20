@@ -38,7 +38,11 @@ $DEBUG_INT   = -O0 -check all -debug all -warn all -extend-source 132 -traceback
 # nvfortran, FIGURE's flags (szaghi/figure#15, K9): -Munixlogical at compile and link (.true. is C's 1, as ifx's
 # -fpscomp logicals); mixing it between compile and link breaks select type
 $CSTATIC_NVF = -c -Mstandard -Mfree -Munixlogical
-$DEBUG_NVF   = -O0 -g -Mbounds -Mchkptr -Ktrap=fp -traceback
+# no -Mchkptr: nvfortran 26.9 reports a null pointer for any zero-size array constructor actual argument, `[real(R8P) ::]`
+$DEBUG_NVF   = -O0 -g -Mbounds -Ktrap=fp -traceback
+# tests only: the goldens are byte-exact, written without fused multiply-add (a contraction moves a coordinate on a
+# rounding tie, 95.625 -> 95.62 in circles.svg)
+$NOFMA_NVF   = -Mnofma
 $OPTIMIZE    = -O2
 $EXDIRS      = PENF/src/tests/ PENF/src/third_party/ PENF/scripts/ PENF/docs/ BeFoR64/src/tests/ BeFoR64/src/third_party/ BeFoR64/scripts/ BeFoR64/docs/ FACE/src/tests/ FACE/src/third_party/ FACE/scripts/ FACE/docs/ StringiFor/src/tests/ StringiFor/src/third_party/ StringiFor/scripts/ StringiFor/docs/
 
@@ -140,7 +144,7 @@ jobs            = 10
 compiler        = nvfortran
 exclude_dirs    = $EXDIRS
 src             = src/lib/ src/app/
-cflags          = $CSTATIC_NVF $OPTIMIZE
+cflags          = $CSTATIC_NVF $NOFMA_NVF $OPTIMIZE
 lflags          = $OPTIMIZE -Munixlogical
 cflags_heritage = True
 colors          = True
@@ -152,7 +156,7 @@ jobs            = 10
 compiler        = nvfortran
 exclude_dirs    = $EXDIRS
 src             = src/lib/ src/app/
-cflags          = $CSTATIC_NVF $DEBUG_NVF
+cflags          = $CSTATIC_NVF $NOFMA_NVF $DEBUG_NVF
 lflags          = $DEBUG_NVF -Munixlogical
 cflags_heritage = True
 colors          = True

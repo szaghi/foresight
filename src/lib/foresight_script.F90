@@ -77,7 +77,7 @@ module foresight_script
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object, symbols_object
+use foresight_expression, only : expression_object, push, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
@@ -86,13 +86,19 @@ use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : tics_object
-use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
+use foresight_tokens, only : push, split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
 
 implicit none
 private
 public :: script_object
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_line_style
+endinterface push
 
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
 character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps or dots' !< Styles
@@ -327,6 +333,8 @@ contains
    character(len=:), allocatable :: s       !< Statement, leading blanks removed.
    character(len=:), allocatable :: name    !< Symbol name.
    character(len=:), allocatable :: list    !< Parameter list.
+   character(len=:), allocatable :: rhs     !< Right-hand side (a copy: nvfortran 26.9 blanks an associate name
+                                            !< of a substring).
    character(len=64), allocatable :: params(:) !< Parameters.
    integer(I4P)                  :: k       !< Character counter.
    integer(I4P)                  :: e       !< Name end.
@@ -362,21 +370,20 @@ contains
       if (s(k + 1_I4P:k + 1_I4P) == '=') return
    endif
    done = .true.
-   associate(rhs => s(k + 1_I4P:))
-      if (is_function) then
-         allocate(params(0))
-         do while (len_trim(list) > 0)
-            comma = index(list, ',', kind=I4P)
-            if (comma == 0_I4P) comma = len(list, kind=I4P) + 1_I4P
-            params = [character(len=64) :: params, adjustl(list(1:comma - 1_I4P))]
-            list = list(min(comma + 1_I4P, len(list, kind=I4P) + 1_I4P):)
-         enddo
-         call self%symbols%define(name, params, trim(adjustl(rhs)), iostat, iomsg)
-      else
-         call self%symbols%assign(name, trim(adjustl(rhs)), iostat, iomsg, &
-                                  degrees=self%figure%panels(self%figure%current)%degrees)
-      endif
-   endassociate
+   rhs = s(k + 1_I4P:)
+   if (is_function) then
+      allocate(params(0))
+      do while (len_trim(list) > 0)
+         comma = index(list, ',', kind=I4P)
+         if (comma == 0_I4P) comma = len(list, kind=I4P) + 1_I4P
+         params = [character(len=64) :: params, adjustl(list(1:comma - 1_I4P))]
+         list = list(min(comma + 1_I4P, len(list, kind=I4P) + 1_I4P):)
+      enddo
+      call self%symbols%define(name, params, trim(adjustl(rhs)), iostat, iomsg)
+   else
+      call self%symbols%assign(name, trim(adjustl(rhs)), iostat, iomsg, &
+                               degrees=self%figure%panels(self%figure%current)%degrees)
+   endif
    endfunction assignment
 
    subroutine plot_command(self, tokens, text, iostat, iomsg)
@@ -436,6 +443,8 @@ contains
    real(R8P),        allocatable                :: yhigh(:)  !< Vertical error bar ends.
    type(expression_object), allocatable         :: fields(:) !< `using` fields, unallocated for default.
    type(expression_object)                      :: point     !< Point number field.
+   type(expression_object), allocatable         :: kept(:)   !< Fields kept (`fields = f(fields)` by a temporary: see
+                                                             !< `push`).
    integer(I4P)                                 :: ux        !< Default abscissa column.
    integer(I4P)                                 :: uy        !< Default ordinate column.
    integer(I4P)                                 :: nbar      !< Error bar columns.
@@ -832,7 +841,7 @@ contains
          if (.not. has_title .and. self%autotitle /= 'none') title = written
          call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
                                dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
-         functions = [functions, func]
+         call push(functions, func)
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
@@ -866,7 +875,8 @@ contains
                return
             endif
             read(word, *) label_col
-            fields = fields(1:2)
+            kept = fields(1:2)
+            call move_alloc(kept, fields)
          else
             call fail('plot: labels needs using x:y:text_column', iostat, iomsg)
             return
@@ -885,7 +895,8 @@ contains
                return
             endif
             read(word, *) label_col
-            fields = fields(1:3)
+            kept = fields(1:3)
+            call move_alloc(kept, fields)
          endif
       endif
       ! reloaded to keep the text of the xtic column
@@ -927,7 +938,8 @@ contains
       elseif (size(fields) == 1) then
          one_field = .true.
          call point%set_column(0_I4P)
-         fields = [point, fields(1)]
+         kept = [point, fields(1)]
+         call move_alloc(kept, fields)
       endif
       nbar = size(fields, kind=I4P) - 2_I4P
       select case (with)
@@ -1398,10 +1410,12 @@ contains
 
       subroutine image_item
       !< An image item: the values of a `matrix` file, or `using x:y:z` (default 1:2:3) gathered on a regular grid.
-      real(R8P), allocatable        :: z(:,:)  !< Grid values.
-      real(R8P), allocatable        :: xs(:)   !< Pixel centre abscissae.
-      real(R8P), allocatable        :: ys(:)   !< Pixel centre ordinates.
-      character(len=:), allocatable :: problem !< Grid problem.
+      real(R8P), allocatable        :: points(:,:) !< Values of the `using` fields (local: nvfortran 26.9 breaks the
+                                                   !< column sections of the host's `values` allocated here).
+      real(R8P), allocatable        :: z(:,:)      !< Grid values.
+      real(R8P), allocatable        :: xs(:)       !< Pixel centre abscissae.
+      real(R8P), allocatable        :: ys(:)       !< Pixel centre ordinates.
+      character(len=:), allocatable :: problem     !< Grid problem.
 
       if (.not. has_title .and. self%autotitle == 'file') then
          title = quote//written//quote
@@ -1433,8 +1447,8 @@ contains
          call fail('plot: image needs using x:y:z (or a matrix file)', iostat, iomsg)
          return
       endif
-      call data%table(fields, set_index, every, values)
-      call regular_grid(values(:, 1), values(:, 2), values(:, 3), xs, ys, z, problem)
+      call data%table(fields, set_index, every, points)
+      call regular_grid(points(:, 1), points(:, 2), points(:, 3), xs, ys, z, problem)
       if (len(problem) > 0) then
          call fail('plot: image of "'//file//'": '//problem, iostat, iomsg)
          return
@@ -1445,6 +1459,7 @@ contains
       subroutine rgb_item
       !< An `rgbimage` (`using x:y:r:g:b`) or `rgbalpha` (`x:y:r:g:b:a`) item on a regular grid, the components scaled
       !< from [0:rgbmax] to [0:255].
+      real(R8P), allocatable        :: points(:,:) !< Values of the `using` fields (local: see `image_item`).
       real(R8P), allocatable        :: c(:,:,:) !< Channels on the grid (4, column, row).
       real(R8P), allocatable        :: z(:,:)   !< One channel on the grid.
       real(R8P), allocatable        :: xs(:)    !< Pixel centre abscissae.
@@ -1459,9 +1474,9 @@ contains
          call fail('plot: '//with//' needs using x:y:r:g:b'//trim(merge(':a', '  ', m == 4_I4P)), iostat, iomsg)
          return
       endif
-      call data%table(fields, set_index, every, values)
+      call data%table(fields, set_index, every, points)
       do k = 1_I4P, m
-         call regular_grid(values(:, 1), values(:, 2), values(:, 2_I4P + k) * (255.0_R8P / self%rgbmax), xs, ys, z, &
+         call regular_grid(points(:, 1), points(:, 2), points(:, 2_I4P + k) * (255.0_R8P / self%rgbmax), xs, ys, z, &
                            problem)
          if (len(problem) > 0) then
             call fail('plot: '//with//' of "'//file//'": '//problem, iostat, iomsg)
@@ -1674,7 +1689,7 @@ contains
       if (self%data_files(f)%text == file) return
    enddo
    entry%text = file
-   self%data_files = [self%data_files, entry]
+   call push(self%data_files, entry)
    endsubroutine register_file
 
    subroutine save_output(self, iostat, iomsg)
@@ -2547,7 +2562,7 @@ contains
                return
             endblock ok_ratio
          else
-            rest = [rest, tokens(i)]
+            call push(rest, tokens(i))
          endif
          i = i + 1_I4P
       enddo
@@ -2718,7 +2733,7 @@ contains
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
          else
-            args = [args, toks(i)]
+            call push(args, toks(i))
          endif
       enddo
       n = size(args, kind=I4P)
@@ -3016,7 +3031,7 @@ contains
                   return
                endif
             enddo
-            self%line_styles = [self%line_styles, style]
+            call push(self%line_styles, style)
             return
          endif
       endif
@@ -3456,6 +3471,8 @@ contains
    logical,                              intent(in)  :: degrees   !< Angles of the expressions in degrees.
    type(symbols_object),                 intent(in)  :: symbols   !< User variables and functions.
    type(expression_object)                           :: field     !< Current field.
+   character(len=:), allocatable                     :: text      !< Current field text (a copy: nvfortran 26.9
+                                                                  !< blanks an associate name of a substring).
    integer(I4P)                                      :: start     !< Field start.
    integer(I4P)                                      :: finish    !< Field end.
    integer(I4P)                                      :: depth     !< Parenthesis depth.
@@ -3483,31 +3500,30 @@ contains
          endif
          finish = finish + 1_I4P
       enddo
-      associate(text => spec(start:finish - 1_I4P))
-         if (len(text) > 0 .and. verify(text, '0123456789') == 0 .and. len(text) < 10) then
-            read(text, *) c
-            call field%set_column(c)
-         elseif (is_quoted(text)) then
-            ! a column header name, gnuplot `using 1:"residual"`
-            call field%set_name(text(2:len(text) - 1))
-         elseif (text(1:min(1, len(text))) == '(') then
-            ! compiled first, so that an unbalanced expression gets the precise syntax error
-            call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols)
-            if (iostat /= 0_I4P) then
-               iomsg = 'using: '//iomsg
-               return
-            endif
-            if (.not. is_parenthesized(text)) then
-               call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
-               return
-            endif
-         else
-            call fail('using: field "'//text//'" is neither a column number, a "header" nor a parenthesized '// &
-                      'expression (write ($2*1e3), not $2*1e3)', iostat, iomsg)
+      text = spec(start:finish - 1_I4P)
+      if (len(text) > 0 .and. verify(text, '0123456789') == 0 .and. len(text) < 10) then
+         read(text, *) c
+         call field%set_column(c)
+      elseif (is_quoted(text)) then
+         ! a column header name, gnuplot `using 1:"residual"`
+         call field%set_name(text(2:len(text) - 1))
+      elseif (text(1:min(1, len(text))) == '(') then
+         ! compiled first, so that an unbalanced expression gets the precise syntax error
+         call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'using: '//iomsg
             return
          endif
-      endassociate
-      fields = [fields, field]
+         if (.not. is_parenthesized(text)) then
+            call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
+            return
+         endif
+      else
+         call fail('using: field "'//text//'" is neither a column number, a "header" nor a parenthesized '// &
+                   'expression (write ($2*1e3), not $2*1e3)', iostat, iomsg)
+         return
+      endif
+      call push(fields, field)
       start = finish + 1_I4P
    enddo
    if (size(fields) > 6) call fail('using: "'//spec//'" has more than 6 fields', iostat, iomsg)
@@ -3763,4 +3779,19 @@ contains
    if (.not. ok) return
    call real_from_decimal(word, value, ok)
    endfunction to_number
+
+   pure subroutine push_line_style(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(line_style_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(line_style_object),              intent(in)    :: item     !< New item.
+   type(line_style_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                        :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_line_style
 endmodule foresight_script

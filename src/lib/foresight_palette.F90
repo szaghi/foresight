@@ -331,6 +331,7 @@ contains
       character(len=:), allocatable :: color !< Color word.
       real(R8P), allocatable        :: pos(:) !< Positions.
       real(R8P), allocatable        :: col(:,:) !< Colors.
+      real(R8P), allocatable        :: grown(:,:) !< Colors, one more.
       integer(I4P)                  :: c(3)  !< Channels.
       integer(I4P)                  :: comma !< Item end.
       integer(I4P)                  :: blank !< Value end.
@@ -368,7 +369,9 @@ contains
             return
          endif
          pos = [pos, v]
-         col = reshape([col, real(c, R8P) / 255.0_R8P], [3, size(pos)])
+         ! grown into `grown`: nvfortran 26.9 -O2 zeroes `col = reshape([col, ...], ...)`
+         grown = reshape([col, real(c, R8P) / 255.0_R8P], [3, size(pos)])
+         call move_alloc(grown, col)
       enddo
       call palette_gradient(palette, pos, col, bad)
       if (len(bad) > 0) bad = 'defined ('//bad//')'

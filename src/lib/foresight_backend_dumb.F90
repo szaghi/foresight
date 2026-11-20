@@ -41,6 +41,12 @@ public :: GRID_COLOR
 public :: TEXT_COLORS
 public :: scanline
 
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_symbol
+endinterface push
+
 character(len=*), parameter :: SYMBOLS     = '*#$%@&=+' !< Series symbols, cycled.
 character(len=*), parameter :: FRAME_COLOR = 'black'    !< Frame color, drawn as ticks.
 character(len=*), parameter :: GRID_COLOR  = '#a0a0a0'  !< Grid color, drawn as dots on blank cells.
@@ -636,9 +642,12 @@ contains
    endif
    tint = self%color_index(color)
    do k = 1_I4P, size(masks, kind=I4P)
-      rows(1) = ' '//lit(0_I4P, '_')//'  '
-      rows(2) = lit(5_I4P, '|')//lit(6_I4P, '_')//lit(1_I4P, '|')//' '
-      rows(3) = lit(4_I4P, '|')//lit(3_I4P, '_')//lit(2_I4P, '|')//lit(7_I4P, '.')
+      ! the mask passed: an internal function reading the host's masks(k) draws no segment under nvfortran 26.9 -O2
+      rows(1) = ' '//segment_char(masks(k), 0_I4P, '_')//'  '
+      rows(2) = segment_char(masks(k), 5_I4P, '|')//segment_char(masks(k), 6_I4P, '_')// &
+                segment_char(masks(k), 1_I4P, '|')//' '
+      rows(3) = segment_char(masks(k), 4_I4P, '|')//segment_char(masks(k), 3_I4P, '_')// &
+                segment_char(masks(k), 2_I4P, '|')//segment_char(masks(k), 7_I4P, '.')
       do j = 1_I4P, 3_I4P
          do i = 1_I4P, 4_I4P
             if (rows(j)(i:i) == ' ') then
@@ -651,15 +660,6 @@ contains
    enddo
    if (len(suffix) > 0) call write_text(cg + 4_I4P * size(masks, kind=I4P), r0 + 2_I4P, suffix)
    contains
-      pure function lit(segment, symbol) result(c)
-      !< `symbol` if `segment` of the cell `k` is lit, else a blank.
-      integer(I4P),     intent(in) :: segment !< Segment bit.
-      character(len=1), intent(in) :: symbol  !< Symbol.
-      character(len=1)             :: c       !< Character.
-
-      c = merge(symbol, ' ', btest(masks(k), segment))
-      endfunction lit
-
       subroutine write_text(c, r, string)
       !< `string` from column `c` of row `r`.
       integer(I4P),     intent(in) :: c      !< Start column.
@@ -748,7 +748,7 @@ contains
    s = modulo(k - 1_I4P, len(SYMBOLS, kind=I4P)) + 1_I4P
    entry%color = color
    entry%symbol = SYMBOLS(s:s)
-   self%symbols = [self%symbols, entry]
+   call push(self%symbols, entry)
    endfunction color_index
 
    subroutine px_fill(self, x, y, color)
@@ -1101,4 +1101,29 @@ contains
       text = trim(buffer)
       endfunction str
    endfunction ansi_escape
+
+   pure subroutine push_symbol(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(color_symbol), allocatable, intent(inout) :: list(:)  !< List.
+   type(color_symbol),              intent(in)    :: item     !< New item.
+   type(color_symbol), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                   :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_symbol
+
+   pure function segment_char(mask, segment, symbol) result(c)
+   !< `symbol` if `segment` of the seven-segment cell `mask` is lit, else a blank.
+   integer(I4P),     intent(in) :: mask    !< Segments of the cell.
+   integer(I4P),     intent(in) :: segment !< Segment bit.
+   character(len=1), intent(in) :: symbol  !< Symbol.
+   character(len=1)             :: c       !< Character.
+
+   c = merge(symbol, ' ', btest(mask, segment))
+   endfunction segment_char
 endmodule foresight_backend_dumb

@@ -66,6 +66,8 @@ contains
    character(len=:), allocatable              :: flags    !< Conversion flags.
    character(len=:), allocatable              :: message  !< Format problem.
    character(len=:), allocatable              :: label    !< Formatted value with the text around it.
+   character(len=:), allocatable              :: body     !< Formatted value (a copy: nvfortran 26.9 blanks an
+                                                          !< associate name of a substring).
    character(len=:), allocatable              :: sup      !< Superscript, never set by a readout format.
    integer(I4P),     allocatable              :: lit(:)   !< Cells of the formatted value.
    character(len=1)                           :: type     !< Conversion type.
@@ -82,23 +84,22 @@ contains
    if (.not. ieee_is_finite(value)) return
    call decimal_of(value, n, e)
    call format_decimal(format, n, e, label, sup)
-   associate(body => label(len(prefix) + 1:len(label) - len(suffix)))
-      allocate(lit(len(body)))
-      k = 0_I4P
-      do i = 1_I4P, len(body, kind=I4P)
-         if (body(i:i) == '.') then
-            ! the point lights a segment of the cell before it
-            if (k == 0_I4P) then
-               k = 1_I4P
-               lit(k) = 0_I4P
-            endif
-            lit(k) = ibset(lit(k), SEGMENT_DP)
-         else
-            k = k + 1_I4P
-            lit(k) = glyph(body(i:i))
+   body = label(len(prefix) + 1:len(label) - len(suffix))
+   allocate(lit(len(body)))
+   k = 0_I4P
+   do i = 1_I4P, len(body, kind=I4P)
+      if (body(i:i) == '.') then
+         ! the point lights a segment of the cell before it
+         if (k == 0_I4P) then
+            k = 1_I4P
+            lit(k) = 0_I4P
          endif
-      enddo
-   endassociate
+         lit(k) = ibset(lit(k), SEGMENT_DP)
+      else
+         k = k + 1_I4P
+         lit(k) = glyph(body(i:i))
+      endif
+   enddo
    ! wider than the glass: dashes
    if (k > size(masks, kind=I4P)) return
    masks = 0_I4P

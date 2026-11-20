@@ -26,6 +26,13 @@ public :: tick_object
 public :: tics_object
 public :: TICS_AUTO, TICS_FIXED, TICS_NONE
 public :: labels_attribute
+public :: push
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_tick
+endinterface push
 
 type :: tick_object
    !< Axis tick.
@@ -391,7 +398,7 @@ contains
          tick%label = '10'
          tick%sup = int_str(k)
       endif
-      ticks = [ticks, tick]
+      call push(ticks, tick)
    enddo
    if (s == 1_I8P .and. tb - ta <= 10.0_R8P) then
       do k = floor(ta - TOL, I8P), floor(tb + TOL, I8P)
@@ -408,7 +415,7 @@ contains
             else
                tick%label = ''
             endif
-            ticks = [ticks, tick]
+            call push(ticks, tick)
          enddo
       enddo
    endif
@@ -676,4 +683,19 @@ contains
    label = label//'x10'
    sup = int_str(ee + len(digits, kind=I8P) - 1_I8P)
    endsubroutine format_label
+
+   pure subroutine push_tick(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(tick_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(tick_object),              intent(in)    :: item     !< New item.
+   type(tick_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                  :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_tick
 endmodule foresight_ticks

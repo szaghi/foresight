@@ -32,6 +32,16 @@ implicit none
 private
 public :: expression_object
 public :: symbols_object
+public :: push
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_name
+   module procedure push_variable
+   module procedure push_function
+   module procedure push_expression
+endinterface push
 
 ! operation codes
 integer(I4P), parameter :: OP_CONSTANT    = 1_I4P  !< Push the constant.
@@ -530,7 +540,7 @@ contains
                call syntax('columns are only valid in using, not in a function', at)
                return
             endif
-            self%names = [self%names, name_object(token)]
+            call push(self%names, name_object(token))
             call next
             call expect(')')
             call emit(OP_COLUMN_NAMED, arg=size(self%names, kind=I4P))
@@ -679,7 +689,7 @@ contains
          pos = saved(1)
          kind = saved(2)
          start = saved(3)
-         frames = frames(1:size(frames) - 1)
+         call pop_frame
       endassociate
       if (iostat /= 0_I4P) return
       if (nargs > 0_I4P) then
@@ -689,8 +699,7 @@ contains
       endsubroutine user_call
 
       subroutine push_frame(name, params, base)
-      !< Push the frame of a user function compiled inline (by a temporary: nvfortran 26.9 stops on the array
-      !< constructor of a type with allocatable components).
+      !< Push the frame of a user function compiled inline (by a temporary: see `push`).
       character(len=*),  intent(in)   :: name      !< Function name.
       type(name_object), intent(in)   :: params(:) !< Parameter names.
       integer(I4P),      intent(in)   :: base      !< Stack slot of the first argument.
@@ -705,6 +714,14 @@ contains
       grown(n + 1_I4P)%base = base
       call move_alloc(grown, frames)
       endsubroutine push_frame
+
+      subroutine pop_frame
+      !< Pop the innermost frame (by a temporary: see `push`).
+      type(frame_object), allocatable :: shrunk(:) !< Frames, one less.
+
+      shrunk = frames(1:size(frames) - 1)
+      call move_alloc(shrunk, frames)
+      endsubroutine pop_frame
 
       pure function int_text(n) result(s)
       !< Decimal text of `n`.
@@ -750,7 +767,7 @@ contains
    if (k > 0_I4P) then
       self%variables(k)%v = v
    else
-      self%variables = [self%variables, user_variable(name=name, v=v)]
+      call push(self%variables, user_variable(name=name, v=v))
    endif
    endsubroutine assign
 
@@ -765,6 +782,7 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(expression_object)                      :: e         !< Body check.
    type(name_object), allocatable               :: names(:)  !< Parameters.
+   type(user_function)                          :: fn        !< New function.
    integer(I4P)                                 :: k         !< Counter.
    integer(I4P)                                 :: j         !< Earlier parameter counter.
 
@@ -786,19 +804,23 @@ contains
             return
          endif
       enddo
-      names = [names, name_object(trim(params(k)))]
+      call push(names, name_object(trim(params(k))))
    enddo
    call compile_expression(e, body, iostat, iomsg, symbols=self, frame_name=name, parameters=names, lenient=.true.)
    if (iostat /= 0_I4P) then
       iomsg = 'in function '//name//': '//iomsg
       return
    endif
+   ! by components: nvfortran 26.9 blanks `body` in user_function(name=name, params=names, body=body)
+   fn%name = name
+   fn%params = names
+   fn%body = body
    if (.not. allocated(self%functions)) allocate(self%functions(0))
    k = self%function_index(name)
    if (k > 0_I4P) then
-      self%functions(k) = user_function(name=name, params=names, body=body)
+      self%functions(k) = fn
    else
-      self%functions = [self%functions, user_function(name=name, params=names, body=body)]
+      call push(self%functions, fn)
    endif
    endsubroutine define
 
@@ -1507,4 +1529,64 @@ contains
    if (y * t > LOG_TINY) z = abs(x)**y
    if (odd) z = -z
    endsubroutine safe_power
+
+   pure subroutine push_name(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(name_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(name_object),              intent(in)    :: item     !< New item.
+   type(name_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                  :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_name
+
+   pure subroutine push_variable(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(user_variable), allocatable, intent(inout) :: list(:)  !< List.
+   type(user_variable),              intent(in)    :: item     !< New item.
+   type(user_variable), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                    :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_variable
+
+   pure subroutine push_function(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(user_function), allocatable, intent(inout) :: list(:)  !< List.
+   type(user_function),              intent(in)    :: item     !< New item.
+   type(user_function), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                    :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_function
+
+   pure subroutine push_expression(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(expression_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(expression_object),              intent(in)    :: item     !< New item.
+   type(expression_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                        :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_expression
 endmodule foresight_expression

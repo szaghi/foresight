@@ -15,7 +15,7 @@ module foresight_figure
 !< call fig%save('parabola.svg')
 !<```
 use foresight_axes, only : axes_names, axes_object, boxplot_words, colorbox_object, key_position, paxis_object, &
-                           polar_series, readout_position, spider_words, POLAR_STYLES
+                           polar_series, push, readout_position, spider_words, POLAR_STYLES
 use foresight_axis, only : axis_object
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
@@ -241,7 +241,7 @@ contains
    settings = self%panels(self%current)
    if (allocated(settings%series)) deallocate(settings%series)
    if (self%manual) then
-      self%panels = [self%panels, settings]
+      call push(self%panels, settings)
    elseif (self%current >= size(self%panels, kind=I4P)) then
       error stop 'foresight: next_panel: the multiplot layout is full'
    endif

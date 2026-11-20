@@ -410,6 +410,8 @@ contains
    !< Fill color of a filled style: the line color when solid, `none` when empty.
    class(style_object), intent(in) :: self  !< Style.
    character(len=:), allocatable   :: color !< SVG color or `none`.
+   character(len=1)                :: digit !< Pattern number (a fixed length: nvfortran 26.9 sizes a deferred-length
+                                            !< `color = ...//achar(i)//...` by the value of i).
 
    !< A pattern fill is `pattern:N:color` (see `pattern_parts`), N from 1 to PATTERNS - 1 but 3, the solid one, given
    !< as its color; pattern 0 is empty.
@@ -421,7 +423,8 @@ contains
       case (3_I4P)
          color = self%color
       case default
-         color = 'pattern:'//achar(iachar('0') + modulo(self%pattern, PATTERNS))//':'//self%color
+         digit = achar(iachar('0') + modulo(self%pattern, PATTERNS))
+         color = 'pattern:'//digit//':'//self%color
       endselect
    endif
    endfunction fill_color
@@ -562,12 +565,14 @@ contains
       !< Blank separated words of `text`.
       character(len=*), intent(in)  :: text     !< Text.
       character(len=:), allocatable :: parts(:) !< Words.
+      character(len=:), allocatable :: words(:) !< Words, the first `n` (a temporary: nvfortran 26.9 corrupts
+                                                !< `parts = parts(1:n)`).
       integer(I4P)                  :: i        !< Character counter.
       integer(I4P)                  :: start    !< Word start.
       integer(I4P)                  :: n        !< Words.
 
       n = 0_I4P
-      allocate(character(len=max(1, len(text))) :: parts(len(text) / 2 + 1))
+      allocate(character(len=max(1, len(text))) :: words(len(text) / 2 + 1))
       i = 1_I4P
       do while (i <= len(text))
          if (text(i:i) == ' ') then
@@ -580,9 +585,9 @@ contains
             i = i + 1_I4P
          enddo
          n = n + 1_I4P
-         parts(n) = text(start:i - 1_I4P)
+         words(n) = text(start:i - 1_I4P)
       enddo
-      parts = parts(1:n)
+      parts = words(1:n)
       endfunction split
    endsubroutine fill_style
 

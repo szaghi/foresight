@@ -52,7 +52,7 @@ use foresight_format, only : int_str
 use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
-use foresight_series, only : series_object
+use foresight_series, only : push, series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
@@ -60,7 +60,7 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
                             WITH_PARALLELAXES, WITH_SPIDERPLOT
-use foresight_ticks, only : labels_attribute, linear_ticks, tick_object, tics_object, TICS_FIXED, TICS_NONE
+use foresight_ticks, only : labels_attribute, linear_ticks, push, tick_object, tics_object, TICS_FIXED, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -79,6 +79,13 @@ public :: key_position
 public :: polar_series
 public :: readout_position
 public :: POLAR_STYLES
+public :: push
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_axes
+endinterface push
 
 real(R8P),        parameter :: PAD           = 10.0_R8P  !< Outer padding [px].
 real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [px].
@@ -561,7 +568,7 @@ contains
       series%yhigh = yhigh
    endif
    if (self%polar .and. .not. polar_series(series)) error stop 'foresight: plot: '//POLAR_STYLES
-   self%series = [self%series, series]
+   call push(self%series, series)
    if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
                                                                      self%histogram_gap, self%boxwidth)
    contains
@@ -710,6 +717,7 @@ contains
       !< x(1) + k * separation, each with its quartiles (`bounds`), median (`y`), whiskers (`ylow`, `yhigh`, the
       !< farthest values within the whisker range) and outliers, as gnuplot. A level of fewer than 4 values has no box.
       character(len=:), allocatable :: names(:) !< Factor levels.
+      character(len=:), allocatable :: found(:) !< Factor levels found, the first `nf`.
       character(len=:), allocatable :: level    !< Current level.
       real(R8P), allocatable        :: v(:)     !< Values of a level, sorted.
       real(R8P), allocatable        :: cx(:)    !< Box centres.
@@ -718,6 +726,9 @@ contains
       real(R8P)                     :: lo       !< Lowest whisker limit.
       real(R8P)                     :: hi       !< Highest whisker limit.
       integer(I4P)                  :: nb       !< Boxes.
+      integer(I4P)                  :: nf       !< Factor levels found.
+      integer(I4P), allocatable     :: boxes(:) !< Level of each box drawn.
+      real(R8P), allocatable        :: grown(:,:) !< Bounds or outliers, one more.
       integer(I4P)                  :: k        !< Box counter.
       integer(I4P)                  :: i        !< Value counter.
       integer(I4P)                  :: j        !< Sort counter.
@@ -741,14 +752,16 @@ contains
             bad = 'factors and x have different sizes'
             return
          endif
-         allocate(character(len=len(factors)) :: names(0))
+         ! collected in a separate array: nvfortran 26.9 corrupts `names = [names, factors(i)]`
+         allocate(character(len=len(factors)) :: found(size(factors)))
+         nf = 0_I4P
          do i = 1_I4P, size(factors, kind=I4P)
             if (len_trim(factors(i)) == 0) cycle
-            if (size(names) > 0) then
-               if (any(names == factors(i))) cycle
-            endif
-            names = [names, factors(i)]
+            if (any(found(1_I4P:nf) == factors(i))) cycle
+            nf = nf + 1_I4P
+            found(nf) = factors(i)
          enddo
+         names = found(1_I4P:nf)
          if (self%boxplot%sorted) then
             do i = 2_I4P, size(names, kind=I4P)
                level = names(i)
@@ -780,7 +793,7 @@ contains
       series%yhigh = [real(R8P) ::]
       allocate(series%bounds(2, 0), series%outliers(2, 0))
       named = present(factors) .and. self%boxplot%labels /= 'off'
-      if (named) allocate(character(len=len(names)) :: series%xlabels(0))
+      allocate(boxes(0))
       do k = 1_I4P, nb
          if (present(factors)) then
             v = pack(y, factors == names(k) .and. ieee_is_finite(y))
@@ -809,15 +822,21 @@ contains
          series%xhigh = [series%xhigh, cx(size(cx)) + 1.5_R8P * w]
          series%ylow = [series%ylow, lo]
          series%yhigh = [series%yhigh, hi]
-         series%bounds = reshape([series%bounds, q(1), q(3)], [2, size(cx)])
-         if (named) series%xlabels = [character(len=len(names)) :: series%xlabels, names(k)]
+         ! grown into `grown`: nvfortran 26.9 -O2 zeroes `a = reshape([a, ...], ...)`
+         grown = reshape([series%bounds, q(1), q(3)], [2, size(cx)])
+         call move_alloc(grown, series%bounds)
+         boxes = [boxes, k]
          if (self%boxplot%outliers) then
             do i = 1_I4P, size(v, kind=I4P)
-               if (v(i) < lo .or. v(i) > hi) series%outliers = reshape([series%outliers, cx(size(cx)), v(i)], &
-                                                                       [2, size(series%outliers, 2) + 1])
+               if (v(i) < lo .or. v(i) > hi) then
+                  grown = reshape([series%outliers, cx(size(cx)), v(i)], [2, size(series%outliers, 2) + 1])
+                  call move_alloc(grown, series%outliers)
+               endif
             enddo
          endif
       enddo
+      ! the levels of the boxes drawn, at once: nvfortran 26.9 corrupts the growth of a deferred-length character array
+      if (named) series%xlabels = names(boxes)
       endsubroutine boxplot_stats
 
       pure function quantile(v, p) result(value)
@@ -879,7 +898,7 @@ contains
       series%title = ''
       if (present(title)) series%title = title
       series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P, self%linecolors)
-      self%series = [self%series, series]
+      call push(self%series, series)
       endsubroutine add_image
 
       pure function spacing_of(c) result(step)
@@ -1165,20 +1184,24 @@ contains
       !< Unit abscissae of the circle of radius `rho` [r units] about the pole.
       real(R8P), intent(in)  :: rho  !< Radius.
       real(R8P), allocatable :: u(:) !< Unit abscissae.
+      real(R8P), allocatable :: c(:) !< Abscissae [r units] (allocatable: nvfortran 26.9 does not allocate
+                                     !< `u` for an elemental reference of constant extent, as the constructor's).
       integer(I4P)           :: k    !< Vertex counter.
 
-      u = self%xaxis%to_unit([(rho * cos(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), &
-                               k = 0_I4P, CIRCLE_SIDES)])
+      c = [(rho * cos(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), k = 0_I4P, CIRCLE_SIDES)]
+      u = self%xaxis%to_unit(c)
       endfunction circle_u
 
       pure function circle_v(rho) result(v)
       !< Unit ordinates of the circle of radius `rho` [r units] about the pole.
       real(R8P), intent(in)  :: rho  !< Radius.
       real(R8P), allocatable :: v(:) !< Unit ordinates.
+      real(R8P), allocatable :: c(:) !< Ordinates [r units] (allocatable: nvfortran 26.9 does not allocate
+                                     !< `v` for an elemental reference of constant extent, as the constructor's).
       integer(I4P)           :: k    !< Vertex counter.
 
-      v = self%yaxis%to_unit([(rho * sin(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), &
-                               k = 0_I4P, CIRCLE_SIDES)])
+      c = [(rho * sin(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P)), k = 0_I4P, CIRCLE_SIDES)]
+      v = self%yaxis%to_unit(c)
       endfunction circle_v
    endsubroutine render
 
@@ -3888,7 +3911,7 @@ contains
                if (size(labels) > 0) then
                   if (any(labels%value == series%x(i))) cycle
                endif
-               labels = [labels, tick_object(value=series%x(i), major=.true., label=trim(series%xlabels(i)), sup='')]
+               call push(labels, tick_object(value=series%x(i), major=.true., label=trim(series%xlabels(i)), sup=''))
             enddo
          endassociate
       enddo
@@ -4036,4 +4059,19 @@ contains
       endselect
    enddo
    endsubroutine key_position
+
+   pure subroutine push_axes(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(axes_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(axes_object),              intent(in)    :: item     !< New item.
+   type(axes_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                  :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_axes
 endmodule foresight_axes

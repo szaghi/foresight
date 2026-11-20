@@ -8,6 +8,13 @@ use foresight_style, only : style_object, WITH_HISTOGRAMS, WITH_VECTORS
 implicit none
 private
 public :: series_object
+public :: push
+
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_series
+endinterface push
 
 type :: series_object
    !< Data series.
@@ -155,4 +162,19 @@ contains
       hi = max(hi, maxval(ends, mask=ok))
       endsubroutine widen
    endsubroutine extent
+
+   pure subroutine push_series(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(series_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(series_object),              intent(in)    :: item     !< New item.
+   type(series_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                    :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_series
 endmodule foresight_series

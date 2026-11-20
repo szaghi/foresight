@@ -34,6 +34,13 @@ implicit none
 private
 public :: datafile_object
 
+interface push
+   !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
+   !< when the items hold deferred-length characters.
+   module procedure push_header
+   module procedure push_text
+endinterface push
+
 character(len=1), parameter :: TAB = achar(9) !< Tab character.
 
 type :: text_object
@@ -213,7 +220,7 @@ contains
       ! the first row of a dataset is also kept as text, a header if one is used
       recording = self%nrows == 1_I4P
       if (.not. recording) recording = self%dataset(self%nrows - 1_I4P) /= dset
-      if (recording) self%headers = [self%headers, header_object([text_object ::])]
+      if (recording) call push(self%headers, header_object([text_object ::]))
       endsubroutine new_row
 
       subroutine record(cell)
@@ -224,7 +231,7 @@ contains
 
       text = clean(cell)
       associate(header => self%headers(size(self%headers)))
-         header%cells = [header%cells, text_object(text)]
+         call push(header%cells, text_object(text))
       endassociate
       endsubroutine record
 
@@ -762,4 +769,34 @@ contains
       if (c >= 'A' .and. c <= 'Z') l = achar(iachar(c) + 32)
       endfunction lower
    endfunction hexadecimal
+
+   pure subroutine push_header(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(header_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(header_object),              intent(in)    :: item     !< New item.
+   type(header_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                    :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_header
+
+   pure subroutine push_text(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(text_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(text_object),              intent(in)    :: item     !< New item.
+   type(text_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                  :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_text
 endmodule foresight_datafile

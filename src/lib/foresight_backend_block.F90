@@ -393,19 +393,31 @@ contains
 
    pure function utf8(code) result(text)
    !< UTF-8 encoding of the code point `code` (at most U+10FFFF).
-   integer(I4P), intent(in)      :: code !< Code point.
-   character(len=:), allocatable :: text !< Encoded bytes.
+   integer(I4P), intent(in)      :: code  !< Code point.
+   character(len=:), allocatable :: text  !< Encoded bytes.
+   character(len=4)              :: bytes !< Encoded bytes, the first `n` (a fixed length: nvfortran 26.9 sizes a
+                                          !< deferred-length `text = char(i)` by the value of i).
+   integer(I4P)                  :: n     !< Bytes.
 
    if (code < int(z'80')) then
-      text = achar(code)
+      n = 1_I4P
+      bytes(1:1) = achar(code)
    elseif (code < int(z'800')) then
-      text = char(int(z'C0') + ishft(code, -6))//char(int(z'80') + iand(code, int(z'3F')))
+      n = 2_I4P
+      bytes(1:1) = char(int(z'C0') + ishft(code, -6))
+      bytes(2:2) = char(int(z'80') + iand(code, int(z'3F')))
    elseif (code < int(z'10000')) then
-      text = char(int(z'E0') + ishft(code, -12))//char(int(z'80') + iand(ishft(code, -6), int(z'3F')))// &
-             char(int(z'80') + iand(code, int(z'3F')))
+      n = 3_I4P
+      bytes(1:1) = char(int(z'E0') + ishft(code, -12))
+      bytes(2:2) = char(int(z'80') + iand(ishft(code, -6), int(z'3F')))
+      bytes(3:3) = char(int(z'80') + iand(code, int(z'3F')))
    else
-      text = char(int(z'F0') + ishft(code, -18))//char(int(z'80') + iand(ishft(code, -12), int(z'3F')))// &
-             char(int(z'80') + iand(ishft(code, -6), int(z'3F')))//char(int(z'80') + iand(code, int(z'3F')))
+      n = 4_I4P
+      bytes(1:1) = char(int(z'F0') + ishft(code, -18))
+      bytes(2:2) = char(int(z'80') + iand(ishft(code, -12), int(z'3F')))
+      bytes(3:3) = char(int(z'80') + iand(ishft(code, -6), int(z'3F')))
+      bytes(4:4) = char(int(z'80') + iand(code, int(z'3F')))
    endif
+   text = bytes(1:n)
    endfunction utf8
 endmodule foresight_backend_block
