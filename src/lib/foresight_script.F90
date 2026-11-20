@@ -4,6 +4,8 @@ module foresight_script
 !<
 !< Supported (with gnuplot abbreviations):
 !<
+!< - `NAME = expression` (a user variable, its value now), `NAME(P1, ...) = expression` (a user function, see
+!<   foresight_expression); expressions take them everywhere, range ends included (`set xrange [0:2*pi]`);
 !< - `set|unset title|xlabel|ylabel|y2label ["text"]`, `set xrange|yrange|y2range [min:max]` (`*` or empty autoscales
 !<   an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, e.g. `xy2`; all when absent),
 !<   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
@@ -74,7 +76,7 @@ module foresight_script
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object
+use foresight_expression, only : expression_object, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
@@ -125,11 +127,13 @@ type :: script_object
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
+   type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
       procedure, pass(self) :: run_file               !< Run a script file.
       procedure, pass(self) :: run_text               !< Run script text.
+      procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: register_file !< Remember a data file.
       procedure, pass(self), private :: save_output   !< Render to the current output.
@@ -160,6 +164,7 @@ contains
    self%separator = ''
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
+   call self%symbols%clear
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -266,6 +271,7 @@ contains
    type(token_object), allocatable              :: tokens(:) !< Statement tokens.
    character(len=:), allocatable                :: command   !< Command word.
 
+   if (self%assignment(statement, iostat, iomsg)) return
    call tokenize(statement, tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (size(tokens) == 0) return
@@ -308,6 +314,70 @@ contains
    endsubroutine execute
 
    ! private procedures
+   function assignment(self, statement, iostat, iomsg) result(done)
+   !< gnuplot's `NAME = expression` (a user variable, its value now) or `NAME(P1, ...) = expression` (a user function):
+   !< an `=` right after the name or the parameter list, not `==`. False if `statement` is neither.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< Statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: done      !< An assignment or a definition.
+   character(len=*), parameter   :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=:), allocatable :: s       !< Statement, leading blanks removed.
+   character(len=:), allocatable :: name    !< Symbol name.
+   character(len=:), allocatable :: list    !< Parameter list.
+   character(len=64), allocatable :: params(:) !< Parameters.
+   integer(I4P)                  :: k       !< Character counter.
+   integer(I4P)                  :: e       !< Name end.
+   integer(I4P)                  :: close   !< Closing parenthesis.
+   integer(I4P)                  :: comma   !< Parameter separator.
+   logical                       :: is_function !< A function definition.
+
+   iostat = 0_I4P
+   iomsg = ''
+   done = .false.
+   s = trim(adjustl(statement))
+   if (len(s) == 0) return
+   if (scan(s(1:1), LETTERS) == 0) return
+   e = verify(s, LETTERS//'0123456789', kind=I4P)
+   if (e == 0_I4P) return
+   name = s(1:e - 1_I4P)
+   k = e
+   is_function = .false.
+   if (s(k:k) == '(') then
+      close = index(s(k:), ')', kind=I4P)
+      if (close == 0_I4P) return
+      list = s(k + 1_I4P:k + close - 2_I4P)
+      k = k + close
+      is_function = .true.
+   endif
+   do while (k <= len(s, kind=I4P))
+      if (s(k:k) /= ' ' .and. s(k:k) /= achar(9)) exit
+      k = k + 1_I4P
+   enddo
+   if (k > len(s, kind=I4P)) return
+   if (s(k:k) /= '=') return
+   if (k < len(s, kind=I4P)) then
+      if (s(k + 1_I4P:k + 1_I4P) == '=') return
+   endif
+   done = .true.
+   associate(rhs => s(k + 1_I4P:))
+      if (is_function) then
+         allocate(params(0))
+         do while (len_trim(list) > 0)
+            comma = index(list, ',', kind=I4P)
+            if (comma == 0_I4P) comma = len(list, kind=I4P) + 1_I4P
+            params = [character(len=64) :: params, adjustl(list(1:comma - 1_I4P))]
+            list = list(min(comma + 1_I4P, len(list, kind=I4P) + 1_I4P):)
+         enddo
+         call self%symbols%define(name, params, trim(adjustl(rhs)), iostat, iomsg)
+      else
+         call self%symbols%assign(name, trim(adjustl(rhs)), iostat, iomsg, &
+                                  degrees=self%figure%panels(self%figure%current)%degrees)
+      endif
+   endassociate
+   endfunction assignment
+
    subroutine plot_command(self, tokens, text, iostat, iomsg)
    !< `plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
    !< renders it.
@@ -416,7 +486,8 @@ contains
          written = text(tokens(head)%first:tokens(i)%last)
          ! gnuplot's dummy variable is t in polar mode
          associate(panel => self%figure%panels(self%figure%current))
-            call func%compile(written, iostat, iomsg, variable=merge('t', 'x', panel%polar), degrees=panel%degrees)
+            call func%compile(written, iostat, iomsg, variable=merge('t', 'x', panel%polar), degrees=panel%degrees, &
+                              symbols=self%symbols)
          endassociate
          if (iostat /= 0_I4P) then
             iomsg = 'plot: '//iomsg
@@ -479,7 +550,7 @@ contains
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
             call split_xtic(spec, label_col, iostat, iomsg, keyed)
             if (iostat /= 0_I4P) return
-            call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees)
+            call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'matrix', 3_I4P)) then
             if (is_function) then
@@ -1957,7 +2028,7 @@ contains
       endsubroutine set_range
 
       subroutine range_end(text, fixed, value)
-      !< One range end: empty or `*` autoscales, else a number.
+      !< One range end: empty or `*` autoscales, else a number or a constant expression (`2*pi`, user variables).
       character(len=*), intent(in)    :: text  !< End text.
       logical,          intent(inout) :: fixed !< End fixed.
       real(R8P),        intent(inout) :: value !< End value.
@@ -1968,8 +2039,12 @@ contains
          return
       endif
       if (.not. to_number(trim(adjustl(text)), v)) then
-         call fail('set '//option//': "'//trim(adjustl(text))//'" is not a number', iostat, iomsg)
-         return
+         call self%symbols%constant(trim(adjustl(text)), v, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set '//option//': '//iomsg
+            return
+         endif
       endif
       fixed = .true.
       value = v
@@ -2189,7 +2264,8 @@ contains
                if (keyword(word, 'using', 1_I4P)) then
                   i = i + 1_I4P
                   if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-                  call parse_using(word, pfields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees)
+                  call parse_using(word, pfields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                                   self%symbols)
                   if (iostat /= 0_I4P) return
                elseif (keyword(word, 'index', 1_I4P)) then
                   i = i + 1_I4P
@@ -3369,14 +3445,15 @@ contains
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
 
-   subroutine parse_using(spec, fields, iostat, iomsg, degrees)
+   subroutine parse_using(spec, fields, iostat, iomsg, degrees, symbols)
    !< `using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a
-   !< parenthesized expression, as in gnuplot.
+   !< parenthesized expression (with the user variables and functions of `symbols`), as in gnuplot.
    character(len=*),                     intent(in)  :: spec      !< Specification.
    type(expression_object), allocatable, intent(out) :: fields(:) !< Fields.
    character(len=:), allocatable,        intent(out) :: iomsg     !< Error message.
    integer(I4P),                         intent(out) :: iostat    !< 0 on success.
    logical,                              intent(in)  :: degrees   !< Angles of the expressions in degrees.
+   type(symbols_object),                 intent(in)  :: symbols   !< User variables and functions.
    type(expression_object)                           :: field     !< Current field.
    integer(I4P)                                      :: start     !< Field start.
    integer(I4P)                                      :: finish    !< Field end.
@@ -3414,7 +3491,7 @@ contains
             call field%set_name(text(2:len(text) - 1))
          elseif (text(1:min(1, len(text))) == '(') then
             ! compiled first, so that an unbalanced expression gets the precise syntax error
-            call field%compile(text, iostat, iomsg, degrees=degrees)
+            call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols)
             if (iostat /= 0_I4P) then
                iomsg = 'using: '//iomsg
                return

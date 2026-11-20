@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(80)                           !< Per-check outcome.
+logical                       :: test_passed(81)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -90,7 +90,7 @@ test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'inline ranges are not suppo
 call interpreter%run_text("plot '"//data_file//"' u 1:$2", iostat, iomsg)
 test_passed(8) = iostat /= 0_I4P .and. index(iomsg, 'nor a parenthesized expression') > 0
 call interpreter%run_text('set xrange [a:1]', iostat, iomsg)
-test_passed(9) = iostat /= 0_I4P .and. index(iomsg, 'is not a number') > 0
+test_passed(9) = iostat /= 0_I4P .and. index(iomsg, 'set xrange: undefined variable: a') > 0
 
 ! using expressions: scaled column, blanks inside parentheses
 call interpreter%init(scratch)
@@ -249,7 +249,7 @@ associate(tics => interpreter%figure%panels(1)%xaxis%tics)
 endassociate
 ! a number beyond the real range is an error, not an IEEE overflow
 call interpreter%run_text('set xrange [1e999:1]', iostat, iomsg)
-test_passed(37) = iostat /= 0_I4P .and. index(iomsg, '"1e999" is not a number') > 0
+test_passed(37) = iostat /= 0_I4P .and. index(iomsg, 'set xrange: number out of range') > 0
 
 ! set style function: the default style of functions, error bars refused; with overrides it; unset restores lines
 call interpreter%init(scratch)
@@ -1057,6 +1057,62 @@ call interpreter%run_text("set colorbox origin 0.1", iostat, iomsg)
 test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'origin needs X,Y') > 0
 call interpreter%run_text("set colorbox d", iostat, iomsg)
 test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "d"') > 0
+! user variables and functions, as gnuplot 6.0: a function of a variable over a range of that variable, replot
+! seeing a new value, using expressions, the dummy variable winning, angles in degrees, statements on one line; errors
+call interpreter%init(scratch)
+call interpreter%run_text("a = 2"//new_line('a')//"f(x) = a*sin(x)"//new_line('a')//"set xrange [0:a]"// &
+                          new_line('a')//"plot f(x)", iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(81) = iostat == 0_I4P .and. panel%xaxis%max_fixed .and. panel%xaxis%max_user == 2.0_R8P
+   if (test_passed(81)) test_passed(81) = abs(panel%series(1)%y(size(panel%series(1)%y)) - 2.0_R8P * sin(2.0_R8P)) < &
+                                          1.0e-12_R8P
+endassociate
+call interpreter%run_text("a = 3; replot", iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(81) = test_passed(81) .and. iostat == 0_I4P
+   if (test_passed(81)) test_passed(81) = abs(panel%series(1)%y(size(panel%series(1)%y)) - 3.0_R8P * sin(2.0_R8P)) < &
+                                          1.0e-12_R8P
+endassociate
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2', '2 4'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("scale = 10; plot '"//data_file//"' u 1:($2*scale)", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat == 0_I4P
+if (test_passed(81)) test_passed(81) = all(interpreter%figure%panels(1)%series(1)%y == [20.0_R8P, 40.0_R8P])
+call interpreter%init(scratch)
+call interpreter%run_text("x = 3; set xrange [0:2]; plot x**2", iostat, iomsg)
+block
+   real(R8P) :: v     !< Value.
+   logical   :: found !< Found.
+
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(81) = test_passed(81) .and. iostat == 0_I4P
+      if (test_passed(81)) test_passed(81) = series%y(size(series%y)) == 4.0_R8P
+   endassociate
+   call interpreter%symbols%value_of('x', v, found)
+   test_passed(81) = test_passed(81) .and. found .and. v == 3.0_R8P
+   call interpreter%run_text("set angles degrees; s = sin(90); b = 7/2; set xrange [-pi:2*pi]", iostat, iomsg)
+   call interpreter%symbols%value_of('s', v, found)
+   test_passed(81) = test_passed(81) .and. iostat == 0_I4P .and. found .and. abs(v - 1.0_R8P) < 1.0e-15_R8P
+   call interpreter%symbols%value_of('b', v, found)
+   test_passed(81) = test_passed(81) .and. found .and. v == 3.0_R8P
+   test_passed(81) = test_passed(81) .and. interpreter%figure%panels(1)%xaxis%min_user == -acos(-1.0_R8P)
+endblock
+call interpreter%run_text("h2( u , v ) = u*v; set xrange [0:h2(2, 3)]", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%max_user == 6.0_R8P
+call interpreter%run_text("plot c*x", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: c') > 0
+call interpreter%run_text("fact(n) = n <= 1 ? 1 : n*fact(n-1)", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'recursive function fact') > 0
+call interpreter%run_text("a = $1", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'columns are only valid in using') > 0
+call interpreter%run_text("sin(x) = 2", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, '"sin" is a builtin function') > 0
+call interpreter%run_text("g(x) = x; plot g(1,2)", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'function g requires 1 variable') > 0
+call interpreter%run_text("a == 2", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported command "a"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1074,7 +1130,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,80L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,81L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

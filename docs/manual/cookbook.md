@@ -118,6 +118,15 @@ On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 
 ## Lines, points and error bars
 
+### User variables and functions
+
+<<< @/examples/snippets/cb_user_functions.gp{gnuplot}
+
+<Plot name="cb_user_functions" svg :width="560" :height="320" />
+
+`name = value` and `name(t) = expression` as in gnuplot: the functions read the variables when the plot is drawn,
+and the range ends take expressions. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+
 ### Line styles and point types
 
 <<< @/examples/snippets/cb_styles.gp{gnuplot}

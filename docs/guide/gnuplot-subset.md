@@ -25,6 +25,8 @@ that did what it says.
 | **rep**lot [*items*] | render the last plot again (re-reading its data), optionally adding items |
 | **se**t *option* | set an option |
 | **uns**et *option* | reset an option |
+| *name* `=` *expression* | a [user variable](#user-variables-and-functions): the value now, integer or real |
+| *name*`(`*p1*`, ...) =` *expression* | a [user function](#user-variables-and-functions) |
 
 ## `set` / `unset` options
 
@@ -150,8 +152,30 @@ A field must be a column number or one parenthesized expression, as in gnuplot: 
 errors. Syntax errors point at the character: `using: unexpected ")" at character 6 of "($2 +)"`.
 
 Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
-stops the plot. Not supported: user variables and functions, string values (`stringcolumn`, string operators),
-bitwise operators, the pseudo-columns -1 and -2.
+stops the plot. Expressions take [user variables and functions](#user-variables-and-functions). Not supported: string
+values (`stringcolumn`, string operators), bitwise operators, the pseudo-columns -1 and -2.
+
+## User variables and functions
+
+```gnuplot
+A = 2.0; tau = 3.0; omega = 2*pi/2
+envelope(t) = A*exp(-t/tau)
+signal(t) = envelope(t)*cos(omega*t)
+set xrange [0:2*tau]
+plot signal(x) t 'signal', envelope(x) t 'envelope', -envelope(x) notitle
+```
+
+<Plot name="cb_user_functions" svg :width="560" :height="320" />
+
+As gnuplot: `name = expression` stores the value of the expression now, an integer stays an integer (`a = 2; b = a/3`
+is 0, `a = 2.` is real); `name(p1, p2, ...) = expression` defines a function whose variables take their values when
+it is called, that is when the plot is drawn (`f(x) = a*x; a = 3` then `plot f(x)` uses 3; `replot` after a new value
+uses it). Expressions everywhere take them: plotted functions, `using` fields (`u 1:($2*scale)`), range ends (`set
+xrange [0:2*tau]`, also `[-pi:pi]`). The plot's dummy variable wins over a user variable of its name, and is not seen
+inside a function body (there `x` is the user variable `x`). Names are case sensitive (`a_1`, `A`), `pi` may be
+assigned, the builtin functions may not be redefined. Errors as gnuplot: `undefined variable: c`, `function f requires
+1 variable`. Not supported: recursive functions (gnuplot evaluates `fact(n) = n <= 1 ? 1 : n*fact(n-1)`; foresight
+reports `recursive function fact is not supported`), `print`, string variables, `undefine`.
 
 ## Functions
 
@@ -795,7 +819,7 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-User variables and functions (`f(x) = ...`), inline ranges (`plot [0:1] sin(x)`), the second
+Recursive user functions, inline ranges (`plot [0:1] sin(x)`), the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`,
 explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the

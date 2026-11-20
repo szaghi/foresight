@@ -141,6 +141,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
   <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
+  <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />

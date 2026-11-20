@@ -13,7 +13,7 @@ Everything foresight does, and where it is documented. The [tutorial](/manual/) 
 | Axes | linear and log scales, fixed or autoscaled ends extended to the ticks, reversed ranges; tick steps, `mirror`, printf label formats; a second y axis | [Ticks](gnuplot-subset#ticks-and-label-formats), [Second y axis](gnuplot-subset#second-y-axis) |
 | Key | inside (any corner, centred), `outside`, `below`/`above` in rows, box; titles as written, from column headers, or none | [Key](gnuplot-subset#key) |
 | Data files | whitespace, CSV or any separator; comments, blocks, datasets; `using`, `index`, `every`; column 0; missing values; cells read as gnuplot (C `strtod`) | [Data Files](data-files) |
-| Expressions | `using ($2*1e3)`, `column("name")`, `?:`, `1/0` gaps, gnuplot's integer arithmetic and functions | [Expressions](gnuplot-subset#expressions-in-using) |
+| Expressions | `using ($2*1e3)`, `column("name")`, `?:`, `1/0` gaps, gnuplot's integer arithmetic and functions; user variables and functions (`a = 2`, `f(x) = a*sin(x)`), expressions in range ends | [Expressions](gnuplot-subset#expressions-in-using) |
 | Column headers | `using 1:"residual"`, `title columnhead`, `set key autotitle columnhead` | [Column headers](gnuplot-subset#column-headers) |
 | Functions | `plot sin(x)/x`, sampled over the data x range, `set samples`, `set style function` | [Functions](gnuplot-subset#functions) |
 | Smoothing | `smooth unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`: averages of repeated x, histograms, distributions | [Smoothing](gnuplot-subset#smoothing) |
