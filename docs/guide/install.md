@@ -53,7 +53,7 @@ bash scripts/run_tests.sh            # Fortran tests, byte-exact golden files in
 fobis rule --ex test-js              # viewer tick rules (needs node)
 ```
 
-Tests run from the repository root, where they find the reference files in `src/tests/golden/`.
+Tests run from the repository root, where they find the reference files in `src/tests/goldens/`.
 
 ## Use the library
 

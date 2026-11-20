@@ -15,18 +15,28 @@ check("nice step 0.4", ns.m === 5 && ns.e === -1);
 ns = viewer.niceStep(1000);
 check("nice step 1000", ns.m === 1 && ns.e === 3);
 
+// gnuplot's step, independent of the length (gnuplot 6.0, 150 to 1200 px): [-2:2] 0.5, [0:1] 0.2,
+// [0:13] 2, [0:100] 20, [0:7] 1, [0:0.3] 0.05
+function step(ns) { return ns.m * Math.pow(10, ns.e); }
+check("gnuplot steps", Math.abs(step(viewer.gnuplotStep(4)) - 0.5) < 1e-12 &&
+  Math.abs(step(viewer.gnuplotStep(1)) - 0.2) < 1e-12 && step(viewer.gnuplotStep(13)) === 2 &&
+  step(viewer.gnuplotStep(100)) === 20 && step(viewer.gnuplotStep(7)) === 1 &&
+  Math.abs(step(viewer.gnuplotStep(0.3)) - 0.05) < 1e-12);
+
 var ticks = viewer.linearTicks(0, 10, 500);
-check("linear [0:10]", ticks.length === 11 && ticks[1].label === "1" && ticks[10].label === "10");
+check("linear [0:10]", ticks.length === 6 && ticks[1].label === "2" && ticks[5].label === "10");
+check("linear any length", viewer.linearTicks(0, 10, 150).length === 6 &&
+  viewer.linearTicks(0, 10, 1500).length === 6);
 
 ticks = viewer.linearTicks(0, 0.3, 150);
-check("linear exact labels", ticks.length === 4 && ticks[3].label === "0.3");
+check("linear exact labels", ticks.length === 7 && ticks[6].label === "0.3");
 
 ticks = viewer.linearTicks(0, 2e-4, 200);
 check("linear scientific", ticks[1].label === "5x10" && ticks[1].sup === "-5" &&
   ticks[3].label === "1.5x10" && ticks[3].sup === "-4" && ticks[0].label === "0");
 
 ticks = viewer.linearTicks(10, 0, 500);
-check("linear reversed", ticks.length === 11);
+check("linear reversed", ticks.length === 6);
 
 ticks = viewer.logTicks(1e-5, 10, 400);
 check("log decades", labels(ticks).length === 7 && ticks.length === 7 + 6 * 8);
@@ -36,8 +46,9 @@ ticks = viewer.logTicks(2, 8, 400);
 check("log plain", labels(ticks).length === 7 && ticks[0].label === "2" && ticks[6].label === "8");
 
 ticks = viewer.logTicks(2.1, 2.3, 150);
-check("log linear fallback", ticks.length === 5 && ticks[0].label === "2.1" &&
-  ticks[4].label === "2.3");
+// 2.3 - 2.1 is 0.19999999999999996: gnuplot steps by 0.02 too
+check("log linear fallback", ticks.length === 11 && ticks[0].label === "2.1" &&
+  ticks[10].label === "2.3");
 
 check("decimal strings", viewer.decimalStr(-5, 3) === "-0.005" &&
   viewer.decimalStr(15, -2) === "1500" && viewer.decimalStr(100, 2) === "1");

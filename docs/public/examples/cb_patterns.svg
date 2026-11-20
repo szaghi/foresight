@@ -7,10 +7,15 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="284.7,289 284.7,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="412.45,289 412.45,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,289 540.2,289"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,261.7 540.2,261.7"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,234.4 540.2,234.4"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,207.1 540.2,207.1"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,179.8 540.2,179.8"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,152.5 540.2,152.5"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,125.2 540.2,125.2"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,97.9 540.2,97.9"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,70.6 540.2,70.6"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,43.3 540.2,43.3"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,16 540.2,16"/>
 </g>
 <svg class="fs-plot" x="29.2" y="16" width="511" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -49,18 +54,33 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,289 35.2,289"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,289 534.2,289"/>
 <text x="23.2" y="293.2" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,261.7 35.2,261.7"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,261.7 534.2,261.7"/>
+<text x="23.2" y="265.9" text-anchor="end">1</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,234.4 35.2,234.4"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,234.4 534.2,234.4"/>
 <text x="23.2" y="238.6" text-anchor="end">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,207.1 35.2,207.1"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,207.1 534.2,207.1"/>
+<text x="23.2" y="211.3" text-anchor="end">3</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,179.8 35.2,179.8"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,179.8 534.2,179.8"/>
 <text x="23.2" y="184" text-anchor="end">4</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,152.5 35.2,152.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,152.5 534.2,152.5"/>
+<text x="23.2" y="156.7" text-anchor="end">5</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,125.2 35.2,125.2"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,125.2 534.2,125.2"/>
 <text x="23.2" y="129.4" text-anchor="end">6</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,97.9 35.2,97.9"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,97.9 534.2,97.9"/>
+<text x="23.2" y="102.1" text-anchor="end">7</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,70.6 35.2,70.6"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,70.6 534.2,70.6"/>
 <text x="23.2" y="74.8" text-anchor="end">8</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="29.2,43.3 35.2,43.3"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="540.2,43.3 534.2,43.3"/>
+<text x="23.2" y="47.5" text-anchor="end">9</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="29.2,16 35.2,16"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="540.2,16 534.2,16"/>
 <text x="23.2" y="20.2" text-anchor="end">10</text>

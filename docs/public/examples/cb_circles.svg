@@ -4,15 +4,9 @@
 <g class="fs-axes" data-area="50.2 550 16 268" data-x="0 2e1" data-y="0 1.1e1" data-log="0 0" data-grid="0" data-font-size="12">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="50.2,268 50.2,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="100.18,268 100.18,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="150.16,268 150.16,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="200.14,268 200.14,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="250.12,268 250.12,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="175.15,268 175.15,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="300.1,268 300.1,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="350.08,268 350.08,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="400.06,268 400.06,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="450.04,268 450.04,16"/>
-<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="500.02,268 500.02,16"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="425.05,268 425.05,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="550,268 550,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="50.2,268 550,268"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="50.2,222.18 550,222.18"/>
@@ -62,33 +56,15 @@
 <polyline fill="none" stroke="black" stroke-width="1" points="50.2,268 50.2,262"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="50.2,16 50.2,22"/>
 <text x="50.2" y="286" text-anchor="middle">0</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="100.18,268 100.18,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="100.18,16 100.18,22"/>
-<text x="100.18" y="286" text-anchor="middle">2</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="150.16,268 150.16,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="150.16,16 150.16,22"/>
-<text x="150.16" y="286" text-anchor="middle">4</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="200.14,268 200.14,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="200.14,16 200.14,22"/>
-<text x="200.14" y="286" text-anchor="middle">6</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="250.12,268 250.12,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="250.12,16 250.12,22"/>
-<text x="250.12" y="286" text-anchor="middle">8</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="175.15,268 175.15,262"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="175.15,16 175.15,22"/>
+<text x="175.15" y="286" text-anchor="middle">5</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="300.1,268 300.1,262"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="300.1,16 300.1,22"/>
 <text x="300.1" y="286" text-anchor="middle">10</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="350.08,268 350.08,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="350.08,16 350.08,22"/>
-<text x="350.08" y="286" text-anchor="middle">12</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="400.06,268 400.06,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="400.06,16 400.06,22"/>
-<text x="400.06" y="286" text-anchor="middle">14</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="450.04,268 450.04,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="450.04,16 450.04,22"/>
-<text x="450.04" y="286" text-anchor="middle">16</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="500.02,268 500.02,262"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="500.02,16 500.02,22"/>
-<text x="500.02" y="286" text-anchor="middle">18</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="425.05,268 425.05,262"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="425.05,16 425.05,22"/>
+<text x="425.05" y="286" text-anchor="middle">15</text>
 <polyline fill="none" stroke="black" stroke-width="1" points="550,268 550,262"/>
 <polyline fill="none" stroke="black" stroke-width="1" points="550,16 550,22"/>
 <text x="550" y="286" text-anchor="middle">20</text>

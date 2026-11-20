@@ -17,7 +17,7 @@ flowchart TD
     AXES["foresight_axes<br/>layout, key, series drawing"] --> AXIS["foresight_axis<br/>ranges, autoscale"]
     AXES --> SERIES["foresight_series / _style"]
     AXES --> READOUT["foresight_readout<br/>seven-segment glass"]
-    AXIS --> TICKS["foresight_ticks<br/>nice numbers, exact labels"]
+    AXIS --> TICKS["foresight_ticks<br/>gnuplot steps, exact labels"]
     AXES --> BACKEND
     BACKEND["foresight_backend<br/>abstract device"] --> SVG["backend_svg"]
     SVG --> HTML["backend_html<br/>+ embedded viewer.js"]

@@ -9,7 +9,7 @@ use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : figure_object, I4P, R8P
 
 implicit none
-character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
+character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
 logical                     :: test_passed(77)                  !< Per-figure outcome.

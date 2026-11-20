@@ -2,7 +2,7 @@
 // end of the data, and the state kept in the URL across a reload. They run src/js/viewer.js (not
 // the copy embedded in the page) on the tutorial dashboard, docs/public/examples/ch7.html: two
 // panels over the same iterations, with three and one series, markers and error bar caps. Then on
-// a curve with a readout, src/tests/golden/readout_mixed.html: the readout is no series and no key
+// a curve with a readout, src/tests/goldens/readout_mixed.html: the readout is no series and no key
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
@@ -141,7 +141,7 @@ b0 = box(0);
 check("reload keeps following", close(b0[0] + b0[2], 1) && b0[2] < 1);
 
 // a readout over a curve: drawn once, outside the zoomable plot area, never a series nor a key entry
-page = strip(path.join(__dirname, "..", "tests", "golden", "readout_mixed.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "readout_mixed.html"));
 p = load("");
 var readout = panel(0).querySelector(".fs-readouts"), drawn = readout.innerHTML;
 check("readout in the panel, one key entry (the curve)",
@@ -157,7 +157,7 @@ key("f");
 check("follow leaves the readout", box(0)[3] < 1 && readout.innerHTML === drawn);
 
 // boxes: data geometry like lines; a key entry hides its boxes, a zoom transforms them with the plot
-page = strip(path.join(__dirname, "..", "tests", "golden", "boxes.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "boxes.html"));
 p = load("");
 check("boxes are series paths in the plot area",
   series(0, 1).querySelectorAll("path").length === 4 && series(0, 1).closest(".fs-plot") !== null);
@@ -167,7 +167,7 @@ wheel(0);
 check("zoom acts on the boxes panel", box(0)[2] < 1);
 
 // text labels from the data: the x ticks are the labels, kept as text by a zoom
-page = strip(path.join(__dirname, "..", "tests", "golden", "histograms.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "histograms.html"));
 p = load("");
 function xlabels() {
   return Array.prototype.map.call(panel(0).querySelectorAll(".fs-xticks text"),
@@ -179,7 +179,7 @@ check("a zoom keeps labels, not numbers", box(0)[2] < 1 && xlabels().length > 0 
   xlabels().every(function (t) { return /^(Xall GPU|Xall CPU|ADAM)$/.test(t); }));
 
 // a themed page: the ticks the viewer redraws take the theme frame color, not black
-page = strip(path.join(__dirname, "..", "tests", "golden", "theme_vfd.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "theme_vfd.html"));
 p = load("");
 wheel(0);
 check("themed ticks redrawn in the theme color", box(0)[2] < 1 &&
@@ -188,7 +188,7 @@ check("themed ticks redrawn in the theme color", box(0)[2] < 1 &&
   panel(0).querySelectorAll(".fs-xticks line").length > 0);
 
 // an image: data in the plot area, zoomed with it; the color box outside, left alone
-page = strip(path.join(__dirname, "..", "tests", "golden", "image.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "image.html"));
 p = load("");
 var colorbox = panel(0).querySelector(".fs-colorbox").innerHTML;
 check("image in the plot area", panel(0).querySelector(".fs-plot image") !== null);
@@ -198,7 +198,7 @@ check("a zoom acts on the image, not on the color box", box(0)[2] < 1 &&
 
 // a polar plot: grid rings and spokes are data, zoomed with the series; the r tick labels and theta
 // labels are page geometry, hidden while zoomed; no rectangular grid is drawn over the polar one
-page = strip(path.join(__dirname, "..", "tests", "golden", "polar_round.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "polar_round.html"));
 p = load("");
 var pgrid = panel(0).querySelector(".fs-pgrid"), plabels = panel(0).querySelector(".fs-polar");
 check("polar grid in the plot area, labels outside it",
@@ -218,7 +218,7 @@ check("autoscale shows the polar labels again", box(0)[2] === 1 &&
 
 // arrows and labels: the shafts are data; the heads and the label texts keep their pixel size, redrawn and moved
 // from their data anchors by a zoom, back to the original at autoscale
-page = strip(path.join(__dirname, "..", "tests", "golden", "shapes.html"));
+page = strip(path.join(__dirname, "..", "tests", "goldens", "shapes.html"));
 p = load("");
 var heads = panel(0).querySelector(".fs-heads"), labels = panel(0).querySelector(".fs-labels");
 var headsHome = heads.innerHTML, label0 = labels.querySelector(".fs-label");

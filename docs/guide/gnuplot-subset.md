@@ -269,6 +269,10 @@ set format x "%g s"      # 0.5 s
 set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
 ```
 
+Automatic ticks step as gnuplot's: by the axis range only, whatever the size of the plot (0.5 on [-2:2], 0.2 on
+[0:1], 2 on [0:13], 20 on [0:100]); log axes label every 1, 2, 5, ... decades by the same rule (every 2 decades on
+[1:1e10]). Within a single decade foresight labels the 2..9 multiples where gnuplot shows the decade alone.
+
 As in gnuplot, `set xtics` without positions (alone, or with only `mirror`/`nomirror`) keeps the last ones and turns
 the ticks back on after `unset xtics`; `set xtics auto` returns to automatic ticks.
 

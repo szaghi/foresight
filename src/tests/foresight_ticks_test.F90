@@ -34,7 +34,7 @@ test_passed(4) = ticks(2)%label == '1' .and. ticks(11)%label == '10'
 lo = 0.0_R8P
 hi = 0.3_R8P
 call linear_ticks(lo, hi, 150.0_R8P, .false., .false., ticks)
-test_passed(5) = size(ticks) == 4 .and. ticks(4)%label == '0.3'
+test_passed(5) = size(ticks) == 7 .and. ticks(7)%label == '0.3'
 
 ! scientific labels for small magnitudes
 lo = 0.0_R8P
@@ -43,11 +43,15 @@ call linear_ticks(lo, hi, 200.0_R8P, .false., .false., ticks)
 test_passed(6) = ticks(2)%label == '5x10' .and. ticks(2)%sup == '-5' .and. &
                  ticks(4)%label == '1.5x10' .and. ticks(4)%sup == '-4' .and. ticks(1)%label == '0'
 
-! reversed fixed range keeps its ends
+! reversed fixed range keeps its ends; gnuplot's step 2 for a range of 10, at any length (150 or 1500 px too)
 lo = 10.0_R8P
 hi = 0.0_R8P
 call linear_ticks(lo, hi, 500.0_R8P, .false., .false., ticks)
-test_passed(7) = lo == 10.0_R8P .and. hi == 0.0_R8P .and. size(ticks) == 11
+test_passed(7) = lo == 10.0_R8P .and. hi == 0.0_R8P .and. size(ticks) == 6
+call linear_ticks(lo, hi, 150.0_R8P, .false., .false., ticks)
+test_passed(7) = test_passed(7) .and. size(ticks) == 6
+call linear_ticks(lo, hi, 1500.0_R8P, .false., .false., ticks)
+test_passed(7) = test_passed(7) .and. size(ticks) == 6
 
 ! log axis: autoscale to whole decades, majors 10^-5..10^1, minors in between
 lo = 3.0e-5_R8P
@@ -64,11 +68,12 @@ call log_ticks(lo, hi, 400.0_R8P, .false., .false., ticks)
 test_passed(11) = count(ticks%major) == 7
 test_passed(12) = ticks(1)%label == '2' .and. ticks(7)%label == '8'
 
-! log axis inside one decade, no multiple of the decade in range: linear ticks instead
+! log axis inside one decade, no multiple of the decade in range: linear ticks instead (2.3 - 2.1 is
+! 0.19999999999999996: gnuplot steps by 0.02 too)
 lo = 2.1_R8P
 hi = 2.3_R8P
 call log_ticks(lo, hi, 150.0_R8P, .false., .false., ticks)
-test_passed(13) = size(ticks) == 5 .and. ticks(1)%label == '2.1' .and. ticks(5)%label == '2.3'
+test_passed(13) = size(ticks) == 11 .and. ticks(1)%label == '2.1' .and. ticks(11)%label == '2.3'
 
 ! set xtics 0.4: autoscaled ends extended to multiples of the step
 call tics%set_fixed('0.4', '', '', message)

@@ -2,8 +2,10 @@
 module foresight_ticks
 !< foresight_ticks, axis tick placement and labelling.
 !<
-!< Linear axes use the "nice numbers" rule (Heckbert, Graphics Gems, 1990): the step is rounded to `m * 10**e` with
-!< `m` in {1, 2, 5}. Log axes place majors at integer decades. Tick values are carried as the integer pair (`n`, `e`)
+!< Automatic steps are gnuplot's (`quantize_normal_tics`, guide 20): they depend on the axis range only, not on its
+!< length in pixels (probed on gnuplot 6.0 from 150 to 1200 px: [-2:2] steps by 0.5, [0:1] by 0.2, [0:13] by 2). The
+!< range normalised to its decade, f in [1, 10), gives the step 0.2 (f < 2), 0.5 (f < 5) or 1 times the decade. Log
+!< axes place majors at integer decades, every 1, 2, 5, 10, ... decades by the same rule on the decade count. Tick values are carried as the integer pair (`n`, `e`)
 !< meaning `n * 10**e`, so labels are exact decimal strings, free of floating point noise such as `0.30000000000000004`.
 !<
 !< User settings (`tics_object`, gnuplot `set xtics` and `set format`) replace the automatic rule: a fixed step from an
@@ -53,7 +55,6 @@ type :: tics_object
 endtype tics_object
 
 real(R8P), parameter :: TOL          = 1.0e-9_R8P !< Tolerance on tick-grid membership, in units of the step.
-real(R8P), parameter :: TICK_SPACING = 50.0_R8P   !< Target distance between major ticks [px].
 real(R8P), parameter :: SCI_HIGH     = 1.0e5_R8P  !< Labels switch to scientific notation from this magnitude...
 real(R8P), parameter :: SCI_LOW      = 1.0e-3_R8P !< ...or below this one.
 integer(I8P), parameter :: MAX_TICKS = 1000_I8P   !< Tick count cap: no ticks beyond it (degenerate or extreme zoom).
@@ -210,8 +211,57 @@ contains
    endif
    endsubroutine nice_step
 
+   pure subroutine gnuplot_step(range, m, e)
+   !< gnuplot's automatic step `m * 10**e` of an axis `range` (> 0) long: `quantize_normal_tics(range, 20)`, with the
+   !< range normalised to its decade (f in [1, 10)): 2 10**(p-1) for f < 2, 5 10**(p-1) for f < 5, else 10**p. Exact
+   !< powers of ten, so the viewer's mirror finds the same step.
+   real(R8P),    intent(in)  :: range !< Axis range.
+   integer(I8P), intent(out) :: m     !< Step mantissa.
+   integer(I4P), intent(out) :: e     !< Step exponent.
+   real(R8P)                 :: f     !< Range normalised to its decade.
+   integer(I4P)              :: p     !< Decade of the range.
+
+   m = 1_I8P
+   e = 0_I4P
+   if (.not. (range > 0.0_R8P .and. range <= huge(1.0_R8P))) return
+   p = floor(log10(range), I4P)
+   f = scaled(range, p)
+   ! log10 may land on the wrong side of a decade
+   if (f >= 10.0_R8P) then
+      p = p + 1_I4P
+      f = scaled(range, p)
+   elseif (f < 1.0_R8P) then
+      p = p - 1_I4P
+      f = scaled(range, p)
+   endif
+   if (f < 2.0_R8P) then
+      m = 2_I8P
+      e = p - 1_I4P
+   elseif (f < 5.0_R8P) then
+      m = 5_I8P
+      e = p - 1_I4P
+   else
+      m = 1_I8P
+      e = p
+   endif
+   contains
+      pure function scaled(x, k) result(y)
+      !< `x / 10**k` by an exact power of ten.
+      real(R8P),    intent(in) :: x !< Value.
+      integer(I4P), intent(in) :: k !< Exponent.
+      real(R8P)                :: y !< Scaled value.
+
+      if (k >= 0_I4P) then
+         y = x / 10.0_R8P**k
+      else
+         y = x * 10.0_R8P**(-k)
+      endif
+      endfunction scaled
+   endsubroutine gnuplot_step
+
    pure subroutine linear_ticks(lo, hi, npx, extend_lo, extend_hi, ticks, tics)
-   !< Major ticks of a linear axis `npx` pixels long; autoscaled ends are extended outward to the tick grid.
+   !< Major ticks of a linear axis (`npx` pixels long, kept for the interface: gnuplot's density does not depend on it);
+   !< autoscaled ends are extended outward to the tick grid.
    !<
    !< With `tics`: no ticks and no extension (TICS_NONE), or the fixed grid (TICS_FIXED), and the label format.
    real(R8P),                      intent(inout)        :: lo        !< Value at the axis start (`lo > hi`: reversed).
@@ -238,7 +288,7 @@ contains
          return
       endif
    endif
-   call nice_step(abs(hi - lo) / max(2.0_R8P, npx / TICK_SPACING), m, e)
+   call gnuplot_step(abs(hi - lo), m, e)
    step = grid_value(m, e)
    if (lo <= hi) then
       if (extend_lo) lo = grid_value(m * floor(lo / step + TOL, I8P), e)
@@ -315,7 +365,7 @@ contains
    endif
    ta = log10(min(lo, hi))
    tb = log10(max(lo, hi))
-   call nice_step((tb - ta) / max(2.0_R8P, npx / TICK_SPACING), m, e)
+   call gnuplot_step(tb - ta, m, e)
    s = 1_I8P
    if (e >= 0_I4P) s = m * 10_I8P**e
    kmin = ceiling(ta - TOL, I8P)

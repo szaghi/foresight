@@ -22,13 +22,13 @@ use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
 implicit none
 character(len=*), parameter   :: data_file = 'foresight_script_test.dat'   !< Test data file.
 character(len=*), parameter   :: output    = 'foresight_script_test.svg'   !< Rendered file.
-character(len=*), parameter   :: golden    = 'src/tests/golden/script.svg' !< Reference file.
+character(len=*), parameter   :: golden    = 'src/tests/goldens/script.svg' !< Reference file.
 character(len=*), parameter   :: scratch   = 'foresight_script_test_expressions.svg' !< Expression plots.
 character(len=*), parameter   :: options   = 'foresight_script_test_options.svg'     !< Options plot.
-character(len=*), parameter   :: options_golden = 'src/tests/golden/options.svg'    !< Options reference.
+character(len=*), parameter   :: options_golden = 'src/tests/goldens/options.svg'    !< Options reference.
 character(len=*), parameter   :: csv_file  = 'foresight_script_test.csv'   !< CSV data file.
 character(len=*), parameter   :: y2        = 'foresight_script_test_y2.svg'          !< Second y axis plot.
-character(len=*), parameter   :: y2_golden = 'src/tests/golden/y2.svg'                !< Second y axis reference.
+character(len=*), parameter   :: y2_golden = 'src/tests/goldens/y2.svg'                !< Second y axis reference.
 type(script_object)           :: interpreter                               !< Interpreter.
 character(len=:), allocatable :: iomsg                                     !< Error message.
 character(len=:), allocatable :: script                                    !< Script text.

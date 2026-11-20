@@ -8,7 +8,7 @@ use foresight, only : I4P, R8P, script_object
 
 implicit none
 character(len=*), parameter   :: data_file = 'foresight_multiplot_test.dat' !< Test data file.
-character(len=*), parameter   :: golden    = 'src/tests/golden/'            !< Reference files directory.
+character(len=*), parameter   :: golden    = 'src/tests/goldens/'            !< Reference files directory.
 type(script_object)           :: interpreter                                !< Interpreter.
 character(len=:), allocatable :: iomsg                                      !< Error message.
 character(len=:), allocatable :: multiplot                                  !< Multiplot script body.

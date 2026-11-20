@@ -7,7 +7,7 @@
 (function () {
   "use strict";
 
-  var TOL = 1e-9, TICK_SPACING = 50, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
+  var TOL = 1e-9, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
   var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
   var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // arrowheads, as arrow_head in foresight_backend
@@ -38,6 +38,19 @@
     else if (f < 7) m = 5;
     else { m = 1; e += 1; }
     return {m: m, e: e};
+  }
+
+  // gnuplot's automatic step of an axis `range` long (quantize_normal_tics, guide 20), as
+  // foresight_ticks gnuplot_step: the range normalised to its decade, f in [1, 10), steps by
+  // 0.2 (f < 2), 0.5 (f < 5) or 1 decade
+  function gnuplotStep(range) {
+    if (!(range > 0 && isFinite(range))) return {m: 1, e: 0};
+    var p = Math.floor(Math.log10(range)), f = scale10(range, -p);
+    if (f >= 10) { p += 1; f = scale10(range, -p); }
+    else if (f < 1) { p -= 1; f = scale10(range, -p); }
+    if (f < 2) return {m: 2, e: p - 1};
+    if (f < 5) return {m: 5, e: p - 1};
+    return {m: 1, e: p};
   }
 
   function decimalStr(n, ndec) {
@@ -302,7 +315,7 @@
     return ticks;
   }
 
-  // major ticks of a linear axis spanning [lo, hi] (either order) over npx pixels, no extension
+  // major ticks of a linear axis over [lo, hi] (either order), gnuplot's step (npx unused)
   // the data labels inside [lo, hi], in either order: the range is never extended to them
   function labelTicks(lo, hi, tics) {
     var a = Math.min(lo, hi), b = Math.max(lo, hi);
@@ -314,7 +327,7 @@
     if (tics && tics.mode === "none") return [];
     if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLinearTicks(lo, hi, tics);
-    var ns = niceStep(Math.abs(hi - lo) / Math.max(2, npx / TICK_SPACING));
+    var ns = gnuplotStep(Math.abs(hi - lo));
     var step = scale10(ns.m, ns.e), ticks = [], k, t;
     var kmin = Math.ceil(Math.min(lo, hi) / step - TOL);
     var kmax = Math.floor(Math.max(lo, hi) / step + TOL);
@@ -327,13 +340,13 @@
     return ticks;
   }
 
-  // ticks of a base-10 log axis spanning [lo, hi] (either order, > 0) over npx pixels
+  // ticks of a base-10 log axis over [lo, hi] (either order, > 0), gnuplot's step (npx unused)
   function logTicks(lo, hi, npx, tics) {
     if (tics && tics.mode === "none") return [];
     if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLogTicks(lo, hi, tics);
     var ta = Math.log10(Math.min(lo, hi)), tb = Math.log10(Math.max(lo, hi));
-    var ns = niceStep((tb - ta) / Math.max(2, npx / TICK_SPACING));
+    var ns = gnuplotStep(tb - ta);
     var s = ns.e >= 0 ? ns.m * scale10(1, ns.e) : 1, custom = !!(tics && tics.format);
     var kmin = Math.ceil(ta - TOL), kmax = Math.floor(tb + TOL), ticks = [], k, d, v, t;
     var nmajor = 0, plain;
@@ -364,7 +377,8 @@
     return ticks;
   }
 
-  var core = {niceStep: niceStep, decimalStr: decimalStr, linearTicks: linearTicks,
+  var core = {niceStep: niceStep, gnuplotStep: gnuplotStep,
+    decimalStr: decimalStr, linearTicks: linearTicks,
     logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
     decimalOf: decimalOf, readTics: readTics};
   if (typeof module === "object" && module.exports) {
