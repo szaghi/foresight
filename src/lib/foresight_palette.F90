@@ -199,11 +199,12 @@ contains
    real(R8P)                                    :: v       !< Number.
    logical                                      :: ok      !< Number read.
    integer(I4P)                                 :: k       !< Formula counter, palette index.
+   type(palette_object)                         :: initial !< Default palette (nvfortran: no empty constructor).
 
    bad = ''
    rest = trim(adjustl(words))
    if (len(rest) == 0) then
-      palette = palette_object()
+      palette = initial
       return
    endif
    do while (len(rest) > 0)

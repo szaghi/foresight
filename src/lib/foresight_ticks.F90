@@ -5,7 +5,8 @@ module foresight_ticks
 !< Automatic steps are gnuplot's (`quantize_normal_tics`, guide 20): they depend on the axis range only, not on its
 !< length in pixels (probed on gnuplot 6.0 from 150 to 1200 px: [-2:2] steps by 0.5, [0:1] by 0.2, [0:13] by 2). The
 !< range normalised to its decade, f in [1, 10), gives the step 0.2 (f < 2), 0.5 (f < 5) or 1 times the decade. Log
-!< axes place majors at integer decades, every 1, 2, 5, 10, ... decades by the same rule on the decade count. Tick values are carried as the integer pair (`n`, `e`)
+!< axes place majors at integer decades, every 1, 2, 5, 10, ... decades by the same rule on the decade count. Tick
+!< values are carried as the integer pair (`n`, `e`)
 !< meaning `n * 10**e`, so labels are exact decimal strings, free of floating point noise such as `0.30000000000000004`.
 !<
 !< User settings (`tics_object`, gnuplot `set xtics` and `set format`) replace the automatic rule: a fixed step from an

@@ -464,7 +464,8 @@ test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'dens
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
-! histograms with xtic labels (same() reads -1 as NaN: values are shifted off it): clustered slots 1/(k+gap) centred on the rows 0, 1, 2; x one unit beyond, y to 0
+! histograms with xtic labels (same() reads -1 as NaN: values are shifted off it): clustered slots 1/(k+gap) centred
+! on the rows 0, 1, 2; x one unit beyond, y to 0
 open(newunit=unit, file=data_file, action='write', status='replace')
 write(unit, '(A)') '"Xall GPU" 3 -2', 'B 5 1', 'C -2 4'
 close(unit)
@@ -524,7 +525,8 @@ test_passed(55) = test_passed(55) .and. iostat /= 0_I4P .and. index(iomsg, 'whol
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
-! images (same() reads -1 as NaN: edges shifted off it): x:y:z gathered on a regular grid (a missing point NaN), the pixel edges; a matrix file; palette, cbrange
+! images (same() reads -1 as NaN: edges shifted off it): x:y:z gathered on a regular grid (a missing point NaN), the
+! pixel edges; a matrix file; palette, cbrange
 open(newunit=unit, file=data_file, action='write', status='replace')
 write(unit, '(A)') '0 0 1', '2 0 2', '4 0 3', '', '0 1 4', '2 1 5'
 close(unit)

@@ -1243,6 +1243,10 @@ contains
 
    if (allocated(self%panels)) return
    allocate(self%panels(1))
+   ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
+   associate(panel => self%panels(1))
+      call panel%set_defaults
+   endassociate
    self%rows = 1_I4P
    self%cols = 1_I4P
    self%current = 1_I4P

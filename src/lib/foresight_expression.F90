@@ -222,7 +222,7 @@ contains
    allocate(frames(0))
    if (present(parameters)) then
       ! a body checked alone: the parameters on the stack
-      frames = [frame_object(name=frame_name, params=parameters, base=1_I4P)]
+      call push_frame(frame_name, parameters, 1_I4P)
       depth = size(parameters, kind=I4P)
       self%depth = depth
    endif
@@ -662,7 +662,7 @@ contains
                         trim(merge('s', ' ', n /= 1_I4P)), at)
             return
          endif
-         frames = [frames, frame_object(name=name, params=f%params, base=depth - nargs + 1_I4P)]
+         call push_frame(name=name, params=f%params, base=depth - nargs + 1_I4P)
          saved_src = src
          saved_token = token
          saved_number = number
@@ -687,6 +687,24 @@ contains
          depth = depth - nargs
       endif
       endsubroutine user_call
+
+      subroutine push_frame(name, params, base)
+      !< Push the frame of a user function compiled inline (by a temporary: nvfortran 26.9 stops on the array
+      !< constructor of a type with allocatable components).
+      character(len=*),  intent(in)   :: name      !< Function name.
+      type(name_object), intent(in)   :: params(:) !< Parameter names.
+      integer(I4P),      intent(in)   :: base      !< Stack slot of the first argument.
+      type(frame_object), allocatable :: grown(:)  !< Frames, one more.
+      integer(I4P)                    :: n         !< Frames before the push.
+
+      n = size(frames, kind=I4P)
+      allocate(grown(n + 1_I4P))
+      grown(1:n) = frames
+      grown(n + 1_I4P)%name = name
+      grown(n + 1_I4P)%params = params
+      grown(n + 1_I4P)%base = base
+      call move_alloc(grown, frames)
+      endsubroutine push_frame
 
       pure function int_text(n) result(s)
       !< Decimal text of `n`.
@@ -1064,7 +1082,8 @@ contains
 
    self%text = ''
    self%code = [instruction_object(op=OP_COLUMN, arg=c)]
-   self%names = [name_object ::]
+   if (allocated(self%names)) deallocate(self%names)
+   allocate(self%names(0))
    self%depth = 1_I4P
    endsubroutine set_column
 

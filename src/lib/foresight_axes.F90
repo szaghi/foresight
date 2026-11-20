@@ -131,8 +131,8 @@ type :: axes_object
    !< Plot panel.
    type(axis_object)                :: xaxis          !< Horizontal axis.
    type(axis_object)                :: yaxis          !< Vertical axis.
-   type(axis_object)                :: y2axis = axis_object(tics=tics_object(mode=TICS_NONE, mirror=.false.)) !< Second
-                                                      !< vertical axis, on the right: no ticks until set (gnuplot).
+   type(axis_object)                :: y2axis         !< Second vertical axis, on the right: no ticks until set
+                                                      !< (gnuplot), see `set_defaults`.
    logical                          :: y2_active = .false. !< The second y axis is drawn, set by `setup_axes`.
    type(series_object), allocatable :: series(:)      !< Plotted series.
    character(len=:), allocatable    :: title          !< Panel title, empty for none.
@@ -155,7 +155,8 @@ type :: axes_object
    real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
    type(palette_object)             :: palette          !< Palette of the images, `set palette`.
    character(len=7), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
-   type(axis_object)                :: cbaxis = axis_object(tight=.true.) !< Color axis of the images, `set cbrange`.
+   type(axis_object)                :: cbaxis         !< Color axis of the images, `set cbrange`; tight, see
+                                                      !< `set_defaults`.
    logical                          :: colorbox = .true. !< Draw the color box of the images.
    type(colorbox_object)            :: cbox              !< Color box placement and look, `set colorbox`.
    real(R8P)                        :: canvas(2) = 0.0_R8P !< Page width and height being rendered [px].
@@ -174,7 +175,8 @@ type :: axes_object
    type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
    logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
    type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.
-   type(tics_object)                :: ttics = tics_object(mode=TICS_NONE) !< Theta labels around the polar plot.
+   type(tics_object)                :: ttics          !< Theta labels around the polar plot; none until set, see
+                                                      !< `set_defaults`.
    real(R8P)                        :: grid_polar = 0.0_R8P !< Spoke step of the polar grid [deg]; 0: rectangular grid.
    integer(I4P)                     :: border = 31_I4P   !< Border sides (gnuplot mask): 1 bottom, 2 left, 4 top, 8
                                                          !< right.
@@ -190,6 +192,7 @@ type :: axes_object
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
       procedure, pass(self) :: render                      !< Render the panel.
+      procedure, pass(self) :: set_defaults                !< Settings of a new panel beyond its components' defaults.
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
       procedure, pass(self), private :: draw_polar_axes    !< Draw the radial axis and the theta labels.
@@ -992,6 +995,19 @@ contains
       endif
    enddo
    endsubroutine data_extent
+
+   pure subroutine set_defaults(self)
+   !< Settings of a new panel that its components' default initialization does not give: the second y axis without
+   !< ticks (nor mirror) until set, the color axis tight to the values, no theta labels until set. Set here, where a
+   !< panel is made, not as component initializers: nvfortran 26.9 stops on a structure constructor of `axis_object` or
+   !< `tics_object` (deferred-length character components) in a component's default initialization.
+   class(axes_object), intent(inout) :: self !< Panel.
+
+   self%y2axis%tics%mode = TICS_NONE
+   self%y2axis%tics%mirror = .false.
+   self%cbaxis%tight = .true.
+   self%ttics%mode = TICS_NONE
+   endsubroutine set_defaults
 
    subroutine render(self, backend, x0, y0, width, height, font_size, canvas)
    !< Render the panel into the pixel box of top-left corner (`x0`, `y0`) and size `width` x `height`, on a page of
@@ -3608,12 +3624,14 @@ contains
    if (self%colorbox .and. self%has_image(palette=.true.) .and. self%cbox%horizontal .and. .not. self%cbox%user) &
       margins(4) = margins(4) + self%colorbox_height(font_size)
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
-   if (self%ratio > 0.0_R8P) call fit_ratio
+   if (self%ratio > 0.0_R8P) call fit_ratio(area)
    contains
-      pure subroutine fit_ratio
+      pure subroutine fit_ratio(area)
       !< Shrink the plot area to the height over width `ratio`, centred, as gnuplot `set size ratio`.
-      real(R8P) :: w !< Width [px].
-      real(R8P) :: h !< Height [px].
+      !< The area is an argument: a pure procedure defines no host-associated variable (F2018 C1594).
+      real(R8P), intent(inout) :: area(4) !< Plot area [px].
+      real(R8P)                :: w       !< Width [px].
+      real(R8P)                :: h       !< Height [px].
 
       w = area(2) - area(1)
       h = area(4) - area(3)
