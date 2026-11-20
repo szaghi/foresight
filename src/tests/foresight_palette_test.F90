@@ -11,6 +11,8 @@ implicit none
 type(palette_object)          :: p               !< Palette.
 character(len=:), allocatable :: bad             !< Unknown word.
 type(palette_object)          :: q               !< Second palette.
+type(palette_object)          :: fresh           !< Default palette (nvfortran: no empty constructor of a type
+                                                 !< with allocatable components).
 logical                       :: test_passed(16) !< Per-check outcome.
 integer(I4P)                  :: k               !< Band counter.
 integer, parameter            :: BATLOW10(3, 10) = reshape([1, 25, 89, 16, 63, 96, 28, 90, 98, 60, 109, 86, &
@@ -25,7 +27,7 @@ call palette_words('maxcolors 4', p, bad)
 test_passed(2) = len(bad) == 0 .and. same(p%rgb(0.25_R8P), [147, 9, 221]) .and. same(p%rgb(0.2_R8P), [0, 0, 0]) .and. &
                  same(p%rgb(0.99_R8P), [255, 255, 0])
 ! viridis ends, gray (gamma 1.5), negative
-p = palette_object()
+p = fresh
 call palette_words('viridis', p, bad)
 test_passed(3) = hex_color(p%rgb(0.0_R8P)) == '#440154' .and. hex_color(p%rgb(1.0_R8P)) == '#fde725'
 call palette_words('gray', p, bad)
@@ -34,11 +36,11 @@ test_passed(4) = same(p%rgb(0.5_R8P), [161, 161, 161])
 call palette_words('color negative', p, bad)
 test_passed(5) = same(p%rgb(0.0_R8P), [253, 231, 37]) .and. p%negative
 ! defined: values mapped to 0..1, colors by name or #rrggbb, linear in RGB
-p = palette_object()
+p = fresh
 call palette_words('defined (0 "blue", 1 "white", 2 "#ff0000")', p, bad)
 test_passed(6) = len(bad) == 0 .and. same(p%rgb(0.25_R8P), [128, 128, 255]) .and. same(p%rgb(0.75_R8P), [255, 128, 128])
 ! rgbformulae with commas, a negative formula (the formula of 1 - gray)
-p = palette_object()
+p = fresh
 call palette_words('rgbformulae 33 , 13 , 10', p, bad)
 test_passed(7) = len(bad) == 0 .and. all(p%formulae == [33, 13, 10])
 call palette_words('rgbformulae -7 , 0 , 2', p, bad)
@@ -54,7 +56,7 @@ test_passed(10) = test_passed(10) .and. index(bad, 'a value and a color') > 0
 call palette_words('rgbformulae 40 , 1 , 1', p, bad)
 test_passed(10) = test_passed(10) .and. index(bad, '-36 to 36') > 0
 ! named palettes: table ends and middle (gray 0.5 takes color nint(127.5) = 128), Crameri's .lut values
-p = palette_object()
+p = fresh
 call palette_words('batlow', p, bad)
 test_passed(11) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [1, 25, 89]) .and. same(p%rgb(0.5_R8P), [130, 130, 49]) .and. &
                   same(p%rgb(1.0_R8P), [250, 204, 250])
@@ -73,21 +75,21 @@ call palette_words('CIVIDIS', p, bad)
 test_passed(11) = test_passed(11) .and. len(bad) == 0 .and. hex_color(p%rgb(0.0_R8P)) == '#00224e' .and. &
                   hex_color(p%rgb(1.0_R8P)) == '#fee838'
 ! maxcolors 10 gives Crameri's discrete batlow10 (DiscretePalettes/batlow10.txt), band k at gray (k + 0.5) / 10
-p = palette_object()
+p = fresh
 call palette_words('batlow maxcolors 10', p, bad)
 test_passed(12) = len(bad) == 0
 do k = 0_I4P, 9_I4P
    test_passed(12) = test_passed(12) .and. same(p%rgb((real(k, R8P) + 0.5_R8P) / 10.0_R8P), BATLOW10(:, k + 1_I4P))
 enddo
 ! negative reverses a named palette; the last mode wins
-p = palette_object()
+p = fresh
 call palette_words('vik negative', p, bad)
 test_passed(13) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [89, 0, 8]) .and. same(p%rgb(1.0_R8P), [0, 18, 97])
 call palette_words('positive gray', p, bad)
 test_passed(13) = test_passed(13) .and. same(p%rgb(0.5_R8P), [161, 161, 161])
 ! names are case-insensitive (viridis too); gnuplot's own words are not; an unknown name is reported
-p = palette_object()
-q = palette_object()
+p = fresh
+q = fresh
 call palette_words('BatLow', p, bad)
 call palette_words('batlow', q, bad)
 test_passed(14) = len(bad) == 0 .and. p%table == q%table .and. same(p%rgb(0.3_R8P), q%rgb(0.3_R8P))
@@ -101,23 +103,23 @@ test_passed(14) = test_passed(14) .and. bad == 'batlw'
 call palette_words('GRAY', p, bad)
 test_passed(14) = test_passed(14) .and. bad == 'GRAY'
 ! color restores the last palette set by rgbformulae, defined or a name (gnuplot 6.0: `show palette` after each)
-p = palette_object()
+p = fresh
 call palette_words('defined (0 "red", 1 "blue")', p, bad)
 call palette_words('gray', p, bad)
 call palette_words('color', p, bad)
 test_passed(15) = same(p%rgb(0.0_R8P), [255, 0, 0]) .and. same(p%rgb(1.0_R8P), [0, 0, 255])
-p = palette_object()
+p = fresh
 call palette_words('viridis', p, bad)
 call palette_words('gray', p, bad)
 call palette_words('color', p, bad)
 test_passed(15) = test_passed(15) .and. hex_color(p%rgb(0.0_R8P)) == '#440154'
-q = palette_object()
+q = fresh
 call palette_words('rgbformulae 3 , 4 , 5', q, bad)
 call palette_words('viridis', p, bad)
 call palette_words('rgbformulae 3 , 4 , 5', p, bad)
 call palette_words('color', p, bad)
 test_passed(15) = test_passed(15) .and. same(p%rgb(0.3_R8P), q%rgb(0.3_R8P))
-p = palette_object()
+p = fresh
 call palette_words('gray', p, bad)
 call palette_words('color', p, bad)
 test_passed(15) = test_passed(15) .and. p%is_default()
@@ -125,7 +127,7 @@ call palette_words('batlow gray color', p, bad)
 test_passed(15) = test_passed(15) .and. len(bad) == 0 .and. same(p%rgb(0.0_R8P), [1, 25, 89])
 ! cubehelix against gnuplot 6.0's PNG pixels (ramp 0..255, gray k/255): the defaults, other parameters (clipped
 ! channels), negative, maxcolors; each `cubehelix` restarts from the defaults; options only right after it
-p = palette_object()
+p = fresh
 call palette_words('cubehelix', p, bad)
 test_passed(16) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [0, 0, 0]) .and. same(p%rgb(64.0_R8P / 255.0_R8P), [48, 126, 117]) &
                   .and. same(p%rgb(128.0_R8P / 255.0_R8P), [192, 155, 111]) .and. &
@@ -138,7 +140,7 @@ test_passed(16) = test_passed(16) .and. same(p%rgb(0.0_R8P), [255, 255, 255]) .a
                   same(p%rgb(64.0_R8P / 255.0_R8P), [216, 201, 245])
 call palette_words('positive maxcolors 4', p, bad)
 test_passed(16) = test_passed(16) .and. same(p%rgb(77.0_R8P / 255.0_R8P), [76, 152, 91])
-p = palette_object()
+p = fresh
 call palette_words('cubehelix start 1', p, bad)
 call palette_words('cubehelix cycles 2', p, bad)
 test_passed(16) = test_passed(16) .and. all(p%cubehelix == [0.5_R8P, 2.0_R8P, 1.0_R8P])

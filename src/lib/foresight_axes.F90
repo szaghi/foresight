@@ -763,7 +763,7 @@ contains
          endif
       else
          allocate(character(len=1) :: names(1))
-         names = ' '
+         names(:) = ' '
       endif
       w = 0.5_R8P
       if (self%boxwidth > 0.0_R8P .and. .not. self%boxwidth_relative) w = self%boxwidth

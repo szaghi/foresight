@@ -14,6 +14,7 @@ real(R8P)                      :: hi              !< Axis end.
 integer(I8P)                   :: m               !< Step mantissa.
 integer(I4P)                   :: e               !< Step exponent.
 type(tics_object)              :: tics            !< User tick settings.
+type(tics_object)              :: fresh_tics !< Default settings (nvfortran: no empty constructor).
 character(len=:), allocatable  :: message         !< Settings problem.
 logical                        :: test_passed(22) !< Per-check outcome.
 
@@ -104,7 +105,7 @@ call fixed_linear(tics)
 test_passed(18) = ticks(1)%label == '0.00' .and. ticks(2)%label == '0.25' .and. ticks(13)%label == '3.00'
 
 ! log axis, set ytics 3: decades extension as always, ticks at powers of 3
-tics = tics_object()
+tics = fresh_tics
 call tics%set_fixed('3', '', '', message)
 lo = 3.0_R8P
 hi = 170.0_R8P

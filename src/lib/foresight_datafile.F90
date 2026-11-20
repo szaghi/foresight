@@ -324,7 +324,8 @@ contains
          enddo
       endif
       allocate(character(len=width) :: labels(size(values, 1)))
-      labels = ''
+      ! a section: `labels = ''` would reallocate them to length 0 (F2018 10.2.1.3), as ifx does
+      labels(:) = ''
    endif
    call store_points
    contains
