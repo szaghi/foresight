@@ -8,13 +8,14 @@ program foresight_expression_test
 !< raises no floating point exception.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight_expression, only : expression_object
+use foresight_expression, only : expression_object, symbols_object
 use penf, only : I4P, R8P
 
 implicit none
 real(R8P)    :: row(3)   !< Data row: 10, 20, missing.
 integer(I4P) :: failures !< Failed checks.
 integer(I4P) :: checks   !< Checks run.
+type(symbols_object) :: symbols !< User variables and functions.
 
 row = [10.0_R8P, 20.0_R8P, ieee_value(1.0_R8P, ieee_quiet_nan)]
 failures = 0_I4P
@@ -89,7 +90,7 @@ call check_error('$2 +', 'unexpected end at character 5')
 call check_error('(1', 'expected ")", found "end"')
 call check_error('1 2', 'unexpected "2" at character 3')
 call check_error('foo(1)', 'unknown function "foo" at character 1')
-call check_error('x*2', 'unknown name "x" (user variables are not supported) at character 1')
+call check_error('x*2', 'undefined variable: x at character 1')
 call check_error('1 & 2', 'bitwise operator "&" not supported')
 call check_error('atan2(1)', 'atan2 needs 2 arguments')
 call check_error('$', '"$" needs a column number')
@@ -109,13 +110,185 @@ call check_function('1/x', 0.0_R8P, ieee_value(1.0_R8P, ieee_quiet_nan))
 call check_function('sqrt(x)', -1.0_R8P, ieee_value(1.0_R8P, ieee_quiet_nan))
 call check_function_error('$1*x', 'columns are only valid in using, not in a function at character 1')
 call check_function_error('column(1)', 'columns are only valid in using, not in a function at character 1')
-call check_function_error('y', 'unknown name "y"')
+call check_function_error('y', 'undefined variable: y')
+
+! user variables and functions, against gnuplot 6.0: integers stay integers, functions see the variables when they are
+! called, several parameters, nesting, the dummy variable winning over a user variable, arity and name errors
+call assign('a', '2')
+call assign('b', 'a/3')
+call check_symbol('b', 0.0_R8P, is_int=.true.)
+call assign('a2', '2.')
+call check_symbol('a2/3', 2.0_R8P / 3.0_R8P)
+call define('f', ['x'], 'a*x')
+call assign('a', '3')
+call check_symbol('f(2)', 6.0_R8P)
+call assign('a', '1')
+call assign('b', 'f(2)')
+call assign('a', '5')
+call check_symbol('b', 2.0_R8P)
+call check_symbol('f(2)', 10.0_R8P)
+call define('g', ['x', 'y'], 'x+y')
+call check_symbol('g(1,2)', 3.0_R8P)
+call check_symbol('g(f(1), g(2,3))', 10.0_R8P)
+call check_symbol('g(1 && 0, 2)', 2.0_R8P)
+call define('s', ['x'], 'x > 0 ? 1 : -1')
+call check_symbol('s(-2) + 10*s(3)', 9.0_R8P)
+call define('h', ['t'], 't**2')
+call check_symbol('h(3)', 9.0_R8P, is_int=.true.)
+call define('f', ['x'], 'x*2')
+call check_symbol('f(f(1))', 4.0_R8P)
+call define('f', ['x'], 'x*3')
+call check_symbol('f(1)', 3.0_R8P)
+call assign('a', '-2')
+call check_symbol('a**2', 4.0_R8P)
+call assign('a', '2**10')
+call check_symbol('a/3', 341.0_R8P, is_int=.true.)
+call assign('pi', '3')
+call check_symbol('pi', 3.0_R8P)
+call assign('a_1', '4')
+call assign('A', '5')
+call check_symbol('a_1*10 + A', 45.0_R8P)
+call define('u', ['x'], 'v(x) + 1')
+call define('v', ['x'], 'x*10')
+call check_symbol('u(1)', 11.0_R8P)
+call define('k', ['x'], 'q*x')
+call check_symbol_error('k(2)', 'in function k: undefined variable: q')
+call assign('q', '4')
+call check_symbol('k(2)', 8.0_R8P)
+call assign('scale', '2')
+call check_symbol('($2*scale)', 40.0_R8P)
+call assign('x', '3')
+call check_symbol_function('x**2', 2.0_R8P, 4.0_R8P)
+call define('w', ['t'], 't*x')
+call check_symbol_function('w(x)', 2.0_R8P, 6.0_R8P)
+call check_symbol_error('c + 1', 'undefined variable: c')
+call check_symbol_error('f(1,2)', 'function f requires 1 variable')
+call check_symbol_error('g(1)', 'function g requires 2 variables')
+call check_define_error('fact', ['n'], 'n<=1 ? 1 : n*fact(n-1)', 'recursive function fact is not supported')
+call check_define_error('sin', ['x'], '2', '"sin" is a builtin function')
+call check_define_error('r', ['x', 'x'], 'x', 'repeated parameter "x"')
+call check_define_error('r', ['x'], 'x*', 'in function r:')
+call check_assign_error('z', '$1', 'columns are only valid in using')
+call check_assign_error('z', '1/0', 'undefined value')
+call check_assign_error('1z', '1', 'invalid name "1z"')
+call check_constant('2*pi + a_1', 2.0_R8P * 3.0_R8P + 4.0_R8P)
 
 write(output_unit, '(A,I0,A,I0,A)') 'foresight_expression checks: ', checks - failures, ' of ', checks, ' passed'
 write(output_unit, '(A,L1)') 'Are all tests passed? ', failures == 0_I4P
 if (failures /= 0_I4P) error stop 1
 
 contains
+   subroutine assign(name, text)
+   !< `name = text` in the test symbols, recorded as a check.
+   character(len=*), intent(in)  :: name   !< Variable.
+   character(len=*), intent(in)  :: text   !< Expression.
+   character(len=:), allocatable :: iomsg  !< Error message.
+   integer(I4P)                  :: iostat !< Status.
+
+   call symbols%assign(name, text, iostat, iomsg)
+   call record(iostat == 0_I4P, name//' = '//text//' -> '//iomsg)
+   endsubroutine assign
+
+   subroutine define(name, params, body)
+   !< `name(params) = body` in the test symbols, recorded as a check.
+   character(len=*), intent(in)  :: name      !< Function.
+   character(len=*), intent(in)  :: params(:) !< Parameters.
+   character(len=*), intent(in)  :: body      !< Body.
+   character(len=:), allocatable :: iomsg     !< Error message.
+   integer(I4P)                  :: iostat    !< Status.
+
+   call symbols%define(name, params, body, iostat, iomsg)
+   call record(iostat == 0_I4P, name//'(...) = '//body//' -> '//iomsg)
+   endsubroutine define
+
+   subroutine check_symbol(text, expected, is_int)
+   !< `text`, compiled with the test symbols, evaluates to `expected` on the test row (an integer if `is_int`: checked
+   !< through a variable assigned from it).
+   character(len=*), intent(in)           :: text       !< Expression.
+   real(R8P),        intent(in)           :: expected   !< Value.
+   logical,          intent(in), optional :: is_int     !< Integer expected.
+   type(expression_object)                :: expression !< Compiled expression.
+   character(len=:), allocatable          :: iomsg      !< Error message.
+   integer(I4P)                           :: iostat     !< Status.
+   real(R8P)                              :: v          !< Value.
+   logical                                :: found      !< Variable found.
+   logical                                :: whole      !< Integer value.
+   logical                                :: passed     !< Check outcome.
+
+   call expression%compile(text, iostat, iomsg, symbols=symbols)
+   passed = iostat == 0_I4P
+   if (passed) passed = abs(expression%evaluate(row, 3_I4P) - expected) <= 1.0e-15_R8P * max(1.0_R8P, abs(expected))
+   if (passed .and. present(is_int)) then
+      call symbols%assign('check_symbol_value', text, iostat, iomsg)
+      call symbols%value_of('check_symbol_value', v, found, whole)
+      passed = iostat == 0_I4P .and. found .and. (whole .eqv. is_int)
+   endif
+   if (.not. allocated(iomsg)) iomsg = ''
+   call record(passed, text//' -> '//iomsg)
+   endsubroutine check_symbol
+
+   subroutine check_symbol_function(text, x, expected)
+   !< Function `text` of the dummy `x`, compiled with the test symbols, is `expected` at `x`.
+   character(len=*), intent(in)  :: text       !< Expression.
+   real(R8P),        intent(in)  :: x          !< Dummy value.
+   real(R8P),        intent(in)  :: expected   !< Value.
+   type(expression_object)       :: expression !< Compiled expression.
+   character(len=:), allocatable :: iomsg      !< Error message.
+   integer(I4P)                  :: iostat     !< Status.
+
+   call expression%compile(text, iostat, iomsg, variable='x', symbols=symbols)
+   call record(iostat == 0_I4P .and. expression%value_at(x) == expected, text//' -> '//iomsg)
+   endsubroutine check_symbol_function
+
+   subroutine check_symbol_error(text, message)
+   !< `text` does not compile with the test symbols, and the error contains `message`.
+   character(len=*), intent(in)  :: text       !< Expression.
+   character(len=*), intent(in)  :: message    !< Expected part of the error.
+   type(expression_object)       :: expression !< Compiled expression.
+   character(len=:), allocatable :: iomsg      !< Error message.
+   integer(I4P)                  :: iostat     !< Status.
+
+   call expression%compile(text, iostat, iomsg, symbols=symbols)
+   call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, text//' -> '//iomsg)
+   endsubroutine check_symbol_error
+
+   subroutine check_define_error(name, params, body, message)
+   !< `name(params) = body` is refused, the error containing `message`.
+   character(len=*), intent(in)  :: name      !< Function.
+   character(len=*), intent(in)  :: params(:) !< Parameters.
+   character(len=*), intent(in)  :: body      !< Body.
+   character(len=*), intent(in)  :: message   !< Expected part of the error.
+   character(len=:), allocatable :: iomsg     !< Error message.
+   integer(I4P)                  :: iostat    !< Status.
+
+   call symbols%define(name, params, body, iostat, iomsg)
+   call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, name//'(...) = '//body//' -> '//iomsg)
+   endsubroutine check_define_error
+
+   subroutine check_assign_error(name, text, message)
+   !< `name = text` is refused, the error containing `message`.
+   character(len=*), intent(in)  :: name    !< Variable.
+   character(len=*), intent(in)  :: text    !< Expression.
+   character(len=*), intent(in)  :: message !< Expected part of the error.
+   character(len=:), allocatable :: iomsg   !< Error message.
+   integer(I4P)                  :: iostat  !< Status.
+
+   call symbols%assign(name, text, iostat, iomsg)
+   call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, name//' = '//text//' -> '//iomsg)
+   endsubroutine check_assign_error
+
+   subroutine check_constant(text, expected)
+   !< The constant expression `text` is `expected`.
+   character(len=*), intent(in)  :: text     !< Expression.
+   real(R8P),        intent(in)  :: expected !< Value.
+   character(len=:), allocatable :: iomsg    !< Error message.
+   integer(I4P)                  :: iostat   !< Status.
+   real(R8P)                     :: v        !< Value.
+
+   call symbols%constant(text, v, iostat, iomsg)
+   call record(iostat == 0_I4P .and. abs(v - expected) <= 1.0e-15_R8P * abs(expected), text//' -> '//iomsg)
+   endsubroutine check_constant
+
    subroutine check_value(text, expected, tolerance)
    !< `text` evaluates to `expected` on the test row, point number 3.
    character(len=*), intent(in)           :: text       !< Expression.

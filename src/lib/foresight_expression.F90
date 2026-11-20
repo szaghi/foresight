@@ -11,6 +11,9 @@ module foresight_expression
 !< - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `column("name")` (the column
 !<   of that header, see `resolve`), `pi`, and the functions
 !<   `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`;
+!< - with a `symbols_object`, user variables (`a = 2`: their value when the expression is compiled, integer or real)
+!<   and user functions (`f(x, y) = ...`: compiled inline where called, the arguments read from their stack slots;
+!<   recursion is not supported), as gnuplot's `a = 2` and `f(x) = a*sin(x)`;
 !< - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
 !<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
 !< - a missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the whole value
@@ -28,6 +31,7 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: expression_object
+public :: symbols_object
 
 ! operation codes
 integer(I4P), parameter :: OP_CONSTANT    = 1_I4P  !< Push the constant.
@@ -55,6 +59,8 @@ integer(I4P), parameter :: OP_JUMP_UNLESS = 22_I4P !< Pop; jump to `arg` if fals
 integer(I4P), parameter :: OP_AND_JUMP    = 23_I4P !< If the top is false: make it 0, jump to `arg`; else pop.
 integer(I4P), parameter :: OP_OR_JUMP     = 24_I4P !< If the top is true: make it 1, jump to `arg`; else pop.
 integer(I4P), parameter :: OP_COLUMN_NAMED = 25_I4P !< Push the column of header `names(arg)`: undefined until resolved.
+integer(I4P), parameter :: OP_LOAD         = 26_I4P !< Push a copy of stack slot `arg` (a user function argument).
+integer(I4P), parameter :: OP_COLLAPSE     = 27_I4P !< Drop the `arg` values under the top (a call's arguments).
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
 character(len=*), parameter :: FUNCTIONS(18) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
@@ -92,6 +98,42 @@ type :: name_object
    character(len=:), allocatable :: text !< Name.
 endtype name_object
 
+type :: frame_object
+   !< A user function being compiled inline: its parameters read the stack slots from `base`.
+   character(len=:), allocatable :: name      !< Function name.
+   type(name_object), allocatable :: params(:) !< Parameter names.
+   integer(I4P)                  :: base = 1_I4P !< Stack slot of the first argument.
+endtype frame_object
+
+type :: user_variable
+   !< User variable, gnuplot `a = 2`.
+   character(len=:), allocatable :: name !< Name.
+   type(value_object)            :: v    !< Value, integer or real.
+endtype user_variable
+
+type :: user_function
+   !< User function, gnuplot `f(x, y) = ...`.
+   character(len=:), allocatable  :: name      !< Name.
+   type(name_object), allocatable :: params(:) !< Parameter names.
+   character(len=:), allocatable  :: body      !< Body text.
+endtype user_function
+
+type :: symbols_object
+   !< User variables and functions of a script, gnuplot's: `a = 2` stores the value now (integer or real), `f(x) = a*x`
+   !< stores the text, compiled inline where it is called, so its variables take their values at that moment (plot
+   !< time); recursion is not supported.
+   type(user_variable), allocatable, private :: variables(:) !< Variables.
+   type(user_function), allocatable, private :: functions(:) !< Functions.
+   contains
+      procedure, pass(self) :: assign   !< `name = expression`.
+      procedure, pass(self) :: clear    !< Forget every symbol.
+      procedure, pass(self) :: constant !< Value of a constant expression.
+      procedure, pass(self) :: define   !< `name(params) = body`.
+      procedure, pass(self) :: value_of !< Value of a variable.
+      procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
+      procedure, pass(self), private :: variable_index !< Index of a variable, 0 if none.
+endtype symbols_object
+
 type :: expression_object
    !< Compiled expression.
    character(len=:),         allocatable :: text          !< Source text.
@@ -113,18 +155,40 @@ type :: expression_object
 endtype expression_object
 
 contains
-   subroutine compile(self, text, iostat, iomsg, variable, degrees)
+   subroutine compile(self, text, iostat, iomsg, variable, degrees, symbols)
    !< Compile `text`; on error `iostat` is not 0 and `iomsg` names the problem and its position.
    !<
    !< With `variable` (gnuplot's dummy `x`) the expression is a function of it, evaluated by `value_at`; columns are
    !< then errors. The variable is held as the only cell of the row `evaluate` receives. With `degrees` true the
-   !< trigonometric functions work in degrees.
+   !< trigonometric functions work in degrees. With `symbols`, user variables are constants of their current values
+   !< and user functions are compiled inline (the dummy variable wins over a user variable of its name, as gnuplot).
    class(expression_object),      intent(inout)        :: self     !< Expression.
    character(len=*),              intent(in)           :: text     !< Source text.
    integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg    !< Error message.
    character(len=*),              intent(in), optional :: variable !< Dummy variable name, for a function.
    logical,                       intent(in), optional :: degrees  !< Angles in degrees.
+   type(symbols_object),          intent(in), optional :: symbols  !< User variables and functions.
+
+   call compile_expression(self, text, iostat, iomsg, variable=variable, degrees=degrees, symbols=symbols)
+   endsubroutine compile
+
+   subroutine compile_expression(self, text, iostat, iomsg, variable, degrees, symbols, frame_name, parameters, lenient)
+   !< `compile`, and the syntax check of a user function body: `parameters` of the function `frame_name` read the stack
+   !< slots from 1, and with `lenient` unknown names and functions are accepted (resolved when called).
+   class(expression_object),      intent(inout)        :: self       !< Expression.
+   character(len=*),              intent(in)           :: text       !< Source text.
+   integer(I4P),                  intent(out)          :: iostat     !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg      !< Error message.
+   character(len=*),              intent(in), optional :: variable   !< Dummy variable name, for a function.
+   logical,                       intent(in), optional :: degrees    !< Angles in degrees.
+   type(symbols_object),          intent(in), optional :: symbols    !< User variables and functions.
+   character(len=*),              intent(in), optional :: frame_name !< Function whose body `text` is.
+   type(name_object),             intent(in), optional :: parameters(:) !< Its parameters.
+   logical,                       intent(in), optional :: lenient    !< Unknown names accepted.
+   character(len=:), allocatable                :: src     !< Text being read (a body while compiled inline).
+   type(frame_object), allocatable              :: frames(:) !< User functions being compiled inline, innermost last.
+   logical                                      :: loose   !< Unknown names accepted.
    integer(I4P), parameter                      :: T_END = 0_I4P      !< End of text.
    integer(I4P), parameter                      :: T_NUMBER = 1_I4P   !< Number.
    integer(I4P), parameter                      :: T_COLUMN = 2_I4P   !< `$N`.
@@ -149,9 +213,19 @@ contains
    if (present(degrees)) self%degrees = degrees
    iostat = 0_I4P
    iomsg = ''
+   src = text
    pos = 1_I4P
    depth = 0_I4P
    nesting = 0_I4P
+   loose = .false.
+   if (present(lenient)) loose = lenient
+   allocate(frames(0))
+   if (present(parameters)) then
+      ! a body checked alone: the parameters on the stack
+      frames = [frame_object(name=frame_name, params=parameters, base=1_I4P)]
+      depth = size(parameters, kind=I4P)
+      self%depth = depth
+   endif
    call next
    call parse_ternary
    if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
@@ -169,7 +243,7 @@ contains
       else
          write(column, '(I0)') start
       endif
-      iomsg = message//' at character '//trim(column)//' of "'//text//'"'
+      iomsg = message//' at character '//trim(column)//' of "'//src//'"'
       endsubroutine syntax
 
       subroutine next
@@ -183,9 +257,9 @@ contains
       integer(I4P)                :: close   !< Closing quote, from the opening one.
 
       if (iostat /= 0_I4P) return
-      n = len(text, kind=I4P)
+      n = len(src, kind=I4P)
       do while (pos <= n)
-         if (text(pos:pos) /= ' ' .and. text(pos:pos) /= achar(9)) exit
+         if (src(pos:pos) /= ' ' .and. src(pos:pos) /= achar(9)) exit
          pos = pos + 1_I4P
       enddo
       start = pos
@@ -194,7 +268,7 @@ contains
          token = 'end'
          return
       endif
-      if (scan(text(pos:pos), DIGITS) > 0 .or. (text(pos:pos) == '.' .and. next_is(DIGITS, 1_I4P))) then
+      if (scan(src(pos:pos), DIGITS) > 0 .or. (src(pos:pos) == '.' .and. next_is(DIGITS, 1_I4P))) then
          kind = T_NUMBER
          is_real = .false.
          call skip(DIGITS)
@@ -213,7 +287,7 @@ contains
             endif
             call skip(DIGITS)
          endif
-         token = text(start:pos - 1_I4P)
+         token = src(start:pos - 1_I4P)
          number = value_object()
          ios = 1_I4P
          if (.not. is_real) then
@@ -226,7 +300,7 @@ contains
             call real_from_decimal(token, number%r, ok)
             if (.not. ok) call syntax('number out of range')
          endif
-      elseif (text(pos:pos) == '$') then
+      elseif (src(pos:pos) == '$') then
          kind = T_COLUMN
          pos = pos + 1_I4P
          if (.not. next_is(DIGITS, 0_I4P)) then
@@ -234,31 +308,31 @@ contains
             return
          endif
          call skip(DIGITS)
-         token = text(start:pos - 1_I4P)
+         token = src(start:pos - 1_I4P)
          number = value_object(is_int=.true.)
          read(token(2:), *, iostat=ios) number%i
          if (ios /= 0_I4P .or. number%i > huge(1_I4P)) call syntax('column number too large')
-      elseif (text(pos:pos) == '"' .or. text(pos:pos) == "'") then
+      elseif (src(pos:pos) == '"' .or. src(pos:pos) == "'") then
          kind = T_STRING
-         close = index(text(pos + 1_I4P:), text(pos:pos), kind=I4P)
+         close = index(src(pos + 1_I4P:), src(pos:pos), kind=I4P)
          if (close == 0_I4P) then
             call syntax('unterminated string')
             return
          endif
-         token = text(pos + 1_I4P:pos + close - 1_I4P)
+         token = src(pos + 1_I4P:pos + close - 1_I4P)
          pos = pos + close + 1_I4P
-      elseif (scan(text(pos:pos), LETTERS) > 0) then
+      elseif (scan(src(pos:pos), LETTERS) > 0) then
          kind = T_NAME
          call skip(LETTERS//DIGITS)
-         token = text(start:pos - 1_I4P)
+         token = src(start:pos - 1_I4P)
       else
          kind = T_OPERATOR
-         token = text(pos:min(pos + 1_I4P, n))
+         token = src(pos:min(pos + 1_I4P, n))
          select case (token)
          case ('**', '<=', '>=', '==', '!=', '&&', '||')
             pos = pos + 2_I4P
          case default
-            token = text(pos:pos)
+            token = src(pos:pos)
             pos = pos + 1_I4P
             select case (token)
             case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',')
@@ -278,15 +352,15 @@ contains
       logical                      :: yes    !< Character in `set`.
 
       yes = .false.
-      if (pos + offset <= len(text)) yes = scan(text(pos + offset:pos + offset), set) > 0
+      if (pos + offset <= len(src)) yes = scan(src(pos + offset:pos + offset), set) > 0
       endfunction next_is
 
       subroutine skip(set)
       !< Advance `pos` over characters of `set`.
       character(len=*), intent(in) :: set !< Characters.
 
-      do while (pos <= len(text))
-         if (scan(text(pos:pos), set) == 0) exit
+      do while (pos <= len(src))
+         if (scan(src(pos:pos), set) == 0) exit
          pos = pos + 1_I4P
       enddo
       endsubroutine skip
@@ -305,7 +379,7 @@ contains
       self%code = [self%code, instruction]
       if (present(k)) k = size(self%code, kind=I4P)
       select case (op)
-      case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED)
+      case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD)
          depth = depth + 1_I4P
       case (OP_ADD:OP_NE, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
          ! the conditional jumps pop on the path that falls through
@@ -447,13 +521,7 @@ contains
          call next
          if (iostat /= 0_I4P) return
          if (.not. (kind == T_OPERATOR .and. token == '(')) then
-            if (name == 'pi') then
-               call emit(OP_CONSTANT, v=value_object(r=PI))
-            elseif (is_variable(name)) then
-               call emit(OP_COLUMN, arg=1_I4P)
-            else
-               call syntax('unknown name "'//name//'" (user variables are not supported)', at)
-            endif
+            call name_value(name, at)
             return
          endif
          call next
@@ -492,7 +560,7 @@ contains
                call emit(OP_FUNCTION, arg=f)
             endif
          else
-            call syntax('unknown function "'//name//'"', at)
+            call user_call(name, nargs, at)
          endif
       case (T_STRING)
          call syntax('a string is only valid as column("name")')
@@ -509,23 +577,320 @@ contains
       endsubroutine parse_primary
 
       function is_variable(name) result(yes)
-      !< Whether `name` is the dummy variable.
+      !< Whether `name` is the dummy variable (not seen inside a user function body).
       character(len=*), intent(in) :: name !< Name.
       logical                      :: yes  !< The variable.
 
       yes = .false.
-      if (present(variable)) yes = name == variable
+      if (present(variable) .and. size(frames) == 0) yes = name == variable
       endfunction is_variable
-   endsubroutine compile
+
+      subroutine name_value(name, at)
+      !< A name alone: a parameter of the function being compiled inline, the dummy variable, a user variable, `pi`.
+      character(len=*), intent(in) :: name !< Name.
+      integer(I4P),     intent(in) :: at   !< Position.
+      integer(I4P)                 :: k    !< Parameter or variable index.
+
+      if (size(frames) > 0) then
+         associate(frame => frames(size(frames)))
+            do k = 1_I4P, size(frame%params, kind=I4P)
+               if (frame%params(k)%text == name) then
+                  call emit(OP_LOAD, arg=frame%base + k - 1_I4P)
+                  return
+               endif
+            enddo
+         endassociate
+      endif
+      if (is_variable(name)) then
+         call emit(OP_COLUMN, arg=1_I4P)
+         return
+      endif
+      k = 0_I4P
+      if (present(symbols)) k = symbols%variable_index(name)
+      if (k > 0_I4P) then
+         call emit(OP_CONSTANT, v=symbols%variables(k)%v)
+      elseif (name == 'pi') then
+         call emit(OP_CONSTANT, v=value_object(r=PI))
+      elseif (loose) then
+         call emit(OP_CONSTANT, v=value_object())
+      else
+         call syntax('undefined variable: '//name, at)
+      endif
+      endsubroutine name_value
+
+      recursive subroutine user_call(name, nargs, at)
+      !< A call of the user function `name` whose `nargs` arguments are on the stack: its body compiled inline, the
+      !< arguments then dropped under its value.
+      character(len=*), intent(in) :: name  !< Function name.
+      integer(I4P),     intent(in) :: nargs !< Arguments given.
+      integer(I4P),     intent(in) :: at    !< Position.
+      character(len=:), allocatable :: saved_src   !< Reader state of the caller.
+      character(len=:), allocatable :: saved_token !< Current token of the caller.
+      type(value_object)            :: saved_number !< Current number of the caller.
+      integer(I4P)                  :: saved(3)    !< Position, kind and start of the caller's token.
+      integer(I4P)                  :: k           !< Function index.
+      integer(I4P)                  :: n           !< Parameters.
+
+      if (size(frames) > 0) then
+         do k = 1_I4P, size(frames, kind=I4P)
+            if (frames(k)%name == name) then
+               call syntax('recursive function '//name//' is not supported', at)
+               return
+            endif
+         enddo
+      endif
+      k = 0_I4P
+      if (present(symbols)) k = symbols%function_index(name)
+      if (k == 0_I4P) then
+         if (loose) then
+            ! unknown here, resolved where the body is used: its value stands for the call
+            if (nargs == 0_I4P) then
+               call emit(OP_CONSTANT, v=value_object())
+            elseif (nargs > 1_I4P) then
+               call emit(OP_COLLAPSE, arg=nargs - 1_I4P)
+               depth = depth - (nargs - 1_I4P)
+            endif
+         else
+            call syntax('unknown function "'//name//'"', at)
+         endif
+         return
+      endif
+      associate(f => symbols%functions(k))
+         n = size(f%params, kind=I4P)
+         if (nargs /= n) then
+            call syntax('function '//name//' requires '//trim(adjustl(int_text(n)))//' variable'// &
+                        trim(merge('s', ' ', n /= 1_I4P)), at)
+            return
+         endif
+         frames = [frames, frame_object(name=name, params=f%params, base=depth - nargs + 1_I4P)]
+         saved_src = src
+         saved_token = token
+         saved_number = number
+         saved = [pos, kind, start]
+         src = f%body
+         pos = 1_I4P
+         call next
+         call parse_ternary
+         if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
+         if (iostat /= 0_I4P) iomsg = 'in function '//name//': '//iomsg
+         src = saved_src
+         token = saved_token
+         number = saved_number
+         pos = saved(1)
+         kind = saved(2)
+         start = saved(3)
+         frames = frames(1:size(frames) - 1)
+      endassociate
+      if (iostat /= 0_I4P) return
+      if (nargs > 0_I4P) then
+         call emit(OP_COLLAPSE, arg=nargs)
+         depth = depth - nargs
+      endif
+      endsubroutine user_call
+
+      pure function int_text(n) result(s)
+      !< Decimal text of `n`.
+      integer(I4P), intent(in) :: n !< Number.
+      character(len=12)        :: s !< Text.
+
+      write(s, '(I0)') n
+      endfunction int_text
+   endsubroutine compile_expression
+
+   subroutine assign(self, name, text, iostat, iomsg, degrees)
+   !< gnuplot `name = text`: the value of the expression now, integer or real, kept as a constant (a redefinition
+   !< replaces it). Columns, undefined values (`1/0`) and bad names are errors.
+   class(symbols_object),         intent(inout)        :: self    !< Symbols.
+   character(len=*),              intent(in)           :: name    !< Variable name.
+   character(len=*),              intent(in)           :: text    !< Expression.
+   integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
+   logical,                       intent(in), optional :: degrees !< Angles in degrees.
+   type(expression_object)                             :: e       !< Compiled expression.
+   type(value_object)                                  :: v       !< Value.
+   logical                                             :: defined !< Defined.
+   integer(I4P)                                        :: k       !< Variable index.
+
+   call check_name(name, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   call e%compile(text, iostat, iomsg, degrees=degrees, symbols=self)
+   if (iostat /= 0_I4P) return
+   if (e%first_column() > 0_I4P .or. any(e%code%op == OP_COLUMN) .or. any(e%code%op == OP_COLUMN_OF) .or. &
+       size(e%names) > 0) then
+      iostat = 1_I4P
+      iomsg = 'columns are only valid in using, not in "'//name//' = '//text//'"'
+      return
+   endif
+   call run(e, [real(R8P) ::], 0_I4P, v, defined)
+   if (.not. defined) then
+      iostat = 1_I4P
+      iomsg = 'undefined value: '//name//' = '//text
+      return
+   endif
+   if (.not. allocated(self%variables)) allocate(self%variables(0))
+   k = self%variable_index(name)
+   if (k > 0_I4P) then
+      self%variables(k)%v = v
+   else
+      self%variables = [self%variables, user_variable(name=name, v=v)]
+   endif
+   endsubroutine assign
+
+   subroutine define(self, name, params, body, iostat, iomsg)
+   !< gnuplot `name(params) = body`: the body is checked now, its names resolved when the function is called (a
+   !< redefinition replaces it). Builtin function names, repeated or bad parameter names and recursion are errors.
+   class(symbols_object),         intent(inout) :: self      !< Symbols.
+   character(len=*),              intent(in)    :: name      !< Function name.
+   character(len=*),              intent(in)    :: params(:) !< Parameter names.
+   character(len=*),              intent(in)    :: body      !< Body.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(expression_object)                      :: e         !< Body check.
+   type(name_object), allocatable               :: names(:)  !< Parameters.
+   integer(I4P)                                 :: k         !< Counter.
+   integer(I4P)                                 :: j         !< Earlier parameter counter.
+
+   call check_name(name, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   if (any(FUNCTIONS == name) .or. name == 'atan2' .or. name == 'column') then
+      iostat = 1_I4P
+      iomsg = '"'//name//'" is a builtin function'
+      return
+   endif
+   allocate(names(0))
+   do k = 1_I4P, size(params, kind=I4P)
+      call check_name(trim(params(k)), iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      do j = 1_I4P, size(names, kind=I4P)
+         if (names(j)%text == trim(params(k))) then
+            iostat = 1_I4P
+            iomsg = 'repeated parameter "'//trim(params(k))//'" of '//name
+            return
+         endif
+      enddo
+      names = [names, name_object(trim(params(k)))]
+   enddo
+   call compile_expression(e, body, iostat, iomsg, symbols=self, frame_name=name, parameters=names, lenient=.true.)
+   if (iostat /= 0_I4P) then
+      iomsg = 'in function '//name//': '//iomsg
+      return
+   endif
+   if (.not. allocated(self%functions)) allocate(self%functions(0))
+   k = self%function_index(name)
+   if (k > 0_I4P) then
+      self%functions(k) = user_function(name=name, params=names, body=body)
+   else
+      self%functions = [self%functions, user_function(name=name, params=names, body=body)]
+   endif
+   endsubroutine define
+
+   subroutine constant(self, text, v, iostat, iomsg, degrees)
+   !< Value of the constant expression `text` (numbers, user variables and functions, `pi`), as a range end
+   !< `[0:2*pi]`; columns and undefined values are errors.
+   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   character(len=*),              intent(in)           :: text    !< Expression.
+   real(R8P),                     intent(out)          :: v       !< Value.
+   integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
+   logical,                       intent(in), optional :: degrees !< Angles in degrees.
+   type(expression_object)                             :: e       !< Compiled expression.
+   type(value_object)                                  :: value   !< Typed value.
+   logical                                             :: defined !< Defined.
+
+   v = 0.0_R8P
+   call e%compile(text, iostat, iomsg, degrees=degrees, symbols=self)
+   if (iostat /= 0_I4P) return
+   if (any(e%code%op == OP_COLUMN) .or. any(e%code%op == OP_COLUMN_OF) .or. size(e%names) > 0) then
+      iostat = 1_I4P
+      iomsg = 'columns are only valid in using, not in "'//text//'"'
+      return
+   endif
+   call run(e, [real(R8P) ::], 0_I4P, value, defined)
+   if (.not. defined) then
+      iostat = 1_I4P
+      iomsg = 'undefined value: '//text
+      return
+   endif
+   v = real_of(value)
+   endsubroutine constant
+
+   pure subroutine clear(self)
+   !< Forget every variable and function.
+   class(symbols_object), intent(inout) :: self !< Symbols.
+
+   if (allocated(self%variables)) deallocate(self%variables)
+   if (allocated(self%functions)) deallocate(self%functions)
+   endsubroutine clear
+
+   pure subroutine value_of(self, name, v, found, is_int)
+   !< Value of the variable `name` (real), `found` false (and NaN) if none; `is_int` whether an integer.
+   class(symbols_object), intent(in)            :: self   !< Symbols.
+   character(len=*),      intent(in)            :: name   !< Variable name.
+   real(R8P),             intent(out)           :: v      !< Value.
+   logical,               intent(out)           :: found  !< Variable found.
+   logical,               intent(out), optional :: is_int !< Integer value.
+   integer(I4P)                                 :: k      !< Index.
+
+   v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   if (present(is_int)) is_int = .false.
+   k = self%variable_index(name)
+   found = k > 0_I4P
+   if (.not. found) return
+   v = real_of(self%variables(k)%v)
+   if (present(is_int)) is_int = self%variables(k)%v%is_int
+   endsubroutine value_of
+
+   pure function variable_index(self, name) result(k)
+   !< Index of the variable `name`, 0 if none.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   integer(I4P)                      :: k    !< Index.
+
+   if (allocated(self%variables)) then
+      do k = 1_I4P, size(self%variables, kind=I4P)
+         if (self%variables(k)%name == name) return
+      enddo
+   endif
+   k = 0_I4P
+   endfunction variable_index
+
+   pure function function_index(self, name) result(k)
+   !< Index of the function `name`, 0 if none.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   integer(I4P)                      :: k    !< Index.
+
+   if (allocated(self%functions)) then
+      do k = 1_I4P, size(self%functions, kind=I4P)
+         if (self%functions(k)%name == name) return
+      enddo
+   endif
+   k = 0_I4P
+   endfunction function_index
 
    pure function evaluate(self, row, point) result(v)
    !< Value on a data row: `row` holds its cells (NaN if missing), `point` is its point number (column 0).
    !<
    !< NaN if undefined. Every floating point operation is checked beforehand, so no IEEE exception is raised.
-   class(expression_object), intent(in) :: self                           !< Expression.
-   real(R8P),                intent(in) :: row(:)                         !< Row cells.
-   integer(I4P),             intent(in) :: point                          !< Point number.
-   real(R8P)                            :: v                              !< Value.
+   class(expression_object), intent(in) :: self    !< Expression.
+   real(R8P),                intent(in) :: row(:)  !< Row cells.
+   integer(I4P),             intent(in) :: point   !< Point number.
+   real(R8P)                            :: v       !< Value.
+   type(value_object)                   :: top     !< Typed value.
+   logical                              :: defined !< Defined.
+
+   v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   call run(self, row, point, top, defined)
+   if (defined) v = real_of(top)
+   endfunction evaluate
+
+   pure subroutine run(self, row, point, top, defined)
+   !< Run the stack code on a data row: `top` is the typed value, `defined` false if undefined.
+   class(expression_object), intent(in)  :: self                           !< Expression.
+   real(R8P),                intent(in)  :: row(:)                         !< Row cells.
+   integer(I4P),             intent(in)  :: point                          !< Point number.
+   type(value_object),       intent(out) :: top                            !< Value.
+   logical,                  intent(out) :: defined                        !< Defined.
    type(value_object)                   :: stack(max(1_I4P, self%depth)) !< Operand stack.
    type(value_object)                   :: result                         !< Operation result.
    integer(I8P)                         :: c                              !< Column number.
@@ -533,7 +898,8 @@ contains
    integer(I4P)                         :: sp                             !< Stack top.
    logical                              :: ok                             !< Defined.
 
-   v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   top = value_object()
+   defined = .false.
    sp = 0_I4P
    pc = 1_I4P
    ok = .true.
@@ -600,11 +966,20 @@ contains
             else
                sp = sp - 1_I4P
             endif
+         case (OP_LOAD)
+            sp = sp + 1_I4P
+            stack(sp) = stack(instruction%arg)
+         case (OP_COLLAPSE)
+            stack(sp - instruction%arg) = stack(sp)
+            sp = sp - instruction%arg
          endselect
       endassociate
       if (.not. ok) return
    enddo
-   if (sp == 1_I4P) v = real_of(stack(1))
+   if (sp == 1_I4P) then
+      top = stack(1)
+      defined = .true.
+   endif
    contains
       pure subroutine column(c, value, ok)
       !< Column `c` of the row; column 0 is the point number; a missing cell is undefined.
@@ -622,7 +997,7 @@ contains
          ok = .false.
       endif
       endsubroutine column
-   endfunction evaluate
+   endsubroutine run
 
    pure function first_column(self) result(c)
    !< First data column (from 1) the expression reads, 0 if none (an unresolved name is none): the column whose header
@@ -714,6 +1089,23 @@ contains
    endfunction value_at
 
    ! private procedures
+   pure subroutine check_name(name, iostat, iomsg)
+   !< A user symbol name: a letter or `_`, then letters, digits, `_`.
+   character(len=*),              intent(in)  :: name   !< Name.
+   integer(I4P),                  intent(out) :: iostat !< 0 if valid.
+   character(len=:), allocatable, intent(out) :: iomsg  !< Error message.
+   character(len=*), parameter :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (len(name) == 0) then
+      iostat = 1_I4P
+   elseif (scan(name(1:1), LETTERS) == 0 .or. verify(name, LETTERS//'0123456789') > 0) then
+      iostat = 1_I4P
+   endif
+   if (iostat /= 0_I4P) iomsg = 'invalid name "'//name//'"'
+   endsubroutine check_name
+
    pure function in_level(operator, level) result(yes)
    !< Whether `operator` is a binary operator of grammar level `level`.
    character(len=*), intent(in) :: operator !< Operator.
