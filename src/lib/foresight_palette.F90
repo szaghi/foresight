@@ -8,6 +8,8 @@ module foresight_palette
 !< (gray to the power 1/1.5, gnuplot's gamma); `viridis`; `negative` reverses the gray axis; `maxcolors N` quantizes:
 !< band k = floor(gray N) takes the color of gray k / (N - 1). Channels are rounded to 8 bits.
 !< `color` (after `gray`, say) restores the last palette set by `rgbformulae`, `defined` or a name, else the default.
+!< `cubehelix [start S] [cycles C] [saturation S]` (gnuplot's defaults 0.5, -1.5, 1 at each `cubehelix`): Green's
+!< helix, angle 2pi (S/3 + C gray), lightness gray^(1/1.5) (gamma 1.5), amplitude saturation lightness (1 - lightness)/2.
 !< Beyond gnuplot, any named palette of foresight_colormaps (`batlow`, `vik`, `magma`, `cividis`, ..., `viridis`),
 !< matched case-insensitively: a 256-color table, gray g taking its color nint(255 g), so `maxcolors N` gives the
 !< N colors nint(255 k / (N - 1)), Crameri's discrete palettes.
@@ -27,6 +29,9 @@ integer(I4P), parameter :: PAL_FORMULAE = 0_I4P !< `rgbformulae`.
 integer(I4P), parameter :: PAL_DEFINED  = 1_I4P !< `defined`.
 integer(I4P), parameter :: PAL_GRAY     = 2_I4P !< `gray`.
 integer(I4P), parameter :: PAL_TABLE    = 3_I4P !< A named palette of foresight_colormaps (`viridis`, `batlow`, ...).
+integer(I4P), parameter :: PAL_CUBEHELIX = 4_I4P !< `cubehelix`.
+real(R8P),    parameter :: CUBEHELIX_DEFAULT(3) = [0.5_R8P, -1.5_R8P, 1.0_R8P] !< gnuplot's start, cycles, saturation.
+real(R8P),    parameter :: PI = acos(-1.0_R8P) !< Pi.
 
 type :: palette_object
    !< Color palette.
@@ -35,6 +40,7 @@ type :: palette_object
    logical                :: negative = .false.          !< Gray axis reversed.
    integer(I4P)           :: maxcolors = 0_I4P           !< Colors of a quantized palette, 0 for continuous.
    integer(I4P)           :: table = 0_I4P               !< Named palette (foresight_colormaps index), `PAL_TABLE`.
+   real(R8P)              :: cubehelix(3) = CUBEHELIX_DEFAULT !< `cubehelix` start, cycles, saturation.
    integer(I4P)           :: color_mode = PAL_FORMULAE   !< Mode `color` restores: the last set by `rgbformulae`,
                                                          !< `defined` or a name (as gnuplot's last gradient or formulae).
    real(R8P), allocatable :: positions(:)                !< `defined` positions, increasing.
@@ -61,6 +67,8 @@ contains
    real(R8P)                         :: g    !< Effective gray.
    real(R8P)                         :: f(3) !< Channels, 0..1.
    real(R8P)                         :: t    !< Interpolation weight.
+   real(R8P)                         :: phi  !< Cubehelix angle [rad].
+   real(R8P)                         :: a    !< Cubehelix amplitude.
    integer(I4P)                      :: k    !< Counter.
 
    g = min(1.0_R8P, max(0.0_R8P, gray))
@@ -84,6 +92,14 @@ contains
             endif
          enddo
       endif
+   case (PAL_CUBEHELIX)
+      ! gnuplot's: the angle from the gray level, the gamma (1.5) on the lightness only
+      phi = 2.0_R8P * PI * (self%cubehelix(1) / 3.0_R8P + g * self%cubehelix(2))
+      t = g**(1.0_R8P / 1.5_R8P)
+      a = self%cubehelix(3) * t * (1.0_R8P - t) / 2.0_R8P
+      f(1) = t + a * (-0.14861_R8P * cos(phi) + 1.78277_R8P * sin(phi))
+      f(2) = t + a * (-0.29227_R8P * cos(phi) - 0.90649_R8P * sin(phi))
+      f(3) = t + a * (1.97294_R8P * cos(phi))
    case (PAL_GRAY)
       f = g**(1.0_R8P / 1.5_R8P)
    case (PAL_TABLE)
@@ -170,7 +186,8 @@ contains
 
    subroutine palette_words(words, palette, bad)
    !< Update `palette` from gnuplot `set palette` words: none (the default), `rgbformulae R , G , B` (`rgb`),
-   !< `defined (v c, ...)`, `gray`/`grey`, `color`, `positive`, `negative`, `maxcolors N`, `model RGB`, and a palette
+   !< `defined (v c, ...)`, `cubehelix [start S] [cycles C] [saturation S]`, `gray`/`grey`, `color`, `positive`,
+   !< `negative`, `maxcolors N`, `model RGB`, and a palette
    !< name of foresight_colormaps (`viridis`, `batlow`, ..., case-insensitive); `bad` is the first word not understood.
    character(len=*),              intent(in)    :: words   !< Words, blank separated (a `defined` list one word).
    type(palette_object),          intent(inout) :: palette !< Palette.
@@ -219,6 +236,11 @@ contains
          rest = rest(k + 1_I4P:)
          call defined_list(w)
          if (len(bad) > 0) return
+      case ('cubehelix')
+         palette%mode = PAL_CUBEHELIX
+         palette%cubehelix = CUBEHELIX_DEFAULT
+         call cubehelix_options
+         if (len(bad) > 0) return
       case ('gray', 'grey')
          palette%mode = PAL_GRAY
       case ('color')
@@ -264,6 +286,39 @@ contains
       word = rest(1:e - 1_I4P)
       rest = rest(e:)
       endsubroutine next
+
+      subroutine cubehelix_options
+      !< Read the `start S`, `cycles C`, `saturation S` right after `cubehelix`, in any order, the last one winning.
+      character(len=:), allocatable :: key   !< Option.
+      integer(I4P)                  :: e     !< Option end.
+      integer(I4P)                  :: c     !< Parameter index.
+
+      do
+         rest = trim(adjustl(rest))
+         e = index(rest, ' ', kind=I4P)
+         if (e == 0_I4P) e = len(rest, kind=I4P) + 1_I4P
+         key = rest(1:e - 1_I4P)
+         select case (key)
+         case ('start')
+            c = 1_I4P
+         case ('cycles')
+            c = 2_I4P
+         case ('saturation')
+            c = 3_I4P
+         case default
+            exit
+         endselect
+         call next(key)
+         call next(w)
+         call real_from_decimal(w, v, ok)
+         if (ok) ok = ieee_is_finite(v)
+         if (.not. ok) then
+            bad = 'cubehelix '//key//' '//w//' (a number is expected)'
+            return
+         endif
+         palette%cubehelix(c) = v
+      enddo
+      endsubroutine cubehelix_options
 
       subroutine defined_list(list)
       !< Parse `(v1 c1, v2 c2, ...)`: increasing values, colors quoted or not; the values are mapped to 0..1.

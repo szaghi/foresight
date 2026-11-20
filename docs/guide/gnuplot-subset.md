@@ -56,7 +56,7 @@ that did what it says.
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
-| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
+| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`cubehelix` [`start S`] [`cycles C`] [`saturation S`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
 | **cbl**abel `"text"` | color box label | no label |
 | **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
@@ -541,7 +541,9 @@ The palette maps the values over `cbrange` (autoscaled to the values, not extend
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
 `#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
-purple, dark-green, dark-blue, brown, violet, navy), `gray`, `viridis`, or a [named palette](#named-palettes);
+purple, dark-green, dark-blue, brown, violet, navy), `cubehelix` (Dave Green's helix through the color cube, lightness
+rising with gray: `start S` its starting hue, `cycles C` its turns, `saturation S`; gnuplot's 0.5, -1.5, 1, reset at
+each `cubehelix`, the options right after it), `gray`, `viridis`, or a [named palette](#named-palettes);
 `color` (after `gray`) restores the last one set by `rgbformulae`, `defined`, `viridis` or a name, else the default;
 `negative` reverses it, `maxcolors N` quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
 The palette colors only images and the color box: the series colors (`lc N`) are the linetype colors.
@@ -561,7 +563,7 @@ lowest values up to the emissive colors, and `maxcolors` turns the heatmap into 
 
 <Plot name="cb_image_vfd" svg :width="560" :height="400" />
 
-Not supported: `cubehelix`, `functions`, `file` palettes, `set palette model` other than RGB, `set colorbox` options
+Not supported: `functions`, `file` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox` options
 (position, size, horizontal), `set cbtics`, `set format cb`, `set logscale cb`, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,

@@ -357,10 +357,10 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 <<< @/examples/snippets/cb_palettes.gp{gnuplot}
 
-<Plot name="cb_palettes" svg :width="760" :height="300" />
+<Plot name="cb_palettes" svg :width="760" :height="560" />
 
-`set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `viridis`, with `negative`
-and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+`set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `cubehelix [start S]
+[cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 ### Named palettes
 

@@ -553,8 +553,15 @@ if (test_passed(57)) then
    endassociate
 endif
 ! image errors
-call interpreter%run_text("set palette cubehelix", iostat, iomsg)
-test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "cubehelix"') > 0
+call interpreter%run_text("set palette functions", iostat, iomsg)
+test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "functions"') > 0
+call interpreter%run_text("set palette cubehelix start 0 cycles 1 saturation 2 negative", iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(58) = test_passed(58) .and. iostat == 0_I4P .and. palette%negative .and. &
+                     all(palette%cubehelix == [0.0_R8P, 1.0_R8P, 2.0_R8P])
+endassociate
+call interpreter%run_text("set palette cubehelix saturation x", iostat, iomsg)
+test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'cubehelix saturation x (a number is expected)') > 0
 call interpreter%run_text("set palette batlw", iostat, iomsg)
 test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "batlw"') > 0
 ! a named palette (foresight extension), any case, with gnuplot's words

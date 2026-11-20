@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(71)                  !< Per-figure outcome.
+logical                     :: test_passed(72)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -92,7 +92,8 @@ test_passed(68) = check('spider.txt', figure_spider())
 test_passed(69) = check('image_batlow.svg', figure_image('batlow'))
 test_passed(70) = check('image_vik.svg', figure_image('vik', cbmax=1.0_R8P))
 test_passed(71) = check('image_romaO.svg', figure_image('romaO maxcolors 12'))
-write(output_unit, '(A,71L2)') 'foresight golden checks:', test_passed
+test_passed(72) = check('image_cubehelix.svg', figure_image('cubehelix'))
+write(output_unit, '(A,72L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

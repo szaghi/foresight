@@ -11,7 +11,7 @@ implicit none
 type(palette_object)          :: p               !< Palette.
 character(len=:), allocatable :: bad             !< Unknown word.
 type(palette_object)          :: q               !< Second palette.
-logical                       :: test_passed(15) !< Per-check outcome.
+logical                       :: test_passed(16) !< Per-check outcome.
 integer(I4P)                  :: k               !< Band counter.
 integer, parameter            :: BATLOW10(3, 10) = reshape([1, 25, 89, 16, 63, 96, 28, 90, 98, 60, 109, 86, &
                                                             104, 123, 62, 157, 137, 43, 210, 147, 67, 248, 161, 123, &
@@ -47,8 +47,8 @@ test_passed(8) = same(p%rgb(0.0_R8P), [255, 0, 255])
 call palette_words('', p, bad)
 test_passed(9) = p%is_default() .and. p%maxcolors == 0_I4P
 ! errors
-call palette_words('cubehelix', p, bad)
-test_passed(10) = bad == 'cubehelix'
+call palette_words('functions', p, bad)
+test_passed(10) = bad == 'functions'
 call palette_words('defined (0 "blue", 1 "nocolor")', p, bad)
 test_passed(10) = test_passed(10) .and. index(bad, 'a value and a color') > 0
 call palette_words('rgbformulae 40 , 1 , 1', p, bad)
@@ -120,7 +120,34 @@ call palette_words('color', p, bad)
 test_passed(15) = test_passed(15) .and. p%is_default()
 call palette_words('batlow gray color', p, bad)
 test_passed(15) = test_passed(15) .and. len(bad) == 0 .and. same(p%rgb(0.0_R8P), [1, 25, 89])
-write(output_unit, '(A,15L2)') 'foresight palette checks:', test_passed
+! cubehelix against gnuplot 6.0's PNG pixels (ramp 0..255, gray k/255): the defaults, other parameters (clipped
+! channels), negative, maxcolors; each `cubehelix` restarts from the defaults; options only right after it
+p = palette_object()
+call palette_words('cubehelix', p, bad)
+test_passed(16) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [0, 0, 0]) .and. same(p%rgb(64.0_R8P / 255.0_R8P), [48, 126, 117]) &
+                  .and. same(p%rgb(128.0_R8P / 255.0_R8P), [192, 155, 111]) .and. &
+                  same(p%rgb(200.0_R8P / 255.0_R8P), [213, 213, 249]) .and. same(p%rgb(1.0_R8P), [255, 255, 255])
+call palette_words('cubehelix start 0 cycles 1 saturation 2', p, bad)
+test_passed(16) = test_passed(16) .and. len(bad) == 0 .and. same(p%rgb(40.0_R8P / 255.0_R8P), [148, 26, 131]) .and. &
+                  same(p%rgb(128.0_R8P / 255.0_R8P), [169, 179, 44]) .and. same(p%rgb(230.0_R8P / 255.0_R8P), [220, 243, 255])
+call palette_words('cubehelix negative', p, bad)
+test_passed(16) = test_passed(16) .and. same(p%rgb(0.0_R8P), [255, 255, 255]) .and. &
+                  same(p%rgb(64.0_R8P / 255.0_R8P), [216, 201, 245])
+call palette_words('positive maxcolors 4', p, bad)
+test_passed(16) = test_passed(16) .and. same(p%rgb(77.0_R8P / 255.0_R8P), [76, 152, 91])
+p = palette_object()
+call palette_words('cubehelix start 1', p, bad)
+call palette_words('cubehelix cycles 2', p, bad)
+test_passed(16) = test_passed(16) .and. all(p%cubehelix == [0.5_R8P, 2.0_R8P, 1.0_R8P])
+call palette_words('cubehelix start 1 start 2 saturation -1', p, bad)
+test_passed(16) = test_passed(16) .and. all(p%cubehelix == [2.0_R8P, -1.5_R8P, -1.0_R8P])
+call palette_words('cubehelix color', p, bad)
+test_passed(16) = test_passed(16) .and. p%is_default()
+call palette_words('cubehelix negative start 1', p, bad)
+test_passed(16) = test_passed(16) .and. bad == 'start'
+call palette_words('cubehelix start', p, bad)
+test_passed(16) = test_passed(16) .and. index(bad, 'a number is expected') > 0
+write(output_unit, '(A,16L2)') 'foresight palette checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
