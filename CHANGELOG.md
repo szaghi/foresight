@@ -4,6 +4,49 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] — 2026-11-20
+### Added
+- **build**: Fpm support
+
+- **install**: The one-line installer
+
+- **palette**: Tables of 44 named palettes, generated from the original releases
+
+- **palette**: Set palette NAME, the named palettes, any case
+
+- **palette**: Cividis named palette
+
+- **palette**: Cubehelix palette, as gnuplot 6.0
+
+- **palette**: Black_body named palette
+
+- **palette**: Set palette file, as gnuplot 6.0
+
+- **figure**: Set_palette_gradient, a palette gradient from arrays
+
+- **style**: Set colorsequence, gnuplot's and the categorical orders
+
+
+### Documentation
+- New identity, Fugaku mark in the Kurenai palette
+
+- **palette**: Name the series colors linetype colors, list the defined color names
+
+- **palette**: Named palettes recipe, swatch of every name, goldens
+
+- **features**: The styles row names the linetype colors
+
+
+### Fixed
+- **fpm**: Fpm install installs the library
+
+- **docs**: The colormaps module docstring no longer breaks the API pages
+
+- **palette**: Color restores the last palette set, as gnuplot
+
+- **axes**: No bottom margin for x tick labels that are not drawn
+
+
 ## [0.4.0] — 2026-10-09
 ### Added
 - Add steps, impulses, dots and error-line styles
