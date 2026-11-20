@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(75)                  !< Per-figure outcome.
+logical                     :: test_passed(76)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -98,7 +98,8 @@ test_passed(73) = check('short_panels.svg', figure_short_panels())
 test_passed(74) = rendered(figure_image('negative', gradient=.true.)) == &
                   rendered(figure_image('defined (0 "blue", 1 "white", 2 "red") negative'))
 test_passed(75) = check('colorsequence_batlowS.svg', figure_colorsequence())
-write(output_unit, '(A,75L2)') 'foresight golden checks:', test_passed
+test_passed(76) = check('image_logcb.svg', figure_logcb())
+write(output_unit, '(A,76L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -404,6 +405,20 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_logcb() result(fig)
+   !< A log color axis, gray palette: values 3, 30, 700 and 0, -5, 50; the axis spans the positive extent 3..700 (not
+   !< decades), the nonpositive values take the low end, as gnuplot 6.0 (pixel for pixel).
+   type(figure_object) :: fig    !< Figure.
+   real(R8P)           :: z(3,2) !< Values.
+
+   z = reshape([3.0_R8P, 30.0_R8P, 700.0_R8P, 0.0_R8P, -5.0_R8P, 50.0_R8P], [3, 2])
+   call fig%init(width=420_I4P, height=300_I4P)
+   call fig%set_logscale('cb')
+   call fig%set_palette('gray')
+   call fig%set_cblabel('z')
+   call fig%image(z)
+   endfunction figure_logcb
 
    function figure_colorsequence() result(fig)
    !< Seven curves in the first six colors of Crameri's categorical batlowS order (the seventh cycles to the first).

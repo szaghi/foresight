@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(78)                           !< Per-check outcome.
+logical                       :: test_passed(79)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -231,7 +231,7 @@ associate(panel => interpreter%figure%panels(1))
                      panel%y2axis%tics%format == '%.1f' .and. .not. panel%yaxis%tics%has_format()
 endassociate
 call interpreter%run_text('set logscale x2', iostat, iomsg)
-test_passed(34) = iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2 expected') > 0
+test_passed(34) = iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2, cb expected') > 0
 call interpreter%run_text("plot '"//data_file//"' axes x2y1", iostat, iomsg)
 test_passed(35) = iostat /= 0_I4P .and. index(iomsg, 'axes x1y1 or x1y2 expected, found "x2y1"') > 0
 
@@ -1006,6 +1006,29 @@ call interpreter%run_text("set colorsequence batlowS 101", iostat, iomsg)
 test_passed(78) = test_passed(78) .and. iostat /= 0_I4P .and. index(iomsg, '1 to 100 colors') > 0
 call interpreter%run_text("set colorsequence", iostat, iomsg)
 test_passed(78) = test_passed(78) .and. iostat /= 0_I4P
+! the color axis, as gnuplot 6.0: cbtics, set format cb (a bare set format too, not set format xy), unset cbtics;
+! logscale cb: the positive data extent (3..700, not decades), ticks at 10 and 100, the x axis untouched
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0', '1 0 0.3', '2 0 1', '', '0 2 0.5', '1 2 0.7', '2 2 0.9'
+close(unit)
+test_passed(79) = colorbox_labels("set cbtics 0.25", ['0.25', '0.75'], ['0.2 '])
+test_passed(79) = test_passed(79) .and. colorbox_labels("set format cb '%.2f'", ['0.00', '0.40', '1.00'], ['0.4 '])
+test_passed(79) = test_passed(79) .and. colorbox_labels("set format '%.1e'", ['2.0e-01'], ['0.2    '])
+test_passed(79) = test_passed(79) .and. colorbox_labels("set format xy '%.1e'", ['0.2'], ['0.6e-01'])
+test_passed(79) = test_passed(79) .and. colorbox_labels("unset cbtics; set cblabel 'phi'", ['phi'], ['0.2'])
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 3', '1 0 30', '2 0 700', '', '0 1 0', '1 1 -5', '2 1 50'
+close(unit)
+! (foresight labels decades 10 with a superscript exponent, on every log axis)
+test_passed(79) = test_passed(79) .and. colorbox_labels("set logscale cb", ['10'], ['1000'])
+associate(panel => interpreter%figure%panels(1))
+   test_passed(79) = test_passed(79) .and. panel%cbaxis%log .and. panel%cbaxis%lo == 3.0_R8P .and. &
+                     panel%cbaxis%hi == 700.0_R8P .and. .not. panel%xaxis%log
+   if (test_passed(79)) test_passed(79) = count(panel%cbaxis%ticks%major) == 2 .and. &
+                                          all(pack(panel%cbaxis%ticks%value, panel%cbaxis%ticks%major) == [10.0_R8P, 100.0_R8P])
+endassociate
+call interpreter%run_text("set logscale cb x2", iostat, iomsg)
+test_passed(79) = test_passed(79) .and. iostat /= 0_I4P
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1023,7 +1046,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,78L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,79L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1050,6 +1073,36 @@ contains
       endif
    enddo
    endfunction same
+
+   function colorbox_labels(settings, present_labels, absent_labels) result(ok)
+   !< Plot the data file as an image after `settings` into an SVG, and whether its texts include every one of
+   !< `present_labels` and none of `absent_labels` (blanks trimmed).
+   character(len=*), intent(in)  :: settings          !< Commands before the plot.
+   character(len=*), intent(in)  :: present_labels(:) !< Texts expected.
+   character(len=*), intent(in)  :: absent_labels(:)  !< Texts not expected.
+   logical                       :: ok                !< As expected.
+   character(len=:), allocatable :: svg               !< Rendered SVG.
+   integer(I4P)                  :: k                 !< Label counter.
+   integer(I4P)                  :: u                 !< File unit.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg; set output 'foresight_script_test_cb.svg'; "//settings// &
+                             "; plot '"//data_file//"' u 1:2:3 w image notitle", iostat, iomsg)
+   ok = iostat == 0_I4P
+   if (.not. ok) then
+      write(error_unit, '(A)') 'colorbox_labels: '//iomsg
+      return
+   endif
+   svg = read_text('foresight_script_test_cb.svg')
+   do k = 1_I4P, size(present_labels, kind=I4P)
+      ok = ok .and. index(svg, '>'//trim(present_labels(k))//'<') > 0
+   enddo
+   do k = 1_I4P, size(absent_labels, kind=I4P)
+      ok = ok .and. index(svg, '>'//trim(absent_labels(k))//'<') == 0
+   enddo
+   open(newunit=u, file='foresight_script_test_cb.svg')
+   close(u, status='delete')
+   endfunction colorbox_labels
 
    function matches_golden(output, golden) result(passed)
    !< Compare the rendered file with the reference, or rewrite the reference in update mode.

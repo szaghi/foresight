@@ -49,7 +49,7 @@ module foresight_script
 !<   [using U]|gray|grey|color|NAME|positive|
 !<   negative|maxcolors N|model RGB]` (NAME: a
 !<   named palette of foresight_colormaps, `viridis`, `batlow`, ..., any case), `set cbrange [min:max]`,
-!<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
+!<   `set|unset cblabel ["t"]`, `set|unset colorbox`, `set|unset cbtics`, `set format cb`, `set|unset logscale cb`;
 !< - `with circles` (`using x:y[:r[:start:end]]`, wedges with angles in degrees); foresight's `with pie [donut F]`
 !<   (`using Y[:xtic(N)]`, alone in its panel);
 !< - foresight's panel charts: `with gauge range [A:B] [segments N] [format "fmt"]`, `with radar`, `with rose [linear]`
@@ -1867,6 +1867,8 @@ contains
       call tics_option(self%figure%panels(self%figure%current)%yaxis%tics)
    elseif (keyword(option, 'y2tics', 4_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%y2axis%tics)
+   elseif (keyword(option, 'cbtics', 4_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'datafile', 5_I4P)) then
       call datafile_option
    elseif (keyword(option, 'samples', 3_I4P)) then
@@ -2533,7 +2535,7 @@ contains
       endsubroutine border_option
 
       subroutine tics_option(tics, words)
-      !< `set xtics|ytics|y2tics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
+      !< `set xtics|ytics|y2tics|cbtics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
       !< the last ones are kept, turning off ticks on (gnuplot); `auto` resets them. `words` (the tics keyword and its
       !< arguments) replaces the option tokens.
       type(tics_object),  intent(inout)        :: tics     !< Axis tick settings.
@@ -2656,19 +2658,19 @@ contains
       endsubroutine samples_option
 
       subroutine format_option
-      !< `set format [x|y|xy] ["format"]`: no format restores the default labels.
+      !< `set format [x|y|y2|cb|xy...] ["format"]` (all axes by default): no format restores the default labels.
       character(len=:), allocatable :: axes    !< Axes letters.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Problem.
 
-      axes = 'xyy2'
+      axes = 'xyy2cb'
       format = ''
       i = 2_I4P
       if (i <= size(tokens, kind=I4P)) then
          if (tokens(i)%kind == TOKEN_WORD) then
             axes = tokens(i)%text
             if (.not. valid_axes(axes)) then
-               call fail('set format: axes must be among x, y, y2 (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
+               call fail('set format: axes must be among x, y, y2, cb (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
                return
             endif
             i = i + 1_I4P
@@ -2980,6 +2982,8 @@ contains
       call self%figure%unset_ytics
    elseif (keyword(option, 'y2tics', 4_I4P)) then
       call self%figure%unset_y2tics
+   elseif (keyword(option, 'cbtics', 4_I4P)) then
+      call self%figure%unset_cbtics
    elseif (keyword(option, 'format', 3_I4P)) then
       call self%figure%set_format('')
    else
@@ -3004,7 +3008,7 @@ contains
    endfunction after_command
 
    function axes_argument(tokens, axes, iostat, iomsg) result(ok)
-   !< Optional axes names after a `logscale` option (default all: `xyy2`); a base other than 10 is an error.
+   !< Optional axes names after a `logscale` option (default all: `xyy2cb`); a base other than 10 is an error.
    type(token_object),            intent(in)  :: tokens(:) !< Option tokens.
    character(len=:), allocatable, intent(out) :: axes      !< Axes letters.
    integer(I4P),                  intent(out) :: iostat    !< 0 on success.
@@ -3013,12 +3017,12 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
-   axes = 'xyy2'
+   axes = 'xyy2cb'
    ok = .true.
    if (size(tokens) >= 2) then
       axes = tokens(2)%text
       if (.not. valid_axes(axes)) then
-         call fail('logscale: axes among x, y, y2 expected (e.g. y or xy2), found "'//axes//'"', iostat, iomsg)
+         call fail('logscale: axes among x, y, y2, cb expected (e.g. y or xy2), found "'//axes//'"', iostat, iomsg)
          ok = .false.
          return
       endif
@@ -3577,14 +3581,14 @@ contains
    endfunction string_argument
 
    pure function valid_axes(names) result(ok)
-   !< Whether `names` concatenates supported axis names: x, y, y2.
+   !< Whether `names` concatenates supported axis names: x, y, y2, cb.
    character(len=*), intent(in)  :: names !< Axis names.
    logical                       :: ok    !< Supported.
    character(len=:), allocatable :: bad   !< Unsupported rest.
-   logical                       :: named(3) !< x, y, y2 named.
+   logical                       :: named(4) !< x, y, y2, cb named.
 
    named = .false.
-   call axes_names(names, named(1), named(2), named(3), bad)
+   call axes_names(names, named(1), named(2), named(3), bad, cb=named(4))
    ok = len(names) > 0 .and. len(bad) == 0
    endfunction valid_axes
 

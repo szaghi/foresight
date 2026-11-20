@@ -372,6 +372,16 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 `set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `cubehelix [start S]
 [cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### A log color axis
+
+<<< @/examples/snippets/cb_logcb.gp{gnuplot}
+
+<Plot name="cb_logcb" svg :width="560" :height="400" />
+
+`set logscale cb` maps the values on a log scale, for residuals spanning decades; `set cbtics`, `set format cb` and
+`unset cbtics` set the labels of the color box as those of the x and y axes. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ### A palette from a file
 
 <<< @/examples/snippets/cb_palette_file.gp{gnuplot}

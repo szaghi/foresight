@@ -2151,7 +2151,12 @@ contains
       c = 0_I4P
       if (.not. ieee_is_finite(value)) return
       p = effective_palette(self%palette, backend%theme%name)
-      c(1:3) = p%rgb(self%cbaxis%to_unit(value))
+      if (self%cbaxis%log .and. value <= 0.0_R8P) then
+         ! no logarithm: the low end of the color axis, as gnuplot
+         c(1:3) = p%rgb(merge(0.0_R8P, 1.0_R8P, self%cbaxis%lo < self%cbaxis%hi))
+      else
+         c(1:3) = p%rgb(self%cbaxis%to_unit(value))
+      endif
       c(4) = 255_I4P
       endfunction pixel
 
@@ -2329,13 +2334,15 @@ contains
    endif
    endsubroutine outline
 
-   pure subroutine image_range(all, zmin, zmax, found)
-   !< Range of the finite values of the images among the series `all`. A module procedure on the series array, as
-   !< `layout_histograms`: gfortran 16 debug builds misread `self%series(s)%grid` through the class dummy.
-   type(series_object), intent(in)  :: all(:) !< Series of the panel.
-   real(R8P),           intent(out) :: zmin   !< Smallest value.
-   real(R8P),           intent(out) :: zmax   !< Largest value.
-   logical,             intent(out) :: found  !< Any finite value.
+   pure subroutine image_range(all, zmin, zmax, found, positive)
+   !< Range of the finite values (the positive ones with `positive`, for a log color axis) of the images among the
+   !< series `all`. A module procedure on the series array, as `layout_histograms`: gfortran 16 debug builds misread
+   !< `self%series(s)%grid` through the class dummy.
+   type(series_object), intent(in)  :: all(:)   !< Series of the panel.
+   real(R8P),           intent(out) :: zmin     !< Smallest value.
+   real(R8P),           intent(out) :: zmax     !< Largest value.
+   logical,             intent(out) :: found    !< Any finite value.
+   logical,             intent(in)  :: positive !< Positive values only.
    integer(I4P)                     :: s      !< Series counter.
    integer(I4P)                     :: i      !< Column counter.
    integer(I4P)                     :: j      !< Row counter.
@@ -2348,6 +2355,7 @@ contains
       do j = 1_I4P, size(all(s)%grid, 2, kind=I4P)
          do i = 1_I4P, size(all(s)%grid, 1, kind=I4P)
             if (.not. ieee_is_finite(all(s)%grid(i, j))) cycle
+            if (positive .and. all(s)%grid(i, j) <= 0.0_R8P) cycle
             found = .true.
             zmin = min(zmin, all(s)%grid(i, j))
             zmax = max(zmax, all(s)%grid(i, j))
@@ -3745,12 +3753,13 @@ contains
       endsubroutine setup_polar
 
       subroutine setup_colors
-      !< The color axis over the finite values of the images (or `cbrange`), never extended.
+      !< The color axis over the finite values of the images (the positive ones on a log axis; or `cbrange`), never
+      !< extended.
       real(R8P) :: zmin  !< Smallest value.
       real(R8P) :: zmax  !< Largest value.
       logical   :: any_z !< Any finite value.
 
-      call image_range(self%series, zmin, zmax, any_z)
+      call image_range(self%series, zmin, zmax, any_z, positive=self%cbaxis%log)
       call self%cbaxis%setup(zmin, zmax, any_z, area(4) - area(3))
       endsubroutine setup_colors
 
@@ -3790,14 +3799,16 @@ contains
       endsubroutine collect_labels
    endsubroutine setup_axes
 
-   pure subroutine axes_names(names, x, y, y2, bad)
-   !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`: each found one sets its flag (the
-   !< others are left unchanged); `bad` is the first unsupported rest (`x2` included), empty if none.
+   pure subroutine axes_names(names, x, y, y2, bad, cb)
+   !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`, `cb`: each found one sets its flag
+   !< (the others are left unchanged); `bad` is the first unsupported rest (`x2` included, `cb` without `cb` present),
+   !< empty if none.
    character(len=*),              intent(in)    :: names !< Axis names.
    logical,                       intent(inout) :: x     !< x named.
    logical,                       intent(inout) :: y     !< y named.
    logical,                       intent(inout) :: y2    !< y2 named.
    character(len=:), allocatable, intent(out)   :: bad   !< Unsupported rest, empty if none.
+   logical,             optional, intent(inout) :: cb    !< cb (color axis) named.
    integer(I4P)                                 :: i     !< Character counter.
    logical                                      :: two   !< A `2` follows.
 
@@ -3806,6 +3817,13 @@ contains
    do while (i <= len(names))
       two = .false.
       if (i < len(names)) two = names(i + 1:i + 1) == '2'
+      if (present(cb) .and. i < len(names)) then
+         if (names(i:i + 1) == 'cb') then
+            cb = .true.
+            i = i + 2_I4P
+            cycle
+         endif
+      endif
       if (names(i:i) == 'y' .and. two) then
          y2 = .true.
       elseif (names(i:i) == 'x' .and. .not. two) then

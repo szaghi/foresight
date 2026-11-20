@@ -33,7 +33,7 @@ that did what it says.
 | **tit**le `"text"` | panel title | no title |
 | **xl**abel / **yl**abel / **y2l**abel `"text"` | axis label (`y2` on the right) | no label |
 | **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
-| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2` (`y`, `xy2`), all when absent | linear axes |
+| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
 | **gr**id [**po**lar [`STEP`]\|**spider**plot] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
@@ -44,7 +44,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis) | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
@@ -587,8 +587,22 @@ plot 'field.dat' u 1:2:3 w image notitle
 
 <Plot name="cb_palette_file" svg :width="560" :height="400" />
 
+The color axis takes the x and y settings: `set cbtics` (step, start, end; a factor on a log axis), `set format cb`
+(a bare `set format` reaches it too, `set format xy` does not), `unset cbtics` (no ticks nor labels on the box).
+`set logscale cb` maps log10 of the values: autoscaled, the axis spans the positive values (3 to 700, not widened to
+decades), and values <= 0 take the low end color, as gnuplot; its decades are labelled 10 with an exponent, as the
+log x and y axes.
+
+```gnuplot
+set logscale cb; set cblabel 'residual'
+set cbtics 10
+plot 'field.dat' u 1:2:(10**(3*$3)) w image notitle
+```
+
+<Plot name="cb_logcb" svg :width="560" :height="400" />
+
 Not supported: `functions` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox` options
-(position, size, horizontal), `set cbtics`, `set format cb`, `set logscale cb`, `pm3d`.
+(position, size, horizontal), `set mcbtics`, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,
 the components from 0 to `set rgbmax` (255; 1.0 for fractions), without palette nor color box; an undefined component

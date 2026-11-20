@@ -103,6 +103,8 @@ type :: figure_object
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
       procedure, pass(self) :: set_xtics       !< gnuplot `set xtics`.
+      procedure, pass(self) :: set_cbtics      !< gnuplot `set cbtics`.
+      procedure, pass(self) :: unset_cbtics    !< gnuplot `unset cbtics`.
       procedure, pass(self) :: set_ylabel      !< gnuplot `set ylabel`.
       procedure, pass(self) :: set_yrange      !< gnuplot `set yrange`.
       procedure, pass(self) :: set_ytics       !< gnuplot `set ytics`.
@@ -579,14 +581,14 @@ contains
    endsubroutine set_style_boxplot
 
    subroutine set_format(self, format, axes)
-   !< Tick label `format` of the `axes` named `x`, `y`, `y2` (all when absent), as gnuplot `set format`: text
+   !< Tick label `format` of the `axes` named `x`, `y`, `y2`, `cb` (all when absent), as gnuplot `set format`: text
    !< with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
    !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
    class(figure_object), intent(inout)        :: self    !< Figure.
    character(len=*),     intent(in)           :: format  !< Label format.
    character(len=*),     intent(in), optional :: axes    !< Axes names, e.g. `y`, `xy` or `y2`.
    character(len=:), allocatable              :: message !< Format problem.
-   logical                                    :: named(3) !< x, y, y2 named.
+   logical                                    :: named(4) !< x, y, y2, cb named.
 
    if (len(format) > 0) then
       message = format_check(format)
@@ -598,6 +600,7 @@ contains
       if (named(1)) panel%xaxis%tics%format = format
       if (named(2)) panel%yaxis%tics%format = format
       if (named(3)) panel%y2axis%tics%format = format
+      if (named(4)) panel%cbaxis%tics%format = format
    endassociate
    endsubroutine set_format
 
@@ -716,10 +719,11 @@ contains
    endsubroutine set_key
 
    subroutine set_logscale(self, axes)
-   !< Base-10 log scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
+   !< Base-10 log scale on the `axes` named `x`, `y`, `y2`, `cb` (the color axis of the images); all axes when absent,
+   !< as gnuplot.
    class(figure_object), intent(inout)        :: self     !< Figure.
    character(len=*),     intent(in), optional :: axes     !< Axes names, e.g. `y`, `xy` or `y2`.
-   logical                                    :: named(3) !< x, y, y2 named.
+   logical                                    :: named(4) !< x, y, y2, cb named.
 
    named = which_axes(axes, 'set_logscale')
    call self%ensure_panels
@@ -727,6 +731,7 @@ contains
       if (named(1)) panel%xaxis%log = .true.
       if (named(2)) panel%yaxis%log = .true.
       if (named(3)) panel%y2axis%log = .true.
+      if (named(4)) panel%cbaxis%log = .true.
    endassociate
    endsubroutine set_logscale
 
@@ -1046,6 +1051,26 @@ contains
    call self%panels(self%current)%xaxis%set_range(min=min, max=max)
    endsubroutine set_xrange
 
+   subroutine set_cbtics(self, step, start, end)
+   !< Ticks of the color box every `step` from `start` to `end` (both optional), as gnuplot `set cbtics START,STEP,END`;
+   !< automatic without `step`. On a log color axis the step is a factor (> 1).
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in), optional :: step  !< Tick step, a factor on a log axis.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+
+   call self%ensure_panels
+   call set_tics(self%panels(self%current)%cbaxis%tics, 'set_cbtics', step, start, end)
+   endsubroutine set_cbtics
+
+   subroutine unset_cbtics(self)
+   !< No ticks nor tick labels on the color box, as gnuplot `unset cbtics` (the box and its label stay).
+   class(figure_object), intent(inout) :: self !< Figure.
+
+   call self%ensure_panels
+   self%panels(self%current)%cbaxis%tics%mode = TICS_NONE
+   endsubroutine unset_cbtics
+
    subroutine set_xtics(self, step, start, end, mirror)
    !< x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
    !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
@@ -1126,10 +1151,10 @@ contains
    endsubroutine set_y2tics
 
    subroutine unset_logscale(self, axes)
-   !< Linear scale on the `axes` named `x`, `y`, `y2`; all axes when absent, as gnuplot.
+   !< Linear scale on the `axes` named `x`, `y`, `y2`, `cb`; all axes when absent, as gnuplot.
    class(figure_object), intent(inout)        :: self     !< Figure.
    character(len=*),     intent(in), optional :: axes     !< Axes names, e.g. `y`, `xy` or `y2`.
-   logical                                    :: named(3) !< x, y, y2 named.
+   logical                                    :: named(4) !< x, y, y2, cb named.
 
    named = which_axes(axes, 'unset_logscale')
    call self%ensure_panels
@@ -1137,6 +1162,7 @@ contains
       if (named(1)) panel%xaxis%log = .false.
       if (named(2)) panel%yaxis%log = .false.
       if (named(3)) panel%y2axis%log = .false.
+      if (named(4)) panel%cbaxis%log = .false.
    endassociate
    endsubroutine unset_logscale
 
@@ -1235,17 +1261,17 @@ contains
    endsubroutine render
 
    function which_axes(axes, caller) result(named)
-   !< Axes named in `axes` (`x`, `y`, `y2`, concatenated), all when absent; unsupported names stop.
+   !< Axes named in `axes` (`x`, `y`, `y2`, `cb`, concatenated), all when absent; unsupported names stop.
    character(len=*), intent(in), optional :: axes     !< Axes names.
    character(len=*), intent(in)           :: caller   !< Procedure name, for messages.
-   logical                                :: named(3) !< x, y, y2 named.
+   logical                                :: named(4) !< x, y, y2, cb named.
    character(len=:), allocatable          :: bad      !< Unsupported name.
 
    named = .true.
    if (.not. present(axes)) return
    named = .false.
-   call axes_names(axes, named(1), named(2), named(3), bad)
-   if (len(bad) > 0 .or. len(axes) == 0) error stop 'foresight: '//caller//': axes must be among x, y, y2, not "'// &
+   call axes_names(axes, named(1), named(2), named(3), bad, cb=named(4))
+   if (len(bad) > 0 .or. len(axes) == 0) error stop 'foresight: '//caller//': axes must be among x, y, y2, cb, not "'// &
                                                     axes//'"'
    endfunction which_axes
 
