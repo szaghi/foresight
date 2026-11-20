@@ -843,7 +843,7 @@ contains
    else
       inquire(file=golden, exist=exists)
       passed = .false.
-      if (exists) passed = produced == read_text(golden)
+      if (exists) passed = same_page(produced, read_text(golden))
       if (.not. passed) write(error_unit, '(A)') name//': '//output//' differs from '//golden// &
                                                  ' (FORESIGHT_UPDATE_GOLDEN=1 rewrites it)'
    endif
@@ -866,6 +866,28 @@ contains
    open(newunit=unit, file='foresight_golden_rendered.svg')
    close(unit, status='delete')
    endfunction rendered
+
+   function same_page(produced, reference) result(same)
+   !< Whether `produced` matches `reference`. An HTML page is compared outside its script, the embedded viewer, which
+   !< must be src/js/viewer.js itself: a viewer change neither rewrites every HTML reference nor goes unembedded.
+   character(len=*), intent(in)  :: produced  !< Rendered content.
+   character(len=*), intent(in)  :: reference !< Reference content.
+   logical                       :: same      !< Match.
+   character(len=*), parameter   :: OPEN_TAG = '<script>'   !< Script start.
+   character(len=*), parameter   :: CLOSE_TAG = '</script>' !< Script end.
+   integer                       :: p(2)      !< Script start and end in `produced`.
+   integer                       :: r(2)      !< Script start and end in `reference`.
+
+   p = [index(produced, OPEN_TAG), index(produced, CLOSE_TAG, back=.true.)]
+   r = [index(reference, OPEN_TAG), index(reference, CLOSE_TAG, back=.true.)]
+   if (any(p == 0) .or. any(r == 0)) then
+      same = produced == reference
+      return
+   endif
+   same = produced(1:p(1) + len(OPEN_TAG) - 1) == reference(1:r(1) + len(OPEN_TAG) - 1) .and. &
+          produced(p(2):) == reference(r(2):)
+   if (same) same = produced(p(1) + len(OPEN_TAG):p(2) - 1) == new_line('a')//read_text('src/js/viewer.js')
+   endfunction same_page
 
    function read_text(file) result(text)
    !< Whole content of `file`.
