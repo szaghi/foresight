@@ -518,7 +518,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     zip_sum = sha256(args.crameri_zip) if args.crameri_zip else "not recorded"
     sources = [
-        "- Scientific colour maps 8.0.1, F. Crameri: <name>/<name>.lut of ScientificColourMaps8.zip,",
+        "- Scientific colour maps 8.0.1, F. Crameri: `NAME/NAME.lut` of ScientificColourMaps8.zip,",
         "  https://zenodo.org/records/8409685,",
         f"  sha256 {zip_sum};",
         "- mpl-colormaps: colormaps.py of https://github.com/BIDS/colormap, commit bc549477db0c,",
