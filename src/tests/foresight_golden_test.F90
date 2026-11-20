@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(79)                  !< Per-figure outcome.
+logical                     :: test_passed(80)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -102,7 +102,8 @@ test_passed(76) = check('image_logcb.svg', figure_logcb())
 test_passed(77) = check('colorbox_modes.svg', figure_colorbox_modes())
 test_passed(78) = check('tics_list.svg', figure_tics_list())
 test_passed(79) = check('tics_list.txt', figure_tics_list())
-write(output_unit, '(A,79L2)') 'foresight golden checks:', test_passed
+test_passed(80) = check('mtics.svg', figure_mtics())
+write(output_unit, '(A,80L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -343,6 +344,34 @@ contains
    call fig%set_grid
    call fig%plot([1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [3.2_R8P, 6.1_R8P, 8.4_R8P, 5.0_R8P], title='rain', with='linespoints')
    endfunction figure_tics_list
+
+   function figure_mtics() result(fig)
+   !< Minor ticks, gnuplot `set mxtics [N]`: on x gnuplot's count (5 per step of 1, from a partial interval at each end),
+   !< on the log y axis 4 intervals per decade, linear in value (gnuplot's rule); the color box 2 per step.
+   type(figure_object) :: fig !< Figure.
+   real(R8P)           :: z(6, 4) !< Image values.
+   integer(I4P)        :: i       !< Column.
+   integer(I4P)        :: j       !< Row.
+
+   call fig%init(width=560_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_xrange(min=0.3_R8P, max=7.7_R8P)
+   call fig%set_logscale('y')
+   call fig%set_yrange(min=1.0_R8P, max=1000.0_R8P)
+   call fig%set_mxtics
+   call fig%set_mytics(4_I4P)
+   call fig%plot([1.0_R8P, 3.0_R8P, 5.0_R8P, 7.0_R8P], [2.0_R8P, 30.0_R8P, 120.0_R8P, 700.0_R8P], title='growth', &
+                 with='linespoints')
+   call fig%next_panel
+   call fig%unset_logscale
+   call fig%set_xrange
+   call fig%set_yrange
+   call fig%set_mxtics(0_I4P)
+   call fig%set_mytics(0_I4P)
+   call fig%set_mcbtics(2_I4P)
+   z = reshape([((real(i * j, R8P), i = 1, 6), j = 1, 4)], [6, 4])
+   call fig%image(z, title='')
+   endfunction figure_mtics
 
    function figure_segments() result(fig)
    !< Segmented boxes (classic theme): 10 cells over the y range, lit when covered at least half, the others ghosts

@@ -17,6 +17,11 @@ module foresight_ticks
 !< items inside the range, a label printed as written (a format when it has a conversion, `"%.1f"`), the axis label of
 !< the position when absent; level 1 is a minor tick. A list alone does not extend the range to a tick grid.
 !<
+!< Minor ticks (gnuplot `set mxtics [N]`) divide each interval between consecutive major ticks of the automatic or fixed
+!< ticks in N parts, linearly in value also on log axes, within the range and the fixed ticks' start and end; without N
+!< (gnuplot's automatic count) in 2 when the step's leading digit is 2, else 5, and in 9 on log axes. By default linear
+!< axes have none, log axes the 2..9 multiples of a decade; `unset mxtics` removes them.
+!<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
 use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
@@ -31,6 +36,7 @@ public :: nice_step
 public :: tic_item
 public :: tick_object
 public :: tics_object
+public :: MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE
 public :: TICS_AUTO, TICS_FIXED, TICS_NONE
 public :: labels_attribute
 public :: push
@@ -61,6 +67,10 @@ integer(I4P), parameter :: TICS_AUTO  = 0_I4P !< Ticks by the automatic rule.
 integer(I4P), parameter :: TICS_FIXED = 1_I4P !< Ticks at a fixed step.
 integer(I4P), parameter :: TICS_NONE  = 2_I4P !< No ticks.
 
+integer(I4P), parameter :: MINOR_DEFAULT = -1_I4P !< Minor ticks by default: none on linear axes, 2..9 on log ones.
+integer(I4P), parameter :: MINOR_AUTO    = -2_I4P !< gnuplot's automatic count, `set mxtics`.
+integer(I4P), parameter :: MINOR_NONE    = 0_I4P  !< No minor ticks, `unset mxtics`; N > 1: N intervals.
+
 type :: tics_object
    !< User tick settings of an axis, gnuplot `set xtics` and `set format`.
    integer(I4P)                  :: mode = TICS_AUTO !< TICS_AUTO, TICS_FIXED or TICS_NONE.
@@ -70,6 +80,7 @@ type :: tics_object
    character(len=:), allocatable :: format           !< Label format, empty for the default labels.
    logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
    logical                       :: series = .true.  !< The automatic or fixed ticks, else the explicit list alone.
+   integer(I4P)                  :: minor = MINOR_DEFAULT !< Minor ticks: MINOR_DEFAULT, MINOR_AUTO, MINOR_NONE or N.
    type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
@@ -91,9 +102,10 @@ integer(I8P), parameter :: MAX_POWER = 10000_I8P  !< Largest power of a fixed lo
 
 contains
    pure function attribute(self, lo, hi) result(text)
-   !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end. With
-   !< an explicit list (and the axis range [`lo`, `hi`], for the default labels of its items): `labels` and its items
-   !< (see `labels_attribute`), after `auto` or the step when the list is added to them.
+   !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end, then
+   !< `minor auto|N` unless minor ticks are by default (`auto` first if automatic). With an explicit list (and the axis
+   !< range [`lo`, `hi`], for the default labels of its items): `labels` and its items (see `labels_attribute`), after
+   !< `auto` or the step when the list is added to them.
    class(tics_object), intent(in)           :: self  !< Settings.
    real(R8P),          intent(in), optional :: lo    !< Value at the axis start.
    real(R8P),          intent(in), optional :: hi    !< Value at the axis end.
@@ -108,7 +120,17 @@ contains
    case default
       text = ''
    endselect
-   if (self%mode == TICS_NONE .or. .not. (self%has_list() .and. present(lo) .and. present(hi))) return
+   if (self%mode == TICS_NONE) return
+   if (self%minor /= MINOR_DEFAULT) then
+      if (len(text) == 0) text = 'auto'
+      select case (self%minor)
+      case (MINOR_AUTO)
+         text = text//' minor auto'
+      case default
+         text = text//' minor '//int_str(int(self%minor, I8P))
+      endselect
+   endif
+   if (.not. (self%has_list() .and. present(lo) .and. present(hi))) return
    call list_ticks(self, lo, hi, .true., items)
    if (self%series) then
       if (len(text) == 0) text = 'auto'
@@ -413,6 +435,8 @@ contains
       ticks(k - kmin + 1_I8P)%value = grid_value(k * m, e)
       call tick_label(k * m, e, sci, ticks(k - kmin + 1_I8P)%label, ticks(k - kmin + 1_I8P)%sup, tics)
    enddo
+   if (present(tics)) call append_minors(ticks, 0.0_R8P, step, .false., minor_count(tics, m, .false.), lo, hi, &
+                                         -huge(1.0_R8P), huge(1.0_R8P))
    endsubroutine linear_ticks
 
    pure subroutine log_ticks(lo, hi, npx, extend_lo, extend_hi, ticks, tics)
@@ -447,6 +471,7 @@ contains
    integer(I4P)                                  :: e         !< Decade step exponent.
    logical                                       :: plain     !< Label minors, all in plain decimals.
    logical                                       :: custom    !< User label format.
+   logical                                       :: default_minors !< Minor ticks by default (2..9 of a decade).
 
    ! gnuplot extends autoscaled log axes to whole decades whatever the tick settings
    if (lo <= hi) then
@@ -496,7 +521,9 @@ contains
       endif
       call push(ticks, tick)
    enddo
-   if (s == 1_I8P .and. tb - ta <= 10.0_R8P) then
+   default_minors = .true.
+   if (present(tics)) default_minors = tics%minor == MINOR_DEFAULT
+   if (s == 1_I8P .and. tb - ta <= 10.0_R8P .and. (default_minors .or. plain)) then
       do k = floor(ta - TOL, I8P), floor(tb + TOL, I8P)
          do d = 2_I8P, 9_I8P
             tick%value = grid_value(d, int(k, I4P))
@@ -520,10 +547,122 @@ contains
       b = hi
       call linear_ticks(a, b, npx, .false., .false., linear, tics)
       ticks = pack(linear, linear%value > 0.0_R8P)
+   elseif (.not. (default_minors .or. plain)) then
+      call append_minors(ticks, 1.0_R8P, grid_value(1_I8P, int(s, I4P)), .true., minor_count(tics, 1_I8P, .true.), lo, &
+                         hi, -huge(1.0_R8P), huge(1.0_R8P))
    endif
    endsubroutine log_ticks
 
    ! private procedures
+   pure subroutine append_minors(ticks, first, step, logaxis, n, lo, hi, lower, upper)
+   !< Append to `ticks` the minor ticks of the majors `first + k step` (`first step**k` on a log axis), `n` intervals
+   !< between consecutive majors, linear in value, inside [`lo`, `hi`] (either order) and [`lower`, `upper`]; none for
+   !< `n` < 2.
+   type(tick_object), allocatable, intent(inout) :: ticks(:) !< Ticks.
+   real(R8P),                      intent(in)    :: first    !< A major tick.
+   real(R8P),                      intent(in)    :: step     !< Major step, a factor (> 1) on a log axis.
+   logical,                        intent(in)    :: logaxis  !< Log axis.
+   integer(I4P),                   intent(in)    :: n        !< Intervals between majors.
+   real(R8P),                      intent(in)    :: lo       !< Value at the axis start.
+   real(R8P),                      intent(in)    :: hi       !< Value at the axis end.
+   real(R8P),                      intent(in)    :: lower    !< Smallest value of the series.
+   real(R8P),                      intent(in)    :: upper    !< Largest value of the series.
+   type(tick_object)                             :: tick     !< Minor tick.
+   real(R8P)                                     :: a        !< Smaller range end.
+   real(R8P)                                     :: b        !< Larger range end.
+   real(R8P)                                     :: slack    !< Tolerance on the ends (in decades on a log axis).
+   real(R8P)                                     :: ma       !< Interval start.
+   real(R8P)                                     :: mb       !< Interval end.
+   integer(I8P)                                  :: k        !< Interval index.
+   integer(I8P)                                  :: kmin     !< First interval.
+   integer(I8P)                                  :: kmax     !< Last interval.
+   integer(I4P)                                  :: j        !< Minor counter.
+
+   if (n < 2_I4P .or. .not. (step > 0.0_R8P)) return
+   if (logaxis .and. (step <= 1.0_R8P .or. first <= 0.0_R8P)) return
+   a = min(lo, hi)
+   b = max(lo, hi)
+   slack = 1.0e-9_R8P * (b - a)
+   if (logaxis) then
+      if (a <= 0.0_R8P) return
+      if (max(abs(log10(a)), abs(log10(b)), abs(log10(first))) / log10(step) > real(MAX_POWER, R8P)) return
+      kmin = floor((log10(a) - log10(first)) / log10(step) + TOL, I8P) - 1_I8P
+      kmax = ceiling((log10(b) - log10(first)) / log10(step) - TOL, I8P)
+   else
+      if (max(abs(a), abs(b), abs(first)) / step > 1.0e15_R8P) return
+      kmin = floor((a - first) / step + TOL, I8P) - 1_I8P
+      kmax = ceiling((b - first) / step - TOL, I8P)
+   endif
+   if ((kmax - kmin) * int(n, I8P) > 10_I8P * MAX_TICKS) return
+   tick%major = .false.
+   tick%label = ''
+   tick%sup = ''
+   do k = kmin, kmax
+      if (logaxis) then
+         ma = 10.0_R8P**(log10(first) + real(k, R8P) * log10(step))
+         mb = ma * step
+      else
+         ma = first + real(k, R8P) * step
+         mb = ma + step
+      endif
+      do j = 1_I4P, n - 1_I4P
+         tick%value = ma + real(j, R8P) * (mb - ma) / real(n, R8P)
+         if (logaxis) then
+            if (.not. within(log10(tick%value), log10(a), log10(b), TOL)) cycle
+            ! relative to the series ends, when there are ends (no overflow on huge)
+            if (lower > -huge(1.0_R8P)) then
+               if (tick%value < lower * (1.0_R8P - TOL)) cycle
+            endif
+            if (upper < huge(1.0_R8P)) then
+               if (tick%value > upper * (1.0_R8P + TOL)) cycle
+            endif
+         else
+            if (.not. within(tick%value, a, b, slack)) cycle
+            if (tick%value < lower - slack .or. tick%value > upper + slack) cycle
+         endif
+         call push(ticks, tick)
+      enddo
+   enddo
+   contains
+      pure function within(v, low, high, margin) result(inside)
+      !< Whether `v` lies in [`low`, `high`] to `margin`.
+      real(R8P), intent(in) :: v      !< Value.
+      real(R8P), intent(in) :: low    !< Lower end.
+      real(R8P), intent(in) :: high   !< Upper end.
+      real(R8P), intent(in) :: margin !< Tolerance.
+      logical               :: inside !< Inside.
+
+      inside = v >= low - margin .and. v <= high + margin
+      endfunction within
+   endsubroutine append_minors
+
+   pure function minor_count(tics, mantissa, logaxis) result(n)
+   !< Intervals between major ticks for the minor ticks of `tics`: 0 by default and with none, N if set, else gnuplot's
+   !< automatic count: 9 on a log axis, 2 when the leading digit of the step `mantissa` is 2, else 5.
+   type(tics_object), intent(in) :: tics     !< Settings.
+   integer(I8P),      intent(in) :: mantissa !< Step mantissa (any trailing zeros).
+   logical,           intent(in) :: logaxis  !< Log axis.
+   integer(I4P)                  :: n        !< Intervals, < 2 for none.
+   integer(I8P)                  :: d        !< Leading digit.
+
+   select case (tics%minor)
+   case (MINOR_DEFAULT, MINOR_NONE)
+      n = 0_I4P
+   case (MINOR_AUTO)
+      if (logaxis) then
+         n = 9_I4P
+      else
+         d = abs(mantissa)
+         do while (d >= 10_I8P)
+            d = d / 10_I8P
+         enddo
+         n = merge(2_I4P, 5_I4P, d == 2_I8P)
+      endif
+   case default
+      n = tics%minor
+   endselect
+   endfunction minor_count
+
    pure subroutine common_scale(n, e, ok)
    !< Rescale the decimals `n * 10**e` to their smallest exponent, keeping every mantissa below 1e15 (exact in the
    !< viewer's double precision integers); `ok` false if impossible.
@@ -578,7 +717,6 @@ contains
    logical,                        intent(in)  :: everywhere !< All the items, whatever the range.
    type(tick_object), allocatable, intent(out) :: ticks(:)   !< Ticks.
    type(tick_object)                           :: tick       !< Current tick.
-   real(R8P)                                   :: tol        !< Tolerance on the range ends.
    integer(I8P)                                :: n          !< Position mantissa.
    integer(I4P)                                :: e          !< Position exponent.
    integer(I4P)                                :: k          !< Item counter.
@@ -586,11 +724,12 @@ contains
 
    allocate(ticks(0))
    if (.not. tics%has_list()) return
-   tol = 1.0e-9_R8P * abs(hi - lo)
    sci = is_scientific(max(abs(lo), abs(hi)))
    do k = 1_I4P, size(tics%list, kind=I4P)
       associate(item => tics%list(k))
-         if (.not. everywhere .and. (item%value < min(lo, hi) - tol .or. item%value > max(lo, hi) + tol)) cycle
+         ! the ends to 1e-9 of their magnitude: right on linear and log axes alike
+         if (.not. everywhere .and. (item%value < min(lo, hi) - 1.0e-9_R8P * abs(min(lo, hi)) .or. &
+                                     item%value > max(lo, hi) + 1.0e-9_R8P * abs(max(lo, hi)))) cycle
          tick%value = item%value
          tick%major = item%major
          tick%label = ''
@@ -634,12 +773,12 @@ contains
    call move_alloc(merged, ticks)
    contains
       elemental function same_place(a, b) result(same)
-      !< Whether `a` and `b` are one position, to 1e-9 of the range or of their magnitude.
+      !< Whether `a` and `b` are one position, to 1e-9 of their magnitude (right on log axes too).
       real(R8P), intent(in) :: a    !< Value.
       real(R8P), intent(in) :: b    !< Value.
       logical               :: same !< Same position.
 
-      same = abs(a - b) <= 1.0e-9_R8P * max(abs(hi - lo), abs(a), abs(b))
+      same = abs(a - b) <= 1.0e-9_R8P * max(abs(a), abs(b))
       endfunction same_place
    endsubroutine merge_list
 
@@ -698,6 +837,8 @@ contains
          call tick_label(n(2) + k * n(1), e(1), sci, tick%label, tick%sup, tics)
       endassociate
    enddo
+   call append_minors(ticks, first, step, .false., minor_count(tics, n(1), .false.), lo, hi, &
+                      merge(first, -huge(1.0_R8P), has_start), merge(last, huge(1.0_R8P), has_end))
    endsubroutine fixed_linear_ticks
 
    pure subroutine fixed_log_ticks(lo, hi, tics, ticks)
@@ -754,6 +895,8 @@ contains
       endassociate
       v = v * factor
    enddo
+   call append_minors(ticks, first, factor, .true., minor_count(tics, n(1), .true.), lo, hi, &
+                      merge(first, -huge(1.0_R8P), has_start), merge(last, huge(1.0_R8P), has_end))
    endsubroutine fixed_log_ticks
 
    pure function power(first, factor, k) result(v)

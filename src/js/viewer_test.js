@@ -81,6 +81,24 @@ ticks = viewer.linearTicks(0, 8, 500, viewer.readTics("labels 2e0:1.5x10^6", "")
 check("list superscript", ticks[0].label === "1.5x10" && ticks[0].sup === "6");
 ticks = viewer.linearTicks(0, 4, 500, viewer.readTics("labels 1e0:a%20b 3e0:c", ""));
 check("data labels", ticks.length === 2 && ticks[0].label === "a b" && ticks[0].major);
+// minor ticks (set mxtics [N]), as gnuplot 6.0: counts of majors + minors
+function counts(t) { return labels(t).length + "+" + (t.length - labels(t).length); }
+check("minor auto",
+  counts(viewer.linearTicks(0, 7, 500, viewer.readTics("auto minor auto", ""))) === "8+28");
+check("minor auto step 2",
+  counts(viewer.linearTicks(0, 8, 500, viewer.readTics("* 2 * minor auto", ""))) === "5+4");
+check("minor N partial ends",
+  counts(viewer.linearTicks(0.3, 7.7, 500, viewer.readTics("auto minor auto", ""))) === "7+30");
+check("minor bounded series",
+  counts(viewer.linearTicks(0, 10, 500, viewer.readTics("2 2 6 minor 2", ""))) === "3+2");
+check("minor log N",
+  counts(viewer.logTicks(1, 1000, 400, viewer.readTics("auto minor 2", ""))) === "4+3");
+check("minor log none",
+  counts(viewer.logTicks(1, 1000, 400, viewer.readTics("auto minor 0", ""))) === "4+0");
+check("minor log factor",
+  counts(viewer.logTicks(1, 1e6, 400, viewer.readTics("* 100 * minor 4", ""))) === "4+9");
+check("minor log wide",
+  counts(viewer.logTicks(1, 1e20, 400, viewer.readTics("auto minor 2", ""))) === "5+4");
 
 // tick formats (the same cases as foresight_format_test.F90, checked against C printf)
 function label(format, n, e) { return viewer.formatDecimal(format, n, e).label; }

@@ -85,7 +85,7 @@ use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
-use foresight_ticks, only : push, tic_item, tics_object
+use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
 use foresight_tokens, only : push, split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -1953,6 +1953,14 @@ contains
       call tics_option(self%figure%panels(self%figure%current)%y2axis%tics)
    elseif (keyword(option, 'cbtics', 4_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%cbaxis%tics)
+   elseif (keyword(option, 'mxtics', 3_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%xaxis%tics)
+   elseif (keyword(option, 'mytics', 3_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%yaxis%tics)
+   elseif (keyword(option, 'my2tics', 4_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%y2axis%tics)
+   elseif (keyword(option, 'mcbtics', 4_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'datafile', 5_I4P)) then
       call datafile_option
    elseif (keyword(option, 'samples', 3_I4P)) then
@@ -2798,6 +2806,32 @@ contains
       if (allocated(mirror)) tics%mirror = mirror
       endsubroutine tics_option
 
+      subroutine minor_option(tics)
+      !< `set mxtics|mytics|my2tics|mcbtics [N|default]`: N intervals between consecutive major ticks, gnuplot's
+      !< automatic count without N; `default` restores the minor ticks by default (none, 2..9 on log axes).
+      type(tics_object), intent(inout) :: tics !< Axis tick settings.
+      integer(I4P)                     :: n    !< Intervals.
+      integer(I4P)                     :: ios  !< Read status.
+
+      if (size(tokens) == 1) then
+         tics%minor = MINOR_AUTO
+         return
+      endif
+      if (size(tokens) == 2 .and. tokens(2)%kind == TOKEN_WORD) then
+         if (keyword(tokens(2)%text, 'default', 3_I4P)) then
+            tics%minor = MINOR_DEFAULT
+            return
+         elseif (verify(tokens(2)%text, '0123456789') == 0 .and. len(tokens(2)%text) <= 6) then
+            read(tokens(2)%text, *, iostat=ios) n
+            if (ios == 0_I4P .and. n >= 1_I4P) then
+               tics%minor = n
+               return
+            endif
+         endif
+      endif
+      call fail('set '//option//': a number of intervals (a whole number from 1) or default is expected', iostat, iomsg)
+      endsubroutine minor_option
+
       subroutine list_items(text, items)
       !< The items of the explicit tick list `text`, `({"label"} pos {level}, ...)`, comma separated (a trailing comma is
       !< allowed): the position a constant expression, the level 1 for a minor tick (others are major), as gnuplot.
@@ -3293,6 +3327,14 @@ contains
       call self%figure%unset_y2tics
    elseif (keyword(option, 'cbtics', 4_I4P)) then
       call self%figure%unset_cbtics
+   elseif (keyword(option, 'mxtics', 3_I4P)) then
+      call self%figure%set_mxtics(0_I4P)
+   elseif (keyword(option, 'mytics', 3_I4P)) then
+      call self%figure%set_mytics(0_I4P)
+   elseif (keyword(option, 'my2tics', 4_I4P)) then
+      call self%figure%set_my2tics(0_I4P)
+   elseif (keyword(option, 'mcbtics', 4_I4P)) then
+      call self%figure%set_mcbtics(0_I4P)
    elseif (keyword(option, 'format', 3_I4P)) then
       call self%figure%set_format('')
    else

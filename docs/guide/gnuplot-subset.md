@@ -54,6 +54,7 @@ that did what it says.
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`]\|[`transparent`] `pattern` [`N`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `pattern N` one of the 8 patterns of gnuplot's svg terminal, cycling over the filled items from N; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
+| **mxti**cs / **myti**cs / **my2ti**cs / **mcbti**cs [`N`\|`default`] | minor ticks: `N` intervals between major ticks, gnuplot's count without it; `default`: by default (none, 2..9 on log axes); see [below](#ticks-and-label-formats) | no minor ticks |
 | `paxis` `N` `range [min:max]`\|`tics [...]`\|`label "text"` | parallel axis N of the [parallel axis and spider plots](#parallel-axes-and-spider-plots): its range (autoscaled to its values, not extended), ticks (off by default), label | `unset paxis N tics`: no ticks |
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
@@ -297,6 +298,19 @@ and any earlier list; with `add` it joins them, an item replacing the tick at it
 ```gnuplot
 set xtics ("Jan" 1, "" 1.5 1, "Feb" 2, "" 2.5 1, "Mar" 3)   # months, a minor tick between them
 set ytics add ("limit" 7.5, "%.2f mm" 4.25)                 # the automatic ticks and two more
+```
+
+Minor ticks divide each interval between consecutive major ticks: `set mxtics N` in `N` parts, `set mxtics` by
+gnuplot's count (2 when the step leads with 2, 0.2 or 20, else 5; 9 on log axes), linearly in value on log axes too
+(`set mytics 4` puts them at 3.25, 5.5, 7.75 within each decade), as gnuplot. They cover the partial intervals at the
+ends of an automatic step, stay within `START` and `END` of a fixed one, and an explicit list alone has none. By
+default linear axes have none and log axes the 2..9 multiples of each decade (gnuplot also draws them on log axes whose
+majors are several decades apart: foresight does not); `unset mxtics` removes them, `set mxtics default` restores them.
+
+```gnuplot
+set mxtics               # gnuplot's count: 5 per step of 1
+set mytics 4             # 4 intervals between major ticks
+unset mytics             # none, also the 2..9 of a log axis
 ```
 
 All these settings follow the zoom in the HTML page: the viewer places and formats the ticks by the same rules, the
@@ -842,7 +856,7 @@ text). Zooming magnifies the cells with the data.
 Recursive user functions, inline ranges (`plot [0:1] sin(x)`), the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
-(`set xtics 0,1 ("a" 2)`), minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
+(`set xtics 0,1 ("a" 2)`), and the `rotate`, `out` options; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; variable colors (`lc variable`), `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters other than

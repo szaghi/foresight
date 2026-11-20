@@ -97,6 +97,14 @@ On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 An explicit list replaces the ticks: names at chosen positions, `""` with level `1` for an unlabelled minor tick. With
 `add` the list joins the automatic ticks; a label holding a conversion is the format of its position (`"%.0f mm"`).
 
+### Minor ticks
+
+<<< @/examples/snippets/cb_mtics.gp{gnuplot}
+
+<Plot name="cb_mtics" svg :width="560" :height="320" />
+
+`set mxtics 4` divides each step of x in 4; `set mytics` alone takes gnuplot's count, 9 per decade on a log axis.
+
 ### Two y axes
 
 <<< @/examples/snippets/cb_y2.gp{gnuplot}

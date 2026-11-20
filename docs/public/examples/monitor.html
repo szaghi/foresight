@@ -455,11 +455,16 @@
   // user tick settings from the panel attributes: {mode, start, step, end, format}; labels
   // ("labels v:text ...", texts percent-encoded, "^sup" a superscript, "v!" a minor tick), from
   // the data or an explicit list, give mode "labels" and {labels}; after "auto" or a step they are
-  // added to those ticks ({add}), as gnuplot `set xtics add`
+  // added to those ticks ({add}), as gnuplot `set xtics add`; "minor auto|N" sets {minor}: "auto",
+  // N intervals, or "" by default
   function readTics(positions, format) {
-    var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""};
+    var tics = {mode: "auto", start: "", step: "", end: "", format: format || "", minor: ""};
     var words = positions ? positions.split(" ") : [], k = words.indexOf("labels");
-    var series = k < 0 ? words : words.slice(0, k);
+    var series = k < 0 ? words : words.slice(0, k), m = series.indexOf("minor");
+    if (m >= 0) {
+      tics.minor = series[m + 1] === "auto" ? "auto" : Number(series[m + 1]);
+      series = series.slice(0, m);
+    }
     if (k >= 0) {
       tics.labels = words.slice(k + 1).map(function (item) {
         var colon = item.indexOf(":"), caret, text;
@@ -473,6 +478,7 @@
       tics.add = k > 0;
     }
     if (k === 0) tics.mode = "labels";
+    else if (series.length === 1 && series[0] === "auto") tics.mode = "auto";
     else if (series[0] === "none") tics.mode = "none";
     else if (series.length === 3) {
       tics.mode = "fixed";
@@ -523,6 +529,8 @@
       v = scale10(f.n[1] + k * f.n[0], f.e);
       ticks.push({value: v, major: true, label: t.label, sup: t.sup});
     }
+    appendMinors(ticks, scale10(f.n[1], f.e), step, false, minorCount(tics, f.n[0], false), lo, hi,
+      f.hasStart ? scale10(f.n[1], f.e) : -Infinity, f.hasEnd ? scale10(f.n[2], f.e) : Infinity);
     return ticks;
   }
 
@@ -560,14 +568,72 @@
       ticks.push({value: v, major: true, label: t.label, sup: t.sup});
       v *= factor;
     }
+    appendMinors(ticks, first, factor, true, minorCount(tics, f.n[0], true), lo, hi,
+      f.hasStart ? first : -Infinity, f.hasEnd ? last : Infinity);
     return ticks;
+  }
+
+  // minor ticks of the majors first + k * step (first * step**k on a log axis), n intervals
+  // between consecutive majors, linear in value, inside [lo, hi] and [lower, upper]
+  // (mirror of append_minors)
+  function appendMinors(ticks, first, step, logaxis, n, lo, hi, lower, upper) {
+    var a = Math.min(lo, hi), b = Math.max(lo, hi), slack = 1e-9 * (b - a), kmin, kmax, k, j;
+    var ma, mb, v;
+    if (n < 2 || !(step > 0)) return;
+    if (logaxis && (step <= 1 || first <= 0)) return;
+    if (logaxis) {
+      if (a <= 0) return;
+      var lf = Math.log10(step);
+      if (Math.max(Math.abs(Math.log10(a)), Math.abs(Math.log10(b)),
+        Math.abs(Math.log10(first))) / lf > MAX_POWER) return;
+      kmin = Math.floor((Math.log10(a) - Math.log10(first)) / lf + TOL) - 1;
+      kmax = Math.ceil((Math.log10(b) - Math.log10(first)) / lf - TOL);
+    } else {
+      if (Math.max(Math.abs(a), Math.abs(b), Math.abs(first)) / step > 1e15) return;
+      kmin = Math.floor((a - first) / step + TOL) - 1;
+      kmax = Math.ceil((b - first) / step - TOL);
+    }
+    if ((kmax - kmin) * n > 10 * MAX_TICKS) return;
+    for (k = kmin; k <= kmax; k++) {
+      if (logaxis) {
+        ma = Math.pow(10, Math.log10(first) + k * Math.log10(step));
+        mb = ma * step;
+      } else {
+        ma = first + k * step;
+        mb = ma + step;
+      }
+      for (j = 1; j <= n - 1; j++) {
+        v = ma + j * (mb - ma) / n;
+        if (logaxis) {
+          if (Math.log10(v) < Math.log10(a) - TOL || Math.log10(v) > Math.log10(b) + TOL) continue;
+          if (v < lower * (1 - TOL) || v > upper * (1 + TOL)) continue;
+        } else {
+          if (v < a - slack || v > b + slack) continue;
+          if (v < lower - slack || v > upper + slack) continue;
+        }
+        ticks.push({value: v, major: false, label: "", sup: ""});
+      }
+    }
+  }
+
+  // intervals between majors for the minor ticks (mirror of minor_count): 0 by default, N if set,
+  // else 9 on a log axis, 2 when the step mantissa leads with 2, else 5
+  function minorCount(tics, mantissa, logaxis) {
+    if (!tics || tics.minor === "" || tics.minor === 0) return 0;
+    if (tics.minor !== "auto") return tics.minor;
+    if (logaxis) return 9;
+    var d = Math.abs(mantissa);
+    while (d >= 10) d = Math.floor(d / 10);
+    return d === 2 ? 2 : 5;
   }
 
   // major ticks of a linear axis over [lo, hi] (either order), gnuplot's step (npx unused)
   // the labels inside [lo, hi], in either order: the range is never extended to them
   function labelTicks(lo, hi, tics) {
-    var a = Math.min(lo, hi), b = Math.max(lo, hi), tol = 1e-9 * (b - a);
-    return tics.labels.filter(function (t) { return t.value >= a - tol && t.value <= b + tol; })
+    var a = Math.min(lo, hi), b = Math.max(lo, hi);
+    return tics.labels.filter(function (t) {
+      return t.value >= a - 1e-9 * Math.abs(a) && t.value <= b + 1e-9 * Math.abs(b);
+    })
       .map(function (t) {
         return {value: t.value, major: t.major !== false, label: t.label, sup: t.sup || ""};
       });
@@ -577,12 +643,11 @@
   // (mirror of merge_list)
   function mergeLabels(ticks, lo, hi, tics) {
     if (!tics || !tics.add) return ticks;
-    var items = labelTicks(lo, hi, tics), span = Math.abs(hi - lo);
+    var items = labelTicks(lo, hi, tics);
     if (!items.length) return ticks;
     return ticks.filter(function (t) {
       return !items.some(function (i) {
-        var scale = Math.max(span, Math.abs(t.value), Math.abs(i.value));
-        return Math.abs(t.value - i.value) <= 1e-9 * scale;
+        return Math.abs(t.value - i.value) <= 1e-9 * Math.max(Math.abs(t.value), Math.abs(i.value));
       });
     }).concat(items);
   }
@@ -605,6 +670,7 @@
       t = tickLabel(k * ns.m, ns.e, sci, tics);
       ticks.push({value: scale10(k * ns.m, ns.e), major: true, label: t.label, sup: t.sup});
     }
+    appendMinors(ticks, 0, step, false, minorCount(tics, ns.m, false), lo, hi, -Infinity, Infinity);
     return ticks;
   }
 
@@ -631,7 +697,8 @@
       else t = {label: plain ? decimalStr(1, -k) : "10", sup: plain ? "" : String(k)};
       ticks.push({value: scale10(1, k), major: true, label: t.label, sup: t.sup});
     }
-    if (s === 1 && tb - ta <= 10) {
+    var byDefault = !tics || tics.minor === "";
+    if (s === 1 && tb - ta <= 10 && (byDefault || plain)) {
       for (k = Math.floor(ta - TOL); k <= Math.floor(tb + TOL); k++) {
         for (d = 2; d <= 9; d++) {
           v = scale10(d, k);
@@ -645,6 +712,9 @@
     }
     if (ticks.filter(function (x) { return x.major; }).length < 2) {
       ticks = linearSeries(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
+    } else if (!(byDefault || plain)) {
+      appendMinors(ticks, 1, scale10(1, s), true, minorCount(tics, 1, true), lo, hi, -Infinity,
+        Infinity);
     }
     return ticks;
   }

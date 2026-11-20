@@ -60,7 +60,8 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
                             WITH_PARALLELAXES, WITH_SPIDERPLOT
-use foresight_ticks, only : labels_attribute, linear_ticks, push, tick_object, tics_object, TICS_FIXED, TICS_NONE
+use foresight_ticks, only : labels_attribute, linear_ticks, MINOR_DEFAULT, push, tick_object, tics_object, TICS_FIXED, &
+                           TICS_NONE
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -3769,7 +3770,19 @@ contains
       call backend%image(left, top, left + bw, top + bh, rgba)
       if (self%cbox%border) call backend%rect(left, top, bw, bh, FRAME_COLOR, 'none', 1.0_R8P)
       do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
-         if (.not. self%cbaxis%ticks(k)%major) cycle
+         if (.not. self%cbaxis%ticks(k)%major) then
+            ! minor ticks once set (mcbtics): the log decade multiples are not drawn by default
+            if (self%cbaxis%tics%minor == MINOR_DEFAULT) cycle
+            if (self%cbox%horizontal) then
+               pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
+               call backend%polyline([pos, pos], [top + bh, top + bh - TICK_MINOR], FRAME_COLOR, 1.0_R8P, '')
+            else
+               pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
+               pos = merge(top + pos, top + bh - pos, self%cbox%invert)
+               call backend%polyline([left + bw, left + bw - TICK_MINOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+            endif
+            cycle
+         endif
          labelled = .true.
          if (self%cbox%horizontal) then
             pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw

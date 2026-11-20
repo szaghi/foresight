@@ -8,7 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : I4P, R8P, script_object
-use foresight_ticks, only : TICS_NONE
+use foresight_ticks, only : MINOR_AUTO, TICS_NONE
 use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(82)                           !< Per-check outcome.
+logical                       :: test_passed(83)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1150,6 +1150,28 @@ test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'empt
 call interpreter%run_text('set xtics ("a" 1 +)', iostat, iomsg)
 test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'list item "1 +"') > 0
 test_passed(82) = test_passed(82) .and. colorbox_labels('set cbtics ("low" 0.2, "high" 0.8)', ['low ', 'high'], ['0.2'])
+
+! minor ticks, as gnuplot 6.0: set mxtics [N] (gnuplot's count without N), unset mxtics, set mxtics default
+call interpreter%init(scratch)
+associate(tics => interpreter%figure%panels(1)%xaxis%tics)
+   call interpreter%run_text('set mxtics', iostat, iomsg)
+   test_passed(83) = iostat == 0_I4P .and. tics%attribute() == 'auto minor auto'
+   call interpreter%run_text('set xtics 2; set mxtics 4', iostat, iomsg)
+   test_passed(83) = test_passed(83) .and. tics%attribute() == '* 2 * minor 4'
+   call interpreter%run_text('unset mxtics', iostat, iomsg)
+   test_passed(83) = test_passed(83) .and. tics%attribute() == '* 2 * minor 0'
+   call interpreter%run_text('set mxtics default; set xtics auto', iostat, iomsg)
+   test_passed(83) = test_passed(83) .and. tics%attribute() == ''
+endassociate
+call interpreter%run_text('set mytics 3; set my2tics; set mcbtics 2', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(83) = test_passed(83) .and. iostat == 0_I4P .and. panel%yaxis%tics%minor == 3_I4P .and. &
+                     panel%y2axis%tics%minor == MINOR_AUTO .and. panel%cbaxis%tics%minor == 2_I4P
+endassociate
+call interpreter%run_text('set mxtics 0', iostat, iomsg)
+test_passed(83) = test_passed(83) .and. iostat /= 0_I4P .and. index(iomsg, 'set mxtics: a number of intervals') > 0
+call interpreter%run_text('set mxtics 2.5', iostat, iomsg)
+test_passed(83) = test_passed(83) .and. iostat /= 0_I4P .and. index(iomsg, 'set mxtics: a number of intervals') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1167,7 +1189,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,82L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,83L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

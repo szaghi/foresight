@@ -26,7 +26,7 @@ use foresight_format, only : format_check, real_str
 use foresight_style, only : fill_style, sequence_colors
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
-use foresight_ticks, only : tic_item, tics_object, TICS_NONE
+use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
@@ -103,6 +103,10 @@ type :: figure_object
       procedure, pass(self) :: set_xlabel      !< gnuplot `set xlabel`.
       procedure, pass(self) :: set_xrange      !< gnuplot `set xrange`.
       procedure, pass(self) :: set_xtics       !< gnuplot `set xtics`.
+      procedure, pass(self) :: set_mxtics      !< gnuplot `set mxtics`.
+      procedure, pass(self) :: set_mytics      !< gnuplot `set mytics`.
+      procedure, pass(self) :: set_my2tics     !< gnuplot `set my2tics`.
+      procedure, pass(self) :: set_mcbtics     !< gnuplot `set mcbtics`.
       procedure, pass(self) :: set_cbtics      !< gnuplot `set cbtics`.
       procedure, pass(self) :: unset_cbtics    !< gnuplot `unset cbtics`.
       procedure, pass(self) :: set_ylabel      !< gnuplot `set ylabel`.
@@ -1127,6 +1131,62 @@ contains
    call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end, mirror, positions, labels, minor, &
                  add)
    endsubroutine set_xtics
+
+   subroutine set_mxtics(self, intervals)
+   !< Minor x ticks, as gnuplot `set mxtics [N]`: `intervals` between consecutive major ticks of the automatic or
+   !< fixed ticks (linearly in value on a log axis), gnuplot's count without it (2 or 5 by the step, 9 on log axes); 0 or
+   !< 1 for none, as `unset mxtics`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks.
+
+   call self%ensure_panels
+   associate(tics => self%panels(self%current)%xaxis%tics)
+      tics%minor = MINOR_AUTO
+      if (present(intervals)) tics%minor = max(0_I4P, intervals)
+   endassociate
+   endsubroutine set_mxtics
+
+   subroutine set_mytics(self, intervals)
+   !< Minor y ticks, as gnuplot `set mytics [N]`: `intervals` between consecutive major ticks of the automatic or
+   !< fixed ticks (linearly in value on a log axis), gnuplot's count without it (2 or 5 by the step, 9 on log axes); 0 or
+   !< 1 for none, as `unset mytics`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks.
+
+   call self%ensure_panels
+   associate(tics => self%panels(self%current)%yaxis%tics)
+      tics%minor = MINOR_AUTO
+      if (present(intervals)) tics%minor = max(0_I4P, intervals)
+   endassociate
+   endsubroutine set_mytics
+
+   subroutine set_my2tics(self, intervals)
+   !< Minor second y ticks, as gnuplot `set my2tics [N]`: `intervals` between consecutive major ticks of the automatic or
+   !< fixed ticks (linearly in value on a log axis), gnuplot's count without it (2 or 5 by the step, 9 on log axes); 0 or
+   !< 1 for none, as `unset my2tics`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks.
+
+   call self%ensure_panels
+   associate(tics => self%panels(self%current)%y2axis%tics)
+      tics%minor = MINOR_AUTO
+      if (present(intervals)) tics%minor = max(0_I4P, intervals)
+   endassociate
+   endsubroutine set_my2tics
+
+   subroutine set_mcbtics(self, intervals)
+   !< Minor color box ticks, as gnuplot `set mcbtics [N]`: `intervals` between consecutive major ticks of the automatic or
+   !< fixed ticks (linearly in value on a log axis), gnuplot's count without it (2 or 5 by the step, 9 on log axes); 0 or
+   !< 1 for none, as `unset mcbtics`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks.
+
+   call self%ensure_panels
+   associate(tics => self%panels(self%current)%cbaxis%tics)
+      tics%minor = MINOR_AUTO
+      if (present(intervals)) tics%minor = max(0_I4P, intervals)
+   endassociate
+   endsubroutine set_mcbtics
 
    subroutine set_ylabel(self, label)
    !< Set the y axis label of the current panel, empty for none.

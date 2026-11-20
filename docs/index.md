@@ -138,6 +138,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
+  <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
   <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
   <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
