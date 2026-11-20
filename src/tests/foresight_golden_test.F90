@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(73)                  !< Per-figure outcome.
+logical                     :: test_passed(74)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -94,7 +94,10 @@ test_passed(70) = check('image_vik.svg', figure_image('vik', cbmax=1.0_R8P))
 test_passed(71) = check('image_romaO.svg', figure_image('romaO maxcolors 12'))
 test_passed(72) = check('image_cubehelix.svg', figure_image('cubehelix'))
 test_passed(73) = check('short_panels.svg', figure_short_panels())
-write(output_unit, '(A,73L2)') 'foresight golden checks:', test_passed
+! the library gradient renders as the same `defined` palette
+test_passed(74) = rendered(figure_image('negative', gradient=.true.)) == &
+                  rendered(figure_image('defined (0 "blue", 1 "white", 2 "red") negative'))
+write(output_unit, '(A,74L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -368,12 +371,13 @@ contains
    call fig%set_text(charset='quadrants', colors='ansirgb')
    endfunction figure_theme_block
 
-   function figure_image(palette, theme, cbmax) result(fig)
+   function figure_image(palette, theme, cbmax, gradient) result(fig)
    !< A heatmap of a 21 x 15 grid with an undefined (transparent) pixel, in the `palette`: x and y fit the pixel edges,
    !< the color box at the right with its label; `cbmax` sets the symmetric color range [-cbmax:cbmax].
    character(len=*), intent(in)           :: palette !< Palette words.
    character(len=*), intent(in), optional :: theme   !< Theme name.
    real(R8P),        intent(in), optional :: cbmax   !< Half width of a symmetric color range.
+   logical,          intent(in), optional :: gradient !< First the gradient blue, white, red at 0, 1, 2.
    type(figure_object)                    :: fig     !< Figure.
    real(R8P), allocatable                 :: x(:)    !< Pixel centre abscissae.
    real(R8P), allocatable                 :: y(:)    !< Pixel centre ordinates.
@@ -392,6 +396,8 @@ contains
       enddo
    enddo
    z(1, 1) = ieee_value(1.0_R8P, ieee_quiet_nan)
+   if (present(gradient)) call fig%set_palette_gradient([0.0_R8P, 1.0_R8P, 2.0_R8P], &
+      reshape([0.0_R8P, 0.0_R8P, 1.0_R8P, 1.0_R8P, 1.0_R8P, 1.0_R8P, 1.0_R8P, 0.0_R8P, 0.0_R8P], [3, 3]))
    call fig%set_palette(palette)
    if (present(cbmax)) call fig%set_cbrange(-cbmax, cbmax)
    call fig%set_cblabel('phi')
@@ -788,6 +794,20 @@ contains
       close(unit, status='delete')
    endif
    endfunction check
+
+   function rendered(fig) result(text)
+   !< The SVG of `fig`, through a scratch file.
+   type(figure_object), intent(in) :: fig    !< Figure.
+   character(len=:), allocatable   :: text   !< SVG.
+   type(figure_object)             :: figure !< Figure being rendered.
+   integer(I4P)                    :: unit   !< File unit.
+
+   figure = fig
+   call figure%save('foresight_golden_rendered.svg')
+   text = read_text('foresight_golden_rendered.svg')
+   open(newunit=unit, file='foresight_golden_rendered.svg')
+   close(unit, status='delete')
+   endfunction rendered
 
    function read_text(file) result(text)
    !< Whole content of `file`.

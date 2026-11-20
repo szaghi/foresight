@@ -25,7 +25,7 @@ use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_style, only : fill_style
 use foresight_theme, only : theme_named, theme_object, THEMES
-use foresight_palette, only : palette_words
+use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
@@ -79,6 +79,7 @@ type :: figure_object
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
       procedure, pass(self) :: set_palette     !< gnuplot `set palette`.
+      procedure, pass(self) :: set_palette_gradient !< gnuplot `set palette defined`/`file` from arrays.
       procedure, pass(self) :: set_paxis       !< gnuplot `set paxis N range|tics|label`.
       procedure, pass(self) :: set_polar       !< gnuplot `set polar` / `unset polar`.
       procedure, pass(self) :: set_raxis       !< gnuplot `set raxis` / `unset raxis`.
@@ -434,6 +435,24 @@ contains
    endassociate
    if (len(bad) > 0) error stop 'foresight: set_palette: unsupported palette "'//bad//'"'
    endsubroutine set_palette
+
+   subroutine set_palette_gradient(self, positions, colors)
+   !< Palette of the images as a gradient, as gnuplot `set palette defined` or `set palette file`: `colors(:, k)`
+   !< (red, green, blue, 0 to 1, clipped) at `positions(k)`, increasing (equal ones make a sharp step), mapped to
+   !< 0..1. Other palette settings (`negative`, `maxcolors`) are kept; `set_palette` words can follow.
+   class(figure_object), intent(inout) :: self         !< Figure.
+   real(R8P),            intent(in)    :: positions(:) !< Positions.
+   real(R8P),            intent(in)    :: colors(:,:)  !< Colors (red, green, blue; position).
+   character(len=:), allocatable       :: bad          !< Problem.
+
+   if (size(colors, 1) /= 3 .or. size(colors, 2) /= size(positions)) &
+      error stop 'foresight: set_palette_gradient: colors(3, size(positions)) expected'
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      call palette_gradient(panel%palette, positions, colors, bad)
+   endassociate
+   if (len(bad) > 0) error stop 'foresight: set_palette_gradient: '//bad
+   endsubroutine set_palette_gradient
 
    subroutine set_angles(self, unit)
    !< Unit of the angles, as gnuplot `set angles degrees|radians` (radians by default): theta of a polar panel and

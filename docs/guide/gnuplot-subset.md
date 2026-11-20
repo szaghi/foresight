@@ -568,8 +568,8 @@ lowest values up to the emissive colors, and `maxcolors` turns the heatmap into 
 `defined`), or 3 columns `r:g:b` evenly spaced (the default is 4 columns when the rows have a 4th), the components
 from 0 to 1 (clipped); `index`, `every` and `using` (expressions too) select and compute them as in `plot`, `#`
 comments are skipped and a blank line is an error. Words before the file keep their effect (`set palette negative`
-then `set palette file 'f'` stays negative), words after it apply to it. A script feature: the library takes
-`defined` lists.
+then `set palette file 'f'` stays negative), words after it apply to it. From the library, `set_palette_gradient`
+takes the positions and colors as arrays.
 
 ```gnuplot
 set palette file 'terrain.dat'
