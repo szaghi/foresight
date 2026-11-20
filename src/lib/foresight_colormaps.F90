@@ -9,7 +9,10 @@ module foresight_colormaps
 !< - mpl-colormaps: colormaps.py of https://github.com/BIDS/colormap, commit bc549477db0c,
 !<   sha256 b7478d10e2ccfdb22128867e137f16f55b687e9c225065e91bcbd6bb9e6c0352;
 !< - cividis: lib/matplotlib/_cm_listed.py of https://github.com/matplotlib/matplotlib, commit 5c4c028dcca3,
-!<   sha256 ddad3698f5129ceb1792a445371286c08bc9080298e657b3054aea19c9659ef9.
+!<   sha256 ddad3698f5129ceb1792a445371286c08bc9080298e657b3054aea19c9659ef9;
+!< - black_body: black-body-table-byte-0256.csv of
+!<   https://www.kennethmoreland.com/color-advice/black-body/,
+!<   sha256 9591b49e0f3f87165f2ab1f801d85fcca5a9d14193ecb8a54d168c6ec421caaa.
 !<
 !< Each map is 256 colors `rrggbb`: Crameri's 8-bit tables, the matplotlib ones rounded half up from 0..1.
 !<
@@ -37,6 +40,9 @@ module foresight_colormaps
 !<
 !< magma, inferno, plasma and viridis (mpl-colormaps, Nathaniel J. Smith, Stefan van der Walt and Eric Firing) are
 !< dedicated to the public domain (CC0 1.0).
+!<
+!< black_body (Kenneth Moreland, https://www.kennethmoreland.com/color-advice/) is dedicated to the public
+!< domain (CC0).
 !<
 !< cividis (Nunez, J. R., Anderton, C. R., Renslow, R. S. (2018). Optimizing colormaps with consideration for
 !< color vision deficiency to enable accurate interpretation of scientific data. PLoS ONE 13(7), e0199239,
@@ -150,7 +156,7 @@ public :: COLORMAP_NAMES
 public :: colormap_hex
 public :: colormap_id
 
-integer(I4P), parameter :: COLORMAPS = 45_I4P !< Number of named palettes.
+integer(I4P), parameter :: COLORMAPS = 46_I4P !< Number of named palettes.
 character(len=*), parameter :: CM_ACTON = &
    '260d40270e41280f422911432a12442b13452b14462c16482d17492e184a2f194b301b4c' // &
    '311c4d321d4e321e4f331f503421523522533623543624553725563826573927583a2959' // &
@@ -1186,19 +1192,43 @@ character(len=*), parameter :: CM_CIVIDIS = &
    'e2cd54e4ce53e5cf52e6d051e7d150e8d24fe9d34eead34cebd44bedd54aeed649efd748' // &
    'f0d846f1d945f2da44f3db42f5dc41f6dd3ff7de3ef8df3cf9e03afbe138fce236fde334' // &
    'fee434fee535fee636fee838' !< cividis, J. R. Nunez et al..
-character(len=7), parameter :: COLORMAP_NAMES(COLORMAPS) = [ &
-   'acton  ', 'bam    ', 'bamako ', 'bamO   ', 'batlow ', 'batlowK', 'batlowW', 'berlin ', 'bilbao ', 'broc   ', &
-   'brocO  ', 'buda   ', 'bukavu ', 'cork   ', 'corkO  ', 'davos  ', 'devon  ', 'fes    ', 'glasgow', 'grayC  ', &
-   'hawaii ', 'imola  ', 'lajolla', 'lapaz  ', 'lipari ', 'lisbon ', 'managua', 'navia  ', 'naviaW ', 'nuuk   ', &
-   'oleron ', 'oslo   ', 'roma   ', 'romaO  ', 'tofino ', 'tokyo  ', 'turku  ', 'vanimo ', 'vik    ', 'vikO   ', &
-   'magma  ', 'inferno', 'plasma ', 'viridis', 'cividis' &
+character(len=*), parameter :: CM_BLACK_BODY = &
+   '0000000301010702010a03020d04021005031206031407041608041809051a0a051b0b06' // &
+   '1d0b061e0c07200d08210e08220f09240f0925100a26100a28110b29110b2b120c2c120c' // &
+   '2e120d2f130d31130e32130e34140f36140f37140f3915103a15103c15103e16113f1611' // &
+   '4116114217124417124617124718134918134b18134c19144e1914501914511914531a15' // &
+   '551a15561a15581a155a1b165b1b165d1b165f1b16611c17621c17641c17661c17681d18' // &
+   '691d186b1d186d1d186f1d19701e19721e19741e19761e1a771e1a791f1a7b1f1a7d1f1b' // &
+   '7f1f1b801f1b821f1b84201c86201c88201c89201c8b201d8d201d8f201d91211d93211e' // &
+   '94211e96211e98211f9a211f9c211f9e211fa02120a12220a32220a52220a72221a92221' // &
+   'ab2221ad2221af2222b12222b22222b32422b42622b52821b62a21b72c21b82d21b92f20' // &
+   'ba3120bb3220bc341fbd351fbe371fbf381fc03a1ec13b1ec23d1ec33e1dc4401dc5411c' // &
+   'c6421cc7441cc8451bc9471bca481acb491acc4b19cd4c19ce4d18cf4f18d05017d15217' // &
+   'd25316d35415d45515d55714d65813d75913d85b12d95c11da5d10db5f0fdc600edd610d' // &
+   'de620cdf640be06509e16608e26807e36905e36b05e36d06e46e07e47007e47208e47408' // &
+   'e57609e5770ae5790ae57b0be57c0ce67e0ce6800de6820ee6830ee6850fe6870fe78810' // &
+   'e78a11e78c11e78d12e78f13e79113e79214e89415e89615e89716e89916e89a17e89c18' // &
+   'e89e18e89f19e8a11ae8a21ae9a41be9a61be9a71ce9a91de9aa1de9ac1ee9ae1ee9af1f' // &
+   'e9b120e9b220e9b421e9b522e9b722e9b923e9ba23e9bc24e9bd25e9bf25e9c026e9c226' // &
+   'e9c327e9c528e9c728e9c829e8ca2ae8cb2ae8cd2be8ce2be8d02ce8d12de8d32de8d52e' // &
+   'e8d62fe8d82fe7d930e7db30e7dc31e7de32e7df32e7e133e6e234e6e434e6e535e7e73c' // &
+   'e9e745eae84eece957edea5eeeeb66f0ec6df1ec75f2ed7cf3ee83f5ef89f6f090f7f197' // &
+   'f8f19ef9f2a4f9f3abfaf4b1fbf5b8fcf6befcf7c5fdf8cbfdf9d2fef9d8fefadffefbe5' // &
+   'fffcecfffdf2fffef9ffffff' !< black_body, K. Moreland (CC0).
+character(len=10), parameter :: COLORMAP_NAMES(COLORMAPS) = [ &
+   'acton     ', 'bam       ', 'bamako    ', 'bamO      ', 'batlow    ', 'batlowK   ', 'batlowW   ', 'berlin    ', &
+   'bilbao    ', 'broc      ', 'brocO     ', 'buda      ', 'bukavu    ', 'cork      ', 'corkO     ', 'davos     ', &
+   'devon     ', 'fes       ', 'glasgow   ', 'grayC     ', 'hawaii    ', 'imola     ', 'lajolla   ', 'lapaz     ', &
+   'lipari    ', 'lisbon    ', 'managua   ', 'navia     ', 'naviaW    ', 'nuuk      ', 'oleron    ', 'oslo      ', &
+   'roma      ', 'romaO     ', 'tofino    ', 'tokyo     ', 'turku     ', 'vanimo    ', 'vik       ', 'vikO      ', &
+   'magma     ', 'inferno   ', 'plasma    ', 'viridis   ', 'cividis   ', 'black_body' &
    ] !< Names, canonical case.
 character(len=1536), parameter :: TABLES(COLORMAPS) = [ &
    CM_ACTON, CM_BAM, CM_BAMAKO, CM_BAMO, CM_BATLOW, CM_BATLOWK, CM_BATLOWW, CM_BERLIN, CM_BILBAO, CM_BROC, &
    CM_BROCO, CM_BUDA, CM_BUKAVU, CM_CORK, CM_CORKO, CM_DAVOS, CM_DEVON, CM_FES, CM_GLASGOW, CM_GRAYC, CM_HAWAII, &
    CM_IMOLA, CM_LAJOLLA, CM_LAPAZ, CM_LIPARI, CM_LISBON, CM_MANAGUA, CM_NAVIA, CM_NAVIAW, CM_NUUK, CM_OLERON, &
    CM_OSLO, CM_ROMA, CM_ROMAO, CM_TOFINO, CM_TOKYO, CM_TURKU, CM_VANIMO, CM_VIK, CM_VIKO, CM_MAGMA, CM_INFERNO, &
-   CM_PLASMA, CM_VIRIDIS, CM_CIVIDIS &
+   CM_PLASMA, CM_VIRIDIS, CM_CIVIDIS, CM_BLACK_BODY &
    ] !< Tables, in the order of the names.
 
 contains
@@ -1207,7 +1237,7 @@ contains
    character(len=*), intent(in) :: name !< Palette name.
    integer(I4P)                 :: id   !< Index in `COLORMAP_NAMES`, 0 if unknown.
 
-   if (len_trim(name) > 7) then
+   if (len_trim(name) > 10) then
       id = 0_I4P
       return
    endif

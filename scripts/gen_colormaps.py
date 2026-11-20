@@ -11,7 +11,9 @@ The tables come from the original releases, never from a translation:
   Eric Firing (CC0), ``colormaps.py`` of https://github.com/BIDS/colormap;
 - cividis by J. R. Nunez, C. R. Anderton and R. S. Renslow, the table its author contributed
   to matplotlib, ``lib/matplotlib/_cm_listed.py`` (matplotlib's licence and the Battelle
-  licence of its origin, pnnl/cmaputil: both notices are written into the module).
+  licence of its origin, pnnl/cmaputil: both notices are written into the module);
+- black_body by Kenneth Moreland (CC0), his 256-entry byte table
+  ``black-body-table-byte-0256.csv`` of https://www.kennethmoreland.com/color-advice/.
 
 The matplotlib colors, 0 to 1 per channel, are rounded half up to 8 bits; the 256 colors of a map are
 written as ``rrggbb``. The inputs are parsed as text, never executed. Run by hand (it
@@ -19,7 +21,8 @@ needs the downloaded inputs, not available in CI):
 
     python3 scripts/gen_colormaps.py --crameri DIR --crameri-zip ScientificColourMaps8.zip \
         --bids colormaps.py --cividis _cm_listed.py --mpl-license LICENSE \
-        --battelle-license cmaputil/LICENSE --output src/lib/foresight_colormaps.F90
+        --battelle-license cmaputil/LICENSE --black-body black-body-table-byte-0256.csv \
+        --output src/lib/foresight_colormaps.F90
 """
 
 from __future__ import annotations
@@ -54,7 +57,7 @@ PNNL_DISCLAIMER = (
 )
 LEVELS = 256
 PER_LINE = 12  # colors per source line, as the former VIRIDIS constant
-NAME_LEN = 7
+NAME_LEN = 10
 
 
 class ColormapError(Exception):
@@ -154,6 +157,40 @@ def read_crameri(root: Path, name: str) -> list[tuple[int, int, int]]:
         msg = f"{name}: .lut and .txt differ by more than 1"
         raise ColormapError(msg)
     return [(c[0], c[1], c[2]) for c in lut]
+
+
+def read_moreland(path: Path) -> list[tuple[int, int, int]]:
+    """Read Kenneth Moreland's 256-entry byte table (``scalar,RGB_r,RGB_g,RGB_b`` CSV).
+
+    Parameters
+    ----------
+    path : Path
+        ``black-body-table-byte-0256.csv``.
+
+    Returns
+    -------
+    list of tuple of int
+        The 256 colors.
+
+    Raises
+    ------
+    ColormapError
+        If the table is not 256 rows of three bytes after the header.
+    """
+    lines = [
+        line for line in path.read_text(encoding="ascii").splitlines() if line.strip()
+    ]
+    if not lines or lines[0].strip() != "scalar,RGB_r,RGB_g,RGB_b":
+        msg = f"{path.name}: header scalar,RGB_r,RGB_g,RGB_b expected"
+        raise ColormapError(msg)
+    rows = [tuple(int(v) for v in line.split(",")[1:]) for line in lines[1:]]
+    if len(rows) != LEVELS or any(
+        len(r) != 3 or any(not 0 <= v <= 255 for v in r)
+        for r in rows  # noqa: PLR2004
+    ):
+        msg = f"{path.name}: {LEVELS} rows of three bytes expected"
+        raise ColormapError(msg)
+    return [(r[0], r[1], r[2]) for r in rows]
 
 
 def read_bids(text: str, name: str) -> list[tuple[int, int, int]]:
@@ -305,6 +342,9 @@ def fortran_module(
         "!<",
         "!< magma, inferno, plasma and viridis (mpl-colormaps, Nathaniel J. Smith, Stefan van der Walt and Eric Firing) are",
         "!< dedicated to the public domain (CC0 1.0).",
+        "!<",
+        "!< black_body (Kenneth Moreland, https://www.kennethmoreland.com/color-advice/) is dedicated to the public",
+        "!< domain (CC0).",
         *[f"!< {n}".rstrip() for n in notices],
         "use penf, only : I4P",
         "",
@@ -496,6 +536,12 @@ def main(argv: list[str] | None = None) -> int:
         "--battelle-license", type=Path, required=True, help="pnnl/cmaputil LICENSE"
     )
     parser.add_argument(
+        "--black-body",
+        type=Path,
+        required=True,
+        help="Moreland's black-body-table-byte-0256.csv",
+    )
+    parser.add_argument(
         "--output", type=Path, required=True, help="Fortran module to write"
     )
     args = parser.parse_args(argv)
@@ -512,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
         maps += [(n, read_bids(bids_text, n), "mpl-colormaps (CC0)") for n in BIDS]
         mpl_text = args.cividis.read_text(encoding="utf-8")
         maps.append(("cividis", read_bids(mpl_text, "cividis"), "J. R. Nunez et al."))
+        maps.append(("black_body", read_moreland(args.black_body), "K. Moreland (CC0)"))
         notices = cividis_notices(args.mpl_license, args.battelle_license)
     except (ColormapError, OSError, ValueError) as err:
         print(f"gen_colormaps: {err}", file=sys.stderr)
@@ -524,7 +571,10 @@ def main(argv: list[str] | None = None) -> int:
         "- mpl-colormaps: colormaps.py of https://github.com/BIDS/colormap, commit bc549477db0c,",
         f"  sha256 {sha256(args.bids)};",
         "- cividis: lib/matplotlib/_cm_listed.py of https://github.com/matplotlib/matplotlib, commit 5c4c028dcca3,",
-        f"  sha256 {sha256(args.cividis)}.",
+        f"  sha256 {sha256(args.cividis)};",
+        "- black_body: black-body-table-byte-0256.csv of",
+        "  https://www.kennethmoreland.com/color-advice/black-body/,",
+        f"  sha256 {sha256(args.black_body)}.",
     ]
     args.output.write_text(fortran_module(maps, sources, notices), encoding="ascii")
     return 0

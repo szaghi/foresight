@@ -1,6 +1,6 @@
-set terminal svg size 760,1200; set output 'cb_colormaps_all.svg'
+set terminal svg size 760,1280; set output 'cb_colormaps_all.svg'
 # every named palette, by type: sequential, diverging, multi-sequential, cyclic
-set multiplot layout 15,3
+set multiplot layout 16,3
 unset xtics; unset ytics; unset border; unset colorbox
 set cbrange [0:255]
 set title 'acton'; set palette acton; plot 'ramp.dat' matrix w image notitle
@@ -30,6 +30,7 @@ set title 'inferno'; set palette inferno; plot 'ramp.dat' matrix w image notitle
 set title 'plasma'; set palette plasma; plot 'ramp.dat' matrix w image notitle
 set title 'viridis'; set palette viridis; plot 'ramp.dat' matrix w image notitle
 set title 'cividis'; set palette cividis; plot 'ramp.dat' matrix w image notitle
+set title 'black_body'; set palette black_body; plot 'ramp.dat' matrix w image notitle
 set title 'bam'; set palette bam; plot 'ramp.dat' matrix w image notitle
 set title 'berlin'; set palette berlin; plot 'ramp.dat' matrix w image notitle
 set title 'broc'; set palette broc; plot 'ramp.dat' matrix w image notitle

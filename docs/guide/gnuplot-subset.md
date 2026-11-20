@@ -573,7 +573,8 @@ makes its pixel transparent. Packed ARGB in one column and `matrix` RGB data are
 ### Named palettes
 
 A foresight extension (gnuplot rejects these scripts): `set palette NAME` takes one of the 40 *Scientific colour maps*
-(v8.0.1) by Fabio Crameri, one of matplotlib's `magma`, `inferno`, `plasma`, `viridis`, or `cividis`, the name in any case
+(v8.0.1) by Fabio Crameri, one of matplotlib's `magma`, `inferno`, `plasma`, `viridis`, `cividis`, or Kenneth
+Moreland's `black_body`, the name in any case
 (`batlow`, `BATLOW`, `romao`). They are perceptually uniform (equal steps in value look like equal steps in color),
 readable with color-vision deficiencies and, the sequential ones, in black-and-white print. A table of 256 colors,
 gray g takes its color nint(255 g); `negative` reverses it, and `maxcolors N` takes the N colors nint(255 k / (N - 1)),
@@ -581,12 +582,12 @@ Crameri's discrete palettes (`batlow maxcolors 10` is his `batlow10`; a few of h
 
 | Type | Names | For |
 |---|---|---|
-| Sequential | `acton` `bamako` `batlow` `batlowK` `batlowW` `bilbao` `buda` `davos` `devon` `glasgow` `grayC` `hawaii` `imola` `lajolla` `lapaz` `lipari` `navia` `naviaW` `nuuk` `oslo` `tokyo` `turku`; `magma` `inferno` `plasma` `viridis` `cividis` | a magnitude, low to high |
+| Sequential | `acton` `bamako` `batlow` `batlowK` `batlowW` `bilbao` `buda` `davos` `devon` `glasgow` `grayC` `hawaii` `imola` `lajolla` `lapaz` `lipari` `navia` `naviaW` `nuuk` `oslo` `tokyo` `turku`; `magma` `inferno` `plasma` `viridis` `cividis` `black_body` | a magnitude, low to high |
 | Diverging | `bam` `berlin` `broc` `cork` `lisbon` `managua` `roma` `tofino` `vanimo` `vik` | a deviation from a meaningful centre (zero, a mean): set a `cbrange` symmetric about it |
 | Multi-sequential | `bukavu` `fes` `oleron` | two regimes either side of a value at mid-palette (depth and height about sea level): set a `cbrange` that puts the value in the middle |
 | Cyclic | `bamO` `brocO` `corkO` `romaO` `vikO` | a periodic quantity (phase, angle, direction, time of day): both ends have the same color |
 
-<Plot name="cb_colormaps_all" svg :width="760" :height="1200" />
+<Plot name="cb_colormaps_all" svg :width="760" :height="1280" />
 
 ```gnuplot
 set palette vik
@@ -601,7 +602,8 @@ Credit the Scientific colour maps as Crameri, F. (2018), *Scientific colour maps
 (2018), *Optimizing colormaps with consideration for color vision deficiency to enable accurate interpretation of
 scientific data*, PLoS ONE 13(7), e0199239, [doi:10.1371/journal.pone.0199239](https://doi.org/10.1371/journal.pone.0199239),
 in the version its author gave matplotlib. The Scientific colour maps are MIT-licensed, magma, inferno, plasma and
-viridis CC0, cividis under matplotlib's licence and Battelle's: the notices are in `src/lib/foresight_colormaps.F90`.
+viridis CC0, cividis under matplotlib's licence and Battelle's, black_body CC0: the notices are in
+`src/lib/foresight_colormaps.F90`.
 
 ## Circles, pies and donuts
 

@@ -66,6 +66,9 @@ call palette_words('romaO', p, bad)
 test_passed(11) = test_passed(11) .and. same(p%rgb(0.0_R8P), [115, 57, 87]) .and. same(p%rgb(1.0_R8P), [114, 57, 89])
 call palette_words('magma', p, bad)
 test_passed(11) = test_passed(11) .and. hex_color(p%rgb(0.0_R8P)) == '#000004' .and. hex_color(p%rgb(1.0_R8P)) == '#fcfdbf'
+call palette_words('Black_Body', p, bad)
+test_passed(11) = test_passed(11) .and. len(bad) == 0 .and. same(p%rgb(0.0_R8P), [0, 0, 0]) .and. &
+                  same(p%rgb(0.5_R8P), [206, 77, 24]) .and. same(p%rgb(1.0_R8P), [255, 255, 255])
 call palette_words('CIVIDIS', p, bad)
 test_passed(11) = test_passed(11) .and. len(bad) == 0 .and. hex_color(p%rgb(0.0_R8P)) == '#00224e' .and. &
                   hex_color(p%rgb(1.0_R8P)) == '#fee838'
