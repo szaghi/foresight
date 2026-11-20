@@ -51,7 +51,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_colorsequence(name, [colors])` | `set colorsequence podo`, `set colorsequence batlowS 6` (`colors=6`) |
 | `set_palette_gradient(positions, colors)` | `set palette defined (...)` / `set palette file 'f'` from arrays: `colors(:, k)` (red, green, blue, 0 to 1) at increasing `positions(k)`; `set_palette` words can follow (`'negative'`) |
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")`, `set palette cubehelix cycles 1`, `set palette vik negative` (named palettes, see [Images and palettes](gnuplot-subset#images-and-palettes)) |
-| `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
+| `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on], [horizontal], [user], [origin], [size], [border], [invert])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox horizontal`, `set colorbox user origin 0.8,0.2 size 0.05,0.6` / `unset colorbox` (`on=.false.`) |
 | `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
 | `set_paxis(n, [min], [max], [step], [start], [end], [tics], [label])` | `set paxis 2 range [0:100]`, `set paxis 2 tics 25`, `set paxis 1 label "speed"` |
 | `set_spiderplot([on])`, `set_style_spiderplot(words)` | `set spiderplot`, `set style spiderplot fs transparent solid 0.2 border lw 2` |

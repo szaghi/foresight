@@ -14,8 +14,8 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
-use foresight_axes, only : axes_names, axes_object, boxplot_words, key_position, paxis_object, polar_series, &
-                           readout_position, spider_words, POLAR_STYLES
+use foresight_axes, only : axes_names, axes_object, boxplot_words, colorbox_object, key_position, paxis_object, &
+                           polar_series, readout_position, spider_words, POLAR_STYLES
 use foresight_axis, only : axis_object
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
@@ -413,14 +413,41 @@ contains
    call self%panels(self%current)%cbaxis%set_range(min, max)
    endsubroutine set_cbrange
 
-   subroutine set_colorbox(self, on)
-   !< Draw the color box of the images (`on` absent or true), as gnuplot `set colorbox`, or not.
-   class(figure_object), intent(inout)        :: self !< Figure.
-   logical,              intent(in), optional :: on   !< Color box on.
+   subroutine set_colorbox(self, on, horizontal, user, origin, size, border, invert)
+   !< Draw the color box of the images (`on` absent or true), as gnuplot `set colorbox`, or not (`on` false: `unset
+   !< colorbox`, which also resets every option). `horizontal` (else vertical), `user` (in the `origin`, `size` box:
+   !< canvas fractions from the bottom left; else at the default place: right of the plot, or below it when
+   !< horizontal), `border`, `invert` (a vertical box with low values at the top). With no option at all the box returns
+   !< to the default place, the others kept, as gnuplot's bare `set colorbox`.
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   logical,              intent(in), optional :: on         !< Box drawn.
+   logical,              intent(in), optional :: horizontal !< Horizontal, else vertical.
+   logical,              intent(in), optional :: user       !< In the user box, else at the default place.
+   real(R8P),            intent(in), optional :: origin(2)  !< User box bottom left, canvas fractions.
+   real(R8P),            intent(in), optional :: size(2)    !< User box width and height, canvas fractions (> 0).
+   logical,              intent(in), optional :: border     !< Frame drawn.
+   logical,              intent(in), optional :: invert     !< Low values at the top of a vertical box.
 
    call self%ensure_panels
-   self%panels(self%current)%colorbox = .true.
-   if (present(on)) self%panels(self%current)%colorbox = on
+   associate(panel => self%panels(self%current))
+      panel%colorbox = .true.
+      if (present(on)) panel%colorbox = on
+      if (.not. panel%colorbox) then
+         panel%cbox = colorbox_object()
+         return
+      endif
+      if (.not. (present(horizontal) .or. present(user) .or. present(origin) .or. present(size) .or. &
+                 present(border) .or. present(invert))) panel%cbox%user = .false.
+      if (present(horizontal)) panel%cbox%horizontal = horizontal
+      if (present(user)) panel%cbox%user = user
+      if (present(origin)) panel%cbox%origin = origin
+      if (present(size)) then
+         if (any(size <= 0.0_R8P)) error stop 'foresight: set_colorbox: the size must be positive'
+         panel%cbox%size = size
+      endif
+      if (present(border)) panel%cbox%border = border
+      if (present(invert)) panel%cbox%invert = invert
+   endassociate
    endsubroutine set_colorbox
 
    subroutine set_palette(self, words)
@@ -1248,12 +1275,14 @@ contains
          endif
          if (self%layout) then
             call panel%render(backend, real(modulo(p - 1_I4P, self%cols), R8P) * cell(1), &
-                              top + real((p - 1_I4P) / self%cols, R8P) * cell(2), cell(1), cell(2), self%font_size)
+                              top + real((p - 1_I4P) / self%cols, R8P) * cell(2), cell(1), cell(2), self%font_size, &
+                              canvas=[self%width, self%height])
          else
             ! fractions from the bottom left of the page below the multiplot title, as gnuplot
             call panel%render(backend, panel%origin(1) * self%width, &
                               top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (self%height - top), &
-                              panel%size(1) * self%width, panel%size(2) * (self%height - top), self%font_size)
+                              panel%size(1) * self%width, panel%size(2) * (self%height - top), self%font_size, &
+                              canvas=[self%width, self%height])
          endif
       endassociate
    enddo

@@ -66,6 +66,7 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: axes_object
+public :: colorbox_object
 public :: axes_names
 public :: boxplot_style
 public :: paxis_object
@@ -116,6 +117,16 @@ type :: boxplot_style
    logical          :: sorted      = .false.  !< Factor levels in sorted order, else in order of appearance.
 endtype boxplot_style
 
+type :: colorbox_object
+   !< Color box settings, gnuplot `set colorbox`.
+   logical   :: horizontal = .false.                  !< Gradient left to right, else bottom to top.
+   logical   :: user       = .false.                  !< In the `origin`/`size` box, else at the default place.
+   logical   :: border     = .true.                   !< Frame drawn.
+   logical   :: invert     = .false.                  !< A vertical box with low values at the top.
+   real(R8P) :: origin(2)  = [0.9_R8P, 0.2_R8P]       !< User box bottom left, canvas fractions from the bottom left.
+   real(R8P) :: size(2)    = [0.05_R8P, 0.6_R8P]      !< User box width and height, canvas fractions.
+endtype colorbox_object
+
 type :: axes_object
    !< Plot panel.
    type(axis_object)                :: xaxis          !< Horizontal axis.
@@ -146,6 +157,8 @@ type :: axes_object
    character(len=7), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
    type(axis_object)                :: cbaxis = axis_object(tight=.true.) !< Color axis of the images, `set cbrange`.
    logical                          :: colorbox = .true. !< Draw the color box of the images.
+   type(colorbox_object)            :: cbox              !< Color box placement and look, `set colorbox`.
+   real(R8P)                        :: canvas(2) = 0.0_R8P !< Page width and height being rendered [px].
    logical                          :: readout = .true. !< Draw the readouts.
    character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
    character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
@@ -199,6 +212,7 @@ type :: axes_object
       procedure, pass(self), private :: draw_spider        !< Draw a spider plot panel.
       procedure, pass(self), private :: parallel_axis      !< A parallel axis set up for its values.
       procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
+      procedure, pass(self), private :: colorbox_height    !< Room of a horizontal color box below the plot [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
@@ -979,8 +993,9 @@ contains
    enddo
    endsubroutine data_extent
 
-   subroutine render(self, backend, x0, y0, width, height, font_size)
-   !< Render the panel into the pixel box of top-left corner (`x0`, `y0`) and size `width` x `height`.
+   subroutine render(self, backend, x0, y0, width, height, font_size, canvas)
+   !< Render the panel into the pixel box of top-left corner (`x0`, `y0`) and size `width` x `height`, on a page of
+   !< `canvas` width and height (the box when absent), where a user color box lies.
    class(axes_object),    intent(inout) :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: x0        !< Box left side [px].
@@ -988,6 +1003,7 @@ contains
    real(R8P),             intent(in)    :: width     !< Box width [px].
    real(R8P),             intent(in)    :: height    !< Box height [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P),             intent(in), optional :: canvas(2) !< Page width and height [px].
    real(R8P)                            :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P)                            :: box(4)    !< Box left to the rest of the panel by an outside key:
                                                      !< left, top, width, height [px].
@@ -999,6 +1015,8 @@ contains
    integer(I4P)                         :: s         !< Series counter.
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
 
+   self%canvas = [x0 + width, y0 + height]
+   if (present(canvas)) self%canvas = canvas
    if (.not. allocated(self%series)) allocate(self%series(0))
    if (size(self%series) > 0) then
       if (is_panel_chart(self%series(1)%style%with)) then
@@ -1120,7 +1138,8 @@ contains
    endif
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
-   if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, x0 + width, font_size)
+   if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, &
+                                                                                 [x0, y0, x0 + width, y0 + height], font_size)
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
@@ -3571,8 +3590,8 @@ contains
       if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
       margins(2) = max(margins(2), y2_margin)
    endif
-   if (self%colorbox .and. self%has_image(palette=.true.)) margins(2) = margins(2) + &
-                                                              self%colorbox_width(backend, font_size)
+   if (self%colorbox .and. self%has_image(palette=.true.) .and. .not. (self%cbox%user .or. self%cbox%horizontal)) &
+      margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(3) = margins(3) + above
@@ -3585,6 +3604,9 @@ contains
       margins(1:2) = max(margins(1:2), PAD + GAP + backend%text_width('360', '', font_size))
       margins(3:4) = max(margins(3:4), [PAD, PAD] + GAP + LINE_HEIGHT * font_size + [above, 0.0_R8P])
    endif
+   ! a horizontal color box at its default place: below the x labels
+   if (self%colorbox .and. self%has_image(palette=.true.) .and. self%cbox%horizontal .and. .not. self%cbox%user) &
+      margins(4) = margins(4) + self%colorbox_height(font_size)
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
    if (self%ratio > 0.0_R8P) call fit_ratio
    contains
@@ -3636,43 +3658,104 @@ contains
    if (self%cbaxis%has_label()) room = room + GAP + LINE_HEIGHT * font_size
    endfunction colorbox_width
 
-   subroutine draw_colorbox(self, backend, area, right, font_size)
-   !< The color box: the palette gradient over the color axis (bottom to top), its frame, ticks, labels and label,
-   !< between the plot area and the panel right side `right`.
+   pure function colorbox_height(self, font_size) result(room)
+   !< Room of a horizontal color box below the x labels: a gap, the box, its tick labels, the label [px].
+   class(axes_object),    intent(in) :: self      !< Panel.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: room      !< Height [px].
+
+   room = 2.0_R8P * GAP + COLORBOX_SIZE * font_size
+   if (allocated(self%cbaxis%ticks)) then
+      if (any(self%cbaxis%ticks%major)) room = room + GAP + LINE_HEIGHT * font_size
+   endif
+   if (self%cbaxis%has_label()) room = room + GAP + LINE_HEIGHT * font_size
+   endfunction colorbox_height
+
+   subroutine draw_colorbox(self, backend, area, panel, font_size)
+   !< The color box: the palette gradient over the color axis, its frame (`border`), ticks, labels and label. Vertical,
+   !< low values at the bottom (at the top with `invert`), at the right of the plot by default; horizontal, low values
+   !< at the left, below the x labels by default; or in the `user` box (canvas fractions from the bottom left).
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
-   real(R8P),             intent(in)    :: right     !< Panel right side [px].
+   real(R8P),             intent(in)    :: panel(4)  !< Panel box: left, top, right, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
-   integer(I4P), allocatable            :: rgba(:,:,:) !< Gradient, top to bottom.
+   integer(I4P), allocatable            :: rgba(:,:,:) !< Gradient.
    type(palette_object)                 :: p         !< Effective palette.
-   real(R8P)                            :: left      !< Box left [px].
-   real(R8P)                            :: pos       !< Tick ordinate [px].
+   real(R8P)                            :: box(4)    !< Box left, top, width, height [px].
+   real(R8P)                            :: pos       !< Tick position [px].
+   real(R8P)                            :: g         !< Gray level.
+   real(R8P)                            :: widest    !< Widest tick label [px].
+   logical                              :: labelled  !< Any tick label.
    integer(I4P)                         :: n         !< Gradient steps.
    integer(I4P)                         :: k         !< Counter.
 
-   left = right - PAD - self%colorbox_width(backend, font_size) + GAP
+   if (self%cbox%user) then
+      box(3:4) = self%cbox%size * self%canvas
+      box(1) = self%cbox%origin(1) * self%canvas(1)
+      box(2) = (1.0_R8P - self%cbox%origin(2)) * self%canvas(2) - box(4)
+   elseif (self%cbox%horizontal) then
+      box = [area(1), panel(4) - PAD - self%colorbox_height(font_size) + GAP, area(2) - area(1), &
+             COLORBOX_SIZE * font_size]
+   else
+      box = [panel(3) - PAD - self%colorbox_width(backend, font_size) + GAP, area(3), COLORBOX_SIZE * font_size, &
+             area(4) - area(3)]
+   endif
    p = effective_palette(self%palette, backend%theme%name)
    n = 256_I4P
    if (p%maxcolors > 0_I4P) n = p%maxcolors
-   allocate(rgba(4, 1, n))
+   if (self%cbox%horizontal) then
+      allocate(rgba(4, n, 1))
+   else
+      allocate(rgba(4, 1, n))
+   endif
    do k = 1_I4P, n
-      rgba(1:3, 1, k) = p%rgb(1.0_R8P - (real(k, R8P) - 0.5_R8P) / real(n, R8P))
-      rgba(4, 1, k) = 255_I4P
+      ! left to right low to high; top to bottom high to low (low to high inverted)
+      g = (real(k, R8P) - 0.5_R8P) / real(n, R8P)
+      if (.not. (self%cbox%horizontal .or. self%cbox%invert)) g = 1.0_R8P - g
+      if (self%cbox%horizontal) then
+         rgba(1:3, k, 1) = p%rgb(g)
+         rgba(4, k, 1) = 255_I4P
+      else
+         rgba(1:3, 1, k) = p%rgb(g)
+         rgba(4, 1, k) = 255_I4P
+      endif
    enddo
+   widest = 0.0_R8P
+   labelled = .false.
    call backend%begin_group('fs-colorbox')
-   associate(top => area(3), bottom => area(4), box => COLORBOX_SIZE * font_size)
-      call backend%image(left, top, left + box, bottom, rgba)
-      call backend%rect(left, top, box, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+   associate(left => box(1), top => box(2), bw => box(3), bh => box(4))
+      call backend%image(left, top, left + bw, top + bh, rgba)
+      if (self%cbox%border) call backend%rect(left, top, bw, bh, FRAME_COLOR, 'none', 1.0_R8P)
       do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
          if (.not. self%cbaxis%ticks(k)%major) cycle
-         pos = bottom - self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * (bottom - top)
-         call backend%polyline([left + box, left + box - TICK_MAJOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
-         call backend%text(left + box + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
-                           sup=self%cbaxis%ticks(k)%sup)
+         labelled = .true.
+         if (self%cbox%horizontal) then
+            pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
+            call backend%polyline([pos, pos], [top + bh, top + bh - TICK_MAJOR], FRAME_COLOR, 1.0_R8P, '')
+            call backend%text(pos, top + bh + GAP + font_size, self%cbaxis%ticks(k)%label, 'middle', &
+                              sup=self%cbaxis%ticks(k)%sup)
+         else
+            pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
+            pos = merge(top + pos, top + bh - pos, self%cbox%invert)
+            call backend%polyline([left + bw, left + bw - TICK_MAJOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+            call backend%text(left + bw + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
+                              sup=self%cbaxis%ticks(k)%sup)
+         endif
       enddo
-      if (self%cbaxis%has_label()) call backend%text(right - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
-                                                     self%cbaxis%label, 'middle', rotate=-90.0_R8P)
+      ! as colorbox_width: over every tick
+      do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
+         widest = max(widest, backend%text_width(self%cbaxis%ticks(k)%label, self%cbaxis%ticks(k)%sup, font_size))
+      enddo
+      if (self%cbaxis%has_label()) then
+         if (self%cbox%horizontal) then
+            call backend%text(left + 0.5_R8P * bw, top + bh + GAP + font_size + &
+                              merge(GAP + LINE_HEIGHT * font_size, 0.0_R8P, labelled), self%cbaxis%label, 'middle')
+         else
+            call backend%text(left + bw + 3.0_R8P * GAP + widest + (LINE_HEIGHT - 0.25_R8P) * font_size, &
+                              top + 0.5_R8P * bh, self%cbaxis%label, 'middle', rotate=-90.0_R8P)
+         endif
+      endif
    endassociate
    call backend%end_group
    endsubroutine draw_colorbox
@@ -3759,8 +3842,15 @@ contains
       real(R8P) :: zmax  !< Largest value.
       logical   :: any_z !< Any finite value.
 
+      real(R8P) :: npx   !< Color box length [px].
+
       call image_range(self%series, zmin, zmax, any_z, positive=self%cbaxis%log)
-      call self%cbaxis%setup(zmin, zmax, any_z, area(4) - area(3))
+      if (self%cbox%user) then
+         npx = merge(self%cbox%size(1) * self%canvas(1), self%cbox%size(2) * self%canvas(2), self%cbox%horizontal)
+      else
+         npx = merge(area(2) - area(1), area(4) - area(3), self%cbox%horizontal)
+      endif
+      call self%cbaxis%setup(zmin, zmax, any_z, npx)
       endsubroutine setup_colors
 
       subroutine collect_labels

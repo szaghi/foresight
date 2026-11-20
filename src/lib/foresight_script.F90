@@ -49,7 +49,8 @@ module foresight_script
 !<   [using U]|gray|grey|color|NAME|positive|
 !<   negative|maxcolors N|model RGB]` (NAME: a
 !<   named palette of foresight_colormaps, `viridis`, `batlow`, ..., any case), `set cbrange [min:max]`,
-!<   `set|unset cblabel ["t"]`, `set|unset colorbox`, `set|unset cbtics`, `set format cb`, `set|unset logscale cb`;
+!<   `set|unset cblabel ["t"]`, `set|unset colorbox [vertical|horizontal] [default|user] [origin X,Y] [size W,H]
+!<   [border|bdefault|noborder] [invert|noinvert] [front]`, `set|unset cbtics`, `set format cb`, `set|unset logscale cb`;
 !< - `with circles` (`using x:y[:r[:start:end]]`, wedges with angles in degrees); foresight's `with pie [donut F]`
 !<   (`using Y[:xtic(N)]`, alone in its panel);
 !< - foresight's panel charts: `with gauge range [A:B] [segments N] [format "fmt"]`, `with radar`, `with rose [linear]`
@@ -1764,11 +1765,7 @@ contains
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_cblabel(text)
    elseif (keyword(option, 'colorbox', 4_I4P)) then
-      if (size(tokens) > 1) then
-         call fail('set colorbox: no options are supported (the box is at the right of the plot)', iostat, iomsg)
-         return
-      endif
-      call self%figure%set_colorbox(.true.)
+      call colorbox_option
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call boxwidth_option
    elseif (keyword(option, 'output', 2_I4P)) then
@@ -2024,6 +2021,91 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine colorbox_option
+      !< `set colorbox [vertical|horizontal] [default|user] [origin X,Y] [size W,H] [border|bdefault|noborder]
+      !< [invert|noinvert] [front]`, gnuplot's keywords and abbreviations; bare, the box returns to the default place.
+      logical, allocatable   :: horizontal !< Orientation, if given.
+      logical, allocatable   :: user       !< Placement, if given.
+      logical, allocatable   :: border     !< Frame, if given.
+      logical, allocatable   :: invert     !< Inversion, if given.
+      real(R8P), allocatable :: origin(:)  !< User box origin, if given.
+      real(R8P), allocatable :: box(:)     !< User box size, if given.
+      character(len=:), allocatable :: word !< Option word.
+      real(R8P)              :: pair(2)    !< Two numbers.
+
+      if (size(tokens) == 1) then
+         call self%figure%set_colorbox(.true.)
+         return
+      endif
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         word = tokens(i)%text
+         if (tokens(i)%kind /= TOKEN_WORD) then
+            call fail('set colorbox: unexpected "'//word//'"', iostat, iomsg)
+            return
+         elseif (keyword(word, 'vertical', 1_I4P)) then
+            horizontal = .false.
+         elseif (keyword(word, 'horizontal', 1_I4P)) then
+            horizontal = .true.
+         elseif (keyword(word, 'default', 3_I4P)) then
+            user = .false.
+         elseif (keyword(word, 'user', 1_I4P)) then
+            user = .true.
+         elseif (keyword(word, 'origin', 1_I4P)) then
+            if (.not. number_pair('origin', pair)) return
+            origin = pair
+         elseif (keyword(word, 'size', 1_I4P)) then
+            if (.not. number_pair('size', pair)) return
+            if (any(pair <= 0.0_R8P)) then
+               call fail('set colorbox: the size must be positive', iostat, iomsg)
+               return
+            endif
+            box = pair
+         elseif (keyword(word, 'bdefault', 2_I4P) .or. keyword(word, 'border', 2_I4P)) then
+            border = .true.
+            if (i < size(tokens, kind=I4P)) then
+               if (to_number(tokens(i + 1_I4P)%text, pair(1))) then
+                  call fail('set colorbox: border line types are not supported (border or noborder)', iostat, iomsg)
+                  return
+               endif
+            endif
+         elseif (keyword(word, 'noborder', 4_I4P)) then
+            border = .false.
+         elseif (keyword(word, 'invert', 3_I4P)) then
+            invert = .true.
+         elseif (keyword(word, 'noinvert', 5_I4P)) then
+            invert = .false.
+         elseif (keyword(word, 'front', 2_I4P)) then
+            continue
+         elseif (keyword(word, 'back', 2_I4P)) then
+            call fail('set colorbox: back is not supported (the box is drawn in front)', iostat, iomsg)
+            return
+         else
+            call fail('set colorbox: unsupported option "'//word//'"', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+      enddo
+      call self%figure%set_colorbox(.true., horizontal=horizontal, user=user, origin=origin, size=box, border=border, &
+                                    invert=invert)
+      endsubroutine colorbox_option
+
+      function number_pair(name, pair) result(ok)
+      !< Read `X,Y` after the `name` keyword at token `i` into `pair`, leaving `i` on Y.
+      character(len=*), intent(in)  :: name    !< Keyword, for messages.
+      real(R8P),        intent(out) :: pair(2) !< X and Y.
+      logical                       :: ok      !< Read.
+
+      ok = i + 3_I4P <= size(tokens, kind=I4P)
+      if (ok) ok = tokens(i + 2_I4P)%kind == TOKEN_COMMA .and. to_number(tokens(i + 1_I4P)%text, pair(1)) .and. &
+                   to_number(tokens(i + 3_I4P)%text, pair(2))
+      if (.not. ok) then
+         call fail('set colorbox: '//name//' needs X,Y', iostat, iomsg)
+         return
+      endif
+      i = i + 3_I4P
+      endfunction number_pair
 
       subroutine colorsequence_option
       !< `set colorsequence default|podo|classic` (gnuplot's linetype colors), or foresight's `NAME [N]`: the first N

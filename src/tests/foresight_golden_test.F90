@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(76)                  !< Per-figure outcome.
+logical                     :: test_passed(77)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -99,7 +99,8 @@ test_passed(74) = rendered(figure_image('negative', gradient=.true.)) == &
                   rendered(figure_image('defined (0 "blue", 1 "white", 2 "red") negative'))
 test_passed(75) = check('colorsequence_batlowS.svg', figure_colorsequence())
 test_passed(76) = check('image_logcb.svg', figure_logcb())
-write(output_unit, '(A,76L2)') 'foresight golden checks:', test_passed
+test_passed(77) = check('colorbox_modes.svg', figure_colorbox_modes())
+write(output_unit, '(A,77L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -405,6 +406,32 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_colorbox_modes() result(fig)
+   !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.
+   type(figure_object) :: fig     !< Figure.
+   real(R8P)           :: z(21,15) !< Values.
+   integer(I4P)        :: i       !< Column counter.
+   integer(I4P)        :: j       !< Row counter.
+
+   do j = 1_I4P, 15_I4P
+      do i = 1_I4P, 21_I4P
+         z(i, j) = exp(-(real(i - 11, R8P)**2 + real(j - 8, R8P)**2) / 24.0_R8P)
+      enddo
+   enddo
+   call fig%init(width=900_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=3_I4P)
+   call fig%set_palette('viridis')
+   call fig%set_cblabel('phi')
+   call fig%set_colorbox(horizontal=.true.)
+   call fig%image(z)
+   call fig%next_panel
+   call fig%set_colorbox(horizontal=.false., invert=.true., border=.false.)
+   call fig%image(z)
+   call fig%next_panel
+   call fig%set_colorbox(border=.true., invert=.false., user=.true., origin=[0.9_R8P, 0.25_R8P], size=[0.02_R8P, 0.5_R8P])
+   call fig%image(z)
+   endfunction figure_colorbox_modes
 
    function figure_logcb() result(fig)
    !< A log color axis, gray palette: values 3, 30, 700 and 0, -5, 50; the axis spans the positive extent 3..700 (not

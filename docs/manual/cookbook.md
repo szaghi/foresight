@@ -382,6 +382,16 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 `unset cbtics` set the labels of the color box as those of the x and y axes. See
 [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### Color box placement
+
+<<< @/examples/snippets/cb_colorbox.gp{gnuplot}
+
+<Plot name="cb_colorbox" svg :width="760" :height="320" />
+
+`set colorbox horizontal` lays the box below the plot; `user origin X,Y size W,H` puts it anywhere on the page
+(fractions from the bottom left), `invert` turns a vertical box upside down, `noborder` drops its frame. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ### A palette from a file
 
 <<< @/examples/snippets/cb_palette_file.gp{gnuplot}

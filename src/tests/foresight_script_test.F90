@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(79)                           !< Per-check outcome.
+logical                       :: test_passed(80)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1029,6 +1029,34 @@ associate(panel => interpreter%figure%panels(1))
 endassociate
 call interpreter%run_text("set logscale cb x2", iostat, iomsg)
 test_passed(79) = test_passed(79) .and. iostat /= 0_I4P
+! set colorbox, as gnuplot 6.0: options and minimal abbreviations, origin/size kept until used, a bare set colorbox back
+! to the default place (the rest kept), unset colorbox resetting every option; back, border line types, bad sizes
+call interpreter%init(scratch)
+call interpreter%run_text("set colorbox h u o 0.1,0.2 s 0.5, 0.05 nobo inv fr", iostat, iomsg)
+associate(cbox => interpreter%figure%panels(1)%cbox)
+   test_passed(80) = iostat == 0_I4P .and. cbox%horizontal .and. cbox%user .and. .not. cbox%border .and. cbox%invert .and. &
+                     all(cbox%origin == [0.1_R8P, 0.2_R8P]) .and. all(cbox%size == [0.5_R8P, 0.05_R8P])
+   call interpreter%run_text("set colorbox", iostat, iomsg)
+   test_passed(80) = test_passed(80) .and. iostat == 0_I4P .and. .not. cbox%user .and. cbox%horizontal .and. &
+                     cbox%invert .and. .not. cbox%border .and. all(cbox%origin == [0.1_R8P, 0.2_R8P])
+   call interpreter%run_text("set colorbox user; set colorbox default vertical bdefault noinv", iostat, iomsg)
+   test_passed(80) = test_passed(80) .and. iostat == 0_I4P .and. .not. (cbox%user .or. cbox%horizontal .or. cbox%invert) &
+                     .and. cbox%border
+   call interpreter%run_text("set colorbox horizontal invert noborder user; unset colorbox; set colorbox", iostat, iomsg)
+   test_passed(80) = test_passed(80) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%colorbox .and. &
+                     .not. (cbox%user .or. cbox%horizontal .or. cbox%invert) .and. cbox%border .and. &
+                     all(cbox%origin == [0.9_R8P, 0.2_R8P]) .and. all(cbox%size == [0.05_R8P, 0.6_R8P])
+endassociate
+call interpreter%run_text("set colorbox back", iostat, iomsg)
+test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'drawn in front') > 0
+call interpreter%run_text("set colorbox border 3", iostat, iomsg)
+test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'line types are not supported') > 0
+call interpreter%run_text("set colorbox user size 0,0.5", iostat, iomsg)
+test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'the size must be positive') > 0
+call interpreter%run_text("set colorbox origin 0.1", iostat, iomsg)
+test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'origin needs X,Y') > 0
+call interpreter%run_text("set colorbox d", iostat, iomsg)
+test_passed(80) = test_passed(80) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "d"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1046,7 +1074,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,79L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,80L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

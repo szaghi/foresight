@@ -60,7 +60,7 @@ that did what it says.
 | **colors**equence `default`\|`podo`\|`classic`\|`NAME` [`N`] | the [linetype colors](#styles) of the series, `lc N` and the slices: gnuplot's 8 (`default`), `podo` (8), `classic` (13, gnuplot's svg terminal); `NAME [N]` foresight's: the first N (8) colors of a categorical order | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
 | **cbl**abel `"text"` | color box label | no label |
-| **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
+| **colo**rbox [`vertical`\|`horizontal`] [`default`\|`user`] [`origin X,Y`] [`size W,H`] [`border`\|`bdefault`\|`noborder`] [`invert`\|`noinvert`] [`front`] | color box of the images, see [below](#images-and-palettes) | no color box, every option reset |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle `boxplot` [`range R`\|`fraction F`] [`outliers`\|`nooutliers`] [`pointtype P`] [`candlesticks`\|`financebars`] [`medianlinewidth W`] [`separation S`] [`labels off`\|`auto`\|`x`] [`sorted`\|`unsorted`] | layout of the [boxplots](#box-finance-and-boxplot-styles) plotted next | — |
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
@@ -601,8 +601,23 @@ plot 'field.dat' u 1:2:(10**(3*$3)) w image notitle
 
 <Plot name="cb_logcb" svg :width="560" :height="400" />
 
-Not supported: `functions` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox` options
-(position, size, horizontal), `set mcbtics`, `pm3d`.
+`set colorbox` places the box as gnuplot: `vertical` (the default) at the right of the plot, low values at the bottom
+(`invert`: at the top); `user` in the box of `origin X,Y` and `size W,H`, fractions of the whole page from its bottom
+left (0.9,0.2 and 0.05,0.6 by default), over the plot if so placed; `noborder` without its frame. `horizontal` puts
+low values at the left, the tick labels and `cblabel` below: at its default place the box lies below the x labels,
+as wide as the plot (gnuplot keeps the narrow vertical slot there: a horizontal box needs `user` in gnuplot), and
+`invert` changes nothing, as gnuplot. A bare `set colorbox` returns the box to its default place, the other options
+kept; `unset colorbox` resets them all.
+
+```gnuplot
+set colorbox horizontal
+set colorbox vertical user origin 0.86,0.3 size 0.02,0.45 invert
+```
+
+<Plot name="cb_colorbox" svg :width="760" :height="320" />
+
+Not supported: `functions` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox back`
+and border line types, `set mcbtics`, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,
 the components from 0 to `set rgbmax` (255; 1.0 for fractions), without palette nor color box; an undefined component
