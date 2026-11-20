@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.2] — 2026-11-20
+### Fixed
+- Foresight compiles with nvfortran 26.9 and ifx 2026.2 under FIGURE's flags
+
+- **datafile**: Xtic labels keep their length under a conforming compiler
+
+- Foresight's suite passes under nvfortran 26.9
+
+
 ## [0.6.1] — 2026-11-20
 ### Added
 - **ticks**: Automatic ticks step as gnuplot's, by the range only
