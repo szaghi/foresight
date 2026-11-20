@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.1] — 2026-11-20
+### Added
+- **ticks**: Automatic ticks step as gnuplot's, by the range only
+
+
 ## [0.6.0] — 2026-11-20
 ### Added
 - **axes**: Set cbtics, set format cb and set logscale cb, as gnuplot 6.0
