@@ -7,6 +7,7 @@ module foresight_palette
 !< interpolating linearly in RGB between colors (`#rrggbb` or a gnuplot color name) at increasing values; `gray`
 !< (gray to the power 1/1.5, gnuplot's gamma); `viridis`; `negative` reverses the gray axis; `maxcolors N` quantizes:
 !< band k = floor(gray N) takes the color of gray k / (N - 1). Channels are rounded to 8 bits.
+!< `color` (after `gray`, say) restores the last palette set by `rgbformulae`, `defined` or a name, else the default.
 !< Beyond gnuplot, any named palette of foresight_colormaps (`batlow`, `vik`, `magma`, `cividis`, ..., `viridis`),
 !< matched case-insensitively: a 256-color table, gray g taking its color nint(255 g), so `maxcolors N` gives the
 !< N colors nint(255 k / (N - 1)), Crameri's discrete palettes.
@@ -34,6 +35,8 @@ type :: palette_object
    logical                :: negative = .false.          !< Gray axis reversed.
    integer(I4P)           :: maxcolors = 0_I4P           !< Colors of a quantized palette, 0 for continuous.
    integer(I4P)           :: table = 0_I4P               !< Named palette (foresight_colormaps index), `PAL_TABLE`.
+   integer(I4P)           :: color_mode = PAL_FORMULAE   !< Mode `color` restores: the last set by `rgbformulae`,
+                                                         !< `defined` or a name (as gnuplot's last gradient or formulae).
    real(R8P), allocatable :: positions(:)                !< `defined` positions, increasing.
    real(R8P), allocatable :: colors(:,:)                 !< `defined` colors (RGB 0..1, position).
    contains
@@ -203,6 +206,7 @@ contains
             palette%formulae(k) = int(v, I4P)
          enddo
          palette%mode = PAL_FORMULAE
+         palette%color_mode = PAL_FORMULAE
       case ('defined')
          ! the list runs to its closing parenthesis, blanks included
          rest = trim(adjustl(rest))
@@ -218,7 +222,7 @@ contains
       case ('gray', 'grey')
          palette%mode = PAL_GRAY
       case ('color')
-         if (palette%mode == PAL_GRAY) palette%mode = PAL_FORMULAE
+         palette%mode = palette%color_mode
       case ('positive')
          palette%negative = .false.
       case ('negative')
@@ -244,6 +248,7 @@ contains
             return
          endif
          palette%mode = PAL_TABLE
+         palette%color_mode = PAL_TABLE
          palette%table = k
       endselect
    enddo
@@ -320,6 +325,7 @@ contains
       palette%positions = (pos - pos(1)) / (pos(size(pos)) - pos(1))
       palette%colors = col
       palette%mode = PAL_DEFINED
+      palette%color_mode = PAL_DEFINED
       endsubroutine defined_list
    endsubroutine palette_words
 

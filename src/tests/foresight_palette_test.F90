@@ -11,7 +11,7 @@ implicit none
 type(palette_object)          :: p               !< Palette.
 character(len=:), allocatable :: bad             !< Unknown word.
 type(palette_object)          :: q               !< Second palette.
-logical                       :: test_passed(14) !< Per-check outcome.
+logical                       :: test_passed(15) !< Per-check outcome.
 integer(I4P)                  :: k               !< Band counter.
 integer, parameter            :: BATLOW10(3, 10) = reshape([1, 25, 89, 16, 63, 96, 28, 90, 98, 60, 109, 86, &
                                                             104, 123, 62, 157, 137, 43, 210, 147, 67, 248, 161, 123, &
@@ -30,8 +30,9 @@ call palette_words('viridis', p, bad)
 test_passed(3) = hex_color(p%rgb(0.0_R8P)) == '#440154' .and. hex_color(p%rgb(1.0_R8P)) == '#fde725'
 call palette_words('gray', p, bad)
 test_passed(4) = same(p%rgb(0.5_R8P), [161, 161, 161])
+! color restores viridis, the last palette set (gnuplot 6.0: `gradient named viridis`, `test palette` at 0: 253,231,37)
 call palette_words('color negative', p, bad)
-test_passed(5) = same(p%rgb(0.0_R8P), [255, 255, 0]) .and. p%negative
+test_passed(5) = same(p%rgb(0.0_R8P), [253, 231, 37]) .and. p%negative
 ! defined: values mapped to 0..1, colors by name or #rrggbb, linear in RGB
 p = palette_object()
 call palette_words('defined (0 "blue", 1 "white", 2 "#ff0000")', p, bad)
@@ -96,7 +97,30 @@ call palette_words('batlw', p, bad)
 test_passed(14) = test_passed(14) .and. bad == 'batlw'
 call palette_words('GRAY', p, bad)
 test_passed(14) = test_passed(14) .and. bad == 'GRAY'
-write(output_unit, '(A,14L2)') 'foresight palette checks:', test_passed
+! color restores the last palette set by rgbformulae, defined or a name (gnuplot 6.0: `show palette` after each)
+p = palette_object()
+call palette_words('defined (0 "red", 1 "blue")', p, bad)
+call palette_words('gray', p, bad)
+call palette_words('color', p, bad)
+test_passed(15) = same(p%rgb(0.0_R8P), [255, 0, 0]) .and. same(p%rgb(1.0_R8P), [0, 0, 255])
+p = palette_object()
+call palette_words('viridis', p, bad)
+call palette_words('gray', p, bad)
+call palette_words('color', p, bad)
+test_passed(15) = test_passed(15) .and. hex_color(p%rgb(0.0_R8P)) == '#440154'
+q = palette_object()
+call palette_words('rgbformulae 3 , 4 , 5', q, bad)
+call palette_words('viridis', p, bad)
+call palette_words('rgbformulae 3 , 4 , 5', p, bad)
+call palette_words('color', p, bad)
+test_passed(15) = test_passed(15) .and. same(p%rgb(0.3_R8P), q%rgb(0.3_R8P))
+p = palette_object()
+call palette_words('gray', p, bad)
+call palette_words('color', p, bad)
+test_passed(15) = test_passed(15) .and. p%is_default()
+call palette_words('batlow gray color', p, bad)
+test_passed(15) = test_passed(15) .and. len(bad) == 0 .and. same(p%rgb(0.0_R8P), [1, 25, 89])
+write(output_unit, '(A,15L2)') 'foresight palette checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

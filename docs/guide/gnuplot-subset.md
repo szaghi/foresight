@@ -542,6 +542,7 @@ The palette maps the values over `cbrange` (autoscaled to the values, not extend
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
 `#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
 purple, dark-green, dark-blue, brown, violet, navy), `gray`, `viridis`, or a [named palette](#named-palettes);
+`color` (after `gray`) restores the last one set by `rgbformulae`, `defined`, `viridis` or a name, else the default;
 `negative` reverses it, `maxcolors N` quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
 The palette colors only images and the color box: the series colors (`lc N`) are the linetype colors.
 
