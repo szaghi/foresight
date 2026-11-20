@@ -176,6 +176,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_image" svg :width="560" :height="400" caption="a heatmap with its color box" />
   <Plot name="cb_matrix" svg :width="560" :height="400" caption="a matrix file" />
   <Plot name="cb_palettes" svg :width="760" :height="560" caption="palettes" />
+  <Plot name="cb_palette_file" svg :width="560" :height="400" caption="a palette from a file" />
   <Plot name="cb_colormaps" svg :width="760" :height="560" caption="named palettes: sequential, diverging, multi-sequential, cyclic" />
   <Plot name="cb_rgbimage" svg :width="560" :height="400" caption="an RGB image" />
 </div>

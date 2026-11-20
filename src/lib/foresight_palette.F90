@@ -4,7 +4,8 @@ module foresight_palette
 !<
 !< As gnuplot 6.0 (values checked against its `test palette` tables): `rgbformulae R,G,B` (the default 7,5,15: sqrt,
 !< cube, sin 2pi) with gnuplot's 37 formulae, a negative number meaning the formula of 1 - gray; `defined (v1 c1, ...)`
-!< interpolating linearly in RGB between colors (`#rrggbb` or a gnuplot color name) at increasing values; `gray`
+!< interpolating linearly in RGB between colors (`#rrggbb` or a gnuplot color name) at increasing values (the script's
+!< `file` palettes too, through `palette_gradient`); `gray`
 !< (gray to the power 1/1.5, gnuplot's gamma); `viridis`; `negative` reverses the gray axis; `maxcolors N` quantizes:
 !< band k = floor(gray N) takes the color of gray k / (N - 1). Channels are rounded to 8 bits.
 !< `color` (after `gray`, say) restores the last palette set by `rgbformulae`, `defined` or a name, else the default.
@@ -23,6 +24,7 @@ private
 public :: palette_object
 public :: hex_color
 public :: named_color
+public :: palette_gradient
 public :: palette_words
 
 integer(I4P), parameter :: PAL_FORMULAE = 0_I4P !< `rgbformulae`.
@@ -364,25 +366,46 @@ contains
             bad = 'defined item "'//item//'" (a value and a color, #rrggbb or a name, are expected)'
             return
          endif
-         if (size(pos) > 0) then
-            if (v < pos(size(pos))) then
-               bad = 'defined (the values must increase)'
-               return
-            endif
-         endif
          pos = [pos, v]
          col = reshape([col, real(c, R8P) / 255.0_R8P], [3, size(pos)])
       enddo
-      if (size(pos) < 2 .or. pos(size(pos)) == pos(1)) then
-         bad = 'defined (at least two colors at different values are expected)'
-         return
-      endif
-      palette%positions = (pos - pos(1)) / (pos(size(pos)) - pos(1))
-      palette%colors = col
-      palette%mode = PAL_DEFINED
-      palette%color_mode = PAL_DEFINED
+      call palette_gradient(palette, pos, col, bad)
+      if (len(bad) > 0) bad = 'defined ('//bad//')'
       endsubroutine defined_list
    endsubroutine palette_words
+
+   pure subroutine palette_gradient(palette, positions, colors, bad)
+   !< Make `palette` the gradient of `colors` (RGB 0..1, clipped) at `positions`, increasing (equal ones make a sharp
+   !< step), mapped to 0..1, as gnuplot `defined` and `file` palettes; `bad` says why not, empty if done.
+   type(palette_object),          intent(inout) :: palette      !< Palette.
+   real(R8P),                     intent(in)    :: positions(:) !< Positions.
+   real(R8P),                     intent(in)    :: colors(:,:)  !< Colors (RGB, position).
+   character(len=:), allocatable, intent(out)   :: bad          !< Problem, empty if none.
+   integer(I4P)                                 :: n            !< Colors.
+
+   bad = ''
+   n = size(positions, kind=I4P)
+   if (.not. (all(ieee_is_finite(positions)) .and. all(ieee_is_finite(colors)))) then
+      bad = 'finite values and colors are expected'
+      return
+   endif
+   if (n < 2_I4P) then
+      bad = 'at least two colors at different values are expected'
+      return
+   endif
+   if (any(positions(2:) < positions(:n - 1_I4P))) then
+      bad = 'the values must increase'
+      return
+   endif
+   if (positions(n) == positions(1)) then
+      bad = 'at least two colors at different values are expected'
+      return
+   endif
+   palette%positions = (positions - positions(1)) / (positions(n) - positions(1))
+   palette%colors = min(1.0_R8P, max(0.0_R8P, colors))
+   palette%mode = PAL_DEFINED
+   palette%color_mode = PAL_DEFINED
+   endsubroutine palette_gradient
 
    ! private procedures
    pure function hex_channels(hex) result(c)

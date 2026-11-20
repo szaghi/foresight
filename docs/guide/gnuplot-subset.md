@@ -56,7 +56,7 @@ that did what it says.
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
-| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`cubehelix` [`start S`] [`cycles C`] [`saturation S`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
+| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`cubehelix` [`start S`] [`cycles C`] [`saturation S`]\|`file 'f'` [`index N`] [`every E`] [`using U`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
 | **cbl**abel `"text"` | color box label | no label |
 | **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
@@ -543,7 +543,8 @@ The palette maps the values over `cbrange` (autoscaled to the values, not extend
 `#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
 purple, dark-green, dark-blue, brown, violet, navy), `cubehelix` (Dave Green's helix through the color cube, lightness
 rising with gray: `start S` its starting hue, `cycles C` its turns, `saturation S`; gnuplot's 0.5, -1.5, 1, reset at
-each `cubehelix`, the options right after it), `gray`, `viridis`, or a [named palette](#named-palettes);
+each `cubehelix`, the options right after it), `file 'f'` (a gradient read from a data file, see below), `gray`,
+`viridis`, or a [named palette](#named-palettes);
 `color` (after `gray`) restores the last one set by `rgbformulae`, `defined`, `viridis` or a name, else the default;
 `negative` reverses it, `maxcolors N` quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
 The palette colors only images and the color box: the series colors (`lc N`) are the linetype colors.
@@ -563,7 +564,22 @@ lowest values up to the emissive colors, and `maxcolors` turns the heatmap into 
 
 <Plot name="cb_image_vfd" svg :width="560" :height="400" />
 
-Not supported: `functions`, `file` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox` options
+`set palette file 'f'` reads a gradient as gnuplot: 4 columns `gray:r:g:b` (the grays increasing, mapped to 0..1 as
+`defined`), or 3 columns `r:g:b` evenly spaced (the default is 4 columns when the rows have a 4th), the components
+from 0 to 1 (clipped); `index`, `every` and `using` (expressions too) select and compute them as in `plot`, `#`
+comments are skipped and a blank line is an error. Words before the file keep their effect (`set palette negative`
+then `set palette file 'f'` stays negative), words after it apply to it. A script feature: the library takes
+`defined` lists.
+
+```gnuplot
+set palette file 'terrain.dat'
+set cbrange [-1:1]; set cblabel 'height'
+plot 'field.dat' u 1:2:3 w image notitle
+```
+
+<Plot name="cb_palette_file" svg :width="560" :height="400" />
+
+Not supported: `functions` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox` options
 (position, size, horizontal), `set cbtics`, `set format cb`, `set logscale cb`, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,

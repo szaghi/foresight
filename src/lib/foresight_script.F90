@@ -44,7 +44,8 @@ module foresight_script
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
 !<   the labels replacing the x ticks;
 !< - `plot 'file' [matrix] with image` (`using x:y:z` on a regular grid, or the values of a `matrix` file), `set palette
-!<   [rgbformulae R,G,B|defined (v c, ...)|cubehelix [start S] [cycles C] [saturation S]|gray|grey|color|NAME|positive|
+!<   [rgbformulae R,G,B|defined (v c, ...)|cubehelix [start S] [cycles C] [saturation S]|file 'f' [index N] [every E]
+!<   [using U]|gray|grey|color|NAME|positive|
 !<   negative|maxcolors N|model RGB]` (NAME: a
 !<   named palette of foresight_colormaps, `viridis`, `batlow`, ..., any case), `set cbrange [min:max]`,
 !<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
@@ -76,7 +77,7 @@ use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
-use foresight_palette, only : palette_object, palette_words
+use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_style, only : default_color, fill_style, style_name, style_object, style_with, STYLE_NAMES, WITH_GAUGE, &
                             WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : tics_object
@@ -2020,22 +2021,128 @@ contains
       endsubroutine key_option
 
       subroutine palette_option
-      !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette).
-      type(palette_object)          :: probe !< Palette the words are tried on.
-      character(len=:), allocatable :: words !< Palette words.
-      character(len=:), allocatable :: bad   !< Unknown word.
+      !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette). `file 'f' [index N] [every E]
+      !< [using U]` reads a gradient as gnuplot: 4 columns gray:r:g:b, or 3 columns r:g:b evenly spaced (default: 4
+      !< if the rows have a 4th column), components 0 to 1 (clipped), `#` comments skipped, no blank lines.
+      type(palette_object)                 :: probe  !< Palette the words are tried on.
+      character(len=:), allocatable        :: words  !< Palette words.
+      character(len=:), allocatable        :: after  !< Palette words after the file.
+      character(len=:), allocatable        :: bad    !< Unknown word.
+      character(len=:), allocatable        :: file   !< Palette file.
+      character(len=:), allocatable        :: word   !< Modifier argument.
+      type(datafile_object)                :: pdata  !< Palette file data.
+      type(expression_object), allocatable :: pfields(:) !< `using` fields.
+      real(R8P), allocatable               :: rows(:,:)  !< Gradient rows.
+      real(R8P), allocatable               :: pos(:)     !< Gradient positions.
+      integer(I4P)                         :: pevery(6)  !< `every` fields.
+      integer(I4P)                         :: pindex     !< Dataset, negative for all.
+      integer(I4P)                         :: n          !< Rows.
+      integer(I4P)                         :: k          !< Row counter.
 
       words = ''
-      do i = 2_I4P, size(tokens, kind=I4P)
-         words = words//' '//tokens(i)%text
+      after = ''
+      file = ''
+      pindex = -1_I4P
+      pevery = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         if (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'file' .and. len(file) == 0) then
+            if (i == size(tokens, kind=I4P)) then
+               call fail('set palette: file needs a file name', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            file = tokens(i)%text
+            if (len(file) == 0) then
+               call fail('set palette: file needs a file name', iostat, iomsg)
+               return
+            endif
+            do while (i < size(tokens, kind=I4P))
+               word = tokens(i + 1_I4P)%text
+               if (keyword(word, 'using', 1_I4P)) then
+                  i = i + 1_I4P
+                  if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+                  call parse_using(word, pfields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees)
+                  if (iostat /= 0_I4P) return
+               elseif (keyword(word, 'index', 1_I4P)) then
+                  i = i + 1_I4P
+                  if (.not. next_integer(tokens, i, pindex, iostat, iomsg)) return
+               elseif (keyword(word, 'every', 2_I4P)) then
+                  i = i + 1_I4P
+                  if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+                  call parse_every(word, pevery, iostat, iomsg)
+                  if (iostat /= 0_I4P) return
+               else
+                  exit
+               endif
+            enddo
+         elseif (len(file) == 0) then
+            words = words//' '//tokens(i)%text
+         else
+            after = after//' '//tokens(i)%text
+         endif
+         i = i + 1_I4P
       enddo
       probe = self%figure%panels(self%figure%current)%palette
-      call palette_words(words, probe, bad)
+      ! no words reset the palette, unless a file follows: then they only modify it, as gnuplot
+      bad = ''
+      if (len(file) == 0 .or. len_trim(words) > 0) call palette_words(words, probe, bad)
       if (len(bad) > 0) then
          call fail('set palette: unsupported option "'//bad//'"', iostat, iomsg)
          return
       endif
-      call self%figure%set_palette(words)
+      if (len(file) == 0) then
+         call self%figure%set_palette(words)
+         return
+      endif
+      call pdata%load(file, iostat, iomsg, separator=self%separator)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set palette file: '//iomsg
+         return
+      endif
+      call self%register_file(file)
+      if (.not. allocated(pfields)) then
+         ! gnuplot's default: gray:r:g:b if the rows have a 4th column, else r:g:b
+         pfields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
+         call pdata%table(pfields, pindex, pevery, rows)
+         if (size(rows, 1) > 0) then
+            if (all(rows(:, 4) /= rows(:, 4))) pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
+         endif
+      endif
+      if (size(pfields) /= 3 .and. size(pfields) /= 4) then
+         call fail('set palette file: using needs r:g:b or gray:r:g:b', iostat, iomsg)
+         return
+      endif
+      call pdata%table(pfields, pindex, pevery, rows)
+      n = size(rows, 1, kind=I4P)
+      if (n == 0_I4P) then
+         call fail('set palette file: no colors in "'//file//'"', iostat, iomsg)
+         return
+      endif
+      do k = 1_I4P, n
+         if (any(rows(k, :) /= rows(k, :))) then
+            call fail('set palette file: bad data in "'//file//'" (a number in every column, no blank line)', &
+                      iostat, iomsg)
+            return
+         endif
+      enddo
+      if (size(pfields) == 4) then
+         pos = rows(:, 1)
+         call palette_gradient(probe, pos, transpose(rows(:, 2:4)), bad)
+      else
+         pos = [(real(k, R8P), k = 0_I4P, n - 1_I4P)]
+         call palette_gradient(probe, pos, transpose(rows(:, 1:3)), bad)
+      endif
+      if (len(bad) > 0) then
+         call fail('set palette file: "'//file//'": '//bad, iostat, iomsg)
+         return
+      endif
+      if (len_trim(after) > 0) call palette_words(after, probe, bad)
+      if (len(bad) > 0) then
+         call fail('set palette: unsupported option "'//bad//'"', iostat, iomsg)
+         return
+      endif
+      self%figure%panels(self%figure%current)%palette = probe
       endsubroutine palette_option
 
       subroutine boxwidth_option

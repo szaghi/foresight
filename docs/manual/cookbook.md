@@ -362,6 +362,16 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 `set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `cubehelix [start S]
 [cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### A palette from a file
+
+<<< @/examples/snippets/cb_palette_file.gp{gnuplot}
+
+<Plot name="cb_palette_file" svg :width="560" :height="400" />
+
+`set palette file 'terrain.dat'` reads a gradient as gnuplot: `gray r g b` rows (here sea below 0.5, land above), or
+`r g b` rows evenly spaced; `using`, `index` and `every` work as in `plot`. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ### Named palettes
 
 <<< @/examples/snippets/cb_colormaps.gp{gnuplot}

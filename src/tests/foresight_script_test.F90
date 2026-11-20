@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(76)                           !< Per-check outcome.
+logical                       :: test_passed(77)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -925,6 +925,50 @@ call interpreter%run_text("set style spiderplot lw", iostat, iomsg)
 test_passed(76) = test_passed(76) .and. iostat /= 0_I4P .and. index(iomsg, 'lw needs a number') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2 w lines at 3", iostat, iomsg)
 test_passed(76) = test_passed(76) .and. iostat /= 0_I4P
+! set palette file, against gnuplot 6.0 (test palette): gray:r:g:b rescaled, r:g:b evenly spaced, using, every, the
+! words before the file kept, clipped components; bad data, decreasing grays, no file, two columns
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '# gray r g b', '0 0 0 1', '1 1 1 1', '3 1 0 0'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set palette negative; set palette file '"//data_file//"'", iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(77) = iostat == 0_I4P .and. palette%negative .and. all(palette%rgb(1.0_R8P) == [0, 0, 255]) .and. &
+                     all(palette%rgb(0.75_R8P) == [191, 191, 255]) .and. all(palette%rgb(0.25_R8P) == [255, 96, 96])
+endassociate
+call interpreter%run_text("set palette positive; set palette file '"//data_file//"' u ($1*2):4:3:2 maxcolors 0", &
+                          iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(77) = test_passed(77) .and. iostat == 0_I4P .and. all(palette%rgb(0.0_R8P) == [255, 0, 0]) .and. &
+                     all(palette%rgb(1.0_R8P) == [0, 0, 255])
+endassociate
+call interpreter%run_text("set palette file '"//data_file//"' every ::1", iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(77) = test_passed(77) .and. iostat == 0_I4P .and. all(palette%rgb(0.0_R8P) == [255, 255, 255]) .and. &
+                     all(palette%rgb(1.0_R8P) == [255, 0, 0])
+endassociate
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 300', '255 255 255', '1 0 0'
+close(unit)
+call interpreter%run_text("set palette file '"//data_file//"'", iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(77) = test_passed(77) .and. iostat == 0_I4P .and. all(palette%rgb(0.2_R8P) == [102, 102, 255]) .and. &
+                     all(palette%rgb(0.9_R8P) == [255, 51, 51])
+endassociate
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0 1', '1 1 1 1', '', '2 1 0 0'
+close(unit)
+call interpreter%run_text("set palette file '"//data_file//"'", iostat, iomsg)
+test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'bad data') > 0
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0 1', '2 1 0 0', '1 1 1 1'
+close(unit)
+call interpreter%run_text("set palette file '"//data_file//"'", iostat, iomsg)
+test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'the values must increase') > 0
+call interpreter%run_text("set palette file '"//data_file//"' using 1:2", iostat, iomsg)
+test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'r:g:b or gray:r:g:b') > 0
+call interpreter%run_text("set palette file 'foresight_no_such_palette.dat'", iostat, iomsg)
+test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'set palette file:') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -942,7 +986,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,76L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,77L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
