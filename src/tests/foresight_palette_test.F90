@@ -65,6 +65,9 @@ call palette_words('romaO', p, bad)
 test_passed(11) = test_passed(11) .and. same(p%rgb(0.0_R8P), [115, 57, 87]) .and. same(p%rgb(1.0_R8P), [114, 57, 89])
 call palette_words('magma', p, bad)
 test_passed(11) = test_passed(11) .and. hex_color(p%rgb(0.0_R8P)) == '#000004' .and. hex_color(p%rgb(1.0_R8P)) == '#fcfdbf'
+call palette_words('CIVIDIS', p, bad)
+test_passed(11) = test_passed(11) .and. len(bad) == 0 .and. hex_color(p%rgb(0.0_R8P)) == '#00224e' .and. &
+                  hex_color(p%rgb(1.0_R8P)) == '#fee838'
 ! maxcolors 10 gives Crameri's discrete batlow10 (DiscretePalettes/batlow10.txt), band k at gray (k + 0.5) / 10
 p = palette_object()
 call palette_words('batlow maxcolors 10', p, bad)

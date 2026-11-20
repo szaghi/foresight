@@ -7,7 +7,9 @@ module foresight_colormaps
 !<   https://zenodo.org/records/8409685,
 !<   sha256 fe8ccf8e26d87b6703e96e4da1a6872f14a79e725c7025bc9db034898b8fc02c;
 !< - mpl-colormaps: colormaps.py of https://github.com/BIDS/colormap, commit bc549477db0c,
-!<   sha256 b7478d10e2ccfdb22128867e137f16f55b687e9c225065e91bcbd6bb9e6c0352.
+!<   sha256 b7478d10e2ccfdb22128867e137f16f55b687e9c225065e91bcbd6bb9e6c0352;
+!< - cividis: lib/matplotlib/_cm_listed.py of https://github.com/matplotlib/matplotlib, commit 5c4c028dcca3,
+!<   sha256 ddad3698f5129ceb1792a445371286c08bc9080298e657b3054aea19c9659ef9.
 !<
 !< Each map is 256 colors `rrggbb`: Crameri's 8-bit tables, the matplotlib ones rounded half up from 0..1.
 !<
@@ -35,6 +37,110 @@ module foresight_colormaps
 !<
 !< magma, inferno, plasma and viridis (mpl-colormaps, Nathaniel J. Smith, Stefan van der Walt and Eric Firing) are
 !< dedicated to the public domain (CC0 1.0).
+!<
+!< cividis (Nunez, J. R., Anderton, C. R., Renslow, R. S. (2018). Optimizing colormaps with consideration for
+!< color vision deficiency to enable accurate interpretation of scientific data. PLoS ONE 13(7), e0199239,
+!< doi:10.1371/journal.pone.0199239) is the table its author contributed to matplotlib (PR #9871). Changes
+!< made: the 256 colors of `_cividis_data` rounded half up to 8 bits and written as `rrggbb`. matplotlib's
+!< notice and licence agreement:
+!<
+!< Copyright (c) 2012- Matplotlib Development Team; All Rights Reserved
+!<
+!< License agreement for matplotlib versions 1.3.0 and later
+!< =========================================================
+!<
+!< 1. This LICENSE AGREEMENT is between the Matplotlib Development Team
+!< ("MDT"), and the Individual or Organization ("Licensee") accessing and
+!< otherwise using matplotlib software in source or binary form and its
+!< associated documentation.
+!<
+!< 2. Subject to the terms and conditions of this License Agreement, MDT
+!< hereby grants Licensee a nonexclusive, royalty-free, world-wide license
+!< to reproduce, analyze, test, perform and/or display publicly, prepare
+!< derivative works, distribute, and otherwise use matplotlib
+!< alone or in any derivative version, provided, however, that MDT's
+!< License Agreement and MDT's notice of copyright, i.e., "Copyright (c)
+!< 2012- Matplotlib Development Team; All Rights Reserved" are retained in
+!< matplotlib  alone or in any derivative version prepared by
+!< Licensee.
+!<
+!< 3. In the event Licensee prepares a derivative work that is based on or
+!< incorporates matplotlib or any part thereof, and wants to
+!< make the derivative work available to others as provided herein, then
+!< Licensee hereby agrees to include in any such work a brief summary of
+!< the changes made to matplotlib .
+!<
+!< 4. MDT is making matplotlib available to Licensee on an "AS
+!< IS" basis.  MDT MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+!< IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, MDT MAKES NO AND
+!< DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
+!< FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF MATPLOTLIB
+!< WILL NOT INFRINGE ANY THIRD PARTY RIGHTS.
+!<
+!< 5. MDT SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF MATPLOTLIB
+!<  FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR
+!< LOSS AS A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING
+!< MATPLOTLIB , OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF
+!< THE POSSIBILITY THEREOF.
+!<
+!< 6. This License Agreement will automatically terminate upon a material
+!< breach of its terms and conditions.
+!<
+!< 7. Nothing in this License Agreement shall be deemed to create any
+!< relationship of agency, partnership, or joint venture between MDT and
+!< Licensee.  This License Agreement does not grant permission to use MDT
+!< trademarks or trade name in a trademark sense to endorse or promote
+!< products or services of Licensee, or any third party.
+!<
+!< 8. By copying, installing or otherwise using matplotlib ,
+!< Licensee agrees to be bound by the terms and conditions of this License
+!< Agreement.
+!<
+!< and the notice, licence and disclaimers of its origin, pnnl/cmaputil:
+!<
+!< Copyright (c) 2017, Battelle Memorial Institute
+!<
+!< 1.  Battelle Memorial Institute (hereinafter Battelle) hereby grants
+!< permission to any person or entity lawfully obtaining a copy of this software
+!< and associated documentation files (hereinafter "the Software") to
+!< redistribute and use the Software in source and binary forms, with or without
+!< modification. Such person or entity may use, copy, modify, merge, publish,
+!< distribute, sublicense, and/or sell copies of the Software, and may permit
+!< others to do so, subject to the following conditions:
+!<
+!< + Redistributions of source code must retain the above copyright notice, this
+!< list of conditions and the following disclaimers.
+!<
+!< + Redistributions in binary form must reproduce the above copyright notice,
+!< this list of conditions and the following disclaimer in the documentation
+!< and/or other materials provided with the distribution.
+!<
+!< + Other than as used herein, neither the name Battelle Memorial Institute or
+!< Battelle may be used in any form whatsoever without the express written
+!< consent of Battelle.
+!<
+!< 2.  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+!< "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+!< THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+!< ARE DISCLAIMED. IN NO EVENT SHALL BATTELLE OR CONTRIBUTORS BE LIABLE FOR ANY
+!< DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+!< (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+!< LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+!< ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+!< (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+!< SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+!<
+!< This material was prepared as an account of work sponsored by an agency of the United States Government. Neither
+!< the United States Government nor the United States Department of Energy, nor Battelle, nor any of their
+!< employees, nor any jurisdiction or organization that has cooperated in the development of these materials, makes
+!< any warranty, express or implied, or assumes any legal liability or responsibility for the accuracy,
+!< completeness, or usefulness or any information, apparatus, product, software, or process disclosed, or
+!< represents that its use would not infringe privately owned rights. Reference herein to any specific commercial
+!< product, process, or service by trade name, trademark, manufacturer, or otherwise does not necessarily
+!< constitute or imply its endorsement, recommendation, or favoring by the United States Government or any agency
+!< thereof, or Battelle Memorial Institute. The views and opinions of authors expressed herein do not necessarily
+!< state or reflect those of the United States Government or any agency thereof. PACIFIC NORTHWEST NATIONAL
+!< LABORATORY operated by BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY under Contract DE-AC05-76RL01830
 use penf, only : I4P
 
 implicit none
@@ -44,7 +150,7 @@ public :: COLORMAP_NAMES
 public :: colormap_hex
 public :: colormap_id
 
-integer(I4P), parameter :: COLORMAPS = 44_I4P !< Number of named palettes.
+integer(I4P), parameter :: COLORMAPS = 45_I4P !< Number of named palettes.
 character(len=*), parameter :: CM_ACTON = &
    '260d40270e41280f422911432a12442b13452b14462c16482d17492e184a2f194b301b4c' // &
    '311c4d321d4e321e4f331f503421523522533623543624553725563826573927583a2959' // &
@@ -1057,19 +1163,42 @@ character(len=*), parameter :: CM_VIRIDIS = &
    'b8de29bade28bddf26c0df25c2df23c5e021c8e020cae11fcde11dd0e11cd2e21bd5e21a' // &
    'd8e219dae319dde318dfe318e2e418e5e419e7e419eae51aece51befe51cf1e51df4e61e' // &
    'f6e620f8e621fbe723fde725' !< viridis, mpl-colormaps (CC0).
+character(len=*), parameter :: CM_CIVIDIS = &
+   '00224e00234f00245100255300255400265600275800285900285b00295d002a5f002a61' // &
+   '002b62002c64002c66002d68002e6a002e6c002f6d00306f003070003170003171013271' // &
+   '0533710833700c34700f357012357014367016377018376f1a386f1c396f1e3a6f203a6f' // &
+   '213b6e233c6e243c6e263d6e273e6e293f6e2a3f6d2b406d2d416d2e416d2f426d31436d' // &
+   '32436d33446d34456c35456c36466c38476c39486c3a486c3b496c3c4a6c3d4a6c3e4b6c' // &
+   '3f4c6c404c6c414d6c424e6c434e6c444f6c45506c46516c47516c48526c49536c4a536c' // &
+   '4b546c4c556c4d556c4e566c4f576c50576c51586d52596d535a6d545a6d555b6d555c6d' // &
+   '565c6d575d6d585e6d595e6e5a5f6e5b606e5c616e5d616e5e626e5e636f5f636f60646f' // &
+   '61656f62656f636670646770656870656870666970676a71686a71696b716a6c716b6d72' // &
+   '6c6d726c6e726d6f726e6f736f7073707173717274727274727374737475747475757575' // &
+   '7676767777767777777878777979777a7a787b7a787c7b787d7c787e7c787e7d787f7e78' // &
+   '807f78817f788280798381798482798582798683798784788885788985788a86788b8778' // &
+   '8c88788d88788e89788f8a78908b78918b78928c78928d78938e78948e77958f77969077' // &
+   '9791779892779992779a93769b94769c95769d95769e96769f9775a09875a19975a29975' // &
+   'a39a74a49b74a59c74a69c74a79d73a89e73a99f73aaa073aba072aca172ada272aea371' // &
+   'afa471b0a571b1a570b3a670b4a76fb5a86fb6a96fb7a96eb8aa6eb9ab6dbaac6dbbad6d' // &
+   'bcae6cbdae6cbeaf6bbfb06bc0b16ac1b26ac2b369c3b369c4b468c5b568c6b667c7b767' // &
+   'c8b866c9b965cbb965ccba64cdbb63cebc63cfbd62d0be62d1bf61d2c060d3c05fd4c15f' // &
+   'd5c25ed6c35dd7c45cd9c55cdac65bdbc75adcc859ddc858dec958dfca57e0cb56e1cc55' // &
+   'e2cd54e4ce53e5cf52e6d051e7d150e8d24fe9d34eead34cebd44bedd54aeed649efd748' // &
+   'f0d846f1d945f2da44f3db42f5dc41f6dd3ff7de3ef8df3cf9e03afbe138fce236fde334' // &
+   'fee434fee535fee636fee838' !< cividis, J. R. Nunez et al..
 character(len=7), parameter :: COLORMAP_NAMES(COLORMAPS) = [ &
    'acton  ', 'bam    ', 'bamako ', 'bamO   ', 'batlow ', 'batlowK', 'batlowW', 'berlin ', 'bilbao ', 'broc   ', &
    'brocO  ', 'buda   ', 'bukavu ', 'cork   ', 'corkO  ', 'davos  ', 'devon  ', 'fes    ', 'glasgow', 'grayC  ', &
    'hawaii ', 'imola  ', 'lajolla', 'lapaz  ', 'lipari ', 'lisbon ', 'managua', 'navia  ', 'naviaW ', 'nuuk   ', &
    'oleron ', 'oslo   ', 'roma   ', 'romaO  ', 'tofino ', 'tokyo  ', 'turku  ', 'vanimo ', 'vik    ', 'vikO   ', &
-   'magma  ', 'inferno', 'plasma ', 'viridis' &
+   'magma  ', 'inferno', 'plasma ', 'viridis', 'cividis' &
    ] !< Names, canonical case.
 character(len=1536), parameter :: TABLES(COLORMAPS) = [ &
    CM_ACTON, CM_BAM, CM_BAMAKO, CM_BAMO, CM_BATLOW, CM_BATLOWK, CM_BATLOWW, CM_BERLIN, CM_BILBAO, CM_BROC, &
    CM_BROCO, CM_BUDA, CM_BUKAVU, CM_CORK, CM_CORKO, CM_DAVOS, CM_DEVON, CM_FES, CM_GLASGOW, CM_GRAYC, CM_HAWAII, &
    CM_IMOLA, CM_LAJOLLA, CM_LAPAZ, CM_LIPARI, CM_LISBON, CM_MANAGUA, CM_NAVIA, CM_NAVIAW, CM_NUUK, CM_OLERON, &
    CM_OSLO, CM_ROMA, CM_ROMAO, CM_TOFINO, CM_TOKYO, CM_TURKU, CM_VANIMO, CM_VIK, CM_VIKO, CM_MAGMA, CM_INFERNO, &
-   CM_PLASMA, CM_VIRIDIS &
+   CM_PLASMA, CM_VIRIDIS, CM_CIVIDIS &
    ] !< Tables, in the order of the names.
 
 contains

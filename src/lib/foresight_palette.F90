@@ -7,7 +7,7 @@ module foresight_palette
 !< interpolating linearly in RGB between colors (`#rrggbb` or a gnuplot color name) at increasing values; `gray`
 !< (gray to the power 1/1.5, gnuplot's gamma); `viridis`; `negative` reverses the gray axis; `maxcolors N` quantizes:
 !< band k = floor(gray N) takes the color of gray k / (N - 1). Channels are rounded to 8 bits.
-!< Beyond gnuplot, any named palette of foresight_colormaps (`batlow`, `vik`, `magma`, ..., `viridis` among them),
+!< Beyond gnuplot, any named palette of foresight_colormaps (`batlow`, `vik`, `magma`, `cividis`, ..., `viridis`),
 !< matched case-insensitively: a 256-color table, gray g taking its color nint(255 g), so `maxcolors N` gives the
 !< N colors nint(255 k / (N - 1)), Crameri's discrete palettes.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite

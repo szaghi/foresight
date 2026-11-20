@@ -29,8 +29,9 @@ Contributions are welcome — see the [Contributing](https://szaghi.github.io/fo
 This project is distributed under the [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html) license.
 
 The named palettes carry third-party color tables: the *Scientific colour maps* by Fabio Crameri (MIT,
-[doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862)) and matplotlib's magma, inferno, plasma and
-viridis (CC0); their notices are in `src/lib/foresight_colormaps.F90`.
+[doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862)), matplotlib's magma, inferno, plasma and
+viridis (CC0), and cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial Institute's licence);
+their notices are in `src/lib/foresight_colormaps.F90`.
 
 > Anyone interested in using, developing, or contributing to this project is welcome.
 

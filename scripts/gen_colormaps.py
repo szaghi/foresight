@@ -8,14 +8,18 @@ The tables come from the original releases, never from a translation:
   against the 6-decimal ``<name>/<name>.txt``: within 1 per channel),
   https://zenodo.org/records/8409685 (doi:10.5281/zenodo.8409685);
 - magma, inferno, plasma and viridis by Nathaniel J. Smith, Stefan van der Walt and
-  Eric Firing (CC0), ``colormaps.py`` of https://github.com/BIDS/colormap.
+  Eric Firing (CC0), ``colormaps.py`` of https://github.com/BIDS/colormap;
+- cividis by J. R. Nunez, C. R. Anderton and R. S. Renslow, the table its author contributed
+  to matplotlib, ``lib/matplotlib/_cm_listed.py`` (matplotlib's licence and the Battelle
+  licence of its origin, pnnl/cmaputil: both notices are written into the module).
 
 The matplotlib colors, 0 to 1 per channel, are rounded half up to 8 bits; the 256 colors of a map are
 written as ``rrggbb``. The inputs are parsed as text, never executed. Run by hand (it
 needs the downloaded inputs, not available in CI):
 
-    python3 scripts/gen_colormaps.py --crameri DIR --bids colormaps.py \
-        --output src/lib/foresight_colormaps.F90
+    python3 scripts/gen_colormaps.py --crameri DIR --crameri-zip ScientificColourMaps8.zip \
+        --bids colormaps.py --cividis _cm_listed.py --mpl-license LICENSE \
+        --battelle-license cmaputil/LICENSE --output src/lib/foresight_colormaps.F90
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import hashlib
 import math
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 CRAMERI = (
@@ -33,6 +38,20 @@ CRAMERI = (
     "managua navia naviaW nuuk oleron oslo roma romaO tofino tokyo turku vanimo vik vikO"
 ).split()
 BIDS = ("magma", "inferno", "plasma", "viridis")
+PNNL_DISCLAIMER = (
+    "This material was prepared as an account of work sponsored by an agency of the United States Government. "
+    "Neither the United States Government nor the United States Department of Energy, nor Battelle, nor any of "
+    "their employees, nor any jurisdiction or organization that has cooperated in the development of these "
+    "materials, makes any warranty, express or implied, or assumes any legal liability or responsibility for the "
+    "accuracy, completeness, or usefulness or any information, apparatus, product, software, or process "
+    "disclosed, or represents that its use would not infringe privately owned rights. Reference herein to any "
+    "specific commercial product, process, or service by trade name, trademark, manufacturer, or otherwise does "
+    "not necessarily constitute or imply its endorsement, recommendation, or favoring by the United States "
+    "Government or any agency thereof, or Battelle Memorial Institute. The views and opinions of authors "
+    "expressed herein do not necessarily state or reflect those of the United States Government or any agency "
+    "thereof. PACIFIC NORTHWEST NATIONAL LABORATORY operated by BATTELLE for the UNITED STATES DEPARTMENT OF "
+    "ENERGY under Contract DE-AC05-76RL01830"
+)
 LEVELS = 256
 PER_LINE = 12  # colors per source line, as the former VIRIDIS constant
 NAME_LEN = 7
@@ -229,7 +248,9 @@ def fortran_table(
 
 
 def fortran_module(
-    maps: list[tuple[str, list[tuple[int, int, int]], str]], sources: list[str]
+    maps: list[tuple[str, list[tuple[int, int, int]], str]],
+    sources: list[str],
+    notices: list[str],
 ) -> str:
     """The whole generated module.
 
@@ -239,6 +260,8 @@ def fortran_module(
         ``(name, colors, origin)`` per map, in table order.
     sources : list of str
         One line per input file: what, where, sha256.
+    notices : list of str
+        Further licence notices, one comment line each.
 
     Returns
     -------
@@ -282,6 +305,7 @@ def fortran_module(
         "!<",
         "!< magma, inferno, plasma and viridis (mpl-colormaps, Nathaniel J. Smith, Stefan van der Walt and Eric Firing) are",
         "!< dedicated to the public domain (CC0 1.0).",
+        *[f"!< {n}".rstrip() for n in notices],
         "use penf, only : I4P",
         "",
         "implicit none",
@@ -379,6 +403,60 @@ def wrap(items: str, indent: str, cont: str, width: int = 116) -> list[str]:
     return lines
 
 
+def cividis_notices(mpl_license: Path, battelle_license: Path) -> list[str]:
+    """Licence notices of the cividis table, as comment lines.
+
+    cividis was contributed to matplotlib by its author (matplotlib PR #9871, 2017), a later
+    table than the one of pnnl/cmaputil; the notices of both carry over.
+
+    Parameters
+    ----------
+    mpl_license : Path
+        matplotlib's ``LICENSE/LICENSE``; its agreement for versions 1.3.0 and later is kept.
+    battelle_license : Path
+        pnnl/cmaputil's ``LICENSE``.
+
+    Returns
+    -------
+    list of str
+        The lines.
+
+    Raises
+    ------
+    ColormapError
+        If matplotlib's agreement is not found.
+    """
+    mpl = mpl_license.read_text(encoding="utf-8")
+    end = mpl.find("License agreement for matplotlib versions prior to 1.3.0")
+    if not mpl.startswith("License agreement for matplotlib versions 1.3.0") or end < 0:
+        msg = "matplotlib LICENSE: agreement for versions 1.3.0 and later not found"
+        raise ColormapError(msg)
+    battelle = battelle_license.read_text(encoding="utf-8")
+    battelle = battelle.replace("\u201c", '"').replace("\u201d", '"')
+    lines = [
+        "",
+        "cividis (Nunez, J. R., Anderton, C. R., Renslow, R. S. (2018). Optimizing colormaps with consideration for",
+        "color vision deficiency to enable accurate interpretation of scientific data. PLoS ONE 13(7), e0199239,",
+        "doi:10.1371/journal.pone.0199239) is the table its author contributed to matplotlib (PR #9871). Changes",
+        "made: the 256 colors of `_cividis_data` rounded half up to 8 bits and written as `rrggbb`. matplotlib's",
+        "notice and licence agreement:",
+        "",
+        "Copyright (c) 2012- Matplotlib Development Team; All Rights Reserved",
+        "",
+        *mpl[:end].rstrip().splitlines(),
+        "",
+        "and the notice, licence and disclaimers of its origin, pnnl/cmaputil:",
+        "",
+        *battelle.rstrip().splitlines(),
+        "",
+        *textwrap.wrap(PNNL_DISCLAIMER, 112),
+    ]
+    if any(not line.isascii() for line in lines):
+        msg = "cividis notices: non-ASCII text"
+        raise ColormapError(msg)
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     """Command line entry point.
 
@@ -406,6 +484,18 @@ def main(argv: list[str] | None = None) -> int:
         "--bids", type=Path, required=True, help="BIDS/colormap colormaps.py"
     )
     parser.add_argument(
+        "--cividis",
+        type=Path,
+        required=True,
+        help="matplotlib lib/matplotlib/_cm_listed.py",
+    )
+    parser.add_argument(
+        "--mpl-license", type=Path, required=True, help="matplotlib LICENSE/LICENSE"
+    )
+    parser.add_argument(
+        "--battelle-license", type=Path, required=True, help="pnnl/cmaputil LICENSE"
+    )
+    parser.add_argument(
         "--output", type=Path, required=True, help="Fortran module to write"
     )
     args = parser.parse_args(argv)
@@ -420,6 +510,9 @@ def main(argv: list[str] | None = None) -> int:
         ]
         bids_text = args.bids.read_text(encoding="utf-8")
         maps += [(n, read_bids(bids_text, n), "mpl-colormaps (CC0)") for n in BIDS]
+        mpl_text = args.cividis.read_text(encoding="utf-8")
+        maps.append(("cividis", read_bids(mpl_text, "cividis"), "J. R. Nunez et al."))
+        notices = cividis_notices(args.mpl_license, args.battelle_license)
     except (ColormapError, OSError, ValueError) as err:
         print(f"gen_colormaps: {err}", file=sys.stderr)
         return 1
@@ -429,9 +522,11 @@ def main(argv: list[str] | None = None) -> int:
         "  https://zenodo.org/records/8409685,",
         f"  sha256 {zip_sum};",
         "- mpl-colormaps: colormaps.py of https://github.com/BIDS/colormap, commit bc549477db0c,",
-        f"  sha256 {sha256(args.bids)}.",
+        f"  sha256 {sha256(args.bids)};",
+        "- cividis: lib/matplotlib/_cm_listed.py of https://github.com/matplotlib/matplotlib, commit 5c4c028dcca3,",
+        f"  sha256 {sha256(args.cividis)}.",
     ]
-    args.output.write_text(fortran_module(maps, sources), encoding="ascii")
+    args.output.write_text(fortran_module(maps, sources, notices), encoding="ascii")
     return 0
 
 

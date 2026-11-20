@@ -368,8 +368,8 @@ and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-pa
 
 <Plot name="cb_colormaps" svg :width="760" :height="560" />
 
-A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour maps* or matplotlib's `magma`,
-`inferno`, `plasma`, `viridis`, in any case. Pick the type for the data: sequential for a magnitude, diverging about a
+A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour maps*, matplotlib's `magma`,
+`inferno`, `plasma`, `viridis`, or `cividis`, in any case. Pick the type for the data: sequential for a magnitude, diverging about a
 meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
 angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
 
