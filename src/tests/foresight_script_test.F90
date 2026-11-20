@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(84)                           !< Per-check outcome.
+logical                       :: test_passed(85)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -85,8 +85,8 @@ test_passed(5) = interpreter%output == 'mine.html'
 call interpreter%init('run.html')
 call interpreter%run_text('set grid'//new_line('a')//'splot x', iostat, iomsg, source='t.gp')
 test_passed(6) = iostat /= 0_I4P .and. iomsg == 't.gp:2: unsupported command "splot"'
-call interpreter%run_text('plot [0:1] sin(x)', iostat, iomsg)
-test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'inline ranges are not supported') > 0
+call interpreter%run_text('plot [0:1] [0:1] [0:1] sin(x)', iostat, iomsg)
+test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'at most two inline ranges') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:$2", iostat, iomsg)
 test_passed(8) = iostat /= 0_I4P .and. index(iomsg, 'nor a parenthesized expression') > 0
 call interpreter%run_text('set xrange [a:1]', iostat, iomsg)
@@ -1197,6 +1197,37 @@ call interpreter%run_text('set xtics right', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'right justifies rotated labels') > 0
 call interpreter%run_text('set xtics rotate by', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate by needs an angle') > 0
+
+! inline ranges, as gnuplot 6.0: [x] then [y] for that plot only (set xrange untouched), an empty or * end keeps the
+! set one, [t=a:b] names the dummy variable, replot keeps them
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text('set xrange [0:10]; plot [0:2*pi] [-2:2] sin(x)', iostat, iomsg)
+   test_passed(85) = iostat == 0_I4P .and. panel%xaxis%lo == 0.0_R8P .and. &
+                     abs(panel%xaxis%hi - 2.0_R8P * acos(-1.0_R8P)) < 1.0e-12_R8P .and. &
+                     panel%yaxis%lo == -2.0_R8P .and. panel%yaxis%hi == 2.0_R8P .and. panel%xaxis%max_user == 10.0_R8P
+   call interpreter%run_text('replot', iostat, iomsg)
+   test_passed(85) = test_passed(85) .and. iostat == 0_I4P .and. panel%yaxis%hi == 2.0_R8P
+   call interpreter%run_text('plot sin(x)', iostat, iomsg)
+   test_passed(85) = test_passed(85) .and. iostat == 0_I4P .and. panel%xaxis%lo == 0.0_R8P .and. &
+                     panel%xaxis%hi == 10.0_R8P .and. panel%yaxis%hi == 1.0_R8P
+   call interpreter%run_text('plot [*:3] [] x', iostat, iomsg)
+   test_passed(85) = test_passed(85) .and. iostat == 0_I4P .and. panel%xaxis%lo == 0.0_R8P .and. panel%xaxis%hi == 3.0_R8P
+   call interpreter%run_text('unset xrange; plot [u=1:2] u**2', iostat, iomsg)
+   test_passed(85) = test_passed(85) .and. iostat == 0_I4P .and. panel%xaxis%lo == 1.0_R8P .and. panel%yaxis%hi == 4.0_R8P
+endassociate
+call interpreter%run_text('plot [u=1:2] x', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: x') > 0
+call interpreter%run_text('plot [0:1] [0:1] [0:1] x', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'at most two inline ranges') > 0
+call interpreter%run_text('plot x, [0:1] x', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'inline ranges go before the first item') > 0
+call interpreter%run_text('plot [0;1] x', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P
+call interpreter%run_text('plot [1=0:1] x', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'bad dummy variable name') > 0
+call interpreter%run_text('plot [0:1]', iostat, iomsg)
+test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'nothing to plot') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1214,7 +1245,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,84L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,85L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

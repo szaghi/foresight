@@ -126,7 +126,8 @@ endtype figure_object
 
 contains
    subroutine clear(self)
-   !< Remove the series of the current panel, keeping every setting: a new gnuplot `plot` replaces the previous one.
+   !< Remove the series of the current panel, keeping every setting: a new gnuplot `plot` replaces the previous one,
+   !< with the ranges of the previous plot command (`plot [min:max]`).
    class(figure_object), intent(inout) :: self !< Figure.
 
    call self%ensure_panels
@@ -134,6 +135,10 @@ contains
    ! of an allocatable array component of a polymorphic dummy
    associate(panel => self%panels(self%current))
       if (allocated(panel%series)) deallocate(panel%series)
+      panel%xaxis%plot_min_fixed = .false.
+      panel%xaxis%plot_max_fixed = .false.
+      panel%yaxis%plot_min_fixed = .false.
+      panel%yaxis%plot_max_fixed = .false.
    endassociate
    endsubroutine clear
 

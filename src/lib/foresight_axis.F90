@@ -24,6 +24,11 @@ type :: axis_object
    logical                        :: max_fixed = .false.    !< Axis end set by the user, else autoscaled.
    real(R8P)                      :: min_user  = 0.0_R8P    !< User value at the axis start.
    real(R8P)                      :: max_user  = 0.0_R8P    !< User value at the axis end.
+   logical                        :: plot_min_fixed = .false. !< Axis start of the current plot, over the user one,
+                                                              !< gnuplot `plot [min:max]`.
+   logical                        :: plot_max_fixed = .false. !< Axis end of the current plot, over the user one.
+   real(R8P)                      :: plot_min  = 0.0_R8P    !< Value at the axis start of the current plot.
+   real(R8P)                      :: plot_max  = 0.0_R8P    !< Value at the axis end of the current plot.
    real(R8P)                      :: lo        = -10.0_R8P  !< Effective value at the axis start, set by `setup`.
    real(R8P)                      :: hi        = 10.0_R8P   !< Effective value at the axis end, set by `setup`.
    type(tics_object)              :: tics                   !< User tick settings: fixed step, none, label format.
@@ -108,18 +113,23 @@ contains
    endif
    if (self%min_fixed) lo = self%min_user
    if (self%max_fixed) hi = self%max_user
-   if (lo == hi .and. .not. (self%min_fixed .and. self%max_fixed)) then
-      if (self%log) then
-         if (.not. self%min_fixed) lo = lo * 0.99_R8P
-         if (.not. self%max_fixed) hi = hi * 1.01_R8P
-      elseif (lo == 0.0_R8P) then
-         if (.not. self%min_fixed) lo = -1.0_R8P
-         if (.not. self%max_fixed) hi = 1.0_R8P
-      else
-         if (.not. self%min_fixed) lo = lo - 0.01_R8P * abs(lo)
-         if (.not. self%max_fixed) hi = hi + 0.01_R8P * abs(hi)
+   ! a range of the plot command overrides the set one, for that plot
+   if (self%plot_min_fixed) lo = self%plot_min
+   if (self%plot_max_fixed) hi = self%plot_max
+   associate(min_fixed => self%min_fixed .or. self%plot_min_fixed, max_fixed => self%max_fixed .or. self%plot_max_fixed)
+      if (lo == hi .and. .not. (min_fixed .and. max_fixed)) then
+         if (self%log) then
+            if (.not. min_fixed) lo = lo * 0.99_R8P
+            if (.not. max_fixed) hi = hi * 1.01_R8P
+         elseif (lo == 0.0_R8P) then
+            if (.not. min_fixed) lo = -1.0_R8P
+            if (.not. max_fixed) hi = 1.0_R8P
+         else
+            if (.not. min_fixed) lo = lo - 0.01_R8P * abs(lo)
+            if (.not. max_fixed) hi = hi + 0.01_R8P * abs(hi)
+         endif
       endif
-   endif
+   endassociate
    endsubroutine range_of
 
    subroutine setup(self, dmin, dmax, has_data, npx)
@@ -141,10 +151,12 @@ contains
       ! an explicit list alone: the range is not extended to a tick grid, as gnuplot
       call list_ticks(self%tics, lo, hi, .false., self%ticks)
    elseif (self%log) then
-      call log_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
+      call log_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%plot_min_fixed .or. self%tight), &
+                     .not. (self%max_fixed .or. self%plot_max_fixed .or. self%tight), &
                      self%ticks, self%tics)
    else
-      call linear_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
+      call linear_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%plot_min_fixed .or. self%tight), &
+                        .not. (self%max_fixed .or. self%plot_max_fixed .or. self%tight), &
                         self%ticks, self%tics)
    endif
    ! a list added to the ticks, after the extension of the range

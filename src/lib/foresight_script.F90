@@ -460,6 +460,8 @@ contains
    integer(I4P)                                 :: title_column !< Header column titling the item: 0 the y one,
                                                                 !< negative for none (gnuplot `title columnhead(N)`).
    character(len=:), allocatable                :: missing   !< Header name found nowhere.
+   character(len=:), allocatable                :: dummy     !< Dummy variable of the functions.
+   integer(I4P)                                 :: nranges   !< Inline ranges read.
 
    iostat = 0_I4P
    iomsg = ''
@@ -470,7 +472,30 @@ contains
       call fail('plot: nothing to plot', iostat, iomsg)
       return
    endif
+   ! gnuplot's dummy variable is t in polar mode
+   dummy = merge('t', 'x', self%figure%panels(self%figure%current)%polar)
+   ! inline ranges, [x] then [y], for this plot only: plot [0:2*pi] [-1:1] sin(x), plot [t=0:1] t**2
    i = 1_I4P
+   nranges = 0_I4P
+   do while (i <= size(tokens, kind=I4P))
+      if (tokens(i)%kind /= TOKEN_RANGE) exit
+      nranges = nranges + 1_I4P
+      if (nranges > 2_I4P) then
+         call fail('plot: at most two inline ranges, [x] and [y], are supported', iostat, iomsg)
+         return
+      endif
+      if (self%figure%panels(self%figure%current)%polar) then
+         call fail('plot: inline ranges are not supported in polar mode (use set trange and set rrange)', iostat, iomsg)
+         return
+      endif
+      call inline_range(tokens(i)%text, nranges == 1_I4P)
+      if (iostat /= 0_I4P) return
+      i = i + 1_I4P
+   enddo
+   if (i > size(tokens, kind=I4P)) then
+      call fail('plot: nothing to plot', iostat, iomsg)
+      return
+   endif
    do
       ! data file or function
       if (i > size(tokens, kind=I4P)) then
@@ -479,8 +504,7 @@ contains
       endif
       is_function = tokens(i)%kind == TOKEN_WORD
       if (tokens(i)%kind == TOKEN_RANGE) then
-         call fail('plot: inline ranges are not supported, found "['//tokens(i)%text//']" (use set xrange)', &
-                   iostat, iomsg)
+         call fail('plot: inline ranges go before the first item, found "['//tokens(i)%text//']"', iostat, iomsg)
          return
       elseif (tokens(i)%kind == TOKEN_COMMA) then
          call fail('plot: missing item before ","', iostat, iomsg)
@@ -494,9 +518,8 @@ contains
             i = i + 1_I4P
          enddo
          written = text(tokens(head)%first:tokens(i)%last)
-         ! gnuplot's dummy variable is t in polar mode
          associate(panel => self%figure%panels(self%figure%current))
-            call func%compile(written, iostat, iomsg, variable=merge('t', 'x', panel%polar), degrees=panel%degrees, &
+            call func%compile(written, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
                               symbols=self%symbols)
          endassociate
          if (iostat /= 0_I4P) then
@@ -1407,6 +1430,68 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine inline_range(text, first)
+      !< An inline range `[min:max]` of the plot command (`text` without brackets): of x if `first` (where
+      !< `[name=min:max]` also names the dummy variable), else of y; an empty or `*` end keeps the set one, as gnuplot.
+      character(len=*), intent(in)  :: text  !< Range text.
+      logical,          intent(in)  :: first !< The first range: x.
+      character(len=:), allocatable :: body  !< Range without the dummy variable.
+      integer(I4P)                  :: colon !< Separator.
+      integer(I4P)                  :: equal !< Dummy variable separator.
+
+      body = text
+      equal = index(text, '=', kind=I4P)
+      colon = index(text, ':', kind=I4P)
+      if (first .and. equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
+         dummy = trim(adjustl(text(1:equal - 1_I4P)))
+         if (len(dummy) == 0) then
+            call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
+            return
+         endif
+         if (verify(dummy, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_') /= 0 .or. &
+             verify(dummy(1:1), '0123456789') == 0) then
+            call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
+            return
+         endif
+         body = text(equal + 1_I4P:)
+         colon = index(body, ':', kind=I4P)
+      endif
+      if (len_trim(body) == 0) return
+      if (colon == 0_I4P) then
+         call fail('plot: inline range "['//text//']": [min:max] expected', iostat, iomsg)
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         if (first) then
+            call inline_end(body(1:colon - 1_I4P), panel%xaxis%plot_min_fixed, panel%xaxis%plot_min)
+            if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%xaxis%plot_max_fixed, panel%xaxis%plot_max)
+         else
+            call inline_end(body(1:colon - 1_I4P), panel%yaxis%plot_min_fixed, panel%yaxis%plot_min)
+            if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%yaxis%plot_max_fixed, panel%yaxis%plot_max)
+         endif
+      endassociate
+      endsubroutine inline_range
+
+      subroutine inline_end(text, fixed, value)
+      !< One end of an inline range: empty or `*` keeps the set one, else a number or a constant expression.
+      character(len=*), intent(in)    :: text  !< End text.
+      logical,          intent(inout) :: fixed !< End given.
+      real(R8P),        intent(inout) :: value !< End value.
+      real(R8P)                       :: v     !< Parsed value.
+
+      if (len_trim(text) == 0 .or. trim(adjustl(text)) == '*') return
+      if (.not. to_number(trim(adjustl(text)), v)) then
+         call self%symbols%constant(trim(adjustl(text)), v, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: inline range: '//iomsg
+            return
+         endif
+      endif
+      fixed = .true.
+      value = v
+      endsubroutine inline_end
 
       subroutine image_item
       !< An image item: the values of a `matrix` file, or `using x:y:z` (default 1:2:3) gathered on a regular grid.

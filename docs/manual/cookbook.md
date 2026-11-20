@@ -221,6 +221,14 @@ takes the first colors of a categorical order of the Scientific colour maps, the
 
 Without data, functions are sampled over [-10:10], or the `xrange`; `set samples` sets the number of points.
 
+### A range for one plot
+
+<<< @/examples/snippets/cb_inline_range.gp{gnuplot}
+
+<Plot name="cb_inline_range" svg :width="560" :height="320" />
+
+Inline ranges set x, then y, for that plot only: `set xrange` is left alone. `t=` names the variable of the functions.
+
 ### A model over the data
 
 <<< @/examples/snippets/cb_model.gp{gnuplot}

@@ -79,10 +79,24 @@ that did what it says.
 ## `plot` items
 
 ```gnuplot
+plot [XRANGE] [YRANGE] ITEM, ITEM, ...
 plot 'file' [using SPEC] [index N] [every N] [smooth FILTER] [with STYLE] [title "text" | notitle]
             [axes x1y1|x1y2] [lc [rgb] "color" | lc N] [lw W] [dt N] [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
+
+Inline ranges `[min:max]` before the first item set the x range, then the y range, of that plot only, over `set
+xrange` and `set yrange` (which they leave as they are: the next plot without them uses those again; `replot` keeps
+them), as gnuplot. An empty or `*` end keeps the set one, `[]` skips an axis, the ends are constant expressions
+(`[0:2*pi]`), and `[t=0:2]` names the dummy variable of the functions `t` instead of `x`:
+
+```gnuplot
+plot [0:2*pi] [-1.5:1.5] sin(x), cos(x)
+plot [t=0:10] exp(-t/4)*sin(t)
+plot [] [0:*] 'run.dat' u 1:2      # the y range only
+```
+
+They are not supported in polar mode (where gnuplot's first range is the t range): use `set trange`.
 
 | Modifier | Meaning |
 |---|---|
@@ -865,7 +879,7 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-Recursive user functions, inline ranges (`plot [0:1] sin(x)`), the second
+Recursive user functions, inline ranges in polar mode, the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
