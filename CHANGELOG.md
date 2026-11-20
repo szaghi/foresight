@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] — 2026-11-20
+### Added
+- **ticks**: Explicit tick lists and set xtics add, as gnuplot 6.0
+
+- **ticks**: Minor ticks, set mxtics, mytics, my2tics and mcbtics
+
+- **ticks**: Rotated x tick labels and outward ticks, as gnuplot 6.0
+
+- **script**: Inline ranges, plot [x] [y] ..., as gnuplot 6.0
+
+- **datafile**: Set datafile missing and commentschars, as gnuplot 6.0
+
+
 ## [0.6.2] — 2026-11-20
 ### Fixed
 - Foresight compiles with nvfortran 26.9 and ifx 2026.2 under FIGURE's flags
