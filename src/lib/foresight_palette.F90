@@ -7,7 +7,11 @@ module foresight_palette
 !< interpolating linearly in RGB between colors (`#rrggbb` or a gnuplot color name) at increasing values; `gray`
 !< (gray to the power 1/1.5, gnuplot's gamma); `viridis`; `negative` reverses the gray axis; `maxcolors N` quantizes:
 !< band k = floor(gray N) takes the color of gray k / (N - 1). Channels are rounded to 8 bits.
+!< Beyond gnuplot, any named palette of foresight_colormaps (`batlow`, `vik`, `magma`, ..., `viridis` among them),
+!< matched case-insensitively: a 256-color table, gray g taking its color nint(255 g), so `maxcolors N` gives the
+!< N colors nint(255 k / (N - 1)), Crameri's discrete palettes.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use foresight_colormaps, only : colormap_hex, colormap_id
 use foresight_format, only : real_from_decimal
 use penf, only : I4P, R8P
 
@@ -21,30 +25,7 @@ public :: palette_words
 integer(I4P), parameter :: PAL_FORMULAE = 0_I4P !< `rgbformulae`.
 integer(I4P), parameter :: PAL_DEFINED  = 1_I4P !< `defined`.
 integer(I4P), parameter :: PAL_GRAY     = 2_I4P !< `gray`.
-integer(I4P), parameter :: PAL_VIRIDIS  = 3_I4P !< `viridis`.
-character(len=*), parameter :: VIRIDIS = &
-   '44015444025645045745055946075a46085c460a5d460b5e470d60470e61471063471164' // &
-   '47136548146748166848176948186a481a6c481b6d481c6e481d6f481f70482071482173' // &
-   '482374482475482576482677482878482979472a7a472c7a472d7b472e7c472f7d46307e' // &
-   '46327e46337f463480453581453781453882443983443a83443b84433d84433e85423f85' // &
-   '4240864241864142874144874045884046883f47883f48893e49893e4a893e4c8a3d4d8a' // &
-   '3d4e8a3c4f8a3c508b3b518b3b528b3a538b3a548c39558c39568c38588c38598c375a8c' // &
-   '375b8d365c8d365d8d355e8d355f8d34608d34618d33628d33638d32648e32658e31668e' // &
-   '31678e31688e30698e306a8e2f6b8e2f6c8e2e6d8e2e6e8e2e6f8e2d708e2d718e2c718e' // &
-   '2c728e2c738e2b748e2b758e2a768e2a778e2a788e29798e297a8e297b8e287c8e287d8e' // &
-   '277e8e277f8e27808e26818e26828e26828e25838e25848e25858e24868e24878e23888e' // &
-   '23898e238a8d228b8d228c8d228d8d218e8d218f8d21908d21918c20928c20928c20938c' // &
-   '1f948c1f958b1f968b1f978b1f988b1f998a1f9a8a1e9b8a1e9c891e9d891f9e891f9f88' // &
-   '1fa0881fa1881fa1871fa28720a38620a48621a58521a68522a78522a88423a98324aa83' // &
-   '25ab8225ac8226ad8127ad8128ae8029af7f2ab07f2cb17e2db27d2eb37c2fb47c31b57b' // &
-   '32b67a34b67935b77937b87838b9773aba763bbb753dbc743fbc7340bd7242be7144bf70' // &
-   '46c06f48c16e4ac16d4cc26c4ec36b50c46a52c56954c56856c66758c7655ac8645cc863' // &
-   '5ec96260ca6063cb5f65cb5e67cc5c69cd5b6ccd5a6ece5870cf5773d05675d05477d153' // &
-   '7ad1517cd2507fd34e81d34d84d44b86d54989d5488bd6468ed64590d74393d74195d840' // &
-   '98d83e9bd93c9dd93ba0da39a2da37a5db36a8db34aadc32addc30b0dd2fb2dd2db5de2b' // &
-   'b8de29bade28bddf26c0df25c2df23c5e021c8e020cae11fcde11dd0e11cd2e21bd5e21a' // &
-   'd8e219dae319dde318dfe318e2e418e5e419e7e419eae51aece51befe51cf1e51df4e61e' // &
-   'f6e620f8e621fbe723fde725' !< viridis, 256 colors as rrggbb (gnuplot 6.0 `set palette viridis`).
+integer(I4P), parameter :: PAL_TABLE    = 3_I4P !< A named palette of foresight_colormaps (`viridis`, `batlow`, ...).
 
 type :: palette_object
    !< Color palette.
@@ -52,6 +33,7 @@ type :: palette_object
    integer(I4P)           :: formulae(3) = [7, 5, 15]   !< gnuplot rgbformulae, R, G, B.
    logical                :: negative = .false.          !< Gray axis reversed.
    integer(I4P)           :: maxcolors = 0_I4P           !< Colors of a quantized palette, 0 for continuous.
+   integer(I4P)           :: table = 0_I4P               !< Named palette (foresight_colormaps index), `PAL_TABLE`.
    real(R8P), allocatable :: positions(:)                !< `defined` positions, increasing.
    real(R8P), allocatable :: colors(:,:)                 !< `defined` colors (RGB 0..1, position).
    contains
@@ -101,9 +83,8 @@ contains
       endif
    case (PAL_GRAY)
       f = g**(1.0_R8P / 1.5_R8P)
-   case (PAL_VIRIDIS)
-      k = nint(g * 255.0_R8P, I4P)
-      f = hex_channels(VIRIDIS(6 * k + 1:6 * k + 6)) / 255.0_R8P
+   case (PAL_TABLE)
+      f = hex_channels(colormap_hex(self%table, nint(g * 255.0_R8P, I4P))) / 255.0_R8P
    case default
       do k = 1_I4P, 3_I4P
          f(k) = formula(self%formulae(k), g)
@@ -186,8 +167,8 @@ contains
 
    subroutine palette_words(words, palette, bad)
    !< Update `palette` from gnuplot `set palette` words: none (the default), `rgbformulae R , G , B` (`rgb`),
-   !< `defined (v c, ...)`, `gray`/`grey`, `color`, `viridis`, `positive`, `negative`, `maxcolors N`, `model RGB`;
-   !< `bad` is the first word not understood.
+   !< `defined (v c, ...)`, `gray`/`grey`, `color`, `positive`, `negative`, `maxcolors N`, `model RGB`, and a palette
+   !< name of foresight_colormaps (`viridis`, `batlow`, ..., case-insensitive); `bad` is the first word not understood.
    character(len=*),              intent(in)    :: words   !< Words, blank separated (a `defined` list one word).
    type(palette_object),          intent(inout) :: palette !< Palette.
    character(len=:), allocatable, intent(out)   :: bad     !< First word not understood, empty if none.
@@ -195,7 +176,7 @@ contains
    character(len=:), allocatable                :: rest    !< Remaining words.
    real(R8P)                                    :: v       !< Number.
    logical                                      :: ok      !< Number read.
-   integer(I4P)                                 :: k       !< Formula counter.
+   integer(I4P)                                 :: k       !< Formula counter, palette index.
 
    bad = ''
    rest = trim(adjustl(words))
@@ -238,8 +219,6 @@ contains
          palette%mode = PAL_GRAY
       case ('color')
          if (palette%mode == PAL_GRAY) palette%mode = PAL_FORMULAE
-      case ('viridis')
-         palette%mode = PAL_VIRIDIS
       case ('positive')
          palette%negative = .false.
       case ('negative')
@@ -259,8 +238,13 @@ contains
             return
          endif
       case default
-         bad = w
-         return
+         k = colormap_id(w)
+         if (k == 0_I4P) then
+            bad = w
+            return
+         endif
+         palette%mode = PAL_TABLE
+         palette%table = k
       endselect
    enddo
    contains

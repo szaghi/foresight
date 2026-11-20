@@ -44,7 +44,8 @@ module foresight_script
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
 !<   the labels replacing the x ticks;
 !< - `plot 'file' [matrix] with image` (`using x:y:z` on a regular grid, or the values of a `matrix` file), `set palette
-!<   [rgbformulae R,G,B|defined (v c, ...)|gray|color|viridis|positive|negative|maxcolors N]`, `set cbrange [min:max]`,
+!<   [rgbformulae R,G,B|defined (v c, ...)|gray|grey|color|NAME|positive|negative|maxcolors N|model RGB]` (NAME: a
+!<   named palette of foresight_colormaps, `viridis`, `batlow`, ..., any case), `set cbrange [min:max]`,
 !<   `set|unset cblabel ["t"]`, `set|unset colorbox`;
 !< - `with circles` (`using x:y[:r[:start:end]]`, wedges with angles in degrees); foresight's `with pie [donut F]`
 !<   (`using Y[:xtic(N)]`, alone in its panel);

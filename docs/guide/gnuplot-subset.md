@@ -56,7 +56,7 @@ that did what it says.
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
-| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`gray`\|`color`\|`viridis`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`) | — |
+| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
 | **cbl**abel `"text"` | color box label | no label |
 | **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
@@ -541,8 +541,8 @@ The palette maps the values over `cbrange` (autoscaled to the values, not extend
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
 `#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
-purple, dark-green, dark-blue, brown, violet, navy), `gray`, `viridis`; `negative` reverses it, `maxcolors N`
-quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
+purple, dark-green, dark-blue, brown, violet, navy), `gray`, `viridis`, or a [named palette](#named-palettes);
+`negative` reverses it, `maxcolors N` quantizes it to N bands. The color box at the right of the plot shows the palette over the range, with `cblabel`.
 The palette colors only images and the color box: the series colors (`lc N`) are the linetype colors.
 
 ```gnuplot
@@ -566,6 +566,34 @@ Not supported: `cubehelix`, `functions`, `file` palettes, `set palette model` ot
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,
 the components from 0 to `set rgbmax` (255; 1.0 for fractions), without palette nor color box; an undefined component
 makes its pixel transparent. Packed ARGB in one column and `matrix` RGB data are not supported.
+
+### Named palettes
+
+A foresight extension (gnuplot rejects these scripts): `set palette NAME` takes one of the 40 *Scientific colour maps*
+(v8.0.1) by Fabio Crameri or one of matplotlib's `magma`, `inferno`, `plasma`, `viridis`, the name in any case
+(`batlow`, `BATLOW`, `romao`). They are perceptually uniform (equal steps in value look like equal steps in color),
+readable with color-vision deficiencies and, the sequential ones, in black-and-white print. A table of 256 colors,
+gray g takes its color nint(255 g); `negative` reverses it, and `maxcolors N` takes the N colors nint(255 k / (N - 1)),
+Crameri's discrete palettes (`batlow maxcolors 10` is his `batlow10`; a few of his differ by 4/255 at most).
+
+| Type | Names | For |
+|---|---|---|
+| Sequential | `acton` `bamako` `batlow` `batlowK` `batlowW` `bilbao` `buda` `davos` `devon` `glasgow` `grayC` `hawaii` `imola` `lajolla` `lapaz` `lipari` `navia` `naviaW` `nuuk` `oslo` `tokyo` `turku`; `magma` `inferno` `plasma` `viridis` | a magnitude, low to high |
+| Diverging | `bam` `berlin` `broc` `cork` `lisbon` `managua` `roma` `tofino` `vanimo` `vik` | a deviation from a meaningful centre (zero, a mean): set a `cbrange` symmetric about it |
+| Multi-sequential | `bukavu` `fes` `oleron` | two regimes either side of a value at mid-palette (depth and height about sea level): set a `cbrange` that puts the value in the middle |
+| Cyclic | `bamO` `brocO` `corkO` `romaO` `vikO` | a periodic quantity (phase, angle, direction, time of day): both ends have the same color |
+
+```gnuplot
+set palette vik
+set cbrange [-1:1]
+plot 'field.dat' u 1:2:3 w image notitle
+```
+
+Credit the Scientific colour maps as Crameri, F. (2018), *Scientific colour maps*, Zenodo,
+[doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862), and see Crameri, Shephard and Heron (2020),
+*The misuse of colour in science communication*, Nature Communications 11, 5444,
+[doi:10.1038/s41467-020-19160-7](https://doi.org/10.1038/s41467-020-19160-7). They are MIT-licensed, matplotlib's are
+CC0: the notices are in `src/lib/foresight_colormaps.F90`.
 
 ## Circles, pies and donuts
 

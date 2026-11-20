@@ -47,7 +47,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_style_fill(words)` | `set style fill solid 0.5 noborder`, `solid segments 10` |
 | `rgbimage(red, green, blue, [x], [y], [title], [alpha])` | `plot ... with rgbimage` / `rgbalpha`: colors 0 to 255 per pixel (column, row) |
 | `image(z, [x], [y], [title])` | `plot ... with image`: the values `z(column, row)` at the pixel centres `x`, `y` (evenly spaced; 0, 1, ... if absent) |
-| `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")` |
+| `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")`, `set palette vik negative` (named palettes, see [Images and palettes](gnuplot-subset#images-and-palettes)) |
 | `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox` / `unset colorbox` |
 | `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd` |
 | `set_paxis(n, [min], [max], [step], [start], [end], [tics], [label])` | `set paxis 2 range [0:100]`, `set paxis 2 tics 25`, `set paxis 1 label "speed"` |

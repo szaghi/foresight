@@ -1,6 +1,8 @@
-!< foresight_palette test: palette colors against gnuplot 6.0 (`test palette` tables, its PNG images), palette words.
+!< foresight_palette test: palette colors against gnuplot 6.0 (`test palette` tables, its PNG images), palette words;
+!< the named palettes against their authors' 8-bit tables.
 program foresight_palette_test
-!< foresight_palette test: palette colors against gnuplot 6.0 (`test palette` tables, its PNG images), palette words.
+!< foresight_palette test: palette colors against gnuplot 6.0 (`test palette` tables, its PNG images), palette words;
+!< the named palettes against their authors' 8-bit tables.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_palette, only : hex_color, palette_object, palette_words
 use penf, only : I4P, R8P
@@ -8,7 +10,12 @@ use penf, only : I4P, R8P
 implicit none
 type(palette_object)          :: p               !< Palette.
 character(len=:), allocatable :: bad             !< Unknown word.
-logical                       :: test_passed(10) !< Per-check outcome.
+type(palette_object)          :: q               !< Second palette.
+logical                       :: test_passed(14) !< Per-check outcome.
+integer(I4P)                  :: k               !< Band counter.
+integer, parameter            :: BATLOW10(3, 10) = reshape([1, 25, 89, 16, 63, 96, 28, 90, 98, 60, 109, 86, &
+                                                            104, 123, 62, 157, 137, 43, 210, 147, 67, 248, 161, 123, &
+                                                            253, 183, 188, 250, 204, 250], [3, 10]) !< Crameri's batlow10.
 
 ! the default, rgbformulae 7,5,15: gnuplot's pixels at gray 0.125 and 0.5
 test_passed(1) = same(p%rgb(0.125_R8P), [90, 0, 180]) .and. same(p%rgb(0.5_R8P), [180, 32, 0]) .and. &
@@ -45,7 +52,48 @@ call palette_words('defined (0 "blue", 1 "nocolor")', p, bad)
 test_passed(10) = test_passed(10) .and. index(bad, 'a value and a color') > 0
 call palette_words('rgbformulae 40 , 1 , 1', p, bad)
 test_passed(10) = test_passed(10) .and. index(bad, '-36 to 36') > 0
-write(output_unit, '(A,10L2)') 'foresight palette checks:', test_passed
+! named palettes: table ends and middle (gray 0.5 takes color nint(127.5) = 128), Crameri's .lut values
+p = palette_object()
+call palette_words('batlow', p, bad)
+test_passed(11) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [1, 25, 89]) .and. same(p%rgb(0.5_R8P), [130, 130, 49]) .and. &
+                  same(p%rgb(1.0_R8P), [250, 204, 250])
+call palette_words('vik', p, bad)
+test_passed(11) = test_passed(11) .and. same(p%rgb(0.0_R8P), [0, 18, 97]) .and. same(p%rgb(1.0_R8P), [89, 0, 8])
+call palette_words('bukavu', p, bad)
+test_passed(11) = test_passed(11) .and. same(p%rgb(0.5_R8P), [1, 64, 38]) .and. same(p%rgb(1.0_R8P), [237, 237, 252])
+call palette_words('romaO', p, bad)
+test_passed(11) = test_passed(11) .and. same(p%rgb(0.0_R8P), [115, 57, 87]) .and. same(p%rgb(1.0_R8P), [114, 57, 89])
+call palette_words('magma', p, bad)
+test_passed(11) = test_passed(11) .and. hex_color(p%rgb(0.0_R8P)) == '#000004' .and. hex_color(p%rgb(1.0_R8P)) == '#fcfdbf'
+! maxcolors 10 gives Crameri's discrete batlow10 (DiscretePalettes/batlow10.txt), band k at gray (k + 0.5) / 10
+p = palette_object()
+call palette_words('batlow maxcolors 10', p, bad)
+test_passed(12) = len(bad) == 0
+do k = 0_I4P, 9_I4P
+   test_passed(12) = test_passed(12) .and. same(p%rgb((real(k, R8P) + 0.5_R8P) / 10.0_R8P), BATLOW10(:, k + 1_I4P))
+enddo
+! negative reverses a named palette; the last mode wins
+p = palette_object()
+call palette_words('vik negative', p, bad)
+test_passed(13) = len(bad) == 0 .and. same(p%rgb(0.0_R8P), [89, 0, 8]) .and. same(p%rgb(1.0_R8P), [0, 18, 97])
+call palette_words('positive gray', p, bad)
+test_passed(13) = test_passed(13) .and. same(p%rgb(0.5_R8P), [161, 161, 161])
+! names are case-insensitive (viridis too); gnuplot's own words are not; an unknown name is reported
+p = palette_object()
+q = palette_object()
+call palette_words('BatLow', p, bad)
+call palette_words('batlow', q, bad)
+test_passed(14) = len(bad) == 0 .and. p%table == q%table .and. same(p%rgb(0.3_R8P), q%rgb(0.3_R8P))
+call palette_words('VIRIDIS', p, bad)
+test_passed(14) = test_passed(14) .and. len(bad) == 0 .and. hex_color(p%rgb(0.0_R8P)) == '#440154'
+call palette_words('grayc', p, bad)
+call palette_words('grayC', q, bad)
+test_passed(14) = test_passed(14) .and. len(bad) == 0 .and. p%table == q%table .and. p%table > 0_I4P
+call palette_words('batlw', p, bad)
+test_passed(14) = test_passed(14) .and. bad == 'batlw'
+call palette_words('GRAY', p, bad)
+test_passed(14) = test_passed(14) .and. bad == 'GRAY'
+write(output_unit, '(A,14L2)') 'foresight palette checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

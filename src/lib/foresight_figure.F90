@@ -421,7 +421,8 @@ contains
 
    subroutine set_palette(self, words)
    !< Palette of the images, as gnuplot `set palette`: `''` (the default, rgbformulae 7,5,15), `'rgbformulae 33,13,10'`,
-   !< `'defined (0 "blue", 1 "white", 2 "red")'`, `'gray'`, `'viridis'`, `'negative'`, `'maxcolors 8'`.
+   !< `'defined (0 "blue", 1 "white", 2 "red")'`, `'gray'`, `'viridis'`, `'negative'`, `'maxcolors 8'`; a named palette
+   !< of foresight_colormaps, any case (`'batlow'`, `'vik negative'`, `'romaO maxcolors 12'`).
    class(figure_object), intent(inout) :: self  !< Figure.
    character(len=*),     intent(in)    :: words !< Palette words.
    character(len=:), allocatable       :: bad   !< Unknown word.

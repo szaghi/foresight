@@ -555,6 +555,14 @@ endif
 ! image errors
 call interpreter%run_text("set palette cubehelix", iostat, iomsg)
 test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "cubehelix"') > 0
+call interpreter%run_text("set palette batlw", iostat, iomsg)
+test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "batlw"') > 0
+! a named palette (foresight extension), any case, with gnuplot's words
+call interpreter%run_text("set palette Vik negative maxcolors 5", iostat, iomsg)
+associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
+   test_passed(58) = test_passed(58) .and. iostat == 0_I4P .and. palette%table > 0_I4P .and. palette%negative .and. &
+                     palette%maxcolors == 5_I4P .and. all(palette%rgb(0.0_R8P) == [89, 0, 8])
+endassociate
 call interpreter%run_text("plot '"//data_file//"' matrix w lines", iostat, iomsg)
 test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'matrix data are plotted with image') > 0
 open(newunit=unit, file=data_file, action='write', status='replace')
