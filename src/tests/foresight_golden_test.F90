@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(72)                  !< Per-figure outcome.
+logical                     :: test_passed(73)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -93,7 +93,8 @@ test_passed(69) = check('image_batlow.svg', figure_image('batlow'))
 test_passed(70) = check('image_vik.svg', figure_image('vik', cbmax=1.0_R8P))
 test_passed(71) = check('image_romaO.svg', figure_image('romaO maxcolors 12'))
 test_passed(72) = check('image_cubehelix.svg', figure_image('cubehelix'))
-write(output_unit, '(A,72L2)') 'foresight golden checks:', test_passed
+test_passed(73) = check('short_panels.svg', figure_short_panels())
+write(output_unit, '(A,73L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -396,6 +397,31 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_short_panels() result(fig)
+   !< Four 60 px panels with titles and no tics nor border: without x tick labels the bottom margin drops their row (as
+   !< gnuplot), so each keeps a plot area.
+   type(figure_object) :: fig     !< Figure.
+   real(R8P)           :: z(32,2) !< Ramp values.
+   integer(I4P)        :: i       !< Column counter.
+   integer(I4P)        :: k       !< Panel counter.
+
+   do i = 1_I4P, 32_I4P
+      z(i, :) = real(i - 1_I4P, R8P)
+   enddo
+   call fig%init(width=300_I4P, height=240_I4P)
+   call fig%set_multiplot(rows=4_I4P, cols=1_I4P)
+   do k = 1_I4P, 4_I4P
+      if (k > 1_I4P) call fig%next_panel
+      call fig%set_title('panel')
+      call fig%set_colorbox(.false.)
+      call fig%set_border(0_I4P)
+      call fig%unset_xtics
+      call fig%unset_ytics
+      call fig%set_palette('batlow')
+      call fig%image(z)
+   enddo
+   endfunction figure_short_panels
 
    function figure_circles() result(fig)
    !< Circles of radii in x units (the x autoscale widened by them, round on the page), one of the default radius, and

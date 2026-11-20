@@ -3567,7 +3567,9 @@ contains
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(3) = margins(3) + above
-   margins(4) = PAD + GAP + LINE_HEIGHT * font_size
+   ! the row of the x tick labels only if there are labels (gnuplot: 36 px with them, 16.8 without, at 400x300)
+   margins(4) = PAD + 0.5_R8P * font_size
+   if (any(self%xaxis%ticks%major)) margins(4) = PAD + GAP + LINE_HEIGHT * font_size
    if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
    if (self%polar .and. self%ttics%mode /= TICS_NONE) then
       ! theta labels outside the disc, as wide as "360"

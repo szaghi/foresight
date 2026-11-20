@@ -238,7 +238,7 @@ included, out of the key.
 set xtics 0.5            # a tick every 0.5
 set xtics 0,5,30         # from 0 to 30 every 5
 set ytics 10             # on a log axis the step is a factor: 1, 10, 100, ...
-unset xtics              # no ticks, no labels, no grid lines
+unset xtics              # no ticks, no labels (nor their margin), no grid lines
 set format y "%.1e"      # 1.0e-03
 set format x "%g s"      # 0.5 s
 set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
