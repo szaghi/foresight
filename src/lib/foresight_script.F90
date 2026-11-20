@@ -25,7 +25,8 @@ module foresight_script
 !<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style);
 !<   `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
-!<   item with a column header; `ls N`, `lt N` in an item apply a line style, a linetype color;
+!<   item with a column header; `ls N`, `lt N` in an item apply a line style, a linetype color; `set colorsequence
+!<   default|podo|classic|NAME [N]` picks the linetype colors (NAME: a categorical order, `batlowS`, ...);
 !< - `with boxerrorbars|boxxyerror|candlesticks [whiskerbars [F]]|financebars|boxplot` (gnuplot's layouts), `set style
 !<   boxplot [range R|fraction F] [[no]outliers] [pointtype P] [candlesticks|financebars] [medianlinewidth W]
 !<   [separation S] [labels off|auto|x] [sorted|unsorted]`;
@@ -78,8 +79,8 @@ use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
-use foresight_style, only : default_color, fill_style, style_name, style_object, style_with, STYLE_NAMES, WITH_GAUGE, &
-                            WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
+use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
+                            STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : tics_object
 use foresight_tokens, only : split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
@@ -680,11 +681,11 @@ contains
             has_title = .true.
          elseif (word == 'ls' .or. keyword(word, 'linestyle', 5_I4P)) then
             if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
-            call apply_line_style(self%line_styles, number, line)
+            call apply_line_style(self%line_styles, number, line, self%figure%panels(self%figure%current)%linecolors)
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
                        keyword(word, 'linetype', 5_I4P))) shaping = word
-            if (.not. line_option(tokens, i, line, iostat, iomsg)) then
+            if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors)) then
                iomsg = 'plot: '//iomsg
                return
             endif
@@ -1753,6 +1754,8 @@ contains
       call readout_option
    elseif (keyword(option, 'palette', 3_I4P)) then
       call palette_option
+   elseif (keyword(option, 'colorsequence', 6_I4P)) then
+      call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%cbaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
@@ -2019,6 +2022,46 @@ contains
       enddo
       call self%figure%set_key(on, position=words, box=box)
       endsubroutine key_option
+
+      subroutine colorsequence_option
+      !< `set colorsequence default|podo|classic` (gnuplot's linetype colors), or foresight's `NAME [N]`: the first N
+      !< colors (8 by default) of a categorical order (`batlowS`, ..., any case).
+      character(len=7), allocatable :: list(:) !< Colors.
+      character(len=:), allocatable :: bad     !< Problem.
+      real(R8P)                     :: v       !< Number of colors.
+      integer(I4P)                  :: n       !< Number of colors.
+      logical                       :: ok      !< Number read.
+
+      if (size(tokens) < 2) then
+         call fail('set colorsequence: default, podo, classic or a categorical order (batlowS, ...) expected', &
+                   iostat, iomsg)
+         return
+      endif
+      n = 0_I4P
+      if (size(tokens) > 3) then
+         call fail('set colorsequence: unexpected "'//tokens(4)%text//'"', iostat, iomsg)
+         return
+      elseif (size(tokens) == 3) then
+         call real_from_decimal(tokens(3)%text, v, ok)
+         if (ok) ok = .not. any(tokens(2)%text == ['default', 'podo   ', 'classic'])
+         if (ok) ok = v >= 1.0_R8P .and. v <= 100.0_R8P .and. v == aint(v)
+         if (.not. ok) then
+            call fail('set colorsequence: "'//tokens(3)%text//'" (a categorical order takes 1 to 100 colors; '// &
+                      'default, podo and classic none)', iostat, iomsg)
+            return
+         endif
+         n = int(v, I4P)
+      endif
+      call sequence_colors(tokens(2)%text, n, list, bad)
+      if (len(bad) > 0) then
+         call fail('set colorsequence: '//bad, iostat, iomsg)
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         if (allocated(panel%linecolors)) deallocate(panel%linecolors)
+         if (size(list) > 0) panel%linecolors = list
+      endassociate
+      endsubroutine colorsequence_option
 
       subroutine palette_option
       !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette). `file 'f' [index N] [every E]
@@ -2799,7 +2842,8 @@ contains
                   call fail('set style line: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
                   return
                endif
-               if (.not. line_option(tokens, i, style, iostat, iomsg)) then
+               if (.not. line_option(tokens, i, style, iostat, iomsg, &
+                                     self%figure%panels(self%figure%current)%linecolors)) then
                   iomsg = 'set style line: '//iomsg
                   return
                endif
@@ -3334,11 +3378,12 @@ contains
       endfunction is_parenthesized
    endsubroutine parse_using
 
-   pure subroutine apply_line_style(styles, id, line)
+   pure subroutine apply_line_style(styles, id, line, colors)
    !< Apply the line style `id` to `line`: its defined properties; an undefined style is the linetype `id`, as gnuplot.
    type(line_style_object), intent(in)    :: styles(:) !< Defined styles.
    integer(I4P),            intent(in)    :: id        !< Style number.
    type(line_style_object), intent(inout) :: line      !< Line properties.
+   character(len=7),        intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
    integer(I4P)                           :: s         !< Counter.
 
    do s = 1_I4P, size(styles, kind=I4P)
@@ -3350,7 +3395,7 @@ contains
       if (allocated(styles(s)%pt)) line%pt = styles(s)%pt
       return
    enddo
-   line%lc = default_color(id)
+   line%lc = default_color(id, colors)
    endsubroutine apply_line_style
 
    function columnhead_title(word, column) result(ok)
@@ -3408,7 +3453,7 @@ contains
         .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)
    endfunction is_line_option
 
-   function line_option(tokens, i, line, iostat, iomsg) result(ok)
+   function line_option(tokens, i, line, iostat, iomsg, colors) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
    !< `lc [rgb] "color"`, `lc N`, `lt N` (linetype color N), `lw W`, `dt N`, `ps S`, `pt N`.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
@@ -3416,6 +3461,7 @@ contains
    type(line_style_object),       intent(inout) :: line      !< Line properties.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=7),              intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: word      !< Property word.
    integer(I4P)                                 :: number    !< Integer value.
@@ -3438,11 +3484,11 @@ contains
       else
          i = i - 1_I4P
          ok = next_integer(tokens, i, number, iostat, iomsg)
-         if (ok) line%lc = default_color(number)
+         if (ok) line%lc = default_color(number, colors)
       endif
    elseif (word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) then
       ok = next_integer(tokens, i, number, iostat, iomsg)
-      if (ok) line%lc = default_color(number)
+      if (ok) line%lc = default_color(number, colors)
    elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
       ok = next_real(tokens, i, value, iostat, iomsg)
       if (ok) line%lw = value

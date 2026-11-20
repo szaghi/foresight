@@ -23,7 +23,7 @@ use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
-use foresight_style, only : fill_style
+use foresight_style, only : fill_style, sequence_colors
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : tics_object, TICS_NONE
@@ -78,6 +78,7 @@ type :: figure_object
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
       procedure, pass(self) :: set_multiplot   !< gnuplot `set multiplot layout rows,cols title "..."`.
       procedure, pass(self) :: set_origin      !< gnuplot `set origin`.
+      procedure, pass(self) :: set_colorsequence !< gnuplot `set colorsequence`.
       procedure, pass(self) :: set_palette     !< gnuplot `set palette`.
       procedure, pass(self) :: set_palette_gradient !< gnuplot `set palette defined`/`file` from arrays.
       procedure, pass(self) :: set_paxis       !< gnuplot `set paxis N range|tics|label`.
@@ -435,6 +436,29 @@ contains
    endassociate
    if (len(bad) > 0) error stop 'foresight: set_palette: unsupported palette "'//bad//'"'
    endsubroutine set_palette
+
+   subroutine set_colorsequence(self, name, colors)
+   !< Linetype colors of the series, `lc N` and the slices of the current panel (carried to the next ones), as gnuplot
+   !< `set colorsequence default|podo|classic`; beyond gnuplot, a categorical order (`'batlowS'`, ..., any case) and
+   !< the number of its `colors` taken (8 by default), the most distinct first. Series already added keep theirs; a
+   !< theme recolors gnuplot's default sequence only.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   character(len=*),     intent(in)           :: name   !< Sequence.
+   integer(I4P),         intent(in), optional :: colors !< Colors of a categorical order, 1 to 100.
+   character(len=7), allocatable              :: list(:) !< Colors.
+   character(len=:), allocatable              :: bad    !< Problem.
+   integer(I4P)                               :: n      !< Colors asked.
+
+   n = 0_I4P
+   if (present(colors)) n = colors
+   call sequence_colors(name, n, list, bad)
+   if (len(bad) > 0) error stop 'foresight: set_colorsequence: '//bad
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (allocated(panel%linecolors)) deallocate(panel%linecolors)
+      if (size(list) > 0) panel%linecolors = list
+   endassociate
+   endsubroutine set_colorsequence
 
    subroutine set_palette_gradient(self, positions, colors)
    !< Palette of the images as a gradient, as gnuplot `set palette defined` or `set palette file`: `colors(:, k)`

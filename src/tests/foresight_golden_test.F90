@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(74)                  !< Per-figure outcome.
+logical                     :: test_passed(75)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -97,7 +97,8 @@ test_passed(73) = check('short_panels.svg', figure_short_panels())
 ! the library gradient renders as the same `defined` palette
 test_passed(74) = rendered(figure_image('negative', gradient=.true.)) == &
                   rendered(figure_image('defined (0 "blue", 1 "white", 2 "red") negative'))
-write(output_unit, '(A,74L2)') 'foresight golden checks:', test_passed
+test_passed(75) = check('colorsequence_batlowS.svg', figure_colorsequence())
+write(output_unit, '(A,75L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -403,6 +404,21 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_colorsequence() result(fig)
+   !< Seven curves in the first six colors of Crameri's categorical batlowS order (the seventh cycles to the first).
+   type(figure_object) :: fig   !< Figure.
+   real(R8P)           :: x(41) !< Abscissae.
+   integer(I4P)        :: i     !< Point counter.
+   integer(I4P)        :: k     !< Curve counter.
+
+   x = [(0.1_R8P * real(i, R8P), i = 0, 40)]
+   call fig%init(width=420_I4P, height=300_I4P)
+   call fig%set_colorsequence('batlowS', colors=6_I4P)
+   do k = 1_I4P, 7_I4P
+      call fig%plot(x, sin(x + 0.4_R8P * real(k, R8P)) + 0.3_R8P * real(k, R8P), title='curve '//achar(48 + k))
+   enddo
+   endfunction figure_colorsequence
 
    function figure_short_panels() result(fig)
    !< Four 60 px panels with titles and no tics nor border: without x tick labels the bottom margin drops their row (as

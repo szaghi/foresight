@@ -143,6 +143,7 @@ type :: axes_object
    logical                          :: histogram_rowstacked = .false. !< Histograms stacked by row, else clustered.
    real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
    type(palette_object)             :: palette          !< Palette of the images, `set palette`.
+   character(len=7), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
    type(axis_object)                :: cbaxis = axis_object(tight=.true.) !< Color axis of the images, `set cbrange`.
    logical                          :: colorbox = .true. !< Draw the color box of the images.
    logical                          :: readout = .true. !< Draw the readouts.
@@ -297,7 +298,7 @@ contains
    series%title = ''
    if (present(title)) series%title = title
    if (present(with)) series%style%with = style_with(with)
-   series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P)
+   series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P, self%linecolors)
    if (present(lc)) series%style%color = lc
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt
@@ -860,7 +861,7 @@ contains
       endif
       series%title = ''
       if (present(title)) series%title = title
-      series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P)
+      series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P, self%linecolors)
       self%series = [self%series, series]
       endsubroutine add_image
 
@@ -2494,7 +2495,7 @@ contains
       integer(I4P), intent(in)      :: k     !< Slice.
       character(len=:), allocatable :: color !< SVG color.
 
-      color = default_color(k)
+      color = default_color(k, self%linecolors)
       endfunction slice_color
    endsubroutine draw_pie
 
@@ -2719,7 +2720,7 @@ contains
       do k = 1_I4P, m
          labels(k) = ''
          if (allocated(series%xlabels)) labels(k) = trim(series%xlabels(k))
-         colors(k) = default_color(k)
+         colors(k) = default_color(k, self%linecolors)
       enddo
       key_width = 0.0_R8P
       if (self%key .and. allocated(series%xlabels)) key_width = chart_key_width(backend, labels, font_size)
@@ -2732,7 +2733,7 @@ contains
          if (series%values(k) <= 0.0_R8P) cycle
          call outline(radius * fraction(series%values(k)), 0.0_R8P, 90.0_R8P - span * real(k, R8P), &
                       90.0_R8P - span * real(k - 1_I4P, R8P), px, py)
-         call backend%polygon(c(1) + px, c(2) - py, default_color(k), series%style%density, &
+         call backend%polygon(c(1) + px, c(2) - py, default_color(k, self%linecolors), series%style%density, &
                               merge('white', 'none ', series%style%border), 1.0_R8P)
       enddo
       ! the scale over the sectors: rings and their values on the 12 o'clock line
@@ -3364,7 +3365,7 @@ contains
    endassociate
    allocate(character(len=16) :: colors(m))
    do j = 1_I4P, m
-      colors(j) = default_color(j)
+      colors(j) = default_color(j, self%linecolors)
    enddo
    key_width = 0.0_R8P
    if (self%key .and. size(names) > 0) key_width = chart_key_width(backend, names, font_size)

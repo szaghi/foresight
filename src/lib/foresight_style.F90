@@ -8,11 +8,13 @@ module foresight_style
 !< foresight adds `segments N` (boxes and histograms): the y range cut into N cells, a bar lighting the cells it covers
 !< at least half, the others drawn faintly, as the bar graphs of a 1980s display.
 use penf, only : I4P, R8P
+use foresight_colormaps, only : CATEGORICAL_LEVELS, categorical_hex, categorical_id
 use foresight_format, only : fixed, real_from_decimal
 
 implicit none
 private
 public :: default_color
+public :: sequence_colors
 public :: fill_style
 public :: style_object
 public :: style_name
@@ -114,13 +116,63 @@ type :: style_object
 endtype style_object
 
 contains
-   pure function default_color(index) result(color)
-   !< Default color of the `index`-th series, cycling gnuplot 5's linetype colors.
-   integer(I4P), intent(in)      :: index !< Series index, from 1.
-   character(len=:), allocatable :: color !< SVG color.
+   pure function default_color(index, colors) result(color)
+   !< Color of linetype `index`, cycling the active sequence `colors` (`set colorsequence`), else gnuplot 5's
+   !< linetype colors.
+   integer(I4P),     intent(in)           :: index     !< Series index, from 1.
+   character(len=7), intent(in), optional :: colors(:) !< Active color sequence; absent or empty: gnuplot's default.
+   character(len=:), allocatable          :: color     !< SVG color.
 
+   if (present(colors)) then
+      if (size(colors) > 0) then
+         color = trim(colors(modulo(index - 1_I4P, size(colors, kind=I4P)) + 1_I4P))
+         return
+      endif
+   endif
    color = PALETTE(modulo(index - 1_I4P, size(PALETTE, kind=I4P)) + 1_I4P)
    endfunction default_color
+
+   pure subroutine sequence_colors(name, n, colors, bad)
+   !< Colors of the sequence `name`, as gnuplot `set colorsequence`: `default` (gnuplot 5's, returned empty: the
+   !< default), `podo` (8 colors) or `classic` (gnuplot's svg terminal, 13 colors); beyond gnuplot, a categorical order
+   !< of foresight_colormaps (`batlowS`, ..., any case), its first `n` colors (8 if `n` < 1), the most distinct first.
+   character(len=*),              intent(in)  :: name      !< Sequence name.
+   integer(I4P),                  intent(in)  :: n         !< Colors of a categorical order; < 1 for 8.
+   character(len=7), allocatable, intent(out) :: colors(:) !< Colors, `#rrggbb`; empty for gnuplot's default.
+   character(len=:), allocatable, intent(out) :: bad       !< Why not, empty if done.
+   integer(I4P)                               :: id        !< Categorical order.
+   integer(I4P)                               :: m         !< Colors taken.
+   integer(I4P)                               :: k         !< Counter.
+
+   bad = ''
+   select case (name)
+   case ('default')
+      allocate(colors(0))
+   case ('podo')
+      colors = ['#000000', '#e69f00', '#56b4e9', '#009e73', '#f0e442', '#0072b2', '#d55e00', '#cc79a7']
+   case ('classic')
+      colors = ['#ff0000', '#008000', '#0000ff', '#00ffff', '#157545', '#000094', '#ff9900', '#0099a1', '#d6d645', &
+                '#a391ff', '#ffcc00', '#d60078', '#abd600']
+   case default
+      id = categorical_id(name)
+      if (id == 0_I4P) then
+         bad = 'unknown color sequence "'//name//'" (default, podo, classic or a categorical order: batlowS, ...)'
+         allocate(colors(0))
+         return
+      endif
+      m = 8_I4P
+      if (n > 0_I4P) m = n
+      if (m > CATEGORICAL_LEVELS) then
+         bad = 'a categorical order has 1 to 100 colors'
+         allocate(colors(0))
+         return
+      endif
+      allocate(colors(m))
+      do k = 1_I4P, m
+         colors(k) = '#'//categorical_hex(id, k)
+      enddo
+   endselect
+   endsubroutine sequence_colors
 
    pure function style_name(word) result(name)
    !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot accepts it (`l`, `p`, `lp`, `i`, `st`, `fs`,

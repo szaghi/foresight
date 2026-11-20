@@ -155,6 +155,11 @@ public :: COLORMAPS
 public :: COLORMAP_NAMES
 public :: colormap_hex
 public :: colormap_id
+public :: CATEGORICALS
+public :: CATEGORICAL_NAMES
+public :: CATEGORICAL_LEVELS
+public :: categorical_hex
+public :: categorical_id
 
 integer(I4P), parameter :: COLORMAPS = 46_I4P !< Number of named palettes.
 character(len=*), parameter :: CM_ACTON = &
@@ -1231,6 +1236,239 @@ character(len=1536), parameter :: TABLES(COLORMAPS) = [ &
    CM_PLASMA, CM_VIRIDIS, CM_CIVIDIS, CM_BLACK_BODY &
    ] !< Tables, in the order of the names.
 
+integer(I4P), parameter :: CATEGORICALS = 22_I4P !< Number of categorical orders.
+integer(I4P), parameter :: CATEGORICAL_LEVELS = 100_I4P !< Colors of an order.
+character(len=*), parameter :: CS_ACTONS = &
+   '260d40f0eafaa76690dda1c25853807d638ee8cae1cf789e4032614c4371ecdbee69608b' // &
+   'e3b6d2d78cb091648fbe6a92342152ead3e8524b7973628d463a69605b86e5c0dad382a7' // &
+   'c86f9786648eeee3f4da97b99b658fb267902d1749e0acca3a29598b648e311c4debd7eb' // &
+   'eddff1ac6790a1668f6e618ce6c5de78628d433665dea7c681638e554f7cb868913d2d5d' // &
+   '4f4775efe7f7e9cee4d27da32a1244655d89c36c94e1b1ce493f6d5c5783cc739adb9cbd' // &
+   'd892b4d587ab96658fe4bbd63624554e45737f638ed37fa5e1aecc382657ebd9eddfa9c8' // &
+   'a4668f8e648e99658f675f8ab56891bb6992e5bed8e2b4d0d07aa071618ce6c2dcaa6690' // &
+   '625c88ede1f3e8cce3af6790ca7199c16b9345386757517e84638e4b416fe7c7df423463' // &
+   '5149773e2f5f544d7b93658f' !< actonS, Crameri's categorical order.
+character(len=*), parameter :: CS_BAMAKOS = &
+   '003b47ffe5ad61790bb4a022245231406420898900ddc4640f443eefd58acab23f194a38' // &
+   '748401506e169e9108315a29083f43a99815948c016a7f05bfa9307f870014473b1e4e35' // &
+   'f7dd9c2a562d043d45597411e6cc77385f2548691bd4bb510b42418f8a0044661e1b4c37' // &
+   '5471136f820312463d998e0327542f4c6b18a4940e2e582b355c27b9a529215033ead181' // &
+   'fbe1a5c5ad373c6122848800063e44e2c86ed9bf5bcfb64816493a798600023c46667c08' // &
+   '5d770e0d433fae9c1bf3d993094042a696118c8a00053e450c4240365e266d80049c8f05' // &
+   '4a6a1ad6bd56b19e1ff9dfa0647b0a2f592a10453d818800c7af3b46681c0e443f265330' // &
+   '174a39335b285b750f7785015f780de8cf7c718302f1d78e978d02f5db97204f34ac9a18' // &
+   '29552ea1920bb7a225033c46' !< bamakoS, Crameri's categorical order.
+character(len=*), parameter :: CS_BATLOWS = &
+   '011959faccfa828231226061f29d6d4d734d114360c09036fdb4b4dd954d356a59fcbfd6' // &
+   '175262677b3ea18a2b0d315dfca890fbc6e82b655eb18d2f5a7745fdaea2cf93400f3b5f' // &
+   'e9995cfdbac4416f5391862d1b596208255b747e38134b61f9a3808a842f0e365e124761' // &
+   '154f62e397547b80341e5d6299882c1956620b2b5cfdb7bcc8913bfcc3dfee9b64a98c2c' // &
+   'fdb1abfdbccdfbc9f1051f5af6a077607942fdab9a4771503b6d56b98f3226635f537549' // &
+   'd694466d7c3b30685c103f60fba689bd8f34cb923eeb9a60fdb8c0fbc7ecf09c698e852e' // &
+   'fdbbc97f8133031c5a114160fdac9e5d7844fca995185462787f36a58b2c0a285c9d892b' // &
+   '33695a0d335e637a40165062124561205e61144d621d5b620c2e5dd9954a3e6e55ad8c2d' // &
+   'f49f72868330b58e30577647' !< batlowS, Crameri's categorical order.
+character(len=*), parameter :: CS_BATLOWKS = &
+   '04050afdc0d6787c4138555fe5a160536855af933afaae9a1a2e43fdb6b7294458455f5c' // &
+   '63724bcd9b4791883af3a77e111a27f7ab8dfdbbc5fcb2aad99e52a18e384c645921384f' // &
+   '3f5b5e1523350c1019eea5705b6d506c7647314e5e85823dbe973e7e7f3ffbb0a249625b' // &
+   '576a530f151f2d495bdfa059727944fdbdcd253e54eaa368c699423c585f998b38677449' // &
+   'f1a678f9ac92141f2f1d3248506657090c13a991395f6f4e35525f435d5dfdb8bdf5a984' // &
+   'b5953bfdb5b217273bd39d4c8c853b9d8c38415c5e1f354b33505efcb1a61017233e595f' // &
+   '121c2b757b4306080ffcb3ae3a565f27415661704d88843c2b475afdbed16a7548596c51' // &
+   '192b3f6f7845233b51c99a45f0a574dc9f552f4b5d47615cf6aa88fdb9c1c298404a635a' // &
+   'faad9681813e7b7e40e7a264' !< batlowKS, Crameri's categorical order.
+character(len=*), parameter :: CS_BATLOWWS = &
+   'fffefe0119597e8737205f61e7ab84497451114360fed1cdbf9d46637e449e9233ffeaea' // &
+   '0d315d326b5cf5b7a6165162d7a5640f3b5f1a58623d7056fff5f5ffdfddfac3ba134a61' // &
+   '08255b70823deeb09456794ae0a8748e8d3328655faf9839cba154ebad8b1d5c62051f5a' // &
+   '124761ffe5e4b79b3fa79535386d595c7b47185562dba76df8bdaffff0f0246261f2b39c' // &
+   '868a354f774de4aa7c2d685e77853afed8d6103f60fffaf9968f32d1a35c144e62fccac4' // &
+   '4372546980400e365e0b2b5cc59f4c30695d1c5a62a29433407155ffdbda0c2e5df7baaa' // &
+   'e5ab801753628289361f5d62bb9c42e9ac88fff7f73a6e589a91328a8b344c754fffeded' // &
+   'd9a669144c62266460fdcdc9fcc6bfffe2e1fffcfc7b86392b675e1550625f7c45f9c0b5' // &
+   '356c5af3b5a1edaf8ffed5d2' !< batlowWS, Crameri's categorical order.
+character(len=*), parameter :: CS_BILBAOS = &
+   '4c0001f8f8f8a9815e984d50beb794af9965cccac378292fa26a599f5d5664161ab6aa77' // &
+   'c4c0aca6765c8a3a41ac8c60dddddba16358c7c5b7b3a16ba4705a6e2024eaeae992434a' // &
+   'bab1859c5554ad9262580b10813137c1bca1aa865fd2d2cea77c5dd7d7d4bcb48db4a571' // &
+   'c0b99a9e5955ab8960a6795ca36d5a8e3f4685353ca16758732529cac7bdf1f1f0520509' // &
+   'ac8f615e1115c6c2b2e3e3e2691b1fb8ad7e95484dae9663b19d68a5735ba060579a5152' // &
+   'a87e5d7d2e34a9835ec3bea6cfcec9a46e5af4f4f4dadad8b29f69edededbbb2899d5754' // &
+   'af9764904148994f51b3a36ea87f5ea26859ac8d61bdb590aa875fa77a5dab8a60a4715b' // &
+   '611418bfb897e6e6e69b5353d5d4d1974a4fc8c6baa165589f5e5676272c67191d8c3c43' // &
+   'b9af82c3bfa9b5a8744f0205' !< bilbaoS, Crameri's categorical order.
+character(len=*), parameter :: CS_BUDAS = &
+   'b301b3ffff66cd857ebc4e90dbbd70c56a87b32f9ce3db69d4a177edec67d1937bb73f95' // &
+   'c05c8bdfcb6dc97882b31ca6d8ae74e7e368dab572b311acd39a79c36389c77184b53798' // &
+   'e1d36bbe558eb94793cb7e80cf8c7cddc46eb326a0f6f566d6a875dab971c66e86e2d76a' // &
+   'b32b9eb317a9b4339aba4b91c46788c2608ab309afd49e78b63b97bd528fdcc06feae767' // &
+   'fafa66d2977af1f066d0907cce897dc87483cc827fd5a576b321a3e5df68b84394d9b273' // &
+   'e0cf6cca7b81dec86ebf598cd7ab75e6e168d1957acc8080d39c78e0cd6ccd847fb63d96' // &
+   'c87384c66c86f8f866d49f78d9b473dab772bf578dcb7d81cf8a7db32d9dd08e7cdbbb71' // &
+   'c2628ae2d56adcbf70bc508fc46987c05b8cdfca6dddc26fc15e8bd7ad74f3f366dec66e' // &
+   'd5a377b31aa7ba4992ce877e' !< budaS, Crameri's categorical order.
+character(len=*), parameter :: CS_DAVOSS = &
+   '00054afdfdf4688b942d5895b2c08fe8ebc087a0891330754b769d5a829a20458876958e' // &
+   'd0d8a499ad88f6f6db3c699c081c610312561a3b7f537c9ca4b68ac1cc987e9a8bfafae8' // &
+   '3561990e266bdee3b3274f906f90916186978fa588f0f1cd43709d1d408447739df3f4d4' // &
+   '658996567f9b17367afcfbee4f799dc9d29e93a98739659bd8deababbb8c739290b9c693' // &
+   'f8f8e1234a8c112b707a978d9eb188315c97829d8a05175b010c503f6c9d0b20655d8499' // &
+   '2a53928ba3886b8d93edefc7e3e7b822488a638897122e7300094daebd8d4d789dcdd5a1' // &
+   '5f859858819a071a5e0c236818387d91a78737639aebedc4f2f2d0fbfbeb74938f2f5a96' // &
+   '335f98809b8bbdc99549759d7191919baf88f7f7de1b3e82a8b88b849e89557e9be6e9bc' // &
+   '45719d1e438696ab8789a188' !< davosS, Crameri's categorical order.
+character(len=*), parameter :: CS_DEVONS = &
+   '2c1a4cf8f8fe758ad9c6c0f328568c29376aaaa5eddedcf83d6eb7ebe9fb9197e43063a2' // &
+   '274579577ccbd2cef62a285abab3f1b2adeff2f0fc274e822a2f62ccc7f49e9ee94875c1' // &
+   'c0baf22b5d983669ad2b2154e4e2fa8290dfd8d4f76784d3283e71c9c4f4bdb7f1dbd8f8' // &
+   '283a6d4f79c6a4a2ebeeedfccfcbf5e8e5fa5f80cf4272bcb6b0f02b1d50aea9ee275287' // &
+   '2a2b5e989be729336627497d8a94e1295a923266a7f5f4fd7b8ddc2741742d609c2b2558' // &
+   '6f88d7e1def93a6cb2d5d1f6c3bef32e629f3165a48d95e33468aadad6f7d1cdf59b9ce8' // &
+   '275084b8b2f027477b6382d14573bfa2a0eaf7f6fdc7c2f4f3f2fd2743768692e02b1f52' // &
+   'cac6f4aca7ede3e0f9f0eefce6e4fa386ab02c1c4e6b86d528396b283c6f2a5c952a2d60' // &
+   'beb9f2c2bcf27e8fdd3f70b9' !< devonS, Crameri's categorical order.
+character(len=*), parameter :: CS_GLASGOWS = &
+   '361338dbd3ff6d702b69a3a5702d06a0bbd3638968521b2074510184b0be7540015f9587' // &
+   'bbc6e761201345172c687d4a726210618f784b19263e1532629c96658359caccf376aab2' // &
+   '6b763a7449006a250cadc1dd73590592b6c9591d1a74370270681c4f1a237544006d2909' // &
+   '60998e41162f744d00745503b4c3e2697a427dadb8628c708bb3c3561c1dd2d0f999b9ce' // &
+   '3a14356f6c23743b0160927f662210648661659f9d678051725e0a4818296fa6ab6c7332' // &
+   '5d1e17a6bed8c2c9ed72320371661768240e6f6a20c6cbf079abb572600d75420043162d' // &
+   '67a1a16b75365f1f15735b07571c1b72a8af744f01bec8ea3813378eb4c6628b6c677e4d' // &
+   '60917b639e9a4a1827a3bdd63c1433743901632112b7c5e54d192465845d618e74609483' // &
+   '9cbad146172a87b1c16d712f' !< glasgowS, Crameri's categorical order.
+character(len=*), parameter :: CS_GRAYCS = &
+   '070707f9f9f9777777454545aeaeae9090902929295f5f5fd1d1d19e9e9e525252e4e4e4' // &
+   '6c6c6cbfbfbf1a1a1a373737848484595959222222b6b6b6a6a6a63e3e3e7d7d7d666666' // &
+   '9696968a8a8a4b4b4bdadadac8c8c8313131717171131313efefefc4c4c4a2a2a2424242' // &
+   '8787872525252d2d2d4f4f4f3b3b3b8080801e1e1ebbbbbbaaaaaaeaeaea6969697a7a7a' // &
+   'dfdfdf636363565656b2b2b20e0e0e9a9a9a5c5c5c747474f3f3f33333336e6e6ed5d5d5' // &
+   '8d8d8d939393494949cccccc171717bdbdbd575757c1c1c1404040828282e2e2e2151515' // &
+   '1c1c1c0b0b0b9c9c9c8585852f2f2fb4b4b48888882424242727273c3c3cb0b0b0353535' // &
+   '5454545b5b5b393939d7d7d7a4a4a4a8a8a8959595767676646464989898444444474747' // &
+   '111111f6f6f6ececec4d4d4d' !< grayCS, Crameri's categorical order.
+character(len=*), parameter :: CS_HAWAIIS = &
+   '8c0273b3f2fd9c951c6cd48c964d3e8abc489b6d2966e8d3922e559c801f87efee995d34' // &
+   '7bc969901d6360deb096aa2b943d4a97543982c3595fe4c29aa02173ce7b65d99e954544' // &
+   '9d8a1c8e126b91b4399df1f773ece291265c9c77249a652e93364f922a599961319d851d' // &
+   '9d901c9a692c68d6959021609b9a1e9858369b722693325277cc729c7b219541478d0a6f' // &
+   '93af3262dca792f0f38f18677deee897513c6cebdb61e6caa8f2fa9649417fc66186bf50' // &
+   '98a52670d1835fe1b98db84094394d9c79238f1569985a3560e0b49a6b2a91245e97a828' // &
+   '9b74256ad59195ad2e5fe2bd60e5c6953f4893305463e7cf84c1548d067182efeb9b9d1f' // &
+   '99a32388be4c6ed2886febde9a672d91285a75cd76995f3268e9d79b702861ddab943b4b' // &
+   '9334508df0f08f1a6581c45d' !< hawaiiS, Crameri's categorical order.
+character(len=*), parameter :: CS_IMOLAS = &
+   '1a33b3ffff6654867f305e9d91c36f3f718e2549a8bde66770a3772b53a237689680b373' // &
+   'a3d56bddf466203ead487b8662947a2d59a088bb715b8d7dcded664e8082eef96633639a' // &
+   '284ea544768a2344aaafde693b6c9278ab751d39b099cc6d699c793d6f902c56a12f5b9e' // &
+   '5e917b4b7d849ed06c1f3caec4ea6784b772274ca6d5f0662951a474a776578a7e2446a9' // &
+   '1c36b1a9d96a95c86e4678882141ac7caf74356598b5e26866987a396a94f7fc668cbf70' // &
+   'e6f66632609b51838041738c6da0786b9e78b9e4687aad7452858032629b86b9713c6e91' // &
+   '5c8f7cc8eb67acdb69d1ef66e2f56697ca6d1b35b21c37b02345aa2f5d9e1f3dae457789' // &
+   '3a6b93598b7dd9f266346499386995a6d76a366797274da656887ea1d36b42748b7eb173' // &
+   '72a5764779874c7f83f2fb66' !< imolaS, Crameri's categorical order.
+character(len=*), parameter :: CS_LAJOLLAS = &
+   '191900fffecbd85f4decac54653329f7d971a44544e58751362411e1744fc44e4ae99a52' // &
+   '4b2b1b833d38f1c159fcef9f271e08fef7b6402716d0554cfae587e79052efb655b54947' // &
+   '201c04e37d50743830dd694feba35394413e572f21f4cd612e210cfdf3ab32220f241d06' // &
+   'f5d3697b3b341d1b02f0bc575e3125f8df7c512d1eca514be48251e68c51ea9e53e89552' // &
+   'bc4c496c362cedb1549c4341e27950fbea933b2513fefbc0452918eba853f2c75c8b3f3b' // &
+   'db644ead4746df6e4fd55a4d2b200a783932e79352d75c4dfef9bbedaf54e0714f7f3c36' // &
+   '613227f7dc77c7504bf1c45a30210df4d0651e1b03fae78df9e282da614e3924124e2c1d' // &
+   'e99c52efb956221c05eba553fdf5b0984240e380508f403d542e20ecaa54e68e5170372e' // &
+   'de6c4fb94a48291f091b1a01' !< lajollaS, Crameri's categorical order.
+character(len=*), parameter :: CS_LAPAZS = &
+   '1a0c64fef2f35b8ba3b3ac962c52923c70a0eaceb9859e9c24327e6f96a133619a202071' // &
+   'd0baa09ba496f9e1d64a7fa328428990a199fceae51d176b37699df3d8c8a7a8955285a4' // &
+   '7a9a9e2f5a974278a2263a846591a2c1b299dec3ab2229782a4b8e5688a4d7bea6fdeeec' // &
+   '608ea3efd3c0a1a6966a94a1fbe6ddadaa95f6ddcf4e82a32e56953a6d9fc8b69c1c1268' // &
+   '232d7b3f74a1467ba31e1c6e7f9c9dbaaf97253681315e9929478ce4c9b274989f273e87' // &
+   '21257595a3988aa09a35659c2b4f9123307ce7cbb5f1d5c42b4d90202373588aa3d3bca3' // &
+   '5487a4447aa26792a224347f253882ecd0bd879f9b305c98e1c6af1e196d5d8da3aaa995' // &
+   '386b9e487da377999ff7dfd3beb0981f1e70325f994176a2f4dacb4c80a32d54948da099' // &
+   '6c95a1fae3dafdece8b7ad96' !< lapazS, Crameri's categorical order.
+character(len=*), parameter :: CS_LIPARIS = &
+   '031326fdf5daa56267525b7ae99b74785f72da6f5e183e61e7c3988d616d365176092844' // &
+   '655e77e98466bf6561f0dbb7e5ad82b26364ebcfa75c5d79061d3525486d0e3353ea906d' // &
+   '98616ae37861e5b88c826070cd685f6e5f7545587af6e8c9e7a37a615e78e77e63d46b5e' // &
+   '9f6268e9957093616b87606e7d6071f3e1c0575c7a0b2d4b2d4d72e6a87ee9c99ffaeed1' // &
+   '1e4368ea8a69b864626a5e76ab6365735f74df735fe5b28713385a05182de6bd923e5578' // &
+   'edd5af07223cc6665f4c5a7ae8a077b56363fbf1d6a26267e6c0950a2a48f8ebcdeacca3' // &
+   'ae63647a5f72635e78e98768041629715f74ecd2aba862668a606e96616b545c7aefd8b3' // &
+   'f5e5c49b6169f2debb765f736c5f75294b7022466be89d76e88165bc6461e6a67c85606f' // &
+   'c366601b4064d06a5e103557' !< lipariS, Crameri's categorical order.
+character(len=*), parameter :: CS_NAVIAS = &
+   '031327fcf4d9408a8087c2691b608f59a072073966d1e39f2f798beaedbf052546266f90' // &
+   '6bb06a0e4d81aed57d4c947a378186dfe8b0337d892a748e14578a051c369acc700a4374' // &
+   '468f7d529a76f4f1cd062f56c1dc8d20689178b96862a86e3c8583569d74236c91f8f3d3' // &
+   'd8e5a80c487b04182e71b469b8d98507345e05213e4f97785da4703e8882062a4e7fbd68' // &
+   'efefc6c9e0961152862c768d1e649149917b66ac6c28718fa4d17690c76c438c7f175c8d' // &
+   '083e6de5eab8317b8a357f87398385b3d7810d4a7e1c6290052342579f739fce73448d7e' // &
+   '051a32faf3d6428b7f29738f104f845fa66f5098778cc56a0940712d788c083b6ad5e4a3' // &
+   '2b758d226a9104162bbcdb8947907c4d9579e2e9b47bbb686eb2691354884a937af1f0ca' // &
+   '5ba271c5de92f6f2d0cde19b' !< naviaS, Crameri's categorical order.
+character(len=*), parameter :: CS_NAVIAWS = &
+   '041427fbfdf6478f809fd07d1f628d64a973e3f0c40a3a66337c8bc7e49e7dbc71549b7a' // &
+   '2a718f135080f2f8e13c8586062747d7ebb2418a83b4db8c2e778d6fb271ebf5d40e4574' // &
+   '051d374d957d256b8f195a88388189f7faec5ca2768cc57407305631798c367e8a69ad72' // &
+   'e7f3cc104a7a95cb78eff6db0b406d2c748e4a927fddeebb50987c165584589e7876b671' // &
+   '3f878505192fbedf95448c8222678e06223fa9d68408355ecfe8a8f9fcf1286e8f85c172' // &
+   '072c50f5f9e71c5f8b3a838760a675f3f9e40c4271266d8f81be720a3d6a4b937e9acd7b' // &
+   'edf5d790c876a4d3813780891b5d8a489080145282daecb667ab73cbe6a3b9dd903d8686' // &
+   '23698f6caf71fafcf379b971d3e9ad5aa077458e8172b471327b8ce5f1c8051b33f8fbee' // &
+   '0624433982882b728f06294c' !< naviaWS, Crameri's categorical order.
+character(len=*), parameter :: CS_NUUKS = &
+   '05598cfefeb2a1a698537785c3c385b5b5917d8f912d6483dddd8b919b96bcbc8b3f6c82' // &
+   'cdcd831c5e87adae9568838beeee9ca7aa97879594c8c783f6f6a7135c89b9b98e497183' // &
+   '73898e366882c0bf88d4d48699a097b1b2935e7d88256185e6e693829293788c909da398' // &
+   'aaac96e1e18f3b6a82638089b3b492a4a897446f82baba8cd8d888185d888c9895215f86' // &
+   'bebd89b7b78fcaca834e7484c1c186959e97f2f2a1afb094326682587a86296284fafaad' // &
+   '6e868cc5c584d1d0840d5b8be9e997dfdf8d66818ab0b1945b7b872b6383859493cccb83' // &
+   'f8f8aad2d2851f5f8670878d4b7383768b8ffcfcafa9ab97bfbe88c9c983346782dbda89' // &
+   '236085bdbd8abab98db8b88e2f6583939c979fa498a2a798cfcf84b4b591c4c485979f97' // &
+   'f0f09e155c899ba298517584' !< nuukS, Crameri's categorical order.
+character(len=*), parameter :: CS_OSLOS = &
+   '030609f9f9f9507bbc163b5ea0afc97b98ca27588e0e2032caced5122d483767a61d4875' // &
+   '8da3c9e2e3e5678bc7b4bdcc0c151fbfc5cf97a9c94371b210263d080e167292c9215081' // &
+   '2e5f99aab6caecedee0d1a28143454d5d8dc5b83c319426a859eca13314e0e1d2d3d6cac' // &
+   '6c8fc87795c9f3f3f44976b8245488dbdde0112a4392a6c9c5c9d2809bca0f23373263a0' // &
+   '050a10b9c1cd1f4c7b183e64a5b3ca0a121b9cacc96187c50d18248aa1ca2a5b93547ebf' // &
+   'd1d3d9e6e7e91b456fb0bacb1537587494c9d8dade6a8dc890a5c999abc9235285133251' // &
+   '060c13406eaf7e9aca173c614c78ba122f4b1c477287a0caced1d7c2c7d10f253a2c5d96' // &
+   'c7ccd3112b45eff0f16f90c90e1e2fadb8cb7997ca4673b515395b09101819406730619c' // &
+   '94a8c9f6f6f60f2135a3b1ca' !< osloS, Crameri's categorical order.
+character(len=*), parameter :: CS_TOKYOS = &
+   '1c0e34effcdd7470536c475087b666b8e8a1512446715d52798b567d9f5b37163d726653' // &
+   '99d07d63374c6f5451d8f7c5767c547059515b2d497b9558441d41291238e5fad2c9f1b4' // &
+   '71625281aa5f683f4e736b536e4e507576548ec370a7dd8e77845574735484b062231036' // &
+   '93ca76dff9cc30143aa0d7857fa45deafbd86a434fc1edab736d535629486d4b507a9057' // &
+   '7c9a594b2044715f52663b4dd1f4bd7056518abd6a6e5151afe3985f324b7579543e193f' // &
+   '726853726452778055705b5278875661344c746e53abe09353274785b3647ea25c261137' // &
+   '736c53e8fbd54e224588b968798e57767e55726753757754715e523a183e6e4f51778255' // &
+   '7b9759dcf8c9edfcda411b407d9c5a767b547263526f555172655282ad60d5f6c134153c' // &
+   '9cd481747454c5efb0481e43' !< tokyoS, Crameri's categorical order.
+character(len=*), parameter :: CS_TURKUS = &
+   '070707ffe6e6948d5be5aa904d4c3b2c2c27c3a3746d6c4afbc4bfd6a780f2b4a71c1c19' // &
+   '3d3d32ac9a677e7c52fed6d45d5d4335342ddda88814131255543f242420fdcdcaf7bcb3' // &
+   '898456b8a06decae9bcda57affdedd6464474545379f946176744e71704c30302a414135' // &
+   '181816fcc8c4efb1a1838054f5b8ade1a98cc8a47768684859594120201d8e8859d1a67d' // &
+   'b29d6ae9ac95bea270fed1cf0e0e0da59764daa784282823f9c0b951503d393930ffdad9' // &
+   '49493a606045ffe2e19a915e797750f4b6aaf6bab0cba578ffd8d6fecfcc262622c0a272' // &
+   '8682551a1a18fac2bc8b8658e3aa8e1616144f4e3cc6a4752e2e28bba16f6b6a49e7ab93' // &
+   'cfa67c62624653523e5b5b42fed3d17c7a51817e5373724dffdcdb37372ef8beb60b0b0a' // &
+   '575740dfa98a474738b59f6c' !< turkuS, Crameri's categorical order.
+character(len=10), parameter :: CATEGORICAL_NAMES(CATEGORICALS) = [ &
+   'actonS    ', 'bamakoS   ', 'batlowS   ', 'batlowKS  ', 'batlowWS  ', 'bilbaoS   ', 'budaS     ', 'davosS    ', &
+   'devonS    ', 'glasgowS  ', 'grayCS    ', 'hawaiiS   ', 'imolaS    ', 'lajollaS  ', 'lapazS    ', 'lipariS   ', &
+   'naviaS    ', 'naviaWS   ', 'nuukS     ', 'osloS     ', 'tokyoS    ', 'turkuS    ' &
+   ] !< Categorical order names (`batlowS`: batlow's colors, the most distinct first).
+character(len=600), parameter :: CATEGORICAL_TABLES(CATEGORICALS) = [ &
+   CS_ACTONS, CS_BAMAKOS, CS_BATLOWS, CS_BATLOWKS, CS_BATLOWWS, CS_BILBAOS, CS_BUDAS, CS_DAVOSS, CS_DEVONS, &
+   CS_GLASGOWS, CS_GRAYCS, CS_HAWAIIS, CS_IMOLAS, CS_LAJOLLAS, CS_LAPAZS, CS_LIPARIS, CS_NAVIAS, CS_NAVIAWS, &
+   CS_NUUKS, CS_OSLOS, CS_TOKYOS, CS_TURKUS &
+   ] !< Categorical tables, in the order of the names.
+
 contains
    pure function colormap_id(name) result(id)
    !< Index of the named palette `name`, case-insensitive; 0 if unknown.
@@ -1257,6 +1495,32 @@ contains
    j = min(255_I4P, max(0_I4P, k))
    hex = TABLES(id)(6 * j + 1:6 * j + 6)
    endfunction colormap_hex
+
+   pure function categorical_id(name) result(id)
+   !< Index of the categorical order `name` (`batlowS`, ...), case-insensitive; 0 if unknown.
+   character(len=*), intent(in) :: name !< Order name.
+   integer(I4P)                 :: id   !< Index in `CATEGORICAL_NAMES`, 0 if unknown.
+
+   if (len_trim(name) > 10) then
+      id = 0_I4P
+      return
+   endif
+   do id = 1_I4P, CATEGORICALS
+      if (lower(trim(name)) == lower(trim(CATEGORICAL_NAMES(id)))) return
+   enddo
+   id = 0_I4P
+   endfunction categorical_id
+
+   pure function categorical_hex(id, k) result(hex)
+   !< Color `k` (1 to 100, clamped) of the categorical order `id`, as `rrggbb`.
+   integer(I4P), intent(in) :: id  !< Order index, 1 to `CATEGORICALS`.
+   integer(I4P), intent(in) :: k   !< Color index.
+   character(len=6)         :: hex !< Color.
+   integer(I4P)             :: j   !< Clamped color index, from 0.
+
+   j = min(99_I4P, max(0_I4P, k - 1_I4P))
+   hex = CATEGORICAL_TABLES(id)(6 * j + 1:6 * j + 6)
+   endfunction categorical_hex
 
    pure function lower(s) result(l)
    !< `s` in lower case (ASCII).

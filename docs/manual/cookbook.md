@@ -126,6 +126,16 @@ On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 
 `set style line N` defines a style once; `ls N` applies it, the options after it override it.
 
+### Color sequences
+
+<<< @/examples/snippets/cb_colorsequence.gp{gnuplot}
+
+<Plot name="cb_colorsequence" svg :width="760" :height="320" />
+
+`set colorsequence default|podo|classic` picks gnuplot's linetype colors; foresight's `set colorsequence batlowS 6`
+takes the first colors of a categorical order of the Scientific colour maps, the most distinct first. See
+[Styles](/guide/gnuplot-subset#styles).
+
 ### Error bars
 
 <<< @/examples/snippets/cb_errorbars.gp{gnuplot}

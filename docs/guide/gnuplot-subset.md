@@ -57,6 +57,7 @@ that did what it says.
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
 | **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`cubehelix` [`start S`] [`cycles C`] [`saturation S`]\|`file 'f'` [`index N`] [`every E`] [`using U`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension) | — |
+| **colors**equence `default`\|`podo`\|`classic`\|`NAME` [`N`] | the [linetype colors](#styles) of the series, `lc N` and the slices: gnuplot's 8 (`default`), `podo` (8), `classic` (13, gnuplot's svg terminal); `NAME [N]` foresight's: the first N (8) colors of a categorical order | — |
 | **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
 | **cbl**abel `"text"` | color box label | no label |
 | **colo**rbox | color box of the images, at the right of the plot (the default) | no color box |
@@ -285,6 +286,13 @@ plot 'run.dat' u 1:2 ls 1 t 'residual', '' u 1:3 lt 3 t 'momentum'
 ```
 
 `ls N` of an undefined style takes the color of linetype `N`, as gnuplot.
+
+The linetype colors cycle through gnuplot's sequence: `set colorsequence default` (dark violet, green, sky blue, orange,
+yellow, blue, red, black), `podo` (black, orange, sky blue, green, yellow, blue, vermilion, pink) or `classic` (the
+13 colors of gnuplot's svg terminal, red, green, blue, cyan, ...). Beyond gnuplot, `set colorsequence batlowS 6` takes
+the first 6 colors of a categorical order of the Scientific colour maps (`actonS` ... `turkuS`, 22 orders of 100
+colors of the [named palettes](#named-palettes), the most distinct first; 8 by default; any case). The sequence
+applies to the series added after it and carries over to the next multiplot panels.
 
 ## Lines, steps and impulses
 
@@ -611,6 +619,9 @@ set cbrange [-1:1]
 plot 'field.dat' u 1:2:3 w image notitle
 ```
 
+Their 22 categorical orders (`actonS` ... `turkuS`) color series instead: `set colorsequence batlowS 6`, see
+[Styles](#styles).
+
 Credit the Scientific colour maps as Crameri, F. (2018), *Scientific colour maps*, Zenodo,
 [doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862), and see Crameri, Shephard and Heron (2020),
 *The misuse of colour in science communication*, Nature Communications 11, 5444,
@@ -742,7 +753,7 @@ unset multiplot
 **Themes** recolor the output, never the figure: `classic` (the default) changes nothing; `vfd` is a vacuum
 fluorescent display, black glass, emissive series colors (cyan-green, amber, red, ...), the frame and labels printed in
 blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments. The default linetype
-colors, the frame, grid and page become the theme ones; a color you give (`lc '#123456'`) is kept. `glow` and
+colors (not another `set colorsequence`), the frame, grid and page become the theme ones; a color you give (`lc '#123456'`) is kept. `glow` and
 `noglow` override the theme (only `vfd` glows by default); the glow is an SVG filter, so converters that do not render
 filters (some PDF ones) drop or rasterize it. In the HTML page, the ticks and grid redrawn by a zoom take the theme
 colors. In text the theme only recolors the series, with `ansi`, `ansi256` or `ansirgb`: the terminal background is

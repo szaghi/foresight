@@ -12,6 +12,8 @@ The tables come from the original releases, never from a translation:
 - cividis by J. R. Nunez, C. R. Anderton and R. S. Renslow, the table its author contributed
   to matplotlib, ``lib/matplotlib/_cm_listed.py`` (matplotlib's licence and the Battelle
   licence of its origin, pnnl/cmaputil: both notices are written into the module);
+- the 22 categorical orders of the Scientific colour maps (``<name>S``), their
+  ``CategoricalPalettes/<name>S_HEX.txt`` files, checked against the base 8-bit tables;
 - black_body by Kenneth Moreland (CC0), his 256-entry byte table
   ``black-body-table-byte-0256.csv`` of https://www.kennethmoreland.com/color-advice/.
 
@@ -56,6 +58,11 @@ PNNL_DISCLAIMER = (
     "ENERGY under Contract DE-AC05-76RL01830"
 )
 LEVELS = 256
+CATEGORICAL_LEVELS = 100
+CATEGORICAL = (
+    "acton bamako batlow batlowK batlowW bilbao buda davos devon glasgow grayC hawaii imola lajolla lapaz "
+    "lipari navia naviaW nuuk oslo tokyo turku"
+).split()
 PER_LINE = 12  # colors per source line, as the former VIRIDIS constant
 NAME_LEN = 10
 
@@ -159,6 +166,53 @@ def read_crameri(root: Path, name: str) -> list[tuple[int, int, int]]:
     return [(c[0], c[1], c[2]) for c in lut]
 
 
+def read_categorical(root: Path, name: str) -> list[tuple[int, int, int]]:
+    """Read a categorical Scientific colour map, ``root/<name>/CategoricalPalettes/<name>S_HEX.txt``.
+
+    Its 100 colors, ``r g b<TAB>label #RRGGBB`` rows, are an order of colors of the base map, the
+    most distinct first; the generator checks the triplets against the hexadecimal codes and the
+    base map's 8-bit table.
+
+    Parameters
+    ----------
+    root : Path
+        The extracted ``ScientificColourMaps8`` directory.
+    name : str
+        Base map name (``batlow`` for ``batlowS``).
+
+    Returns
+    -------
+    list of tuple of int
+        The 100 colors.
+
+    Raises
+    ------
+    ColormapError
+        If the file is malformed or a color is not one of the base map.
+    """
+    text = (root / name / "CategoricalPalettes" / f"{name}S_HEX.txt").read_text(
+        encoding="ascii"
+    )
+    rows = [line for line in text.splitlines() if re.search(r"#[0-9A-Fa-f]{6}", line)]
+    colors = [tuple(int(v) for v in row.split()[:3]) for row in rows]
+    codes = [
+        m.group(1).lower()
+        for row in rows
+        if (m := re.search(r"#([0-9A-Fa-f]{6})", row))
+    ]
+    base = read_crameri(root, name)
+    if len(colors) != CATEGORICAL_LEVELS or any(
+        f"{c[0]:02x}{c[1]:02x}{c[2]:02x}" != h
+        for c, h in zip(colors, codes, strict=True)
+    ):
+        msg = f"{name}S: {CATEGORICAL_LEVELS} colors with matching codes expected"
+        raise ColormapError(msg)
+    if any(c not in base for c in colors):
+        msg = f"{name}S: a color is not one of {name}"
+        raise ColormapError(msg)
+    return [(c[0], c[1], c[2]) for c in colors]
+
+
 def read_moreland(path: Path) -> list[tuple[int, int, int]]:
     """Read Kenneth Moreland's 256-entry byte table (``scalar,RGB_r,RGB_g,RGB_b`` CSV).
 
@@ -240,24 +294,26 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def constant(name: str) -> str:
+def constant(name: str, prefix: str = "CM_") -> str:
     """Fortran name of the table constant of a map.
 
     Parameters
     ----------
     name : str
         Map name.
+    prefix : str
+        Constant name prefix: ``CM_`` palettes, ``CS_`` categorical orders.
 
     Returns
     -------
     str
         Constant name, e.g. ``CM_BATLOWK``.
     """
-    return f"CM_{name.upper()}"
+    return f"{prefix}{name.upper()}"
 
 
 def fortran_table(
-    name: str, colors: list[tuple[int, int, int]], origin: str
+    name: str, colors: list[tuple[int, int, int]], origin: str, prefix: str = "CM_"
 ) -> list[str]:
     """Source lines of the table constant of a map.
 
@@ -266,9 +322,11 @@ def fortran_table(
     name : str
         Map name.
     colors : list of tuple of int
-        The 256 colors.
+        The colors.
     origin : str
         Short credit for the docstring.
+    prefix : str
+        Constant name prefix.
 
     Returns
     -------
@@ -278,7 +336,7 @@ def fortran_table(
     hexes = "".join(f"{r:02x}{g:02x}{b:02x}" for r, g, b in colors)
     step = 6 * PER_LINE
     chunks = [hexes[i : i + step] for i in range(0, len(hexes), step)]
-    lines = [f"character(len=*), parameter :: {constant(name)} = &"]
+    lines = [f"character(len=*), parameter :: {constant(name, prefix)} = &"]
     lines += [f"   '{c}' // &" for c in chunks[:-1]]
     lines.append(f"   '{chunks[-1]}' !< {name}, {origin}.")
     return lines
@@ -288,6 +346,7 @@ def fortran_module(
     maps: list[tuple[str, list[tuple[int, int, int]], str]],
     sources: list[str],
     notices: list[str],
+    categoricals: list[tuple[str, list[tuple[int, int, int]]]],
 ) -> str:
     """The whole generated module.
 
@@ -299,6 +358,8 @@ def fortran_module(
         One line per input file: what, where, sha256.
     notices : list of str
         Further licence notices, one comment line each.
+    categoricals : list of tuple
+        ``(name, colors)`` per categorical order (100 colors), in table order.
 
     Returns
     -------
@@ -354,6 +415,11 @@ def fortran_module(
         "public :: COLORMAP_NAMES",
         "public :: colormap_hex",
         "public :: colormap_id",
+        "public :: CATEGORICALS",
+        "public :: CATEGORICAL_NAMES",
+        "public :: CATEGORICAL_LEVELS",
+        "public :: categorical_hex",
+        "public :: categorical_id",
         "",
         f"integer(I4P), parameter :: COLORMAPS = {count}_I4P !< Number of named palettes.",
     ]
@@ -366,6 +432,20 @@ def fortran_module(
         f"character(len={6 * LEVELS}), parameter :: TABLES(COLORMAPS) = [ &",
         *wrap(tables, "   ", " &"),
         "   ] !< Tables, in the order of the names.",
+        "",
+        f"integer(I4P), parameter :: CATEGORICALS = {len(categoricals)}_I4P !< Number of categorical orders.",
+        f"integer(I4P), parameter :: CATEGORICAL_LEVELS = {CATEGORICAL_LEVELS}_I4P !< Colors of an order.",
+        *[
+            line
+            for n, c in categoricals
+            for line in fortran_table(n, c, "Crameri's categorical order", "CS_")
+        ],
+        f"character(len={NAME_LEN}), parameter :: CATEGORICAL_NAMES(CATEGORICALS) = [ &",
+        *wrap(", ".join(f"'{n:<{NAME_LEN}}'" for n, _ in categoricals), "   ", " &"),
+        "   ] !< Categorical order names (`batlowS`: batlow's colors, the most distinct first).",
+        f"character(len={6 * CATEGORICAL_LEVELS}), parameter :: CATEGORICAL_TABLES(CATEGORICALS) = [ &",
+        *wrap(", ".join(constant(n, "CS_") for n, _ in categoricals), "   ", " &"),
+        "   ] !< Categorical tables, in the order of the names.",
         "",
         "contains",
         "   pure function colormap_id(name) result(id)",
@@ -393,6 +473,32 @@ def fortran_module(
         f"   j = min({LEVELS - 1}_I4P, max(0_I4P, k))",
         "   hex = TABLES(id)(6 * j + 1:6 * j + 6)",
         "   endfunction colormap_hex",
+        "",
+        "   pure function categorical_id(name) result(id)",
+        "   !< Index of the categorical order `name` (`batlowS`, ...), case-insensitive; 0 if unknown.",
+        "   character(len=*), intent(in) :: name !< Order name.",
+        "   integer(I4P)                 :: id   !< Index in `CATEGORICAL_NAMES`, 0 if unknown.",
+        "",
+        f"   if (len_trim(name) > {NAME_LEN}) then",
+        "      id = 0_I4P",
+        "      return",
+        "   endif",
+        "   do id = 1_I4P, CATEGORICALS",
+        "      if (lower(trim(name)) == lower(trim(CATEGORICAL_NAMES(id)))) return",
+        "   enddo",
+        "   id = 0_I4P",
+        "   endfunction categorical_id",
+        "",
+        "   pure function categorical_hex(id, k) result(hex)",
+        f"   !< Color `k` (1 to {CATEGORICAL_LEVELS}, clamped) of the categorical order `id`, as `rrggbb`.",
+        "   integer(I4P), intent(in) :: id  !< Order index, 1 to `CATEGORICALS`.",
+        "   integer(I4P), intent(in) :: k   !< Color index.",
+        "   character(len=6)         :: hex !< Color.",
+        "   integer(I4P)             :: j   !< Clamped color index, from 0.",
+        "",
+        f"   j = min({CATEGORICAL_LEVELS - 1}_I4P, max(0_I4P, k - 1_I4P))",
+        "   hex = CATEGORICAL_TABLES(id)(6 * j + 1:6 * j + 6)",
+        "   endfunction categorical_hex",
         "",
         "   pure function lower(s) result(l)",
         "   !< `s` in lower case (ASCII).",
@@ -559,6 +665,9 @@ def main(argv: list[str] | None = None) -> int:
         mpl_text = args.cividis.read_text(encoding="utf-8")
         maps.append(("cividis", read_bids(mpl_text, "cividis"), "J. R. Nunez et al."))
         maps.append(("black_body", read_moreland(args.black_body), "K. Moreland (CC0)"))
+        categoricals = [
+            (f"{n}S", read_categorical(args.crameri, n)) for n in CATEGORICAL
+        ]
         notices = cividis_notices(args.mpl_license, args.battelle_license)
     except (ColormapError, OSError, ValueError) as err:
         print(f"gen_colormaps: {err}", file=sys.stderr)
@@ -576,7 +685,9 @@ def main(argv: list[str] | None = None) -> int:
         "  https://www.kennethmoreland.com/color-advice/black-body/,",
         f"  sha256 {sha256(args.black_body)}.",
     ]
-    args.output.write_text(fortran_module(maps, sources, notices), encoding="ascii")
+    args.output.write_text(
+        fortran_module(maps, sources, notices, categoricals), encoding="ascii"
+    )
     return 0
 
 

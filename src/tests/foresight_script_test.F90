@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(77)                           !< Per-check outcome.
+logical                       :: test_passed(78)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -969,6 +969,43 @@ call interpreter%run_text("set palette file '"//data_file//"' using 1:2", iostat
 test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'r:g:b or gray:r:g:b') > 0
 call interpreter%run_text("set palette file 'foresight_no_such_palette.dat'", iostat, iomsg)
 test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'set palette file:') > 0
+! set colorsequence: gnuplot 6.0's podo and classic (svg terminal) linetype colors, `colors` abbreviated, a categorical
+! order (its first N colors, then cycling), lc N following it, default back; errors as gnuplot (no N, unknown names)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 3 4 5', '2 3 4 5 6'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set colors podo; plot '"//data_file//"' u 1:2 w l, '' u 1:3 w l lc 7", iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(78) = iostat == 0_I4P .and. panel%series(1)%style%color == '#000000' .and. &
+                     panel%series(2)%style%color == '#d55e00'
+endassociate
+call interpreter%init(scratch)
+call interpreter%run_text("set colorsequence classic; plot '"//data_file//"' u 1:2 w l, '' u 1:3 w l", iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(78) = test_passed(78) .and. iostat == 0_I4P .and. panel%series(1)%style%color == '#ff0000' .and. &
+                     panel%series(2)%style%color == '#008000'
+endassociate
+call interpreter%init(scratch)
+call interpreter%run_text("set colorsequence BatlowS 3; plot '"//data_file//"' u 1:2 w l, '' u 1:3 w l, '' u 1:4 w l, "// &
+                          "'' u 1:5 w l, '' u 1:2 w l lc 2", iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(78) = test_passed(78) .and. iostat == 0_I4P .and. panel%series(1)%style%color == '#011959' .and. &
+                     panel%series(2)%style%color == '#faccfa' .and. panel%series(3)%style%color == '#828231' .and. &
+                     panel%series(4)%style%color == '#011959' .and. panel%series(5)%style%color == '#faccfa'
+endassociate
+call interpreter%init(scratch)
+call interpreter%run_text("set colorsequence podo; set colorsequence default; plot '"//data_file//"' u 1:2 w l", &
+                          iostat, iomsg)
+test_passed(78) = test_passed(78) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%series(1)%style%color == '#9400d3'
+call interpreter%run_text("set colorsequence foo", iostat, iomsg)
+test_passed(78) = test_passed(78) .and. iostat /= 0_I4P .and. index(iomsg, 'unknown color sequence "foo"') > 0
+call interpreter%run_text("set colorsequence podo 3", iostat, iomsg)
+test_passed(78) = test_passed(78) .and. iostat /= 0_I4P .and. index(iomsg, 'default, podo and classic none') > 0
+call interpreter%run_text("set colorsequence batlowS 101", iostat, iomsg)
+test_passed(78) = test_passed(78) .and. iostat /= 0_I4P .and. index(iomsg, '1 to 100 colors') > 0
+call interpreter%run_text("set colorsequence", iostat, iomsg)
+test_passed(78) = test_passed(78) .and. iostat /= 0_I4P
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -986,7 +1023,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,77L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,78L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
