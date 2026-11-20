@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(77)                  !< Per-figure outcome.
+logical                     :: test_passed(79)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -100,7 +100,9 @@ test_passed(74) = rendered(figure_image('negative', gradient=.true.)) == &
 test_passed(75) = check('colorsequence_batlowS.svg', figure_colorsequence())
 test_passed(76) = check('image_logcb.svg', figure_logcb())
 test_passed(77) = check('colorbox_modes.svg', figure_colorbox_modes())
-write(output_unit, '(A,77L2)') 'foresight golden checks:', test_passed
+test_passed(78) = check('tics_list.svg', figure_tics_list())
+test_passed(79) = check('tics_list.txt', figure_tics_list())
+write(output_unit, '(A,79L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -327,6 +329,20 @@ contains
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [2.0_R8P, 1.0_R8P, 4.0_R8P], title='io', with='histograms')
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [1.0_R8P, 2.0_R8P, -1.0_R8P], title='comm', with='histograms')
    endfunction figure_histograms
+
+   function figure_tics_list() result(fig)
+   !< Explicit tick lists, gnuplot `set xtics ("label" pos level, ...)`: month names on x with minor ticks between them
+   !< (the range not extended to a tick grid), and on y the automatic ticks plus a labelled threshold and a formatted one.
+   type(figure_object) :: fig !< Figure.
+
+   call fig%init(width=520_I4P, height=320_I4P)
+   call fig%set_xtics(positions=[1.0_R8P, 1.5_R8P, 2.0_R8P, 2.5_R8P, 3.0_R8P, 3.5_R8P, 4.0_R8P], &
+                      labels=['Jan', '   ', 'Feb', '   ', 'Mar', '   ', 'Apr'], &
+                      minor=[.false., .true., .false., .true., .false., .true., .false.])
+   call fig%set_ytics(positions=[7.5_R8P, 4.25_R8P], labels=['limit  ', '%.2f mm'], add=.true.)
+   call fig%set_grid
+   call fig%plot([1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P], [3.2_R8P, 6.1_R8P, 8.4_R8P, 5.0_R8P], title='rain', with='linespoints')
+   endfunction figure_tics_list
 
    function figure_segments() result(fig)
    !< Segmented boxes (classic theme): 10 cells over the y range, lit when covered at least half, the others ghosts

@@ -26,7 +26,7 @@ use foresight_format, only : format_check, real_str
 use foresight_style, only : fill_style, sequence_colors
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
-use foresight_ticks, only : tics_object, TICS_NONE
+use foresight_ticks, only : tic_item, tics_object, TICS_NONE
 use penf, only : I4P, R8P
 
 implicit none
@@ -1078,16 +1078,24 @@ contains
    call self%panels(self%current)%xaxis%set_range(min=min, max=max)
    endsubroutine set_xrange
 
-   subroutine set_cbtics(self, step, start, end)
+   subroutine set_cbtics(self, step, start, end, positions, labels, minor, add)
    !< Ticks of the color box every `step` from `start` to `end` (both optional), as gnuplot `set cbtics START,STEP,END`;
    !< automatic without `step`. On a log color axis the step is a factor (> 1).
+   !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
+   !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
+   !< as gnuplot `set cbtics [add] ("label" pos level, ...)`.
    class(figure_object), intent(inout)        :: self  !< Figure.
    real(R8P),            intent(in), optional :: step  !< Tick step, a factor on a log axis.
    real(R8P),            intent(in), optional :: start !< First tick.
    real(R8P),            intent(in), optional :: end   !< Last tick.
+   real(R8P),            intent(in), optional :: positions(:) !< Explicit list positions, gnuplot `("label" pos, ...)`.
+   character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
+   logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
+   logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%cbaxis%tics, 'set_cbtics', step, start, end)
+   call set_tics(self%panels(self%current)%cbaxis%tics, 'set_cbtics', step, start, end, positions=positions, &
+                 labels=labels, minor=minor, add=add)
    endsubroutine set_cbtics
 
    subroutine unset_cbtics(self)
@@ -1095,21 +1103,29 @@ contains
    class(figure_object), intent(inout) :: self !< Figure.
 
    call self%ensure_panels
-   self%panels(self%current)%cbaxis%tics%mode = TICS_NONE
+   call self%panels(self%current)%cbaxis%tics%disable
    endsubroutine unset_cbtics
 
-   subroutine set_xtics(self, step, start, end, mirror)
+   subroutine set_xtics(self, step, start, end, mirror, positions, labels, minor, add)
    !< x ticks every `step` from `start` to `end` (both optional), as gnuplot `set xtics START,STEP,END`; automatic
    !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
    !< the bottom border only (gnuplot `nomirror`).
+   !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
+   !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
+   !< as gnuplot `set xtics [add] ("label" pos level, ...)`.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
    real(R8P),            intent(in), optional :: end    !< Last tick.
    logical,              intent(in), optional :: mirror !< Ticks also on the top border.
+   real(R8P),            intent(in), optional :: positions(:) !< Explicit list positions, gnuplot `("label" pos, ...)`.
+   character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
+   logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
+   logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end, mirror)
+   call set_tics(self%panels(self%current)%xaxis%tics, 'set_xtics', step, start, end, mirror, positions, labels, minor, &
+                 add)
    endsubroutine set_xtics
 
    subroutine set_ylabel(self, label)
@@ -1131,18 +1147,26 @@ contains
    call self%panels(self%current)%yaxis%set_range(min=min, max=max)
    endsubroutine set_yrange
 
-   subroutine set_ytics(self, step, start, end, mirror)
+   subroutine set_ytics(self, step, start, end, mirror, positions, labels, minor, add)
    !< y ticks every `step` from `start` to `end` (both optional), as gnuplot `set ytics START,STEP,END`; automatic
    !< without `step`. On a log axis the step is a factor (> 1): ticks at start * step**k. `mirror` false draws them on
    !< the left border only (gnuplot `nomirror`), leaving the right one to the second y axis.
+   !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
+   !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
+   !< as gnuplot `set ytics [add] ("label" pos level, ...)`.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
    real(R8P),            intent(in), optional :: end    !< Last tick.
    logical,              intent(in), optional :: mirror !< Ticks also on the right border.
+   real(R8P),            intent(in), optional :: positions(:) !< Explicit list positions, gnuplot `("label" pos, ...)`.
+   character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
+   logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
+   logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end, mirror)
+   call set_tics(self%panels(self%current)%yaxis%tics, 'set_ytics', step, start, end, mirror, positions, labels, minor, &
+                 add)
    endsubroutine set_ytics
 
    subroutine set_y2label(self, label)
@@ -1164,17 +1188,25 @@ contains
    call self%panels(self%current)%y2axis%set_range(min=min, max=max)
    endsubroutine set_y2range
 
-   subroutine set_y2tics(self, step, start, end, mirror)
+   subroutine set_y2tics(self, step, start, end, mirror, positions, labels, minor, add)
    !< Ticks and labels of the second y axis on the right border, as gnuplot `set y2tics START,STEP,END` (automatic
    !< without `step`); off by default, as in gnuplot. `mirror` true draws the ticks on the left border too.
+   !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
+   !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
+   !< as gnuplot `set y2tics [add] ("label" pos level, ...)`.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
    real(R8P),            intent(in), optional :: end    !< Last tick.
    logical,              intent(in), optional :: mirror !< Ticks also on the left border.
+   real(R8P),            intent(in), optional :: positions(:) !< Explicit list positions, gnuplot `("label" pos, ...)`.
+   character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels (a format if with a conversion).
+   logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
+   logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
 
    call self%ensure_panels
-   call set_tics(self%panels(self%current)%y2axis%tics, 'set_y2tics', step, start, end, mirror)
+   call set_tics(self%panels(self%current)%y2axis%tics, 'set_y2tics', step, start, end, mirror, positions, labels, minor, &
+                 add)
    endsubroutine set_y2tics
 
    subroutine unset_logscale(self, axes)
@@ -1217,7 +1249,7 @@ contains
    class(figure_object), intent(inout) :: self !< Figure.
 
    call self%ensure_panels
-   self%panels(self%current)%xaxis%tics%mode = TICS_NONE
+   call self%panels(self%current)%xaxis%tics%disable
    endsubroutine unset_xtics
 
    subroutine unset_ytics(self)
@@ -1225,7 +1257,7 @@ contains
    class(figure_object), intent(inout) :: self !< Figure.
 
    call self%ensure_panels
-   self%panels(self%current)%yaxis%tics%mode = TICS_NONE
+   call self%panels(self%current)%yaxis%tics%disable
    endsubroutine unset_ytics
 
    subroutine unset_y2tics(self)
@@ -1233,7 +1265,7 @@ contains
    class(figure_object), intent(inout) :: self !< Figure.
 
    call self%ensure_panels
-   self%panels(self%current)%y2axis%tics%mode = TICS_NONE
+   call self%panels(self%current)%y2axis%tics%disable
    endsubroutine unset_y2tics
 
    ! private procedures
@@ -1324,20 +1356,55 @@ contains
    enddo
    endfunction extension
 
-   subroutine set_tics(tics, caller, step, start, end, mirror)
+   subroutine set_tics(tics, caller, step, start, end, mirror, positions, labels, minor, add)
    !< Fixed ticks from real settings, or automatic ones without `step`; invalid settings stop. `mirror` alone (no
    !< step, start, end) keeps the tick positions, as gnuplot `set xtics nomirror`, turning off ticks on at their last
-   !< positions.
-   type(tics_object),   intent(inout)        :: tics    !< Axis tick settings.
-   character(len=*),    intent(in)           :: caller  !< Procedure name, for messages.
-   real(R8P),           intent(in), optional :: step    !< Tick step.
-   real(R8P),           intent(in), optional :: start   !< First tick.
-   real(R8P),           intent(in), optional :: end     !< Last tick.
-   logical,             intent(in), optional :: mirror  !< Ticks also on the opposite border.
-   character(len=:), allocatable             :: first   !< Start text.
-   character(len=:), allocatable             :: last    !< End text.
-   character(len=:), allocatable             :: message !< Problem.
+   !< positions. `positions` is an explicit list (gnuplot `set xtics ("label" pos level, ...)`), with `labels` (each
+   !< printed as written, a format if it has a conversion; the axis labels without them) and `minor` (level 1);
+   !< `add` adds the list to the ticks, or a step to the list, instead of replacing them.
+   type(tics_object),   intent(inout)        :: tics         !< Axis tick settings.
+   character(len=*),    intent(in)           :: caller       !< Procedure name, for messages.
+   real(R8P),           intent(in), optional :: step         !< Tick step.
+   real(R8P),           intent(in), optional :: start        !< First tick.
+   real(R8P),           intent(in), optional :: end          !< Last tick.
+   logical,             intent(in), optional :: mirror       !< Ticks also on the opposite border.
+   real(R8P),           intent(in), optional :: positions(:) !< Explicit list positions.
+   character(len=*),    intent(in), optional :: labels(:)    !< Explicit list labels.
+   logical,             intent(in), optional :: minor(:)     !< Explicit list minor ticks.
+   logical,             intent(in), optional :: add          !< Add to the ticks.
+   type(tic_item), allocatable               :: items(:)     !< Explicit list.
+   character(len=:), allocatable             :: first        !< Start text.
+   character(len=:), allocatable             :: last         !< End text.
+   character(len=:), allocatable             :: message      !< Problem.
+   logical                                   :: adding       !< Add to the ticks.
+   integer(I4P)                              :: k            !< Item counter.
 
+   adding = .false.
+   if (present(add)) adding = add
+   if (present(positions)) then
+      if (present(step) .or. present(start) .or. present(end)) &
+         error stop 'foresight: '//caller//': positions and a step together (set them apart, with add)'
+      if (present(labels)) then
+         if (size(labels) /= size(positions)) error stop 'foresight: '//caller//': labels and positions differ in size'
+      endif
+      if (present(minor)) then
+         if (size(minor) /= size(positions)) error stop 'foresight: '//caller//': minor and positions differ in size'
+      endif
+      allocate(items(size(positions)))
+      do k = 1_I4P, size(positions, kind=I4P)
+         items(k)%value = positions(k)
+         items(k)%label = ''
+         if (present(labels)) then
+            items(k)%labelled = .true.
+            items(k)%label = trim(labels(k))
+         endif
+         if (present(minor)) items(k)%major = .not. minor(k)
+      enddo
+      call tics%set_list(items, adding)
+      if (present(mirror)) tics%mirror = mirror
+      return
+   endif
+   if (present(labels) .or. present(minor)) error stop 'foresight: '//caller//': labels and minor need positions'
    if (present(mirror)) then
       tics%mirror = mirror
       if (.not. (present(step) .or. present(start) .or. present(end))) then
@@ -1347,9 +1414,14 @@ contains
    endif
    if (.not. present(step)) then
       if (present(start) .or. present(end)) error stop 'foresight: '//caller//': start and end need a step'
-      call tics%set_auto
+      if (adding) then
+         call tics%enable
+      else
+         call tics%set_auto
+      endif
       return
    endif
+   if (.not. adding) call tics%clear_list
    first = ''
    last = ''
    if (present(start)) first = real_str(start)

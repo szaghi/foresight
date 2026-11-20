@@ -452,24 +452,33 @@
     return {label: (n < 0 ? "-" : "") + label + "x10", sup: String(ee + digits.length - 1)};
   }
 
-  // user tick settings from the panel attributes: {mode, start, step, end, format}; text labels
-  // from the data ("labels v:text ...", texts percent-encoded) give mode "labels" and {labels}
+  // user tick settings from the panel attributes: {mode, start, step, end, format}; labels
+  // ("labels v:text ...", texts percent-encoded, "^sup" a superscript, "v!" a minor tick), from
+  // the data or an explicit list, give mode "labels" and {labels}; after "auto" or a step they are
+  // added to those ticks ({add}), as gnuplot `set xtics add`
   function readTics(positions, format) {
-    var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""}, p;
-    if (positions === "none") tics.mode = "none";
-    else if (positions && positions.indexOf("labels") === 0) {
-      tics.mode = "labels";
-      tics.labels = positions.split(" ").slice(1).map(function (item) {
-        var colon = item.indexOf(":");
-        return {value: Number(item.slice(0, colon)),
-          label: decodeURIComponent(item.slice(colon + 1))};
+    var tics = {mode: "auto", start: "", step: "", end: "", format: format || ""};
+    var words = positions ? positions.split(" ") : [], k = words.indexOf("labels");
+    var series = k < 0 ? words : words.slice(0, k);
+    if (k >= 0) {
+      tics.labels = words.slice(k + 1).map(function (item) {
+        var colon = item.indexOf(":"), caret, text;
+        if (colon < 0) return {value: Number(item.slice(0, -1)), major: false, label: "", sup: ""};
+        text = item.slice(colon + 1);
+        caret = text.indexOf("^");
+        return {value: Number(item.slice(0, colon)), major: true,
+          label: decodeURIComponent(caret < 0 ? text : text.slice(0, caret)),
+          sup: caret < 0 ? "" : decodeURIComponent(text.slice(caret + 1))};
       });
-    } else if (positions) {
-      p = positions.split(" ");
+      tics.add = k > 0;
+    }
+    if (k === 0) tics.mode = "labels";
+    else if (series[0] === "none") tics.mode = "none";
+    else if (series.length === 3) {
       tics.mode = "fixed";
-      tics.start = p[0] === "*" ? "" : p[0];
-      tics.step = p[1];
-      tics.end = p[2] === "*" ? "" : p[2];
+      tics.start = series[0] === "*" ? "" : series[0];
+      tics.step = series[1];
+      tics.end = series[2] === "*" ? "" : series[2];
     }
     return tics;
   }
@@ -555,14 +564,34 @@
   }
 
   // major ticks of a linear axis over [lo, hi] (either order), gnuplot's step (npx unused)
-  // the data labels inside [lo, hi], in either order: the range is never extended to them
+  // the labels inside [lo, hi], in either order: the range is never extended to them
   function labelTicks(lo, hi, tics) {
-    var a = Math.min(lo, hi), b = Math.max(lo, hi);
-    return tics.labels.filter(function (t) { return t.value >= a && t.value <= b; })
-      .map(function (t) { return {value: t.value, major: true, label: t.label, sup: ""}; });
+    var a = Math.min(lo, hi), b = Math.max(lo, hi), tol = 1e-9 * (b - a);
+    return tics.labels.filter(function (t) { return t.value >= a - tol && t.value <= b + tol; })
+      .map(function (t) {
+        return {value: t.value, major: t.major !== false, label: t.label, sup: t.sup || ""};
+      });
+  }
+
+  // the added labels inside [lo, hi] after the ticks, each replacing a tick at its position
+  // (mirror of merge_list)
+  function mergeLabels(ticks, lo, hi, tics) {
+    if (!tics || !tics.add) return ticks;
+    var items = labelTicks(lo, hi, tics), span = Math.abs(hi - lo);
+    if (!items.length) return ticks;
+    return ticks.filter(function (t) {
+      return !items.some(function (i) {
+        var scale = Math.max(span, Math.abs(t.value), Math.abs(i.value));
+        return Math.abs(t.value - i.value) <= 1e-9 * scale;
+      });
+    }).concat(items);
   }
 
   function linearTicks(lo, hi, npx, tics) {
+    return mergeLabels(linearSeries(lo, hi, npx, tics), lo, hi, tics);
+  }
+
+  function linearSeries(lo, hi, npx, tics) {
     if (tics && tics.mode === "none") return [];
     if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLinearTicks(lo, hi, tics);
@@ -581,6 +610,10 @@
 
   // ticks of a base-10 log axis over [lo, hi] (either order, > 0), gnuplot's step (npx unused)
   function logTicks(lo, hi, npx, tics) {
+    return mergeLabels(logSeries(lo, hi, npx, tics), lo, hi, tics);
+  }
+
+  function logSeries(lo, hi, npx, tics) {
     if (tics && tics.mode === "none") return [];
     if (tics && tics.mode === "labels") return labelTicks(lo, hi, tics);
     if (tics && tics.mode === "fixed") return fixedLogTicks(lo, hi, tics);
@@ -611,7 +644,7 @@
       }
     }
     if (ticks.filter(function (x) { return x.major; }).length < 2) {
-      ticks = linearTicks(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
+      ticks = linearSeries(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
     }
     return ticks;
   }

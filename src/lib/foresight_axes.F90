@@ -1118,9 +1118,9 @@ contains
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
-   view%xtics = self%xaxis%tics%attribute()
+   view%xtics = self%xaxis%tics%attribute(self%xaxis%lo, self%xaxis%hi)
    if (self%xaxis%labelled()) view%xtics = labels_attribute(self%xaxis%labels)
-   view%ytics = self%yaxis%tics%attribute()
+   view%ytics = self%yaxis%tics%attribute(self%yaxis%lo, self%yaxis%hi)
    view%xformat = ''
    view%yformat = ''
    if (self%xaxis%tics%has_format()) view%xformat = self%xaxis%tics%format
@@ -1130,7 +1130,7 @@ contains
    if (self%y2_active) then
       view%y2 = [self%y2axis%lo, self%y2axis%hi]
       view%y2log = self%y2axis%log
-      view%y2tics = self%y2axis%tics%attribute()
+      view%y2tics = self%y2axis%tics%attribute(self%y2axis%lo, self%y2axis%hi)
       view%y2format = ''
       if (self%y2axis%tics%has_format()) view%y2format = self%y2axis%tics%format
    endif

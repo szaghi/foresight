@@ -85,7 +85,7 @@ use foresight_smooth, only : smooth, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
-use foresight_ticks, only : tics_object
+use foresight_ticks, only : push, tic_item, tics_object
 use foresight_tokens, only : push, split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
                              TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -2709,15 +2709,19 @@ contains
       endsubroutine border_option
 
       subroutine tics_option(tics, words)
-      !< `set xtics|ytics|y2tics|cbtics [auto|autofreq|STEP|START,STEP|START,STEP,END] [mirror|nomirror]`: without positions
-      !< the last ones are kept, turning off ticks on (gnuplot); `auto` resets them. `words` (the tics keyword and its
-      !< arguments) replaces the option tokens.
+      !< `set xtics|ytics|y2tics|cbtics [add] [auto|autofreq|STEP|START,STEP|START,STEP,END|("label" pos level, ...)]
+      !< [mirror|nomirror]`: without positions the last ones are kept, turning off ticks on (gnuplot); `auto` resets them.
+      !< An explicit list replaces the ticks, with `add` it extends them (and an earlier list); positions without `add`
+      !< forget an earlier list. `words` (the tics keyword and its arguments) replaces the option tokens.
       type(tics_object),  intent(inout)        :: tics     !< Axis tick settings.
       type(token_object), intent(in), optional :: words(:) !< Option tokens, if not the command ones.
       type(token_object), allocatable  :: args(:) !< Position tokens, mirror words removed.
       type(token_object), allocatable  :: toks(:) !< Option tokens.
+      type(tic_item), allocatable      :: items(:) !< Explicit list items.
       character(len=:), allocatable    :: message !< Problem.
+      character(len=:), allocatable    :: list    !< Explicit list, `(...)`, empty if none.
       logical                          :: ok      !< Well formed.
+      logical                          :: add     !< `add`: extend the ticks.
       logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
       integer(I4P)                     :: n       !< Position tokens.
 
@@ -2727,16 +2731,38 @@ contains
          toks = tokens
       endif
       allocate(args(0))
+      add = .false.
+      list = ''
       do i = 2_I4P, size(toks, kind=I4P)
          if (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'mirror', 3_I4P)) then
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
+         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'add') then
+            add = .true.
+         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text(1:min(1, len(toks(i)%text))) == '(') then
+            if (len(list) > 0) then
+               call fail('set '//option//': one list of ticks is expected', iostat, iomsg)
+               return
+            endif
+            list = toks(i)%text
          else
             call push(args, toks(i))
          endif
       enddo
       n = size(args, kind=I4P)
+      if (len(list) > 0) then
+         if (n > 0_I4P) then
+            call fail('set '//option//': a list of ticks with positions is not supported (set them apart, with add)', &
+                      iostat, iomsg)
+            return
+         endif
+         call list_items(list, items)
+         if (iostat /= 0_I4P) return
+         call tics%set_list(items, add)
+         if (allocated(mirror)) tics%mirror = mirror
+         return
+      endif
       if (n == 0_I4P) then
          if (allocated(mirror)) tics%mirror = mirror
          call tics%enable
@@ -2751,6 +2777,8 @@ contains
          return
       endif
       message = ''
+      ! positions without add forget an explicit list, as gnuplot
+      if (.not. add) call tics%clear_list
       select case (n)
       case (1_I4P)
          if (keyword(args(1)%text, 'autofreq', 4_I4P)) then
@@ -2769,6 +2797,113 @@ contains
       endif
       if (allocated(mirror)) tics%mirror = mirror
       endsubroutine tics_option
+
+      subroutine list_items(text, items)
+      !< The items of the explicit tick list `text`, `({"label"} pos {level}, ...)`, comma separated (a trailing comma is
+      !< allowed): the position a constant expression, the level 1 for a minor tick (others are major), as gnuplot.
+      character(len=*),            intent(in)  :: text     !< List, parentheses included.
+      type(tic_item), allocatable, intent(out) :: items(:) !< Items.
+      type(tic_item)                           :: item     !< Current item.
+      character(len=:), allocatable            :: body     !< List without its parentheses.
+      character(len=:), allocatable            :: entry    !< Current item text.
+      character(len=:), allocatable            :: rest     !< Item text after the label.
+      character(len=1)                         :: quote    !< Open quote, blank if none.
+      integer(I4P)                             :: depth    !< Parenthesis depth.
+      integer(I4P)                             :: start    !< Item start.
+      integer(I4P)                             :: k        !< Character counter.
+      integer(I4P)                             :: close    !< Closing quote of the label.
+
+      allocate(items(0))
+      if (text(len(text):len(text)) /= ')') then
+         call fail('set '//option//': the list of ticks "'//text//'" is not closed', iostat, iomsg)
+         return
+      endif
+      body = text(2:len(text) - 1)
+      quote = ' '
+      depth = 0_I4P
+      start = 1_I4P
+      do k = 1_I4P, len(body, kind=I4P) + 1_I4P
+         if (k <= len(body, kind=I4P)) then
+            if (quote /= ' ') then
+               if (body(k:k) == quote) quote = ' '
+               cycle
+            elseif (body(k:k) == '"' .or. body(k:k) == "'") then
+               quote = body(k:k)
+               cycle
+            elseif (body(k:k) == '(') then
+               depth = depth + 1_I4P
+               cycle
+            elseif (body(k:k) == ')') then
+               depth = depth - 1_I4P
+               cycle
+            elseif (body(k:k) /= ',' .or. depth > 0_I4P) then
+               cycle
+            endif
+         endif
+         entry = trim(adjustl(body(start:k - 1_I4P)))
+         start = k + 1_I4P
+         if (len(entry) == 0) then
+            ! a trailing comma, as gnuplot; an empty item elsewhere is an error
+            if (k > len(body, kind=I4P) .and. size(items) > 0) exit
+            call fail('set '//option//': empty item in the list of ticks "'//text//'"', iostat, iomsg)
+            return
+         endif
+         item%labelled = entry(1:1) == '"' .or. entry(1:1) == "'"
+         item%label = ''
+         rest = entry
+         if (item%labelled) then
+            close = index(entry(2:), entry(1:1), kind=I4P) + 1_I4P
+            if (close == 1_I4P) then
+               call fail('set '//option//': unclosed label in "'//entry//'"', iostat, iomsg)
+               return
+            endif
+            item%label = entry(2:close - 1_I4P)
+            rest = trim(adjustl(entry(close + 1_I4P:)))
+         endif
+         call item_position(rest, item)
+         if (iostat /= 0_I4P) return
+         call push(items, item)
+      enddo
+      endsubroutine list_items
+
+      subroutine item_position(text, item)
+      !< Position and level of a list item from `text`, `pos {level}`: the whole text is the position if it is a valid
+      !< expression, else its last word is the level.
+      character(len=*), intent(in)    :: text  !< Position and level.
+      type(tic_item),   intent(inout) :: item  !< Item.
+      character(len=:), allocatable   :: first !< Message of the whole text as a position.
+      real(R8P)                       :: v     !< Value.
+      integer(I4P)                    :: blank !< Last blank.
+      integer(I4P)                    :: level !< Level.
+      integer(I4P)                    :: ios   !< Read status.
+
+      if (len(text) == 0) then
+         call fail('set '//option//': a list item needs a position', iostat, iomsg)
+         return
+      endif
+      item%major = .true.
+      call self%symbols%constant(text, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat == 0_I4P) then
+         item%value = v
+         return
+      endif
+      first = iomsg
+      blank = index(text, ' ', back=.true., kind=I4P)
+      if (blank > 0_I4P) then
+         read(text(blank + 1_I4P:), *, iostat=ios) level
+         if (ios == 0_I4P .and. verify(text(blank + 1_I4P:), '0123456789') == 0) then
+            call self%symbols%constant(trim(text(1:blank - 1_I4P)), v, iostat, iomsg, &
+                                       degrees=self%figure%panels(self%figure%current)%degrees)
+            if (iostat == 0_I4P) then
+               item%value = v
+               item%major = level /= 1_I4P
+               return
+            endif
+         endif
+      endif
+      iostat = 1_I4P
+      iomsg = 'set '//option//': list item "'//text//'": '//first
+      endsubroutine item_position
 
       subroutine datafile_option
       !< `set datafile separator [whitespace|tab|comma|"chars"]`: no argument restores whitespace.

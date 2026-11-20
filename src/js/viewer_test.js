@@ -67,6 +67,20 @@ ticks = viewer.logTicks(1, 1000, 400, viewer.readTics("* 3 *", ""));
 check("log factor", ticks.length === 7 && ticks[0].label === "1" && ticks[6].label === "729");
 ticks = viewer.logTicks(1, 1000, 400, viewer.readTics("2 10 *", ""));
 check("log factor from start", ticks.length === 3 && ticks[2].label === "200");
+// explicit tick lists (set xtics ("label" pos level, ...)): alone, or added to the ticks
+ticks = viewer.linearTicks(0, 6.7, 500, viewer.readTics("labels 1e0:a 2.5e0! 5e0:c 9e0:out", ""));
+check("list alone", ticks.length === 3 && ticks[0].label === "a" && !ticks[1].major &&
+  ticks[1].label === "" && ticks[2].label === "c");
+ticks = viewer.linearTicks(0, 7, 500, viewer.readTics("auto labels 3e0:three 3.14e0:pi", ""));
+check("list added", ticks.length === 9 && ticks[6].label === "7" && ticks[7].label === "three" &&
+  ticks[8].label === "pi" && ticks.every(function (t) { return t.label !== "3"; }));
+ticks = viewer.linearTicks(0, 8, 500, viewer.readTics("* 2 * labels 3.14e0:pi", ""));
+check("list added to a step", ticks.length === 6 && ticks[1].label === "2" &&
+  ticks[5].label === "pi");
+ticks = viewer.linearTicks(0, 8, 500, viewer.readTics("labels 2e0:1.5x10^6", ""));
+check("list superscript", ticks[0].label === "1.5x10" && ticks[0].sup === "6");
+ticks = viewer.linearTicks(0, 4, 500, viewer.readTics("labels 1e0:a%20b 3e0:c", ""));
+check("data labels", ticks.length === 2 && ticks[0].label === "a b" && ticks[0].major);
 
 // tick formats (the same cases as foresight_format_test.F90, checked against C printf)
 function label(format, n, e) { return viewer.formatDecimal(format, n, e).label; }

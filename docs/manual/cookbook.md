@@ -88,6 +88,15 @@ Quoted names select columns by header; `title columnhead` titles with the header
 
 On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 
+### Named ticks and extra ticks
+
+<<< @/examples/snippets/cb_tics_list.gp{gnuplot}
+
+<Plot name="cb_tics_list" svg :width="560" :height="320" />
+
+An explicit list replaces the ticks: names at chosen positions, `""` with level `1` for an unlabelled minor tick. With
+`add` the list joins the automatic ticks; a label holding a conversion is the format of its position (`"%.0f mm"`).
+
 ### Two y axes
 
 <<< @/examples/snippets/cb_y2.gp{gnuplot}

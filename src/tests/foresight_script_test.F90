@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(81)                           !< Per-check outcome.
+logical                       :: test_passed(82)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1115,6 +1115,41 @@ call interpreter%run_text("g(x) = x; plot g(1,2)", iostat, iomsg)
 test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'function g requires 1 variable') > 0
 call interpreter%run_text("a == 2", iostat, iomsg)
 test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported command "a"') > 0
+
+! explicit tick lists, as gnuplot 6.0: alone (a level 1 item is minor), added to the ticks (add), forgotten by positions
+! without add and by unset; a label is a format if it has a conversion; positions are expressions
+call interpreter%init(scratch)
+associate(tics => interpreter%figure%panels(1)%xaxis%tics)
+   call interpreter%run_text('set xtics ("a" 1, "b" 2.5 1, "c" 5)', iostat, iomsg)
+   test_passed(82) = iostat == 0_I4P .and. tics%attribute(0.0_R8P, 6.7_R8P) == 'labels 1e0:a 2.5e0! 5e0:c'
+   call interpreter%run_text('set xtics 2; set xtics add ("pi" pi)', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == '* 2 * labels 3.14159265358979e0:pi'
+   call interpreter%run_text('set xtics ("a" 1); set xtics 2', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == '* 2 *'
+   call interpreter%run_text('set xtics ("a" 1); unset xtics; set xtics', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == '* 2 *'
+   call interpreter%run_text('set xtics auto; unset xtics; set xtics add ("b" 3)', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == 'auto labels 3e0:b'
+   call interpreter%run_text('set xtics ("a" 1); set xtics add 2', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == '* 2 * labels 1e0:a'
+   call interpreter%run_text('set xtics ("%.1f" 2, "x%gy" 3, "two" 1 + 1, 4,)', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. tics%attribute(0.0_R8P, 8.0_R8P) == 'labels 2e0:2.0 3e0:x3y 2e0:two 4e0:4'
+   call interpreter%run_text('set xtics ("a" 1) nomirror', iostat, iomsg)
+   test_passed(82) = test_passed(82) .and. iostat == 0_I4P .and. .not. tics%mirror
+endassociate
+call interpreter%run_text('set xtics ("a")', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'a list item needs a position') > 0
+call interpreter%run_text('set xtics 1,2 ("a" 3)', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'with positions is not supported') > 0
+call interpreter%run_text('set xtics ("a" 1) ("b" 2)', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'one list of ticks is expected') > 0
+call interpreter%run_text('set xtics ("a 1)', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'unclosed label') > 0
+call interpreter%run_text('set xtics ("a" 1,, "b" 2)', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'empty item in the list') > 0
+call interpreter%run_text('set xtics ("a" 1 +)', iostat, iomsg)
+test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'list item "1 +"') > 0
+test_passed(82) = test_passed(82) .and. colorbox_labels('set cbtics ("low" 0.2, "high" 0.8)', ['low ', 'high'], ['0.2'])
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1132,7 +1167,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,81L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,82L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

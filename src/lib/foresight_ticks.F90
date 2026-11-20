@@ -13,15 +13,22 @@ module foresight_ticks
 !< optional start to an optional end (a multiplying factor on log axes), no ticks at all, or a printf-like label format.
 !< Fixed steps are kept as the decimal text the user wrote, so linear ticks stay exact decimals too.
 !<
+!< An explicit list (gnuplot `set xtics ("label" pos level, ...)`) replaces those ticks, or is added to them (`add`): its
+!< items inside the range, a label printed as written (a format when it has a conversion, `"%.1f"`), the axis label of
+!< the position when absent; level 1 is a minor tick. A list alone does not extend the range to a tick grid.
+!<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
-use foresight_format, only : decimal_of, decimal_str, format_decimal, int_str, parse_decimal, real_str
+use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
 
 implicit none
 private
 public :: linear_ticks
+public :: list_ticks
 public :: log_ticks
+public :: merge_list
 public :: nice_step
+public :: tic_item
 public :: tick_object
 public :: tics_object
 public :: TICS_AUTO, TICS_FIXED, TICS_NONE
@@ -31,7 +38,7 @@ public :: push
 interface push
    !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
    !< when the items hold deferred-length characters.
-   module procedure push_tick
+   module procedure push_tick, push_item
 endinterface push
 
 type :: tick_object
@@ -41,6 +48,14 @@ type :: tick_object
    character(len=:), allocatable :: label           !< Label text, empty for minor ticks.
    character(len=:), allocatable :: sup             !< Superscript appended to the label, empty if none.
 endtype tick_object
+
+type :: tic_item
+   !< Item of an explicit tick list, gnuplot `("label" pos level)`.
+   real(R8P)                     :: value = 0.0_R8P   !< Position.
+   logical                       :: major = .true.    !< Level 0 (labelled), else level 1: a minor tick.
+   logical                       :: labelled = .false. !< The label is given, else the axis label of the position.
+   character(len=:), allocatable :: label             !< Label as written, a format if it has a conversion.
+endtype tic_item
 
 integer(I4P), parameter :: TICS_AUTO  = 0_I4P !< Ticks by the automatic rule.
 integer(I4P), parameter :: TICS_FIXED = 1_I4P !< Ticks at a fixed step.
@@ -54,12 +69,18 @@ type :: tics_object
    character(len=:), allocatable :: end              !< Fixed ticks end (decimal text), empty for none.
    character(len=:), allocatable :: format           !< Label format, empty for the default labels.
    logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
+   logical                       :: series = .true.  !< The automatic or fixed ticks, else the explicit list alone.
+   type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
+      procedure, pass(self) :: clear_list !< Forget the explicit list, back to the automatic or fixed ticks.
+      procedure, pass(self) :: disable    !< No ticks, the explicit list forgotten, gnuplot `unset xtics`.
       procedure, pass(self) :: enable     !< Turn the ticks on, keeping their positions.
       procedure, pass(self) :: has_format !< Whether a label format is set.
+      procedure, pass(self) :: has_list   !< Whether an explicit list is set.
       procedure, pass(self) :: set_auto   !< Automatic ticks, forgetting a fixed step.
       procedure, pass(self) :: set_fixed  !< Set fixed ticks, validated.
+      procedure, pass(self) :: set_list   !< Set or extend the explicit list.
 endtype tics_object
 
 real(R8P), parameter :: TOL          = 1.0e-9_R8P !< Tolerance on tick-grid membership, in units of the step.
@@ -69,10 +90,15 @@ integer(I8P), parameter :: MAX_TICKS = 1000_I8P   !< Tick count cap: no ticks be
 integer(I8P), parameter :: MAX_POWER = 10000_I8P  !< Largest power of a fixed log step: no ticks beyond it.
 
 contains
-   pure function attribute(self) result(text)
-   !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end.
-   class(tics_object), intent(in) :: self !< Settings.
-   character(len=:), allocatable  :: text !< Attribute text.
+   pure function attribute(self, lo, hi) result(text)
+   !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end. With
+   !< an explicit list (and the axis range [`lo`, `hi`], for the default labels of its items): `labels` and its items
+   !< (see `labels_attribute`), after `auto` or the step when the list is added to them.
+   class(tics_object), intent(in)           :: self  !< Settings.
+   real(R8P),          intent(in), optional :: lo    !< Value at the axis start.
+   real(R8P),          intent(in), optional :: hi    !< Value at the axis end.
+   character(len=:), allocatable            :: text  !< Attribute text.
+   type(tick_object), allocatable           :: items(:) !< Labelled list items.
 
    select case (self%mode)
    case (TICS_FIXED)
@@ -82,6 +108,14 @@ contains
    case default
       text = ''
    endselect
+   if (self%mode == TICS_NONE .or. .not. (self%has_list() .and. present(lo) .and. present(hi))) return
+   call list_ticks(self, lo, hi, .true., items)
+   if (self%series) then
+      if (len(text) == 0) text = 'auto'
+      text = text//' '//labels_attribute(items)
+   else
+      text = labels_attribute(items)
+   endif
    contains
       pure function or_star(value) result(t)
       !< `value`, or `*` if empty.
@@ -95,26 +129,42 @@ contains
 
    pure function labels_attribute(labels) result(text)
    !< Text labels for the viewer: `labels` then `value:label` pairs, blank separated, each label percent-encoded (every
-   !< byte but letters, digits and `-._~`), so blanks and colons in a label never split it.
+   !< byte but letters, digits and `-._~`), so blanks and colons in a label never split it; a superscript follows as
+   !< `^sup`, a minor tick is `value!`.
    type(tick_object), intent(in) :: labels(:) !< Labelled values.
    character(len=:), allocatable :: text      !< Attribute text.
    character(len=*), parameter   :: HEX = '0123456789ABCDEF' !< Hexadecimal digits.
    integer(I4P)                  :: k         !< Label counter.
-   integer(I4P)                  :: i         !< Byte counter.
-   integer(I4P)                  :: b         !< Byte value.
 
    text = 'labels'
    do k = 1_I4P, size(labels, kind=I4P)
-      text = text//' '//real_str(labels(k)%value)//':'
-      do i = 1_I4P, len(labels(k)%label, kind=I4P)
-         b = ichar(labels(k)%label(i:i))
-         if (verify(labels(k)%label(i:i), 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') == 0) then
-            text = text//labels(k)%label(i:i)
+      if (.not. labels(k)%major) then
+         text = text//' '//real_str(labels(k)%value)//'!'
+         cycle
+      endif
+      text = text//' '//real_str(labels(k)%value)//':'//encoded(labels(k)%label)
+      if (allocated(labels(k)%sup)) then
+         if (len(labels(k)%sup) > 0) text = text//'^'//encoded(labels(k)%sup)
+      endif
+   enddo
+   contains
+      pure function encoded(raw) result(enc)
+      !< `raw` percent-encoded.
+      character(len=*), intent(in)  :: raw !< Text.
+      character(len=:), allocatable :: enc !< Encoded text.
+      integer(I4P)                  :: i   !< Byte counter.
+      integer(I4P)                  :: b   !< Byte value.
+
+      enc = ''
+      do i = 1_I4P, len(raw, kind=I4P)
+         b = ichar(raw(i:i))
+         if (verify(raw(i:i), 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') == 0) then
+            enc = enc//raw(i:i)
          else
-            text = text//'%'//HEX(b / 16 + 1:b / 16 + 1)//HEX(modulo(b, 16) + 1:modulo(b, 16) + 1)
+            enc = enc//'%'//HEX(b / 16 + 1:b / 16 + 1)//HEX(modulo(b, 16) + 1:modulo(b, 16) + 1)
          endif
       enddo
-   enddo
+      endfunction encoded
    endfunction labels_attribute
 
    pure subroutine enable(self)
@@ -137,7 +187,52 @@ contains
    self%step = ''
    self%start = ''
    self%end = ''
+   call self%clear_list
    endsubroutine set_auto
+
+   pure subroutine clear_list(self)
+   !< Forget the explicit list: the automatic or fixed ticks again, as gnuplot `set xtics` with positions but no `add`.
+   class(tics_object), intent(inout) :: self !< Settings.
+
+   if (allocated(self%list)) deallocate(self%list)
+   self%series = .true.
+   endsubroutine clear_list
+
+   pure subroutine disable(self)
+   !< No ticks, as gnuplot `unset xtics`: the explicit list is forgotten, a fixed step kept for `enable`.
+   class(tics_object), intent(inout) :: self !< Settings.
+
+   self%mode = TICS_NONE
+   call self%clear_list
+   endsubroutine disable
+
+   pure function has_list(self) result(has)
+   !< Whether an explicit list is set.
+   class(tics_object), intent(in) :: self !< Settings.
+   logical                        :: has  !< List set.
+
+   has = .false.
+   if (allocated(self%list)) has = size(self%list) > 0
+   endfunction has_list
+
+   pure subroutine set_list(self, items, add)
+   !< The explicit list `items` replaces the ticks, or with `add` extends the list and keeps the ticks, as gnuplot
+   !< `set xtics [add] ("label" pos level, ...)`; ticks turned off are turned on.
+   class(tics_object), intent(inout) :: self     !< Settings.
+   type(tic_item),     intent(in)    :: items(:) !< Items.
+   logical,            intent(in)    :: add      !< Added to the ticks and the list.
+   integer(I4P)                      :: k        !< Item counter.
+
+   if (.not. add) then
+      if (allocated(self%list)) deallocate(self%list)
+      self%series = .false.
+   endif
+   if (.not. allocated(self%list)) allocate(self%list(0))
+   do k = 1_I4P, size(items, kind=I4P)
+      call push(self%list, items(k))
+   enddo
+   call self%enable
+   endsubroutine set_list
 
    pure function has_format(self) result(has)
    !< Whether a label format is set.
@@ -191,6 +286,7 @@ contains
    self%step = step
    self%start = start
    self%end = end
+   self%series = .true.
    endsubroutine set_fixed
 
    pure subroutine nice_step(raw, m, e)
@@ -472,6 +568,81 @@ contains
    call common_scale(n, e, ok)
    endsubroutine fixed_values
 
+   pure subroutine list_ticks(tics, lo, hi, everywhere, ticks)
+   !< The items of the explicit list of `tics` inside [`lo`, `hi`] (either order), or all of them if `everywhere`, in
+   !< the list order: a label as written, by itself as the format if it is one (`"%.1f"`, gnuplot), the axis label of
+   !< the position (`set format`, else the default one for the range) if absent; minor items have none.
+   type(tics_object),              intent(in)  :: tics       !< Settings.
+   real(R8P),                      intent(in)  :: lo         !< Value at the axis start.
+   real(R8P),                      intent(in)  :: hi         !< Value at the axis end.
+   logical,                        intent(in)  :: everywhere !< All the items, whatever the range.
+   type(tick_object), allocatable, intent(out) :: ticks(:)   !< Ticks.
+   type(tick_object)                           :: tick       !< Current tick.
+   real(R8P)                                   :: tol        !< Tolerance on the range ends.
+   integer(I8P)                                :: n          !< Position mantissa.
+   integer(I4P)                                :: e          !< Position exponent.
+   integer(I4P)                                :: k          !< Item counter.
+   logical                                     :: sci        !< Scientific default labels.
+
+   allocate(ticks(0))
+   if (.not. tics%has_list()) return
+   tol = 1.0e-9_R8P * abs(hi - lo)
+   sci = is_scientific(max(abs(lo), abs(hi)))
+   do k = 1_I4P, size(tics%list, kind=I4P)
+      associate(item => tics%list(k))
+         if (.not. everywhere .and. (item%value < min(lo, hi) - tol .or. item%value > max(lo, hi) + tol)) cycle
+         tick%value = item%value
+         tick%major = item%major
+         tick%label = ''
+         tick%sup = ''
+         if (item%major) then
+            call decimal_of(item%value, n, e)
+            if (.not. item%labelled) then
+               call tick_label(n, e, sci, tick%label, tick%sup, tics)
+            elseif (index(item%label, '%') > 0 .and. len(format_check(item%label)) == 0) then
+               call format_decimal(item%label, n, e, tick%label, tick%sup)
+            else
+               tick%label = item%label
+            endif
+         endif
+      endassociate
+      call push(ticks, tick)
+   enddo
+   endsubroutine list_ticks
+
+   pure subroutine merge_list(tics, lo, hi, ticks)
+   !< Add to `ticks` the items of the explicit list of `tics` inside [`lo`, `hi`], each replacing a tick at its position
+   !< (gnuplot `set xtics add`): the remaining ticks keep their order, the items follow.
+   type(tics_object),              intent(in)    :: tics     !< Settings.
+   real(R8P),                      intent(in)    :: lo       !< Value at the axis start.
+   real(R8P),                      intent(in)    :: hi       !< Value at the axis end.
+   type(tick_object), allocatable, intent(inout) :: ticks(:) !< Ticks.
+   type(tick_object), allocatable                :: items(:) !< List items in range.
+   type(tick_object), allocatable                :: merged(:) !< Ticks not replaced, then the items.
+   integer(I4P)                                  :: k        !< Tick counter.
+
+   call list_ticks(tics, lo, hi, .false., items)
+   if (size(items) == 0) return
+   allocate(merged(0))
+   do k = 1_I4P, size(ticks, kind=I4P)
+      if (any(same_place(ticks(k)%value, items%value))) cycle
+      call push(merged, ticks(k))
+   enddo
+   do k = 1_I4P, size(items, kind=I4P)
+      call push(merged, items(k))
+   enddo
+   call move_alloc(merged, ticks)
+   contains
+      elemental function same_place(a, b) result(same)
+      !< Whether `a` and `b` are one position, to 1e-9 of the range or of their magnitude.
+      real(R8P), intent(in) :: a    !< Value.
+      real(R8P), intent(in) :: b    !< Value.
+      logical               :: same !< Same position.
+
+      same = abs(a - b) <= 1.0e-9_R8P * max(abs(hi - lo), abs(a), abs(b))
+      endfunction same_place
+   endsubroutine merge_list
+
    pure subroutine fixed_linear_ticks(lo, hi, extend_lo, extend_hi, tics, ticks)
    !< Ticks at start + k * step within [start, end], as gnuplot `set xtics START,STEP,END`.
    !<
@@ -698,4 +869,19 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_tick
+
+   pure subroutine push_item(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(tic_item), allocatable, intent(inout) :: list(:)  !< List.
+   type(tic_item),              intent(in)    :: item     !< New item.
+   type(tic_item), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                               :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_item
 endmodule foresight_ticks

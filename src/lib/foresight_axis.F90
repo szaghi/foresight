@@ -10,7 +10,7 @@ module foresight_axis
 !< the user settings `tics`, so a multiplot does not carry the categories of a panel into the next one.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use penf, only : R8P
-use foresight_ticks, only : linear_ticks, log_ticks, tick_object, tics_object, TICS_NONE
+use foresight_ticks, only : linear_ticks, list_ticks, log_ticks, merge_list, tick_object, tics_object, TICS_NONE
 
 implicit none
 private
@@ -137,6 +137,9 @@ contains
    if (lo == hi) error stop 'foresight: empty axis range'
    if (self%labelled()) then
       self%ticks = pack(self%labels, self%labels%value >= min(lo, hi) .and. self%labels%value <= max(lo, hi))
+   elseif (.not. self%tics%series .and. self%tics%mode /= TICS_NONE) then
+      ! an explicit list alone: the range is not extended to a tick grid, as gnuplot
+      call list_ticks(self%tics, lo, hi, .false., self%ticks)
    elseif (self%log) then
       call log_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
                      self%ticks, self%tics)
@@ -144,6 +147,9 @@ contains
       call linear_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%tight), .not. (self%max_fixed .or. self%tight), &
                         self%ticks, self%tics)
    endif
+   ! a list added to the ticks, after the extension of the range
+   if (.not. self%labelled() .and. self%tics%series .and. self%tics%mode /= TICS_NONE) &
+      call merge_list(self%tics, lo, hi, self%ticks)
    self%lo = lo
    self%hi = hi
    endsubroutine setup

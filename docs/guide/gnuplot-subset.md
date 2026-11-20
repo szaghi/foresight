@@ -46,7 +46,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored | — |
@@ -267,6 +267,8 @@ unset xtics              # no ticks, no labels (nor their margin), no grid lines
 set format y "%.1e"      # 1.0e-03
 set format x "%g s"      # 0.5 s
 set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
+set xtics ("Jan" 1, "Feb" 2, "Mar" 3)   # an explicit list replaces the ticks
+set ytics add ("limit" 7.5)             # ... or is added to them
 ```
 
 Automatic ticks step as gnuplot's: by the axis range only, whatever the size of the plot (0.5 on [-2:2], 0.2 on
@@ -284,7 +286,21 @@ The formats are C printf's for one number: `%[flags][width][.precision]` with th
 tick, so `set xtics 0.1` never shows `0.30000000000000004`, and a rounding tie goes to the even digit, as printf does
 (`0.125` with `%.2f` is `0.12`).
 
-Both settings follow the zoom in the HTML page: the viewer places and formats the ticks by the same rules.
+An explicit list `("label" pos level, ...)` places the ticks itself, as gnuplot: each item is an optional quoted
+label, a position (a constant expression: `2*pi`, user variables) and an optional level, `1` for a minor tick
+(unlabelled, shorter). A label is printed as written, or used as the format of the position when it holds a conversion
+(`"%.1f s" 2` is `2.0 s`); without a label the position gets the axis label (`set format`). Items outside the range are
+left out, and a list alone does not extend an autoscaled end to a tick grid. Without `add` the list replaces the ticks
+and any earlier list; with `add` it joins them, an item replacing the tick at its position. Positions without `add`
+(`set xtics 2`, `set xtics auto`) and `unset xtics` forget the list; `set xtics add 2` keeps it beside the new step.
+
+```gnuplot
+set xtics ("Jan" 1, "" 1.5 1, "Feb" 2, "" 2.5 1, "Mar" 3)   # months, a minor tick between them
+set ytics add ("limit" 7.5, "%.2f mm" 4.25)                 # the automatic ticks and two more
+```
+
+All these settings follow the zoom in the HTML page: the viewer places and formats the ticks by the same rules, the
+list items keeping the labels they were drawn with.
 
 ## Key
 
@@ -825,12 +841,11 @@ text). Zooming magnifies the cells with the data.
 
 Recursive user functions, inline ranges (`plot [0:1] sin(x)`), the second
 x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
-`mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`,
-explicit tick lists `("a" 1, ...)`, minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
+`mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
+(`set xtics 0,1 ("a" 2)`), minor ticks (`mxtics`) and the `rotate`, `out` options; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator` (`missing`, `commentschars`); the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; variable colors (`lc variable`), `set style boxplot labels x2`; `set style histogram
-columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name, `set xtics
-add`; `pointinterval` (`pi`); the `smooth` filters other than
+columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters other than
 `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal` (`csplines`, `acsplines`, `mcsplines`, `bezier`,
 `sbezier`, `kdensity`, `unwrap`, `path`) and `bins`; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.
