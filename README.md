@@ -7,7 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/szaghi/foresight)](https://github.com/szaghi/foresight/issues)
 [![CI](https://github.com/szaghi/foresight/actions/workflows/ci.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://szaghi.github.io/foresight/coverage.json)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](#copyrights)
+[![License](https://img.shields.io/badge/license-GPLv3%20%7C%20BSD%20%7C%20MIT-blue.svg)](#copyrights)
 
 | 🖱️ **Interactive HTML**<br>One self-contained page per plot: wheel zoom, pan, box zoom, gnuplot hotkeys, series hidden from the key, dashboard panels zoomed together | 📈 **gnuplot Semantics**<br>Autoscale to the tick grid, reversed and log axes, blocks and datasets, user variables and functions, gnuplot linetype colors and dash types | 🛰️ **Live Monitoring**<br>`foresight --watch` re-renders while a job appends to its logs; the page reloads keeping your zoom, or following the newest data | 🧩 **Library and CLI**<br>`fig%plot(...)` from your solver, or gnuplot-subset scripts from the shell — the same interpreter |
 |:---:|:---:|:---:|:---:|
@@ -26,7 +26,10 @@ Contributions are welcome — see the [Contributing](https://szaghi.github.io/fo
 
 ## Copyrights
 
-This project is distributed under the [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html) license.
+This project is distributed under a multi-licensing system:
+
+- **FOSS projects**: [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html)
+- **Closed source / commercial**: [BSD 2-Clause](http://opensource.org/licenses/BSD-2-Clause), [BSD 3-Clause](http://opensource.org/licenses/BSD-3-Clause), or [MIT](http://opensource.org/licenses/MIT)
 
 The named palettes carry third-party color tables: the *Scientific colour maps* by Fabio Crameri (MIT,
 [doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862)), matplotlib's magma, inferno, plasma and
@@ -34,7 +37,7 @@ viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Ba
 and Kenneth Moreland's black_body (CC0);
 their notices are in `src/lib/foresight_colormaps.F90`.
 
-> Anyone interested in using, developing, or contributing to this project is welcome.
+> Anyone interested in using, developing, or contributing to this project is welcome — pick the license that best fits your needs.
 
 ---
 

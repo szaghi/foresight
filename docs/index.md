@@ -229,6 +229,9 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 ## Copyrights
 
-foresight is distributed under the [GNU General Public License v3](http://www.gnu.org/licenses/gpl-3.0.html).
+foresight is distributed under a multi-licensing system:
+
+- **FOSS projects**: [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html)
+- **Closed source / commercial**: [BSD 2-Clause](http://opensource.org/licenses/BSD-2-Clause), [BSD 3-Clause](http://opensource.org/licenses/BSD-3-Clause), or [MIT](http://opensource.org/licenses/MIT)
 
 </div>
