@@ -66,6 +66,14 @@ A parenthesized field is an expression evaluated per row: `$N` is column N, `$0`
 
 Quoted names select columns by header; `title columnhead` titles with the header of the y column. `set key autotitle columnhead` does it for every item.
 
+### Missing values and other comment marks
+
+<<< @/examples/snippets/cb_missing.gp{gnuplot}
+
+<Plot name="cb_missing" svg :width="560" :height="320" />
+
+The `-` cells are missing data: those points are left out and the lines go on; `%` starts the comments of this file.
+
 ## Axes, ticks and key
 
 ### A log axis with exponent labels

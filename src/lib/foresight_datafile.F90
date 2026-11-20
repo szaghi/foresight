@@ -65,6 +65,8 @@ type :: datafile_object
    type(text_object), allocatable   :: labels(:)       !< Text of column `label_column` of each row.
    integer(I4P)                  :: nrows   = 0_I4P   !< Number of data rows.
    integer(I4P)                  :: nvalues = 0_I4P   !< Number of stored values.
+   integer(I4P), allocatable     :: missing_cells(:)  !< Indexes in `values` of the cells holding the missing data
+                                                      !< string (gnuplot `set datafile missing`), ascending.
    contains
       procedure, pass(self) :: column_header !< Header name of a column.
       procedure, pass(self) :: columns       !< Extract a (x, y) series.
@@ -77,15 +79,22 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg, separator, label_column)
+   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments)
    !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
-   !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept.
+   !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept. The
+   !< cells equal to `missing` (blanks and double quotes around them removed; none if empty) are missing data, the
+   !< points reading them left out (gnuplot `set datafile missing`); `comments` are the characters starting a comment
+   !< (`#` by default, none if empty: gnuplot `set datafile commentschars`).
    class(datafile_object),        intent(inout)        :: self      !< Data.
    character(len=*),              intent(in)           :: file      !< File name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
    character(len=*),              intent(in), optional :: separator !< Cell separator characters.
    integer(I4P),                  intent(in), optional :: label_column !< Column kept as text, 0 for none.
+   character(len=*),              intent(in), optional :: missing   !< Missing data string, empty for none.
+   character(len=*),              intent(in), optional :: comments  !< Comment characters.
+   character(len=:), allocatable                       :: miss      !< Missing data string, empty for none.
+   character(len=:), allocatable                       :: marks     !< Comment characters.
    character(len=:), allocatable                       :: line      !< Current line.
    character(len=:), allocatable                       :: sep       !< Cell separator characters, empty for whitespace.
    character(len=256)                                  :: message   !< I/O message.
@@ -104,6 +113,12 @@ contains
    self%file = file
    sep = ''
    if (present(separator)) sep = separator
+   miss = ''
+   if (present(missing)) miss = missing
+   marks = '#'
+   if (present(comments)) marks = comments
+   if (allocated(self%missing_cells)) deallocate(self%missing_cells)
+   allocate(self%missing_cells(0))
    self%nrows = 0_I4P
    self%nvalues = 0_I4P
    if (allocated(self%values)) deallocate(self%values)
@@ -133,7 +148,7 @@ contains
          exit
       endif
       if (eof .and. len(line) == 0) exit
-      n = index(line, '#', kind=I4P) - 1_I4P
+      n = scan(line, marks, kind=I4P) - 1_I4P
       if (n < 0_I4P) n = len(line, kind=I4P)
       if (len_trim(line(1:n)) == 0) then
          ! comment lines are neither data nor separators
@@ -162,6 +177,7 @@ contains
                   if (line(j:j) == '"') quoted = .not. quoted
                enddo
                call add_value(to_real(line(i:j)))
+               if (len(miss) > 0) call mark_missing(line(i:j))
                if (recording) call record(line(i:j))
                cell = cell + 1_I4P
                if (cell == self%label_column) self%labels(self%nrows)%text = clean(line(i:j))
@@ -178,6 +194,7 @@ contains
                   j = j + 1_I4P
                enddo
                call add_value(cell_value(line(i:j - 1_I4P)))
+               if (len(miss) > 0) call mark_missing(line(i:j - 1_I4P))
                if (recording) call record(line(i:j - 1_I4P))
                cell = cell + 1_I4P
                if (cell == self%label_column) self%labels(self%nrows)%text = clean(line(i:j - 1_I4P))
@@ -243,6 +260,13 @@ contains
       work(1:size(self%labels)) = self%labels
       call move_alloc(work, self%labels)
       endsubroutine grow_labels
+
+      subroutine mark_missing(cell)
+      !< Mark the value just added as missing data if its `cell` is the missing data string.
+      character(len=*), intent(in) :: cell !< Cell text.
+
+      if (clean(cell) == miss) self%missing_cells = [self%missing_cells, self%nvalues]
+      endsubroutine mark_missing
 
       subroutine add_value(v)
       !< Append a value to the current row, doubling the storage when full.
@@ -318,6 +342,9 @@ contains
    logical                              :: headed      !< Headers in use.
    integer(I4P)                         :: width       !< Label length.
    integer(I4P)                         :: r           !< Row counter.
+   integer(I4P)                         :: stored      !< Points stored.
+   real(R8P),        allocatable        :: kept(:,:)   !< Points kept.
+   character(len=:), allocatable        :: texts(:)    !< Labels of the points kept.
 
    headed = .false.
    if (present(header)) headed = header
@@ -335,6 +362,18 @@ contains
       labels(:) = ''
    endif
    call store_points
+   ! fewer points when some were left out, through temporaries (nvfortran 26.9: see foresight_tokens push), here and
+   ! not in store_points (it breaks a host's rank-2 array reallocated in an internal procedure)
+   if (stored < size(values, 1)) then
+      allocate(kept(stored, size(values, 2)))
+      kept(:, :) = values(1:stored, :)
+      call move_alloc(kept, values)
+      if (present(labels)) then
+         allocate(character(len=len(labels)) :: texts(stored))
+         texts(:) = labels(1:stored)
+         call move_alloc(texts, labels)
+      endif
+   endif
    contains
       pure function is_header(r) result(yes)
       !< Whether row `r` is a header: the first of its dataset, with headers in use.
@@ -381,10 +420,14 @@ contains
       integer(I4P) :: last_blk !< Block of the last selected point.
       integer(I4P) :: picked   !< Selected point number within the dataset: gnuplot's column 0.
       integer(I4P) :: set      !< Dataset of the last selected point.
+      integer(I4P) :: m        !< Next missing cell.
+      integer(I4P) :: c        !< Column of a missing cell.
+      logical      :: dropped  !< The row reads a missing cell.
       type(expression_object) :: resolved(size(fields)) !< Fields on the header of the current dataset.
       character(len=:), allocatable :: names(:) !< Header names of the current dataset.
 
       resolved = fields
+      m = 1_I4P
       k = 0_I4P
       in_block = -1_I4P
       in_set_block = -1_I4P
@@ -402,6 +445,27 @@ contains
             cycle
          endif
          if (.not. selected(r, in_block, in_set_block)) cycle
+         ! a point reading a missing data cell is left out, the line not broken (gnuplot `set datafile missing`)
+         dropped = .false.
+         if (allocated(self%missing_cells)) then
+            do while (m <= size(self%missing_cells, kind=I4P))
+               if (self%missing_cells(m) >= self%first(r)) exit
+               m = m + 1_I4P
+            enddo
+            c = m
+            do while (c <= size(self%missing_cells, kind=I4P))
+               if (self%missing_cells(c) >= self%first(r + 1_I4P)) exit
+               if (any([(resolved(f)%reads_column(self%missing_cells(c) - self%first(r) + 1_I4P), &
+                         f = 1_I4P, size(fields, kind=I4P))])) dropped = .true.
+               c = c + 1_I4P
+            enddo
+         endif
+         if (dropped) then
+            if (self%dataset(r) /= set) picked = -1_I4P
+            set = self%dataset(r)
+            picked = picked + 1_I4P
+            cycle
+         endif
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) then
             k = k + 1_I4P
             values(k, :) = ieee_value(1.0_R8P, ieee_quiet_nan)
@@ -416,6 +480,7 @@ contains
          enddo
          if (present(labels) .and. self%label_column > 0_I4P) labels(k) = self%labels(r)%text
       enddo
+      stored = k
       endsubroutine store_points
 
       pure subroutine advance(r, in_block, in_set_block)

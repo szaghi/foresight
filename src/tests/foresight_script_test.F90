@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(85)                           !< Per-check outcome.
+logical                       :: test_passed(86)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -203,7 +203,9 @@ test_passed(28) = iostat == 0_I4P .and. interpreter%separator == achar(9)
 call interpreter%run_text('unset datafile', iostat, iomsg)
 test_passed(29) = iostat == 0_I4P .and. interpreter%separator == ''
 call interpreter%run_text('set datafile missing "?"', iostat, iomsg)
-test_passed(30) = iostat /= 0_I4P .and. index(iomsg, 'set datafile: unsupported option "missing"') > 0
+test_passed(30) = iostat == 0_I4P .and. interpreter%missing == '?'
+call interpreter%run_text('set datafile fortran', iostat, iomsg)
+test_passed(30) = test_passed(30) .and. iostat /= 0_I4P .and. index(iomsg, 'set datafile: unsupported option "fortran"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -1228,6 +1230,30 @@ call interpreter%run_text('plot [1=0:1] x', iostat, iomsg)
 test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'bad dummy variable name') > 0
 call interpreter%run_text('plot [0:1]', iostat, iomsg)
 test_passed(85) = test_passed(85) .and. iostat /= 0_I4P .and. index(iomsg, 'nothing to plot') > 0
+
+! set datafile missing and commentschars, as gnuplot 6.0: a point reading the missing string (in a plain column or
+! through an expression) is left out without breaking the line, a missing cell in an unused column does not matter;
+! commentschars replaces #
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 1 7', '2 2 7', '3 ? 7', '% note', '4 4 ?', '5 5 7'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set datafile missing '?'; set datafile commentschars '#%'; plot '"//data_file// &
+                             "' u 1:2 w l", iostat, iomsg)
+   test_passed(86) = iostat == 0_I4P .and. size(panel%series(1)%x) == 4 .and. .not. any(ieee_is_nan(panel%series(1)%y))
+   call interpreter%run_text("plot '"//data_file//"' u 1:($3) w l", iostat, iomsg)
+   test_passed(86) = test_passed(86) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 4
+   call interpreter%run_text("unset datafile; plot '"//data_file//"' u 1:2 w l", iostat, iomsg)
+   test_passed(86) = test_passed(86) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 6 .and. &
+                     count(ieee_is_nan(panel%series(1)%y)) == 2
+endassociate
+call interpreter%run_text("set datafile missing ?", iostat, iomsg)
+test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'set datafile missing: a "string"') > 0
+call interpreter%run_text("set datafile commentschars %", iostat, iomsg)
+test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'set datafile commentschars: a "string"') > 0
+call interpreter%run_text("set datafile fortran", iostat, iomsg)
+test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "fortran"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1245,7 +1271,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,85L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,86L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

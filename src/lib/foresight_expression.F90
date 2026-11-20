@@ -158,6 +158,7 @@ type :: expression_object
       procedure, pass(self) :: first_column !< First data column read.
       procedure, pass(self) :: name_count   !< Number of column header names.
       procedure, pass(self) :: name_of      !< A column header name.
+      procedure, pass(self) :: reads_column !< Whether a data column is read.
       procedure, pass(self) :: resolve      !< Header names to column numbers.
       procedure, pass(self) :: set_column   !< Plain column.
       procedure, pass(self) :: set_name     !< Plain column of a header name.
@@ -1054,6 +1055,24 @@ contains
       endif
    enddo
    endfunction first_column
+
+   pure function reads_column(self, c) result(reads)
+   !< Whether the expression reads the data column `c` (from 1): as a plain column or `$c`, or any column through
+   !< `column(expr)`.
+   class(expression_object), intent(in) :: self  !< Expression.
+   integer(I4P),             intent(in) :: c     !< Column.
+   logical                              :: reads !< Column read.
+   integer(I4P)                         :: k     !< Instruction counter.
+
+   reads = .false.
+   if (.not. allocated(self%code)) return
+   do k = 1_I4P, size(self%code, kind=I4P)
+      if ((self%code(k)%op == OP_COLUMN .and. self%code(k)%arg == c) .or. self%code(k)%op == OP_COLUMN_OF) then
+         reads = .true.
+         return
+      endif
+   enddo
+   endfunction reads_column
 
    elemental function name_count(self) result(n)
    !< Number of column header names used.

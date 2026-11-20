@@ -132,6 +132,8 @@ type :: script_object
                                                                 !< `none` (gnuplot `set key [no]autotitle`).
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
+   character(len=:), allocatable   :: missing                  !< Missing data string, empty for none.
+   character(len=:), allocatable   :: comments                 !< Characters starting a comment in data files.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
@@ -169,6 +171,8 @@ contains
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
    self%separator = ''
+   self%missing = ''
+   self%comments = '#'
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
    call self%symbols%clear
@@ -924,7 +928,8 @@ contains
       endif
       ! reloaded to keep the text of the xtic column
       if (file /= loaded .or. (label_col > 0_I4P .and. data%label_column /= label_col)) then
-         call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col)
+         call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col, missing=self%missing, &
+                        comments=self%comments)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
@@ -2407,7 +2412,7 @@ contains
          call self%figure%set_palette(words)
          return
       endif
-      call pdata%load(file, iostat, iomsg, separator=self%separator)
+      call pdata%load(file, iostat, iomsg, separator=self%separator, comments=self%comments)
       if (iostat /= 0_I4P) then
          iomsg = 'set palette file: '//iomsg
          return
@@ -3080,13 +3085,42 @@ contains
       endsubroutine item_position
 
       subroutine datafile_option
-      !< `set datafile separator [whitespace|tab|comma|"chars"]`: no argument restores whitespace.
+      !< `set datafile separator [whitespace|tab|comma|"chars"]` (no argument restores whitespace), `set datafile
+      !< missing ["string"|NaN]` (a point reading that cell is left out, the line not broken; none without argument),
+      !< `set datafile commentschars ["chars"]` (`#` without argument), as gnuplot.
       if (size(tokens) < 2) then
-         call fail('set datafile: only "separator" is supported', iostat, iomsg)
+         call fail('set datafile: separator, missing or commentschars is expected', iostat, iomsg)
+         return
+      endif
+      if (tokens(2)%kind == TOKEN_WORD .and. keyword(tokens(2)%text, 'missing', 3_I4P)) then
+         if (size(tokens) > 3) then
+            call fail('set datafile missing: one "string" (or NaN) is expected', iostat, iomsg)
+         elseif (size(tokens) == 2) then
+            self%missing = ''
+         elseif (tokens(3)%kind == TOKEN_STRING .or. tokens(3)%text == 'NaN') then
+            self%missing = trim(adjustl(tokens(3)%text))
+         else
+            call fail('set datafile missing: a "string" (or NaN) is expected, found "'//tokens(3)%text//'"', iostat, &
+                      iomsg)
+         endif
+         return
+      endif
+      if (tokens(2)%kind == TOKEN_WORD .and. keyword(tokens(2)%text, 'commentschars', 3_I4P)) then
+         if (size(tokens) > 3) then
+            call fail('set datafile commentschars: one "string" of characters is expected', iostat, iomsg)
+         elseif (size(tokens) == 2) then
+            self%comments = '#'
+         elseif (tokens(3)%kind == TOKEN_STRING) then
+            self%comments = tokens(3)%text
+         else
+            call fail('set datafile commentschars: a "string" of characters is expected, found "'//tokens(3)%text// &
+                      '"', iostat, iomsg)
+         endif
          return
       endif
       if (.not. keyword(tokens(2)%text, 'separator', 3_I4P) .or. tokens(2)%kind /= TOKEN_WORD) then
-         call fail('set datafile: unsupported option "'//tokens(2)%text//'" (only separator is)', iostat, iomsg)
+         call fail('set datafile: unsupported option "'//tokens(2)%text//'" (separator, missing and commentschars '// &
+                   'are)', iostat, iomsg)
          return
       endif
       if (size(tokens) > 3) then
@@ -3396,15 +3430,25 @@ contains
       self%function_style = 'lines'
       return
    elseif (keyword(option, 'datafile', 5_I4P)) then
-      ! all the datafile settings, or the separator only: the same here
+      ! all the datafile settings, or one of them
       if (size(tokens) > 1) then
-         if (.not. keyword(tokens(2)%text, 'separator', 3_I4P)) then
-            call fail('unset datafile: unsupported option "'//tokens(2)%text//'" (only separator is)', iostat, iomsg)
+         if (keyword(tokens(2)%text, 'separator', 3_I4P)) then
+            self%separator = ''
+         elseif (keyword(tokens(2)%text, 'missing', 3_I4P)) then
+            self%missing = ''
+         elseif (keyword(tokens(2)%text, 'commentschars', 3_I4P)) then
+            self%comments = '#'
+         else
+            call fail('unset datafile: unsupported option "'//tokens(2)%text//'" (separator, missing and '// &
+                      'commentschars are)', iostat, iomsg)
             return
          endif
+         if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+         return
       endif
-      if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
       self%separator = ''
+      self%missing = ''
+      self%comments = '#'
       return
    endif
    if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return

@@ -57,6 +57,23 @@ Comments, blocks and datasets work as above. A header row is a row of missing va
 item uses the headers: `using 1:"residual"`, `title columnhead` or `set key autotitle columnhead` make the first row
 of each dataset a header, no longer a point (see [Column headers](gnuplot-subset#column-headers)).
 
+## Missing data and comments
+
+`set datafile missing` names the string marking missing data, as gnuplot: a point that reads such a cell, in a plain
+column or through an expression (`using 1:($2*1e3)`), is left out and its line goes on to the next point; the same
+string in a column the item does not use changes nothing. `set datafile commentschars` sets the characters that start a
+comment, on a line of their own or after the data (`#` by default):
+
+```gnuplot
+set datafile missing "-"          # a sensor that reports "-" when it has no value
+set datafile missing NaN          # NaN cells left out too, instead of breaking the line
+set datafile commentschars "#%"   # # and % start comments
+unset datafile                    # whitespace, no missing string, # comments
+```
+
+Without a missing string, `?`, `NaN` and other cells that are no numbers are gaps that break the line (gnuplot breaks it
+for `NaN` only, and passes over unparsable cells without breaking it).
+
 ## Monitoring logs
 
 A solver that appends one line per iteration and flushes it is all `--watch` needs:
