@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/golden/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(68)                  !< Per-figure outcome.
+logical                     :: test_passed(71)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -89,7 +89,10 @@ test_passed(65) = check('patterns.svg', figure_patterns())
 test_passed(66) = check('patterns.txt', figure_patterns())
 test_passed(67) = check('spider.svg', figure_spider())
 test_passed(68) = check('spider.txt', figure_spider())
-write(output_unit, '(A,68L2)') 'foresight golden checks:', test_passed
+test_passed(69) = check('image_batlow.svg', figure_image('batlow'))
+test_passed(70) = check('image_vik.svg', figure_image('vik', cbmax=1.0_R8P))
+test_passed(71) = check('image_romaO.svg', figure_image('romaO maxcolors 12'))
+write(output_unit, '(A,71L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -363,11 +366,12 @@ contains
    call fig%set_text(charset='quadrants', colors='ansirgb')
    endfunction figure_theme_block
 
-   function figure_image(palette, theme) result(fig)
+   function figure_image(palette, theme, cbmax) result(fig)
    !< A heatmap of a 21 x 15 grid with an undefined (transparent) pixel, in the `palette`: x and y fit the pixel edges,
-   !< the color box at the right with its label.
+   !< the color box at the right with its label; `cbmax` sets the symmetric color range [-cbmax:cbmax].
    character(len=*), intent(in)           :: palette !< Palette words.
    character(len=*), intent(in), optional :: theme   !< Theme name.
+   real(R8P),        intent(in), optional :: cbmax   !< Half width of a symmetric color range.
    type(figure_object)                    :: fig     !< Figure.
    real(R8P), allocatable                 :: x(:)    !< Pixel centre abscissae.
    real(R8P), allocatable                 :: y(:)    !< Pixel centre ordinates.
@@ -387,6 +391,7 @@ contains
    enddo
    z(1, 1) = ieee_value(1.0_R8P, ieee_quiet_nan)
    call fig%set_palette(palette)
+   if (present(cbmax)) call fig%set_cbrange(-cbmax, cbmax)
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image

@@ -362,6 +362,17 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 `set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `viridis`, with `negative`
 and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### Named palettes
+
+<<< @/examples/snippets/cb_colormaps.gp{gnuplot}
+
+<Plot name="cb_colormaps" svg :width="760" :height="560" />
+
+A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour maps* or matplotlib's `magma`,
+`inferno`, `plasma`, `viridis`, in any case. Pick the type for the data: sequential for a magnitude, diverging about a
+meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
+angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
+
 ### An RGB image
 
 <<< @/examples/snippets/cb_rgbimage.gp{gnuplot}

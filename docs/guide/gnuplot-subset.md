@@ -583,6 +583,8 @@ Crameri's discrete palettes (`batlow maxcolors 10` is his `batlow10`; a few of h
 | Multi-sequential | `bukavu` `fes` `oleron` | two regimes either side of a value at mid-palette (depth and height about sea level): set a `cbrange` that puts the value in the middle |
 | Cyclic | `bamO` `brocO` `corkO` `romaO` `vikO` | a periodic quantity (phase, angle, direction, time of day): both ends have the same color |
 
+<Plot name="cb_colormaps_all" svg :width="760" :height="1200" />
+
 ```gnuplot
 set palette vik
 set cbrange [-1:1]
