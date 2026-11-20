@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] — 2026-11-20
+### Added
+- **axes**: Set cbtics, set format cb and set logscale cb, as gnuplot 6.0
+
+- **axes**: Set colorbox options, as gnuplot 6.0
+
+- **expression**: User variables and functions in compiled expressions
+
+- **script**: User variables and functions in scripts, as gnuplot 6.0
+
+
 ## [0.5.0] — 2026-11-20
 ### Added
 - **build**: Fpm support

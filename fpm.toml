@@ -1,5 +1,5 @@
 name = "foresight"
-version = "0.5.0"
+version = "0.6.0"
 author = "Stefano Zaghi"
 description = "FORtran Easy Svg Interactive Gnuplot-like Html Tool"
 homepage = "https://github.com/szaghi/foresight"
