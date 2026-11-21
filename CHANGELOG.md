@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.9.0] — 2026-11-21
+### Added
+- **smooth**: Bins, as gnuplot 6.0
+
+- **smooth**: Mcsplines, the monotone spline of gnuplot 6.0
+
+- **style**: Lc palette z, cb and frac, as gnuplot 6.0
+
+- **key**: Set key at a position and in the margins, as gnuplot 6.0
+
+
+### Documentation
+- Audit against the features, gaps filled
+
+- **home**: The gallery follows the cookbook, every recipe shown
+
+
+### Fixed
+- **series**: The bins span without an optional argument, for nvfortran
+
+- **polar**: A set trange leaves out the data beyond it, as gnuplot 6.0
+
+
 ## [0.8.0] — 2026-11-21
 ### Added
 - **smooth**: Csplines, acsplines, bezier, sbezier and kdensity
