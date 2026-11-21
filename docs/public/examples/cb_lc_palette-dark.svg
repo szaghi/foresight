@@ -575,7 +575,7 @@
 <text x="22" y="142" text-anchor="middle" transform="rotate(-90 22 142)">residual</text>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#440154                 " stroke-width="1" points="424,29.5 460,29.5"/>
-<path fill="#440154                 " stroke="#440154                 " stroke-width="1" d="M439.3,29.5A2.7,2.7 0 1 0 444.7,29.5A2.7,2.7 0 1 0 439.3,29.5Z"/>
+<path fill="#fde725" stroke="#fde725" stroke-width="1" d="M439.3,29.5A2.7,2.7 0 1 0 444.7,29.5A2.7,2.7 0 1 0 439.3,29.5Z"/>
 <text x="418" y="33.7" text-anchor="end">continuity</text>
 </g>
 <g class="fs-key-entry" data-series="2">

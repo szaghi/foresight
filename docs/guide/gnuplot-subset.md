@@ -117,7 +117,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` / `x2y1` / `x2y2` | plot against the first axes (default), the [second y axis](#second-y-axis), the [second x axis](#second-x-axis), or both second axes |
 | `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the color of linetype `N` |
-| `lc` [**rgb**] **var**iable | a color per point from the last `using` column (`using 1:2:3`): the linetype color of its number (cycling as `lc N`), or with `rgb` the 24-bit color `0xRRGGBB`; with `lines` (each segment in the color of its end point, the key sample in the first point's), `points`, `linespoints` and `impulses`, not with `smooth` |
+| `lc` [**rgb**] **var**iable | a color per point from the last `using` column (`using 1:2:3`): the linetype color of its number (cycling as `lc N`), or with `rgb` the 24-bit color `0xRRGGBB`; with `lines` (each segment in the color of its end point; in the key, the line sample in the first point's, the point sample in the last one's), `points`, `linespoints` and `impulses`, not with `smooth` |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
@@ -485,11 +485,12 @@ plot 'run.dat' u 1:2 w l lc palette cb 0.5        # one color: the value 0.5 of 
 | `lc palette cb V` | one color for the item: the value V of the color axis (gnuplot's default [-10:10] when nothing sets or spans it) |
 | `lc palette frac F` | one color for the item: the fraction F (0 to 1) of the palette |
 
-As gnuplot, a line segment takes the color of its end point, and a point whose color value is undefined is left out.
+As gnuplot, a line segment takes the color of its end point; a point whose palette value is undefined is not drawn,
+nor the segment to it, but still counts for the autoscale.
 The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints` and `impulses`, and not with
 `smooth` or `bins`; `palette cb` and `frac` to every style but the readouts, the panel charts and `labels`, and to
-functions; all of them in `set style line`. The key sample takes the color of the first point (gnuplot draws its
-point sample in the color of the last one). Not supported: `lc palette NAME` (a named colormap of gnuplot 6).
+functions; all of them in `set style line`. In the key, the line sample takes the color of the first point and the
+point sample that of the last one, as gnuplot. Not supported: `lc palette NAME` (a named colormap of gnuplot 6).
 
 ## Lines, steps and impulses
 

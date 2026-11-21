@@ -1437,7 +1437,8 @@ associate(panel => interpreter%figure%panels(1))
    test_passed(93) = iostat == 0_I4P
    if (test_passed(93)) test_passed(93) = &
       all(panel%series(1)%colors(1:4) == ['#000000', '#b42000', '#ffff00', '#7202f3']) .and. &
-      ieee_is_nan(panel%series(1)%y(5)) .and. panel%series(1)%style%color == '#000000' .and. &
+      panel%series(1)%colors(5) == 'none' .and. .not. ieee_is_nan(panel%series(1)%y(5)) .and. &
+      panel%series(1)%style%color == '#000000' .and. &
       panel%series(2)%style%color == '#8004ff' .and. panel%series(3)%style%color == '#b42000' .and. &
       panel%series(4)%style%color == '#ffff00' .and. panel%cbaxis%lo == 0.0_R8P .and. panel%cbaxis%hi == 10.0_R8P
    ! without z values the color axis keeps gnuplot's default [-10:10]: cb 5 is three quarters of the palette

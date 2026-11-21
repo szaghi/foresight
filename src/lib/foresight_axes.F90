@@ -248,8 +248,8 @@ contains
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< The color from the palette, as gnuplot `lc palette`: `palette_z` maps a value per point over the color axis (`z`,
-   !< lines, points, linespoints and impulses; a segment takes the color of its end point, an undefined value leaves a
-   !< gap), `palette_cb` one color axis value, `palette_frac` one fraction of the palette (0 to 1) for the whole
+   !< lines, points, linespoints and impulses; a segment takes the color of its end point, a point of undefined value
+   !< is not drawn, nor the segment to it, but counts for the autoscale, as gnuplot), `palette_cb` one color axis value, `palette_frac` one fraction of the palette (0 to 1) for the whole
    !< series. The color axis then spans the `palette_z` values too, and the color box is drawn.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -589,7 +589,7 @@ contains
          error stop 'foresight: plot: colors (lc variable) apply to lines, points, linespoints and impulses'
       allocate(series%colors(size(colors)))
       series%colors(:) = colors
-      if (size(colors) > 0) series%style%color = colors(1) ! the key sample: the first point's color (gnuplot)
+      if (size(colors) > 0) series%style%color = colors(1) ! the key line sample: the first point's color (gnuplot)
    endif
    if (count([present(palette_z), present(palette_cb), present(palette_frac), present(colors)]) > 1) &
       error stop 'foresight: plot: one of colors, palette_z, palette_cb, palette_frac'
@@ -599,8 +599,6 @@ contains
          error stop 'foresight: plot: palette_z (lc palette z) applies to lines, points, linespoints and impulses'
       series%palette_mode = 1_I4P
       series%zvalues = palette_z
-      ! a point of undefined color value is undefined, as gnuplot
-      where (.not. ieee_is_finite(palette_z)) series%y = ieee_value(1.0_R8P, ieee_quiet_nan)
    elseif (present(palette_cb) .or. present(palette_frac)) then
       if (any(series%style%with == [WITH_READOUT, WITH_GAUGE, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_PARALLELAXES, &
                                     WITH_SPIDERPLOT, WITH_LABELS])) &
@@ -1714,6 +1712,7 @@ contains
    real(R8P)                            :: entry     !< Entry width, spacing included [px].
    real(R8P)                            :: left      !< Key left [px].
    real(R8P)                            :: top       !< Key top [px].
+   character(len=:), allocatable        :: sample    !< Color of the point sample.
    integer(I4P)                         :: k         !< Entry counter.
    integer(I4P)                         :: s         !< Series counter.
 
@@ -1791,8 +1790,9 @@ contains
                                yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
                               self%series(s)%style%density, self%series(s)%style%stroke_color(), &
                               self%series(s)%style%linewidth)
-      if (self%series(s)%style%draws_lines() .or. any(self%series(s)%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, &
-                                                                                   WITH_VECTORS, WITH_ARROWS])) &
+      if ((self%series(s)%style%draws_lines() .or. any(self%series(s)%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, &
+                                                                                    WITH_VECTORS, WITH_ARROWS])) .and. &
+          trim(self%series(s)%style%color) /= 'none') &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
                                self%series(s)%style%dasharray())
       if (self%series(s)%style%draws_ybars()) &
@@ -1801,10 +1801,17 @@ contains
                                self%series(s)%style%linewidth, '')
       if (self%series(s)%style%draws_xbars()) &
          call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, '')
-      if (self%series(s)%style%draws_points()) &
-         call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], self%series(s)%style%color, &
-                           self%series(s)%style%point_diameter(), pt=self%series(s)%style%pointtype, &
-                           line_width=self%series(s)%style%linewidth)
+      if (self%series(s)%style%draws_points()) then
+         ! with a color per point, the point sample in the last point's color, as gnuplot (the line sample: the first's)
+         sample = self%series(s)%style%color
+         if (allocated(self%series(s)%colors)) then
+            if (size(self%series(s)%colors) > 0) sample = trim(self%series(s)%colors(size(self%series(s)%colors)))
+         endif
+         if (sample /= 'none') call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, &
+                                                 self%series(s)%style%point_diameter(), &
+                                                 pt=self%series(s)%style%pointtype, &
+                                                 line_width=self%series(s)%style%linewidth)
+      endif
       call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
       call backend%end_group
    enddo
@@ -2127,8 +2134,10 @@ contains
                i2 = i2 + 1_I4P
             enddo
             if (allocated(series%colors)) then
-               ! lc variable: each segment in the color of its end point (gnuplot)
+               ! lc variable: each segment in the color of its end point (gnuplot); `none` (an undefined palette
+               ! value) draws nothing
                do i = i1, i2 - 1_I4P
+                  if (series%colors(i + 1_I4P) == 'none') cycle
                   call backend%data_polyline(u(i:i + 1_I4P), v(i:i + 1_I4P), trim(series%colors(i + 1_I4P)), &
                                              series%style%linewidth, series%style%dasharray())
                enddo
@@ -2151,7 +2160,7 @@ contains
                   if (series%colors(i2 + 1_I4P) /= series%colors(i1)) exit
                   i2 = i2 + 1_I4P
                enddo
-               if (any(valid(i1:i2))) &
+               if (any(valid(i1:i2)) .and. series%colors(i1) /= 'none') &
                   call backend%data_dots(pack(u(i1:i2), valid(i1:i2)), pack(v(i1:i2), valid(i1:i2)), &
                                          trim(series%colors(i1)), series%style%point_diameter(), &
                                          pt=series%style%pointtype, line_width=series%style%linewidth)
@@ -2488,6 +2497,7 @@ contains
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
             if (allocated(series%colors)) then
+               if (series%colors(i) == 'none') cycle
                call backend%data_polyline([u(i), u(i)], [v0, v(i)], trim(series%colors(i)), series%style%linewidth, &
                                           series%style%dasharray())
             else
@@ -3997,7 +4007,7 @@ contains
 
    pure subroutine paint_series(all, p, cbaxis)
    !< The colors of the series of `all` colored by the palette `p` (gnuplot `lc palette`): per point over the color
-   !< axis `cbaxis` (`z`; the key sample takes the first point's color), one color axis value (`cb`) or one fraction
+   !< axis `cbaxis` (`z`; the key line sample takes the first point's color, the point sample the last's), one color axis value (`cb`) or one fraction
    !< (`frac`). A value not placeable on a log color axis takes its low end, as the images. A module procedure on the
    !< series array, as `image_range`.
    type(series_object),  intent(inout) :: all(:) !< Series of the panel.
@@ -4029,7 +4039,8 @@ contains
       character(len=7)      :: hex   !< Color.
 
       if (.not. ieee_is_finite(value)) then
-         hex = hex_color(p%rgb(0.0_R8P))
+         ! an undefined value: the point is not drawn, as gnuplot (it still counts for the autoscale)
+         hex = 'none'
       elseif (cbaxis%log .and. value <= 0.0_R8P) then
          hex = hex_color(p%rgb(merge(0.0_R8P, 1.0_R8P, cbaxis%lo < cbaxis%hi)))
       else

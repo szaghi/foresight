@@ -1584,7 +1584,7 @@ contains
 
       subroutine paint_last
       !< Color the series just added from the palette (`lc palette`, marker `palette_lc`): its `z` values (a point of
-      !< undefined value then undefined, as gnuplot), the color axis value or the fraction of `line%palette`.
+      !< undefined value not drawn, as gnuplot), the color axis value or the fraction of `line%palette`.
       integer(I4P) :: last !< Series just added.
 
       associate(panel => self%figure%panels(self%figure%current))
@@ -1593,7 +1593,6 @@ contains
          case (LC_PALETTE_Z)
             panel%series(last)%palette_mode = 1_I4P
             panel%series(last)%zvalues = zcolors
-            where (.not. ieee_is_finite(zcolors)) panel%series(last)%y = ieee_value(1.0_R8P, ieee_quiet_nan)
          case (LC_PALETTE_CB)
             panel%series(last)%palette_mode = 2_I4P
             panel%series(last)%palette_value = line%palette
