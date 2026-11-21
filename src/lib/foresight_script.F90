@@ -101,6 +101,8 @@ interface push
 endinterface push
 
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
+character(len=12), parameter :: LC_VARIABLE     = '*variable'    !< `lc variable` marker in a line color.
+character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb variable` marker in a line color.
 character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps or dots' !< Styles
                                                  !< drawing functions.
 
@@ -417,6 +419,8 @@ contains
    character(len=:), allocatable                :: with      !< Item style.
    character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
    real(R8P)                                    :: bandwidth !< kdensity bandwidth, default if not positive.
+   logical                                      :: lcvar     !< lc variable: the colors from the last using column.
+   character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
@@ -557,6 +561,7 @@ contains
       axes = 'x1y1'
       filter = ''
       bandwidth = 0.0_R8P
+      lcvar = .false.
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
@@ -979,7 +984,25 @@ contains
          kept = [point, fields(1)]
          call move_alloc(kept, fields)
       endif
-      nbar = size(fields, kind=I4P) - 2_I4P
+      ! lc variable: the last field is the color column, out of the style's fields
+      lcvar = .false.
+      if (allocated(line%lc)) lcvar = line%lc(1:1) == '*'
+      if (lcvar) then
+         if (.not. is_word(with, 'lines points linespoints impulses')) then
+            call fail('plot: lc variable applies to lines, points, linespoints and impulses, not to '//with, iostat, &
+                      iomsg)
+            return
+         endif
+         if (one_field .or. size(fields) < 3) then
+            call fail('plot: lc variable needs using x:y:color', iostat, iomsg)
+            return
+         endif
+         if (len(filter) > 0) then
+            call fail('plot: lc variable does not go with smooth', iostat, iomsg)
+            return
+         endif
+      endif
+      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar)
       select case (with)
       case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
          if (nbar /= 1_I4P .and. nbar /= 2_I4P) then
@@ -1102,6 +1125,7 @@ contains
       endif
       x = values(:, 1)
       y = values(:, 2)
+      if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
       if (is_word(filter, CURVE_MODES)) then
          call curve_filter
          if (iostat /= 0_I4P) return
@@ -1344,6 +1368,12 @@ contains
          endif
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
                                width=widths, base=base, fs=fs, xlabels=xlabels)
+      elseif (lcvar) then
+         ! the key sample and the default color of the item: its own, not the marker
+         deallocate(line%lc)
+         call self%figure%plot(x, y, title=title, with=with, lw=line%lw, dt=line%dt, ps=line%ps, xlow=xlow, &
+                               xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels, &
+                               colors=point_colors)
       else
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels)
@@ -1449,6 +1479,37 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine variable_colors(c, rgb)
+      !< The colors of the points from their color column `c`, gnuplot `lc variable`: the linetype color of each
+      !< number (`set colorsequence`), or with `rgb` the 24-bit color 0xRRGGBB; an undefined value takes linetype 1.
+      real(R8P), intent(in)       :: c(:)  !< Color column.
+      logical,   intent(in)       :: rgb   !< `lc rgb variable`.
+      character(len=*), parameter :: HEX = '0123456789abcdef' !< Hexadecimal digits.
+      integer(I8P)                :: code  !< 24-bit color.
+      integer(I4P)                :: k     !< Point counter.
+      integer(I4P)                :: d     !< Digit counter.
+      integer(I4P)                :: digit !< Hexadecimal digit.
+
+      if (allocated(point_colors)) deallocate(point_colors)
+      allocate(point_colors(size(c)))
+      associate(linecolors => self%figure%panels(self%figure%current)%linecolors)
+         do k = 1_I4P, size(c, kind=I4P)
+            if (.not. ieee_is_finite(c(k))) then
+               point_colors(k) = default_color(1_I4P, linecolors)
+            elseif (rgb) then
+               code = iand(int(c(k), I8P), int(z'FFFFFF', I8P))
+               point_colors(k) = '#'
+               do d = 5_I4P, 0_I4P, -1_I4P
+                  digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
+                  point_colors(k)(7 - d:7 - d) = HEX(digit + 1:digit + 1)
+               enddo
+            else
+               point_colors(k) = default_color(int(c(k), I4P), linecolors)
+            endif
+         enddo
+      endassociate
+      endsubroutine variable_colors
 
       subroutine curve_filter
       !< The curve smoothing of the item (csplines, acsplines, bezier, sbezier, kdensity) into (x, y): `set samples`
@@ -4046,7 +4107,8 @@ contains
 
    function line_option(tokens, i, line, iostat, iomsg, colors) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
-   !< `lc [rgb] "color"`, `lc N`, `lt N` (linetype color N), `lw W`, `dt N`, `ps S`, `pt N`.
+   !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lt N` (linetype color N), `lw W`,
+   !< `dt N`, `ps S`, `pt N`.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
    type(line_style_object),       intent(inout) :: line      !< Line properties.
@@ -4057,6 +4119,7 @@ contains
    character(len=:), allocatable                :: word      !< Property word.
    integer(I4P)                                 :: number    !< Integer value.
    real(R8P)                                    :: value     !< Real value.
+   logical                                      :: rgb       !< `lc rgb`.
 
    word = tokens(i)%text
    iostat = 0_I4P
@@ -4064,12 +4127,19 @@ contains
    ok = .true.
    if (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P)) then
       i = i + 1_I4P
+      rgb = .false.
       if (i <= size(tokens, kind=I4P)) then
-         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'rgbcolor', 3_I4P)) i = i + 1_I4P
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'rgbcolor', 3_I4P)) then
+            i = i + 1_I4P
+            rgb = .true.
+         endif
       endif
       if (i > size(tokens, kind=I4P)) then
          call fail('lc needs a color', iostat, iomsg)
          ok = .false.
+      elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'variable', 3_I4P)) then
+         ! the colors from the last using column: linetype numbers, or 24-bit RGB with rgb (gnuplot)
+         line%lc = trim(merge(LC_RGB_VARIABLE, LC_VARIABLE, rgb))
       elseif (tokens(i)%kind == TOKEN_STRING) then
          line%lc = tokens(i)%text
       else

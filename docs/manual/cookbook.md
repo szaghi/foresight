@@ -169,6 +169,15 @@ and the range ends take expressions. See [User variables and functions](/guide/g
 
 `set style line N` defines a style once; `ls N` applies it, the options after it override it.
 
+### A color per point
+
+<<< @/examples/snippets/cb_lc_variable.gp{gnuplot}
+
+<Plot name="cb_lc_variable" svg :width="560" :height="320" />
+
+`lc variable` reads the color of each point from the last `using` column, a linetype number; a segment takes the color
+of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`).
+
 ### Color sequences
 
 <<< @/examples/snippets/cb_colorsequence.gp{gnuplot}

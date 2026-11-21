@@ -232,7 +232,7 @@ endtype axes_object
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
-                         length, angle, major, minor, labels, label, head, origins, curve, channels, at)
+                         length, angle, major, minor, labels, label, head, origins, curve, channels, at, colors)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -304,6 +304,7 @@ contains
    real(R8P),          intent(in), optional :: channels(:,:,:) !< RGB image colors (4, column, row), 0 to 255: red,
                                                                !< green, blue, alpha; `z` then its red ones.
    real(R8P),          intent(in), optional :: at        !< Position of a parallel axis (its number if absent).
+   character(len=*),   intent(in), optional :: colors(:) !< Color of each point (gnuplot `lc variable`).
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -559,6 +560,14 @@ contains
    endif
    if (present(xlabels) .and. series%style%with == WITH_BOXPLOT) &
       error stop 'foresight: plot: a boxplot takes factors, not xlabels'
+   if (present(colors)) then
+      if (size(colors) /= size(x)) error stop 'foresight: plot: colors and x have different sizes'
+      if (.not. any(series%style%with == [WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_IMPULSES])) &
+         error stop 'foresight: plot: colors (lc variable) apply to lines, points, linespoints and impulses'
+      allocate(series%colors(size(colors)))
+      series%colors(:) = colors
+      if (size(colors) > 0) series%style%color = colors(1) ! the key sample: the first point's color (gnuplot)
+   endif
    if (series%style%with == WITH_FILLEDCURVES .and. present(ylow)) then
       if (size(ylow) /= size(y)) error stop 'foresight: plot: ylow and y have different sizes'
       series%ylow = ylow
@@ -1845,6 +1854,7 @@ contains
    integer(I4P)                         :: n        !< Number of points.
    integer(I4P)                         :: i1       !< First point of a run.
    integer(I4P)                         :: i2       !< Last point of a run.
+   integer(I4P)                         :: i        !< Point counter.
 
    associate(series => self%series(s))
       n = size(series%x, kind=I4P)
@@ -1895,16 +1905,42 @@ contains
                if (.not. valid(i2 + 1_I4P)) exit
                i2 = i2 + 1_I4P
             enddo
-            if (i2 > i1 .or. series%style%with == WITH_HISTEPS) call draw_run(i1, i2)
+            if (allocated(series%colors)) then
+               ! lc variable: each segment in the color of its end point (gnuplot)
+               do i = i1, i2 - 1_I4P
+                  call backend%data_polyline(u(i:i + 1_I4P), v(i:i + 1_I4P), trim(series%colors(i + 1_I4P)), &
+                                             series%style%linewidth, series%style%dasharray())
+               enddo
+            elseif (i2 > i1 .or. series%style%with == WITH_HISTEPS) then
+               call draw_run(i1, i2)
+            endif
             i1 = i2 + 1_I4P
          enddo
       endif
       if (series%style%with == WITH_IMPULSES) call draw_impulses
       if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
       if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
-      if (series%style%draws_points() .and. any(valid)) &
-         call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter(), &
-                                pt=series%style%pointtype, line_width=series%style%linewidth)
+      if (series%style%draws_points() .and. any(valid)) then
+         if (allocated(series%colors)) then
+            ! lc variable: each point in its color, consecutive points of one color together
+            i1 = 1_I4P
+            do while (i1 <= n)
+               i2 = i1
+               do while (i2 < n)
+                  if (series%colors(i2 + 1_I4P) /= series%colors(i1)) exit
+                  i2 = i2 + 1_I4P
+               enddo
+               if (any(valid(i1:i2))) &
+                  call backend%data_dots(pack(u(i1:i2), valid(i1:i2)), pack(v(i1:i2), valid(i1:i2)), &
+                                         trim(series%colors(i1)), series%style%point_diameter(), &
+                                         pt=series%style%pointtype, line_width=series%style%linewidth)
+               i1 = i2 + 1_I4P
+            enddo
+         else
+            call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter(), &
+                                   pt=series%style%pointtype, line_width=series%style%linewidth)
+         endif
+      endif
    endassociate
    contains
       subroutine draw_run(i1, i2)
@@ -2229,8 +2265,14 @@ contains
       if (yaxis%accepts(0.0_R8P)) v0 = yaxis%to_unit(0.0_R8P)
       associate(series => self%series(s))
          do i = 1_I4P, n
-            if (valid(i)) call backend%data_polyline([u(i), u(i)], [v0, v(i)], series%style%color, &
-                                                     series%style%linewidth, series%style%dasharray())
+            if (.not. valid(i)) cycle
+            if (allocated(series%colors)) then
+               call backend%data_polyline([u(i), u(i)], [v0, v(i)], trim(series%colors(i)), series%style%linewidth, &
+                                          series%style%dasharray())
+            else
+               call backend%data_polyline([u(i), u(i)], [v0, v(i)], series%style%color, series%style%linewidth, &
+                                          series%style%dasharray())
+            endif
          enddo
       endassociate
       endsubroutine draw_impulses

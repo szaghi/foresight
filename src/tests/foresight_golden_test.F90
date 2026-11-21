@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(82)                  !< Per-figure outcome.
+logical                     :: test_passed(83)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -105,7 +105,8 @@ test_passed(79) = check('tics_list.txt', figure_tics_list())
 test_passed(80) = check('mtics.svg', figure_mtics())
 test_passed(81) = check('tics_rotate.svg', figure_tics_rotate())
 test_passed(82) = check('tics_rotate.txt', figure_tics_rotate())
-write(output_unit, '(A,82L2)') 'foresight golden checks:', test_passed
+test_passed(83) = check('lc_variable.svg', figure_lc_variable())
+write(output_unit, '(A,83L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -400,6 +401,22 @@ contains
    call fig%set_ytics(out=.true.)
    call fig%plot(X, Y, title='out', with='linespoints')
    endfunction figure_tics_rotate
+
+   function figure_lc_variable() result(fig)
+   !< Colors per point, gnuplot `lc variable`: a line whose segments take the color of their end point, points by
+   !< class, impulses by sign.
+   type(figure_object)         :: fig     !< Figure.
+   real(R8P)                   :: t(13)   !< Abscissae.
+   character(len=7), parameter :: C(3) = ['#9400d3', '#009e73', '#e69f00'] !< Class colors.
+   integer(I4P)                :: i       !< Counter.
+
+   t = [(0.5_R8P * real(i, R8P), i = 0, 12)]
+   call fig%init(width=520_I4P, height=320_I4P)
+   call fig%plot(t, sin(t), title='phase', with='linespoints', &
+                 colors=[(C(1 + modulo(int(t(i)), 3)), i = 1, 13)])
+   call fig%plot(t, cos(t) - 1.5_R8P, title='sign', with='impulses', &
+                 colors=[(merge(C(2), C(3), cos(t(i)) - 1.5_R8P >= -1.5_R8P), i = 1, 13)])
+   endfunction figure_lc_variable
 
    function figure_segments() result(fig)
    !< Segmented boxes (classic theme): 10 cells over the y range, lit when covered at least half, the others ghosts

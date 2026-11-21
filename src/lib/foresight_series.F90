@@ -27,6 +27,7 @@ type :: series_object
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    character(len=:), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
+   character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none.
    real(R8P), allocatable        :: values(:) !< Values of a histogram, `y` being the top of its bar or stack segment.
    real(R8P), allocatable        :: grid(:,:) !< Values of an image (column, row), rows upward; `x` and `y` are then its
                                               !< left and right, bottom and top pixel edges.

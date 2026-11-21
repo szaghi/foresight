@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(87)                           !< Per-check outcome.
+logical                       :: test_passed(88)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1286,6 +1286,28 @@ call interpreter%run_text("plot '"//data_file//"' u 1:2:(-1) smooth acsplines", 
 test_passed(87) = test_passed(87) .and. iostat /= 0_I4P .and. index(iomsg, 'acsplines need positive weights') > 0
 call interpreter%run_text("plot '"//data_file//"' smooth kdensity bandwidth x", iostat, iomsg)
 test_passed(87) = test_passed(87) .and. iostat /= 0_I4P .and. index(iomsg, 'a number is expected') > 0
+
+! lc variable, as gnuplot 6.0: the last using column colors each point, a linetype number (cycling) or with rgb a
+! 24-bit color; lines, points, linespoints and impulses only
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 1 1', '2 2 2', '3 3 3', '4 2 1', '5 3 9'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w lp lc variable, '' u 1:2:($3*65536+255) w p lc rgb var", &
+                             iostat, iomsg)
+   test_passed(88) = iostat == 0_I4P
+   if (test_passed(88)) test_passed(88) = all(panel%series(1)%colors == ['#9400d3', '#009e73', '#56b4e9', '#9400d3', &
+                                                                        '#9400d3']) .and. &
+                                          panel%series(2)%colors(5) == '#0900ff' .and. size(panel%series(1)%x) == 5 &
+                                          .and. panel%series(2)%style%color == '#0100ff' ! key: the first point's
+endassociate
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w boxes lc variable", iostat, iomsg)
+test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable applies to lines') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w p lc variable", iostat, iomsg)
+test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable needs using x:y:color') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w l lc var smooth unique", iostat, iomsg)
+test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable does not go with smooth') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1303,7 +1325,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,87L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,88L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

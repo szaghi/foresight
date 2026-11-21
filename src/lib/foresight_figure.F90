@@ -260,9 +260,10 @@ contains
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
                    xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
-                   minor, labels, label, head, origins, curve, at)
+                   minor, labels, label, head, origins, curve, at, colors)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
-   !< ... axes`.
+   !< ... axes`. `colors` gives each point its color (gnuplot `lc variable`) with lines, points, linespoints and
+   !< impulses: a line segment takes the color of its first point.
    !<
    !< Error bar styles (`yerrorbars`, `xerrorbars`, `xyerrorbars`) take the bar bounds `ylow`/`yhigh`, `xlow`/`xhigh`.
    !< `axes='x1y2'` plots the series against the second y axis, scaled on its own. `pt` is gnuplot's point type (0 a
@@ -342,6 +343,7 @@ contains
    real(R8P),            intent(in), optional :: origins(:,:) !< Sector centres (2, point).
    character(len=*),     intent(in), optional :: curve      !< Filled curve options (`'x1'`, `'above'`, `'xy=0,1'`).
    real(R8P),            intent(in), optional :: at         !< Position of a parallel axis.
+   character(len=*),     intent(in), optional :: colors(:)  !< Color of each point (gnuplot `lc variable`).
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
@@ -350,7 +352,8 @@ contains
                                              radius=radius, angles=angles, donut=donut, scale=scale, linear=linear, &
                                              close=close, whiskerbars=whiskerbars, factors=factors, dx=dx, dy=dy, &
                                              length=length, angle=angle, major=major, minor=minor, labels=labels, &
-                                             label=label, head=head, origins=origins, curve=curve, at=at)
+                                             label=label, head=head, origins=origins, curve=curve, at=at, &
+                                             colors=colors)
    endsubroutine plot
 
    subroutine save(self, file)

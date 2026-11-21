@@ -83,7 +83,7 @@ that did what it says.
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
 plot 'file' [using SPEC] [index N] [every N] [smooth FILTER] [with STYLE] [title "text" | notitle]
-            [axes x1y1|x1y2] [lc [rgb] "color" | lc N] [lw W] [dt N] [ps S], ...
+            [axes x1y1|x1y2] [lc [rgb] "color" | lc N | lc [rgb] variable] [lw W] [dt N] [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
@@ -116,6 +116,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
 | `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the color of linetype `N` |
+| `lc` [**rgb**] **var**iable | a color per point from the last `using` column (`using 1:2:3`): the linetype color of its number (cycling as `lc N`), or with `rgb` the 24-bit color `0xRRGGBB`; with `lines` (each segment in the color of its end point, the key sample in the first point's), `points`, `linespoints` and `impulses`, not with `smooth` |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
@@ -486,7 +487,8 @@ or a polygon (`spiderplot`); both are alone in their panel.
   the web at the ticks of the first axis.
 
 foresight's own [`with radar`](#gauges-radars-and-roses) is the transposed shorthand: an item per polygon, a spoke per
-row, a common scale. Not supported: `newspiderplot`, `set style parallelaxis`, `lc variable`, `keyentry`.
+row, a common scale. Not supported: `newspiderplot`, `set style parallelaxis`, `lc variable` on the axes lines,
+`keyentry`.
 
 ## Point types
 
@@ -904,7 +906,7 @@ x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative 
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
-at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; variable colors (`lc variable`), `set style boxplot labels x2`; `set style histogram
+at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` with other styles than lines, points, linespoints and impulses, `lc palette`, `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
 `mcsplines`, `unwrap`, `path`, `bins`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.
