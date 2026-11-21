@@ -7,7 +7,7 @@ program foresight_script_test
 !< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference file.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : fit, fit_result, I4P, R8P, script_object
+use foresight, only : fit, fit_result, I4P, R8P, script_object, stats, stats_result
 use foresight_ticks, only : MINOR_AUTO, TICS_NONE
 use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(102)                           !< Per-check outcome.
+logical                       :: test_passed(104)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1758,6 +1758,67 @@ test_passed(102) = test_passed(102) .and. iostat /= 0_I4P .and. index(iomsg, 'de
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 
+! stats, as gnuplot 6.0: the variables and the report of a set print file, byte for byte gnuplot's own (the golden),
+! blank lines, invalid records and ranges counted
+open(newunit=unit, file='foresight_script_test_stats.dat', action='write', status='replace')
+write(unit, '(A)') '# h', '1 2.5', '2 3.5', '3 1.0', '', '4 7.0', '5 NaN', '6 -1'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_stats.txt'"//new_line('a')// &
+                          "stats 'foresight_script_test_stats.dat' using 2 output"//new_line('a')// &
+                          "stats 'foresight_script_test_stats.dat' u 1:2 name 'B' output"//new_line('a')// &
+                          "print STATS_records, STATS_mean, B_slope, B_pos_max_y, STATS_index_max"//new_line('a')// &
+                          "set print", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(103) = iostat == 0_I4P .and. same_file('foresight_script_test_stats.txt', 'src/tests/goldens/stats_print.txt')
+block
+   real(R8P) :: v(4)  !< Values.
+   logical   :: found !< Variable found.
+   logical   :: whole !< Integer.
+
+   call interpreter%symbols%value_of('STATS_stddev', v(1), found)
+   call interpreter%symbols%value_of('B_correlation', v(2), found)
+   call interpreter%symbols%value_of('B_kurtosis_x', v(3), found)
+   call interpreter%symbols%value_of('STATS_invalid', v(4), found, whole)
+   test_passed(103) = test_passed(103) .and. near15(v(1), 2.67207784317748_R8P) .and. &
+                      near15(v(2), -0.308882556392762_R8P) .and. near15(v(3), 1.9945215485756_R8P) .and. &
+                      v(4) == 1.0_R8P .and. whole
+endblock
+call interpreter%run_text("stats [2:5] 'foresight_script_test_stats.dat' u 1:2 name 'R'; stats 'nope.dat' u 2", &
+                          iostat, iomsg)
+block
+   real(R8P) :: v(3)  !< Values.
+   logical   :: found !< Variable found.
+
+   call interpreter%symbols%value_of('R_records', v(1), found)
+   call interpreter%symbols%value_of('R_outofrange', v(2), found)
+   call interpreter%symbols%value_of('R_mean_x', v(3), found)
+   test_passed(103) = test_passed(103) .and. iostat == 0_I4P .and. &
+                      v(1) == 3.0_R8P .and. v(2) == 2.0_R8P .and. v(3) == 3.0_R8P
+endblock
+call interpreter%run_text("stats 'foresight_script_test_stats.dat' u 2 name '1x'", iostat, iomsg)
+test_passed(103) = test_passed(103) .and. iostat /= 0_I4P .and. index(iomsg, 'illegal prefix "1x"') > 0
+open(newunit=unit, file='foresight_script_test_stats.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_stats.txt')
+close(unit, status='delete')
+
+! stats from Fortran, as gnuplot 6.0 (stats ... nooutput, then show variables)
+block
+   real(R8P)          :: x(5) = [1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P, 6.0_R8P] !< First column.
+   real(R8P)          :: y(5) = [2.5_R8P, 3.5_R8P, 1.0_R8P, 7.0_R8P, -1.0_R8P] !< Second column.
+   type(stats_result) :: r !< Statistics.
+
+   r = stats(y)
+   test_passed(104) = r%records == 5_I4P .and. near15(r%y%ssd, 2.98747384925793_R8P) .and. &
+                      near15(r%y%skewness, 0.368579812184168_R8P) .and. near15(r%y%kurtosis_err, 2.19089023002066_R8P) .and. &
+                      r%y%median == 2.5_R8P .and. r%y%lo_quartile == 1.0_R8P .and. r%y%index_min == 4_I4P .and. .not. r%two
+   r = stats(x, y)
+   test_passed(104) = test_passed(104) .and. r%two .and. near15(r%slope, -0.47972972972973_R8P) .and. &
+                      near15(r%intercept_err, 3.09853107354641_R8P) .and. near15(r%x%stddev_err, 0.544058820349418_R8P) &
+                      .and. r%pos_min_y == 6.0_R8P .and. r%pos_max_y == 4.0_R8P .and. r%sumxy == 34.5_R8P
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1766,7 +1827,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,102L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,104L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1819,6 +1880,33 @@ contains
    enddo
    close(u)
    endfunction consecutive
+
+   function same_file(file, reference) result(ok)
+   !< Whether `file` and `reference` hold the same lines.
+   character(len=*), intent(in) :: file      !< Text file.
+   character(len=*), intent(in) :: reference !< Reference file.
+   logical                      :: ok        !< Same lines.
+   character(len=500)           :: a         !< Line of the file.
+   character(len=500)           :: b         !< Line of the reference.
+   integer(I4P)                 :: u         !< File unit.
+   integer(I4P)                 :: v         !< Reference unit.
+   integer(I4P)                 :: ios(2)    !< I/O status.
+
+   ok = .false.
+   open(newunit=u, file=file, action='read', iostat=ios(1))
+   open(newunit=v, file=reference, action='read', iostat=ios(2))
+   if (all(ios == 0_I4P)) then
+      do
+         read(u, '(A)', iostat=ios(1)) a
+         read(v, '(A)', iostat=ios(2)) b
+         if (any(ios /= 0_I4P)) exit
+         if (a /= b) exit
+      enddo
+      ok = all(ios /= 0_I4P)
+   endif
+   close(u)
+   close(v)
+   endfunction same_file
 
    function file_is(file, lines) result(ok)
    !< Whether `file` holds exactly `lines` (trailing blanks of each ignored).

@@ -86,6 +86,7 @@ use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
+use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
@@ -176,6 +177,7 @@ type :: script_object
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
+      procedure, pass(self), private :: stats_command !< `stats`.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
       procedure, pass(self), private :: while_block   !< `while (...) { ... }`.
       procedure, pass(self), private :: if_block      !< `if (...) { ... } else ...`.
@@ -436,6 +438,8 @@ contains
       call self%fit_command(tokens(2:), statement, iostat, iomsg)
    elseif (keyword(command, 'print', 2_I4P)) then
       call self%print_command(after_command(statement), iostat, iomsg)
+   elseif (keyword(command, 'stats', 4_I4P)) then
+      call self%stats_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'replot', 3_I4P)) then
       if (len(self%last_plot) == 0) then
          call fail('replot: no previous plot', iostat, iomsg)
@@ -851,6 +855,364 @@ contains
    call self%symbols%constant(condition, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
    holds = v /= 0.0_R8P
    endsubroutine truth_of
+
+   subroutine stats_command(self, tokens, iostat, iomsg)
+   !< gnuplot `stats [[xmin:xmax] [[ymin:ymax]]] FILE [using N[:M]] [index N] [every ...] [name "P"] [output|nooutput]`:
+   !< foresight_stats on the column (or the pair) as STATS_* variables (P_* with a name); the records with an undefined
+   !< used value are invalid, those outside the ranges out of range. Silent unless `output`, unlike gnuplot: the report
+   !< then goes where `print` writes (gnuplot's screen layout on the standard error or output, its name-tab-value lines
+   !< in a `set print` file).
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens after `stats`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=*), parameter :: BASES(52) = [character(len=13) :: 'records', 'invalid', 'headers', 'blank', 'blocks', &
+      'outofrange', 'columns', 'mean', 'stddev', 'ssd', 'skewness', 'kurtosis', 'adev', 'mean_err', 'stddev_err', &
+      'skewness_err', 'kurtosis_err', 'sum', 'sumsq', 'min', 'max', 'median', 'lo_quartile', 'up_quartile', 'index_min', &
+      'index_max', 'slope', 'intercept', 'slope_err', 'intercept_err', 'correlation', 'sumxy', 'pos_min_y', 'pos_max_y', &
+      'mean_x', 'mean_y', 'stddev_x', 'stddev_y', 'ssd_x', 'ssd_y', 'min_x', 'min_y', 'max_x', 'max_y', 'sum_x', 'sum_y', &
+      'sumsq_x', 'sumsq_y', 'median_x', 'median_y', 'index_min_x', 'index_min_y'] !< Variables cleared first (gnuplot's).
+   type(datafile_object)                        :: data      !< Data file.
+   type(expression_object), allocatable         :: fields(:) !< `using` fields.
+   type(stats_result)                           :: r         !< Statistics.
+   type(expression_object)                      :: point     !< The point number field.
+   character(len=:), allocatable                :: file      !< Data file name.
+   character(len=:), allocatable                :: spec      !< `using` as written.
+   character(len=:), allocatable                :: word      !< Current word.
+   character(len=:), allocatable                :: prefix    !< Variable prefix.
+   real(R8P), allocatable                       :: values(:,:) !< `using` values.
+   real(R8P), allocatable                       :: x(:)      !< First column kept.
+   real(R8P), allocatable                       :: y(:)      !< Column (or second) kept.
+   logical, allocatable                         :: keep(:)   !< Records kept.
+   real(R8P)                                    :: ranges(2, 2) !< x and y ranges.
+   logical                                      :: limited(2, 2) !< Range ends given.
+   logical                                      :: output    !< Report requested.
+   logical                                      :: found     !< The file exists.
+   logical                                      :: two       !< Two columns.
+   integer(I4P)                                 :: nranges   !< Ranges given.
+   integer(I4P)                                 :: set_index !< Dataset, -1 for all.
+   integer(I4P)                                 :: every(6)  !< `every` fields.
+   integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: k         !< Counter.
+   integer(I4P)                                 :: unit      !< Report unit.
+
+   iostat = 0_I4P
+   iomsg = ''
+   ranges = 0.0_R8P
+   limited = .false.
+   nranges = 0_I4P
+   i = 1_I4P
+   do while (i <= size(tokens, kind=I4P))
+      if (tokens(i)%kind /= TOKEN_RANGE) exit
+      nranges = nranges + 1_I4P
+      if (nranges > 2_I4P) then
+         call fail('stats: at most two ranges, [x] and [y]', iostat, iomsg)
+         return
+      endif
+      call stats_range(tokens(i)%text, nranges)
+      if (iostat /= 0_I4P) return
+      i = i + 1_I4P
+   enddo
+   if (i > size(tokens, kind=I4P)) then
+      call fail('stats: a data file is expected', iostat, iomsg)
+      return
+   endif
+   if (.not. self%string_expression(tokens, i, file, iostat, iomsg)) then
+      iomsg = 'stats: '//iomsg
+      return
+   endif
+   if (len(file) == 0) file = self%previous_file
+   spec = ''
+   set_index = -1_I4P
+   every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+   prefix = 'STATS_'
+   output = .false.
+   i = i + 1_I4P
+   do while (i <= size(tokens, kind=I4P))
+      word = tokens(i)%text
+      if (keyword(word, 'using', 1_I4P)) then
+         if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+         call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+         if (iostat /= 0_I4P) return
+      elseif (keyword(word, 'index', 1_I4P)) then
+         if (.not. next_integer(tokens, i, set_index, iostat, iomsg, self%symbols)) return
+      elseif (keyword(word, 'every', 2_I4P)) then
+         if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+         call parse_every(word, every, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+      elseif (word == 'name' .or. keyword(word, 'prefix', 3_I4P)) then
+         i = i + 1_I4P
+         if (i > size(tokens, kind=I4P)) then
+            call fail('stats: name "prefix" expected', iostat, iomsg)
+            return
+         endif
+         if (.not. self%string_expression(tokens, i, prefix, iostat, iomsg)) then
+            iomsg = 'stats: name: '//iomsg
+            return
+         endif
+         if (len(prefix) == 0 .or. scan(prefix(1:1), '0123456789') > 0 .or. &
+             verify(prefix, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
+            call fail('stats: illegal prefix "'//prefix//'"', iostat, iomsg)
+            return
+         endif
+         if (prefix(len(prefix):len(prefix)) /= '_') prefix = prefix//'_'
+      elseif (keyword(word, 'output', 3_I4P)) then
+         output = .true.
+      elseif (keyword(word, 'nooutput', 5_I4P)) then
+         output = .false.
+      else
+         call fail('stats: unsupported option "'//word//'" (using, index, every, name, output, nooutput)', iostat, iomsg)
+         return
+      endif
+      i = i + 1_I4P
+   enddo
+   ! a missing file is not an error, as gnuplot's (a script may test for it): the variables are left as they are
+   inquire(file=file, exist=found)
+   if (.not. found) then
+      if (output) write(error_unit, '(A)') 'Cannot find or open file "'//file//'"'
+      return
+   endif
+   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments)
+   if (iostat /= 0_I4P) then
+      iomsg = 'stats: '//iomsg
+      return
+   endif
+   self%previous_file = file
+   if (.not. allocated(fields)) then
+      ! gnuplot: the first two columns if the first data line has both, else the first
+      if (data%nrows > 0_I4P) then
+         if (data%first(2) - data%first(1) >= 2_I4P) then
+            fields = plain_columns([1_I4P, 2_I4P])
+         else
+            fields = plain_columns([1_I4P])
+         endif
+      else
+         fields = plain_columns([1_I4P])
+      endif
+   endif
+   if (size(fields) > 2) then
+      call fail('stats: using N or N:M (one or two columns)', iostat, iomsg)
+      return
+   endif
+   two = size(fields) == 2
+   ! the point number as a last field: NaN only on the rows the table inserts at block breaks, not records
+   call point%set_column(0_I4P)
+   call push(fields, point)
+   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P))
+   ! the variables of an earlier stats with this prefix are forgotten first, as gnuplot
+   do k = 1_I4P, size(BASES, kind=I4P)
+      call self%symbols%remove(prefix//trim(BASES(k)))
+   enddo
+   do k = 1_I4P, size(BASES, kind=I4P)
+      call self%symbols%remove(prefix//trim(BASES(k))//'_x')
+      call self%symbols%remove(prefix//trim(BASES(k))//'_y')
+   enddo
+   allocate(keep(size(values, 1)))
+   r%invalid = 0_I4P
+   r%outofrange = 0_I4P
+   do k = 1_I4P, size(values, 1, kind=I4P)
+      keep(k) = .false.
+      if (.not. ieee_is_finite(values(k, size(values, 2)))) cycle
+      keep(k) = all(ieee_is_finite(values(k, 1:size(values, 2) - 1)))
+      if (.not. keep(k)) then
+         r%invalid = r%invalid + 1_I4P
+         cycle
+      endif
+      if (two) then
+         keep(k) = inside(values(k, 1), 1_I4P) .and. inside(values(k, 2), 2_I4P)
+      else
+         keep(k) = inside(values(k, 1), 2_I4P)
+      endif
+      if (.not. keep(k)) r%outofrange = r%outofrange + 1_I4P
+   enddo
+   if (count(keep) == 0) then
+      ! gnuplot: a warning, no variables
+      return
+   endif
+   if (two) then
+      x = pack(values(:, 1), keep)
+      y = pack(values(:, 2), keep)
+      block
+         type(stats_result) :: pair !< Pair statistics.
+
+         pair = stats(x, y)
+         call copy_counts(pair)
+      endblock
+   else
+      y = pack(values(:, 1), keep)
+      block
+         type(stats_result) :: single !< Column statistics.
+
+         single = stats(y)
+         call copy_counts(single)
+      endblock
+   endif
+   call file_counts
+   call set_int('records', r%records)
+   call set_int('invalid', r%invalid)
+   call set_int('headers', r%headers)
+   call set_int('blank', r%blank)
+   call set_int('blocks', r%blocks)
+   call set_int('outofrange', r%outofrange)
+   call set_int('columns', r%columns)
+   if (two) then
+      call set_column(r%x, '_x')
+      call set_column(r%y, '_y')
+      call set_real('slope', r%slope)
+      call set_real('intercept', r%intercept)
+      call set_real('slope_err', r%slope_err)
+      call set_real('intercept_err', r%intercept_err)
+      call set_real('correlation', r%correlation)
+      call set_real('sumxy', r%sumxy)
+      call set_real('pos_min_y', r%pos_min_y)
+      call set_real('pos_max_y', r%pos_max_y)
+   else
+      call set_column(r%y, '')
+   endif
+   if (.not. output) return
+   select case (self%print_file)
+   case ('')
+      call stats_report(r, int(error_unit, I4P), .true.)
+   case ('-')
+      call stats_report(r, int(output_unit, I4P), .true.)
+   case default
+      open(newunit=unit, file=self%print_file, position='append', action='write', iostat=iostat)
+      if (iostat /= 0_I4P) then
+         call fail('stats: cannot write "'//self%print_file//'"', iostat, iomsg)
+         return
+      endif
+      call stats_report(r, unit, .false.)
+      close(unit)
+   endselect
+   contains
+      subroutine stats_range(text, n)
+      !< Range `n` (1 x, 2 y) of the text `min:max`, either end empty or `*` for none.
+      character(len=*), intent(in) :: text  !< Range text.
+      integer(I4P),     intent(in) :: n     !< Axis.
+      integer(I4P)                 :: colon !< Separator.
+      integer(I4P)                 :: e     !< End.
+      character(len=:), allocatable :: part !< One end.
+
+      colon = index(text, ':', kind=I4P)
+      if (colon == 0_I4P) then
+         call fail('stats: a range is [min:max]', iostat, iomsg)
+         return
+      endif
+      do e = 1_I4P, 2_I4P
+         if (e == 1_I4P) then
+            part = trim(adjustl(text(1:colon - 1_I4P)))
+         else
+            part = trim(adjustl(text(colon + 1_I4P:)))
+         endif
+         if (len(part) == 0 .or. part == '*') cycle
+         call self%symbols%constant(part, ranges(e, n), iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'stats: range: '//iomsg
+            return
+         endif
+         limited(e, n) = .true.
+      enddo
+      endsubroutine stats_range
+
+      function inside(v, n) result(yes)
+      !< Whether `v` lies in range `n`, as gnuplot's validate_data (each end only if given).
+      real(R8P),    intent(in) :: v   !< Value.
+      integer(I4P), intent(in) :: n   !< Axis.
+      logical                  :: yes !< Inside.
+
+      yes = .true.
+      if (limited(1, n)) yes = v >= ranges(1, n)
+      if (limited(2, n) .and. yes) yes = v <= ranges(2, n)
+      endfunction inside
+
+      subroutine copy_counts(computed)
+      !< `r` from the computed statistics, the counts found here kept.
+      type(stats_result), intent(in) :: computed !< Statistics of the kept records.
+      integer(I4P)                   :: counts(2) !< Invalid and out of range.
+
+      counts = [r%invalid, r%outofrange]
+      r = computed
+      r%invalid = counts(1)
+      r%outofrange = counts(2)
+      endsubroutine copy_counts
+
+      subroutine file_counts
+      !< Blank lines and blocks of the file (a block ends at two blank lines), header records, columns: gnuplot's.
+      character(len=:), allocatable :: text  !< File content.
+      character(len=256)            :: line  !< One line.
+      integer(I4P)                  :: u     !< Unit.
+      integer(I4P)                  :: ios   !< Status.
+      integer(I4P)                  :: run   !< Consecutive blank lines.
+      integer(I4P)                  :: doubles !< Second blank lines.
+
+      r%blank = 0_I4P
+      doubles = 0_I4P
+      run = 0_I4P
+      open(newunit=u, file=file, action='read', iostat=ios)
+      if (ios == 0_I4P) then
+         do
+            read(u, '(A)', iostat=ios) line
+            if (ios /= 0_I4P) exit
+            text = trim(line)
+            if (len(trim(adjustl(text))) == 0 .or. text == achar(13)) then
+               r%blank = r%blank + 1_I4P
+               run = run + 1_I4P
+               if (run == 2_I4P) doubles = doubles + 1_I4P
+            else
+               run = 0_I4P
+            endif
+         enddo
+         close(u)
+      endif
+      r%blocks = doubles + 1_I4P
+      r%headers = merge(1_I4P, 0_I4P, any(fields%name_count() > 0_I4P))
+      r%columns = 0_I4P
+      if (data%nrows > 0_I4P) r%columns = data%first(2) - data%first(1)
+      endsubroutine file_counts
+
+      subroutine set_int(base, v)
+      !< Set the integer variable prefix//base.
+      character(len=*), intent(in) :: base !< Name after the prefix.
+      integer(I4P),     intent(in) :: v    !< Value.
+
+      call self%symbols%set_value(prefix//base, real(v, R8P), .true.)
+      endsubroutine set_int
+
+      subroutine set_real(base, v)
+      !< Set the real variable prefix//base.
+      character(len=*), intent(in) :: base !< Name after the prefix.
+      real(R8P),        intent(in) :: v    !< Value.
+
+      call self%symbols%set_value(prefix//base, v, .false.)
+      endsubroutine set_real
+
+      subroutine set_column(s, suffix)
+      !< The variables of one column, gnuplot's names with `suffix` (`_x`, `_y` or none).
+      type(stats_column), intent(in) :: s      !< Column statistics.
+      character(len=*),   intent(in) :: suffix !< Suffix.
+
+      call set_real('mean'//suffix, s%mean)
+      call set_real('stddev'//suffix, s%stddev)
+      call set_real('ssd'//suffix, s%ssd)
+      call set_real('skewness'//suffix, s%skewness)
+      call set_real('kurtosis'//suffix, s%kurtosis)
+      call set_real('adev'//suffix, s%adev)
+      call set_real('mean_err'//suffix, s%mean_err)
+      call set_real('stddev_err'//suffix, s%stddev_err)
+      call set_real('skewness_err'//suffix, s%skewness_err)
+      call set_real('kurtosis_err'//suffix, s%kurtosis_err)
+      call set_real('sum'//suffix, s%sum)
+      call set_real('sumsq'//suffix, s%sumsq)
+      call set_real('min'//suffix, s%min)
+      call set_real('max'//suffix, s%max)
+      call set_real('median'//suffix, s%median)
+      call set_real('lo_quartile'//suffix, s%lo_quartile)
+      call set_real('up_quartile'//suffix, s%up_quartile)
+      call set_int('index_min'//suffix, s%index_min)
+      call set_int('index_max'//suffix, s%index_max)
+      endsubroutine set_column
+   endsubroutine stats_command
 
    subroutine print_command(self, text, iostat, iomsg)
    !< gnuplot `print EXPRESSION, ...`: the values (strings as they are, numbers as gnuplot shows them) separated by a

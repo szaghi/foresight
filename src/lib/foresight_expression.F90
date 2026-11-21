@@ -184,6 +184,7 @@ type :: symbols_object
       procedure, pass(self) :: set_string !< Set a variable to a string.
       procedure, pass(self) :: save_variable !< Keep a variable's state.
       procedure, pass(self) :: restore  !< Restore a kept variable's state.
+      procedure, pass(self) :: remove   !< Forget a variable.
       procedure, pass(self) :: string_of !< Value of a string variable.
       procedure, pass(self) :: text_of  !< Value of a constant expression as text.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
@@ -1129,6 +1130,17 @@ contains
    enddo
    call move_alloc(kept, self%variables)
    endsubroutine restore
+
+   pure subroutine remove(self, name)
+   !< Forget the variable `name`, if it exists.
+   class(symbols_object), intent(inout) :: self  !< Symbols.
+   character(len=*),      intent(in)    :: name  !< Variable name.
+   type(saved_variable)                 :: none  !< A variable that did not exist.
+
+   none%name = name
+   none%found = .false.
+   call self%restore(none)
+   endsubroutine remove
 
    pure subroutine string_of(self, name, text, found)
    !< Value of the string variable `name`; `found` false (and `text` empty) if there is none or it is a number.
