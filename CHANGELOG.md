@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.11.0] — 2026-11-21
+### Added
+- **expression**: String values, as gnuplot 6.0
+
+- **script**: Print and set print, as gnuplot 6.0
+
+- **script**: String expressions wherever a string goes, as gnuplot 6.0
+
+- **script**: Do for, while, if/else, break and continue, as gnuplot 6.0
+
+- **script**: Plot for, as gnuplot 6.0
+
+- **stats**: Gnuplot's stats, in scripts and from Fortran
+
+
+### Documentation
+- Strings, print, blocks, plot for and stats
+
+
+### Fixed
+- **expression**: A syntax error ends the reader
+
+- **cli**: No output file reported for a script that plots nothing
+
+
 ## [0.10.0] — 2026-11-21
 ### Added
 - **axes**: Rotated x2 tick labels, as gnuplot 6.0
