@@ -21,11 +21,19 @@ module foresight_expression
 !< - compiled with `degrees` (gnuplot `set angles degrees`), `sin`, `cos`, `tan` take degrees and `asin`, `acos`,
 !<   `atan`, `atan2` return them.
 !<
+!< Strings, as gnuplot's: literals in double quotes (`\t`, `\n`, `\"`, `\\` escapes) or single quotes (literal), string
+!< user variables and functions; `a . b` joins (`b` a string or an integer), `eq` and `ne` compare, `s[i:j]` is a
+!< substring (1-based, ends clamped, `*` or nothing for an open end); `sprintf` (C conversions, from the exact binary
+!< value), `gprintf`, `strlen`, `substr`, `strstrt`, `words`, `word`, `trim`; `value("name")`, `exists("name")`
+!< (quoted names only). Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
+!< or where a number cannot be read, is an error of a constant expression and a gap on a data row.
+!<
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
 !< IEEE invalid, division by zero or overflow exception.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
-use foresight_format, only : real_from_decimal
+use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, gnuplot_real, &
+                             int_str, real_from_decimal
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -41,6 +49,7 @@ interface push
    module procedure push_variable
    module procedure push_function
    module procedure push_expression
+   module procedure push_instruction
 endinterface push
 
 ! operation codes
@@ -71,14 +80,35 @@ integer(I4P), parameter :: OP_OR_JUMP     = 24_I4P !< If the top is true: make i
 integer(I4P), parameter :: OP_COLUMN_NAMED = 25_I4P !< Push the column of header `names(arg)`: undefined until resolved.
 integer(I4P), parameter :: OP_LOAD         = 26_I4P !< Push a copy of stack slot `arg` (a user function argument).
 integer(I4P), parameter :: OP_COLLAPSE     = 27_I4P !< Drop the `arg` values under the top (a call's arguments).
+integer(I4P), parameter :: OP_CONCAT       = 28_I4P !< `.`: string join.
+integer(I4P), parameter :: OP_STREQ        = 29_I4P !< `eq`.
+integer(I4P), parameter :: OP_STRNE        = 30_I4P !< `ne`.
+integer(I4P), parameter :: OP_SUBSTRING    = 31_I4P !< `s[i:j]`: the string and both ends on the stack.
+integer(I4P), parameter :: OP_CALL         = 32_I4P !< String function `arg` of the top `v%i` values.
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
-character(len=*), parameter :: FUNCTIONS(18) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
+character(len=*), parameter :: FUNCTIONS(19) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
                                                 'cosh', 'exp', 'floor', 'int', 'log', 'log10', 'sgn', 'sin', 'sinh', &
-                                                'sqrt', 'tan', 'tanh']
+                                                'sqrt', 'tan', 'tanh', 'real']
+
+! functions of strings, the `OP_CALL` argument is the index; their least and most arguments
+character(len=*), parameter :: STRING_FUNCTIONS(8) = [character(len=7) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
+                                                      'strstrt', 'words', 'word', 'trim']
+integer(I4P),     parameter :: LEAST_ARGS(8) = [1_I4P, 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P]
+integer(I4P),     parameter :: MOST_ARGS(8)  = [huge(1_I4P), 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P]
+
+! errors of typed values (a constant expression reports them, a data row is undefined)
+integer(I4P), parameter :: E_NONE       = 0_I4P !< No error.
+integer(I4P), parameter :: E_NONNUMERIC = 1_I4P !< A string without a leading number in arithmetic.
+integer(I4P), parameter :: E_NOTSTRING  = 2_I4P !< A number given to a string operator or function.
+integer(I4P), parameter :: E_BOOLEAN    = 3_I4P !< A string as a condition.
+integer(I4P), parameter :: E_FORMAT     = 4_I4P !< A bad sprintf/gprintf format.
+integer(I4P), parameter :: E_STRING_ARG = 5_I4P !< A string printed with a numeric conversion.
+integer(I4P), parameter :: E_NUMBER_ARG = 6_I4P !< A number printed with `%s`.
 
 ! binary operator levels of the grammar, loosest first
-character(len=*), parameter :: LEVELS(6) = [character(len=11) :: '||', '&&', '== !=', '< <= > >=', '+ -', '* / %']
+character(len=*), parameter :: LEVELS(6) = [character(len=11) :: '||', '&&', '== != eq ne', '< <= > >=', '+ - .', &
+                                                '* / %']
 
 integer(I4P), parameter :: MAX_NESTING = 256_I4P                     !< Deepest parentheses and unary chains.
 integer(I8P), parameter :: MOST        = huge(1_I8P)                 !< Largest integer.
@@ -90,10 +120,12 @@ real(R8P),    parameter :: INT_LIMIT   = 2.0_R8P**63                 !< Reals fr
 real(R8P),    parameter :: PI          = acos(-1.0_R8P)              !< pi.
 
 type :: value_object
-   !< Stack value: an integer or a real, as in gnuplot.
-   real(R8P)    :: r      = 0.0_R8P !< Real value.
-   integer(I8P) :: i      = 0_I8P   !< Integer value.
-   logical      :: is_int = .false. !< Integer.
+   !< Stack value: an integer, a real or a string, as in gnuplot.
+   real(R8P)                     :: r         = 0.0_R8P !< Real value.
+   integer(I8P)                  :: i         = 0_I8P   !< Integer value.
+   logical                       :: is_int    = .false. !< Integer.
+   logical                       :: is_string = .false. !< String, in `s`.
+   character(len=:), allocatable :: s                   !< String value.
 endtype value_object
 
 type :: instruction_object
@@ -141,7 +173,11 @@ type :: symbols_object
       procedure, pass(self) :: define   !< `name(params) = body`.
       procedure, pass(self) :: value_of !< Value of a variable.
       procedure, pass(self) :: set_value !< Set a variable to a number.
+      procedure, pass(self) :: set_string !< Set a variable to a string.
+      procedure, pass(self) :: string_of !< Value of a string variable.
+      procedure, pass(self) :: text_of  !< Value of a constant expression as text.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
+      procedure, pass(self), private :: store          !< Set a variable to a typed value.
       procedure, pass(self), private :: variable_index !< Index of a variable, 0 if none.
 endtype symbols_object
 
@@ -267,7 +303,7 @@ contains
       integer(I4P)                :: ios     !< Conversion status.
       logical                     :: is_real !< Number with a point or an exponent.
       logical                     :: ok      !< Real conversion succeeded.
-      integer(I4P)                :: close   !< Closing quote, from the opening one.
+      character(len=1)            :: quote   !< Opening quote.
 
       if (iostat /= 0_I4P) return
       n = len(src, kind=I4P)
@@ -326,14 +362,33 @@ contains
          read(token(2:), *, iostat=ios) number%i
          if (ios /= 0_I4P .or. number%i > huge(1_I4P)) call syntax('column number too large')
       elseif (src(pos:pos) == '"' .or. src(pos:pos) == "'") then
+         ! single quotes literal, double quotes with gnuplot's escapes \t, \n and \ taking the next character
          kind = T_STRING
-         close = index(src(pos + 1_I4P:), src(pos:pos), kind=I4P)
-         if (close == 0_I4P) then
-            call syntax('unterminated string')
-            return
-         endif
-         token = src(pos + 1_I4P:pos + close - 1_I4P)
-         pos = pos + close + 1_I4P
+         quote = src(pos:pos)
+         token = ''
+         pos = pos + 1_I4P
+         do
+            if (pos > n) then
+               call syntax('unterminated string')
+               return
+            endif
+            if (src(pos:pos) == quote) exit
+            if (quote == '"' .and. src(pos:pos) == '\' .and. pos < n) then
+               pos = pos + 1_I4P
+               select case (src(pos:pos))
+               case ('t')
+                  token = token//achar(9)
+               case ('n')
+                  token = token//new_line('a')
+               case default
+                  token = token//src(pos:pos)
+               endselect
+            else
+               token = token//src(pos:pos)
+            endif
+            pos = pos + 1_I4P
+         enddo
+         pos = pos + 1_I4P
       elseif (scan(src(pos:pos), LETTERS) > 0) then
          kind = T_NAME
          call skip(LETTERS//DIGITS)
@@ -348,7 +403,7 @@ contains
             token = src(pos:pos)
             pos = pos + 1_I4P
             select case (token)
-            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',')
+            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']')
             case ('&', '|', '^', '~')
                call syntax('bitwise operator "'//token//'" not supported')
             case default
@@ -389,14 +444,18 @@ contains
       instruction%op = op
       if (present(arg)) instruction%arg = arg
       if (present(v)) instruction%v = v
-      self%code = [self%code, instruction]
+      call push(self%code, instruction)
       if (present(k)) k = size(self%code, kind=I4P)
       select case (op)
       case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD)
          depth = depth + 1_I4P
-      case (OP_ADD:OP_NE, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
+      case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
          ! the conditional jumps pop on the path that falls through
          depth = depth - 1_I4P
+      case (OP_SUBSTRING)
+         depth = depth - 2_I4P
+      case (OP_CALL)
+         depth = depth - (int(instruction%v%i, I4P) - 1_I4P)
       endselect
       self%depth = max(self%depth, depth)
       endsubroutine emit
@@ -458,7 +517,7 @@ contains
          return
       endif
       call parse_binary(level + 1_I4P)
-      do while (iostat == 0_I4P .and. kind == T_OPERATOR)
+      do while (iostat == 0_I4P .and. (kind == T_OPERATOR .or. kind == T_NAME))
          if (.not. in_level(token, level)) exit
          operator = token
          call next
@@ -503,11 +562,38 @@ contains
       !< primary [** unary]: right associative, tighter than a unary minus on its left.
 
       call parse_primary
+      do while (accept('['))
+         call parse_substring
+      enddo
       if (accept('**')) then
          call parse_unary
          call emit(OP_POWER)
       endif
       endsubroutine parse_power
+
+      recursive subroutine parse_substring
+      !< `[i:j]` after a string: either end may be `*` or nothing (the first or the last character).
+
+      if (iostat /= 0_I4P) return
+      if (kind == T_OPERATOR .and. token == ':') then
+         call emit(OP_CONSTANT, v=int_value(1_I8P))
+      elseif (accept('*')) then
+         call emit(OP_CONSTANT, v=int_value(1_I8P))
+      else
+         call parse_ternary
+      endif
+      call expect(':')
+      if (iostat /= 0_I4P) return
+      if (kind == T_OPERATOR .and. token == ']') then
+         call emit(OP_CONSTANT, v=int_value(MOST))
+      elseif (accept('*')) then
+         call emit(OP_CONSTANT, v=int_value(MOST))
+      else
+         call parse_ternary
+      endif
+      call expect(']')
+      call emit(OP_SUBSTRING)
+      endsubroutine parse_substring
 
       recursive subroutine parse_primary
       !< Number, column, constant, function call or parenthesized expression.
@@ -538,6 +624,13 @@ contains
             return
          endif
          call next
+         if ((name == 'value' .or. name == 'exists') .and. kind == T_STRING) then
+            call symbol_query(name)
+            return
+         elseif (name == 'value' .or. name == 'exists') then
+            call syntax(name//' takes a quoted variable name', at)
+            return
+         endif
          if (name == 'column' .and. kind == T_STRING) then
             if (present(variable)) then
                call syntax('columns are only valid in using, not in a function', at)
@@ -560,7 +653,19 @@ contains
          call expect(')')
          if (iostat /= 0_I4P) return
          f = findloc(FUNCTIONS, name, dim=1)
-         if (name == 'atan2') then
+         if (any(STRING_FUNCTIONS == name)) then
+            f = findloc(STRING_FUNCTIONS, name, dim=1)
+            if (nargs < LEAST_ARGS(f) .or. nargs > MOST_ARGS(f)) then
+               if (LEAST_ARGS(f) == MOST_ARGS(f)) then
+                  call syntax(name//' needs '//trim(adjustl(int_text(LEAST_ARGS(f))))//' argument'// &
+                              trim(merge('s', ' ', LEAST_ARGS(f) /= 1_I4P)), at)
+               else
+                  call syntax(name//' needs a format', at)
+               endif
+               return
+            endif
+            call emit(OP_CALL, arg=f, v=int_value(int(nargs, I8P)))
+         elseif (name == 'atan2') then
             if (nargs /= 2_I4P) call syntax('atan2 needs 2 arguments', at)
             call emit(OP_ATAN2)
          elseif (name == 'column' .and. present(variable)) then
@@ -568,7 +673,7 @@ contains
          elseif (name == 'column' .or. f > 0) then
             if (nargs /= 1_I4P) call syntax(name//' needs 1 argument', at)
             if (name == 'column') then
-               call emit(OP_COLUMN_OF)
+               call column_of
             else
                call emit(OP_FUNCTION, arg=f)
             endif
@@ -576,7 +681,8 @@ contains
             call user_call(name, nargs, at)
          endif
       case (T_STRING)
-         call syntax('a string is only valid as column("name")')
+         call emit(OP_CONSTANT, v=string_value(token))
+         call next
       case (T_OPERATOR)
          if (accept('(')) then
             call parse_ternary
@@ -588,6 +694,43 @@ contains
          call syntax('unexpected end')
       endselect
       endsubroutine parse_primary
+
+      subroutine column_of
+      !< `column(...)`: of a string constant (a user variable), the column of that header, as `column("name")`.
+      integer(I4P) :: last !< Last instruction.
+
+      last = size(self%code, kind=I4P)
+      if (last > 0_I4P) then
+         if (self%code(last)%op == OP_CONSTANT .and. self%code(last)%v%is_string) then
+            call push(self%names, name_object(self%code(last)%v%s))
+            self%code(last)%op = OP_COLUMN_NAMED
+            self%code(last)%arg = size(self%names, kind=I4P)
+            self%code(last)%v = value_object()
+            return
+         endif
+      endif
+      call emit(OP_COLUMN_OF)
+      endsubroutine column_of
+
+      subroutine symbol_query(name)
+      !< `value("name")` (the variable's value, NaN if none) or `exists("name")` (1 or 0), resolved now: the current
+      !< token is the quoted name.
+      character(len=*), intent(in) :: name !< `value` or `exists`.
+      integer(I4P)                 :: k    !< Variable index.
+
+      k = 0_I4P
+      if (present(symbols)) k = symbols%variable_index(token)
+      call next
+      call expect(')')
+      if (iostat /= 0_I4P) return
+      if (name == 'exists') then
+         call emit(OP_CONSTANT, v=logical_value(k > 0_I4P))
+      elseif (k > 0_I4P) then
+         call emit(OP_CONSTANT, v=symbols%variables(k)%v)
+      else
+         call emit(OP_CONSTANT, v=value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan)))
+      endif
+      endsubroutine symbol_query
 
       function is_variable(name) result(yes)
       !< Whether `name` is the dummy variable (not seen inside a user function body).
@@ -736,8 +879,8 @@ contains
    endsubroutine compile_expression
 
    subroutine assign(self, name, text, iostat, iomsg, degrees)
-   !< gnuplot `name = text`: the value of the expression now, integer or real, kept as a constant (a redefinition
-   !< replaces it). Columns, undefined values (`1/0`) and bad names are errors.
+   !< gnuplot `name = text`: the value of the expression now, integer, real or string, kept as a constant (a
+   !< redefinition replaces it). Columns, undefined values (`1/0`), type errors and bad names are errors.
    class(symbols_object),         intent(inout)        :: self    !< Symbols.
    character(len=*),              intent(in)           :: name    !< Variable name.
    character(len=*),              intent(in)           :: text    !< Expression.
@@ -747,7 +890,7 @@ contains
    type(expression_object)                             :: e       !< Compiled expression.
    type(value_object)                                  :: v       !< Value.
    logical                                             :: defined !< Defined.
-   integer(I4P)                                        :: k       !< Variable index.
+   integer(I4P)                                        :: error   !< Type error.
 
    call check_name(name, iostat, iomsg)
    if (iostat /= 0_I4P) return
@@ -759,19 +902,17 @@ contains
       iomsg = 'columns are only valid in using, not in "'//name//' = '//text//'"'
       return
    endif
-   call run(e, [real(R8P) ::], 0_I4P, v, defined)
+   call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
    if (.not. defined) then
       iostat = 1_I4P
-      iomsg = 'undefined value: '//name//' = '//text
+      if (error /= E_NONE) then
+         iomsg = error_text(error)//': '//name//' = '//text
+      else
+         iomsg = 'undefined value: '//name//' = '//text
+      endif
       return
    endif
-   if (.not. allocated(self%variables)) allocate(self%variables(0))
-   k = self%variable_index(name)
-   if (k > 0_I4P) then
-      self%variables(k)%v = v
-   else
-      call push(self%variables, user_variable(name=name, v=v))
-   endif
+   call self%store(name, v)
    endsubroutine assign
 
    subroutine define(self, name, params, body, iostat, iomsg)
@@ -791,7 +932,8 @@ contains
 
    call check_name(name, iostat, iomsg)
    if (iostat /= 0_I4P) return
-   if (any(FUNCTIONS == name) .or. name == 'atan2' .or. name == 'column') then
+   if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. name == 'atan2' .or. name == 'column' .or. &
+       name == 'value' .or. name == 'exists') then
       iostat = 1_I4P
       iomsg = '"'//name//'" is a builtin function'
       return
@@ -839,6 +981,7 @@ contains
    type(expression_object)                             :: e       !< Compiled expression.
    type(value_object)                                  :: value   !< Typed value.
    logical                                             :: defined !< Defined.
+   integer(I4P)                                        :: error   !< Type error.
 
    v = 0.0_R8P
    call e%compile(text, iostat, iomsg, degrees=degrees, symbols=self)
@@ -848,14 +991,57 @@ contains
       iomsg = 'columns are only valid in using, not in "'//text//'"'
       return
    endif
-   call run(e, [real(R8P) ::], 0_I4P, value, defined)
+   call run(e, [real(R8P) ::], 0_I4P, value, defined, error)
+   if (defined .and. value%is_string) call numeric(value, defined, error)
    if (.not. defined) then
       iostat = 1_I4P
-      iomsg = 'undefined value: '//text
+      if (error /= E_NONE) then
+         iomsg = error_text(error)//': '//text
+      else
+         iomsg = 'undefined value: '//text
+      endif
       return
    endif
    v = real_of(value)
    endsubroutine constant
+
+   subroutine text_of(self, text, value, is_string, iostat, iomsg, degrees)
+   !< Value of the constant expression `text` as text: a string as it is (`is_string`), a number as gnuplot's `print`
+   !< shows it (`3`, `2.5`, `100.0`, `1e+20`). Columns, undefined values and type errors are errors.
+   class(symbols_object),         intent(in)           :: self      !< Symbols.
+   character(len=*),              intent(in)           :: text      !< Expression.
+   character(len=:), allocatable, intent(out)          :: value     !< Value as text.
+   logical,                       intent(out)          :: is_string !< A string.
+   integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
+   logical,                       intent(in), optional :: degrees   !< Angles in degrees.
+   type(expression_object)                             :: e         !< Compiled expression.
+   type(value_object)                                  :: v         !< Typed value.
+   logical                                             :: defined   !< Defined.
+   integer(I4P)                                        :: error     !< Type error.
+
+   value = ''
+   is_string = .false.
+   call e%compile(text, iostat, iomsg, degrees=degrees, symbols=self)
+   if (iostat /= 0_I4P) return
+   if (any(e%code%op == OP_COLUMN) .or. any(e%code%op == OP_COLUMN_OF) .or. size(e%names) > 0) then
+      iostat = 1_I4P
+      iomsg = 'columns are only valid in using, not in "'//text//'"'
+      return
+   endif
+   call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
+   if (.not. defined) then
+      iostat = 1_I4P
+      if (error /= E_NONE) then
+         iomsg = error_text(error)//': '//text
+      else
+         iomsg = 'undefined value: '//text
+      endif
+      return
+   endif
+   is_string = v%is_string
+   value = number_text(v)
+   endsubroutine text_of
 
    pure subroutine clear(self)
    !< Forget every variable and function.
@@ -873,8 +1059,6 @@ contains
    real(R8P),             intent(in)    :: v      !< Value.
    logical,               intent(in)    :: is_int !< Integer value.
    type(value_object)                   :: value  !< Value.
-   integer(I4P)                         :: k      !< Index.
-
    value%is_int = is_int
    if (is_int) then
       value%i = nint(v, I8P)
@@ -882,14 +1066,53 @@ contains
    else
       value%r = v
    endif
+   call self%store(name, value)
+   endsubroutine set_value
+
+   pure subroutine set_string(self, name, text)
+   !< Set the variable `name` to the string `text`, creating it. The name is not checked.
+   class(symbols_object), intent(inout) :: self !< Symbols.
+   character(len=*),      intent(in)    :: name !< Variable name.
+   character(len=*),      intent(in)    :: text !< Value.
+
+   call self%store(name, string_value(text))
+   endsubroutine set_string
+
+   pure subroutine string_of(self, name, text, found)
+   !< Value of the string variable `name`; `found` false (and `text` empty) if there is none or it is a number.
+   class(symbols_object),         intent(in)  :: self  !< Symbols.
+   character(len=*),              intent(in)  :: name  !< Variable name.
+   character(len=:), allocatable, intent(out) :: text  !< Value.
+   logical,                       intent(out) :: found !< A string variable found.
+   integer(I4P)                               :: k     !< Index.
+
+   text = ''
+   k = self%variable_index(name)
+   found = k > 0_I4P
+   if (.not. found) return
+   found = self%variables(k)%v%is_string
+   if (found) text = self%variables(k)%v%s
+   endsubroutine string_of
+
+   pure subroutine store(self, name, v)
+   !< Set the variable `name` to `v`, creating it (by components: nvfortran 26.9 corrupts constructors of types holding
+   !< deferred-length characters).
+   class(symbols_object), intent(inout) :: self !< Symbols.
+   character(len=*),      intent(in)    :: name !< Variable name.
+   type(value_object),    intent(in)    :: v    !< Value.
+   type(user_variable)                  :: item !< New variable.
+   integer(I4P)                         :: k    !< Index.
+
    if (.not. allocated(self%variables)) allocate(self%variables(0))
    k = self%variable_index(name)
    if (k > 0_I4P) then
-      self%variables(k)%v = value
+      self%variables(k)%v = v
    else
-      call push(self%variables, user_variable(name=name, v=value))
+      item%name = name
+      item%v = v
+      call push(self%variables, item)
    endif
-   endsubroutine set_value
+   endsubroutine store
 
    pure subroutine value_of(self, name, v, found, is_int)
    !< Value of the variable `name` (real), `found` false (and NaN) if none; `is_int` whether an integer.
@@ -905,6 +1128,21 @@ contains
    k = self%variable_index(name)
    found = k > 0_I4P
    if (.not. found) return
+   if (self%variables(k)%v%is_string) then
+      ! a string variable: its leading number, NaN if none
+      block
+         type(value_object) :: number !< Its number.
+         logical            :: ok     !< A number read.
+         integer(I4P)       :: err    !< Type error.
+
+         number = self%variables(k)%v
+         ok = .true.
+         call numeric(number, ok, err)
+         if (ok) v = real_of(number)
+         if (present(is_int)) is_int = ok .and. number%is_int
+      endblock
+      return
+   endif
    v = real_of(self%variables(k)%v)
    if (present(is_int)) is_int = self%variables(k)%v%is_int
    endsubroutine value_of
@@ -947,28 +1185,36 @@ contains
    real(R8P)                            :: v       !< Value.
    type(value_object)                   :: top     !< Typed value.
    logical                              :: defined !< Defined.
+   integer(I4P)                         :: err     !< Type error.
 
    v = ieee_value(1.0_R8P, ieee_quiet_nan)
    call run(self, row, point, top, defined)
+   if (defined .and. top%is_string) call numeric(top, defined, err)
    if (defined) v = real_of(top)
    endfunction evaluate
 
-   pure subroutine run(self, row, point, top, defined)
-   !< Run the stack code on a data row: `top` is the typed value, `defined` false if undefined.
-   class(expression_object), intent(in)  :: self                           !< Expression.
-   real(R8P),                intent(in)  :: row(:)                         !< Row cells.
-   integer(I4P),             intent(in)  :: point                          !< Point number.
-   type(value_object),       intent(out) :: top                            !< Value.
-   logical,                  intent(out) :: defined                        !< Defined.
-   type(value_object)                   :: stack(max(1_I4P, self%depth)) !< Operand stack.
-   type(value_object)                   :: result                         !< Operation result.
-   integer(I8P)                         :: c                              !< Column number.
-   integer(I4P)                         :: pc                             !< Next instruction.
-   integer(I4P)                         :: sp                             !< Stack top.
-   logical                              :: ok                             !< Defined.
+   pure subroutine run(self, row, point, top, defined, error)
+   !< Run the stack code on a data row: `top` is the typed value, `defined` false if undefined; `error` the type error
+   !< that made it undefined (E_NONE if none: a missing cell, a domain error).
+   class(expression_object), intent(in)            :: self                 !< Expression.
+   real(R8P),                intent(in)            :: row(:)               !< Row cells.
+   integer(I4P),             intent(in)            :: point                !< Point number.
+   type(value_object),       intent(out)           :: top                  !< Value.
+   logical,                  intent(out)           :: defined              !< Defined.
+   integer(I4P),             intent(out), optional :: error                !< Type error.
+   type(value_object)             :: stack(max(1_I4P, self%depth)) !< Operand stack.
+   type(value_object)             :: result                         !< Operation result.
+   integer(I8P)                   :: c                              !< Column number.
+   integer(I4P)                   :: pc                             !< Next instruction.
+   integer(I4P)                   :: sp                             !< Stack top.
+   integer(I4P)                   :: n                              !< Arguments of a call.
+   integer(I4P)                   :: err                            !< Type error.
+   logical                        :: ok                             !< Defined.
 
    top = value_object()
    defined = .false.
+   if (present(error)) error = E_NONE
+   err = E_NONE
    sp = 0_I4P
    pc = 1_I4P
    ok = .true.
@@ -988,29 +1234,55 @@ contains
             call column(-1_I8P, stack(sp), ok)
          case (OP_COLUMN_OF)
             c = -1_I8P
-            if (stack(sp)%is_int) then
+            if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
+            if (.not. ok) then
+               c = -1_I8P
+            elseif (stack(sp)%is_int) then
                c = stack(sp)%i
             elseif (abs(stack(sp)%r) < INT_LIMIT) then
                c = int(stack(sp)%r, I8P)
             endif
             call column(c, stack(sp), ok)
          case (OP_NEGATE)
-            if (stack(sp)%is_int .and. stack(sp)%i /= LEAST) then
+            if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
+            if (.not. ok) then
+               continue
+            elseif (stack(sp)%is_int .and. stack(sp)%i /= LEAST) then
                stack(sp)%i = -stack(sp)%i
             else
                stack(sp) = value_object(r=-real_of(stack(sp)))
             endif
          case (OP_NOT)
-            stack(sp) = logical_value(.not. truth(stack(sp)))
+            call condition(stack(sp), ok, err)
+            if (ok) stack(sp) = logical_value(.not. truth(stack(sp)))
          case (OP_TRUTH)
-            stack(sp) = logical_value(truth(stack(sp)))
+            call condition(stack(sp), ok, err)
+            if (ok) stack(sp) = logical_value(truth(stack(sp)))
          case (OP_ADD:OP_NE)
-            call binary(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok)
+            if (stack(sp - 1_I4P)%is_string) call numeric(stack(sp - 1_I4P), ok, err)
+            if (stack(sp)%is_string .and. ok) call numeric(stack(sp), ok, err)
+            if (ok) call binary(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok)
             if (self%degrees .and. instruction%op == OP_ATAN2 .and. ok) result%r = result%r * (180.0_R8P / PI)
             sp = sp - 1_I4P
             stack(sp) = result
+         case (OP_CONCAT:OP_STRNE)
+            call string_binary(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok, err)
+            sp = sp - 1_I4P
+            stack(sp) = result
+         case (OP_SUBSTRING)
+            call substring(stack(sp - 2_I4P), stack(sp - 1_I4P), stack(sp), result, ok, err)
+            sp = sp - 2_I4P
+            stack(sp) = result
+         case (OP_CALL)
+            n = int(instruction%v%i, I4P)
+            call string_function(instruction%arg, stack(sp - n + 1_I4P:sp), result, ok, err)
+            sp = sp - n + 1_I4P
+            stack(sp) = result
          case (OP_FUNCTION)
-            if (self%degrees) then
+            if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
+            if (.not. ok) then
+               continue
+            elseif (self%degrees) then
                call unary_degrees(instruction%arg, stack(sp), result, ok)
             else
                call unary(instruction%arg, stack(sp), result, ok)
@@ -1019,17 +1291,28 @@ contains
          case (OP_JUMP)
             pc = instruction%arg
          case (OP_JUMP_UNLESS)
-            if (.not. truth(stack(sp))) pc = instruction%arg
+            call condition(stack(sp), ok, err)
+            if (.not. ok) then
+               continue
+            elseif (.not. truth(stack(sp))) then
+               pc = instruction%arg
+            endif
             sp = sp - 1_I4P
          case (OP_AND_JUMP)
-            if (.not. truth(stack(sp))) then
+            call condition(stack(sp), ok, err)
+            if (.not. ok) then
+               continue
+            elseif (.not. truth(stack(sp))) then
                stack(sp) = logical_value(.false.)
                pc = instruction%arg
             else
                sp = sp - 1_I4P
             endif
          case (OP_OR_JUMP)
-            if (truth(stack(sp))) then
+            call condition(stack(sp), ok, err)
+            if (.not. ok) then
+               continue
+            elseif (truth(stack(sp))) then
                stack(sp) = logical_value(.true.)
                pc = instruction%arg
             else
@@ -1043,7 +1326,10 @@ contains
             sp = sp - instruction%arg
          endselect
       endassociate
-      if (.not. ok) return
+      if (.not. ok) then
+         if (present(error)) error = err
+         return
+      endif
    enddo
    if (sp == 1_I4P) then
       top = stack(1)
@@ -1167,7 +1453,7 @@ contains
    integer(I4P),             intent(in)    :: c    !< Column.
 
    self%text = ''
-   self%code = [instruction_object(op=OP_COLUMN, arg=c)]
+   call single_instruction(self, OP_COLUMN, c)
    if (allocated(self%names)) deallocate(self%names)
    allocate(self%names(0))
    self%depth = 1_I4P
@@ -1179,10 +1465,25 @@ contains
    character(len=*),         intent(in)    :: name !< Column header name.
 
    self%text = ''
-   self%code = [instruction_object(op=OP_COLUMN_NAMED, arg=1_I4P)]
+   call single_instruction(self, OP_COLUMN_NAMED, 1_I4P)
    self%names = [name_object(name)]
    self%depth = 1_I4P
    endsubroutine set_name
+
+   pure subroutine single_instruction(self, op, arg)
+   !< Make the code the one instruction `op arg` (by components: nvfortran 26.9 crashes copying an array constructor
+   !< of a structure constructor whose components hold a deferred-length character, `[instruction_object(...)]`).
+   class(expression_object), intent(inout) :: self        !< Expression.
+   integer(I4P),             intent(in)    :: op          !< Operation code.
+   integer(I4P),             intent(in)    :: arg         !< Argument.
+   type(instruction_object)                :: instruction !< The instruction.
+
+   instruction%op = op
+   instruction%arg = arg
+   if (allocated(self%code)) deallocate(self%code)
+   allocate(self%code(1))
+   self%code(1) = instruction
+   endsubroutine single_instruction
 
    pure function value_at(self, x) result(v)
    !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.
@@ -1246,6 +1547,12 @@ contains
       op = OP_GE
    case ('==')
       op = OP_EQ
+   case ('.')
+      op = OP_CONCAT
+   case ('eq')
+      op = OP_STREQ
+   case ('ne')
+      op = OP_STRNE
    case default
       op = OP_NE
    endselect
@@ -1532,6 +1839,8 @@ contains
       c%r = atan(x)
    case ('tanh')
       c%r = tanh(x)
+   case ('real')
+      c%r = x
    endselect
    endsubroutine unary
 
@@ -1593,6 +1902,566 @@ contains
    if (y * t > LOG_TINY) z = abs(x)**y
    if (odd) z = -z
    endsubroutine safe_power
+
+   pure function string_value(text) result(a)
+   !< String value.
+   character(len=*), intent(in) :: text !< Text.
+   type(value_object)           :: a    !< Value.
+
+   a%is_string = .true.
+   a%s = text
+   endfunction string_value
+
+   pure function number_text(a) result(text)
+   !< `a` as text: a string as it is, an integer in decimal, a real as gnuplot's `print` (`%.15g`, `.0` if integral).
+   type(value_object), intent(in) :: a    !< Value.
+   character(len=:), allocatable  :: text !< Text.
+
+   if (a%is_string) then
+      text = a%s
+   elseif (a%is_int) then
+      text = int_str(a%i)
+   else
+      text = gnuplot_real(a%r)
+   endif
+   endfunction number_text
+
+   pure function error_text(error) result(text)
+   !< Message of a type error.
+   integer(I4P), intent(in)      :: error !< Error code.
+   character(len=:), allocatable :: text  !< Message.
+
+   select case (error)
+   case (E_NONNUMERIC)
+      text = 'non-numeric string found where a numeric expression was expected'
+   case (E_NOTSTRING)
+      text = 'a string operator or function applied to a number'
+   case (E_BOOLEAN)
+      text = 'a string used as a condition'
+   case (E_FORMAT)
+      text = 'unsupported or invalid format specifier'
+   case (E_STRING_ARG)
+      text = 'sprintf: a string printed with a numeric format'
+   case (E_NUMBER_ARG)
+      text = 'sprintf: a number printed with a string format'
+   case default
+      text = 'undefined value'
+   endselect
+   endfunction error_text
+
+   pure subroutine numeric(a, ok, error)
+   !< Replace the string `a` by its leading number, as gnuplot reads a string in arithmetic: blanks, a sign, `0x` and hex
+   !< digits, or digits with a point and a lower case `e` exponent (an integer without point nor exponent); the rest is
+   !< ignored. No number: `ok` false, E_NONNUMERIC.
+   type(value_object), intent(inout) :: a     !< Value.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+   character(len=:), allocatable     :: t     !< The string.
+   integer(I4P)                      :: i     !< Character counter.
+   integer(I4P)                      :: first !< Number start.
+   integer(I4P)                      :: j     !< Exponent start.
+   integer(I4P)                      :: n     !< Length.
+   integer(I4P)                      :: ndigits !< Digits read.
+   integer(I4P)                      :: lead    !< Integer digits, leading zeros excluded.
+   integer(I4P)                      :: x       !< Exponent part.
+   integer(I4P)                      :: ios   !< Conversion status.
+   integer(I8P)                      :: h     !< Hexadecimal value.
+   logical                           :: is_real !< Point or exponent.
+   logical                           :: minus !< Negative.
+
+   if (.not. a%is_string) return
+   t = a%s
+   a = value_object()
+   n = len(t, kind=I4P)
+   i = 1_I4P
+   do while (i <= n)
+      if (scan(t(i:i), ' '//achar(9)//new_line('a')) == 0) exit
+      i = i + 1_I4P
+   enddo
+   first = i
+   minus = .false.
+   if (i <= n) then
+      if (scan(t(i:i), '+-') > 0) then
+         minus = t(i:i) == '-'
+         i = i + 1_I4P
+      endif
+   endif
+   if (i + 1_I4P < n) then
+      if ((t(i:i + 1_I4P) == '0x' .or. t(i:i + 1_I4P) == '0X') .and. &
+          scan(t(i + 2_I4P:i + 2_I4P), '0123456789abcdefABCDEF') > 0) then
+         i = i + 2_I4P
+         h = 0_I8P
+         do while (i <= n)
+            if (scan(t(i:i), '0123456789abcdefABCDEF') == 0) exit
+            if (h > MOST / 16_I8P) then
+               ok = .false.
+               error = E_NONNUMERIC
+               return
+            endif
+            h = h * 16_I8P + int(index('0123456789abcdef', to_lower(t(i:i))) - 1, I8P)
+            i = i + 1_I4P
+         enddo
+         if (minus) h = -h
+         a = int_value(h)
+         return
+      endif
+   endif
+   ndigits = 0_I4P
+   lead = 0_I4P
+   x = 0_I4P
+   is_real = .false.
+   do while (i <= n)
+      if (scan(t(i:i), '0123456789') == 0) exit
+      ndigits = ndigits + 1_I4P
+      if (lead > 0_I4P .or. t(i:i) /= '0') lead = lead + 1_I4P
+      i = i + 1_I4P
+   enddo
+   if (i <= n) then
+      if (t(i:i) == '.') then
+         is_real = .true.
+         i = i + 1_I4P
+         do while (i <= n)
+            if (scan(t(i:i), '0123456789') == 0) exit
+            ndigits = ndigits + 1_I4P
+            i = i + 1_I4P
+         enddo
+      endif
+   endif
+   if (ndigits == 0_I4P) then
+      ok = .false.
+      error = E_NONNUMERIC
+      return
+   endif
+   if (i < n) then
+      if (t(i:i) == 'e') then
+         if (scan(t(i + 1_I4P:i + 1_I4P), '0123456789') > 0) then
+            is_real = .true.
+            i = i + 1_I4P
+         elseif (i + 1_I4P < n .and. scan(t(i + 1_I4P:i + 1_I4P), '+-') > 0) then
+            if (scan(t(i + 2_I4P:i + 2_I4P), '0123456789') > 0) then
+               is_real = .true.
+               i = i + 2_I4P
+            endif
+         endif
+         if (is_real) then
+            j = i
+            do while (i <= n)
+               if (scan(t(i:i), '0123456789') == 0) exit
+               i = i + 1_I4P
+            enddo
+            ! the exponent, capped: only its size matters below
+            if (i - j > 4_I4P) then
+               x = 9999_I4P
+            else
+               read(t(j:i - 1_I4P), *) x
+            endif
+            if (t(j - 1_I4P:j - 1_I4P) == '-') x = -x
+         endif
+      endif
+   endif
+   ios = 1_I4P
+   if (.not. is_real) then
+      read(t(first:i - 1_I4P), *, iostat=ios) a%i
+      a%is_int = ios == 0_I4P
+   endif
+   if (ios /= 0_I4P) then
+      ! an internal read cannot overflow once the decimal exponent is in range: beyond it, undefined, as an overflow
+      if (lead + x > 308_I4P) then
+         ok = .false.
+      elseif (lead + x < -340_I4P) then
+         a%r = 0.0_R8P
+      else
+         read(t(first:i - 1_I4P), *, iostat=ios) a%r
+         ok = ios == 0_I4P
+      endif
+      if (.not. ok) error = E_NONNUMERIC
+   endif
+   endsubroutine numeric
+
+   pure subroutine condition(a, ok, error)
+   !< A condition must be a number: a string is an error (gnuplot: non-integer passed to boolean operator).
+   type(value_object), intent(in)    :: a     !< Value.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+
+   if (a%is_string) then
+      ok = .false.
+      error = E_BOOLEAN
+   endif
+   endsubroutine condition
+
+   pure subroutine string_binary(op, a, b, c, ok, error)
+   !< c = a . b (`a` a string, `b` a string or an integer), a eq b, a ne b (strings).
+   integer(I4P),       intent(in)    :: op    !< Operation code.
+   type(value_object), intent(in)    :: a     !< Left operand.
+   type(value_object), intent(in)    :: b     !< Right operand.
+   type(value_object), intent(out)   :: c     !< Result.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+
+   c = value_object()
+   if (.not. a%is_string) then
+      ok = .false.
+   elseif (op == OP_CONCAT) then
+      if (b%is_string) then
+         c = string_value(a%s//b%s)
+      elseif (b%is_int) then
+         c = string_value(a%s//int_str(b%i))
+      else
+         ok = .false.
+      endif
+   elseif (.not. b%is_string) then
+      ok = .false.
+   else
+      c = logical_value((a%s == b%s .and. len(a%s) == len(b%s)) .eqv. op == OP_STREQ)
+   endif
+   if (.not. ok) error = E_NOTSTRING
+   endsubroutine string_binary
+
+   pure subroutine substring(a, first, last, c, ok, error)
+   !< c = a[first:last], 1-based, the ends clamped to the string, empty if they cross.
+   type(value_object), intent(in)    :: a     !< String.
+   type(value_object), intent(in)    :: first !< First character.
+   type(value_object), intent(in)    :: last  !< Last character.
+   type(value_object), intent(out)   :: c     !< Result.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+   integer(I8P)                      :: i     !< First, clamped.
+   integer(I8P)                      :: j     !< Last, clamped.
+
+   c = value_object()
+   if (.not. a%is_string) then
+      ok = .false.
+      error = E_NOTSTRING
+      return
+   endif
+   call whole(first, i, ok, error)
+   call whole(last, j, ok, error)
+   if (.not. ok) return
+   i = max(1_I8P, i)
+   j = min(int(len(a%s), I8P), j)
+   if (i > j) then
+      c = string_value('')
+   else
+      c = string_value(a%s(i:j))
+   endif
+   endsubroutine substring
+
+   pure subroutine whole(a, i, ok, error)
+   !< Integer value of `a` (a real truncated, a string read as a number), for indices and counts.
+   type(value_object), intent(in)    :: a     !< Value.
+   integer(I8P),       intent(out)   :: i     !< Integer.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+   type(value_object)                :: b     !< Number.
+
+   i = 0_I8P
+   b = a
+   if (b%is_string) call numeric(b, ok, error)
+   if (.not. ok) return
+   if (b%is_int) then
+      i = b%i
+   elseif (abs(b%r) < INT_LIMIT) then
+      i = int(b%r, I8P)
+   elseif (b%r > 0.0_R8P) then
+      i = MOST
+   else
+      i = LEAST
+   endif
+   endsubroutine whole
+
+   pure subroutine string_function(f, args, c, ok, error)
+   !< c = STRING_FUNCTIONS(f)(args), as gnuplot's.
+   integer(I4P),       intent(in)    :: f       !< Function index.
+   type(value_object), intent(in)    :: args(:) !< Arguments.
+   type(value_object), intent(out)   :: c       !< Result.
+   logical,            intent(inout) :: ok      !< Defined.
+   integer(I4P),       intent(inout) :: error   !< Type error.
+   character(len=:), allocatable     :: label   !< gprintf text.
+   character(len=:), allocatable     :: sup     !< gprintf superscript.
+   integer(I8P)                      :: n       !< Integer argument.
+   integer(I8P)                      :: mant    !< gprintf mantissa.
+   integer(I4P)                      :: e       !< gprintf exponent.
+   type(value_object)                :: x       !< Numeric argument.
+
+   c = value_object()
+   ! the string arguments (sprintf and gprintf check their own)
+   select case (trim(STRING_FUNCTIONS(f)))
+   case ('strlen', 'substr', 'words', 'word', 'trim')
+      ok = args(1)%is_string
+   case ('strstrt')
+      ok = args(1)%is_string .and. args(2)%is_string
+   endselect
+   if (.not. ok) then
+      error = E_NOTSTRING
+      return
+   endif
+   select case (trim(STRING_FUNCTIONS(f)))
+   case ('sprintf')
+      call sprintf_value(args, c, ok, error)
+   case ('gprintf')
+      if (.not. args(1)%is_string) then
+         ok = .false.
+         error = E_NOTSTRING
+         return
+      endif
+      if (len(format_check(args(1)%s)) > 0) then
+         ok = .false.
+         error = E_FORMAT
+         return
+      endif
+      x = args(2)
+      if (x%is_string) call numeric(x, ok, error)
+      if (.not. ok) return
+      call decimal_of(real_of(x), mant, e)
+      call format_decimal(args(1)%s, mant, e, label, sup)
+      if (len(sup) > 0) label = label//'^'//sup
+      c = string_value(label)
+   case ('strlen')
+      c = int_value(int(len(args(1)%s), I8P))
+   case ('substr')
+      call substring(args(1), args(2), args(3), c, ok, error)
+   case ('strstrt')
+      c = int_value(int(index(args(1)%s, args(2)%s), I8P))
+   case ('words')
+      c = int_value(int(count_words(args(1)%s), I8P))
+   case ('word')
+      call whole(args(2), n, ok, error)
+      if (ok) c = string_value(nth_word(args(1)%s, n))
+   case ('trim')
+      c = string_value(trim_blanks(args(1)%s))
+   endselect
+   endsubroutine string_function
+
+   pure subroutine sprintf_value(args, c, ok, error)
+   !< gnuplot's `sprintf(format, ...)`: each C conversion takes the next argument (`%s` a string, the others a number:
+   !< `d i u o x X c` its integer part, `f F e E g G` its real value), `%%` is `%`; once the arguments are used up the
+   !< rest of the format is copied as it is, extra arguments are ignored.
+   type(value_object), intent(in)    :: args(:) !< Format and values.
+   type(value_object), intent(out)   :: c       !< Result.
+   logical,            intent(inout) :: ok      !< Defined.
+   integer(I4P),       intent(inout) :: error   !< Type error.
+   character(len=:), allocatable     :: format  !< Format.
+   character(len=:), allocatable     :: text    !< Result text.
+   character(len=:), allocatable     :: flags   !< Conversion flags.
+   character(len=1)                  :: type    !< Conversion type.
+   integer(I4P)                      :: width   !< Field width.
+   integer(I4P)                      :: prec    !< Precision, -1 if absent.
+   integer(I4P)                      :: i       !< Format position.
+   integer(I4P)                      :: j       !< Field start.
+   integer(I4P)                      :: k       !< Next argument.
+   integer(I8P)                      :: v       !< Integer value.
+   type(value_object)                :: x       !< Argument.
+
+   c = value_object()
+   if (.not. args(1)%is_string) then
+      ok = .false.
+      error = E_NOTSTRING
+      return
+   endif
+   format = args(1)%s
+   text = ''
+   k = 2_I4P
+   i = 1_I4P
+   do while (i <= len(format, kind=I4P))
+      if (format(i:i) /= '%') then
+         text = text//format(i:i)
+         i = i + 1_I4P
+         cycle
+      endif
+      if (i == len(format, kind=I4P)) then
+         text = text//'%'
+         exit
+      endif
+      if (format(i + 1_I4P:i + 1_I4P) == '%') then
+         text = text//'%'
+         i = i + 2_I4P
+         cycle
+      endif
+      if (k > size(args, kind=I4P)) then
+         ! no argument left: the conversion stays as written
+         text = text//'%'
+         i = i + 1_I4P
+         cycle
+      endif
+      i = i + 1_I4P
+      j = i
+      do while (i <= len(format, kind=I4P))
+         if (scan(format(i:i), '-+ 0#') == 0) exit
+         i = i + 1_I4P
+      enddo
+      flags = format(j:i - 1_I4P)
+      call digits_at(i, width)
+      prec = -1_I4P
+      if (i <= len(format, kind=I4P)) then
+         if (format(i:i) == '.') then
+            i = i + 1_I4P
+            call digits_at(i, prec)
+            prec = max(0_I4P, prec)
+         endif
+      endif
+      if (i > len(format, kind=I4P) .or. width < 0_I4P .or. prec > 999_I4P) then
+         ok = .false.
+         error = E_FORMAT
+         return
+      endif
+      type = format(i:i)
+      i = i + 1_I4P
+      x = args(k)
+      k = k + 1_I4P
+      if (type == 's') then
+         if (.not. x%is_string) then
+            ok = .false.
+            error = E_NUMBER_ARG
+            return
+         endif
+         text = text//c_string(flags, width, prec, x%s)
+      elseif (scan(type, 'diouxXcfFeEgG') > 0) then
+         if (x%is_string) then
+            ok = .false.
+            error = E_STRING_ARG
+            return
+         endif
+         if (scan(type, 'diouxXc') > 0) then
+            if (x%is_int) then
+               v = x%i
+            elseif (abs(x%r) < INT_LIMIT) then
+               v = int(x%r, I8P)
+            else
+               v = LEAST
+            endif
+            text = text//c_integer(flags, width, prec, type, v)
+         else
+            text = text//c_real(flags, width, prec, type, real_of(x))
+         endif
+      else
+         ok = .false.
+         error = E_FORMAT
+         return
+      endif
+   enddo
+   c = string_value(text)
+   contains
+      pure subroutine digits_at(at, number)
+      !< The decimal number starting at `at` (advanced past it), 0 if none; -1 if longer than 3 digits.
+      integer(I4P), intent(inout) :: at     !< Position.
+      integer(I4P), intent(out)   :: number !< Number.
+      integer(I4P)                :: start  !< First digit.
+
+      number = 0_I4P
+      start = at
+      do while (at <= len(format, kind=I4P))
+         if (scan(format(at:at), '0123456789') == 0) exit
+         if (at - start >= 3_I4P) then
+            number = -1_I4P
+         elseif (number >= 0_I4P) then
+            number = number * 10_I4P + (iachar(format(at:at)) - iachar('0'))
+         endif
+         at = at + 1_I4P
+      enddo
+      endsubroutine digits_at
+   endsubroutine sprintf_value
+
+   pure function count_words(text) result(n)
+   !< Number of blank-separated words of `text`.
+   character(len=*), intent(in) :: text !< Text.
+   integer(I4P)                 :: n    !< Words.
+   integer(I4P)                 :: i    !< Character counter.
+   logical                      :: in_word !< Inside a word.
+
+   n = 0_I4P
+   in_word = .false.
+   do i = 1_I4P, len(text, kind=I4P)
+      if (is_blank(text(i:i))) then
+         in_word = .false.
+      elseif (.not. in_word) then
+         in_word = .true.
+         n = n + 1_I4P
+      endif
+   enddo
+   endfunction count_words
+
+   pure function nth_word(text, k) result(w)
+   !< Word `k` (from 1) of `text`, empty if none.
+   character(len=*), intent(in)  :: text !< Text.
+   integer(I8P),     intent(in)  :: k    !< Word number.
+   character(len=:), allocatable :: w    !< Word.
+   integer(I4P)                  :: i    !< Character counter.
+   integer(I4P)                  :: start !< Word start.
+   integer(I8P)                  :: n    !< Words seen.
+
+   w = ''
+   n = 0_I8P
+   i = 1_I4P
+   do while (i <= len(text, kind=I4P))
+      if (is_blank(text(i:i))) then
+         i = i + 1_I4P
+         cycle
+      endif
+      start = i
+      do while (i <= len(text, kind=I4P))
+         if (is_blank(text(i:i))) exit
+         i = i + 1_I4P
+      enddo
+      n = n + 1_I8P
+      if (n == k) then
+         w = text(start:i - 1_I4P)
+         return
+      endif
+   enddo
+   endfunction nth_word
+
+   pure function trim_blanks(text) result(t)
+   !< `text` without leading and trailing blanks (spaces, tabs, new lines).
+   character(len=*), intent(in)  :: text  !< Text.
+   character(len=:), allocatable :: t     !< Trimmed text.
+   integer(I4P)                  :: first !< First kept.
+   integer(I4P)                  :: last  !< Last kept.
+
+   first = 1_I4P
+   last = len(text, kind=I4P)
+   do while (first <= last)
+      if (.not. is_blank(text(first:first))) exit
+      first = first + 1_I4P
+   enddo
+   do while (last >= first)
+      if (.not. is_blank(text(last:last))) exit
+      last = last - 1_I4P
+   enddo
+   t = text(first:last)
+   endfunction trim_blanks
+
+   elemental function is_blank(c) result(yes)
+   !< Whether `c` is a space, a tab or a new line.
+   character(len=1), intent(in) :: c   !< Character.
+   logical                      :: yes !< Blank.
+
+   yes = c == ' ' .or. c == achar(9) .or. c == achar(10) .or. c == achar(13)
+   endfunction is_blank
+
+   pure function to_lower(c) result(l)
+   !< Lower case of an ASCII letter.
+   character(len=1), intent(in) :: c !< Character.
+   character(len=1)             :: l !< Lower case.
+
+   l = c
+   if (c >= 'A' .and. c <= 'Z') l = achar(iachar(c) + 32)
+   endfunction to_lower
+
+   pure subroutine push_instruction(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(instruction_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(instruction_object),              intent(in)    :: item     !< New item.
+   type(instruction_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                         :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_instruction
 
    pure subroutine push_name(list, item)
    !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.

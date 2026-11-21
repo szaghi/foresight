@@ -96,8 +96,101 @@ call check_error('atan2(1)', 'atan2 needs 2 arguments')
 call check_error('$', '"$" needs a column number')
 call check_error('1e+', 'malformed number')
 call check_error('1e999', 'number out of range')
-call check_error('"a" + 1', 'a string is only valid as column("name")')
+call check_undefined('"a" + 1')
 call check_undefined('column("res")')
+! strings, as gnuplot 6.0 prints them
+call assign('sv', '"abc"')
+call check_text('sv', 'abc')
+call check_text('"de\tf" . "|"', 'de'//achar(9)//'f|')
+call check_text("'de\tf'", 'de\tf')
+call check_text('sv . 1', 'abc1')
+call check_text('sv . -3', 'abc-3')
+call check_text('(sv . 1) . 2', 'abc12')
+call check_text('"x" . (1 < 2)', 'x1')
+call check_text('"a" . 2*3', 'a6')
+call check_text('"a" . "b" eq "ab"', '1')
+call check_text('"a" eq "a" && 1', '1')
+call check_text('sv eq "abc" ? "yes" : "no"', 'yes')
+call check_text('1 ? "a" : "b"', 'a')
+call check_text('0 ? "a" : 2', '2')
+call check_text('"3" + 1', '4')
+call check_text('"3.5" * 2', '7.0')
+call check_text('"1.5e2" + 0', '150.0')
+call check_text('"1E2" + 0', '1')
+call check_text('"12abc" + 0', '12')
+call check_text('" 4" + 0', '4')
+call check_text('"0x10" + 0', '16')
+call check_text('"2" / "4"', '0')
+call check_text('"2." / 4', '0.5')
+call check_text('-"3"', '-3')
+call check_text('sv[2:3] . "|" . sv[2:] . "|" . sv[:2]', 'bc|bc|ab')
+call check_text('sv[0:1] . "|" . sv[3:10] . "|" . sv[4:5] . "|" . sv[3:2] . "|"', 'a|c|||')
+call check_text('sv[2:*] . sv[*:2]', 'bcab')
+call check_text('sv[1+1:3]', 'bc')
+call check_text('("ab")[1:1]', 'a')
+call check_text('strlen(sv) + strlen("")', '3')
+call check_text('strstrt(sv, "c")*10 + strstrt(sv, "z")', '30')
+call check_text('substr(sv, 2, 3) . "|" . substr("hello", 0, 2) . "|" . substr("hello", 4, 99)', 'bc|he|lo')
+call check_text('words("a b  c")', '3')
+call check_text('word("a b  c", 2) . "|" . word("a b", 5) . "|" . word("a b", 0) . "|"', 'b|||')
+call check_text('trim("  a b  ") . "|"', 'a b|')
+call check_text('int("12") + int("2.9")', '14')
+call check_text('real("3")', '3.0')
+call check_text('sprintf("%d|%5.2f|%s|%e|%g|%x|%o|%c|%%", 42, 3.14159, "hi", 12345.678, 0.0001, 255, 8, 65)', &
+                '42| 3.14|hi|1.234568e+04|0.0001|ff|10|A|%')
+call check_text('sprintf("%d", 3.7) . sprintf("%d", -3.7) . sprintf("%f", 3)', '3-33.000000')
+call check_text('sprintf("%5s|%-5s|", "ab", "cd") . sprintf("%05d|%+d|% d", 42, 42, 42)', '   ab|cd   |00042|+42| 42')
+call check_text('sprintf("%d %d", 1)', '1 %d')
+call check_text('sprintf("%d", 1, 2) . sprintf("no args")', '1no args')
+call check_text('sprintf("%10.3e|%G|%E|%i", 1234.5, 1e-10, 2.5, 7)', ' 1.234e+03|1E-10|2.500000E+00|7')
+call check_text('sprintf("%-+8.2f|", 3.14159) . sprintf("%#x|%#o", 255, 8)', '+3.14   |0xff|010')
+call check_text('sprintf("%x", -1) . sprintf(" %d", 2**62) . sprintf(" %d", 1e20)', &
+                'ffffffff 4611686018427387904 -9223372036854775808')
+call check_text('sprintf("%.2s|", "abcdef") . sprintf("%3d|%-3d|", 5, 5)', 'ab|  5|5  |')
+call check_text('sprintf("%e", 0) . sprintf(" %g", 100000) . sprintf(" %g", 1000000)', '0.000000e+00 100000 1e+06')
+call check_text('sprintf("%.0f %.0f %.0f", 0.5, 1.5, 2.5)', '0 2 2')
+call check_text('sprintf("%.2f", 2.675)', '2.67')
+call check_text('sprintf("%5.1f%%", 12.345)', ' 12.3%')
+call check_text('sprintf("%s", "%d")', '%d')
+call check_text('sprintf("%s %s", "a")', 'a %s')
+call check_text('sprintf("%5.3s|", "abcdef")', '  abc|')
+call check_text('sprintf("%-10.4g|%10.4G|", 1234567, 0.000012345)', '1.235e+06 | 1.234E-05|')
+call check_text('sprintf("%5.1d|", 3)', '    3|')
+call check_text('sprintf("%.3f", pi)', '3.142')
+call check_text('1/3.', '0.333333333333333')
+call check_text('1e20', '1e+20')
+call check_text('100.0', '100.0')
+call check_text('2**0.5', '1.4142135623731')
+call check_text('123456789.0', '123456789.0')
+call check_text('2**63', '9.22337203685478e+18')
+call check_text('exists("sv")*10 + exists("nope")', '10')
+call check_text('value("sv")', 'abc')
+call define('frun', ['x'], 'sprintf("run%d.dat", x)')
+call check_text('frun(3)', 'run3.dat')
+call define('gcat', ['a', 'b'], 'a . b')
+call check_text('gcat("x", "y")', 'xy')
+call assign('tv', '"x"')
+call assign('tv', 'tv . "y"')
+call check_text('tv', 'xy')
+call check_constant('"2.5" * 2', 5.0_R8P)
+call check_text_error('"x" . 1.5', 'a string operator or function applied to a number')
+call check_text_error('1 . 2', 'a string operator or function applied to a number')
+call check_text_error('"abc" + 1', 'non-numeric string found where a numeric expression was expected')
+call check_text_error('"a" == "a"', 'non-numeric string')
+call check_text_error('"1" eq 1', 'a string operator or function applied to a number')
+call check_text_error('!"0"', 'a string used as a condition')
+call check_text_error('"a" ? 1 : 2', 'a string used as a condition')
+call check_text_error('strlen(5)', 'a string operator or function applied to a number')
+call check_text_error('sprintf("%f", "x")', 'sprintf: a string printed with a numeric format')
+call check_text_error('sprintf("%s", 3)', 'sprintf: a number printed with a string format')
+call check_text_error('sprintf("%ld", 3)', 'unsupported or invalid format specifier')
+call check_text_error('sprintf("%*d", 5, 3)', 'unsupported or invalid format specifier')
+call check_text_error('sv[2]', 'expected ":"')
+call check_text_error('strlen(sv, 1)', 'strlen needs 1 argument')
+call check_text_error('value(sv)', 'value takes a quoted variable name')
+call check_text_error('sv.1', 'unexpected')
+call check_define_error('words', ['x'], 'x', 'builtin function')
+call check_assign_error('uv', '"a" + 1', 'non-numeric string')
 call check_error('1 = 2', 'unexpected "="')
 call check_error(repeat('(', 300)//'1'//repeat(')', 300), 'nested too deeply')
 ! functions of the dummy variable x: a real, even at integer values; columns are errors
@@ -276,6 +369,34 @@ contains
    call symbols%assign(name, text, iostat, iomsg)
    call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, name//' = '//text//' -> '//iomsg)
    endsubroutine check_assign_error
+
+   subroutine check_text(text, expected)
+   !< The constant expression `text` as text (`text_of`) is `expected`.
+   character(len=*), intent(in)  :: text      !< Expression.
+   character(len=*), intent(in)  :: expected  !< Text.
+   character(len=:), allocatable :: value     !< Value as text.
+   character(len=:), allocatable :: iomsg     !< Error message.
+   integer(I4P)                  :: iostat    !< Status.
+   logical                       :: is_string !< A string.
+
+   call symbols%text_of(text, value, is_string, iostat, iomsg)
+   if (iostat /= 0_I4P) value = ''
+   call record(iostat == 0_I4P .and. value == expected .and. len(value) == len(expected), &
+               text//' -> ['//value//'] '//iomsg)
+   endsubroutine check_text
+
+   subroutine check_text_error(text, message)
+   !< The constant expression `text` fails (compiling or evaluating), the error containing `message`.
+   character(len=*), intent(in)  :: text      !< Expression.
+   character(len=*), intent(in)  :: message   !< Expected part of the error.
+   character(len=:), allocatable :: value     !< Value as text.
+   character(len=:), allocatable :: iomsg     !< Error message.
+   integer(I4P)                  :: iostat    !< Status.
+   logical                       :: is_string !< A string.
+
+   call symbols%text_of(text, value, is_string, iostat, iomsg)
+   call record(iostat /= 0_I4P .and. index(iomsg, message) > 0, text//' -> '//iomsg)
+   endsubroutine check_text_error
 
    subroutine check_constant(text, expected)
    !< The constant expression `text` is `expected`.

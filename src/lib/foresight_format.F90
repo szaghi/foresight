@@ -11,20 +11,28 @@ module foresight_format
 !< tick: `format_decimal` works on digit strings and rounds half to even, so the interactive viewer, which mirrors it,
 !< prints identical labels.
 !<
+!< printf conversions of gnuplot's `sprintf` (`c_real`, `c_integer`, `c_string`) are C's: a real is converted from its
+!< exact binary value (`exact_decimal`), as glibc does, so `%.2f` of 2.675 is 2.67 (the double is 2.67499999...).
+!<
 !< Text to real goes through `real_from_decimal`, which never raises an IEEE overflow: a debug build trapping overflows
 !< would otherwise stop on a data cell such as `1e999`, inside the C library conversion.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use, intrinsic :: ieee_arithmetic, only : ieee_copy_sign, ieee_is_finite, ieee_is_nan
 use, intrinsic :: ieee_exceptions, only : ieee_get_flag, ieee_get_halting_mode, ieee_overflow, ieee_set_flag, &
                                          ieee_set_halting_mode
 use penf, only : I4P, I8P, R8P
 
 implicit none
 private
+public :: c_integer
+public :: c_real
+public :: c_string
 public :: decimal_of
 public :: decimal_str
+public :: exact_decimal
 public :: fixed
 public :: format_check
 public :: format_decimal
+public :: gnuplot_real
 public :: int_str
 public :: parse_decimal
 public :: real_from_decimal
@@ -32,6 +40,7 @@ public :: real_str
 public :: split_format
 public :: xml_escape
 
+integer(I8P), parameter :: LIMB = 1000000000_I8P !< Base of the exact decimal digits.
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
 
 contains
@@ -463,6 +472,228 @@ contains
    if (.not. found) message = 'no conversion in "'//format//'"'
    endsubroutine split_format
 
+   pure subroutine exact_decimal(v, digits, e)
+   !< The exact decimal value of the finite `v`: `|v| = digits * 10**e`, `digits` without leading or trailing zeros (`0`
+   !< for zero). A double is `m * 2**k`, that is `m * 5**(-k) * 10**k` when `k < 0`: the product is computed exactly in
+   !< base 10**9 limbs (at most 767 digits).
+   real(R8P),                     intent(in)  :: v      !< Value.
+   character(len=:), allocatable, intent(out) :: digits !< Decimal digits.
+   integer(I4P),                  intent(out) :: e      !< Decimal exponent.
+   integer(I8P)                               :: limbs(100) !< Base 10**9 digits, least significant first.
+   integer(I8P)                               :: m      !< Binary mantissa.
+   integer(I4P)                               :: k      !< Binary exponent.
+   integer(I4P)                               :: n      !< Limbs in use.
+   integer(I4P)                               :: step   !< Exponent applied at once.
+   integer(I4P)                               :: i      !< Counter.
+   character(len=9)                           :: chunk  !< One limb.
+
+   e = 0_I4P
+   if (v == 0.0_R8P) then
+      digits = '0'
+      return
+   endif
+   m = int(fraction(abs(v)) * 2.0_R8P**53, I8P)
+   k = exponent(abs(v)) - 53_I4P
+   do while (k < 0_I4P .and. modulo(m, 2_I8P) == 0_I8P)
+      m = m / 2_I8P
+      k = k + 1_I4P
+   enddo
+   limbs = 0_I8P
+   limbs(1) = modulo(m, LIMB)
+   limbs(2) = modulo(m / LIMB, LIMB)
+   limbs(3) = m / LIMB**2
+   n = 3_I4P
+   if (k >= 0_I4P) then
+      do while (k > 0_I4P)
+         step = min(k, 30_I4P)
+         call limbs_multiply(limbs, n, 2_I8P**step)
+         k = k - step
+      enddo
+   else
+      e = k
+      k = -k
+      do while (k > 0_I4P)
+         step = min(k, 13_I4P)
+         call limbs_multiply(limbs, n, 5_I8P**step)
+         k = k - step
+      enddo
+   endif
+   do while (n > 1_I4P .and. limbs(n) == 0_I8P)
+      n = n - 1_I4P
+   enddo
+   digits = int_str(limbs(n))
+   do i = n - 1_I4P, 1_I4P, -1_I4P
+      write(chunk, '(I9.9)') limbs(i)
+      digits = digits//chunk
+   enddo
+   i = len(digits, kind=I4P)
+   do while (i > 1_I4P .and. digits(i:i) == '0')
+      i = i - 1_I4P
+   enddo
+   e = e + len(digits, kind=I4P) - i
+   digits = digits(1:i)
+   endsubroutine exact_decimal
+
+   pure function c_real(flags, width, prec, type, v) result(text)
+   !< C printf of the real `v` with the conversion `%<flags><width>.<prec><type>`, `type` among `f F e E g G`, `flags`
+   !< among `-+ 0#`, `prec` -1 if absent (6): glibc's output, from the exact binary value, rounded half to even.
+   character(len=*), intent(in)  :: flags !< Flags.
+   integer(I4P),     intent(in)  :: width !< Field width, 0 if none.
+   integer(I4P),     intent(in)  :: prec  !< Precision, -1 if absent.
+   character(len=1), intent(in)  :: type  !< Conversion.
+   real(R8P),        intent(in)  :: v     !< Value.
+   character(len=:), allocatable :: text  !< Converted text.
+   character(len=:), allocatable :: digits !< Exact digits of |v|.
+   character(len=:), allocatable :: body  !< Text without sign.
+   character(len=:), allocatable :: lead  !< Sign.
+   integer(I4P)                  :: e     !< Exponent of `digits`.
+   integer(I4P)                  :: p     !< Precision used.
+   integer(I4P)                  :: x     !< Exponent of the leading digit.
+   logical                       :: upper !< Upper case conversion.
+   logical                       :: alt   !< `#` flag.
+
+   upper = scan(type, 'FEG') > 0
+   alt = index(flags, '#') > 0
+   ! the sign bit, of a zero or a NaN too (no ordered comparison: a NaN would trap)
+   lead = ''
+   if (ieee_copy_sign(1.0_R8P, v) < 0.0_R8P) then
+      lead = '-'
+   elseif (index(flags, '+') > 0) then
+      lead = '+'
+   elseif (index(flags, ' ') > 0) then
+      lead = ' '
+   endif
+   if (.not. ieee_is_finite(v)) then
+      if (ieee_is_nan(v)) then
+         body = 'nan'
+      else
+         body = 'inf'
+      endif
+      if (upper) body = upper_case(body)
+      text = pad(lead, body, flags, width, .false.)
+      return
+   endif
+   call exact_decimal(v, digits, e)
+   p = prec
+   if (p < 0_I4P) p = 6_I4P
+   select case (type)
+   case ('f', 'F')
+      body = fixed_digits(digits, e, p)
+      if (alt .and. p == 0_I4P) body = body//'.'
+   case ('e', 'E')
+      call exp_digits(digits, e, p, body, x)
+      if (alt .and. p == 0_I4P) body = body//'.'
+      body = body//exp_text(merge('E', 'e', upper), x)
+   case default
+      ! g, G: precision in significant digits, the fixed form when the exponent is in [-4, p)
+      if (p == 0_I4P) p = 1_I4P
+      call exp_digits(digits, e, p - 1_I4P, body, x)
+      if (x < p .and. x >= -4_I4P) then
+         body = fixed_digits(digits, e, p - 1_I4P - x)
+         if (alt) then
+            if (index(body, '.') == 0) body = body//'.'
+         else
+            body = strip_zeros(body)
+         endif
+      else
+         if (alt) then
+            if (index(body, '.') == 0) body = body//'.'
+         else
+            body = strip_zeros(body)
+         endif
+         body = body//exp_text(merge('E', 'e', upper), x)
+      endif
+   endselect
+   text = pad(lead, body, flags, width, .true.)
+   endfunction c_real
+
+   pure function c_integer(flags, width, prec, type, i) result(text)
+   !< C printf of the integer `i` with `%<flags><width>.<prec><type>`, `type` among `d i u o x X c`, as gnuplot passes it:
+   !< a value that fits 32 bits as a C int (so `%x` of -1 is ffffffff), else as a 64-bit integer.
+   character(len=*), intent(in)  :: flags  !< Flags.
+   integer(I4P),     intent(in)  :: width  !< Field width, 0 if none.
+   integer(I4P),     intent(in)  :: prec   !< Precision (minimum digits), -1 if absent.
+   character(len=1), intent(in)  :: type   !< Conversion.
+   integer(I8P),     intent(in)  :: i      !< Value.
+   character(len=:), allocatable :: text   !< Converted text.
+   character(len=:), allocatable :: body   !< Digits.
+   character(len=:), allocatable :: lead   !< Sign or prefix.
+   integer(I8P)                  :: u      !< Bits of the unsigned value.
+   logical                       :: small  !< Fits a C int.
+   logical                       :: zeros  !< `0` flag applies.
+
+   small = i >= -2147483648_I8P .and. i <= 2147483647_I8P
+   lead = ''
+   select case (type)
+   case ('c')
+      text = pad('', achar(int(modulo(i, 256_I8P))), flags, width, .false.)
+      return
+   case ('d', 'i')
+      if (i == -huge(1_I8P) - 1_I8P) then
+         body = '9223372036854775808'
+      else
+         body = int_str(abs(i))
+      endif
+      if (i < 0_I8P) then
+         lead = '-'
+      elseif (index(flags, '+') > 0) then
+         lead = '+'
+      elseif (index(flags, ' ') > 0) then
+         lead = ' '
+      endif
+   case default
+      u = i
+      if (small .and. i < 0_I8P) u = i + 4294967296_I8P
+      select case (type)
+      case ('u')
+         body = unsigned_decimal(u)
+      case ('o')
+         body = radix_digits(u, 3_I4P, '01234567')
+         if (index(flags, '#') > 0 .and. body(1:1) /= '0') body = '0'//body
+      case ('x')
+         body = radix_digits(u, 4_I4P, '0123456789abcdef')
+         if (index(flags, '#') > 0 .and. u /= 0_I8P) lead = '0x'
+      case default
+         body = radix_digits(u, 4_I4P, '0123456789ABCDEF')
+         if (index(flags, '#') > 0 .and. u /= 0_I8P) lead = '0X'
+      endselect
+   endselect
+   if (prec >= 0_I4P) then
+      if (prec == 0_I4P .and. i == 0_I8P .and. type /= 'o') body = ''
+      if (len(body) < prec) body = repeat('0', prec - len(body))//body
+   endif
+   zeros = prec < 0_I4P
+   text = pad(lead, body, flags, width, zeros)
+   endfunction c_integer
+
+   pure function c_string(flags, width, prec, s) result(text)
+   !< C printf of the string `s` with `%<flags><width>.<prec>s`: the precision cuts, the width pads.
+   character(len=*), intent(in)  :: flags !< Flags.
+   integer(I4P),     intent(in)  :: width !< Field width, 0 if none.
+   integer(I4P),     intent(in)  :: prec  !< Most characters, -1 if absent.
+   character(len=*), intent(in)  :: s     !< Value.
+   character(len=:), allocatable :: text  !< Converted text.
+
+   if (prec >= 0_I4P .and. prec < len(s)) then
+      text = pad('', s(1:prec), flags, width, .false.)
+   else
+      text = pad('', s, flags, width, .false.)
+   endif
+   endfunction c_string
+
+   pure function gnuplot_real(v) result(text)
+   !< A real as gnuplot's `print` shows it: `%.15g`, with `.0` appended to an integral value (`100.0`, `-0.0`), `NaN`.
+   real(R8P), intent(in)         :: v    !< Value.
+   character(len=:), allocatable :: text !< Text.
+
+   if (ieee_is_nan(v)) then
+      text = 'NaN'
+      return
+   endif
+   text = c_real('', 0_I4P, 15_I4P, 'g', v)
+   if (verify(text, '-0123456789') == 0) text = text//'.0'
+   endfunction gnuplot_real
+
    ! private procedures
    pure function scale10(x, e) result(y)
    !< `x * 10**e`, in steps of at most 10**22 (exact powers of ten) to never overflow an intermediate.
@@ -601,4 +832,114 @@ contains
    enddo
    if (stripped(len(stripped):len(stripped)) == '.') stripped = stripped(1:len(stripped) - 1)
    endfunction strip_zeros
+   pure subroutine limbs_multiply(limbs, n, f)
+   !< `limbs(1:n) *= f` (base 10**9, least significant first; `f` below 2**31), `n` grown with the carry.
+   integer(I8P), intent(inout) :: limbs(:) !< Digits.
+   integer(I4P), intent(inout) :: n        !< Limbs in use.
+   integer(I8P), intent(in)    :: f        !< Factor.
+   integer(I8P)                :: carry    !< Carry.
+   integer(I8P)                :: p        !< Partial product.
+   integer(I4P)                :: j        !< Counter.
+
+   carry = 0_I8P
+   do j = 1_I4P, n
+      p = limbs(j) * f + carry
+      limbs(j) = modulo(p, LIMB)
+      carry = p / LIMB
+   enddo
+   do while (carry > 0_I8P)
+      n = n + 1_I4P
+      limbs(n) = modulo(carry, LIMB)
+      carry = carry / LIMB
+   enddo
+   endsubroutine limbs_multiply
+
+   pure function pad(sign, body, flags, width, zeros) result(text)
+   !< `sign` and `body` padded to `width` as printf: left justified with `-`, zero filled after the sign with `0` (when
+   !< `zeros` allows it), else right justified with blanks.
+   character(len=*), intent(in)  :: sign  !< Sign or prefix.
+   character(len=*), intent(in)  :: body  !< Body.
+   character(len=*), intent(in)  :: flags !< Flags.
+   integer(I4P),     intent(in)  :: width !< Field width.
+   logical,          intent(in)  :: zeros !< `0` flag allowed.
+   character(len=:), allocatable :: text  !< Result.
+   integer(I4P)                  :: gap   !< Padding.
+
+   gap = width - len(sign, kind=I4P) - len(body, kind=I4P)
+   if (gap <= 0_I4P) then
+      text = sign//body
+   elseif (index(flags, '-') > 0) then
+      text = sign//body//repeat(' ', gap)
+   elseif (index(flags, '0') > 0 .and. zeros) then
+      text = sign//repeat('0', gap)//body
+   else
+      text = repeat(' ', gap)//sign//body
+   endif
+   endfunction pad
+
+   pure function radix_digits(u, bits, symbols) result(text)
+   !< Digits of `u` read as an unsigned 64-bit integer, `bits` per digit (3 octal, 4 hexadecimal).
+   integer(I8P),     intent(in)  :: u       !< Value (bits).
+   integer(I4P),     intent(in)  :: bits    !< Bits per digit.
+   character(len=*), intent(in)  :: symbols !< Digit symbols.
+   character(len=:), allocatable :: text    !< Digits.
+   integer(I8P)                  :: w       !< Remaining bits.
+   integer(I4P)                  :: d       !< Digit.
+
+   text = ''
+   w = u
+   do
+      d = int(iand(w, 2_I8P**bits - 1_I8P), I4P)
+      text = symbols(d + 1:d + 1)//text
+      w = ishft(w, -bits)
+      if (w == 0_I8P) exit
+   enddo
+   endfunction radix_digits
+
+   pure function unsigned_decimal(u) result(text)
+   !< Decimal digits of `u` read as an unsigned 64-bit integer.
+   integer(I8P), intent(in)      :: u     !< Value (bits).
+   character(len=:), allocatable :: text  !< Digits.
+   integer(I8P)                  :: limbs(4) !< Base 10**9 digits.
+   integer(I4P)                  :: n     !< Limbs in use.
+   integer(I4P)                  :: j     !< Counter.
+   character(len=9)              :: chunk !< One limb.
+
+   if (u >= 0_I8P) then
+      text = int_str(u)
+      return
+   endif
+   ! u = hi * 2**32 + lo
+   limbs = 0_I8P
+   limbs(1) = modulo(ishft(u, -32), LIMB)
+   limbs(2) = ishft(u, -32) / LIMB
+   n = 2_I4P
+   call limbs_multiply(limbs, n, 2_I8P**16)
+   call limbs_multiply(limbs, n, 2_I8P**16)
+   limbs(1) = limbs(1) + iand(u, 4294967295_I8P)
+   do j = 1_I4P, n - 1_I4P
+      limbs(j + 1) = limbs(j + 1) + limbs(j) / LIMB
+      limbs(j) = modulo(limbs(j), LIMB)
+   enddo
+   do while (n > 1_I4P .and. limbs(n) == 0_I8P)
+      n = n - 1_I4P
+   enddo
+   text = int_str(limbs(n))
+   do j = n - 1_I4P, 1_I4P, -1_I4P
+      write(chunk, '(I9.9)') limbs(j)
+      text = text//chunk
+   enddo
+   endfunction unsigned_decimal
+
+   pure function upper_case(text) result(upper)
+   !< `text` in upper case (ASCII).
+   character(len=*), intent(in) :: text  !< Text.
+   character(len=len(text))     :: upper !< Upper case text.
+   integer(I4P)                 :: j     !< Counter.
+
+   upper = text
+   do j = 1_I4P, len(text, kind=I4P)
+      if (text(j:j) >= 'a' .and. text(j:j) <= 'z') upper(j:j) = achar(iachar(text(j:j)) - 32)
+   enddo
+   endfunction upper_case
 endmodule foresight_format
