@@ -26,7 +26,7 @@ module foresight_datafile
 !< real per value plus three integers per row.
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : iostat_end, iostat_eor
-use foresight_expression, only : expression_object
+use foresight_expression, only : expression_object, text_object => name_object
 use foresight_format, only : real_from_decimal
 use penf, only : I4P, R8P
 
@@ -43,11 +43,6 @@ endinterface push
 
 character(len=1), parameter :: TAB = achar(9) !< Tab character.
 
-type :: text_object
-   !< Cell text.
-   character(len=:), allocatable :: text !< Text, unquoted.
-endtype text_object
-
 type :: header_object
    !< First row of a dataset, as text.
    type(text_object), allocatable :: cells(:) !< Cells.
@@ -63,6 +58,8 @@ type :: datafile_object
    type(header_object), allocatable :: headers(:)     !< First row of each dataset as text, by dataset from 1.
    integer(I4P)                     :: label_column = 0_I4P !< Column kept as text in `labels`, 0 for none.
    type(text_object), allocatable   :: labels(:)       !< Text of column `label_column` of each row.
+   logical                          :: has_text = .false. !< The cell texts are kept, in `texts`.
+   type(text_object), allocatable   :: texts(:)        !< Text of each cell (unquoted, as `values`), with `has_text`.
    integer(I4P)                  :: nrows   = 0_I4P   !< Number of data rows.
    integer(I4P)                  :: nvalues = 0_I4P   !< Number of stored values.
    integer(I4P), allocatable     :: missing_cells(:)  !< Indexes in `values` of the cells holding the missing data
@@ -81,12 +78,13 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments)
+   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments, keep_text)
    !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
    !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept. The
    !< cells equal to `missing` (blanks and double quotes around them removed; none if empty) are missing data, the
    !< points reading them left out (gnuplot `set datafile missing`); `comments` are the characters starting a comment
-   !< (`#` by default, none if empty: gnuplot `set datafile commentschars`).
+   !< (`#` by default, none if empty: gnuplot `set datafile commentschars`). With `keep_text` the text of every cell
+   !< is kept (gnuplot's `strcol`).
    class(datafile_object),        intent(inout)        :: self      !< Data.
    character(len=*),              intent(in)           :: file      !< File name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
@@ -95,6 +93,7 @@ contains
    integer(I4P),                  intent(in), optional :: label_column !< Column kept as text, 0 for none.
    character(len=*),              intent(in), optional :: missing   !< Missing data string, empty for none.
    character(len=*),              intent(in), optional :: comments  !< Comment characters.
+   logical,                       intent(in), optional :: keep_text !< Keep the text of every cell.
    character(len=:), allocatable                       :: miss      !< Missing data string, empty for none.
    character(len=:), allocatable                       :: marks     !< Comment characters.
    character(len=:), allocatable                       :: line      !< Current line.
@@ -131,6 +130,10 @@ contains
    if (allocated(self%block)) deallocate(self%block)
    if (allocated(self%headers)) deallocate(self%headers)
    if (allocated(self%labels)) deallocate(self%labels)
+   if (allocated(self%texts)) deallocate(self%texts)
+   self%has_text = .false.
+   if (present(keep_text)) self%has_text = keep_text
+   if (self%has_text) allocate(self%texts(1024))
    self%label_column = 0_I4P
    if (present(label_column)) self%label_column = max(0_I4P, label_column)
    allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256), self%headers(0), self%labels(0))
@@ -181,6 +184,7 @@ contains
                   if (line(j:j) == '"') quoted = .not. quoted
                enddo
                call add_value(to_real(line(i:j)))
+               if (self%has_text) call keep(line(i:j))
                if (no_number(line(i:j))) self%invalid_cells = [self%invalid_cells, self%nvalues]
                if (len(miss) > 0) call mark_missing(line(i:j))
                if (recording) call record(line(i:j))
@@ -199,6 +203,7 @@ contains
                   j = j + 1_I4P
                enddo
                call add_value(cell_value(line(i:j - 1_I4P)))
+               if (self%has_text) call keep(line(i:j - 1_I4P))
                if (no_number(clean(line(i:j - 1_I4P)))) self%invalid_cells = [self%invalid_cells, self%nvalues]
                if (len(miss) > 0) call mark_missing(line(i:j - 1_I4P))
                if (recording) call record(line(i:j - 1_I4P))
@@ -267,6 +272,22 @@ contains
       call move_alloc(work, self%labels)
       endsubroutine grow_labels
 
+      subroutine keep(cell)
+      !< Keep the text of the cell just added (blanks around it and double quotes removed), growing the texts as the
+      !< values.
+      character(len=*), intent(in)   :: cell  !< Cell text.
+      type(text_object), allocatable :: work(:) !< Growth buffer.
+      character(len=:), allocatable  :: text  !< Clean text (a temporary, as in `record`).
+
+      if (size(self%texts, kind=I4P) < size(self%values, kind=I4P)) then
+         allocate(work(size(self%values)))
+         work(1:size(self%texts)) = self%texts
+         call move_alloc(work, self%texts)
+      endif
+      text = clean(cell)
+      self%texts(self%nvalues)%text = text
+      endsubroutine keep
+
       subroutine mark_missing(cell)
       !< Mark the value just added as missing data if its `cell` is the missing data string.
       character(len=*), intent(in) :: cell !< Cell text.
@@ -325,13 +346,14 @@ contains
    y = values(:, 2)
    endsubroutine columns
 
-   subroutine table(self, fields, index, every, values, header, labels)
+   subroutine table(self, fields, index, every, values, header, labels, label)
    !< Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
    !< `values(point, field)`.
    !<
    !< With `header` the first row of each dataset names the columns: it is skipped, neither a point nor counted, and
    !< the column header names of the fields are resolved on the header of each dataset. `labels` returns the text of
-   !< the label column (see `load`) of each point, blank for breaks or without a label column.
+   !< the label column (see `load`) of each point, blank for breaks or without a label column; with `label` they are
+   !< the texts of that field instead (`evaluate_text`: `xtic(strcol(1))`, the text of labels).
    !<
    !< `every` is gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, an end negative for
    !< none. Points are numbered within their block, blocks within their dataset, from 0.
@@ -345,16 +367,20 @@ contains
    real(R8P), allocatable,  intent(out) :: values(:,:) !< Points.
    logical,                 intent(in), optional :: header !< The first row of each dataset is a header.
    character(len=:), allocatable, intent(out), optional :: labels(:) !< Text labels of the points.
+   type(expression_object), intent(in), optional :: label  !< Field of the labels.
    logical                              :: headed      !< Headers in use.
    integer(I4P)                         :: width       !< Label length.
    integer(I4P)                         :: r           !< Row counter.
    integer(I4P)                         :: stored      !< Points stored.
    real(R8P),        allocatable        :: kept(:,:)   !< Points kept.
    character(len=:), allocatable        :: texts(:)    !< Labels of the points kept.
+   type(text_object), allocatable       :: words(:)    !< Labels of the `label` field.
+   integer(I4P)                         :: k           !< Point counter.
 
    headed = .false.
    if (present(header)) headed = header
    allocate(values(count_points(), size(fields)))
+   if (present(label)) allocate(words(size(values, 1)))
    if (present(labels)) then
       ! the longest row label, at least 1
       width = 1_I4P
@@ -363,9 +389,11 @@ contains
             width = max(width, len(self%labels(r)%text, kind=I4P))
          enddo
       endif
-      allocate(character(len=width) :: labels(size(values, 1)))
-      ! a section: `labels = ''` would reallocate them to length 0 (F2018 10.2.1.3), as ifx does
-      labels(:) = ''
+      if (.not. present(label)) then
+         allocate(character(len=width) :: labels(size(values, 1)))
+         ! a section: `labels = ''` would reallocate them to length 0 (F2018 10.2.1.3), as ifx does
+         labels(:) = ''
+      endif
    endif
    call store_points
    ! fewer points when some were left out, through temporaries (nvfortran 26.9: see foresight_tokens push), here and
@@ -374,11 +402,23 @@ contains
       allocate(kept(stored, size(values, 2)))
       kept(:, :) = values(1:stored, :)
       call move_alloc(kept, values)
-      if (present(labels)) then
+      if (present(labels) .and. .not. present(label)) then
          allocate(character(len=len(labels)) :: texts(stored))
          texts(:) = labels(1:stored)
          call move_alloc(texts, labels)
       endif
+   endif
+   ! the labels of the `label` field, at their final length and number
+   if (present(labels) .and. present(label)) then
+      width = 1_I4P
+      do k = 1_I4P, stored
+         if (allocated(words(k)%text)) width = max(width, len(words(k)%text, kind=I4P))
+      enddo
+      allocate(character(len=width) :: labels(stored))
+      labels(:) = ''
+      do k = 1_I4P, stored
+         if (allocated(words(k)%text)) labels(k) = words(k)%text
+      enddo
    endif
    contains
       pure function is_header(r) result(yes)
@@ -430,6 +470,7 @@ contains
       integer(I4P) :: v        !< Next invalid cell.
       integer(I4P) :: c        !< Column of a missing cell.
       logical      :: dropped  !< The row reads a missing cell.
+      integer(I4P) :: place(2) !< Block within the dataset and dataset of the row.
       type(expression_object) :: resolved(size(fields)) !< Fields on the header of the current dataset.
       character(len=:), allocatable :: names(:) !< Header names of the current dataset.
 
@@ -500,10 +541,30 @@ contains
          set = self%dataset(r)
          picked = picked + 1_I4P
          k = k + 1_I4P
-         do f = 1_I4P, size(fields, kind=I4P)
-            values(k, f) = resolved(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), picked)
-         enddo
-         if (present(labels) .and. self%label_column > 0_I4P) labels(k) = self%labels(r)%text
+         place = [in_set_block, self%dataset(r)]
+         if (self%has_text) then
+            associate(cells => self%texts(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                      heads => self%headers(self%dataset(r) + 1_I4P)%cells)
+               do f = 1_I4P, size(fields, kind=I4P)
+                  values(k, f) = resolved(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                                                      picked, cells=cells, heads=heads, place=place)
+               enddo
+               if (present(label)) words(k)%text = label%evaluate_text(self%values(self%first(r):self%first(r + 1_I4P) &
+                                                                       - 1_I4P), picked, cells=cells, heads=heads, &
+                                                                       place=place)
+            endassociate
+         else
+            associate(heads => self%headers(self%dataset(r) + 1_I4P)%cells)
+               do f = 1_I4P, size(fields, kind=I4P)
+                  values(k, f) = resolved(f)%evaluate(self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                                                      picked, heads=heads, place=place)
+               enddo
+               if (present(label)) words(k)%text = label%evaluate_text(self%values(self%first(r):self%first(r + 1_I4P) &
+                                                                       - 1_I4P), picked, heads=heads, place=place)
+            endassociate
+         endif
+         if (present(labels) .and. self%label_column > 0_I4P .and. .not. present(label)) &
+            labels(k) = self%labels(r)%text
       enddo
       stored = k
       endsubroutine store_points

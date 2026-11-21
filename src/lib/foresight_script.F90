@@ -47,7 +47,10 @@ module foresight_script
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
 !< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
 !<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
-!<   the labels replacing the x ticks;
+!<   the labels replacing the x ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`);
+!< - string columns in `using` expressions: `strcol(N)`, `stringcolumn(N)` (N a number or a header name),
+!<   `columnhead(N)`, the pseudo-columns `column(-1)` (block) and `column(-2)` (dataset); the text of labels a column
+!<   or an expression;
 !< - `plot 'file' [matrix] with image` (`using x:y:z` on a regular grid, or the values of a `matrix` file), `set palette
 !<   [rgbformulae R,G,B|defined (v c, ...)|cubehelix [start S] [cycles C] [saturation S]|file 'f' [index N] [every E]
 !<   [using U]|gray|grey|color|NAME|positive|
@@ -889,6 +892,7 @@ contains
    logical                                      :: output    !< Report requested.
    logical                                      :: found     !< The file exists.
    logical                                      :: two       !< Two columns.
+   logical                                      :: texts     !< The cell texts are read (`strcol`).
    integer(I4P)                                 :: nranges   !< Ranges given.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
@@ -972,7 +976,10 @@ contains
       if (output) write(error_unit, '(A)') 'Cannot find or open file "'//file//'"'
       return
    endif
-   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments)
+   texts = .false.
+   if (allocated(fields)) texts = any(fields%uses_text())
+   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
+                  keep_text=texts)
    if (iostat /= 0_I4P) then
       iomsg = 'stats: '//iomsg
       return
@@ -1412,7 +1419,8 @@ contains
       call fail('fit: yerrors needs using X:Y:YERROR', iostat, iomsg)
       return
    endif
-   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments)
+   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
+                  keep_text=any(fields%uses_text()))
    if (iostat /= 0_I4P) then
       iomsg = 'fit: '//iomsg
       return
@@ -1632,7 +1640,9 @@ contains
    real(R8P),        allocatable                :: at_x      !< Position of a parallel axis (`at X`).
    character(len=:), allocatable                :: label_opts !< Option words of labels.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
-   integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
+   integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 1 for an expression, 0 for none.
+   type(expression_object)                      :: label_field !< Field of the text labels (`xtic(...)`, labels).
+   logical                                      :: needs_text !< The cell texts are read (`strcol`, labels).
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
    logical                                      :: weight_one !< The single column is x, each point of weight 1.
@@ -1853,7 +1863,7 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
-            call split_xtic(spec, label_col, iostat, iomsg, keyed)
+            call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field)
             if (iostat /= 0_I4P) return
             call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
             if (iostat /= 0_I4P) return
@@ -2211,13 +2221,18 @@ contains
          endif
          if (.not. allocated(fields)) then
             label_col = 3_I4P
+            call label_field%set_column(label_col)
          elseif (size(fields) == 3) then
+            ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
+            ! written as the text of the first column it reads, as gnuplot
             word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
-            if (len(word) == 0 .or. verify(word, '0123456789') /= 0 .or. len(word) > 9) then
-               call fail('plot: the labels text (3rd using field) must be a column number', iostat, iomsg)
-               return
+            if (len(word) > 0 .and. verify(word, '0123456789') == 0 .and. len(word) <= 9) then
+               read(word, *) label_col
+               call label_field%set_column(label_col)
+            else
+               label_col = 1_I4P
+               label_field = fields(3)
             endif
-            read(word, *) label_col
             kept = fields(1:2)
             call move_alloc(kept, fields)
          else
@@ -2238,14 +2253,17 @@ contains
                return
             endif
             read(word, *) label_col
+            call label_field%set_column(label_col)
             kept = fields(1:3)
             call move_alloc(kept, fields)
          endif
       endif
-      ! reloaded to keep the text of the xtic column
-      if (file /= loaded .or. (label_col > 0_I4P .and. data%label_column /= label_col)) then
-         call data%load(file, iostat, iomsg, separator=self%separator, label_column=label_col, missing=self%missing, &
-                        comments=self%comments)
+      ! reloaded to keep the cell texts, for the labels and strcol
+      needs_text = label_col > 0_I4P
+      if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
+      if (file /= loaded .or. (needs_text .and. .not. data%has_text)) then
+         call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
+                        keep_text=needs_text)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
@@ -2436,7 +2454,7 @@ contains
          if (title_column >= 0_I4P) title = header_title(max(0_I4P, set_index))
       endif
       if (label_col > 0_I4P) then
-         call data%table(fields, set_index, every, values, header=headed, labels=xlabels)
+         call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
       else
          call data%table(fields, set_index, every, values, header=headed)
          if (allocated(xlabels)) deallocate(xlabels)
@@ -3267,14 +3285,16 @@ contains
       call self%figure%rgbimage(c(1, :, :), c(2, :, :), c(3, :, :), xs, ys, title=title, alpha=c(4, :, :))
       endsubroutine rgb_item
 
-      subroutine split_xtic(spec, column, iostat, iomsg, keyed)
-      !< Remove a last `using` field `xtic(N)` or `xticlabels(N)` from `spec`, returning N (0 if none); `key(N)` (the
-      !< row names of a spider plot) likewise, with `keyed` true.
+      subroutine split_xtic(spec, column, iostat, iomsg, keyed, field)
+      !< Remove a last `using` field `xtic(...)` or `xticlabels(...)` from `spec`, returning its `field`: a column N
+      !< (`column` N), or a string expression (`xtic(strcol(1) . ' K')`, `xtic("a")` the same text on every row;
+      !< `column` 1), `column` 0 if none; `key(N)` (the row names of a spider plot) likewise, with `keyed` true.
       character(len=:), allocatable, intent(inout) :: spec   !< `using` specification.
       integer(I4P),                  intent(out)   :: column !< Label column, 0 for none.
       integer(I4P),                  intent(inout) :: iostat !< Status.
       character(len=:), allocatable, intent(inout) :: iomsg  !< Error message.
       logical,                       intent(out)   :: keyed  !< The field is `key(N)`.
+      type(expression_object),       intent(inout) :: field  !< Label field.
       character(len=:), allocatable                :: last   !< Last field.
       character(len=:), allocatable                :: inner  !< Argument of the label field.
       integer(I4P)                                 :: k      !< Character counter.
@@ -3304,15 +3324,29 @@ contains
          return
       endif
       inner = last(index(last, '(') + 1:len(last) - 1)
-      if (last(len(last):len(last)) /= ')' .or. .not. to_number(inner, v)) then
-         call fail('plot: xtic needs a column number, xtic(1), found "'//last//'"', iostat, iomsg)
+      if (last(len(last):len(last)) /= ')') then
+         call fail('plot: xtic needs a column number or an expression, xtic(1), found "'//last//'"', iostat, iomsg)
          return
       endif
-      if (v < 1.0_R8P .or. v /= aint(v)) then
-         call fail('plot: xtic needs a column number, xtic(1), found "'//last//'"', iostat, iomsg)
+      if (to_number(inner, v)) then
+         if (v < 1.0_R8P .or. v /= aint(v)) then
+            call fail('plot: xtic needs a column number, xtic(1), found "'//last//'"', iostat, iomsg)
+            return
+         endif
+         column = int(v, I4P)
+         call field%set_column(column)
+      elseif (keyed) then
+         call fail('plot: key needs a column number, key(1), found "'//last//'"', iostat, iomsg)
          return
+      else
+         call field%compile(inner, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees, &
+                            symbols=self%symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: xtic: '//iomsg
+            return
+         endif
+         column = 1_I4P
       endif
-      column = int(v, I4P)
       if (cut == 0_I4P) then
          call fail('plot: xtic(N) labels a value: using Y:xtic(N) or X:Y:xtic(N)', iostat, iomsg)
          return

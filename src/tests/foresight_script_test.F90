@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(104)                           !< Per-check outcome.
+logical                       :: test_passed(105)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -513,7 +513,7 @@ test_passed(53) = iostat /= 0_I4P .and. index(iomsg, 'histograms needs using Y o
 call interpreter%run_text("set style histogram columnstacked", iostat, iomsg)
 test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "columnstacked"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2:xtic(a) w hist", iostat, iomsg)
-test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'xtic needs a column number') > 0
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'xtic: undefined variable: a') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2:ytic(1) w hist", iostat, iomsg)
 test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'only xtic(N) labels are supported') > 0
 open(newunit=unit, file=scratch)
@@ -842,8 +842,8 @@ if (test_passed(71)) then
 endif
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w vectors", iostat, iomsg)
 test_passed(72) = iostat /= 0_I4P .and. index(iomsg, 'vectors needs using x:y:xdelta:ydelta') > 0
-call interpreter%run_text("plot '"//data_file//"' u 1:2:($3) w labels", iostat, iomsg)
-test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'must be a column number') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:(1/0) w labels", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat == 0_I4P
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w ellipses units xx", iostat, iomsg)
 test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'units xy only') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w sectors", iostat, iomsg)
@@ -1819,6 +1819,52 @@ block
                       .and. r%pos_min_y == 6.0_R8P .and. r%pos_max_y == 4.0_R8P .and. r%sumxy == 34.5_R8P
 endblock
 
+! string columns, as gnuplot 6.0: strcol/stringcolumn (number or header name), columnhead(N), the pseudo-columns -1
+! (block) and -2 (dataset), string fields of labels and xtic
+open(newunit=unit, file='foresight_script_test_strings.dat', action='write', status='replace')
+write(unit, '(A)') 'name value err', '"alpha one" 1.5 0.2', 'beta 2.5 0.3', '', 'gamma 3 0.1', '', '', 'delta 4 0.5'
+close(unit)
+call interpreter%run_text("set output 'foresight_script_test_strings.svg'", iostat, iomsg)
+call interpreter%run_text("plot 'foresight_script_test_strings.dat' u 0:(strcol(1) eq 'beta' ? $2 : 1/0), "// &
+                          "'' u 0:(strlen(stringcolumn(1))), '' u (column(-1)):(column(-2)), "// &
+                          "'' u 0:2:xtic(strcol(1) . '!'), '' u 2:3:(sprintf('%s=%g', strcol(1), $2)) w labels, "// &
+                          "'' u 2:3:($3*2) w labels, '' u 0:(strcol('value') eq '3' ? 1 : 0), "// &
+                          "'' u 0:2:xtic(columnhead(3))", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(105) = iostat == 0_I4P
+if (test_passed(105)) then
+   associate(panel => interpreter%figure%panels(1))
+      ! the header row is a row (no header used): an invalid point, as gnuplot's
+      test_passed(105) = same(panel%series(1)%y * 10.0_R8P, [-1, -1, 25, -1, -1, -1, -1])
+      test_passed(105) = test_passed(105) .and. same(panel%series(2)%y, [4, 9, 4, -1, 5, -1, 5])
+      test_passed(105) = test_passed(105) .and. same(panel%series(3)%x, [0, 0, 0, -1, 1, -1, 0]) .and. &
+                         same(panel%series(3)%y, [0, 0, 0, -1, 0, -1, 1])
+      test_passed(105) = test_passed(105) .and. trim(panel%series(4)%xlabels(1)) == 'alpha one!' .and. &
+                         trim(panel%series(4)%xlabels(2)) == 'beta!'
+      test_passed(105) = test_passed(105) .and. trim(panel%series(5)%texts(1)) == 'alpha one=1.5' .and. &
+                         trim(panel%series(6)%texts(1)) == '0.2' .and. trim(panel%series(8)%xlabels(1)) == 'err'
+      test_passed(105) = test_passed(105) .and. same(panel%series(7)%y, [0, 0, 0, -1, 1, -1, -1])
+   endassociate
+endif
+call interpreter%run_text("plot 'foresight_script_test_strings.dat' u 0:(strcol(1, 2))", iostat, iomsg)
+test_passed(105) = test_passed(105) .and. iostat /= 0_I4P .and. index(iomsg, 'strcol needs 1 argument') > 0
+call interpreter%run_text("plot strcol(1)", iostat, iomsg)
+test_passed(105) = test_passed(105) .and. iostat /= 0_I4P .and. index(iomsg, 'only valid in using') > 0
+call interpreter%run_text("stats 'foresight_script_test_strings.dat' u (strcol(1) ne 'delta' ? $2 : 1/0) nooutput", &
+                          iostat, iomsg)
+block
+   real(R8P) :: v(2)  !< Values.
+   logical   :: found !< Variable found.
+
+   call interpreter%symbols%value_of('STATS_records', v(1), found)
+   call interpreter%symbols%value_of('STATS_max', v(2), found)
+   test_passed(105) = test_passed(105) .and. iostat == 0_I4P .and. v(1) == 3.0_R8P .and. v(2) == 3.0_R8P
+endblock
+open(newunit=unit, file='foresight_script_test_strings.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_strings.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1827,7 +1873,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,104L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,105L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

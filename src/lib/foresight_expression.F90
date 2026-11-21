@@ -39,6 +39,7 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: expression_object
+public :: name_object
 public :: saved_variable
 public :: symbols_object
 public :: push
@@ -86,6 +87,15 @@ integer(I4P), parameter :: OP_STREQ        = 29_I4P !< `eq`.
 integer(I4P), parameter :: OP_STRNE        = 30_I4P !< `ne`.
 integer(I4P), parameter :: OP_SUBSTRING    = 31_I4P !< `s[i:j]`: the string and both ends on the stack.
 integer(I4P), parameter :: OP_CALL         = 32_I4P !< String function `arg` of the top `v%i` values.
+integer(I4P), parameter :: OP_STRCOL       = 33_I4P !< Replace the top with the text of the column it numbers or names.
+integer(I4P), parameter :: OP_COLUMNHEAD   = 34_I4P !< Replace the top with the header text of the column it numbers.
+
+! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
+! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
+character(len=*), parameter :: ROW_FUNCTIONS(4) = [character(len=12) :: 'strcol', 'stringcolumn', 'columnhead', &
+                                                   'columnheader']
+
+integer(I4P), parameter :: NO_COLUMN = -huge(1_I4P) !< Column of a header name found nowhere: reads nothing.
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
 character(len=*), parameter :: FUNCTIONS(19) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
@@ -203,6 +213,8 @@ type :: expression_object
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
       procedure, pass(self) :: evaluate     !< Value on a data row.
+      procedure, pass(self) :: evaluate_text !< Text on a data row (a label).
+      procedure, pass(self) :: uses_text    !< Whether the row cell texts are read.
       procedure, pass(self) :: first_column !< First data column read.
       procedure, pass(self) :: name_count   !< Number of column header names.
       procedure, pass(self) :: name_of      !< A column header name.
@@ -685,6 +697,16 @@ contains
          elseif (name == 'atan2') then
             if (nargs /= 2_I4P) call syntax('atan2 needs 2 arguments', at)
             call emit(OP_ATAN2)
+         elseif (any(ROW_FUNCTIONS == name)) then
+            if (present(variable)) then
+               call syntax(name//' is only valid in using, not in a function', at)
+            elseif (nargs /= 1_I4P) then
+               call syntax(name//' needs 1 argument', at)
+            elseif (name(1:3) == 'str') then
+               call emit(OP_STRCOL)
+            else
+               call emit(OP_COLUMNHEAD)
+            endif
          elseif (name == 'column' .and. present(variable)) then
             call syntax('columns are only valid in using, not in a function', at)
          elseif (name == 'column' .or. f > 0) then
@@ -949,8 +971,8 @@ contains
 
    call check_name(name, iostat, iomsg)
    if (iostat /= 0_I4P) return
-   if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. name == 'atan2' .or. name == 'column' .or. &
-       name == 'value' .or. name == 'exists') then
+   if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. any(ROW_FUNCTIONS == name) .or. &
+       name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists') then
       iostat = 1_I4P
       iomsg = '"'//name//'" is a builtin function'
       return
@@ -1239,33 +1261,90 @@ contains
    k = 0_I4P
    endfunction function_index
 
-   pure function evaluate(self, row, point) result(v)
+   pure function evaluate(self, row, point, cells, heads, place) result(v)
    !< Value on a data row: `row` holds its cells (NaN if missing), `point` is its point number (column 0).
    !<
+   !< `cells` are the texts of the row cells (`strcol`), `heads` those of the first row of its dataset (`columnhead`),
+   !< `place` its block within the dataset and its dataset (the pseudo-columns -1 and -2), all from 0; without them
+   !< those functions and pseudo-columns are undefined.
+   !<
    !< NaN if undefined. Every floating point operation is checked beforehand, so no IEEE exception is raised.
-   class(expression_object), intent(in) :: self    !< Expression.
-   real(R8P),                intent(in) :: row(:)  !< Row cells.
-   integer(I4P),             intent(in) :: point   !< Point number.
-   real(R8P)                            :: v       !< Value.
-   type(value_object)                   :: top     !< Typed value.
-   logical                              :: defined !< Defined.
-   integer(I4P)                         :: err     !< Type error.
+   class(expression_object), intent(in)           :: self     !< Expression.
+   real(R8P),                intent(in)           :: row(:)   !< Row cells.
+   integer(I4P),             intent(in)           :: point    !< Point number.
+   type(name_object),        intent(in), optional :: cells(:) !< Row cell texts.
+   type(name_object),        intent(in), optional :: heads(:) !< Header cell texts of the row's dataset.
+   integer(I4P),             intent(in), optional :: place(2) !< Block within the dataset and dataset, from 0.
+   real(R8P)                                      :: v        !< Value.
+   type(value_object)                             :: top      !< Typed value.
+   logical                                        :: defined  !< Defined.
+   integer(I4P)                                   :: err      !< Type error.
 
    v = ieee_value(1.0_R8P, ieee_quiet_nan)
-   call run(self, row, point, top, defined)
+   call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
    if (defined .and. top%is_string) call numeric(top, defined, err)
    if (defined) v = real_of(top)
    endfunction evaluate
 
-   pure subroutine run(self, row, point, top, defined, error)
+   pure function evaluate_text(self, row, point, cells, heads, place) result(text)
+   !< Text on a data row (arguments as `evaluate`), as gnuplot's label and tick label fields: a string value as it is;
+   !< a number, the text of the first column the expression reads (gnuplot's `using 1:2:($2*2) with labels` writes
+   !< the text of column 2), or the number as `%g` if it reads none; empty if undefined.
+   class(expression_object), intent(in)           :: self     !< Expression.
+   real(R8P),                intent(in)           :: row(:)   !< Row cells.
+   integer(I4P),             intent(in)           :: point    !< Point number.
+   type(name_object),        intent(in), optional :: cells(:) !< Row cell texts.
+   type(name_object),        intent(in), optional :: heads(:) !< Header cell texts of the row's dataset.
+   integer(I4P),             intent(in), optional :: place(2) !< Block within the dataset and dataset, from 0.
+   character(len=:), allocatable                  :: text     !< Text.
+   type(value_object)                             :: top      !< Typed value.
+   logical                                        :: defined  !< Defined.
+   integer(I4P)                                   :: c        !< First column read.
+
+   text = ''
+   ! a plain column: its text, a number or not
+   c = self%plain_column()
+   if (c > 0_I4P .and. present(cells)) then
+      if (c <= size(cells, kind=I4P)) text = cells(c)%text
+      return
+   endif
+   call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
+   if (.not. defined) return
+   if (top%is_string) then
+      text = top%s
+      return
+   endif
+   c = self%first_column()
+   if (c > 0_I4P .and. present(cells)) then
+      if (c <= size(cells, kind=I4P)) text = cells(c)%text
+   elseif (top%is_int) then
+      text = c_integer('', 0_I4P, -1_I4P, 'd', top%i)
+   else
+      text = c_real('', 0_I4P, -1_I4P, 'g', top%r)
+   endif
+   endfunction evaluate_text
+
+   elemental function uses_text(self) result(uses)
+   !< Whether the expression reads the texts of the row cells (`strcol`), which the data must then keep.
+   class(expression_object), intent(in) :: self !< Expression.
+   logical                              :: uses !< Cell texts read.
+
+   uses = .false.
+   if (allocated(self%code)) uses = any(self%code%op == OP_STRCOL)
+   endfunction uses_text
+
+   pure subroutine run(self, row, point, top, defined, error, cells, heads, place)
    !< Run the stack code on a data row: `top` is the typed value, `defined` false if undefined; `error` the type error
-   !< that made it undefined (E_NONE if none: a missing cell, a domain error).
+   !< that made it undefined (E_NONE if none: a missing cell, a domain error); `cells`, `heads`, `place` as `evaluate`.
    class(expression_object), intent(in)            :: self                 !< Expression.
    real(R8P),                intent(in)            :: row(:)               !< Row cells.
    integer(I4P),             intent(in)            :: point                !< Point number.
    type(value_object),       intent(out)           :: top                  !< Value.
    logical,                  intent(out)           :: defined              !< Defined.
    integer(I4P),             intent(out), optional :: error                !< Type error.
+   type(name_object),        intent(in),  optional :: cells(:)             !< Row cell texts.
+   type(name_object),        intent(in),  optional :: heads(:)             !< Header cell texts of the dataset.
+   integer(I4P),             intent(in),  optional :: place(2)             !< Block within the dataset and dataset.
    type(value_object)             :: stack(max(1_I4P, self%depth)) !< Operand stack.
    type(value_object)             :: result                         !< Operation result.
    integer(I8P)                   :: c                              !< Column number.
@@ -1295,7 +1374,7 @@ contains
          case (OP_COLUMN_NAMED)
             ! a name not resolved against a header: no column
             sp = sp + 1_I4P
-            call column(-1_I8P, stack(sp), ok)
+            call column(int(NO_COLUMN, I8P), stack(sp), ok)
          case (OP_COLUMN_OF)
             c = -1_I8P
             if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
@@ -1307,6 +1386,10 @@ contains
                c = int(stack(sp)%r, I8P)
             endif
             call column(c, stack(sp), ok)
+         case (OP_STRCOL)
+            call column_text(stack(sp), ok)
+         case (OP_COLUMNHEAD)
+            call header_text(stack(sp), ok, err)
          case (OP_NEGATE)
             if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
             if (.not. ok) then
@@ -1412,10 +1495,60 @@ contains
       elseif (c >= 1_I8P .and. c <= size(row, kind=I8P)) then
          value%r = row(c)
          if (ieee_is_nan(value%r)) ok = .false.
+      elseif ((c == -1_I8P .or. c == -2_I8P) .and. present(place)) then
+         ! the pseudo-columns: -1 the block within the dataset, -2 the dataset (gnuplot's index), integers
+         value = int_value(int(place(-c), I8P))
       else
          ok = .false.
       endif
       endsubroutine column
+
+      pure subroutine column_text(value, ok)
+      !< `strcol(value)`: the text of the column `value` numbers (a header name if a string), undefined if none.
+      type(value_object), intent(inout) :: value !< Column number or name; its text.
+      logical,            intent(inout) :: ok    !< Defined.
+      integer(I8P)                      :: c     !< Column.
+      integer(I4P)                      :: k     !< Header cell counter.
+
+      c = -1_I8P
+      if (value%is_string) then
+         if (present(heads)) then
+            do k = 1_I4P, size(heads, kind=I4P)
+               if (heads(k)%text == value%s) then
+                  c = k
+                  exit
+               endif
+            enddo
+         endif
+      elseif (value%is_int) then
+         c = value%i
+      elseif (abs(value%r) < INT_LIMIT) then
+         c = int(value%r, I8P)
+      endif
+      ok = present(cells)
+      if (ok) ok = c >= 1_I8P .and. c <= size(cells, kind=I8P)
+      if (ok) value = string_value(cells(c)%text)
+      endsubroutine column_text
+
+      pure subroutine header_text(value, ok, err)
+      !< `columnhead(value)`: the text of column `value` in the first row of the dataset, undefined if none.
+      type(value_object), intent(inout) :: value !< Column number; its header text.
+      logical,            intent(inout) :: ok    !< Defined.
+      integer(I4P),       intent(inout) :: err   !< Type error.
+      integer(I8P)                      :: c     !< Column.
+
+      c = -1_I8P
+      if (value%is_string) call numeric(value, ok, err)
+      if (.not. ok) return
+      if (value%is_int) then
+         c = value%i
+      elseif (abs(value%r) < INT_LIMIT) then
+         c = int(value%r, I8P)
+      endif
+      ok = present(heads)
+      if (ok) ok = c >= 1_I8P .and. c <= size(heads, kind=I8P)
+      if (ok) value = string_value(heads(c)%text)
+      endsubroutine header_text
    endsubroutine run
 
    pure function first_column(self) result(c)
@@ -1500,7 +1633,7 @@ contains
    do k = 1_I4P, size(resolved%code, kind=I4P)
       if (resolved%code(k)%op /= OP_COLUMN_NAMED) cycle
       associate(name => self%names(resolved%code(k)%arg)%text)
-         resolved%code(k) = instruction_object(op=OP_COLUMN, arg=-1_I4P)
+         resolved%code(k) = instruction_object(op=OP_COLUMN, arg=NO_COLUMN)
          do c = 1_I4P, size(header, kind=I4P)
             if (trim(header(c)) == name) then
                resolved%code(k)%arg = c

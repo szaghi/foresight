@@ -9,6 +9,11 @@ implicit none
 private
 public :: series_object
 public :: push
+public :: LABEL_LEN
+
+integer(I4P), parameter :: LABEL_LEN = 128_I4P !< Longest text label of a point (`xtic`, `labels`), longer ones cut;
+                                               !< fixed: nvfortran 26.9 corrupts the heap assigning and copying
+                                               !< deferred-length character array components.
 
 interface push
    !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
@@ -26,7 +31,7 @@ type :: series_object
    real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
-   character(len=:), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
+   character(len=LABEL_LEN), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
    character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none;
                                                !< of `lc palette z`, set at each rendering.
    integer(I4P)                  :: palette_mode = 0_I4P !< Color from the palette (gnuplot `lc palette`): 0 none, 1 a
@@ -55,7 +60,7 @@ type :: series_object
                                                !< diameters for the default size.
    integer(I4P)                  :: head = 1_I4P     !< Arrowheads: 0 none, 1 end, 2 start, 3 both.
    logical                       :: head_filled = .false. !< Filled arrowheads.
-   character(len=:), allocatable :: texts(:)   !< Texts of `labels`, one per point.
+   character(len=LABEL_LEN), allocatable :: texts(:) !< Texts of `labels`, one per point.
    character(len=6)              :: text_anchor = 'middle' !< Label anchor: start, middle, end.
    real(R8P)                     :: text_rotate = 0.0_R8P  !< Label rotation [deg, counterclockwise].
    real(R8P)                     :: text_offset(2) = 0.0_R8P !< Label offset [characters, y upward].
