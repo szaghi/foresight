@@ -108,7 +108,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
-| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, see [below](#smoothing) |
+| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, see [below](#smoothing) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
@@ -238,9 +238,25 @@ plot 'run.dat' u 5:(1) smooth cnormal                           # its empirical 
 
 The [cookbook](/manual/cookbook#histogram-and-distribution) draws the last two.
 
+The curve filters replace each run by `set samples` points (100 by default), as gnuplot 6.0 computes them:
+
+| Filter | Curve |
+|---|---|
+| `csplines` | the natural cubic spline through the points sorted and merged as above (at least 3), sampled from the first x to the last within the x range |
+| `acsplines` | the smoothing spline of Reinsch through them (at least 4): `using X:Y:W` weights each point, larger weights draw the curve closer (1 without) |
+| `bezier` | the Bézier curve with the points as control points, in the file order: it starts and ends on the first and last point |
+| `sbezier` | the same after sorting and merging the points |
+| `kdensity` [`bandwidth B`] | the Gaussian kernel density of the x values weighted by y, over the x range: `using X:(1)` for a density of counts; the bandwidth is gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, unless given |
+
+```gnuplot
+plot 'run.dat' u 1:5 smooth csplines                  # a spline through the drag coefficient
+plot 'run.dat' u 1:5:(0.1) smooth acsplines           # smoothed: small weights, a smooth curve
+plot 'run.dat' u 5:(1) smooth kdensity bandwidth 0.01 # the distribution of column 5
+```
+
 The runs stay separate lines. `smooth` applies to `lines`, `points` and `linespoints`; with error bars or on a
-function it is an error (gnuplot ignores the extra columns, or the filter). The other filters (splines, Bézier,
-`kdensity`, ...) are [not supported](#not-supported).
+function it is an error (gnuplot ignores the extra columns, or the filter); `acsplines` reads a third column as the
+weights. `mcsplines`, `unwrap`, `path` and the others are [not supported](#not-supported).
 
 ## Second y axis
 
@@ -889,7 +905,6 @@ x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative 
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; variable colors (`lc variable`), `set style boxplot labels x2`; `set style histogram
-columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters other than
-`unique`, `frequency`, `fnormal`, `cumulative`, `cnormal` (`csplines`, `acsplines`, `mcsplines`, `bezier`,
-`sbezier`, `kdensity`, `unwrap`, `path`) and `bins`; the `block` character sets `dot`, `octants`, `sextpua`,
+columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
+`mcsplines`, `unwrap`, `path`, `bins`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

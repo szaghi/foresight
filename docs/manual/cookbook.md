@@ -255,6 +255,16 @@ A function is sampled over the x range of the data of the same plot.
 accumulates them over the sorted x, divided by the total: the fraction of iterations below each value. `smooth unique`
 averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 
+### Splines and densities
+
+<<< @/examples/snippets/cb_splines.gp{gnuplot}
+
+<Plot name="cb_splines" svg :width="760" :height="320" />
+
+`csplines` passes through every point; `acsplines` weighs fit against smoothness (smaller weights, smoother curve);
+`sbezier` stays inside the points. `kdensity` estimates the distribution of a sample: gnuplot's bandwidth by default,
+narrower to show more detail.
+
 ## Bars and statistics
 
 ### A bar chart

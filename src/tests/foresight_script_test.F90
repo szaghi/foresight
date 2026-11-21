@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(86)                           !< Per-check outcome.
+logical                       :: test_passed(87)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -367,8 +367,8 @@ endif
 call interpreter%run_text("set logscale y; plot '"//data_file//"' smooth cumulative", iostat, iomsg)
 test_passed(44) = test_passed(44) .and. iostat == 0_I4P
 if (test_passed(44)) test_passed(44) = same(interpreter%figure%panels(1)%series(1)%y, [8, 12, 13, -1, 1, -1, 3, 5])
-call interpreter%run_text("plot '"//data_file//"' smooth csplines", iostat, iomsg)
-test_passed(45) = iostat /= 0_I4P .and. index(iomsg, 'unsupported smooth "csplines"') > 0
+call interpreter%run_text("plot '"//data_file//"' smooth mcsplines", iostat, iomsg)
+test_passed(45) = iostat /= 0_I4P .and. index(iomsg, 'unsupported smooth "mcsplines"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:(0.1) w yerr smooth unique", iostat, iomsg)
 test_passed(45) = test_passed(45) .and. iostat /= 0_I4P .and. index(iomsg, 'smooth applies to lines') > 0
 call interpreter%run_text("plot x smooth unique", iostat, iomsg)
@@ -1260,6 +1260,32 @@ call interpreter%run_text("set datafile commentschars %", iostat, iomsg)
 test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'set datafile commentschars: a "string"') > 0
 call interpreter%run_text("set datafile fortran", iostat, iomsg)
 test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "fortran"') > 0
+
+! smooth csplines, acsplines, bezier, sbezier, kdensity: set samples points, the values of gnuplot 6.0 (set table)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2', '2 3', '4 1', '3 5', '5 4', '2 4', '6 2'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set samples 9; plot '"//data_file//"' smooth csplines, '' smooth acsplines, "// &
+                             "'' smooth bezier, '' smooth sbezier, '' u 1:2 smooth kdensity, '' smooth kdensity bandwidth 0.5", &
+                             iostat, iomsg)
+   test_passed(87) = iostat == 0_I4P .and. all([(size(panel%series(i)%x) == 9, i = 1, 6)])
+   if (test_passed(87)) test_passed(87) = &
+      near(panel%series(1)%y(3), 4.21176_R8P) .and. near(panel%series(1)%y(6), 1.04256_R8P) .and. &
+      near(panel%series(2)%y(1), 2.54139_R8P) .and. near(panel%series(2)%y(9), 2.37165_R8P) .and. &
+      near(panel%series(3)%x(2), 1.86057_R8P) .and. near(panel%series(3)%y(8), 3.12_R8P) .and. &
+      near(panel%series(4)%y(4), 3.37672_R8P) .and. near(panel%series(5)%y(1), 2.74479_R8P) .and. &
+      near(panel%series(6)%y(3), 6.29595_R8P)
+   call interpreter%run_text("plot '"//data_file//"' u 1:2:(0.5) smooth acsplines", iostat, iomsg)
+   test_passed(87) = test_passed(87) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 9
+endassociate
+call interpreter%run_text("plot '"//data_file//"' every ::0::2 smooth acsplines", iostat, iomsg)
+test_passed(87) = test_passed(87) .and. iostat /= 0_I4P .and. index(iomsg, 'acsplines need at least 4 points') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:(-1) smooth acsplines", iostat, iomsg)
+test_passed(87) = test_passed(87) .and. iostat /= 0_I4P .and. index(iomsg, 'acsplines need positive weights') > 0
+call interpreter%run_text("plot '"//data_file//"' smooth kdensity bandwidth x", iostat, iomsg)
+test_passed(87) = test_passed(87) .and. iostat /= 0_I4P .and. index(iomsg, 'a number is expected') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1277,7 +1303,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,86L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,87L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1304,6 +1330,15 @@ contains
       endif
    enddo
    endfunction same
+
+   elemental function near(a, b) result(close)
+   !< Whether `a` is `b` to 1e-5 relative (gnuplot prints 6 significant digits).
+   real(R8P), intent(in) :: a     !< Value.
+   real(R8P), intent(in) :: b     !< Reference.
+   logical               :: close !< Close.
+
+   close = abs(a - b) <= 1.0e-5_R8P * max(1.0_R8P, abs(b))
+   endfunction near
 
    function colorbox_labels(settings, present_labels, absent_labels) result(ok)
    !< Plot the data file as an image after `settings` into an SVG, and whether its texts include every one of

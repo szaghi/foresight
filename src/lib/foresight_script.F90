@@ -81,7 +81,7 @@ use foresight_expression, only : expression_object, push, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
-use foresight_smooth, only : smooth, SMOOTH_MODES
+use foresight_smooth, only : CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
@@ -416,6 +416,7 @@ contains
    character(len=:), allocatable                :: title     !< Item title.
    character(len=:), allocatable                :: with      !< Item style.
    character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
+   real(R8P)                                    :: bandwidth !< kdensity bandwidth, default if not positive.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
@@ -555,6 +556,7 @@ contains
       title_column = -1_I4P
       axes = 'x1y1'
       filter = ''
+      bandwidth = 0.0_R8P
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
@@ -710,9 +712,17 @@ contains
             endif
          elseif (keyword(word, 'smooth', 1_I4P)) then
             if (.not. next_word(tokens, i, filter, iostat, iomsg)) return
-            if (.not. is_word(filter, SMOOTH_MODES)) then
-               call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//')', iostat, iomsg)
+            if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES))) then
+               call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES//')', &
+                         iostat, iomsg)
                return
+            endif
+            ! smooth kdensity bandwidth B
+            if (filter == 'kdensity' .and. i < size(tokens, kind=I4P)) then
+               if (keyword(tokens(i + 1_I4P)%text, 'bandwidth', 3_I4P)) then
+                  i = i + 1_I4P
+                  if (.not. next_number(bandwidth)) return
+               endif
             endif
             if (is_function) then
                call fail('plot: smooth applies to data files, not to the function "'//written//'"', iostat, iomsg)
@@ -1054,12 +1064,13 @@ contains
             return
          endif
       case default
-         if (nbar /= 0_I4P) then
+         ! smooth acsplines: X:Y:WEIGHT, the weights read by the smoothing
+         if (nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines')) then
             call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
             return
          endif
       endselect
-      if (len(filter) > 0 .and. nbar /= 0_I4P) then
+      if (len(filter) > 0 .and. nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines')) then
          call fail('plot: smooth applies to lines, points and linespoints, not to '//with, iostat, iomsg)
          return
       endif
@@ -1091,7 +1102,10 @@ contains
       endif
       x = values(:, 1)
       y = values(:, 2)
-      if (len(filter) > 0) then
+      if (is_word(filter, CURVE_MODES)) then
+         call curve_filter
+         if (iostat /= 0_I4P) return
+      elseif (len(filter) > 0) then
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             if (axes == 'x1y2') then
@@ -1435,6 +1449,39 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine curve_filter
+      !< The curve smoothing of the item (csplines, acsplines, bezier, sbezier, kdensity) into (x, y): `set samples`
+      !< points, over the x range (fixed, inline, else the data's), acsplines weighted by a third column (1 without).
+      real(R8P), allocatable        :: weights(:) !< acsplines weights.
+      character(len=:), allocatable :: problem    !< Smoothing problem.
+      real(R8P)                     :: lo         !< Smallest abscissa sampled.
+      real(R8P)                     :: hi         !< Largest abscissa sampled.
+      logical,   allocatable        :: finite(:)  !< Finite abscissae.
+
+      if (size(values, 2) >= 3 .and. filter == 'acsplines') then
+         weights = values(:, 3)
+      else
+         allocate(weights(size(values, 1)))
+         weights = 1.0_R8P
+      endif
+      finite = ieee_is_finite(values(:, 1))
+      if (.not. any(finite)) then
+         call fail('plot: smooth '//filter//': no points', iostat, iomsg)
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         call panel%xaxis%range_of(minval(values(:, 1), mask=finite), maxval(values(:, 1), mask=finite), .true., lo, hi)
+         if (axes == 'x1y2') then
+            call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
+                              panel%xaxis%log, panel%y2axis%log, x, y, problem)
+         else
+            call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
+                              panel%xaxis%log, panel%yaxis%log, x, y, problem)
+         endif
+      endassociate
+      if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
+      endsubroutine curve_filter
 
       subroutine inline_range(text, first)
       !< An inline range `[min:max]` of the plot command (`text` without brackets): of x if `first` (where

@@ -151,6 +151,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
+  <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
 </div>
 
 ### Bars and statistics
