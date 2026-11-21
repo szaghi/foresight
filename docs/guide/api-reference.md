@@ -23,6 +23,8 @@ npm run docs:api      # formal generate --mirror-sources --diagrams --project fo
 | `figure_object` | `foresight_figure` | figure with the gnuplot-like API — see [Fortran Library](library) |
 | `script_object` | `foresight_script` | gnuplot subset interpreter — see [Scripts from Fortran](library#scripts-from-fortran) |
 | `rename_file`, `sleep_ms` | `foresight_sys` | atomic rename and sub-second sleep (libc) |
+| `file_fingerprint` | `foresight_fingerprint` | a cheap fingerprint of a file's content, to tell that it changed (the watch mode) |
+| `THEMES` | `foresight_theme` | the names of the output themes, blank separated: `classic vfd lcd washi night` |
 | `I4P`, `I8P`, `R4P`, `R8P` | PENF | kind parameters |
 
 The other modules are internal: their interfaces may change without notice.

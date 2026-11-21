@@ -134,8 +134,9 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 
 <Plot name="cb_x2" svg :width="560" :height="320" />
 
-The top border in another unit: with no item on it, the x2 axis takes the `x2range` given, here the frequency scaled
-to the Strouhal number. Items plotted `axes x2y1` scale it on their own instead.
+The top border in another unit: the x2 axis takes the `x2range` given, here the frequency scaled to the Strouhal
+number. The points are the same peaks plotted `axes x2y1`, against x2: each lands on its impulse, the check that the
+two scales agree. Without a set `x2range`, items on x2 autoscale it on their own.
 
 ### The key below the plot
 
@@ -294,6 +295,16 @@ A function is sampled over the x range of the data of the same plot.
 binning itself: [a histogram of a sample](#a-histogram-of-a-sample)). `smooth cnormal`
 accumulates them over the sorted x, divided by the total: the fraction of iterations below each value. `smooth unique`
 averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
+
+### Block averages and running totals
+
+<<< @/examples/snippets/cb_unique.gp{gnuplot}
+
+<Plot name="cb_unique" svg :width="760" :height="320" />
+
+`smooth unique` merges the points of equal x into their mean: an x rounded to blocks of 25 steps gives the mean wall
+time of each block. `smooth cumulative` adds the y up to each x: the elapsed time of the run. See
+[Smoothing](/guide/gnuplot-subset#smoothing).
 
 ### Splines and densities
 
@@ -553,6 +564,16 @@ for fractions), without palette nor color box.
 
 A probe's directivity against a cardioid model, theta in degrees, in gnuplot's round idiom: square plot, polar border
 and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+
+### A level in decibels
+
+<<< @/examples/snippets/cb_polar_db.gp{gnuplot}
+
+<Plot name="cb_polar_db" svg :width="520" :height="400" />
+
+`set rrange [-30:10]` puts -30 dB at the pole, so a negative level is a distance from it, and the points below
+-30 dB are left out; `set rtics 10` rings the levels on the r axis (`set raxis`). `set trange` samples the model over
+the upper half only, and leaves out the data beyond it too, as gnuplot.
 
 ### A wind rose
 

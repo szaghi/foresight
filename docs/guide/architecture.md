@@ -31,14 +31,19 @@ flowchart TD
   `foresight_smooth`): turns gnuplot
   statements into calls of the figure API. It lives in the library, so the command line tool is a thin shell and Fortran code can run
   scripts too. Errors are returned, not stopped on, which lets a watch loop survive a bad cycle.
-- **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`): panels,
-  axes with gnuplot range semantics, series with their style.
-- **Rules** (`foresight_ticks`, `foresight_format`, `foresight_readout`): tick placement and labels, number formatting,
-  the seven-segment cells a readout format makes and the segments a value lights.
+- **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`,
+  `foresight_theme`): panels, axes with gnuplot range semantics, series with their style, the page colors of a theme.
+- **Rules** (`foresight_ticks`, `foresight_format`, `foresight_readout`, `foresight_palette`, `foresight_colormaps`):
+  tick placement and labels, number formatting, the seven-segment cells a readout format makes and the segments a value
+  lights, the palettes from a value to a color (gnuplot's formulae, gradients and cubehelix; the tables of the named
+  palettes, generated).
 - **Devices** (`foresight_backend` and its extensions): an abstract drawing interface with two coordinate spaces —
   page pixels for decorations, the unit square of the plot area for data. Readouts are a semantic primitive
   (`readout`, `readout_extent`), not polygons: each device draws digits its own way, hexagons in SVG, `_` and `|` in
-  text.
+  text. `foresight_png` encodes the pixels of an image as a base64 PNG for the SVG.
+- **System** (`foresight_sys`, `foresight_fingerprint`): the libc calls standard Fortran lacks (`rename` for atomic
+  rewrites, `nanosleep` between the cycles of the watch mode), and the cheap file fingerprints that tell the watch mode
+  a file changed.
 
 ## Design decisions
 

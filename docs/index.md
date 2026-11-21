@@ -178,6 +178,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
+  <Plot name="cb_unique" svg :width="760" :height="320" caption="block averages and running totals (smooth)" />
   <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
   <Plot name="cb_mcsplines" svg :width="560" :height="320" caption="a monotone interpolation (mcsplines)" />
 </div>
@@ -224,6 +225,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_polar" svg :width="520" :height="400" caption="a polar plot" />
+  <Plot name="cb_polar_db" svg :width="520" :height="400" caption="a polar level in decibels (rrange, trange)" />
   <Plot name="cb_windrose" svg :width="520" :height="420" caption="a wind rose of sectors" />
   <Plot name="cb_spider" svg :width="560" :height="400" caption="a spider plot" />
   <Plot name="cb_parallel" svg :width="560" :height="320" caption="parallel axes" />
