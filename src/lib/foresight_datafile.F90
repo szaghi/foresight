@@ -78,13 +78,14 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments, keep_text)
+   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments, keep_text, content)
    !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
    !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept. The
    !< cells equal to `missing` (blanks and double quotes around them removed; none if empty) are missing data, the
    !< points reading them left out (gnuplot `set datafile missing`); `comments` are the characters starting a comment
    !< (`#` by default, none if empty: gnuplot `set datafile commentschars`). With `keep_text` the text of every cell
-   !< is kept (gnuplot's `strcol`).
+   !< is kept (gnuplot's `strcol`). With `content` the lines are those of that text (a gnuplot datablock, `$D << EOD`,
+   !< named `file`), not of a file.
    class(datafile_object),        intent(inout)        :: self      !< Data.
    character(len=*),              intent(in)           :: file      !< File name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
@@ -94,6 +95,7 @@ contains
    character(len=*),              intent(in), optional :: missing   !< Missing data string, empty for none.
    character(len=*),              intent(in), optional :: comments  !< Comment characters.
    logical,                       intent(in), optional :: keep_text !< Keep the text of every cell.
+   character(len=*),              intent(in), optional :: content   !< Lines to read instead of the file's.
    character(len=:), allocatable                       :: miss      !< Missing data string, empty for none.
    character(len=:), allocatable                       :: marks     !< Comment characters.
    character(len=:), allocatable                       :: line      !< Current line.
@@ -110,6 +112,7 @@ contains
    logical                                             :: eof       !< End of file reached.
    logical                                             :: recording !< Recording the header of a dataset.
    integer(I4P)                                        :: cell      !< Cell number in the row.
+   integer(I4P)                                        :: at        !< Next character of `content`.
 
    self%file = file
    sep = ''
@@ -139,17 +142,25 @@ contains
    allocate(self%values(1024), self%first(257), self%dataset(256), self%block(256), self%headers(0), self%labels(0))
    self%first(1) = 1_I4P
    iomsg = ''
-   open(newunit=unit, file=file, action='read', status='old', form='formatted', access='sequential', &
-        iostat=iostat, iomsg=message)
-   if (iostat /= 0_I4P) then
-      iomsg = 'cannot open "'//file//'": '//trim(message)
-      return
+   iostat = 0_I4P
+   at = 1_I4P
+   if (.not. present(content)) then
+      open(newunit=unit, file=file, action='read', status='old', form='formatted', access='sequential', &
+           iostat=iostat, iomsg=message)
+      if (iostat /= 0_I4P) then
+         iomsg = 'cannot open "'//file//'": '//trim(message)
+         return
+      endif
    endif
    blanks = 0_I4P
    dset = 0_I4P
    blk = 0_I4P
    do
-      call read_line(unit, line, eof, iostat)
+      if (present(content)) then
+         call next_line
+      else
+         call read_line(unit, line, eof, iostat)
+      endif
       if (iostat /= 0_I4P) then
          iomsg = 'read error in "'//file//'"'
          exit
@@ -216,8 +227,28 @@ contains
       endif
       if (eof) exit
    enddo
-   close(unit)
+   if (.not. present(content)) close(unit)
    contains
+      subroutine next_line
+      !< The next line of `content` (a last line without its new line too), `eof` at its end.
+      integer(I4P) :: last !< Line end.
+
+      eof = at > len(content)
+      if (eof) then
+         line = ''
+         return
+      endif
+      last = index(content(at:), new_line('a'), kind=I4P)
+      if (last == 0_I4P) then
+         line = content(at:)
+         at = len(content, kind=I4P) + 1_I4P
+      else
+         line = content(at:at + last - 2_I4P)
+         at = at + last
+      endif
+      eof = at > len(content)
+      endsubroutine next_line
+
       subroutine new_row(dset, blk)
       !< Start a new row, doubling the row arrays when full.
       integer(I4P), intent(in)  :: dset     !< Row dataset.

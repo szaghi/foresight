@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(105)                           !< Per-check outcome.
+logical                       :: test_passed(106)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1865,6 +1865,83 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_strings.svg')
 close(unit, status='delete')
 
+! datablocks, load, call with arguments, eval, macros, undefine, as gnuplot 6.0
+open(newunit=unit, file='foresight_script_test_sub.gp', action='write', status='replace')
+write(unit, '(A)') 'sub_argc = ARGC', 'sub_args = ARG0 . "|" . ARG1 . "|" . ARG2 . "|" . ARG3 . "|" . ARG4', 'sub_x = 42'
+close(unit)
+script = 'set output "foresight_script_test_blocks.svg"'//new_line('a')// &
+         '$D << EOD'//new_line('a')// &
+         '1 10'//new_line('a')// &
+         '2 20  # a comment'//new_line('a')// &
+         '3 30'//new_line('a')// &
+         'EOD'//new_line('a')// &
+         'plot $D using 1:2 title "block", $D u 1:($2*2)'//new_line('a')// &
+         'stats $D using 2 nooutput'//new_line('a')// &
+         'b = 1; fit b*x $D using 1:2 via b'//new_line('a')// &
+         'v = 5; call "foresight_script_test_sub.gp" "a b" 2.50 v (v+1)'//new_line('a')// &
+         'after_argc = ARGC'//new_line('a')// &
+         'eval sprintf("e_%d = %d", 3, 9)'//new_line('a')// &
+         'cmd = "m_x = 7"; @cmd'//new_line('a')// &
+         'what = "e_3"; m_y = @what + 1'//new_line('a')// &
+         'has_d = exists("$D"); undefine $D; gone_d = exists("$D")'//new_line('a')// &
+         'p_1 = 1; p_2 = 2; undefine p_*; gone_p = exists("p_1") + exists("p_2")'//new_line('a')// &
+         'set print "foresight_script_test_blocks.txt"'//new_line('a')// &
+         '$E << END'//new_line('a')// &
+         '  5 6'//new_line('a')// &
+         'END'//new_line('a')// &
+         'print $E'//new_line('a')// &
+         'unset print'
+call interpreter%run_text(script, iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(106) = iostat == 0_I4P
+if (test_passed(106)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(106) = same(panel%series(1)%y, [10, 20, 30]) .and. same(panel%series(2)%y, [20, 40, 60]) .and. &
+                         trim(panel%series(1)%title) == 'block'
+   endassociate
+   block
+      real(R8P)                     :: v(9)  !< Values.
+      logical                       :: found !< Variable found.
+      character(len=:), allocatable :: text  !< String value.
+
+      call interpreter%symbols%value_of('STATS_mean', v(1), found)
+      call interpreter%symbols%value_of('b', v(2), found)
+      call interpreter%symbols%value_of('sub_argc', v(3), found)
+      call interpreter%symbols%value_of('after_argc', v(4), found)
+      call interpreter%symbols%value_of('e_3', v(5), found)
+      call interpreter%symbols%value_of('m_x', v(6), found)
+      call interpreter%symbols%value_of('m_y', v(7), found)
+      call interpreter%symbols%value_of('has_d', v(8), found)
+      call interpreter%symbols%value_of('gone_d', v(9), found)
+      test_passed(106) = v(1) == 20.0_R8P .and. abs(v(2) - 10.0_R8P) < 1e-6_R8P .and. v(3) == 4.0_R8P .and. &
+                         v(4) == 0.0_R8P .and. v(5) == 9.0_R8P .and. v(6) == 7.0_R8P .and. v(7) == 10.0_R8P .and. &
+                         v(8) == 1.0_R8P .and. v(9) == 0.0_R8P
+      call interpreter%symbols%string_of('sub_args', text, found)
+      test_passed(106) = test_passed(106) .and. text == 'foresight_script_test_sub.gp|a b|2.50|5|6'
+      call interpreter%symbols%value_of('gone_p', v(1), found)
+      test_passed(106) = test_passed(106) .and. v(1) == 0.0_R8P
+      call interpreter%symbols%value_of('ARG1', v(1), found)
+      test_passed(106) = test_passed(106) .and. .not. found
+   endblock
+   test_passed(106) = test_passed(106) .and. file_is('foresight_script_test_blocks.txt', ['  5 6', '     '])
+endif
+call interpreter%run_text('plot $NONE u 1:2', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'no datablock $NONE') > 0
+call interpreter%run_text('$Q << EOQ'//new_line('a')//'1 2', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'no line "EOQ" ends it') > 0
+call interpreter%run_text('x_1 = 3; @x_1', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'no string variable x_1') > 0
+call interpreter%run_text('load "foresight_script_test_none.gp"', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'cannot open script') > 0
+call interpreter%run_text('load "foresight_script_test_sub.gp" 1', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'call passes arguments') > 0
+open(newunit=unit, file='foresight_script_test_sub.gp')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_blocks.svg')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_blocks.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1873,7 +1950,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,105L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,106L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

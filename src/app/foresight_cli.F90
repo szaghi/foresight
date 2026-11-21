@@ -12,6 +12,8 @@ use foresight, only : file_fingerprint, I4P, I8P, R8P, script_object, sleep_ms, 
 implicit none
 character(len=:), allocatable :: script      !< Script file, empty for none.
 character(len=:), allocatable :: commands    !< Commands of `-e`, run first.
+character(len=4096)            :: args(9)     !< Script arguments of `-c` (ARG1 ... ARG9), the first `nargs`.
+integer(I4P)                   :: nargs       !< Script arguments.
 character(len=:), allocatable :: output      !< Default output.
 character(len=:), allocatable :: theme       !< Default output theme, empty for classic.
 integer(I8P),     allocatable :: prints(:,:) !< Watched file fingerprints.
@@ -49,6 +51,8 @@ contains
 
    script = ''
    commands = ''
+   args = ''
+   nargs = 0_I4P
    output = ''
    theme = ''
    period = 0.0_R8P
@@ -82,6 +86,14 @@ contains
             endif
          endif
          if (period <= 0.0_R8P) call usage_error('--watch needs a positive period')
+      case ('-c', '--call')
+         ! gnuplot's -c: the script, then its arguments (ARG1 ... ARG9), the rest of the command line
+         if (len(script) > 0) call usage_error('only one script can be given')
+         script = option_value(a)
+         do while (a < n)
+            a = a + 1_I4P
+            call push_argument(argument(a))
+         enddo
       case ('--max-cycles')
          value = option_value(a)
          read(value, *, iostat=ios) max_cycles
@@ -112,7 +124,7 @@ contains
    if (period > 0.0_R8P) interpreter%live_refresh = max(1_I4P, nint(period, I4P))
    status = 0_I4P
    if (len(commands) > 0) call interpreter%run_text(commands, status, iomsg, source='-e')
-   if (status == 0_I4P .and. len(script) > 0) call interpreter%run_file(script, status, iomsg)
+   if (status == 0_I4P .and. len(script) > 0) call interpreter%run_file(script, status, iomsg, args=args(1:nargs))
    if (status /= 0_I4P) then
       write(error_unit, '(A)') 'foresight: '//iomsg
    elseif (interpreter%output /= '-' .and. len(interpreter%last_plot) > 0) then
@@ -177,13 +189,25 @@ contains
    if (dot > 1_I4P) base = base(1:dot - 1_I4P)
    endfunction base_name
 
+   subroutine push_argument(arg)
+   !< Append a script argument (`-c`), at most 9.
+   character(len=*), intent(in) :: arg !< Argument.
+
+   if (nargs == 9_I4P) call usage_error('at most 9 script arguments')
+   if (len(arg) > len(args)) call usage_error('a script argument is too long')
+   nargs = nargs + 1_I4P
+   args(nargs) = arg
+   endsubroutine push_argument
+
    subroutine print_usage
    !< Print the command line usage.
    write(output_unit, '(A)') 'usage: foresight [options] [SCRIPT]'
+   write(output_unit, '(A)') '       foresight [options] -c SCRIPT [ARG1 ... ARG9]'
    write(output_unit, '(A)') ''
    write(output_unit, '(A)') 'Render a gnuplot-like SCRIPT to an interactive HTML page (default SCRIPT.html) or SVG.'
    write(output_unit, '(A)') ''
    write(output_unit, '(A)') 'options:'
+   write(output_unit, '(A)') '  -c, --call SCRIPT ARGS  run SCRIPT with ARGS as ARG1 ... ARG9 (ARGC their number), as gnuplot -c'
    write(output_unit, '(A)') '  -e, --execute COMMANDS  run COMMANDS before SCRIPT (repeatable)'
    write(output_unit, '(A)') '  -o, --output FILE       default output file (.html or .svg)'
    write(output_unit, '(A)') '  -t, --theme NAME        default output theme: '//THEMES

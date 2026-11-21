@@ -74,6 +74,9 @@ module foresight_script
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
 !<   [opaque|noopaque] [size H]`, `unset readout`;
+!< - datablocks `$NAME << WORD` (the lines up to one starting with WORD) plotted, fitted, stated as a file (`plot $D`),
+!<   `print $NAME`, `load FILE`, `call FILE ARG1 ...` (ARG0..ARG9, ARGC, restored after it), `eval STRING`, macros
+!<   `@name` (a string variable's value), `undefine NAME|NAME*|$NAME`;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -86,7 +89,7 @@ use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_serie
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_variable, symbols_object
 use foresight_figure, only : figure_object
-use foresight_format, only : format_check, int_str, real_from_decimal
+use foresight_format, only : c_real, format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
@@ -181,6 +184,9 @@ type :: script_object
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
       procedure, pass(self), private :: stats_command !< `stats`.
+      procedure, pass(self), private :: load_data     !< Load a data file or a datablock.
+      procedure, pass(self), private :: call_command  !< `load`, `call`.
+      procedure, pass(self), private :: expand_macros !< `@name` substitution.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
       procedure, pass(self), private :: while_block   !< `while (...) { ... }`.
       procedure, pass(self), private :: if_block      !< `if (...) { ... } else ...`.
@@ -237,6 +243,7 @@ contains
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
    call self%symbols%clear
+   call self%symbols%set_value('ARGC', 0.0_R8P, is_int=.true.)
    self%fit_options = fit_settings()
    self%fit_verbosity = 'quiet'
    self%fit_logfile = ''
@@ -246,18 +253,37 @@ contains
    self%loop_signal = 0_I4P
    endsubroutine init
 
-   subroutine run_file(self, file, iostat, iomsg)
-   !< Run the script `file`.
-   class(script_object),          intent(inout) :: self    !< Interpreter.
-   character(len=*),              intent(in)    :: file    !< Script file.
-   integer(I4P),                  intent(out)   :: iostat  !< 0 on success.
-   character(len=:), allocatable, intent(out)   :: iomsg   !< Error message.
+   recursive subroutine run_file(self, file, iostat, iomsg, args)
+   !< Run the script `file`. With `args` (as gnuplot's `gnuplot -c FILE ARG1 ...`), ARG0 is the file name, ARG1 to
+   !< ARG9 the arguments (empty beyond them), ARGC their number.
+   class(script_object),          intent(inout)        :: self    !< Interpreter.
+   character(len=*),              intent(in)           :: file    !< Script file.
+   integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
+   character(len=*),              intent(in), optional :: args(:) !< Script arguments, at most 9.
+   character(len=*), parameter                         :: DIGITS = '0123456789' !< Argument numbers.
+   integer(I4P)                                        :: k       !< Argument counter.
    character(len=:), allocatable                :: text    !< Script text.
    character(len=256)                           :: message !< I/O message.
    integer(I4P)                                 :: unit    !< File unit.
    integer(I4P)                                 :: bytes   !< File size.
 
    iomsg = ''
+   if (present(args)) then
+      if (size(args) > 9) then
+         call fail('at most 9 script arguments', iostat, iomsg)
+         return
+      endif
+      call self%symbols%set_string('ARG0', file)
+      do k = 1_I4P, 9_I4P
+         if (k <= size(args, kind=I4P)) then
+            call self%symbols%set_string('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), trim(args(k)))
+         else
+            call self%symbols%set_string('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), '')
+         endif
+      enddo
+      call self%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
+   endif
    open(newunit=unit, file=file, access='stream', form='unformatted', action='read', status='old', &
         iostat=iostat, iomsg=message)
    if (iostat /= 0_I4P) then
@@ -275,8 +301,9 @@ contains
    call self%run_text(text, iostat, iomsg, source=file)
    endsubroutine run_file
 
-   subroutine run_text(self, text, iostat, iomsg, source)
-   !< Run script `text`: lines ending in `\` continue on the next one; the first error stops the run.
+   recursive subroutine run_text(self, text, iostat, iomsg, source)
+   !< Run script `text`: lines ending in `\` continue on the next one; the first error stops the run. A line
+   !< `$NAME << WORD` starts a datablock: the lines after it, as they are, up to a line starting with WORD.
    class(script_object),          intent(inout)        :: self       !< Interpreter.
    character(len=*),              intent(in)           :: text       !< Script text.
    integer(I4P),                  intent(out)          :: iostat     !< 0 on success.
@@ -292,9 +319,17 @@ contains
    character(len=:), allocatable                       :: code       !< Logical line without its comment.
    integer(I4P)                                        :: depth      !< Open braces of the block.
    integer(I4P)                                        :: block_line !< First line of the block.
+   character(len=:), allocatable                       :: here_name  !< Datablock being read, empty if none.
+   character(len=:), allocatable                       :: here_end   !< Its terminator.
+   character(len=:), allocatable                       :: here_text  !< Its lines.
+   integer(I4P)                                        :: here_line  !< Its first line.
 
    iostat = 0_I4P
    iomsg = ''
+   here_name = ''
+   here_end = ''
+   here_text = ''
+   here_line = 0_I4P
    block = ''
    depth = 0_I4P
    block_line = 0_I4P
@@ -312,6 +347,22 @@ contains
          finish = start + finish - 2_I4P
       endif
       lineno = lineno + 1_I4P
+      if (len(here_name) > 0) then
+         ! a datablock line, as it is (a carriage return dropped)
+         line = text(start:finish)
+         start = finish + 2_I4P
+         if (len(line) > 0) then
+            if (line(len(line):len(line)) == achar(13)) line = line(1:len(line) - 1)
+         endif
+         if (index(line, here_end) == 1) then
+            call self%symbols%set_string(here_name, here_text)
+            here_name = ''
+         else
+            here_text = here_text//line//new_line('a')
+         endif
+         line = ''
+         cycle
+      endif
       if (len(line) == 0) first_line = lineno
       line = line//text(start:finish)
       start = finish + 2_I4P
@@ -324,6 +375,12 @@ contains
             cycle
          endif
       endif
+      if (len(block) == 0 .and. heredoc(line, here_name, here_end)) then
+         here_text = ''
+         here_line = first_line
+         line = ''
+         cycle
+      endif
       call take(line)
       if (iostat /= 0_I4P) return
       line = ''
@@ -335,8 +392,12 @@ contains
       call fail('"{" not closed', iostat, iomsg)
       iomsg = name//':'//int_str(int(block_line, I8P))//': '//iomsg
    endif
+   if (len(here_name) > 0) then
+      call fail('datablock '//here_name//': no line "'//here_end//'" ends it', iostat, iomsg)
+      iomsg = name//':'//int_str(int(here_line, I8P))//': '//iomsg
+   endif
    contains
-      subroutine take(logical_line)
+      recursive subroutine take(logical_line)
       !< Execute a logical line, or keep it while a block (`do for [...] {`, `if (...) {`) is open.
       character(len=*), intent(in) :: logical_line !< Logical line.
 
@@ -355,7 +416,7 @@ contains
       endif
       endsubroutine take
 
-      subroutine process(logical_line, at)
+      recursive subroutine process(logical_line, at)
       !< Execute the statements of a logical line (or of a block over several lines) starting at line `at`.
       character(len=*), intent(in)    :: logical_line  !< Logical line.
       integer(I4P),     intent(in)    :: at            !< Its first line.
@@ -381,9 +442,20 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(token_object), allocatable              :: tokens(:) !< Statement tokens.
    character(len=:), allocatable                :: command   !< Command word.
+   character(len=:), allocatable                :: expanded  !< Statement after `@name` substitution.
+   character(len=:), allocatable                :: text      !< String argument.
+   integer(I4P)                                 :: i         !< Token counter.
 
-   ! blocks, flow control
+   ! blocks, flow control (their bodies are expanded statement by statement, when they run)
    command = leading_word(statement)
+   if (.not. is_word(command, 'do while if else')) then
+      call self%expand_macros(statement, expanded, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      if (expanded /= statement) then
+         call self%execute(expanded, iostat, iomsg)
+         return
+      endif
+   endif
    select case (command)
    case ('do')
       call self%do_block(statement, iostat, iomsg)
@@ -443,6 +515,42 @@ contains
       call self%print_command(after_command(statement), iostat, iomsg)
    elseif (keyword(command, 'stats', 4_I4P)) then
       call self%stats_command(tokens(2:), iostat, iomsg)
+   elseif (keyword(command, 'load', 1_I4P) .or. keyword(command, 'call', 3_I4P)) then
+      call self%call_command(tokens, keyword(command, 'call', 3_I4P), iostat, iomsg)
+   elseif (keyword(command, 'eval', 3_I4P)) then
+      ! the string, run as script lines
+      i = 2_I4P
+      if (size(tokens) < 2) then
+         call fail('eval: a string is expected', iostat, iomsg)
+         return
+      endif
+      if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+         iomsg = 'eval: '//iomsg
+         return
+      endif
+      if (i < size(tokens, kind=I4P)) then
+         call fail('eval: unexpected "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+         return
+      endif
+      call self%run_text(text, iostat, iomsg, source='eval')
+   elseif (keyword(command, 'undefine', 3_I4P)) then
+      ! variables and datablocks; NAME* every variable whose name starts with NAME
+      if (size(tokens) < 2) then
+         call fail('undefine: a variable name is expected', iostat, iomsg)
+         return
+      endif
+      do i = 2_I4P, size(tokens, kind=I4P)
+         text = tokens(i)%text
+         if (tokens(i)%kind /= TOKEN_WORD .or. len(text) == 0) then
+            call fail('undefine: a variable name is expected, found "'//text//'"', iostat, iomsg)
+            return
+         endif
+         if (text(len(text):len(text)) == '*') then
+            call self%symbols%remove_prefix(text(1:len(text) - 1))
+         else
+            call self%symbols%remove(text)
+         endif
+      enddo
    elseif (keyword(command, 'replot', 3_I4P)) then
       if (len(self%last_plot) == 0) then
          call fail('replot: no previous plot', iostat, iomsg)
@@ -480,6 +588,14 @@ contains
       text = tokens(i)%text
       ok = .true.
       return
+   endif
+   ! a datablock name stands for its data, as a file name
+   if (last == i .and. tokens(i)%kind == TOKEN_WORD) then
+      if (is_datablock(tokens(i)%text)) then
+         text = tokens(i)%text
+         ok = .true.
+         return
+      endif
    endif
    call self%symbols%text_of(expression_source(tokens(i:last)), text, is_string, iostat, iomsg, &
                              degrees=self%figure%panels(self%figure%current)%degrees)
@@ -971,15 +1087,15 @@ contains
       i = i + 1_I4P
    enddo
    ! a missing file is not an error, as gnuplot's (a script may test for it): the variables are left as they are
-   inquire(file=file, exist=found)
+   found = is_datablock(file)
+   if (.not. found) inquire(file=file, exist=found)
    if (.not. found) then
       if (output) write(error_unit, '(A)') 'Cannot find or open file "'//file//'"'
       return
    endif
    texts = .false.
    if (allocated(fields)) texts = any(fields%uses_text())
-   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
-                  keep_text=texts)
+   call self%load_data(data, file, iostat, iomsg, keep_text=texts)
    if (iostat /= 0_I4P) then
       iomsg = 'stats: '//iomsg
       return
@@ -1238,6 +1354,22 @@ contains
    iostat = 0_I4P
    iomsg = ''
    line = ''
+   ! a datablock: its lines, then an empty one, as gnuplot
+   if (is_datablock(trim(adjustl(text)))) then
+      block
+         logical :: found !< Datablock found.
+
+         call self%symbols%string_of(trim(adjustl(text)), line, found)
+         if (.not. found) then
+            call fail('print: no datablock '//trim(adjustl(text)), iostat, iomsg)
+            return
+         endif
+      endblock
+      if (len(line) > 0) then
+         if (line(len(line):len(line)) == new_line('a')) line = line(1:len(line) - 1)
+      endif
+      line = line//new_line('a')
+   else
    call split_arguments(text, parts)
    if (size(parts) == 0) then
       call fail('print: an expression is expected', iostat, iomsg)
@@ -1257,6 +1389,7 @@ contains
       if (k > 1_I4P) line = line//' '
       line = line//value
    enddo
+   endif
    select case (self%print_file)
    case ('')
       write(error_unit, '(A)') line
@@ -1343,10 +1476,11 @@ contains
    first = i
    do while (i <= size(tokens, kind=I4P))
       if (tokens(i)%kind == TOKEN_STRING) exit
+      if (is_datablock(tokens(i)%text)) exit
       i = i + 1_I4P
    enddo
    if (i > size(tokens, kind=I4P) .or. i == first) then
-      call fail('fit: a function then a quoted data file are expected', iostat, iomsg)
+      call fail('fit: a function then a quoted data file (or a datablock) are expected', iostat, iomsg)
       return
    endif
    text = trim(adjustl(statement(tokens(first)%first:tokens(i)%first - 1_I4P)))
@@ -1419,8 +1553,7 @@ contains
       call fail('fit: yerrors needs using X:Y:YERROR', iostat, iomsg)
       return
    endif
-   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
-                  keep_text=any(fields%uses_text()))
+   call self%load_data(data, file, iostat, iomsg, keep_text=any(fields%uses_text()))
    if (iostat /= 0_I4P) then
       iomsg = 'fit: '//iomsg
       return
@@ -1747,6 +1880,11 @@ contains
       elseif (tokens(i)%kind == TOKEN_COMMA) then
          call fail('plot: missing item before ","', iostat, iomsg)
          return
+      elseif (is_datablock(tokens(i)%text) .and. tokens(i)%kind == TOKEN_WORD) then
+         is_function = .false.
+         file = tokens(i)%text
+         written = file
+         self%previous_file = file
       elseif (is_function) then
          ! the expression runs up to the first item option: blanks may separate its words, `x * 2`
          head = i
@@ -2262,8 +2400,7 @@ contains
       needs_text = label_col > 0_I4P
       if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
       if (file /= loaded .or. (needs_text .and. .not. data%has_text)) then
-         call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
-                        keep_text=needs_text)
+         call self%load_data(data, file, iostat, iomsg, keep_text=needs_text)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
@@ -3523,13 +3660,201 @@ contains
       endsubroutine sample_grid
    endsubroutine plot_command
 
+   recursive subroutine call_command(self, tokens, is_call, iostat, iomsg)
+   !< gnuplot `load FILE` and `call FILE [ARG1 ... ARG9]`: run the script FILE (a string expression), ARG0 its name
+   !< and, for `call`, ARGC the number of arguments and ARG1 to ARG9 their texts (a quoted string as it is, a number
+   !< as written, a variable or a parenthesized expression its value: a string as it is, a number as `%g`); those
+   !< variables are restored after it, as gnuplot's. The script is watched as a data file is.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Statement tokens, the command first.
+   logical,                       intent(in)    :: is_call   !< `call`, else `load`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=*), parameter                  :: DIGITS = '0123456789' !< Argument numbers.
+   type(saved_variable)                         :: saved(11) !< ARG0 to ARG9 and ARGC before the call.
+   type(token_object), allocatable              :: args(:)   !< Argument texts.
+   type(token_object)                           :: arg       !< One argument.
+   character(len=:), allocatable                :: file      !< Script.
+   character(len=:), allocatable                :: command   !< `load` or `call`.
+   character(len=:), allocatable                :: value     !< Value of an argument.
+   character(len=:), allocatable                :: message   !< Error of the script.
+   integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: k         !< Argument counter.
+   integer(I4P)                                 :: status    !< Status of the script.
+   logical                                      :: is_string !< A string value.
+   real(R8P)                                    :: number    !< A numeric argument.
+
+   iostat = 0_I4P
+   iomsg = ''
+   command = merge('call', 'load', is_call)
+   if (size(tokens) < 2) then
+      call fail(command//': a script file is expected', iostat, iomsg)
+      return
+   endif
+   i = 2_I4P
+   if (.not. self%string_expression(tokens, i, file, iostat, iomsg)) then
+      iomsg = command//': '//iomsg
+      return
+   endif
+   allocate(args(0))
+   do while (i < size(tokens, kind=I4P))
+      i = i + 1_I4P
+      if (.not. is_call) then
+         call fail('load: unexpected "'//tokens(i)%text//'" (call passes arguments)', iostat, iomsg)
+         return
+      endif
+      if (tokens(i)%kind == TOKEN_STRING) then
+         arg%text = tokens(i)%text
+      elseif (tokens(i)%kind /= TOKEN_WORD) then
+         call fail('call: unexpected "'//tokens(i)%text//'"', iostat, iomsg)
+         return
+      elseif (to_number(tokens(i)%text, number)) then
+         arg%text = tokens(i)%text
+      else
+         call self%symbols%text_of(tokens(i)%text, value, is_string, iostat, iomsg, &
+                                   degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'call: '//iomsg
+            return
+         endif
+         if (.not. is_string) then
+            call self%symbols%constant(tokens(i)%text, number, iostat, iomsg, &
+                                       degrees=self%figure%panels(self%figure%current)%degrees)
+            if (iostat /= 0_I4P) then
+               iomsg = 'call: '//iomsg
+               return
+            endif
+            value = c_real('', 0_I4P, -1_I4P, 'g', number)
+         endif
+         arg%text = value
+      endif
+      if (size(args) == 9) then
+         call fail('call: at most 9 arguments', iostat, iomsg)
+         return
+      endif
+      call push(args, arg)
+   enddo
+   do k = 0_I4P, 9_I4P
+      call self%symbols%save_variable('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), saved(k + 1_I4P))
+   enddo
+   call self%symbols%save_variable('ARGC', saved(11))
+   call self%symbols%set_string('ARG0', file)
+   if (is_call) then
+      do k = 1_I4P, 9_I4P
+         if (k <= size(args, kind=I4P)) then
+            call self%symbols%set_string('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), args(k)%text)
+         else
+            call self%symbols%set_string('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), '')
+         endif
+      enddo
+      call self%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
+   endif
+   call self%register_file(file)
+   call self%run_file(file, status, message)
+   ! the ARG variables back, also after an error
+   do k = 1_I4P, 11_I4P
+      call self%symbols%restore(saved(k))
+   enddo
+   iostat = status
+   iomsg = message
+   endsubroutine call_command
+
+   subroutine expand_macros(self, statement, expanded, iostat, iomsg)
+   !< gnuplot macros: each `@name` outside quotes replaced by the value of the string variable `name`.
+   class(script_object),          intent(in)  :: self      !< Interpreter.
+   character(len=*),              intent(in)  :: statement !< Statement.
+   character(len=:), allocatable, intent(out) :: expanded  !< Statement after substitution.
+   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
+   character(len=*), parameter    :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_' !< Name start.
+   character(len=:), allocatable  :: value     !< Variable value.
+   character(len=1)               :: quote     !< Open quote, blank if none.
+   integer(I4P)                   :: i         !< Character counter.
+   integer(I4P)                   :: e         !< Name end.
+   logical                        :: found     !< String variable found.
+
+   iostat = 0_I4P
+   iomsg = ''
+   expanded = ''
+   if (index(statement, '@') == 0) then
+      expanded = statement
+      return
+   endif
+   quote = ' '
+   i = 1_I4P
+   do while (i <= len(statement, kind=I4P))
+      associate(c => statement(i:i))
+         if (quote /= ' ') then
+            if (c == quote) quote = ' '
+            if (c == '\' .and. quote == '"' .and. i < len(statement)) then
+               expanded = expanded//statement(i:i + 1_I4P)
+               i = i + 2_I4P
+               cycle
+            endif
+         elseif (c == '"' .or. c == "'") then
+            quote = c
+         elseif (c == '#') then
+            ! a comment: left as it is
+            expanded = expanded//statement(i:)
+            return
+         elseif (c == '@' .and. i < len(statement)) then
+            if (scan(statement(i + 1_I4P:i + 1_I4P), LETTERS) > 0) then
+               e = verify(statement(i + 1_I4P:), LETTERS//'0123456789', kind=I4P)
+               if (e == 0_I4P) then
+                  e = len(statement, kind=I4P)
+               else
+                  e = i + e - 1_I4P
+               endif
+               call self%symbols%string_of(statement(i + 1_I4P:e), value, found)
+               if (.not. found) then
+                  call fail('macro @'//statement(i + 1_I4P:e)//': no string variable '//statement(i + 1_I4P:e), &
+                            iostat, iomsg)
+                  return
+               endif
+               expanded = expanded//value
+               i = e + 1_I4P
+               cycle
+            endif
+         endif
+         expanded = expanded//c
+      endassociate
+      i = i + 1_I4P
+   enddo
+   endsubroutine expand_macros
+
+   subroutine load_data(self, data, file, iostat, iomsg, keep_text)
+   !< Load the data file `file`, or the datablock it names (`$DATA`), with the `set datafile` options.
+   class(script_object),          intent(in)           :: self      !< Interpreter.
+   type(datafile_object),         intent(inout)        :: data      !< Data.
+   character(len=*),              intent(in)           :: file      !< File or datablock name.
+   integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
+   logical,                       intent(in), optional :: keep_text !< Keep the cell texts.
+   character(len=:), allocatable                       :: lines     !< Datablock lines.
+   logical                                             :: found     !< Datablock found.
+
+   if (is_datablock(file)) then
+      call self%symbols%string_of(file, lines, found)
+      if (.not. found) then
+         call fail('no datablock '//file, iostat, iomsg)
+         return
+      endif
+      call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
+                     keep_text=keep_text, content=lines)
+   else
+      call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
+                     keep_text=keep_text)
+   endif
+   endsubroutine load_data
+
    subroutine register_file(self, file)
-   !< Remember `file` among the data files read (once).
+   !< Remember `file` among the data files read (once), not a datablock.
    class(script_object), intent(inout) :: self  !< Interpreter.
    character(len=*),     intent(in)    :: file  !< Data file.
    type(token_object)                  :: entry !< New entry.
    integer(I4P)                        :: f     !< Counter.
 
+   if (is_datablock(file)) return
    do f = 1_I4P, size(self%data_files, kind=I4P)
       if (self%data_files(f)%text == file) return
    enddo
@@ -4367,7 +4692,7 @@ contains
          call self%figure%set_palette(words)
          return
       endif
-      call pdata%load(file, iostat, iomsg, separator=self%separator, comments=self%comments)
+      call self%load_data(pdata, file, iostat, iomsg)
       if (iostat /= 0_I4P) then
          iomsg = 'set palette file: '//iomsg
          return
@@ -5509,6 +5834,44 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure function is_datablock(word) result(yes)
+   !< Whether `word` names a datablock: `$`, then a letter or `_`, then letters, digits, `_` (gnuplot `$DATA`).
+   character(len=*), intent(in) :: word !< Word.
+   logical                      :: yes  !< A datablock name.
+   character(len=*), parameter  :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+
+   yes = len(word) >= 2
+   if (yes) yes = word(1:1) == '$' .and. scan(word(2:2), LETTERS) > 0
+   if (yes) yes = verify(word(2:), LETTERS//'0123456789') == 0
+   endfunction is_datablock
+
+   function heredoc(line, name, terminator) result(yes)
+   !< Whether `line` starts a datablock, `$NAME << WORD` (blanks optional around `<<`, a comment after WORD), giving
+   !< its `name` (`$NAME`) and `terminator`.
+   character(len=*),              intent(in)    :: line       !< Logical line.
+   character(len=:), allocatable, intent(inout) :: name       !< Datablock name.
+   character(len=:), allocatable, intent(inout) :: terminator !< Terminating word.
+   logical                                      :: yes        !< A datablock start.
+   character(len=:), allocatable                :: t          !< Line without leading blanks.
+   integer(I4P)                                 :: k          !< `<<` position.
+   integer(I4P)                                 :: e          !< Word end.
+   character(len=:), allocatable                :: rest       !< Text after `<<`.
+
+   yes = .false.
+   t = trim(adjustl(line))
+   k = index(t, '<<', kind=I4P)
+   if (k < 3_I4P) return
+   if (.not. is_datablock(trim(t(1:k - 1_I4P)))) return
+   rest = trim(adjustl(t(k + 2_I4P:)))
+   e = scan(rest, ' #'//achar(9), kind=I4P) - 1_I4P
+   if (e < 0_I4P) e = len(rest, kind=I4P)
+   if (e == 0_I4P) return
+   if (verify(rest(1:e), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') /= 0) return
+   name = trim(t(1:k - 1_I4P))
+   terminator = rest(1:e)
+   yes = .true.
+   endfunction heredoc
+
    pure function leading_word(text) result(word)
    !< The letters starting `text` (blanks skipped): `do`, `if`, `while`, `else`, `for`, `break`.
    character(len=*), intent(in)  :: text !< Text.

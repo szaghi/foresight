@@ -195,6 +195,7 @@ type :: symbols_object
       procedure, pass(self) :: save_variable !< Keep a variable's state.
       procedure, pass(self) :: restore  !< Restore a kept variable's state.
       procedure, pass(self) :: remove   !< Forget a variable.
+      procedure, pass(self) :: remove_prefix !< Forget the variables whose name starts with a prefix.
       procedure, pass(self) :: string_of !< Value of a string variable.
       procedure, pass(self) :: text_of  !< Value of a constant expression as text.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
@@ -1163,6 +1164,22 @@ contains
    none%found = .false.
    call self%restore(none)
    endsubroutine remove
+
+   pure subroutine remove_prefix(self, prefix)
+   !< Forget every variable whose name starts with `prefix` (gnuplot `undefine prefix*`).
+   class(symbols_object), intent(inout) :: self    !< Symbols.
+   character(len=*),      intent(in)    :: prefix  !< Name prefix.
+   type(user_variable), allocatable     :: kept(:) !< Variables kept.
+   integer(I4P)                         :: k       !< Counter.
+
+   if (.not. allocated(self%variables)) return
+   allocate(kept(0))
+   do k = 1_I4P, size(self%variables, kind=I4P)
+      if (index(self%variables(k)%name, prefix) == 1) cycle
+      call push(kept, self%variables(k))
+   enddo
+   call move_alloc(kept, self%variables)
+   endsubroutine remove_prefix
 
    pure subroutine string_of(self, name, text, found)
    !< Value of the string variable `name`; `found` false (and `text` empty) if there is none or it is a number.
