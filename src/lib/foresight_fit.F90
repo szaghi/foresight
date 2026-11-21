@@ -427,11 +427,14 @@ contains
       real(R8P),    intent(in) :: last !< Chi-square before.
       real(R8P),    intent(in) :: p(:) !< Scaled parameters.
       character(len=:), allocatable :: line !< Line.
+      character(len=:), allocatable :: number !< Iteration number.
       real(R8P)                :: ratio !< Change of chi-square over the stopping limit.
       integer(I4P)             :: q    !< Counter.
 
       if (it >= 0_I4P) then
-         line = repeat(' ', 4 - min(4, len(int_str(int(it, I8P)))))//int_str(int(it, I8P))
+         ! through a variable: ifx 2026.2 takes len() of a function result inside repeat() for a constant expression
+         number = int_str(int(it, I8P))
+         line = repeat(' ', 4 - min(4, len(number)))//number
       else
          line = '   *'
       endif

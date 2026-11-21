@@ -251,7 +251,8 @@ contains
    !<
    !< The color from the palette, as gnuplot `lc palette`: `palette_z` maps a value per point over the color axis (`z`,
    !< lines, points, linespoints and impulses; a segment takes the color of its end point, a point of undefined value
-   !< is not drawn, nor the segment to it, but counts for the autoscale, as gnuplot), `palette_cb` one color axis value, `palette_frac` one fraction of the palette (0 to 1) for the whole
+   !< is not drawn, nor the segment to it, but counts for the autoscale, as gnuplot), `palette_cb` one color axis value,
+   !< `palette_frac` one fraction of the palette (0 to 1) for the whole
    !< series. The color axis then spans the `palette_z` values too, and the color box is drawn.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
@@ -2921,7 +2922,8 @@ contains
 
    pure subroutine image_range(all, zmin, zmax, found, positive)
    !< Range of the finite values (the positive ones with `positive`, for a log color axis) of the images among the
-   !< series `all`, and of the `lc palette z` values. A module procedure on the series array, as `layout_histograms`: gfortran 16 debug builds misread
+   !< series `all`, and of the `lc palette z` values. A module procedure on the series array, as `layout_histograms`:
+   !< gfortran 16 debug builds misread
    !< `self%series(s)%grid` through the class dummy.
    type(series_object), intent(in)  :: all(:)   !< Series of the panel.
    real(R8P),           intent(out) :: zmin     !< Smallest value.
@@ -4133,7 +4135,8 @@ contains
 
    pure subroutine paint_series(all, p, cbaxis)
    !< The colors of the series of `all` colored by the palette `p` (gnuplot `lc palette`): per point over the color
-   !< axis `cbaxis` (`z`; the key line sample takes the first point's color, the point sample the last's), one color axis value (`cb`) or one fraction
+   !< axis `cbaxis` (`z`; the key line sample takes the first point's color, the point sample the last's), one color
+   !< axis value (`cb`) or one fraction
    !< (`frac`). A value not placeable on a log color axis takes its low end, as the images. A module procedure on the
    !< series array, as `image_range`.
    type(series_object),  intent(inout) :: all(:) !< Series of the panel.

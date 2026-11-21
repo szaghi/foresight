@@ -65,7 +65,8 @@ module foresight_script
 !<   [format "fmt"]`, `set|unset raxis`, `set grid [polar [STEP]]`, `set border [MASK] [polar]`, `unset border`,
 !<   `set size [square|nosquare|ratio R|noratio] [W,H]`;
 !< - foresight extensions: `set terminal ... theme classic|vfd|lcd|washi|night [glow|noglow]` (any terminal), the colors
-!<   of a 1980s display or of foresight's identity (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style);
+!<   of a 1980s display or of foresight's identity (see foresight_theme); `fs ... segments N`, bars cut into N cells
+!<   over the y range (foresight_style);
 !<   `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
