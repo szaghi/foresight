@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(90)                           !< Per-check outcome.
+logical                       :: test_passed(91)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1354,6 +1354,45 @@ test_passed(90) = test_passed(90) .and. iostat /= 0_I4P .and. &
                   index(iomsg, 'unknown theme "sepia" (supported: classic vfd lcd washi night)') > 0
 call interpreter%init(scratch)
 test_passed(90) = test_passed(90) .and. interpreter%figure%theme%is_classic()
+
+! bins, as gnuplot 6.0 (set table, GPVAL_X_MIN...): equal-width bins centred from the first to the last x (or binrange),
+! a binwidth centred on the range, the sum or the mean of y per bin; a single column is x, each point counting 1 (so
+! for smooth frequency and kdensity); the autoscale spans the outer bin edges and y = 0
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1.5 2', '2.2 4', '2.7 1', '3.1 3', '3.9 5', '4.4 2', '5.0 6', '2.2 1'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("plot '"//data_file//"' using 1 bins=4 with boxes, '' u 1:2 bins binwidth=1 binvalue=avg, "// &
+                             "'' u 1 smooth bins = 3 binrange [0:6]", iostat, iomsg)
+   test_passed(91) = iostat == 0_I4P
+   if (test_passed(91)) test_passed(91) = &
+      all(near(panel%series(1)%x, [1.5_R8P, 2.66667_R8P, 3.83333_R8P, 5.0_R8P])) .and. &
+      same(panel%series(1)%y, [1, 4, 2, 1]) .and. &
+      all(near(panel%series(2)%x, [1.75_R8P, 2.75_R8P, 3.75_R8P, 4.75_R8P])) .and. &
+      all(near(panel%series(2)%y, [2.33333_R8P, 2.0_R8P, 5.0_R8P, 4.0_R8P])) .and. &
+      same(panel%series(3)%x, [0, 3, 6]) .and. same(panel%series(3)%y, [0, 7, 1])
+   call interpreter%run_text("plot '"//data_file//"' using 1 bins=4 with points", iostat, iomsg)
+   test_passed(91) = test_passed(91) .and. iostat == 0_I4P .and. near(panel%xaxis%lo, 0.5_R8P) .and. &
+                     near(panel%xaxis%hi, 6.0_R8P) .and. near(panel%yaxis%lo, 0.0_R8P) .and. near(panel%yaxis%hi, 4.0_R8P)
+   call interpreter%run_text("plot '"//data_file//"' using 1 smooth frequency, '' u 1 smooth kdensity", iostat, iomsg)
+   test_passed(91) = test_passed(91) .and. iostat == 0_I4P
+   if (test_passed(91)) test_passed(91) = &
+      all(near(panel%series(1)%x, [1.5_R8P, 2.2_R8P, 2.7_R8P, 3.1_R8P, 3.9_R8P, 4.4_R8P, 5.0_R8P])) .and. &
+      same(panel%series(1)%y, [1, 2, 1, 1, 1, 1, 1])
+endassociate
+call interpreter%run_text("plot '"//data_file//"' bins smooth unique", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'bins and smooth unique: not both') > 0
+call interpreter%run_text("plot '"//data_file//"' bins binwidth=-1", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'binwidth must be positive') > 0
+call interpreter%run_text("plot '"//data_file//"' binwidth=1", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'binwidth follows bins') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:2 bins with boxes", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'bins need using X or X:Y') > 0
+call interpreter%run_text("plot '"//data_file//"' bins binvalue=max", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'expecting binvalue={sum|avg}') > 0
+call interpreter%run_text("plot x bins", iostat, iomsg)
+test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'bins apply to data files') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1371,7 +1410,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,90L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,91L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

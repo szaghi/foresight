@@ -22,8 +22,8 @@ module foresight_script
 !<   [ps S]`;
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2|x2y1|x2y2]
-!<   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
-!<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
+!<   [smooth FILTER] [bins[=N] [binrange [LO:HI]] [binwidth=W] [binvalue=sum|avg]] [lc [rgb] "color"|N] [lw W] [dt N]
+!<   [pt N] [ps S], ...` (`''` repeats the previous file; smooth and bins: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
 !<   histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|xerrorlines|xyerrorlines` (error bars: `x:y:dy` or
 !<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style);
 !<   `replot [items]`; a `using` field is a column number or a parenthesized expression,
@@ -82,7 +82,7 @@ use foresight_expression, only : expression_object, push, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
-use foresight_smooth, only : CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
+use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
@@ -426,6 +426,12 @@ contains
    character(len=:), allocatable                :: with      !< Item style.
    character(len=:), allocatable                :: filter    !< Item `smooth` filter, empty for none.
    real(R8P)                                    :: bandwidth !< kdensity bandwidth, default if not positive.
+   logical                                      :: binned    !< `bins`: the item is binned.
+   integer(I4P)                                 :: nbins     !< `bins=N`, the number of bins (`set samples` if absent).
+   real(R8P)                                    :: binrange(2) !< `binrange [lo:hi]`, equal ends for the data's.
+   real(R8P)                                    :: binwidth  !< `binwidth=W`, not positive if absent.
+   logical                                      :: binavg    !< `binvalue=avg`.
+   real(R8P)                                    :: bin_edges(2) !< Outer edges of the bins.
    logical                                      :: lcvar     !< lc variable: the colors from the last using column.
    character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
@@ -448,6 +454,7 @@ contains
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 0 for none.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
+   logical                                      :: weight_one !< The single column is x, each point of weight 1.
    logical                                      :: is_matrix !< The item reads a `matrix` file.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
@@ -568,6 +575,11 @@ contains
       axes = 'x1y1'
       filter = ''
       bandwidth = 0.0_R8P
+      binned = .false.
+      nbins = self%samples
+      binrange = 0.0_R8P
+      binwidth = -1.0_R8P
+      binavg = .false.
       lcvar = .false.
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
@@ -722,8 +734,19 @@ contains
                   endif
                enddo
             endif
+         elseif (word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'binrange' .or. &
+                 index(word, 'binwidth') == 1 .or. index(word, 'binval') == 1) then
+            if (.not. bins_option()) return
          elseif (keyword(word, 'smooth', 1_I4P)) then
             if (.not. next_word(tokens, i, filter, iostat, iomsg)) return
+            ! gnuplot: smooth bins is the filter bins, its options after it
+            if (filter == 'bins' .or. index(filter, 'bins=') == 1) then
+               filter = ''
+               word = tokens(i)%text
+               if (.not. bins_option()) return
+               i = i + 1_I4P
+               cycle
+            endif
             if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES))) then
                call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES//')', &
                          iostat, iomsg)
@@ -965,6 +988,11 @@ contains
       endif
       ! columns: gnuplot defaults are 1:2 (0:1 for one column), 1:2:3 for x/y error bars, 1:2:3:4 for xy error bars
       one_field = .false.
+      weight_one = .false.
+      if (binned .and. len(filter) > 0) then
+         call fail('plot: bins and smooth '//filter//': not both', iostat, iomsg)
+         return
+      endif
       if (.not. allocated(fields)) then
          select case (with)
          case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
@@ -983,10 +1011,13 @@ contains
          case default
             call data%default_using(ux, uy)
             fields = plain_columns([ux, uy])
+            ! a single column binned or smoothed by frequency or kdensity: x, each point of weight 1, as gnuplot
+            weight_one = ux == 0_I4P .and. (binned .or. filter == 'frequency' .or. filter == 'kdensity')
          endselect
          one_field = is_word(with, 'histograms pie radar rose gauge parallelaxes spiderplot')
       elseif (size(fields) == 1) then
          one_field = .true.
+         weight_one = binned .or. filter == 'frequency' .or. filter == 'kdensity'
          call point%set_column(0_I4P)
          kept = [point, fields(1)]
          call move_alloc(kept, fields)
@@ -1004,12 +1035,16 @@ contains
             call fail('plot: lc variable needs using x:y:color', iostat, iomsg)
             return
          endif
-         if (len(filter) > 0) then
-            call fail('plot: lc variable does not go with smooth', iostat, iomsg)
+         if (len(filter) > 0 .or. binned) then
+            call fail('plot: lc variable does not go with smooth nor bins', iostat, iomsg)
             return
          endif
       endif
       nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar)
+      if (binned .and. nbar /= 0_I4P) then
+         call fail('plot: bins need using X or X:Y', iostat, iomsg)
+         return
+      endif
       select case (with)
       case ('yerrorbars', 'xerrorbars', 'yerrorlines', 'xerrorlines')
          if (nbar /= 1_I4P .and. nbar /= 2_I4P) then
@@ -1130,10 +1165,25 @@ contains
          call data%table(fields, set_index, every, values, header=headed)
          if (allocated(xlabels)) deallocate(xlabels)
       endif
+      if (weight_one) then
+         values(:, 1) = values(:, 2)
+         values(:, 2) = 1.0_R8P
+      endif
       x = values(:, 1)
       y = values(:, 2)
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
-      if (is_word(filter, CURVE_MODES)) then
+      if (binned) then
+         ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
+         associate(panel => self%figure%panels(self%figure%current))
+            call bin_values(values(:, 1), values(:, 2), nbins, binrange(1), binrange(2), binwidth, binavg, &
+                            merge(panel%x2axis%log, panel%xaxis%log, axes(1:2) == 'x2'), &
+                            merge(panel%y2axis%log, panel%yaxis%log, axes(3:4) == 'y2'), x, y, bin_edges, word)
+         endassociate
+         if (len(word) > 0) then
+            call fail('plot: bins: '//word, iostat, iomsg)
+            return
+         endif
+      elseif (is_word(filter, CURVE_MODES)) then
          call curve_filter
          if (iostat /= 0_I4P) return
       elseif (len(filter) > 0) then
@@ -1382,6 +1432,13 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels)
       endif
+      if (binned) then
+         ! the autoscale spans the outer bin edges and y = 0, as gnuplot
+         associate(panel => self%figure%panels(self%figure%current))
+            panel%series(size(panel%series))%spanned = .true.
+            panel%series(size(panel%series))%span = [bin_edges(1), bin_edges(2), 0.0_R8P, 0.0_R8P]
+         endassociate
+      endif
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
@@ -1483,6 +1540,124 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      function bins_option() result(ok)
+      !< The `bins` option at token `i` (`word`), advancing `i` past its value: `bins[=N]`, `binrange [LO:HI]`,
+      !< `binwidth=W`, `binvalue=sum|avg` (the last three after `bins`, as gnuplot); fails the plot if malformed.
+      logical                       :: ok    !< Read.
+      character(len=:), allocatable :: text  !< Value text.
+      character(len=:), allocatable :: name  !< Option name.
+      real(R8P)                     :: v     !< Number.
+      integer(I4P)                  :: colon !< Range separator.
+
+      ok = .false.
+      if (is_function) then
+         call fail('plot: bins apply to data files, not to the function "'//written//'"', iostat, iomsg)
+         return
+      endif
+      name = word
+      if (index(word, '=') > 0) name = word(1:index(word, '=') - 1)
+      if (name /= 'bins' .and. .not. binned) then
+         call fail('plot: '//name//' follows bins', iostat, iomsg)
+         return
+      endif
+      select case (name)
+      case ('bins')
+         if (len(filter) > 0) then
+            call fail('plot: bins and smooth '//filter//': not both', iostat, iomsg)
+            return
+         endif
+         binned = .true.
+         if (index(word, '=') == 0) then
+            ! bins alone: set samples bins; else the = may be its own token
+            if (i >= size(tokens, kind=I4P)) then
+               ok = .true.
+               return
+            endif
+            if (index(tokens(i + 1_I4P)%text, '=') /= 1) then
+               ok = .true.
+               return
+            endif
+         endif
+         if (.not. value_text(text)) return
+         if (verify(text, '0123456789+-') /= 0 .or. scan(text, '0123456789') == 0 .or. len(text) > 9) then
+            call fail('plot: bins=N needs an integer, found "'//text//'"', iostat, iomsg)
+            return
+         endif
+         read(text, *) nbins
+         ! gnuplot: not positive means set samples
+         if (nbins <= 0_I4P) nbins = self%samples
+      case ('binrange')
+         if (i >= size(tokens, kind=I4P)) then
+            call fail('plot: binrange needs [LO:HI]', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+         text = tokens(i)%text
+         colon = index(text, ':', kind=I4P)
+         if (tokens(i)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
+            call fail('plot: binrange needs [LO:HI]', iostat, iomsg)
+            return
+         endif
+         if (.not. (to_number(trim(adjustl(text(1:colon - 1_I4P))), binrange(1)) .and. &
+                    to_number(trim(adjustl(text(colon + 1_I4P:))), binrange(2)))) then
+            call fail('plot: binrange needs two numbers, found "['//text//']"', iostat, iomsg)
+            return
+         endif
+      case ('binwidth')
+         if (.not. value_text(text)) return
+         if (.not. to_number(text, v)) then
+            call fail('plot: binwidth=W needs a number, found "'//text//'"', iostat, iomsg)
+            return
+         endif
+         if (.not. v > 0.0_R8P) then
+            call fail('plot: binwidth must be positive', iostat, iomsg)
+            return
+         endif
+         binwidth = v
+      case default
+         if (.not. (keyword(name, 'binvalue', 6_I4P))) then
+            call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
+            return
+         endif
+         if (.not. value_text(text)) return
+         if (text /= 'sum' .and. text /= 'avg') then
+            call fail('plot: expecting binvalue={sum|avg}', iostat, iomsg)
+            return
+         endif
+         binavg = text == 'avg'
+      endselect
+      ok = .true.
+      endfunction bins_option
+
+      function value_text(text) result(ok)
+      !< The value of the option `word` at token `i` written NAME=VALUE, the = and the value glued to the name or in
+      !< tokens of their own, advancing `i` past it; fails the plot if there is none.
+      character(len=:), allocatable, intent(out) :: text !< Value.
+      logical                                    :: ok   !< Read.
+
+      ok = .false.
+      text = ''
+      if (index(word, '=') > 0) then
+         text = word(index(word, '=') + 1:)
+      elseif (i < size(tokens, kind=I4P)) then
+         if (index(tokens(i + 1_I4P)%text, '=') == 1) then
+            i = i + 1_I4P
+            text = tokens(i)%text(2:)
+         endif
+      endif
+      if (len(text) == 0 .and. i < size(tokens, kind=I4P)) then
+         if (index(word, '=') > 0 .or. tokens(i)%text == '=') then
+            i = i + 1_I4P
+            text = tokens(i)%text
+         endif
+      endif
+      if (len(text) == 0) then
+         call fail('plot: '//word//' needs =VALUE', iostat, iomsg)
+         return
+      endif
+      ok = .true.
+      endfunction value_text
 
       subroutine variable_colors(c, rgb)
       !< The colors of the points from their color column `c`, gnuplot `lc variable`: the linetype color of each
@@ -4153,7 +4328,8 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
-        keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P)
+        keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
+        .or. word == 'bins' .or. index(word, 'bins=') == 1
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

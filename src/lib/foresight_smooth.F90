@@ -15,11 +15,14 @@ module foresight_smooth
 !< The curves (`smooth_curve`) are sampled at `set samples` points: the natural cubic spline (`csplines`), the smoothing
 !< spline of Reinsch (`acsplines`, weights from a third column), the Bezier curve of the points (`bezier`, in the file
 !< order; `sbezier` sorted and merged) and the Gaussian kernel density estimate (`kdensity`), as gnuplot 6.0.
+!<
+!< The bins (`bin_values`, gnuplot's `bins` filter) are the sums, or the means, of y over equal-width intervals of x.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use penf, only : I4P, R8P
 
 implicit none
 private
+public :: bin_values
 public :: smooth
 public :: smooth_curve
 public :: CURVE_MODES
@@ -29,6 +32,96 @@ character(len=*), parameter :: SMOOTH_MODES = 'unique frequency fnormal cumulati
 character(len=*), parameter :: CURVE_MODES = 'csplines acsplines bezier sbezier kdensity' !< Filters of `smooth_curve`.
 
 contains
+   pure subroutine bin_values(x, y, nbins, lo, hi, width, average, xlog, ylog, xs, ys, edges, message)
+   !< Bin the series (`x`, `y`) as gnuplot's `bins` filter: `nbins` bins of equal width over [`lo`, `hi`] (the data's x
+   !< extremes if `lo` equals `hi`), `lo` and `hi` the centres of the first and last bins; with a `width` > 0 instead,
+   !< the fewest bins of that width that span the range, centred on it. A point falls in bin floor(n (x - xmin) /
+   !< (xmax - xmin)), xmin and xmax the outer edges: on a boundary, in the upper bin; beyond them, in none. Each bin is
+   !< one point at its centre: the sum of its y (`average`: their mean, for two or more). Points not placeable (NaN, or
+   !< not positive on a log axis) are skipped. `edges` are xmin and xmax, which the x autoscale includes; `message` is
+   !< empty on success.
+   real(R8P),                     intent(in)  :: x(:)     !< Abscissae.
+   real(R8P),                     intent(in)  :: y(:)     !< Ordinates, the value each point adds to its bin.
+   integer(I4P),                  intent(in)  :: nbins    !< Number of bins, if `width` is not positive.
+   real(R8P),                     intent(in)  :: lo       !< Centre of the first bin (equal to `hi`: from the data).
+   real(R8P),                     intent(in)  :: hi       !< Centre of the last bin.
+   real(R8P),                     intent(in)  :: width    !< Bin width, if positive.
+   logical,                       intent(in)  :: average  !< The mean of y per bin, not the sum.
+   logical,                       intent(in)  :: xlog     !< Log x axis.
+   logical,                       intent(in)  :: ylog     !< Log y axis.
+   real(R8P), allocatable,        intent(out) :: xs(:)    !< Bin centres.
+   real(R8P), allocatable,        intent(out) :: ys(:)    !< Bin values.
+   real(R8P),                     intent(out) :: edges(2) !< Outer edges of the bins.
+   character(len=:), allocatable, intent(out) :: message  !< Problem, empty if none.
+   logical,   allocatable                     :: ok(:)    !< Placeable points.
+   integer(I4P), allocatable                  :: members(:) !< Points per bin.
+   real(R8P)                                  :: bottom   !< Left edge.
+   real(R8P)                                  :: top      !< Right edge.
+   real(R8P)                                  :: step     !< Bin width.
+   real(R8P)                                  :: slot     !< Bin of a point as a real; the widening of the range.
+   integer(I4P)                               :: n        !< Bins.
+   integer(I4P)                               :: i        !< Counter.
+   integer(I4P)                               :: b        !< Bin of a point.
+
+   message = ''
+   allocate(xs(0), ys(0))
+   edges = 0.0_R8P
+   ok = placeable(x, xlog) .and. placeable(y, ylog)
+   if (lo /= hi) then
+      bottom = min(lo, hi)
+      top = max(lo, hi)
+   else
+      if (.not. any(ok)) then
+         message = 'no points'
+         return
+      endif
+      bottom = minval(x, mask=ok)
+      top = maxval(x, mask=ok)
+   endif
+   if (width > 0.0_R8P) then
+      ! the truncation of gnuplot's int nbins = 1 + (top - bottom) / binwidth
+      if ((top - bottom) / width > 1.0e6_R8P) then
+         message = 'the bin width gives more than a million bins'
+         return
+      endif
+      n = 1_I4P + int((top - bottom) / width, I4P)
+      step = width
+      slot = real(n, R8P) * width - (top - bottom)
+      bottom = bottom - 0.5_R8P * slot
+      top = top + 0.5_R8P * slot
+   else
+      if (nbins < 2_I4P) then
+         message = 'bins need at least 2 bins, or a binwidth'
+         return
+      endif
+      if (.not. top > bottom) then
+         message = 'the x values are all equal: give a binrange or a binwidth'
+         return
+      endif
+      n = nbins
+      step = (top - bottom) / real(n - 1_I4P, R8P)
+      bottom = bottom - 0.5_R8P * step
+      top = top + 0.5_R8P * step
+   endif
+   allocate(members(n))
+   members = 0_I4P
+   xs = [(bottom + (0.5_R8P + real(i - 1_I4P, R8P)) * step, i = 1_I4P, n)]
+   deallocate(ys)
+   allocate(ys(n))
+   ys = 0.0_R8P
+   do i = 1_I4P, size(x, kind=I4P)
+      if (.not. ok(i)) cycle
+      ! gnuplot's floor(n (x - xmin) / range), compared as a real: no integer overflow for far points
+      slot = real(n, R8P) * (x(i) - bottom) / (top - bottom)
+      if (slot < 0.0_R8P .or. slot >= real(n, R8P)) cycle
+      b = int(slot, I4P) + 1_I4P
+      ys(b) = ys(b) + y(i)
+      members(b) = members(b) + 1_I4P
+   enddo
+   if (average) where (members > 1_I4P) ys = ys / real(members, R8P)
+   edges = [bottom, top]
+   endsubroutine bin_values
+
    subroutine smooth(mode, x, y, xlog, ylog, xs, ys)
    !< Filter the series (`x`, `y`) with the `smooth` `mode` (one of `SMOOTH_MODES`) into (`xs`, `ys`); `xlog`, `ylog`
    !< tell the log axes, on which non-positive values are not placeable.

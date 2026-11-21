@@ -269,7 +269,8 @@ A function is sampled over the x range of the data of the same plot.
 
 <Plot name="cb_smooth" svg :width="560" :height="320" />
 
-`smooth frequency` sums the y of the points of equal x: binned x and y = 1 count the points per bin. `smooth cnormal`
+`smooth frequency` sums the y of the points of equal x: binned x and y = 1 count the points per bin (`bins` does the
+binning itself: [a histogram of a sample](#a-histogram-of-a-sample)). `smooth cnormal`
 accumulates them over the sorted x, divided by the total: the fraction of iterations below each value. `smooth unique`
 averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 
@@ -294,6 +295,16 @@ narrower to show more detail.
 Boxes stand on y = 0 and the autoscale reaches 0 and the box edges, unlike gnuplot: bar lengths are proportional to
 the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
 
+
+### A histogram of a sample
+
+<<< @/examples/snippets/cb_bins.gp{gnuplot}
+
+<Plot name="cb_bins" svg :width="560" :height="320" />
+
+`bins` counts the values of one column in bins of equal width: here 0.02 s, as few bins as cover the data. Boxes
+touch, and the autoscale reaches the outer bin edges and 0. The kernel density of the same column, each point weighted
+by the bin width, lands on the same scale. See [Bins](/guide/gnuplot-subset#bins).
 ### Grouped bars with category labels
 
 <<< @/examples/snippets/cb_histograms.gp{gnuplot}

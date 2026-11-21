@@ -82,7 +82,7 @@ that did what it says.
 
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
-plot 'file' [using SPEC] [index N] [every N] [smooth FILTER] [with STYLE] [title "text" | notitle]
+plot 'file' [using SPEC] [index N] [every N] [smooth FILTER | bins[=N] ...] [with STYLE] [title "text" | notitle]
             [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable] [lw W] [dt N] [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
@@ -226,7 +226,7 @@ its points of equal x are merged into one:
 | Filter | y of the merged point |
 |---|---|
 | `unique` | the mean of their y |
-| `frequency` | the sum of their y: with `using (BIN):(1)`, a histogram |
+| `frequency` | the sum of their y: with `using (BIN):(1)`, a histogram ([`bins`](#bins) bins the values itself) |
 | `fnormal` | `frequency` divided by the sum of y over the whole item |
 | `cumulative` | the sum of y up to that x, within the run |
 | `cnormal` | `cumulative` divided by the sum of y over the whole item: an empirical distribution |
@@ -247,7 +247,7 @@ The curve filters replace each run by `set samples` points (100 by default), as 
 | `acsplines` | the smoothing spline of Reinsch through them (at least 4): `using X:Y:W` weights each point, larger weights draw the curve closer (1 without) |
 | `bezier` | the Bézier curve with the points as control points, in the file order: it starts and ends on the first and last point |
 | `sbezier` | the same after sorting and merging the points |
-| `kdensity` [`bandwidth B`] | the Gaussian kernel density of the x values weighted by y, over the x range: `using X:(1)` for a density of counts; the bandwidth is gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, unless given |
+| `kdensity` [`bandwidth B`] | the Gaussian kernel density of the x values weighted by y, over the x range: `using X:(1)`, or `using X` alone, for a density of counts; the bandwidth is gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, unless given |
 
 ```gnuplot
 plot 'run.dat' u 1:5 smooth csplines                  # a spline through the drag coefficient
@@ -257,7 +257,39 @@ plot 'run.dat' u 5:(1) smooth kdensity bandwidth 0.01 # the distribution of colu
 
 The runs stay separate lines. `smooth` applies to `lines`, `points` and `linespoints`; with error bars or on a
 function it is an error (gnuplot ignores the extra columns, or the filter); `acsplines` reads a third column as the
-weights. `mcsplines`, `unwrap`, `path` and the others are [not supported](#not-supported).
+weights. A single `using` column (or a file of one column) is x, each point of weight 1, for `frequency` and
+`kdensity`, as gnuplot: `using 5 smooth kdensity` is `using 5:(1) smooth kdensity`; the other filters read it as y
+at the point numbers. `mcsplines`, `unwrap`, `path` and the others are [not supported](#not-supported).
+
+### Bins
+
+`bins` sorts the x values into bins of equal width and plots each bin as one point at its centre, as gnuplot 6.0:
+
+```gnuplot
+plot 'FILE' using X[:Y] bins[=N] [binrange [LO:HI]] [binwidth=W] [binvalue=sum|avg] [with STYLE]
+plot 'FILE' using X[:Y] smooth bins[=N] ...       # the same
+```
+
+| Option | Bins |
+|---|---|
+| `bins` | `set samples` bins (100 by default) |
+| `bins=N` | N bins (at least 2), the first centred on the smallest x, the last on the largest |
+| `binrange [LO:HI]` | the centres of the first and last bins at LO and HI, whatever the data: values beyond the outer edges fall in no bin |
+| `binwidth=W` | bins W wide, as few as span the range, centred on it (N is then ignored) |
+| `binvalue=avg` | the mean of the y of each bin (two or more points), not their sum |
+
+With one column each value counts 1: a histogram. With `using X:Y` each point adds its y to its bin. A value on the
+boundary of two bins falls in the upper one; `set xrange` does not change which bin a point falls in. The x
+autoscale reaches the outer edges of the bins and the y autoscale includes 0, as gnuplot. The style is the data style
+(`set style data`, `lines` by default): `with boxes` draws a histogram whose boxes touch. `bins` does not go with
+`smooth` nor `lc variable`, and needs `using X` or `using X:Y`; its options read numbers, not expressions.
+
+```gnuplot
+plot 'steptimes.dat' u 2 bins binwidth=0.02 with boxes        # wall times per step, 0.02 s bins
+plot 'run.dat' u 5:2 bins=20 binvalue=avg with histeps        # the mean residual per drag coefficient bin
+```
+
+The [cookbook](/manual/cookbook#a-histogram-of-a-sample) overlays the density of the same sample.
 
 ## Second y axis
 
@@ -930,5 +962,5 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` with other styles than lines, points, linespoints and impulses, `lc palette`, `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
-`mcsplines`, `unwrap`, `path`, `bins`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
+`mcsplines`, `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

@@ -183,6 +183,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_histograms" svg :width="560" :height="320" caption="grouped bars with category labels" />
+  <Plot name="cb_bins" svg :width="560" :height="320" caption="a histogram of a sample (bins)" />
   <Plot name="cb_rowstacked" svg :width="560" :height="320" caption="stacked bars" />
   <Plot name="cb_boxerrorbars" svg :width="560" :height="320" caption="bars with error bars" />
   <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />

@@ -69,6 +69,9 @@ type :: series_object
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
    logical                       :: x2 = .false. !< On the second x axis (gnuplot `axes x2y1`), else on the first.
+   logical                       :: spanned = .false. !< The autoscale also includes `span`.
+   real(R8P)                     :: span(4) = 0.0_R8P !< Extent beyond the points, x from-to and y from-to: the outer
+                                                      !< edges of `bins` and their y = 0, as gnuplot.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.
@@ -122,6 +125,11 @@ contains
       xmin = min(xmin, minval(self%x, mask=mask) - 1.0_R8P)
       xmax = max(xmax, maxval(self%x, mask=mask) + 1.0_R8P)
    endif
+   if (self%spanned) then
+      ! the outer bin edges widen x, unless only the y autoscale is asked (a window); y = 0 widens y, as gnuplot
+      if (.not. present(xwindow)) call widen(self%span(1:2), xaxis, xmin, xmax, .true.)
+      call widen(self%span(3:4), yaxis, ymin, ymax, .true.)
+   endif
    if (allocated(self%xlow)) call widen(self%xlow, xaxis, xmin, xmax)
    if (allocated(self%xhigh)) call widen(self%xhigh, xaxis, xmin, xmax)
    if (allocated(self%ylow)) call widen(self%ylow, yaxis, ymin, ymax)
@@ -150,15 +158,20 @@ contains
       enddo
    endif
    contains
-      pure subroutine widen(ends, axis, lo, hi)
-      !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points.
-      real(R8P),         intent(in)    :: ends(:) !< Bar ends.
-      type(axis_object), intent(in)    :: axis    !< Axis of the bar ends.
-      real(R8P),         intent(inout) :: lo      !< Extent start.
-      real(R8P),         intent(inout) :: hi      !< Extent end.
-      logical, allocatable             :: ok(:)   !< Counted placeable ends.
+      pure subroutine widen(ends, axis, lo, hi, whole)
+      !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points (`whole`: to all the placeable `ends`).
+      real(R8P),         intent(in)           :: ends(:) !< Bar ends.
+      type(axis_object), intent(in)           :: axis    !< Axis of the bar ends.
+      real(R8P),         intent(inout)        :: lo      !< Extent start.
+      real(R8P),         intent(inout)        :: hi      !< Extent end.
+      logical,           intent(in), optional :: whole   !< Not per point: every placeable end counts.
+      logical, allocatable                    :: ok(:)   !< Counted placeable ends.
 
-      ok = mask .and. axis%accepts(ends)
+      if (present(whole)) then
+         ok = axis%accepts(ends)
+      else
+         ok = mask .and. axis%accepts(ends)
+      endif
       if (.not. any(ok)) return
       lo = min(lo, minval(ends, mask=ok))
       hi = max(hi, maxval(ends, mask=ok))
