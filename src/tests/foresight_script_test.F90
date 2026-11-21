@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(94)                           !< Per-check outcome.
+logical                       :: test_passed(95)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1489,6 +1489,23 @@ call interpreter%run_text("set key at 2", iostat, iomsg)
 test_passed(94) = test_passed(94) .and. iostat /= 0_I4P .and. index(iomsg, 'set key at: X, Y expected') > 0
 call interpreter%run_text("set key at 2, y", iostat, iomsg)
 test_passed(94) = test_passed(94) .and. iostat /= 0_I4P .and. index(iomsg, 'a number is expected, found "y"') > 0
+
+! a set trange leaves out the polar data of theta beyond it, as gnuplot 6.0 (set table: flag e): out of the r autoscale
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 1', '90 2', '270 10'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set polar; set angles degrees; plot '"//data_file//"' w lp", iostat, iomsg)
+   test_passed(95) = iostat == 0_I4P .and. panel%raxis%hi == 10.0_R8P
+   call interpreter%run_text("set trange [0:180]; plot '"//data_file//"' w lp", iostat, iomsg)
+   test_passed(95) = test_passed(95) .and. iostat == 0_I4P .and. panel%raxis%hi == 2.0_R8P .and. &
+                     panel%series(1)%y(3) == 10.0_R8P
+   call interpreter%run_text("set trange [180:0]; plot '"//data_file//"' w lp", iostat, iomsg)
+   test_passed(95) = test_passed(95) .and. iostat == 0_I4P .and. panel%raxis%hi == 2.0_R8P
+   call interpreter%run_text("set trange [*:*]; plot '"//data_file//"' w lp", iostat, iomsg)
+   test_passed(95) = test_passed(95) .and. iostat == 0_I4P .and. panel%raxis%hi == 10.0_R8P
+endassociate
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1506,7 +1523,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,94L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,95L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

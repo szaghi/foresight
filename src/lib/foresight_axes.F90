@@ -3286,6 +3286,36 @@ contains
    enddo
    endsubroutine polar_extent
 
+   pure subroutine polar_window(all, fixed, ends)
+   !< Make undefined the points of the series `all` (theta:r) whose theta lies outside the fixed ends of the theta range
+   !< (gnuplot `set trange`, which excludes them from polar data plots); an autoscaled end excludes nothing. Readouts
+   !< kept. A module procedure on the series array, as `polar_project`.
+   type(series_object), intent(inout) :: all(:)   !< Series, theta:r.
+   logical,             intent(in)    :: fixed(2) !< Start, end of the theta range set.
+   real(R8P),           intent(in)    :: ends(2)  !< Start, end of the theta range.
+   real(R8P)                          :: lo       !< Smallest theta kept.
+   real(R8P)                          :: hi       !< Largest theta kept.
+   integer(I4P)                       :: s        !< Series counter.
+   integer(I4P)                       :: i        !< Point counter.
+
+   if (.not. any(fixed)) return
+   lo = -huge(1.0_R8P)
+   hi = huge(1.0_R8P)
+   if (fixed(1)) lo = ends(1)
+   if (fixed(2)) hi = ends(2)
+   if (fixed(1) .and. fixed(2) .and. ends(1) > ends(2)) then
+      lo = ends(2)
+      hi = ends(1)
+   endif
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with == WITH_READOUT) cycle
+      do i = 1_I4P, size(all(s)%x, kind=I4P)
+         if (.not. ieee_is_finite(all(s)%x(i))) cycle
+         if (all(s)%x(i) < lo .or. all(s)%x(i) > hi) all(s)%y(i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+      enddo
+   enddo
+   endsubroutine polar_window
+
    pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise)
    !< Project the series `all` from theta:r to x:y about the pole at r = `rmin`, as gnuplot: x = (r - rmin) cos(phi),
    !< y = (r - rmin) sin(phi), phi the page angle of theta; with `cut` (a fixed `rmin`) a point with r below `rmin` is
@@ -4358,13 +4388,16 @@ contains
       real(R8P) :: rmin  !< r at the pole.
       logical   :: any_r !< Any point.
 
-      call polar_extent(raw, rmax, any_r)
+      ! the points of theta outside a set trange are undefined, as gnuplot 6.0: out of the autoscale and of the drawing
+      self%series = raw
+      call polar_window(self%series, [self%taxis%min_fixed, self%taxis%max_fixed], &
+                        [self%taxis%min_user, self%taxis%max_user])
+      call polar_extent(self%series, rmax, any_r)
       rmin = 0.0_R8P
       if (self%raxis%min_fixed) rmin = self%raxis%min_user
       if (.not. any_r .or. .not. rmax > rmin) rmax = rmin + 1.0_R8P
       call self%raxis%setup(0.0_R8P, rmax, .true., 0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
       radius = self%raxis%hi - self%raxis%lo
-      self%series = raw
       call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed, self%degrees, self%theta_origin, &
                          self%theta_clockwise)
       xmin(1) = -radius

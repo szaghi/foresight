@@ -1079,7 +1079,8 @@ contains
 
    subroutine set_trange(self, min, max)
    !< Angle range the script functions of a polar panel are sampled over, as gnuplot `set trange [min:max]` (in
-   !< `set_angles` units; a full turn from 0 when absent).
+   !< `set_angles` units; a full turn from 0 when absent). A set end also leaves out the data points beyond it, as
+   !< gnuplot 6.0.
    class(figure_object), intent(inout)        :: self !< Figure.
    real(R8P),            intent(in), optional :: min  !< First angle.
    real(R8P),            intent(in), optional :: max  !< Last angle.

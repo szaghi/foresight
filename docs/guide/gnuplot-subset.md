@@ -40,7 +40,7 @@ that did what it says.
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
 | `theta` [`right`\|`top`\|`left`\|`bottom`] [`clockwise`\|`cw`\|`counterclockwise`\|`ccw`] | where theta = 0 lies and its direction (right, counterclockwise by default) | right, counterclockwise |
-| **rr**ange / **tr**ange `[min:max]` | r range (`min` at the pole, 0 when autoscaled) and theta range of the functions (a full turn by default) | — |
+| **rr**ange / **tr**ange `[min:max]` | r range (`min` at the pole, 0 when autoscaled) and theta range: of the functions (a full turn by default), and a set end leaves out the data points beyond it | — |
 | **rti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] | ticks of the r axis (automatic by default) | no r ticks |
 | **tti**cs [[`START,`]`STEP`] [`format "fmt"`] | theta labels around the polar plot, in degrees; every 45 degrees without `STEP` (gnuplot: none) | no theta labels (the default) |
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
@@ -948,6 +948,9 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
   `atan`, `atan2` return them); `set theta top clockwise` puts theta = 0 at the top, growing clockwise;
 - the r range starts at 0 at the pole and ends at the largest |r| extended to the r ticks; `set rrange [1:*]` puts
   r = 1 at the pole, the points below it undefined; with an autoscaled pole a negative r lies across it, as gnuplot;
+- `set trange [min:max]` samples the functions of `t` over it; a set end also leaves out the data points of theta
+  beyond it (gnuplot 6.0 excludes them), with no wrapping of the angles: `[-90:90]` keeps theta = 0 to 90 of data
+  written 0 to 360;
 - x and y autoscale to the disc, [-R:R] for R = rmax - rmin, extended to their ticks when these are on;
 - `set grid polar` draws rings at the r ticks and spokes, `set border polar` the circle of rmax, `set ttics` the theta
   labels outside it (always in degrees), `set size square` keeps the circle round;
