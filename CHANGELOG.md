@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] — 2026-11-21
+### Added
+- **smooth**: Csplines, acsplines, bezier, sbezier and kdensity
+
+- **script**: Lc variable and lc rgb variable, as gnuplot 6.0
+
+- **axes**: The second x axis, as gnuplot 6.0
+
+- **theme**: Washi and night, foresight's identity in light and dark
+
+
+### Documentation
+- Figures in the site's light and dark modes
+
+- **readme**: The README in SETH's style
+
+- **readme**: A self-ironic author line, as the other projects
+
+- **home**: Authors and license as in the README
+
+
+### Fixed
+- **datafile**: Skip cells with no number in plain columns, as gnuplot
+
+- **ticks**: Default log minor ticks between majors decades apart, as gnuplot
+
+- **smooth**: Splines right under nvfortran 26.9
+
+- **script**: Lc variable reads the linetype colors without an associate
+
+
 ## [0.7.0] — 2026-11-20
 ### Added
 - **ticks**: Explicit tick lists and set xtics add, as gnuplot 6.0
