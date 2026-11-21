@@ -115,8 +115,8 @@ contains
    if (status == 0_I4P .and. len(script) > 0) call interpreter%run_file(script, status, iomsg)
    if (status /= 0_I4P) then
       write(error_unit, '(A)') 'foresight: '//iomsg
-   elseif (interpreter%output /= '-') then
-      ! a plot on standard output (dumb terminal) is the whole output
+   elseif (interpreter%output /= '-' .and. len(interpreter%last_plot) > 0) then
+      ! a plot on standard output (dumb terminal) is the whole output; a script that only prints wrote no file
       write(output_unit, '(A)') 'foresight: '//interpreter%output
    endif
    endfunction run
