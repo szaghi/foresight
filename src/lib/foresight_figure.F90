@@ -24,7 +24,7 @@ use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_time, only : time_format_check
-use foresight_style, only : fill_style, sequence_colors
+use foresight_style, only : fill_style, sequence_colors, WITH_HISTOGRAMS
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
@@ -77,6 +77,7 @@ type :: figure_object
       procedure, pass(self) :: set_format      !< gnuplot `set format`.
       procedure, pass(self) :: set_time_axes   !< gnuplot `set xdata time`.
       procedure, pass(self) :: set_timefmt     !< gnuplot `set timefmt`.
+      procedure, pass(self) :: new_histogram   !< gnuplot `plot newhistogram`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
@@ -145,6 +146,10 @@ contains
    ! of an allocatable array component of a polymorphic dummy
    associate(panel => self%panels(self%current))
       if (allocated(panel%series)) deallocate(panel%series)
+      panel%hist_group = 0_I4P
+      panel%hist_at_set = .false.
+      panel%hist_title = ''
+      panel%color_shift = 0_I4P
       panel%xaxis%plot_min_fixed = .false.
       panel%xaxis%plot_max_fixed = .false.
       panel%yaxis%plot_min_fixed = .false.
@@ -260,6 +265,11 @@ contains
    call self%ensure_panels
    settings = self%panels(self%current)
    if (allocated(settings%series)) deallocate(settings%series)
+   ! the histogram groups of a plot end with it
+   settings%hist_group = 0_I4P
+   settings%hist_at_set = .false.
+   settings%hist_title = ''
+   settings%color_shift = 0_I4P
    if (self%manual) then
       call push(self%panels, settings)
    elseif (self%current >= size(self%panels, kind=I4P)) then
@@ -605,24 +615,71 @@ contains
    if (len(bad) > 0) error stop 'foresight: set_style_fill: unsupported fill style "'//bad//'"'
    endsubroutine set_style_fill
 
-   subroutine set_style_histogram(self, style, gap)
-   !< Layout of the histograms plotted next, as gnuplot `set style histogram clustered [gap G]|rowstacked`: `style`
-   !< `clustered` (the default) or `rowstacked`; `gap` the space between clusters, in bar widths (2 by default).
+   subroutine set_style_histogram(self, style, gap, lw)
+   !< Layout of the histograms plotted next, as gnuplot `set style histogram clustered [gap G]|errorbars [gap G] [lw
+   !< W]|rowstacked|columnstacked`: `style` `clustered` (the default), `errorbars` (clustered, each bar with its error
+   !< bar: `plot` `ylow`, `yhigh`), `rowstacked` (a stack per row) or `columnstacked` (a stack per histogram, its rows
+   !< in their linetype colors, the row names given as `labels` its key entries); `gap` the space between clusters,
+   !< in bar widths (2 by default, kept until set again); `lw` the error bar width [px].
    class(figure_object), intent(inout)        :: self  !< Figure.
-   character(len=*),     intent(in)           :: style !< `clustered` or `rowstacked`.
+   character(len=*),     intent(in)           :: style !< `clustered`, `errorbars`, `rowstacked` or `columnstacked`.
    real(R8P),            intent(in), optional :: gap   !< Gap between clusters [bars].
+   real(R8P),            intent(in), optional :: lw    !< Error bar width [px].
 
-   if (style /= 'clustered' .and. style /= 'rowstacked') &
-      error stop 'foresight: set_style_histogram: clustered or rowstacked expected, not "'//style//'"'
    call self%ensure_panels
    associate(panel => self%panels(self%current))
+      select case (style)
+      case ('clustered')
+         panel%histogram_mode = 0_I4P
+      case ('rowstacked')
+         panel%histogram_mode = 1_I4P
+      case ('columnstacked')
+         panel%histogram_mode = 2_I4P
+      case ('errorbars')
+         panel%histogram_mode = 3_I4P
+      case default
+         error stop 'foresight: set_style_histogram: clustered, errorbars, rowstacked or columnstacked expected, not "'// &
+                    style//'"'
+      endselect
       panel%histogram_rowstacked = style == 'rowstacked'
       if (present(gap)) then
          if (gap < 0.0_R8P) error stop 'foresight: set_style_histogram: the gap must not be negative'
          panel%histogram_gap = gap
       endif
+      panel%histogram_lw = 0.0_R8P
+      if (present(lw)) then
+         if (.not. (lw > 0.0_R8P)) error stop 'foresight: set_style_histogram: the line width must be positive'
+         panel%histogram_lw = lw
+      endif
    endassociate
    endsubroutine set_style_histogram
+
+   subroutine new_histogram(self, title, at, lt)
+   !< Start a new group of histograms in the current plot, as gnuplot `plot newhistogram ["title"] [at X] [lt N]`: the
+   !< histograms plotted next form a group laid out after the previous one (2 rows after its last), or from `at`;
+   !< `title` is written below the x axis under the group; `lt` makes their default colors start at linetype `N`.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   character(len=*),     intent(in), optional :: title !< Group title.
+   real(R8P),            intent(in), optional :: at    !< Group start.
+   integer(I4P),         intent(in), optional :: lt    !< First linetype of the group.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (allocated(panel%series)) then
+         if (any(panel%series%style%with == WITH_HISTOGRAMS)) panel%hist_group = panel%hist_group + 1_I4P
+      endif
+      panel%hist_title = ''
+      if (present(title)) panel%hist_title = title
+      panel%hist_at_set = present(at)
+      if (present(at)) panel%hist_at = at
+      if (present(lt)) then
+         if (lt < 1_I4P) error stop 'foresight: new_histogram: the linetype starts at 1'
+         panel%color_shift = 0_I4P
+         if (allocated(panel%series)) panel%color_shift = -size(panel%series, kind=I4P)
+         panel%color_shift = panel%color_shift + lt - 1_I4P
+      endif
+   endassociate
+   endsubroutine new_histogram
 
    subroutine set_style_boxplot(self, words)
    !< Layout of the boxplots plotted next, as gnuplot `set style boxplot`: `words` among `range R` (1.5), `fraction F`,

@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(107)                           !< Per-check outcome.
+logical                       :: test_passed(108)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -510,8 +510,8 @@ if (test_passed(52)) test_passed(52) = same(interpreter%figure%panels(1)%series(
 ! histogram and label errors
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w hist", iostat, iomsg)
 test_passed(53) = iostat /= 0_I4P .and. index(iomsg, 'histograms needs using Y or Y:xtic(N)') > 0
-call interpreter%run_text("set style histogram columnstacked", iostat, iomsg)
-test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "columnstacked"') > 0
+call interpreter%run_text("set style histogram stacked", iostat, iomsg)
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "stacked"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2:xtic(a) w hist", iostat, iomsg)
 test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'xtic: undefined variable: a') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2:ytic(1) w hist", iostat, iomsg)
@@ -2002,6 +2002,61 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_time.svg')
 close(unit, status='delete')
 
+! histogram layouts, as gnuplot 6.0: newhistogram groups (2 rows after the previous group, or at X; lt, fs),
+! errorbars (Y:ERR, Y:LOW:HIGH), columnstacked (key(N) rows, title columnhead the stack label)
+open(newunit=unit, file='foresight_script_test_hist.dat', action='write', status='replace')
+write(unit, '(A)') 'name a b c ea eb', 'r1 1 2 3 0.1 0.2', 'r2 2 3 1 0.2 0.1', 'r3 3 1 2 0.3 0.3'
+close(unit)
+call interpreter%run_text('set output "foresight_script_test_hist.svg"; set style data histograms'//new_line('a')// &
+                          'set style histogram clustered gap 1'//new_line('a')// &
+                          'plot newhistogram "A", "foresight_script_test_hist.dat" u 2:xtic(1) t "a", "" u 3, '// &
+                          'newhistogram "B" lt 4 fs solid 0.5, "" u 4 t "c", newhistogram at 10, "" u 2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(108) = iostat == 0_I4P
+if (test_passed(108)) then
+   associate(panel => interpreter%figure%panels(1))
+      ! the header row is an invalid row of each, counted (as gnuplot): the rows at 1, 2, 3 in the first group
+      test_passed(108) = same(panel%series(1)%x, [1, 2, 3]) .and. same(panel%series(3)%x, [6, 7, 8]) .and. &
+                         same(panel%series(4)%x, [11, 12, 13]) .and. panel%series(3)%hist_title == 'B' .and. &
+                         panel%series(3)%style%density == 0.5_R8P .and. panel%series(3)%style%color == '#e69f00' .and. &
+                         same(panel%series(1)%xhigh * 3.0_R8P, [3, 6, 9]) .and. &
+                         same(panel%series(3)%xhigh * 4.0_R8P, [25, 29, 33])
+   endassociate
+endif
+call interpreter%run_text('set style histogram errorbars gap 1 lw 2; '// &
+                          'plot "foresight_script_test_hist.dat" u 2:5 t "a", "" u 3:($3-1):($3+1) t "b"', iostat, iomsg)
+test_passed(108) = test_passed(108) .and. iostat == 0_I4P
+if (test_passed(108)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(108) = allocated(panel%series(1)%bounds) .and. panel%histogram_lw == 2.0_R8P .and. &
+                         same(panel%series(1)%bounds(1, :) * 10.0_R8P, [9, 18, 27]) .and. &
+                         same(panel%series(2)%bounds(2, :), [3, 4, 2])
+   endassociate
+endif
+call interpreter%run_text('set style histogram columnstacked; '// &
+                          'plot "foresight_script_test_hist.dat" u 2 title columnhead, "" u 3:key(1)', iostat, iomsg)
+test_passed(108) = test_passed(108) .and. iostat == 0_I4P
+if (test_passed(108)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(108) = same(panel%series(1)%x, [0, 0, 0]) .and. same(panel%series(2)%x, [1, 1, 1]) .and. &
+                         same(panel%series(2)%ylow, [0, 2, 5]) .and. same(panel%series(2)%y, [2, 5, 6]) .and. &
+                         trim(panel%series(2)%texts(3)) == 'r3' .and. trim(panel%series(1)%xlabels(1)) == 'a' .and. &
+                         panel%series(1)%colors(2) == '#009e73'
+   endassociate
+endif
+call interpreter%run_text('set style histogram errorbars; '// &
+                          'plot "foresight_script_test_hist.dat" u 2:3:4:5', iostat, iomsg)
+test_passed(108) = test_passed(108) .and. iostat /= 0_I4P .and. index(iomsg, 'needs using Y or Y:xtic(N)') > 0
+call interpreter%run_text('plot newhistogram "A" blah, "foresight_script_test_hist.dat" u 2', iostat, iomsg)
+test_passed(108) = test_passed(108) .and. iostat /= 0_I4P .and. index(iomsg, 'newhistogram: unsupported option') > 0
+call interpreter%run_text('set style histogram clustered lw 2', iostat, iomsg)
+test_passed(108) = test_passed(108) .and. iostat /= 0_I4P .and. index(iomsg, 'lw applies to errorbars') > 0
+call interpreter%run_text('set style histogram clustered gap 2', iostat, iomsg)
+open(newunit=unit, file='foresight_script_test_hist.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_hist.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2010,7 +2065,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,107L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,108L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

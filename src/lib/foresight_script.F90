@@ -46,8 +46,10 @@ module foresight_script
 !<   `border [lc C|-1]`,
 !<   `noborder`), `set boxwidth [W] [absolute|relative]`, `unset boxwidth`;
 !< - `with histograms` (`using Y[:xtic(N)]`, the rows at the point numbers 0, 1, ...), `set style histogram
-!<   clustered [gap G]|rowstacked`; `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae,
-!<   the labels replacing the x ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`);
+!<   clustered [gap G]|errorbars [gap G] [lw W]|rowstacked|columnstacked` (errorbars: `using Y:ERR` or `Y:LOW:HIGH`;
+!<   columnstacked: `key(N)` the row names), `plot newhistogram ["title"] [lt N] [fs FILL] [at X], ...` groups;
+!<   `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae, the labels replacing the x
+!<   ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`);
 !< - string columns in `using` expressions: `strcol(N)`, `stringcolumn(N)` (N a number or a header name),
 !<   `columnhead(N)`, the pseudo-columns `column(-1)` (block) and `column(-2)` (dataset); the text of labels a column
 !<   or an expression;
@@ -1783,6 +1785,10 @@ contains
    logical                                      :: keyed     !< The label column is `key(N)`, row names.
    real(R8P),        allocatable                :: at_x      !< Position of a parallel axis (`at X`).
    character(len=:), allocatable                :: label_opts !< Option words of labels.
+   character(len=:), allocatable                :: group_fs  !< Fill of the histograms of a group (`newhistogram fs`).
+   logical                                      :: errorbars !< Histograms with error bars (`set style histogram
+                                                             !< errorbars`).
+   logical                                      :: columns   !< Column stacked histograms.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 1 for an expression, 0 for none.
    type(expression_object)                      :: label_field !< Field of the text labels (`xtic(...)`, labels).
@@ -1878,6 +1884,19 @@ contains
                i = i + 1_I4P
             enddo
             if (i > size(tokens, kind=I4P)) exit
+            i = i + 1_I4P
+            cycle
+         endif
+      endif
+      ! newhistogram ["title"] [lt N] [fs FILL] [at X]: the next histograms a new group
+      if (tokens(i)%kind == TOKEN_WORD) then
+         if (keyword(tokens(i)%text, 'newhistogram', 4_I4P)) then
+            call new_histogram
+            if (iostat /= 0_I4P) return
+            if (i > size(tokens, kind=I4P)) then
+               call fail('plot: newhistogram needs histograms after it', iostat, iomsg)
+               return
+            endif
             i = i + 1_I4P
             cycle
          endif
@@ -2293,10 +2312,15 @@ contains
          call fail('plot: at applies to parallelaxes only', iostat, iomsg)
          return
       endif
-      if (keyed .and. with /= 'spiderplot') then
-         call fail('plot: key(N) names the rows of a spider plot', iostat, iomsg)
+      associate(panel => self%figure%panels(self%figure%current))
+         errorbars = with == 'histograms' .and. panel%histogram_mode == 3_I4P
+         columns = with == 'histograms' .and. panel%histogram_mode == 2_I4P
+      endassociate
+      if (keyed .and. with /= 'spiderplot' .and. .not. columns) then
+         call fail('plot: key(N) names the rows of a spider plot or of column stacked histograms', iostat, iomsg)
          return
       endif
+      if (with == 'histograms' .and. .not. allocated(fs) .and. allocated(group_fs)) fs = group_fs
       if (allocated(whisker) .and. with /= 'candlesticks') then
          call fail('plot: whiskerbars applies to candlesticks only', iostat, iomsg)
          return
@@ -2460,6 +2484,12 @@ contains
          weight_one = binned .or. filter == 'frequency' .or. filter == 'kdensity'
          call point%set_column(0_I4P)
          kept = [point, fields(1)]
+         call move_alloc(kept, fields)
+      elseif (errorbars .and. (size(fields) == 2 .or. size(fields) == 3)) then
+         ! errorbars histograms: Y:ERR or Y:LOW:HIGH, at the point numbers
+         one_field = .true.
+         call point%set_column(0_I4P)
+         kept = [point, fields]
          call move_alloc(kept, fields)
       endif
       ! time data (gnuplot `set xdata time`): the x field and the y field read with the timefmt
@@ -2665,6 +2695,17 @@ contains
          if (nbar == 3_I4P) arcs = transpose(values(:, 4:5))
       case ('filledcurves')
          if (nbar == 1_I4P) ylow = values(:, 3)
+      case ('histograms')
+         if (errorbars .and. nbar == 1_I4P) then
+            ylow = y - values(:, 3)
+            yhigh = y + values(:, 3)
+         elseif (errorbars .and. nbar == 2_I4P) then
+            ylow = values(:, 3)
+            yhigh = values(:, 4)
+         elseif (errorbars) then
+            call fail('plot: errorbars histograms need using Y:ERR or Y:LOW:HIGH', iostat, iomsg)
+            return
+         endif
       case ('boxerrorbars')
          if (nbar == 3_I4P) then
             ylow = values(:, 3)
@@ -2875,12 +2916,38 @@ contains
          endif
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
                                base=base, fs=fs, xlabels=xlabels, curve=curve)
+      elseif (with == 'histograms' .and. columns) then
+         if (allocated(fs)) then
+            if (.not. fill_ok(fs)) return
+         endif
+         ! a column stack: the rows named by key(N) in the key; titled by columnhead, the stack's x tick label
+         if (is_head .and. len(title) > 0) then
+            block
+               character(len=:), allocatable :: heads(:) !< The stack label on its first row.
+
+               allocate(character(len=len(title)) :: heads(size(x)))
+               heads(:) = ''
+               if (size(x) > 0) heads(1) = title
+               if (keyed) then
+                  call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
+                                        fs=fs, xlabels=heads, labels=xlabels)
+               else
+                  call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
+                                        fs=fs, xlabels=heads)
+               endif
+            endblock
+         elseif (keyed) then
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
+                                  labels=xlabels)
+         else
+            call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs)
+         endif
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
-                               width=widths, base=base, fs=fs, xlabels=xlabels)
+                               width=widths, base=base, fs=fs, xlabels=xlabels, yhigh=yhigh)
       elseif (lcvar) then
          ! the key sample and the default color of the item: its own, not the marker
          deallocate(line%lc)
@@ -3295,6 +3362,67 @@ contains
       endassociate
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
+
+      subroutine new_histogram
+      !< `newhistogram ["title"] [lt|linetype N] [fs|fillstyle FILL] [at X]` at token `i`, up to the next comma (`i` on
+      !< it): the next histograms a new group, laid out after the previous one or from X, the title below the x axis,
+      !< their default colors from linetype N, their fill FILL.
+      character(len=:), allocatable :: text  !< Group title.
+      real(R8P), allocatable        :: start !< Group start.
+      integer(I4P), allocatable     :: lt    !< First linetype.
+      integer(I4P)                  :: n     !< Linetype read.
+      real(R8P)                     :: v     !< Start read.
+
+      text = ''
+      if (allocated(group_fs)) deallocate(group_fs)
+      i = i + 1_I4P
+      if (i <= size(tokens, kind=I4P)) then
+         if (tokens(i)%kind == TOKEN_STRING .or. (tokens(i)%kind == TOKEN_WORD .and. .not. &
+             is_word(tokens(i)%text, 'lt linetype fs fillstyle at'))) then
+            if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+               iomsg = 'plot: newhistogram: '//iomsg
+               return
+            endif
+            i = i + 1_I4P
+         endif
+      endif
+      do while (i <= size(tokens, kind=I4P))
+         if (tokens(i)%kind == TOKEN_COMMA) exit
+         if (is_word(tokens(i)%text, 'lt linetype')) then
+            if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+            if (n < 1_I4P) then
+               call fail('plot: newhistogram: the linetype starts at 1', iostat, iomsg)
+               return
+            endif
+            lt = n
+         elseif (is_word(tokens(i)%text, 'fs fillstyle')) then
+            group_fs = ''
+            do while (i < size(tokens, kind=I4P))
+               if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) exit
+               if (is_word(tokens(i + 1_I4P)%text, 'lt linetype at')) exit
+               i = i + 1_I4P
+               group_fs = group_fs//' '//tokens(i)%text
+            enddo
+         elseif (tokens(i)%text == 'at') then
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            start = v
+         else
+            call fail('plot: newhistogram: unsupported option "'//tokens(i)%text//'" ("title", lt N, fs FILL, at X)', &
+                      iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+      enddo
+      if (allocated(lt) .and. allocated(start)) then
+         call self%figure%new_histogram(title=text, at=start, lt=lt)
+      elseif (allocated(lt)) then
+         call self%figure%new_histogram(title=text, lt=lt)
+      elseif (allocated(start)) then
+         call self%figure%new_histogram(title=text, at=start)
+      else
+         call self%figure%new_histogram(title=text)
+      endif
+      endsubroutine new_histogram
 
       subroutine inline_range(text, first)
       !< An inline range `[min:max]` of the plot command (`text` without brackets): of x if `first` (where
@@ -5716,40 +5844,57 @@ contains
             return
          elseif (keyword(tokens(2)%text, 'histogram', 4_I4P)) then
             block
-               logical                :: rows !< Row stacked.
-               real(R8P), allocatable :: gap  !< Cluster gap.
-               real(R8P)              :: v    !< Number.
+               character(len=13)      :: mode  !< Layout.
+               real(R8P), allocatable :: gap   !< Cluster gap.
+               real(R8P), allocatable :: width !< Error bar width.
+               real(R8P)              :: v     !< Number.
 
-               rows = .false.
+               mode = 'clustered'
                s = 3_I4P
                do while (s <= size(tokens, kind=I4P))
-                  if (tokens(s)%text == 'clustered') then
-                     rows = .false.
+                  if (keyword(tokens(s)%text, 'clustered', 7_I4P)) then
+                     mode = 'clustered'
                   elseif (keyword(tokens(s)%text, 'rowstacked', 4_I4P)) then
-                     rows = .true.
-                  elseif (tokens(s)%text == 'gap') then
+                     mode = 'rowstacked'
+                  elseif (keyword(tokens(s)%text, 'columnstacked', 7_I4P)) then
+                     mode = 'columnstacked'
+                  elseif (keyword(tokens(s)%text, 'errorbars', 5_I4P)) then
+                     mode = 'errorbars'
+                  elseif (tokens(s)%text == 'gap' .or. is_word(tokens(s)%text, 'lw linewidth')) then
                      s = s + 1_I4P
                      if (s > size(tokens, kind=I4P)) then
-                        call fail('set style histogram: gap needs a number', iostat, iomsg)
+                        call fail('set style histogram: '//tokens(s - 1_I4P)%text//' needs a number', iostat, iomsg)
                         return
                      endif
                      if (.not. to_number(tokens(s)%text, v)) then
-                        call fail('set style histogram: gap needs a number', iostat, iomsg)
+                        call fail('set style histogram: '//tokens(s - 1_I4P)%text//' needs a number', iostat, iomsg)
                         return
                      endif
-                     if (v < 0.0_R8P) then
-                        call fail('set style histogram: the gap must not be negative', iostat, iomsg)
-                        return
+                     if (tokens(s - 1_I4P)%text == 'gap') then
+                        if (v < 0.0_R8P) then
+                           call fail('set style histogram: the gap must not be negative', iostat, iomsg)
+                           return
+                        endif
+                        gap = v
+                     else
+                        if (.not. (v > 0.0_R8P)) then
+                           call fail('set style histogram: the line width must be positive', iostat, iomsg)
+                           return
+                        endif
+                        width = v
                      endif
-                     gap = v
                   else
-                     call fail('set style histogram: unsupported option "'//tokens(s)%text//'" (clustered [gap G] '// &
-                               'and rowstacked are supported)', iostat, iomsg)
+                     call fail('set style histogram: unsupported option "'//tokens(s)%text//'" (clustered [gap G], '// &
+                               'errorbars [gap G] [lw W], rowstacked and columnstacked are supported)', iostat, iomsg)
                      return
                   endif
                   s = s + 1_I4P
                enddo
-               call self%figure%set_style_histogram(merge('rowstacked', 'clustered ', rows), gap)
+               if (allocated(width) .and. trim(mode) /= 'errorbars') then
+                  call fail('set style histogram: lw applies to errorbars', iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_style_histogram(trim(mode), gap, width)
             endblock
             return
          elseif (keyword(tokens(2)%text, 'fill', 2_I4P)) then

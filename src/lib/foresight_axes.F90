@@ -21,9 +21,11 @@ module foresight_axes
 !< Histograms (`with histograms`) lay out their bars from all the histogram series of the panel, as gnuplot: rows at
 !< their abscissae (the point numbers 0, 1, ... from a script), `clustered` the k series side by side in slots
 !< 1/(k + gap) wide centred on the row, `rowstacked` one stack per row, 1 wide, positive values up from 0 and negative
-!< ones down from 0; `boxwidth` scales each bar. The layout is redone at every histogram added, the original values
-!< kept in `values`; the x autoscale reaches one unit beyond the first and last rows, as gnuplot. Unlike gnuplot,
-!< clustered bars reach 0 in the y autoscale, as boxes.
+!< ones down from 0, `columnstacked` one stack per series (its rows stacked, each in its linetype color, the row names
+!< in the key), `errorbars` clustered with an error bar on each bar; `boxwidth` scales each bar. Groups (gnuplot
+!< `newhistogram`) follow one another, 2 rows apart (or from `at`), their titles below the x axis. The layout is redone
+!< at every histogram added, the original values kept in `values`, the rows in `rows`; the x autoscale reaches one unit
+!< beyond the first and last rows, as gnuplot. Unlike gnuplot, clustered bars reach 0 in the y autoscale, as boxes.
 !<
 !< Text labels of the abscissae (`xtic(N)`) of every series replace the x ticks (see foresight_axis).
 !<
@@ -94,6 +96,10 @@ real(R8P),        parameter :: TICK_MAJOR    = 6.0_R8P   !< Major tick length [p
 real(R8P),        parameter :: TICK_MINOR    = 3.0_R8P   !< Minor tick length [px].
 real(R8P),        parameter :: GAP           = 6.0_R8P   !< Gap between border, tick labels and axis labels [px].
 real(R8P),        parameter :: LINE_HEIGHT   = 1.25_R8P  !< Text line height [font size].
+integer(I4P),     parameter :: HIST_CLUSTERED     = 0_I4P !< Histograms side by side in each row.
+integer(I4P),     parameter :: HIST_ROWSTACKED    = 1_I4P !< Histograms stacked by row.
+integer(I4P),     parameter :: HIST_COLUMNSTACKED = 2_I4P !< One stack per histogram, its rows stacked.
+integer(I4P),     parameter :: HIST_ERRORBARS     = 3_I4P !< Clustered, with error bars.
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
 real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
@@ -169,6 +175,15 @@ type :: axes_object
    logical                          :: boxwidth_relative = .false. !< `boxwidth` scales the auto width.
    logical                          :: histogram_rowstacked = .false. !< Histograms stacked by row, else clustered.
    real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
+   integer(I4P)                     :: histogram_mode = HIST_CLUSTERED !< Layout of the histograms: HIST_CLUSTERED,
+                                                        !< HIST_ROWSTACKED, HIST_COLUMNSTACKED, HIST_ERRORBARS.
+   real(R8P)                        :: histogram_lw = 0.0_R8P !< Error bar width of `errorbars` [px], 0: the series'.
+   integer(I4P)                     :: hist_group = 0_I4P   !< Group of the histograms plotted next (`newhistogram`).
+   logical                          :: hist_at_set = .false. !< The next group starts at `hist_at`.
+   real(R8P)                        :: hist_at = 0.0_R8P    !< Start of the next group.
+   character(len=:), allocatable    :: hist_title           !< Title of the next group.
+   integer(I4P)                     :: color_shift = 0_I4P  !< Shift of the default linetype colors of the next
+                                                            !< series (gnuplot `newhistogram lt N`).
    type(palette_object)             :: palette          !< Palette of the images, `set palette`.
    character(len=7), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
    type(axis_object)                :: cbaxis         !< Color axis of the images, `set cbrange`; tight, see
@@ -215,6 +230,10 @@ type :: axes_object
       procedure, pass(self) :: render                      !< Render the panel.
       procedure, pass(self) :: set_defaults                !< Settings of a new panel beyond its components' defaults.
       procedure, pass(self), private :: xlabels_extent !< Extent of the rotated x tick labels.
+      procedure, pass(self), private :: group_rows     !< Lines of the histogram group titles.
+      procedure, pass(self), private :: stacked_column !< Whether a series is a column stack.
+      procedure, pass(self), private :: stack_names    !< The column stack naming the key rows.
+      procedure, pass(self), private :: draw_group_titles !< Draw the histogram group titles.
       procedure, pass(self), private :: draw_frame         !< Draw border, ticks, labels and title.
       procedure, pass(self), private :: draw_grid          !< Draw the grid.
       procedure, pass(self), private :: draw_polar_axes    !< Draw the radial axis and the theta labels.
@@ -351,7 +370,7 @@ contains
    series%title = ''
    if (present(title)) series%title = title
    if (present(with)) series%style%with = style_with(with)
-   series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P, self%linecolors)
+   series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P + self%color_shift, self%linecolors)
    if (present(lc)) series%style%color = lc
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt
@@ -539,9 +558,28 @@ contains
          series%at_set = .true.
       endif
    case (WITH_HISTOGRAMS)
-      if (present(base) .or. present(ylow) .or. present(width)) &
-         error stop 'foresight: plot: histograms take no base, ylow nor width (set_boxwidth scales the bars)'
+      if (present(base) .or. present(width)) &
+         error stop 'foresight: plot: histograms take no base nor width (set_boxwidth scales the bars)'
+      if (present(ylow) .neqv. present(yhigh)) error stop 'foresight: plot: histogram error bars need ylow and yhigh'
+      if (present(ylow) .and. self%histogram_mode /= HIST_ERRORBARS) &
+         error stop 'foresight: plot: histogram error bars (ylow, yhigh) need set_style_histogram("errorbars")'
+      if (present(ylow)) then
+         if (size(ylow) /= size(y) .or. size(yhigh) /= size(y)) error stop 'foresight: plot: ylow/yhigh sizes differ from y'
+         allocate(series%bounds(2, size(x)))
+         series%bounds(1, :) = ylow
+         series%bounds(2, :) = yhigh
+      endif
       series%values = y
+      series%hist_group = self%hist_group
+      series%hist_at_set = self%hist_at_set
+      series%hist_at = self%hist_at
+      series%hist_title = ''
+      if (allocated(self%hist_title)) series%hist_title = self%hist_title
+      if (self%histogram_mode == HIST_COLUMNSTACKED .and. present(labels)) then
+         ! the row names of a column stack (gnuplot `key(N)`): its key entries
+         if (size(labels) /= size(x)) error stop 'foresight: plot: labels and x have different sizes'
+         series%texts = labels
+      endif
    case (WITH_FILLEDCURVES)
       ! gnuplot fills a curve even with an empty fill style, and never draws its border
       if (series%style%fill == FILL_EMPTY) series%style%density = 1.0_R8P
@@ -622,8 +660,9 @@ contains
    endif
    if (self%polar .and. .not. polar_series(series)) error stop 'foresight: plot: '//POLAR_STYLES
    call push(self%series, series)
-   if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_rowstacked, &
-                                                                     self%histogram_gap, self%boxwidth)
+   if (series%style%with == WITH_HISTOGRAMS) call layout_histograms(self%series, self%histogram_mode, &
+                                                                     self%histogram_gap, self%boxwidth, &
+                                                                     self%linecolors)
    contains
       subroutine ellipse_shapes
       !< Ellipse diameters and angles: `major` alone for both diameters, a negative one (or none) for the default size;
@@ -1510,6 +1549,78 @@ contains
    if (self%x2axis%has_label()) room = room + LINE_HEIGHT * font_size + GAP
    endfunction x2_room
 
+   pure function stacked_column(self, s) result(yes)
+   !< Whether series `s` is a column stack (columnstacked histograms): its rows, not its title, make the key.
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P),       intent(in) :: s    !< Series index.
+   logical                        :: yes  !< A column stack.
+
+   yes = self%series(s)%style%with == WITH_HISTOGRAMS .and. self%histogram_mode == HIST_COLUMNSTACKED
+   endfunction stacked_column
+
+   pure function stack_names(self) result(s)
+   !< The last column stack with row names (gnuplot `key(N)`), 0 if none: its rows make the key.
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P)                   :: s    !< Series index.
+
+   do s = size(self%series, kind=I4P), 1_I4P, -1_I4P
+      if (.not. self%stacked_column(s)) cycle
+      if (allocated(self%series(s)%texts)) return
+   enddo
+   s = 0_I4P
+   endfunction stack_names
+
+   pure function group_rows(self) result(rows)
+   !< 1 if a histogram group has a title (gnuplot `newhistogram "title"`), a line below the x tick labels; else 0.
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P)                   :: rows !< Lines.
+   integer(I4P)                   :: s    !< Series counter.
+
+   rows = 0_I4P
+   if (.not. allocated(self%series)) return
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%style%with /= WITH_HISTOGRAMS) cycle
+      if (.not. allocated(self%series(s)%hist_title)) cycle
+      if (len(self%series(s)%hist_title) > 0) rows = 1_I4P
+   enddo
+   endfunction group_rows
+
+   subroutine draw_group_titles(self, backend, left, right, baseline)
+   !< The title of each histogram group centred under its bars (the middle of its rows, or stacks), on `baseline`.
+   class(axes_object),    intent(in)    :: self     !< Panel.
+   class(backend_object), intent(inout) :: backend  !< Output device.
+   real(R8P),             intent(in)    :: left     !< Plot area left [px].
+   real(R8P),             intent(in)    :: right    !< Plot area right [px].
+   real(R8P),             intent(in)    :: baseline !< Text baseline [px].
+   real(R8P)                            :: lo       !< First row of the group.
+   real(R8P)                            :: hi       !< Last row of the group.
+   real(R8P)                            :: u        !< Unit abscissa of the group centre.
+   integer(I4P)                         :: s        !< Series counter.
+   integer(I4P)                         :: t        !< Series of the same group.
+
+   call backend%begin_group('fs-groups')
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%style%with /= WITH_HISTOGRAMS) cycle
+      ! the first series of its group
+      if (any([(self%series(t)%style%with == WITH_HISTOGRAMS .and. &
+                self%series(t)%hist_group == self%series(s)%hist_group, t = 1_I4P, s - 1_I4P)])) cycle
+      if (len(self%series(s)%hist_title) == 0) cycle
+      lo = huge(1.0_R8P)
+      hi = -huge(1.0_R8P)
+      do t = s, size(self%series, kind=I4P)
+         if (self%series(t)%style%with /= WITH_HISTOGRAMS) cycle
+         if (self%series(t)%hist_group /= self%series(s)%hist_group) cycle
+         lo = min(lo, minval(self%series(t)%x, mask=ieee_is_finite(self%series(t)%x)))
+         hi = max(hi, maxval(self%series(t)%x, mask=ieee_is_finite(self%series(t)%x)))
+      enddo
+      if (.not. (lo <= hi)) cycle
+      u = self%xaxis%to_unit(0.5_R8P * (lo + hi))
+      if (u < 0.0_R8P .or. u > 1.0_R8P) cycle
+      call backend%text(left + u * (right - left), baseline, self%series(s)%hist_title, 'middle')
+   enddo
+   call backend%end_group
+   endsubroutine draw_group_titles
+
    pure function xlabels_extent(self, backend, font_size) result(extent)
    !< Depth below the base, reach left and right of the tick [px] of the rotated x tick labels, the largest over the
    !< major ticks (see `rotated_extent`); zero without labels.
@@ -1588,6 +1699,10 @@ contains
          endif
       enddo
       call backend%end_group
+      ! the titles of the histogram groups (gnuplot `newhistogram "title"`), a line below the x tick labels
+      if (self%group_rows() > 0_I4P) call self%draw_group_titles(backend, left, right, bottom + shift + GAP + &
+                                                                 font_size + LINE_HEIGHT * font_size * &
+                                                                 real(label_rows(self%xaxis%ticks), R8P))
       call backend%begin_group('fs-yticks')
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
@@ -1671,7 +1786,7 @@ contains
       if (self%xaxis%has_label()) then
          if (angle /= 0.0_R8P .or. self%xaxis%tics%out) then
             ! below the rotated or moved tick labels
-            depth = shift + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P)
+            depth = shift + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks) + self%group_rows(), R8P)
             if (angle /= 0.0_R8P) then
                extent = self%xlabels_extent(backend, font_size)
                depth = shift + extent(1)
@@ -1679,7 +1794,8 @@ contains
             call backend%text(0.5_R8P * (left + right), bottom + depth + GAP + font_size, self%xaxis%label, 'middle')
          else
             call backend%text(0.5_R8P * (left + right), bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT * &
-                              real(label_rows(self%xaxis%ticks), R8P)) * font_size, self%xaxis%label, 'middle')
+                              real(label_rows(self%xaxis%ticks) + self%group_rows(), R8P)) * font_size, &
+                              self%xaxis%label, 'middle')
          endif
       endif
       if (self%yaxis%has_label()) call backend%text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
@@ -1908,7 +2024,7 @@ contains
    endassociate
    k = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
-      if (len(self%series(s)%title) == 0 .or. self%is_readout(s)) cycle
+      if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
       ! entry k (from 0) in column mod(k, columns), row k / columns
       xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
       xs(1) = xs(2) - SAMPLE_LENGTH * font_size
@@ -1946,6 +2062,30 @@ contains
       call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
       call backend%end_group
    enddo
+   ! the rows of column stacks, by their names, the last row first (as gnuplot): no series of their own
+   s = self%stack_names()
+   if (s > 0_I4P) then
+      block
+         type(style_object) :: row !< Style of a row.
+         integer(I4P)       :: r   !< Row counter.
+
+         do r = size(self%series(s)%texts, kind=I4P), 1_I4P, -1_I4P
+            xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
+            xs(1) = xs(2) - SAMPLE_LENGTH * font_size
+            yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
+            k = k + 1_I4P
+            row = self%series(s)%style
+            row%color = default_color(r, self%linecolors)
+            call backend%begin_group('fs-key-row')
+            call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
+                                 [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
+                                  yc - 0.35_R8P * font_size], row%fill_color(), row%density, row%stroke_color(), &
+                                 row%linewidth)
+            call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, trim(self%series(s)%texts(r)), 'end')
+            call backend%end_group
+         enddo
+      endblock
+   endif
    contains
       subroutine key_anchor(left, top)
       !< Left and top [px] of the key placed at `key_xy`: its box edge (`left`, `right`) or centre on the abscissa, its
@@ -2162,15 +2302,24 @@ contains
    real(R8P),             intent(out) :: extent(2) !< Key width and height [px].
    real(R8P)                          :: entry     !< Entry width, spacing included [px].
    integer(I4P)                       :: s         !< Series counter.
+   integer(I4P)                       :: k         !< Row counter.
 
    grid = [0_I4P, 1_I4P, 0_I4P]
    entry = 0.0_R8P
    if (allocated(self%series)) then
       do s = 1_I4P, size(self%series, kind=I4P)
-         if (len(self%series(s)%title) == 0 .or. self%is_readout(s)) cycle
+         if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
          grid(1) = grid(1) + 1_I4P
          entry = max(entry, backend%text_width(self%series(s)%title, '', font_size))
       enddo
+      ! the rows of column stacks, by their names
+      s = self%stack_names()
+      if (s > 0_I4P) then
+         do k = 1_I4P, size(self%series(s)%texts, kind=I4P)
+            grid(1) = grid(1) + 1_I4P
+            entry = max(entry, backend%text_width(trim(self%series(s)%texts(k)), '', font_size))
+         enddo
+      endif
    endif
    ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
    entry = entry + font_size + GAP + SAMPLE_LENGTH * font_size + GAP
@@ -2234,6 +2383,7 @@ contains
          return
       endif
       if (series%style%with == WITH_BOXES .or. series%style%with == WITH_HISTOGRAMS) call draw_boxes
+      if (series%style%with == WITH_HISTOGRAMS .and. allocated(series%bounds)) call draw_histogram_bars
       if (series%style%with == WITH_BOXERRORBARS) then
          call draw_boxes
          call draw_box_bars
@@ -2656,6 +2806,20 @@ contains
                call draw_cells(xaxis%to_unit(series%xlow(i)), xaxis%to_unit(series%xhigh(i)), v0, v(i))
                cycle
             endif
+            if (allocated(series%colors)) then
+               ! a color per box (the rows of a column stack)
+               block
+                  type(style_object) :: row !< Style of the box.
+
+                  row = series%style
+                  row%color = trim(series%colors(i))
+                  call backend%data_polygon([xaxis%to_unit(series%xlow(i)), xaxis%to_unit(series%xhigh(i)), &
+                                             xaxis%to_unit(series%xhigh(i)), xaxis%to_unit(series%xlow(i))], &
+                                            [v0, v0, v(i), v(i)], row%fill_color(), row%density, row%stroke_color(), &
+                                            row%linewidth)
+               endblock
+               cycle
+            endif
             call backend%data_polygon([xaxis%to_unit(series%xlow(i)), xaxis%to_unit(series%xhigh(i)), &
                                        xaxis%to_unit(series%xhigh(i)), xaxis%to_unit(series%xlow(i))], &
                                       [v0, v0, v(i), v(i)], series%style%fill_color(), series%style%density, &
@@ -2663,6 +2827,34 @@ contains
          enddo
       endassociate
       endsubroutine draw_boxes
+
+      subroutine draw_histogram_bars
+      !< The error bars of `errorbars` histograms (their `bounds`), at the bar centres, in the series color (or the
+      !< border color of the fill), `histogram_lw` wide if set.
+      real(R8P), allocatable :: low(:)    !< Bar starts.
+      real(R8P), allocatable :: high(:)   !< Bar ends.
+      real(R8P), allocatable :: centre(:) !< Unit bar centres.
+      logical, allocatable   :: ok(:)     !< Drawn bars.
+      real(R8P)              :: width     !< Line width [px].
+
+      associate(series => self%series(s))
+         low = series%bounds(1, :)
+         high = series%bounds(2, :)
+         ok = valid .and. yaxis%accepts(low) .and. yaxis%accepts(high) .and. xaxis%accepts(series%xlow) .and. &
+              xaxis%accepts(series%xhigh)
+         if (.not. any(ok)) return
+         centre = xaxis%to_unit(0.5_R8P * (pack(series%xlow, ok) + pack(series%xhigh, ok)))
+         width = series%style%linewidth
+         if (self%histogram_lw > 0.0_R8P) width = self%histogram_lw
+         if (series%style%stroke_color() == 'none') then
+            call backend%data_bars(centre, yaxis%to_unit(pack(low, ok)), centre, yaxis%to_unit(pack(high, ok)), &
+                                   series%style%color, width, CAP_LENGTH, .true.)
+         else
+            call backend%data_bars(centre, yaxis%to_unit(pack(low, ok)), centre, yaxis%to_unit(pack(high, ok)), &
+                                   series%style%stroke_color(), width, CAP_LENGTH, .true.)
+         endif
+      endassociate
+      endsubroutine draw_histogram_bars
 
       subroutine draw_circles
       !< Each placeable point a circle (or a wedge with its angles) round on the page: its radius in x units converted
@@ -2965,75 +3157,160 @@ contains
    enddo
    endsubroutine image_range
 
-   subroutine layout_histograms(all, rowstacked, gap, boxwidth)
-   !< Bars of every histogram series of `all` from their `values`: clustered side by side in each row, or stacked by
-   !< row (positive values up from 0, negative ones down, each sign on its own stack). A module procedure on the series
-   !< array, not a binding: gfortran 16 corrupts the descriptor of `self%series` reached through the class dummy after
-   !< its reallocation by `add_series`.
-   type(series_object), intent(inout) :: all(:)     !< Series of the panel.
-   logical,             intent(in)    :: rowstacked !< Stacked by row, else clustered.
-   real(R8P),           intent(in)    :: gap        !< Gap between clusters [bar slots].
-   real(R8P),           intent(in)    :: boxwidth   !< Bar width factor, 0 for 1.
+   subroutine layout_histograms(all, mode, gap, boxwidth, linecolors)
+   !< Bars of every histogram series of `all` from their `values`, group by group (gnuplot `newhistogram`): the first
+   !< group from its rows (or `at`), each next one 2 rows after the last of the previous one (or `at`), as gnuplot.
+   !< Within a group: clustered (and errorbars) side by side in each row, 1/(k + gap) wide for k series; stacked by row
+   !< (positive values up from 0, negative ones down, each sign on its own stack); or one stack per series
+   !< (columnstacked), its rows stacked, each row in its linetype color. A module procedure on the series array, not
+   !< a binding: gfortran 16 corrupts the descriptor of `self%series` reached through the class dummy after its
+   !< reallocation by `add_series`.
+   type(series_object), intent(inout)        :: all(:)        !< Series of the panel.
+   integer(I4P),        intent(in)           :: mode          !< HIST_CLUSTERED, HIST_ROWSTACKED, ...
+   real(R8P),           intent(in)           :: gap           !< Gap between clusters [bar slots].
+   real(R8P),           intent(in)           :: boxwidth      !< Bar width factor, 0 for 1.
+   character(len=7),    intent(in), optional :: linecolors(:) !< Linetype colors (`set colorsequence`).
    real(R8P), allocatable             :: up(:)      !< Top of the positive stack of each row.
    real(R8P), allocatable             :: down(:)    !< Bottom of the negative stack of each row.
    real(R8P)                          :: slot       !< Clustered slot width.
    real(R8P)                          :: scale      !< Bar width factor.
    real(R8P)                          :: centre     !< Bar centre offset from its row.
-   integer(I4P)                       :: k          !< Histogram series.
-   integer(I4P)                       :: j          !< Histogram series counter.
+   real(R8P)                          :: start      !< Start of the current group.
+   real(R8P)                          :: last       !< Last row (or stack) of the previous group.
+   real(R8P)                          :: rows       !< Last row of the group.
+   integer(I4P)                       :: k          !< Histogram series of the group.
+   integer(I4P)                       :: j          !< Histogram series counter in the group.
    integer(I4P)                       :: s          !< Series counter.
    integer(I4P)                       :: i          !< Row counter.
    integer(I4P)                       :: n          !< Rows.
+   integer(I4P)                       :: g          !< Group.
+   integer(I4P)                       :: first      !< First series of the group.
+   logical                            :: started    !< A group laid out.
 
-   k = 0_I4P
-   n = 0_I4P
-   do s = 1_I4P, size(all, kind=I4P)
-      if (all(s)%style%with /= WITH_HISTOGRAMS) cycle
-      k = k + 1_I4P
-      n = max(n, size(all(s)%values, kind=I4P))
-   enddo
-   allocate(up(n), down(n))
-   up = 0.0_R8P
-   down = 0.0_R8P
    scale = 1.0_R8P
    if (boxwidth > 0.0_R8P) scale = boxwidth
-   slot = 1.0_R8P / (real(k, R8P) + gap)
-   j = 0_I4P
-   do s = 1_I4P, size(all, kind=I4P)
-      if (all(s)%style%with /= WITH_HISTOGRAMS) cycle
-      j = j + 1_I4P
-      n = size(all(s)%values, kind=I4P)
-      if (allocated(all(s)%xlow)) deallocate(all(s)%xlow)
-      if (allocated(all(s)%xhigh)) deallocate(all(s)%xhigh)
-      if (allocated(all(s)%ylow)) deallocate(all(s)%ylow)
-      allocate(all(s)%xlow(n), all(s)%xhigh(n), all(s)%ylow(n))
-      if (rowstacked) then
-         do i = 1_I4P, n
-            all(s)%xlow(i) = all(s)%x(i) - 0.5_R8P * scale
-            all(s)%xhigh(i) = all(s)%x(i) + 0.5_R8P * scale
-            all(s)%ylow(i) = 0.0_R8P
-            all(s)%y(i) = all(s)%values(i)
-            if (.not. ieee_is_finite(all(s)%values(i))) cycle
-            if (all(s)%values(i) >= 0.0_R8P) then
-               all(s)%ylow(i) = up(i)
-               up(i) = up(i) + all(s)%values(i)
-               all(s)%y(i) = up(i)
-            else
-               all(s)%ylow(i) = down(i)
-               down(i) = down(i) + all(s)%values(i)
-               all(s)%y(i) = down(i)
-            endif
-         enddo
-      else
-         centre = (real(j, R8P) - 0.5_R8P * real(k + 1_I4P, R8P)) * slot
-         do i = 1_I4P, n
-            all(s)%xlow(i) = all(s)%x(i) + centre - 0.5_R8P * slot * scale
-            all(s)%xhigh(i) = all(s)%x(i) + centre + 0.5_R8P * slot * scale
-            all(s)%ylow(i) = 0.0_R8P
-            all(s)%y(i) = all(s)%values(i)
-         enddo
+   started = .false.
+   last = 0.0_R8P
+   s = 1_I4P
+   do while (s <= size(all, kind=I4P))
+      if (all(s)%style%with /= WITH_HISTOGRAMS) then
+         s = s + 1_I4P
+         cycle
       endif
+      ! the group of series s: its series, rows, start
+      g = all(s)%hist_group
+      first = s
+      k = 0_I4P
+      n = 0_I4P
+      rows = 0.0_R8P
+      do i = first, size(all, kind=I4P)
+         if (all(i)%style%with /= WITH_HISTOGRAMS) cycle
+         if (all(i)%hist_group /= g) cycle
+         k = k + 1_I4P
+         n = max(n, size(all(i)%values, kind=I4P))
+         ! the rows as given, kept: the layout is redone at every histogram added
+         if (.not. allocated(all(i)%rows)) all(i)%rows = all(i)%x
+         if (any(ieee_is_finite(all(i)%rows))) rows = max(rows, maxval(all(i)%rows, mask=ieee_is_finite(all(i)%rows)))
+      enddo
+      if (all(first)%hist_at_set) then
+         start = all(first)%hist_at
+      elseif (started) then
+         start = last + 2.0_R8P
+      else
+         start = 0.0_R8P
+      endif
+      if (allocated(up)) deallocate(up, down)
+      allocate(up(n), down(n))
+      up = 0.0_R8P
+      down = 0.0_R8P
+      slot = 1.0_R8P / (real(k, R8P) + gap)
+      j = 0_I4P
+      do i = first, size(all, kind=I4P)
+         if (all(i)%style%with /= WITH_HISTOGRAMS) cycle
+         if (all(i)%hist_group /= g) cycle
+         j = j + 1_I4P
+         call lay(all(i), j)
+      enddo
+      if (mode == HIST_COLUMNSTACKED) then
+         last = start + real(k - 1_I4P, R8P)
+      else
+         last = start + rows
+      endif
+      started = .true.
+      ! the next group
+      s = first + 1_I4P
+      do while (s <= size(all, kind=I4P))
+         if (all(s)%style%with == WITH_HISTOGRAMS) then
+            if (all(s)%hist_group /= g) exit
+         endif
+         s = s + 1_I4P
+      enddo
    enddo
+   contains
+      subroutine lay(series, j)
+      !< The bars of `series`, the `j`-th of its group.
+      type(series_object), intent(inout) :: series !< Histogram series.
+      integer(I4P),        intent(in)    :: j      !< Rank in the group.
+      integer(I4P)                       :: m      !< Rows of the series.
+      integer(I4P)                       :: r      !< Row counter.
+
+      m = size(series%values, kind=I4P)
+      if (allocated(series%xlow)) deallocate(series%xlow)
+      if (allocated(series%xhigh)) deallocate(series%xhigh)
+      if (allocated(series%ylow)) deallocate(series%ylow)
+      if (allocated(series%colors)) deallocate(series%colors)
+      allocate(series%xlow(m), series%xhigh(m), series%ylow(m))
+      select case (mode)
+      case (HIST_ROWSTACKED)
+         do r = 1_I4P, m
+            series%x(r) = start + series%rows(r)
+            series%xlow(r) = series%x(r) - 0.5_R8P * scale
+            series%xhigh(r) = series%x(r) + 0.5_R8P * scale
+            call stack(series, r, r)
+         enddo
+      case (HIST_COLUMNSTACKED)
+         ! one stack, each row in the color of its linetype
+         allocate(series%colors(m))
+         up = 0.0_R8P
+         down = 0.0_R8P
+         do r = 1_I4P, m
+            series%x(r) = start + real(j - 1_I4P, R8P)
+            series%xlow(r) = series%x(r) - 0.5_R8P * scale
+            series%xhigh(r) = series%x(r) + 0.5_R8P * scale
+            series%colors(r) = default_color(r, linecolors)
+            call stack(series, r, 1_I4P)
+         enddo
+      case default
+         centre = (real(j, R8P) - 0.5_R8P * real(k + 1_I4P, R8P)) * slot
+         do r = 1_I4P, m
+            series%x(r) = start + series%rows(r)
+            series%xlow(r) = series%x(r) + centre - 0.5_R8P * slot * scale
+            series%xhigh(r) = series%x(r) + centre + 0.5_R8P * slot * scale
+            series%ylow(r) = 0.0_R8P
+            series%y(r) = series%values(r)
+         enddo
+      endselect
+      endsubroutine lay
+
+      subroutine stack(series, r, p)
+      !< Row `r` of `series` on the stack `p` (its positive or negative part).
+      type(series_object), intent(inout) :: series !< Histogram series.
+      integer(I4P),        intent(in)    :: r      !< Row.
+      integer(I4P),        intent(in)    :: p      !< Stack.
+
+      series%ylow(r) = 0.0_R8P
+      series%y(r) = series%values(r)
+      if (.not. ieee_is_finite(series%values(r))) return
+      if (series%values(r) >= 0.0_R8P) then
+         series%ylow(r) = up(p)
+         up(p) = up(p) + series%values(r)
+         series%y(r) = up(p)
+      else
+         series%ylow(r) = down(p)
+         down(p) = down(p) + series%values(r)
+         series%y(r) = down(p)
+      endif
+      endsubroutine stack
    endsubroutine layout_histograms
 
    subroutine draw_pie(self, backend, box, font_size)
@@ -4292,6 +4569,7 @@ contains
       else
          margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P)
       endif
+      margins(4) = margins(4) + LINE_HEIGHT * font_size * real(self%group_rows(), R8P)
    elseif (self%xaxis%tics%out .and. size(self%xaxis%ticks) > 0) then
       margins(4) = margins(4) + TICK_MAJOR
    endif

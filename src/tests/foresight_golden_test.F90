@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(94)                  !< Per-figure outcome.
+logical                     :: test_passed(96)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -119,7 +119,9 @@ test_passed(91) = check('x2_rotate.svg', figure_x2_rotate())
 test_passed(92) = check('time_axis.svg', figure_time_axis())
 test_passed(93) = check('time_axis.txt', figure_time_axis())
 test_passed(94) = check('time_axis.html', figure_time_axis())
-write(output_unit, '(A,94L2)') 'foresight golden checks:', test_passed
+test_passed(95) = check('histogram_layouts.svg', figure_histogram_layouts())
+test_passed(96) = check('histogram_layouts.txt', figure_histogram_layouts())
+write(output_unit, '(A,96L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -463,6 +465,38 @@ contains
    call fig%set_xtics(mirror=.false.)
    call fig%plot(x, cos(x), title='cos')
    endfunction figure_x2_rotate
+
+   function figure_histogram_layouts() result(fig)
+   !< The histogram layouts of gnuplot 6.0: groups (`newhistogram`, the second from linetype 4, titled below the x
+   !< axis), column stacks (rows in their linetype colors, named in the key), error bars (lw 2).
+   type(figure_object) :: fig !< Figure.
+   real(R8P)           :: rows(3) = [0.0_R8P, 1.0_R8P, 2.0_R8P] !< Row numbers.
+
+   call fig%init(width=900_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=3_I4P, title='histogram layouts')
+   call fig%set_style_fill('solid 0.8 border -1')
+   call fig%set_title('newhistogram')
+   call fig%set_style_histogram('clustered', gap=1.0_R8P)
+   call fig%new_histogram(title='A')
+   call fig%plot(rows, [1.0_R8P, 2.0_R8P, 3.0_R8P], title='a', with='histograms', xlabels=['r1', 'r2', 'r3'])
+   call fig%plot(rows, [2.0_R8P, 3.0_R8P, 1.0_R8P], title='b', with='histograms')
+   call fig%new_histogram(title='B', lt=4_I4P)
+   call fig%plot(rows, [3.0_R8P, 1.0_R8P, 2.0_R8P], title='c', with='histograms', xlabels=['r1', 'r2', 'r3'])
+   call fig%next_panel()
+   call fig%set_title('columnstacked')
+   call fig%set_style_histogram('columnstacked')
+   call fig%plot(rows, [1.0_R8P, 2.0_R8P, 3.0_R8P], title='a', with='histograms', xlabels=['a', ' ', ' '])
+   call fig%plot(rows, [2.0_R8P, 3.0_R8P, 1.0_R8P], title='b', with='histograms', xlabels=['b', ' ', ' '])
+   call fig%plot(rows, [3.0_R8P, 1.0_R8P, 2.0_R8P], title='c', with='histograms', xlabels=['c', ' ', ' '], &
+                 labels=['r1', 'r2', 'r3'])
+   call fig%next_panel()
+   call fig%set_title('errorbars')
+   call fig%set_style_histogram('errorbars', gap=1.0_R8P, lw=2.0_R8P)
+   call fig%plot(rows, [1.0_R8P, 2.0_R8P, 3.0_R8P], title='a', with='histograms', ylow=[0.9_R8P, 1.8_R8P, 2.7_R8P], &
+                 yhigh=[1.1_R8P, 2.2_R8P, 3.3_R8P], xlabels=['r1', 'r2', 'r3'])
+   call fig%plot(rows, [2.0_R8P, 3.0_R8P, 1.0_R8P], title='b', with='histograms', ylow=[1.8_R8P, 2.9_R8P, 0.7_R8P], &
+                 yhigh=[2.2_R8P, 3.1_R8P, 1.3_R8P])
+   endfunction figure_histogram_layouts
 
    function figure_time_axis() result(fig)
    !< Time axes (gnuplot `set xdata time`): a day of half-hourly values over midnight, gnuplot's invented two-line

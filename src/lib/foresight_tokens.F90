@@ -5,9 +5,10 @@ module foresight_tokens
 !< A line is split into statements at `;` and cut at `#` (both outside quotes); a statement into tokens: words,
 !< quoted strings (single quotes literal, double quotes with `\t` for a tab, `\n` for a new line and `\` taking the
 !< next character literally, so `\"` and `\\`, as gnuplot), commas and bracketed ranges `[a:b]`. Each token remembers
-!< where it lies in the statement, so that a plot item can be quoted as written. Inside parentheses a word goes on across blanks and commas:
-!< `($2 * 1e3)` and `atan2($2, $1)` are single words; quotes inside a word keep their content, blanks included, and a
-!< quoted string followed by `:` starts a word: `1:"the res"` and `"it":"res"` are `using` specifications.
+!< where it lies in the statement, so that a plot item can be quoted as written. Inside parentheses a word goes on
+!< across blanks and commas: `($2 * 1e3)` and `atan2($2, $1)` are single words; quotes inside a word keep their
+!< content, blanks included, and a quoted string followed by `:` starts a word: `1:"the res"` and `"it":"res"` are
+!< `using` specifications.
 use penf, only : I4P
 
 implicit none

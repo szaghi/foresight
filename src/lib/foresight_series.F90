@@ -73,6 +73,11 @@ type :: series_object
                                                        !< its line or second curve; 0 both.
    real(R8P)                     :: curve_point(2) = 0.0_R8P !< Point of `xy=X,Y`.
    real(R8P)                     :: at = 0.0_R8P  !< Position of a parallel axis (gnuplot `at`); 0 for its number.
+   integer(I4P)                  :: hist_group = 0_I4P !< Histogram group (gnuplot `newhistogram`), 0 the first.
+   real(R8P), allocatable        :: rows(:)           !< Rows of a histogram (its abscissae as given), from 0.
+   logical                       :: hist_at_set = .false. !< The group starts at `hist_at`, else after the previous one.
+   real(R8P)                     :: hist_at = 0.0_R8P  !< Start of the histogram group (gnuplot `newhistogram at X`).
+   character(len=:), allocatable :: hist_title         !< Title of the histogram group, below the x axis.
    logical                       :: at_set = .false. !< `at` given.
    real(R8P), allocatable        :: channels(:,:,:) !< Red, green, blue, alpha of an RGB image (4, column, row),
                                                     !< 0 to 255 (`grid` holds the red ones); unallocated for a palette
