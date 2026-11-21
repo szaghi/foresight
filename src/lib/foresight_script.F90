@@ -2422,8 +2422,11 @@ contains
          ! gnuplot's default: gray:r:g:b if the rows have a 4th column, else r:g:b
          pfields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
          call pdata%table(pfields, pindex, pevery, rows)
-         if (size(rows, 1) > 0) then
-            if (all(rows(:, 4) /= rows(:, 4))) pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
+         ! rows without a 4th column are skipped (gnuplot): none left means r:g:b
+         if (size(rows, 1) == 0) then
+            pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
+         elseif (all(rows(:, 4) /= rows(:, 4))) then
+            pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          endif
       endif
       if (size(pfields) /= 3 .and. size(pfields) /= 4) then

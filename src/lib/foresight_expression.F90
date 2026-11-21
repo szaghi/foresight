@@ -159,6 +159,7 @@ type :: expression_object
       procedure, pass(self) :: name_count   !< Number of column header names.
       procedure, pass(self) :: name_of      !< A column header name.
       procedure, pass(self) :: reads_column !< Whether a data column is read.
+      procedure, pass(self) :: plain_column !< The data column of a plain column field, 0 if none.
       procedure, pass(self) :: resolve      !< Header names to column numbers.
       procedure, pass(self) :: set_column   !< Plain column.
       procedure, pass(self) :: set_name     !< Plain column of a header name.
@@ -1055,6 +1056,23 @@ contains
       endif
    enddo
    endfunction first_column
+
+   pure function plain_column(self) result(c)
+   !< The data column (from 1) of a plain column field (`using 2`, `using "name"` once resolved), 0 for any other
+   !< expression (`$2`, `($2*2)`, column 0): gnuplot skips a point whose plain column holds no number, and leaves an
+   !< expression on it undefined.
+   class(expression_object), intent(in) :: self !< Expression.
+   integer(I4P)                         :: c    !< Column.
+
+   c = 0_I4P
+   if (.not. allocated(self%code)) return
+   ! a compiled expression keeps its source text, a plain column (set_column, set_name) has none
+   if (allocated(self%text)) then
+      if (len(self%text) > 0) return
+   endif
+   if (size(self%code) /= 1) return
+   if (self%code(1)%op == OP_COLUMN .and. self%code(1)%arg >= 1_I4P) c = self%code(1)%arg
+   endfunction plain_column
 
    pure function reads_column(self, c) result(reads)
    !< Whether the expression reads the data column `c` (from 1): as a plain column or `$c`, or any column through

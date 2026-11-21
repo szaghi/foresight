@@ -23,7 +23,7 @@ character(len=8), parameter   :: cells(25) = [character(len=8) :: '3abc', '1e', 
                                               '-.5', 'e3', '1.e2', '1e999', '0x1.8p1', '-0X10', '1e-999', '0x', '0xg']
                                                                       !< Cells probed on gnuplot 6.0.
 real(R8P)                     :: expected(25)                         !< Their values, NaN for gaps.
-logical                       :: test_passed(15)                      !< Per-check outcome.
+logical                       :: test_passed(16)                      !< Per-check outcome.
 integer(I4P)                  :: k                                    !< Counter.
 
 ! dataset 0: blocks {0,1,2} and {3,4}; dataset 1: {0,1}; a comment line and a missing cell
@@ -52,9 +52,10 @@ test_passed(2) = ux == 1_I4P .and. uy == 2_I4P
 call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
 test_passed(3) = size(x) == 9 .and. ieee_is_nan(x(4)) .and. ieee_is_nan(y(7)) .and. y(9) == 8.0_R8P
 
-! missing cell and short row are NaN
+! a cell with no number and a short row are skipped, the line not broken (gnuplot): NaN only between blocks
 call data%columns(1_I4P, 3_I4P, -1_I4P, 1_I4P, x, y)
-test_passed(4) = ieee_is_nan(y(2)) .and. y(3) == 30.0_R8P .and. ieee_is_nan(y(9))
+test_passed(4) = size(y) == 7 .and. y(1) == 10.0_R8P .and. y(2) == 30.0_R8P .and. ieee_is_nan(y(3)) .and. &
+                 y(5) == 50.0_R8P .and. ieee_is_nan(y(6)) .and. y(7) == 70.0_R8P
 
 ! index selects a dataset; pseudo-column 0 counts points within it
 call data%columns(0_I4P, 2_I4P, 1_I4P, 1_I4P, x, y)
@@ -94,12 +95,13 @@ close(unit)
 call data%load(file, iostat, iomsg, separator=',')
 test_passed(10) = iostat == 0_I4P .and. data%nrows == 6_I4P .and. data%first(3) - data%first(2) == 3_I4P .and. &
                   data%first(4) - data%first(3) == 3_I4P
+! the header row, empty cells and abc hold no number: those points are skipped (gnuplot), NaN only between blocks
 call data%columns(1_I4P, 3_I4P, -1_I4P, 1_I4P, x, y)
-test_passed(11) = size(x) == 7 .and. ieee_is_nan(x(1)) .and. y(2) == 3.0_R8P .and. ieee_is_nan(y(3)) .and. &
-                  y(4) == 9.0_R8P .and. x(5) == 4.0_R8P .and. ieee_is_nan(y(5)) .and. ieee_is_nan(x(6)) .and. &
-                  x(7) == 5.0_R8P .and. y(7) == 7.0_R8P
+test_passed(11) = size(x) == 4 .and. x(1) == 1.0_R8P .and. y(1) == 3.0_R8P .and. x(2) == 3.0_R8P .and. &
+                  y(2) == 9.0_R8P .and. ieee_is_nan(x(3)) .and. x(4) == 5.0_R8P .and. y(4) == 7.0_R8P
 call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
-test_passed(12) = y(3) == 4.0_R8P .and. ieee_is_nan(y(4)) .and. y(5) == 50.0_R8P
+test_passed(12) = size(y) == 5 .and. y(2) == 4.0_R8P .and. y(3) == 50.0_R8P .and. ieee_is_nan(y(4)) .and. &
+                  y(5) == 6.0_R8P
 
 ! tab separated: two tabs leave an empty cell
 open(newunit=unit, file=file, action='write', status='replace')
@@ -108,7 +110,7 @@ write(unit, '(A)') '2'//achar(9)//'4'//achar(9)//'5'
 close(unit)
 call data%load(file, iostat, iomsg, separator=achar(9))
 call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
-test_passed(13) = iostat == 0_I4P .and. ieee_is_nan(y(1)) .and. y(2) == 4.0_R8P
+test_passed(13) = iostat == 0_I4P .and. size(y) == 1 .and. y(1) == 4.0_R8P
 
 ! whitespace separated: a double quoted cell holds blanks and is not a number
 open(newunit=unit, file=file, action='write', status='replace')
@@ -129,8 +131,9 @@ do k = 1, size(cells)
 enddo
 close(unit)
 call data%load(file, iostat, iomsg)
-call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
-test_passed(15) = iostat == 0_I4P .and. size(y) == size(cells)
+! the cell values as read (the second cell of each row)
+y = [(data%values(data%first(k) + 1), k = 1, size(cells))]
+test_passed(15) = iostat == 0_I4P .and. data%nrows == size(cells)
 if (test_passed(15)) then
    do k = 1, size(cells)
       if (ieee_is_nan(expected(k)) .neqv. ieee_is_nan(y(k))) then
@@ -144,10 +147,13 @@ if (test_passed(15)) then
       endif
    enddo
 endif
+! plotted: the cells with no number (-, +., .e1, e3) skipped, inf, nan, -inf and 1e999 gaps (undefined), as gnuplot
+call data%columns(1_I4P, 2_I4P, -1_I4P, 1_I4P, x, y)
+test_passed(16) = size(y) == size(cells) - 4 .and. count(ieee_is_nan(y)) == 4
 open(newunit=unit, file=file)
 close(unit, status='delete')
 
-write(output_unit, '(A,15L2)') 'foresight_datafile checks:', test_passed
+write(output_unit, '(A,16L2)') 'foresight_datafile checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

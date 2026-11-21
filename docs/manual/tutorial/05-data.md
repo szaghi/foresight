@@ -16,8 +16,8 @@ Tell foresight the separator, and the header names the columns:
 
 <Plot name="ch5" />
 
-- `set datafile separator comma` (or `tab`, or any characters `";,"`): every separator ends a cell; an empty cell is a
-  gap. `unset datafile` goes back to whitespace.
+- `set datafile separator comma` (or `tab`, or any characters `";,"`): every separator ends a cell; an empty cell
+  holds no number, so its point is skipped. `unset datafile` goes back to whitespace.
 - A quoted name selects a column by its header: `using "iteration":...`, and `column("cd")` inside an expression.
 - `set key autotitle columnhead` titles each item with the header of its y column; an explicit `title` still wins.
   Once headers are in use, the first row of each dataset is a header, not a point.

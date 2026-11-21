@@ -194,8 +194,10 @@ call interpreter%init(scratch)
 call interpreter%run_text("set datafile separator ','; plot '"//csv_file//"' u 1:3", iostat, iomsg)
 if (iostat == 0_I4P) then
    associate(series => interpreter%figure%panels(1)%series(1))
-      test_passed(27) = size(series%x) == 31 .and. ieee_is_nan(series%x(1)) .and. series%x(2) == 1.0_R8P .and. &
-                        ieee_is_nan(series%y(13)) .and. abs(series%y(2) - 0.5_R8P - 0.3_R8P * sin(0.25_R8P)) < 1.0e-6_R8P
+      ! the header row and the empty cell of row 12 hold no number: skipped, the line not broken (gnuplot)
+      test_passed(27) = size(series%x) == 29 .and. series%x(1) == 1.0_R8P .and. series%x(12) == 13.0_R8P .and. &
+                        .not. any(ieee_is_nan(series%y)) .and. &
+                        abs(series%y(1) - 0.5_R8P - 0.3_R8P * sin(0.25_R8P)) < 1.0e-6_R8P
    endassociate
 endif
 call interpreter%run_text('set datafile separator "\t"', iostat, iomsg)
@@ -283,7 +285,7 @@ if (test_passed(39)) then
       test_passed(39) = series(1)%title == "'"//csv_file//"' u 1:""res""" .and. all(series(1)%y == [10, 20, 30]) .and. &
                         series(2)%title == 'coef' .and. all(series(2)%x == [0, 1, 2]) .and. &
                         series(3)%title == 'res' .and. all(series(3)%y == [10, 12, 14]) .and. &
-                        size(series(4)%y) == 4 .and. ieee_is_nan(series(4)%y(1))
+                        size(series(4)%y) == 3 .and. all(series(4)%y == [5, 6, 7])
    endassociate
 endif
 ! autotitle columnhead: every item reads a header, explicit titles win
@@ -1151,6 +1153,9 @@ call interpreter%run_text('set xtics ("a" 1,, "b" 2)', iostat, iomsg)
 test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'empty item in the list') > 0
 call interpreter%run_text('set xtics ("a" 1 +)', iostat, iomsg)
 test_passed(82) = test_passed(82) .and. iostat /= 0_I4P .and. index(iomsg, 'list item "1 +"') > 0
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0', '1 0 0.3', '2 0 1', '', '0 2 0.5', '1 2 0.7', '2 2 0.9'
+close(unit)
 test_passed(82) = test_passed(82) .and. colorbox_labels('set cbtics ("low" 0.2, "high" 0.8)', ['low ', 'high'], ['0.2'])
 
 ! minor ticks, as gnuplot 6.0: set mxtics [N] (gnuplot's count without N), unset mxtics, set mxtics default
@@ -1245,8 +1250,9 @@ associate(panel => interpreter%figure%panels(1))
    call interpreter%run_text("plot '"//data_file//"' u 1:($3) w l", iostat, iomsg)
    test_passed(86) = test_passed(86) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 4
    call interpreter%run_text("unset datafile; plot '"//data_file//"' u 1:2 w l", iostat, iomsg)
-   test_passed(86) = test_passed(86) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 6 .and. &
-                     count(ieee_is_nan(panel%series(1)%y)) == 2
+   ! without a missing string, ? and the % row hold no number: skipped too in a plain column (gnuplot)
+   test_passed(86) = test_passed(86) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 4 .and. &
+                     .not. any(ieee_is_nan(panel%series(1)%y))
 endassociate
 call interpreter%run_text("set datafile missing ?", iostat, iomsg)
 test_passed(86) = test_passed(86) .and. iostat /= 0_I4P .and. index(iomsg, 'set datafile missing: a "string"') > 0

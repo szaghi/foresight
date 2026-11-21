@@ -67,6 +67,8 @@ type :: datafile_object
    integer(I4P)                  :: nvalues = 0_I4P   !< Number of stored values.
    integer(I4P), allocatable     :: missing_cells(:)  !< Indexes in `values` of the cells holding the missing data
                                                       !< string (gnuplot `set datafile missing`), ascending.
+   integer(I4P), allocatable     :: invalid_cells(:)  !< Indexes in `values` of the cells holding no number (empty,
+                                                      !< `?`, words; not `NaN`, `inf`), ascending.
    contains
       procedure, pass(self) :: column_header !< Header name of a column.
       procedure, pass(self) :: columns       !< Extract a (x, y) series.
@@ -119,6 +121,8 @@ contains
    if (present(comments)) marks = comments
    if (allocated(self%missing_cells)) deallocate(self%missing_cells)
    allocate(self%missing_cells(0))
+   if (allocated(self%invalid_cells)) deallocate(self%invalid_cells)
+   allocate(self%invalid_cells(0))
    self%nrows = 0_I4P
    self%nvalues = 0_I4P
    if (allocated(self%values)) deallocate(self%values)
@@ -177,6 +181,7 @@ contains
                   if (line(j:j) == '"') quoted = .not. quoted
                enddo
                call add_value(to_real(line(i:j)))
+               if (no_number(line(i:j))) self%invalid_cells = [self%invalid_cells, self%nvalues]
                if (len(miss) > 0) call mark_missing(line(i:j))
                if (recording) call record(line(i:j))
                cell = cell + 1_I4P
@@ -194,6 +199,7 @@ contains
                   j = j + 1_I4P
                enddo
                call add_value(cell_value(line(i:j - 1_I4P)))
+               if (no_number(clean(line(i:j - 1_I4P)))) self%invalid_cells = [self%invalid_cells, self%nvalues]
                if (len(miss) > 0) call mark_missing(line(i:j - 1_I4P))
                if (recording) call record(line(i:j - 1_I4P))
                cell = cell + 1_I4P
@@ -421,6 +427,7 @@ contains
       integer(I4P) :: picked   !< Selected point number within the dataset: gnuplot's column 0.
       integer(I4P) :: set      !< Dataset of the last selected point.
       integer(I4P) :: m        !< Next missing cell.
+      integer(I4P) :: v        !< Next invalid cell.
       integer(I4P) :: c        !< Column of a missing cell.
       logical      :: dropped  !< The row reads a missing cell.
       type(expression_object) :: resolved(size(fields)) !< Fields on the header of the current dataset.
@@ -428,6 +435,7 @@ contains
 
       resolved = fields
       m = 1_I4P
+      v = 1_I4P
       k = 0_I4P
       in_block = -1_I4P
       in_set_block = -1_I4P
@@ -460,6 +468,23 @@ contains
                c = c + 1_I4P
             enddo
          endif
+         ! a plain column (not an expression) with no number or past the end of the row: skipped, as gnuplot
+         do while (v <= size(self%invalid_cells, kind=I4P))
+            if (self%invalid_cells(v) >= self%first(r)) exit
+            v = v + 1_I4P
+         enddo
+         do f = 1_I4P, size(fields, kind=I4P)
+            if (dropped) exit
+            c = resolved(f)%plain_column()
+            if (c == 0_I4P) cycle
+            if (self%first(r) + c - 1_I4P >= self%first(r + 1_I4P)) then
+               dropped = .true.
+            elseif (v <= size(self%invalid_cells, kind=I4P)) then
+               ! the invalid cells of this row are the next ones, at most c of them up to column c
+               dropped = any(self%invalid_cells(v:min(v + c - 1_I4P, size(self%invalid_cells, kind=I4P))) == &
+                             self%first(r) + c - 1_I4P)
+            endif
+         enddo
          if (dropped) then
             if (self%dataset(r) /= set) picked = -1_I4P
             set = self%dataset(r)
@@ -696,6 +721,34 @@ contains
    endif
    v = to_real(cell(first:last))
    endfunction cell_value
+
+   pure function no_number(token) result(none)
+   !< Whether `token` starts with no number, as C `strtod` reads it: neither a decimal nor a hexadecimal one, nor
+   !< `nan` or `inf` (which are numbers, undefined); empty included. gnuplot skips such a cell in a plain column.
+   character(len=*), intent(in) :: token !< Cell text.
+   logical                      :: none  !< No number.
+   character(len=3)             :: word  !< First letters, lower case.
+   integer(I4P)                 :: body  !< First character after the sign.
+   integer(I4P)                 :: k     !< Letter counter.
+
+   none = .true.
+   body = 1_I4P
+   if (len(token) > 0) then
+      if (token(1:1) == '+' .or. token(1:1) == '-') body = 2_I4P
+   endif
+   if (body > len(token)) return
+   word = token(body:min(len(token), body + 2_I4P))
+   do k = 1_I4P, 3_I4P
+      if (word(k:k) >= 'A' .and. word(k:k) <= 'Z') word(k:k) = achar(iachar(word(k:k)) + 32)
+   enddo
+   if (word == 'nan' .or. word == 'inf') then
+      none = .false.
+   elseif (scan(token(body:body), '0123456789') > 0) then
+      none = .false.
+   elseif (token(body:body) == '.' .and. body < len(token)) then
+      none = scan(token(body + 1_I4P:body + 1_I4P), '0123456789') == 0
+   endif
+   endfunction no_number
 
    function to_real(token) result(v)
    !< Value of the longest number at the start of `token`, as C `strtod`: `[+-]` then decimal `D[.D][e[+-]D]` or `.D...`,

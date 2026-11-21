@@ -9,7 +9,7 @@ title: Data Files
 ```
 # iteration  continuity  momentum      <- comment line
 1  1.0e-1  2.0e-1
-2  8.9e-2  ?                           <- missing cell: a gap
+2  8.9e-2  ?                           <- no number: the point is skipped
 3  7.9e-2  1.6e-1   # trailing comment
 
 4  7.1e-2  1.4e-1                      <- one blank line: new block, the line breaks
@@ -23,13 +23,14 @@ title: Data Files
 | Rule | Behaviour |
 |---|---|
 | Columns | separated by blanks or tabs |
-| `#` | starts a comment anywhere on a line; comment-only lines are neither data nor separators |
+| `#` | starts a comment anywhere on a line; comment-only lines are neither data nor separators (`set datafile commentschars`: other characters) |
 | One blank line | ends a block: plotted lines are broken there |
 | Two blank lines | end a dataset, selected with `index N` (0-based) |
-| `?`, `NaN`, `inf`, non-numbers | missing values: gaps in the plot |
+| `?`, words, empty cells | no number: a point that reads one in a plain column (`using 1:2`) is skipped, its line goes on to the next point; through an expression (`using 1:($2)`) it is undefined, a gap that breaks the line, as gnuplot |
+| `NaN`, `inf` | numbers, undefined: a gap that breaks the line |
 | Numbers | read as gnuplot (C `strtod`): the longest leading number counts, `3abc` is 3, `1.2.3` is 1.2, `1d3` is 1; hexadecimal too, `0x10` is 16; beyond the real range, a gap |
 | `"quoted cell"` | one cell, blanks included; not a number |
-| Short rows | the missing columns are missing values |
+| Short rows | a plain column beyond the row skips the point, as a cell with no number |
 | Column 0 | the number of the point among those plotted in its dataset, from 0 (after `every`, as gnuplot) |
 | `every I:J:K:L:M:N` | points `K` to `M` every `I` of each block, blocks `L` to `N` every `J` of each dataset, from 0 |
 
@@ -46,15 +47,15 @@ set datafile separator              # back to whitespace, as unset datafile
 ```
 
 ```
-iteration,residual,cd                  <- a header of words: a row of missing values
+iteration,residual,cd                  <- a header of words: no numbers, the row is skipped
 1, 1.0e-1, 0.52                        <- blanks around cells are ignored
-2,8.9e-2,                              <- empty cells, also a trailing one, are missing values
+2,8.9e-2,                              <- empty cells, also a trailing one, hold no number
 3,"7.9e-2",0.49                        <- a quoted cell is read without its quotes
 ```
 
 Every separator ends a cell, so two in a row leave an empty one; separators inside double quotes do not count.
-Comments, blocks and datasets work as above. A header row is a row of missing values, counted by column 0, until an
-item uses the headers: `using 1:"residual"`, `title columnhead` or `set key autotitle columnhead` make the first row
+Comments, blocks and datasets work as above. A header row is skipped as a row of no numbers (still counted by column
+0, as gnuplot counts every row) until an item uses the headers: `using 1:"residual"`, `title columnhead` or `set key autotitle columnhead` make the first row
 of each dataset a header, no longer a point (see [Column headers](gnuplot-subset#column-headers)).
 
 ## Missing data and comments
@@ -71,8 +72,9 @@ set datafile commentschars "#%"   # # and % start comments
 unset datafile                    # whitespace, no missing string, # comments
 ```
 
-Without a missing string, `?`, `NaN` and other cells that are no numbers are gaps that break the line (gnuplot breaks it
-for `NaN` only, and passes over unparsable cells without breaking it).
+Without a missing string, a cell with no number (`?`, `-`, a word) is skipped in a plain column, as above, but undefined
+through an expression; the missing string is skipped both ways. `NaN` stays a gap that breaks the line unless it is
+the missing string.
 
 ## Monitoring logs
 
@@ -88,6 +90,6 @@ do it = 1, max_it
 enddo
 ```
 
-A cycle can read the last line while the solver is still writing it: a truncated cell becomes a missing value, or a
+A cycle can read the last line while the solver is still writing it: a truncated cell holds no number, or a
 wrong one (`7.9` read from a half-written `7.95e-2`). The completed line changes the file size again, so the next cycle
 redraws it correctly.
