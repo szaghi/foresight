@@ -515,10 +515,12 @@ M0.975,0.620385 M0.983333,0.621188 M0.991667,0.622035 M1,0.6229"/>
     }
   }
 
-  // intervals between majors for the minor ticks (mirror of minor_count): 0 by default, N if set,
-  // else 9 on a log axis, 2 when the step mantissa leads with 2, else 5
+  // intervals between majors for the minor ticks (mirror of minor_count): 0 with none, N if set,
+  // by default 9 on a log axis and 0 on a linear one, else 9 on a log axis, 2 when the step
+  // mantissa leads with 2, else 5
   function minorCount(tics, mantissa, logaxis) {
-    if (!tics || tics.minor === "" || tics.minor === 0) return 0;
+    if (!tics || tics.minor === "") return logaxis ? 9 : 0;
+    if (tics.minor === 0) return 0;
     if (tics.minor !== "auto") return tics.minor;
     if (logaxis) return 9;
     var d = Math.abs(mantissa);
@@ -611,7 +613,7 @@ M0.975,0.620385 M0.983333,0.621188 M0.991667,0.622035 M1,0.6229"/>
     }
     if (ticks.filter(function (x) { return x.major; }).length < 2) {
       ticks = linearSeries(lo, hi, npx, tics).filter(function (x) { return x.value > 0; });
-    } else if (!(byDefault || plain)) {
+    } else if (!plain && (!byDefault || s > 1)) {
       appendMinors(ticks, 1, scale10(1, s), true, minorCount(tics, 1, true), lo, hi, -Infinity,
         Infinity);
     }

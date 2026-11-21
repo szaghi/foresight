@@ -64,9 +64,10 @@ check("no ticks", viewer.linearTicks(0, 1, 500, viewer.readTics("none", "")).len
 ticks = viewer.linearTicks(0, 3, 500, viewer.readTics("* 0.25 *", "%.2f"));
 check("fixed step format", ticks[0].label === "0.00" && ticks[12].label === "3.00");
 ticks = viewer.logTicks(1, 1000, 400, viewer.readTics("* 3 *", ""));
-check("log factor", ticks.length === 7 && ticks[0].label === "1" && ticks[6].label === "729");
+check("log factor", labels(ticks).length === 7 && ticks[0].label === "1" &&
+  ticks[6].label === "729");
 ticks = viewer.logTicks(1, 1000, 400, viewer.readTics("2 10 *", ""));
-check("log factor from start", ticks.length === 3 && ticks[2].label === "200");
+check("log factor from start", labels(ticks).length === 3 && ticks[2].label === "200");
 // explicit tick lists (set xtics ("label" pos level, ...)): alone, or added to the ticks
 ticks = viewer.linearTicks(0, 6.7, 500, viewer.readTics("labels 1e0:a 2.5e0! 5e0:c 9e0:out", ""));
 check("list alone", ticks.length === 3 && ticks[0].label === "a" && !ticks[1].major &&
@@ -105,6 +106,10 @@ tics = viewer.readTics("auto rotate 9e1 end", "");
 check("rotate alone", tics.mode === "auto" && !tics.out && tics.rotate === 90);
 check("minor log wide",
   counts(viewer.logTicks(1, 1e20, 400, viewer.readTics("auto minor 2", ""))) === "5+4");
+check("minor log wide default",
+  counts(viewer.logTicks(1, 1e20, 400, viewer.readTics("", ""))) === "5+32");
+check("minor log one decade default",
+  counts(viewer.logTicks(1, 1000, 400, viewer.readTics("", ""))) === "4+24");
 
 // tick formats (the same cases as foresight_format_test.F90, checked against C printf)
 function label(format, n, e) { return viewer.formatDecimal(format, n, e).label; }

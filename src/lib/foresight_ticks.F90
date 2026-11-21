@@ -20,7 +20,8 @@ module foresight_ticks
 !< Minor ticks (gnuplot `set mxtics [N]`) divide each interval between consecutive major ticks of the automatic or fixed
 !< ticks in N parts, linearly in value also on log axes, within the range and the fixed ticks' start and end; without N
 !< (gnuplot's automatic count) in 2 when the step's leading digit is 2, else 5, and in 9 on log axes. By default linear
-!< axes have none, log axes the 2..9 multiples of a decade; `unset mxtics` removes them.
+!< axes have none, log axes 9 intervals between majors (the 2..9 multiples of a decade on one-decade steps), as
+!< gnuplot; `unset mxtics` removes them.
 !<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
@@ -498,6 +499,7 @@ contains
    logical                                       :: plain     !< Label minors, all in plain decimals.
    logical                                       :: custom    !< User label format.
    logical                                       :: default_minors !< Minor ticks by default (2..9 of a decade).
+   integer(I4P)                                  :: nminor    !< Intervals between majors of the minor ticks.
 
    ! gnuplot extends autoscaled log axes to whole decades whatever the tick settings
    if (lo <= hi) then
@@ -573,9 +575,12 @@ contains
       b = hi
       call linear_ticks(a, b, npx, .false., .false., linear, tics)
       ticks = pack(linear, linear%value > 0.0_R8P)
-   elseif (.not. (default_minors .or. plain)) then
-      call append_minors(ticks, 1.0_R8P, grid_value(1_I8P, int(s, I4P)), .true., minor_count(tics, 1_I8P, .true.), lo, &
-                         hi, -huge(1.0_R8P), huge(1.0_R8P))
+   elseif (.not. plain .and. (.not. default_minors .or. s > 1_I8P)) then
+      ! set minors, or the default ones of majors several decades apart: linear between majors, as gnuplot
+      nminor = 9_I4P
+      if (present(tics)) nminor = minor_count(tics, 1_I8P, .true.)
+      call append_minors(ticks, 1.0_R8P, grid_value(1_I8P, int(s, I4P)), .true., nminor, lo, hi, -huge(1.0_R8P), &
+                         huge(1.0_R8P))
    endif
    endsubroutine log_ticks
 
@@ -663,8 +668,9 @@ contains
    endsubroutine append_minors
 
    pure function minor_count(tics, mantissa, logaxis) result(n)
-   !< Intervals between major ticks for the minor ticks of `tics`: 0 by default and with none, N if set, else gnuplot's
-   !< automatic count: 9 on a log axis, 2 when the leading digit of the step `mantissa` is 2, else 5.
+   !< Intervals between major ticks for the minor ticks of `tics`: 0 with none, N if set, by default 9 on a log axis and
+   !< 0 on a linear one, else gnuplot's automatic count: 9 on a log axis, 2 when the leading digit of the step
+   !< `mantissa` is 2, else 5.
    type(tics_object), intent(in) :: tics     !< Settings.
    integer(I8P),      intent(in) :: mantissa !< Step mantissa (any trailing zeros).
    logical,           intent(in) :: logaxis  !< Log axis.
@@ -672,7 +678,10 @@ contains
    integer(I8P)                  :: d        !< Leading digit.
 
    select case (tics%minor)
-   case (MINOR_DEFAULT, MINOR_NONE)
+   case (MINOR_DEFAULT)
+      ! by default none on linear axes, 9 intervals on log ones (the 2..9 of a decade on one-decade steps)
+      n = merge(9_I4P, 0_I4P, logaxis)
+   case (MINOR_NONE)
       n = 0_I4P
    case (MINOR_AUTO)
       if (logaxis) then

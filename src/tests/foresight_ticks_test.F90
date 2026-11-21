@@ -110,15 +110,16 @@ call tics%set_fixed('3', '', '', message)
 lo = 3.0_R8P
 hi = 170.0_R8P
 call log_ticks(lo, hi, 400.0_R8P, .true., .true., ticks, tics)
-test_passed(19) = lo == 1.0_R8P .and. hi == 1000.0_R8P .and. size(ticks) == 7 .and. ticks(1)%label == '1' .and. &
-                  ticks(7)%label == '729'
+! majors at the factor's powers, then gnuplot's default minors: 9 linear intervals between majors (1 + 2/9 first)
+test_passed(19) = lo == 1.0_R8P .and. hi == 1000.0_R8P .and. count(ticks%major) == 7 .and. ticks(1)%label == '1' .and. &
+                  ticks(7)%label == '729' .and. .not. ticks(8)%major .and. abs(ticks(8)%value - 11.0_R8P / 9.0_R8P) < 1.0e-12_R8P
 
 ! log axis, set ytics 2,10
 call tics%set_fixed('10', '2', '', message)
 lo = 3.0_R8P
 hi = 170.0_R8P
 call log_ticks(lo, hi, 400.0_R8P, .true., .true., ticks, tics)
-test_passed(20) = size(ticks) == 3 .and. ticks(1)%label == '2' .and. ticks(3)%label == '200'
+test_passed(20) = count(ticks%major) == 3 .and. ticks(1)%label == '2' .and. ticks(3)%label == '200'
 
 ! invalid settings are refused and leave the settings unchanged
 call tics%set_fixed('-1', '', '', message)

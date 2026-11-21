@@ -320,8 +320,9 @@ Minor ticks divide each interval between consecutive major ticks: `set mxtics N`
 gnuplot's count (2 when the step leads with 2, 0.2 or 20, else 5; 9 on log axes), linearly in value on log axes too
 (`set mytics 4` puts them at 3.25, 5.5, 7.75 within each decade), as gnuplot. They cover the partial intervals at the
 ends of an automatic step, stay within `START` and `END` of a fixed one, and an explicit list alone has none. By
-default linear axes have none and log axes the 2..9 multiples of each decade (gnuplot also draws them on log axes whose
-majors are several decades apart: foresight does not); `unset mxtics` removes them, `set mxtics default` restores them.
+default linear axes have none and log axes 9 intervals between majors, as gnuplot: the 2..9 multiples of each decade,
+and linear intervals when the majors are several decades apart or a factor apart (`set ytics 100`); `unset mxtics`
+removes them, `set mxtics default` restores them.
 
 ```gnuplot
 set mxtics               # gnuplot's count: 5 per step of 1
