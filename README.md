@@ -119,8 +119,8 @@ command, option and style, and where foresight departs from gnuplot.
 ## Authors
 
 **[Stefano Zaghi](https://github.com/szaghi)** · stefano.zaghi@gmail.com
-> *Chief Yak Shaver & Serial Library Resurrector* — wanted his solvers to draw their own plots, live, without leaving
-> Fortran
+> *Chief Yak Shaver & Serial Library Resurrector* — trusts no plotting tool he has not rewritten, and has now rewritten
+> one
 
 **[Claude](https://claude.ai)** (Anthropic)
 > *Omniscient Code Oracle & Tireless Rubber Duck* — AI pair programmer, responsible for probing gnuplot 6.0 before every
