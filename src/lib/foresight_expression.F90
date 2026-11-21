@@ -287,6 +287,9 @@ contains
 
       if (iostat /= 0_I4P) return
       iostat = 1_I4P
+      ! the reader stops at an end: every parsing loop tests the token kind, so it ends whatever the optimizer keeps of
+      ! iostat (nvfortran 26.9 -O2 loops forever on "0.3*sin(x/4)", x undefined, testing iostat alone)
+      kind = T_END
       if (present(at)) then
          write(column, '(I0)') at
       else
@@ -305,7 +308,10 @@ contains
       logical                     :: ok      !< Real conversion succeeded.
       character(len=1)            :: quote   !< Opening quote.
 
-      if (iostat /= 0_I4P) return
+      if (iostat /= 0_I4P) then
+         kind = T_END
+         return
+      endif
       n = len(src, kind=I4P)
       do while (pos <= n)
          if (src(pos:pos) /= ' ' .and. src(pos:pos) /= achar(9)) exit
