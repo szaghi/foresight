@@ -247,11 +247,13 @@ The curve filters replace each run by `set samples` points (100 by default), as 
 | `acsplines` | the smoothing spline of Reinsch through them (at least 4): `using X:Y:W` weights each point, larger weights draw the curve closer (1 without) |
 | `bezier` | the Bézier curve with the points as control points, in the file order: it starts and ends on the first and last point |
 | `sbezier` | the same after sorting and merging the points |
+| `mcsplines` | the monotone cubic spline of Fritsch and Carlson through the points sorted and merged (at least 2): no overshoot, it rises and falls only where the points do; sampled at the points and at max(`set samples`, 2n) points between the first and last x within the x range; of the first block of the item only, as gnuplot 6.0 |
 | `kdensity` [`bandwidth B`] | the Gaussian kernel density of the x values weighted by y, over the x range: `using X:(1)`, or `using X` alone, for a density of counts; the bandwidth is gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, unless given |
 
 ```gnuplot
 plot 'run.dat' u 1:5 smooth csplines                  # a spline through the drag coefficient
 plot 'run.dat' u 1:5:(0.1) smooth acsplines           # smoothed: small weights, a smooth curve
+plot 'timestep.dat' smooth mcsplines                  # a time step through its plateaus, never beyond them
 plot 'run.dat' u 5:(1) smooth kdensity bandwidth 0.01 # the distribution of column 5
 ```
 
@@ -259,7 +261,7 @@ The runs stay separate lines. `smooth` applies to `lines`, `points` and `linespo
 function it is an error (gnuplot ignores the extra columns, or the filter); `acsplines` reads a third column as the
 weights. A single `using` column (or a file of one column) is x, each point of weight 1, for `frequency` and
 `kdensity`, as gnuplot: `using 5 smooth kdensity` is `using 5:(1) smooth kdensity`; the other filters read it as y
-at the point numbers. `mcsplines`, `unwrap`, `path` and the others are [not supported](#not-supported).
+at the point numbers. `unwrap`, `path` and the others are [not supported](#not-supported).
 
 ### Bins
 
@@ -962,5 +964,5 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
 at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` with other styles than lines, points, linespoints and impulses, `lc palette`, `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
-`mcsplines`, `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
+`unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

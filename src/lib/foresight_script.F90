@@ -23,9 +23,10 @@ module foresight_script
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
 !< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2|x2y1|x2y2]
 !<   [smooth FILTER] [bins[=N] [binrange [LO:HI]] [binwidth=W] [binvalue=sum|avg]] [lc [rgb] "color"|N] [lw W] [dt N]
-!<   [pt N] [ps S], ...` (`''` repeats the previous file; smooth and bins: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
-!<   histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|xerrorlines|xyerrorlines` (error bars: `x:y:dy` or
-!<   `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`), abbreviated as gnuplot (foresight_style);
+!<   [pt N] [ps S], ...` (`''` repeats the previous file; smooth and bins: see foresight_smooth), STYLE
+!<   `lines|points|linespoints|impulses|steps|fsteps|histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|
+!<   xerrorlines|xyerrorlines` (error bars: `x:y:dy` or `x:y:low:high`, `x:y:dx:dy` or `x:y:xlow:xhigh:ylow:yhigh`),
+!<   abbreviated as gnuplot (foresight_style);
 !<   `replot [items]`; a `using` field is a column number or a parenthesized expression,
 !<   `($2*1e3)` (see foresight_expression), or a column header name, `"residual"`; `title columnhead[(N)]` titles an
 !<   item with a column header; `ls N`, `lt N` in an item apply a line style, a linetype color; `set colorsequence

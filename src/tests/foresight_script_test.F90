@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(91)                           !< Per-check outcome.
+logical                       :: test_passed(92)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -374,8 +374,8 @@ endif
 call interpreter%run_text("set logscale y; plot '"//data_file//"' smooth cumulative", iostat, iomsg)
 test_passed(44) = test_passed(44) .and. iostat == 0_I4P
 if (test_passed(44)) test_passed(44) = same(interpreter%figure%panels(1)%series(1)%y, [8, 12, 13, -1, 1, -1, 3, 5])
-call interpreter%run_text("plot '"//data_file//"' smooth mcsplines", iostat, iomsg)
-test_passed(45) = iostat /= 0_I4P .and. index(iomsg, 'unsupported smooth "mcsplines"') > 0
+call interpreter%run_text("plot '"//data_file//"' smooth unwrap", iostat, iomsg)
+test_passed(45) = iostat /= 0_I4P .and. index(iomsg, 'unsupported smooth "unwrap"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:(0.1) w yerr smooth unique", iostat, iomsg)
 test_passed(45) = test_passed(45) .and. iostat /= 0_I4P .and. index(iomsg, 'smooth applies to lines') > 0
 call interpreter%run_text("plot x smooth unique", iostat, iomsg)
@@ -1393,6 +1393,37 @@ call interpreter%run_text("plot '"//data_file//"' bins binvalue=max", iostat, io
 test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'expecting binvalue={sum|avg}') > 0
 call interpreter%run_text("plot x bins", iostat, iomsg)
 test_passed(91) = test_passed(91) .and. iostat /= 0_I4P .and. index(iomsg, 'bins apply to data files') > 0
+
+! smooth mcsplines, as gnuplot 6.0 (set table): the monotone spline of Fritsch and Carlson at the merged points and at
+! max(samples, 2n) points, the first block only, within a fixed x range
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2', '2 3', '4 1', '3 5', '5 4', '2 4', '6 2'
+close(unit)
+open(newunit=unit, file=csv_file, action='write', status='replace')
+write(unit, '(A)') '1 1', '2 2', '3 2', '4 5', '', '', '10 1', '11 3'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set samples 9; plot '"//data_file//"' smooth mcsplines, '"//csv_file//"' smooth mcsplines", &
+                             iostat, iomsg)
+   test_passed(92) = iostat == 0_I4P
+   if (test_passed(92)) test_passed(92) = size(panel%series(1)%x) == 18 .and. size(panel%series(2)%x) == 13
+   if (test_passed(92)) test_passed(92) = &
+      near(panel%series(1)%x(1), 1.0_R8P) .and. near(panel%series(1)%x(2), 1.0_R8P) .and. &
+      near(panel%series(1)%x(3), 1.45455_R8P) .and. near(panel%series(1)%y(3), 2.68182_R8P) .and. &
+      near(panel%series(1)%y(6), 4.17168_R8P) .and. near(panel%series(1)%y(10), 1.73028_R8P) .and. &
+      near(panel%series(1)%x(17), 5.77273_R8P) .and. near(panel%series(1)%y(17), 2.53437_R8P) .and. &
+      near(panel%series(1)%y(18), 2.0_R8P) .and. near(panel%series(2)%y(3), 1.46289_R8P) .and. &
+      near(panel%series(2)%x(12), 3.8125_R8P) .and. near(panel%series(2)%y(12), 4.35181_R8P)
+   call interpreter%run_text("set xrange [2.5:4.5]; plot '"//data_file//"' smooth mcsplines", iostat, iomsg)
+   test_passed(92) = test_passed(92) .and. iostat == 0_I4P .and. size(panel%series(1)%x) == 18
+   if (test_passed(92)) test_passed(92) = near(panel%series(1)%x(3), 2.5_R8P) .and. &
+                                          near(panel%series(1)%y(3), 4.4375_R8P) .and. &
+                                          near(panel%series(1)%y(8), 4.47408_R8P) .and. &
+                                          near(panel%series(1)%y(16), 2.5_R8P)
+endassociate
+call interpreter%run_text("unset xrange; plot '"//data_file//"' every ::0::0 smooth mcsplines", iostat, iomsg)
+test_passed(92) = test_passed(92) .and. iostat /= 0_I4P .and. index(iomsg, 'mcsplines need at least 2 points') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1410,7 +1441,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,91L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,92L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

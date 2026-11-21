@@ -177,6 +177,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
   <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
+  <Plot name="cb_mcsplines" svg :width="560" :height="320" caption="a monotone interpolation (mcsplines)" />
 </div>
 
 ### Bars and statistics

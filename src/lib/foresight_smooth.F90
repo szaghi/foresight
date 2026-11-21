@@ -14,7 +14,8 @@ module foresight_smooth
 !<
 !< The curves (`smooth_curve`) are sampled at `set samples` points: the natural cubic spline (`csplines`), the smoothing
 !< spline of Reinsch (`acsplines`, weights from a third column), the Bezier curve of the points (`bezier`, in the file
-!< order; `sbezier` sorted and merged) and the Gaussian kernel density estimate (`kdensity`), as gnuplot 6.0.
+!< order; `sbezier` sorted and merged), the Gaussian kernel density estimate (`kdensity`) and the monotone cubic
+!< spline of Fritsch and Carlson (`mcsplines`, at the points and between them), as gnuplot 6.0.
 !<
 !< The bins (`bin_values`, gnuplot's `bins` filter) are the sums, or the means, of y over equal-width intervals of x.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
@@ -29,7 +30,8 @@ public :: CURVE_MODES
 public :: SMOOTH_MODES
 
 character(len=*), parameter :: SMOOTH_MODES = 'unique frequency fnormal cumulative cnormal' !< Filters of `smooth`.
-character(len=*), parameter :: CURVE_MODES = 'csplines acsplines bezier sbezier kdensity' !< Filters of `smooth_curve`.
+character(len=*), parameter :: CURVE_MODES = 'csplines acsplines bezier sbezier kdensity mcsplines' !< Filters of
+                                                                                                 !< `smooth_curve`.
 
 contains
    pure subroutine bin_values(x, y, nbins, lo, hi, width, average, xlog, ylog, xs, ys, edges, message)
@@ -221,7 +223,10 @@ contains
    !< - `bezier`: the Bezier curve with the points as control points, in the file order; `sbezier` after sorting and
    !<   merging them;
    !< - `kdensity`: the Gaussian kernel density estimate of the x values weighted by y, over [`lo`, `hi`], of
-   !<   `bandwidth` (gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, if not positive).
+   !<   `bandwidth` (gnuplot's default, (4/3n)^(1/5) times the standard deviation of x, if not positive);
+   !< - `mcsplines`: the monotone cubic spline of Fritsch and Carlson through the points sorted and merged, of the first
+   !<   run only (gnuplot 6.0 drops the others), sampled at the points and at max(`samples`, 2 n) points within [`lo`,
+   !<   `hi`] (see `mcs_samples`).
    !<
    !< The splines are sampled over the run, within [`lo`, `hi`]; runs are joined by an undefined point. `message` is
    !< empty on success.
@@ -285,6 +290,14 @@ contains
          call spline_samples(rx, approximation_spline(rx, ry, rw))
       case ('bezier', 'sbezier')
          call bezier_samples(rx, ry)
+      case ('mcsplines')
+         if (size(rx) < 2) then
+            message = 'mcsplines need at least 2 points of distinct x'
+            return
+         endif
+         call mcs_samples(rx, ry)
+         ! gnuplot 6.0 smooths the first run only (its FIXME: one curve per data set)
+         exit
       case default
          call kdensity_samples(rx, ry)
       endselect
@@ -337,6 +350,85 @@ contains
       enddo
       call append(px, py)
       endsubroutine spline_samples
+
+      subroutine mcs_samples(knots, v)
+      !< Sample the monotone cubic spline of Fritsch and Carlson through (`knots`, `v`) as gnuplot's mcs_interp: at the
+      !< knots and at max(`samples`, 2 n) evenly spaced points from the first to the last knot within [lo, hi], sorted;
+      !< a point followed by another closer than a thousandth of the step before it moves back by half that step. The
+      !< slope at a knot is 0 where the secant slopes around it change sign (or one is 0), else their weighted harmonic
+      !< mean; at the ends, the secant slope.
+      real(R8P), intent(in)     :: knots(:) !< Knots, increasing.
+      real(R8P), intent(in)     :: v(:)     !< Values.
+      real(R8P), allocatable    :: px(:)    !< Sampled abscissae.
+      real(R8P), allocatable    :: py(:)    !< Sampled ordinates.
+      real(R8P), allocatable    :: dx(:)    !< Interval widths.
+      real(R8P), allocatable    :: slope(:) !< Secant slopes.
+      real(R8P), allocatable    :: c1(:)    !< Slopes at the knots.
+      real(R8P), allocatable    :: c2(:)    !< Quadratic coefficients by interval.
+      real(R8P), allocatable    :: c3(:)    !< Cubic coefficients by interval.
+      integer(I4P), allocatable :: order(:) !< Sorted abscissae.
+      real(R8P)                 :: a        !< Sampled start.
+      real(R8P)                 :: b        !< Sampled end.
+      real(R8P)                 :: delta    !< Step before a sample.
+      real(R8P)                 :: sum2     !< Two interval widths.
+      real(R8P)                 :: temp     !< Curvature term.
+      real(R8P)                 :: t        !< Offset in the interval.
+      integer(I4P)              :: m        !< Knots.
+      integer(I4P)              :: ns       !< Evenly spaced samples.
+      integer(I4P)              :: i        !< Counter.
+      integer(I4P)              :: l        !< Interval.
+
+      m = size(knots, kind=I4P)
+      a = max(knots(1), min(lo, hi))
+      b = min(knots(m), max(lo, hi))
+      if (a > b) return
+      ns = max(samples, 2_I4P * m)
+      allocate(px(m + ns), py(m + ns))
+      px(1:m) = knots
+      do i = 1_I4P, ns
+         px(m + i) = a + real(i - 1_I4P, R8P) * (b - a) / real(max(1_I4P, ns - 1_I4P), R8P)
+      enddo
+      order = sorted(px)
+      px = px(order)
+      do i = 2_I4P, m + ns - 1_I4P
+         delta = px(i) - px(i - 1_I4P)
+         if (px(i + 1_I4P) - px(i) < delta / 1000.0_R8P) px(i) = px(i) - 0.5_R8P * delta
+      enddo
+      allocate(dx(m - 1_I4P), slope(m), c1(m), c2(m - 1_I4P), c3(m - 1_I4P))
+      dx(:) = knots(2:) - knots(:m - 1_I4P)
+      slope(1:m - 1_I4P) = (v(2:) - v(:m - 1_I4P)) / dx
+      slope(m) = slope(m - 1_I4P)
+      c1(1) = slope(1)
+      do i = 1_I4P, m - 2_I4P
+         if (slope(i) * slope(i + 1_I4P) <= 0.0_R8P) then
+            c1(i + 1_I4P) = 0.0_R8P
+         else
+            sum2 = dx(i) + dx(i + 1_I4P)
+            c1(i + 1_I4P) = 3.0_R8P * sum2 / ((sum2 + dx(i + 1_I4P)) / slope(i) + (sum2 + dx(i)) / slope(i + 1_I4P))
+         endif
+      enddo
+      ! gnuplot's last slope from equal secants, slope(m) = slope(m - 1): the secant itself
+      c1(m) = slope(m - 1_I4P)
+      do i = 1_I4P, m - 1_I4P
+         temp = c1(i) + c1(i + 1_I4P) - 2.0_R8P * slope(i)
+         c2(i) = (slope(i) - c1(i) - temp) / dx(i)
+         c3(i) = temp / dx(i)**2
+      enddo
+      l = 1_I4P
+      do i = 1_I4P, m + ns
+         do while (l < m)
+            if (knots(l + 1_I4P) > px(i)) exit
+            l = l + 1_I4P
+         enddo
+         if (knots(l) == px(i)) then
+            py(i) = v(l)
+         else
+            t = px(i) - knots(l)
+            py(i) = v(l) + ((c3(l) * t + c2(l)) * t + c1(l)) * t
+         endif
+      enddo
+      call append(px, py)
+      endsubroutine mcs_samples
 
       subroutine bezier_samples(cx, cy)
       !< Sample the Bezier curve of control points (`cx`, `cy`) at `samples` evenly spaced parameters: the Bernstein

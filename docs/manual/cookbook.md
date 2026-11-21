@@ -284,6 +284,16 @@ averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 `sbezier` stays inside the points. `kdensity` estimates the distribution of a sample: gnuplot's bandwidth by default,
 narrower to show more detail.
 
+### A monotone interpolation
+
+<<< @/examples/snippets/cb_mcsplines.gp{gnuplot}
+
+<Plot name="cb_mcsplines" svg :width="560" :height="320" />
+
+The natural spline (`csplines`) swings above and below each plateau of the time step; the monotone spline of
+Fritsch and Carlson (`mcsplines`) passes through the same points and never beyond them: a step stays a step, a
+positive quantity stays positive. See [Smoothing](/guide/gnuplot-subset#smoothing).
+
 ## Bars and statistics
 
 ### A bar chart
