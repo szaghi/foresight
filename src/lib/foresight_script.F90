@@ -1487,6 +1487,8 @@ contains
       subroutine variable_colors(c, rgb)
       !< The colors of the points from their color column `c`, gnuplot `lc variable`: the linetype color of each
       !< number (`set colorsequence`), or with `rgb` the 24-bit color 0xRRGGBB; an undefined value takes linetype 1.
+      !< The linetype colors go to default_color as the component itself, never through an associate name: they are
+      !< unallocated by default (gnuplot's), and an associate selector must be allocated (nvfortran -O0 faults on it).
       real(R8P), intent(in)       :: c(:)  !< Color column.
       logical,   intent(in)       :: rgb   !< `lc rgb variable`.
       character(len=*), parameter :: HEX = '0123456789abcdef' !< Hexadecimal digits.
@@ -1497,22 +1499,20 @@ contains
 
       if (allocated(point_colors)) deallocate(point_colors)
       allocate(point_colors(size(c)))
-      associate(linecolors => self%figure%panels(self%figure%current)%linecolors)
-         do k = 1_I4P, size(c, kind=I4P)
-            if (.not. ieee_is_finite(c(k))) then
-               point_colors(k) = default_color(1_I4P, linecolors)
-            elseif (rgb) then
-               code = iand(int(c(k), I8P), int(z'FFFFFF', I8P))
-               point_colors(k) = '#'
-               do d = 5_I4P, 0_I4P, -1_I4P
-                  digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
-                  point_colors(k)(7 - d:7 - d) = HEX(digit + 1:digit + 1)
-               enddo
-            else
-               point_colors(k) = default_color(int(c(k), I4P), linecolors)
-            endif
-         enddo
-      endassociate
+      do k = 1_I4P, size(c, kind=I4P)
+         if (.not. ieee_is_finite(c(k))) then
+            point_colors(k) = default_color(1_I4P, self%figure%panels(self%figure%current)%linecolors)
+         elseif (rgb) then
+            code = iand(int(c(k), I8P), int(z'FFFFFF', I8P))
+            point_colors(k) = '#'
+            do d = 5_I4P, 0_I4P, -1_I4P
+               digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
+               point_colors(k)(7 - d:7 - d) = HEX(digit + 1:digit + 1)
+            enddo
+         else
+            point_colors(k) = default_color(int(c(k), I4P), self%figure%panels(self%figure%current)%linecolors)
+         endif
+      enddo
       endsubroutine variable_colors
 
       subroutine curve_filter
