@@ -79,6 +79,7 @@ type, abstract :: backend_object
       procedure(arrows_interface),          pass(self), deferred :: data_arrows     !< Arrows [unit square].
       procedure(label_interface),           pass(self), deferred :: data_label      !< Text at a point [unit square].
       procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
+      procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
 endtype backend_object
 
 abstract interface
@@ -300,6 +301,14 @@ contains
 
    rotates = .true.
    endfunction rotates_text
+
+   pure function row_height(self) result(height)
+   !< Height of a text row of the device [px]: 0 on vector devices, where text sits anywhere.
+   class(backend_object), intent(in) :: self   !< Device.
+   real(R8P)                         :: height !< Row height [px].
+
+   height = 0.0_R8P
+   endfunction row_height
 
    pure subroutine arrow_head(tail, tip, barbs)
    !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation]: HEAD_LENGTH px long,

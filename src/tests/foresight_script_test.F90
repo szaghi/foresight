@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(95)                           !< Per-check outcome.
+logical                       :: test_passed(96)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1507,6 +1507,15 @@ associate(panel => interpreter%figure%panels(1))
    call interpreter%run_text("set trange [*:*]; plot '"//data_file//"' w lp", iostat, iomsg)
    test_passed(95) = test_passed(95) .and. iostat == 0_I4P .and. panel%raxis%hi == 10.0_R8P
 endassociate
+
+! text terminals: the title, the x2 label and the x2 tick labels on consecutive rows, as gnuplot's dumb terminal
+call interpreter%init('foresight_script_test_x2.txt')
+call interpreter%run_text("set terminal dumb size 60,14; set output 'foresight_script_test_x2.txt'; "// &
+                          "set title 'T'; set x2label 'top'; set x2tics; "// &
+                          "plot x notitle, x*10 axes x2y1 notitle", iostat, iomsg)
+test_passed(96) = iostat == 0_I4P .and. consecutive('foresight_script_test_x2.txt', ['T  ', 'top', '-10'])
+open(newunit=unit, file='foresight_script_test_x2.txt')
+close(unit, status='delete')
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1524,7 +1533,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,95L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,96L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1551,6 +1560,32 @@ contains
       endif
    enddo
    endfunction same
+
+   function consecutive(file, starts) result(ok)
+   !< Whether the first non-blank words of three consecutive lines of `file` are `starts`, in order.
+   character(len=*), intent(in) :: file      !< Text file.
+   character(len=*), intent(in) :: starts(3) !< First words of the lines.
+   logical                      :: ok        !< Found.
+   character(len=200)           :: lines(3)  !< Last three lines.
+   integer(I4P)                 :: u         !< Unit.
+   integer(I4P)                 :: ios       !< I/O status.
+
+   ok = .false.
+   lines = ''
+   open(newunit=u, file=file, action='read', iostat=ios)
+   if (ios /= 0_I4P) return
+   do
+      lines(1:2) = lines(2:3)
+      read(u, '(A)', iostat=ios) lines(3)
+      if (ios /= 0_I4P) exit
+      if (index(adjustl(lines(1)), trim(starts(1))) == 1 .and. index(adjustl(lines(2)), trim(starts(2))) == 1 .and. &
+          index(adjustl(lines(3)), trim(starts(3))) == 1) then
+         ok = .true.
+         exit
+      endif
+   enddo
+   close(u)
+   endfunction consecutive
 
    elemental function near(a, b) result(close)
    !< Whether `a` is `b` to 1e-5 relative (gnuplot prints 6 significant digits).

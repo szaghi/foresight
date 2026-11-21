@@ -1443,6 +1443,8 @@ contains
    real(R8P)                            :: angle     !< x label angle drawn [deg].
    real(R8P)                            :: shift     !< x labels moved down by outward ticks [px].
    real(R8P)                            :: depth     !< Room of the x tick labels below the border [px].
+   real(R8P)                            :: label_y   !< Baseline of the x2 label [px].
+   real(R8P)                            :: title_y   !< Baseline of the title [px].
    real(R8P)                            :: ax        !< Label anchor abscissa [px].
    real(R8P)                            :: ay        !< Label anchor ordinate [px].
    real(R8P)                            :: extent(3) !< Rotated x labels extent [px].
@@ -1546,9 +1548,16 @@ contains
          enddo
          call backend%end_group
       endif
-      if (self%x2axis%has_label()) call backend%text(0.5_R8P * (left + right), &
-                                                     top - self%x2_room(font_size) + (LINE_HEIGHT - 0.25_R8P) * &
-                                                     font_size, self%x2axis%label, 'middle')
+      if (self%x2axis%has_label()) then
+         label_y = top - self%x2_room(font_size) + (LINE_HEIGHT - 0.25_R8P) * font_size
+         ! on a text device, the row right above the x2 tick labels, as gnuplot's dumb terminal (the pixel gap could
+         ! leave an empty row between them, depending on what lies above)
+         if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
+            if (any(self%x2axis%ticks%major)) label_y = top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - &
+                                                       0.25_R8P * font_size - backend%row_height()
+         endif
+         call backend%text(0.5_R8P * (left + right), label_y, self%x2axis%label, 'middle')
+      endif
       if (self%xaxis%has_label()) then
          if (angle /= 0.0_R8P .or. self%xaxis%tics%out) then
             ! below the rotated or moved tick labels
@@ -1568,7 +1577,19 @@ contains
       ! read upward as the y label, the glyphs on the left of the baseline
       if (self%y2axis%has_label()) call backend%text(x1 - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
                                                      self%y2axis%label, 'middle', rotate=-90.0_R8P)
-      if (self%has_title()) call backend%text(0.5_R8P * (left + right), y0 + PAD + font_size, self%title, 'middle')
+      if (self%has_title()) then
+         title_y = y0 + PAD + font_size
+         ! on a text device, the row right above the x2 label or tick labels, with no empty row between them
+         if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
+            if (self%x2axis%has_label() .and. any(self%x2axis%ticks%major)) then
+               title_y = label_y - backend%row_height()
+            elseif (any(self%x2axis%ticks%major)) then
+               title_y = top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - 0.25_R8P * font_size - &
+                         backend%row_height()
+            endif
+         endif
+         call backend%text(0.5_R8P * (left + right), title_y, self%title, 'middle')
+      endif
    endassociate
    endsubroutine draw_frame
 

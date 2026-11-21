@@ -97,6 +97,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: data_image
       procedure, pass(self) :: text_width
       procedure, pass(self) :: rotates_text
+      procedure, pass(self) :: row_height
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
       procedure, pass(self) :: data_arrows
@@ -1125,6 +1126,14 @@ contains
 
    rotates = .false.
    endfunction rotates_text
+
+   pure function row_height(self) result(height)
+   !< Height of a character row [px]: text is written row by row.
+   class(backend_dumb), intent(in) :: self   !< Device.
+   real(R8P)                       :: height !< Row height [px].
+
+   height = self%ch
+   endfunction row_height
 
    pure function segment_char(mask, segment, symbol) result(c)
    !< `symbol` if `segment` of the seven-segment cell `mask` is lit, else a blank.
