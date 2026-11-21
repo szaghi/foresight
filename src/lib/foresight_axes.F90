@@ -1269,6 +1269,10 @@ contains
       view%x2format = ''
       if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
    endif
+   view%xtime = time_attribute(self%xaxis)
+   view%ytime = time_attribute(self%yaxis)
+   view%y2time = time_attribute(self%y2axis)
+   view%x2time = time_attribute(self%x2axis)
    call backend%begin_axes(view)
    ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
    call backend%begin_group('fs-grid', visible=self%grid)
@@ -1576,11 +1580,11 @@ contains
             call backend%text(ax, ay, self%xaxis%ticks(t)%label, trim(self%xaxis%tics%anchor()), &
                               sup=self%xaxis%ticks(t)%sup, rotate=-angle)
          elseif (self%xaxis%tics%out) then
-            call backend%text(p, bottom + shift + GAP + font_size, self%xaxis%ticks(t)%label, 'middle', &
-                              sup=self%xaxis%ticks(t)%sup)
+            call lines_text(backend, p, bottom + shift + GAP + font_size, self%xaxis%ticks(t)%label, &
+                            self%xaxis%ticks(t)%sup, LINE_HEIGHT * font_size)
          else
-            call backend%text(p, bottom + GAP + font_size, self%xaxis%ticks(t)%label, 'middle', &
-                              sup=self%xaxis%ticks(t)%sup)
+            call lines_text(backend, p, bottom + GAP + font_size, self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
+                            LINE_HEIGHT * font_size)
          endif
       enddo
       call backend%end_group
@@ -1667,15 +1671,15 @@ contains
       if (self%xaxis%has_label()) then
          if (angle /= 0.0_R8P .or. self%xaxis%tics%out) then
             ! below the rotated or moved tick labels
-            depth = shift + GAP + LINE_HEIGHT * font_size
+            depth = shift + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P)
             if (angle /= 0.0_R8P) then
                extent = self%xlabels_extent(backend, font_size)
                depth = shift + extent(1)
             endif
             call backend%text(0.5_R8P * (left + right), bottom + depth + GAP + font_size, self%xaxis%label, 'middle')
          else
-            call backend%text(0.5_R8P * (left + right), bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT) * font_size, &
-                              self%xaxis%label, 'middle')
+            call backend%text(0.5_R8P * (left + right), bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT * &
+                              real(label_rows(self%xaxis%ticks), R8P)) * font_size, self%xaxis%label, 'middle')
          endif
       endif
       if (self%yaxis%has_label()) call backend%text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
@@ -4284,9 +4288,9 @@ contains
       if (rotated) then
          margins(4) = PAD + merge(TICK_MAJOR, 0.0_R8P, self%xaxis%tics%out) + extent(1)
       elseif (self%xaxis%tics%out) then
-         margins(4) = PAD + GAP + LINE_HEIGHT * font_size + TICK_MAJOR
+         margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P) + TICK_MAJOR
       else
-         margins(4) = PAD + GAP + LINE_HEIGHT * font_size
+         margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P)
       endif
    elseif (self%xaxis%tics%out .and. size(self%xaxis%ticks) > 0) then
       margins(4) = margins(4) + TICK_MAJOR
@@ -4526,6 +4530,11 @@ contains
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
+   ! tick labels on several lines (a time format `%m/%d\n%H:%M`) on the x axis only: one line elsewhere
+   if (allocated(self%yaxis%ticks)) call one_line(self%yaxis%ticks)
+   if (allocated(self%y2axis%ticks)) call one_line(self%y2axis%ticks)
+   if (allocated(self%x2axis%ticks)) call one_line(self%x2axis%ticks)
+   if (allocated(self%xaxis%ticks) .and. self%xaxis%tics%rotate /= 0.0_R8P) call one_line(self%xaxis%ticks)
    if (self%has_image(palette=.true.)) call setup_colors
    contains
       subroutine setup_polar
@@ -4606,6 +4615,77 @@ contains
       call move_alloc(labels, self%xaxis%labels)
       endsubroutine collect_labels
    endsubroutine setup_axes
+
+   pure function time_attribute(axis) result(text)
+   !< The input time format of a time axis (the viewer's mark of one), empty if numeric.
+   type(axis_object), intent(in) :: axis !< Axis.
+   character(len=:), allocatable :: text !< Attribute text.
+
+   text = ''
+   if (.not. axis%time .or. axis%log) return
+   text = '%d/%m/%y,%H:%M'
+   if (allocated(axis%timefmt)) text = axis%timefmt
+   endfunction time_attribute
+
+   pure subroutine one_line(ticks)
+   !< Tick labels on several lines (new lines in them) joined on one line, a blank between the lines.
+   type(tick_object), intent(inout) :: ticks(:) !< Ticks.
+   integer(I4P)                     :: t        !< Tick counter.
+   integer(I4P)                     :: k        !< New line position.
+
+   do t = 1_I4P, size(ticks, kind=I4P)
+      if (.not. allocated(ticks(t)%label)) cycle
+      do
+         k = index(ticks(t)%label, new_line('a'), kind=I4P)
+         if (k == 0_I4P) exit
+         ticks(t)%label(k:k) = ' '
+      enddo
+   enddo
+   endsubroutine one_line
+
+   pure function label_rows(ticks) result(rows)
+   !< Lines of the tallest major tick label (new lines in it), at least 1.
+   type(tick_object), intent(in) :: ticks(:) !< Ticks.
+   integer(I4P)                  :: rows     !< Lines.
+   integer(I4P)                  :: t        !< Tick counter.
+   integer(I4P)                  :: k        !< Character counter.
+   integer(I4P)                  :: n        !< Lines of a label.
+
+   rows = 1_I4P
+   do t = 1_I4P, size(ticks, kind=I4P)
+      if (.not. ticks(t)%major .or. .not. allocated(ticks(t)%label)) cycle
+      n = 1_I4P
+      do k = 1_I4P, len(ticks(t)%label, kind=I4P)
+         if (ticks(t)%label(k:k) == new_line('a')) n = n + 1_I4P
+      enddo
+      rows = max(rows, n)
+   enddo
+   endfunction label_rows
+
+   subroutine lines_text(backend, x, y, label, sup, step)
+   !< A centred text on several lines (new lines in `label`), the first baseline at `y`, the next `step` lower; the
+   !< superscript `sup` ends the last line.
+   class(backend_object), intent(inout) :: backend !< Output device.
+   real(R8P),             intent(in)    :: x       !< Centre abscissa [px].
+   real(R8P),             intent(in)    :: y       !< First baseline [px].
+   character(len=*),      intent(in)    :: label   !< Text.
+   character(len=*),      intent(in)    :: sup     !< Superscript.
+   real(R8P),             intent(in)    :: step    !< Line spacing [px].
+   integer(I4P)                         :: first   !< Line start.
+   integer(I4P)                         :: k       !< New line position.
+   integer(I4P)                         :: row     !< Line counter.
+
+   first = 1_I4P
+   row = 0_I4P
+   do
+      k = index(label(first:), new_line('a'), kind=I4P)
+      if (k == 0_I4P) exit
+      call backend%text(x, y + real(row, R8P) * step, label(first:first + k - 2_I4P), 'middle')
+      first = first + k
+      row = row + 1_I4P
+   enddo
+   call backend%text(x, y + real(row, R8P) * step, label(first:), 'middle', sup=sup)
+   endsubroutine lines_text
 
    pure subroutine axes_names(names, x, y, y2, bad, cb, x2)
    !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`, `cb`, `x2`: each found one sets its

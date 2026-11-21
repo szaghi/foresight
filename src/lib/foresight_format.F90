@@ -164,7 +164,7 @@ contains
    endfunction real_str
 
    pure function xml_escape(text) result(escaped)
-   !< Escape the XML special characters `&`, `<`, `>` and `"`.
+   !< Escape the XML special characters `&`, `<`, `>` and `"`, and new lines (`&#10;`: an attribute keeps them).
    character(len=*), intent(in)  :: text    !< Raw text.
    character(len=:), allocatable :: escaped !< Escaped text.
    integer(I4P)                  :: i       !< Character counter.
@@ -180,6 +180,8 @@ contains
          escaped = escaped//'&gt;'
       case ('"')
          escaped = escaped//'&quot;'
+      case (achar(10))
+         escaped = escaped//'&#10;'
       case default
          escaped = escaped//text(i:i)
       endselect

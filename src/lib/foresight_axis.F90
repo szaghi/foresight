@@ -10,7 +10,7 @@ module foresight_axis
 !< the user settings `tics`, so a multiplot does not carry the categories of a panel into the next one.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use penf, only : R8P
-use foresight_ticks, only : linear_ticks, list_ticks, log_ticks, merge_list, tick_object, tics_object, TICS_NONE
+use foresight_ticks, only : linear_ticks, list_ticks, log_ticks, merge_list, tick_object, tics_object, time_ticks, TICS_NONE
 
 implicit none
 private
@@ -32,6 +32,10 @@ type :: axis_object
    real(R8P)                      :: lo        = -10.0_R8P  !< Effective value at the axis start, set by `setup`.
    real(R8P)                      :: hi        = 10.0_R8P   !< Effective value at the axis end, set by `setup`.
    type(tics_object)              :: tics                   !< User tick settings: fixed step, none, label format.
+   logical                        :: time      = .false.    !< Time values (seconds since 1970): time ticks and labels,
+                                                            !< gnuplot `set xdata time`.
+   character(len=:), allocatable  :: timefmt                !< Input time format, the day and month order of the
+                                                            !< invented labels (gnuplot `set timefmt`).
    logical                        :: tight     = .false.    !< Autoscaled ends not extended to the ticks (images,
                                                             !< the color axis), as gnuplot.
    type(tick_object), allocatable :: ticks(:)               !< Ticks, set by `setup`.
@@ -150,6 +154,11 @@ contains
    elseif (.not. self%tics%series .and. self%tics%mode /= TICS_NONE) then
       ! an explicit list alone: the range is not extended to a tick grid, as gnuplot
       call list_ticks(self%tics, lo, hi, .false., self%ticks)
+   elseif (self%time .and. .not. self%log) then
+      if (.not. allocated(self%timefmt)) self%timefmt = '%d/%m/%y,%H:%M'
+      call time_ticks(lo, hi, .not. (self%min_fixed .or. self%plot_min_fixed .or. self%tight), &
+                      .not. (self%max_fixed .or. self%plot_max_fixed .or. self%tight), self%ticks, self%tics, &
+                      self%timefmt)
    elseif (self%log) then
       call log_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%plot_min_fixed .or. self%tight), &
                      .not. (self%max_fixed .or. self%plot_max_fixed .or. self%tight), &

@@ -23,9 +23,14 @@ module foresight_ticks
 !< axes have none, log axes 9 intervals between majors (the 2..9 multiples of a decade on one-decade steps), as
 !< gnuplot; `unset mxtics` removes them.
 !<
+!< Time axes (gnuplot `set xdata time`) follow gnuplot's time rules (`quantize_time_tics`): the step in whole seconds,
+!< minutes, hours, days, weeks, months or years, the ticks justified to whole units (`time_tic_just`), labels written by
+!< `strftime` with the format set or one gnuplot invents from the range (`%H:%M`, `%m/%d\n%H:%M`, ...).
+!<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
 use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
+use foresight_time, only : DAY_SEC, MON_SEC, WEEK_SEC, YEAR_SEC, strftime, time_format_check, time_justify, time_parts
 
 implicit none
 private
@@ -37,6 +42,8 @@ public :: nice_step
 public :: tic_item
 public :: tick_object
 public :: tics_object
+public :: time_ticks
+public :: time_tick_format
 public :: MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE
 public :: TICS_AUTO, TICS_FIXED, TICS_NONE
 public :: labels_attribute
@@ -411,6 +418,392 @@ contains
       endif
       endfunction scaled
    endsubroutine gnuplot_step
+
+   pure subroutine time_ticks(lo, hi, extend_lo, extend_hi, ticks, tics, timefmt)
+   !< Ticks of a time axis (values in seconds since 1970), as gnuplot's: the automatic step `quantize_time_tics` (or the
+   !< fixed step of `tics`, in seconds), autoscaled ends extended outward to it and justified to whole time units,
+   !< the ticks justified so too, labelled with the time format of `tics` or one invented from the range
+   !< (`time_tick_format`, `timefmt` giving the day and month order). Minor ticks: `set mxtics N` divides each
+   !< step in N, `set mxtics` gnuplot's automatic time step, none by default.
+   real(R8P),                      intent(inout) :: lo        !< Value at the axis start (`lo > hi`: reversed).
+   real(R8P),                      intent(inout) :: hi        !< Value at the axis end.
+   logical,                        intent(in)    :: extend_lo !< Extend `lo` outward to the tick grid.
+   logical,                        intent(in)    :: extend_hi !< Extend `hi` outward to the tick grid.
+   type(tick_object), allocatable, intent(out)   :: ticks(:)  !< Ticks, ascending in value.
+   type(tics_object),              intent(in)    :: tics      !< User settings.
+   character(len=*),               intent(in)    :: timefmt   !< Input time format (gnuplot `set timefmt`).
+   real(R8P), parameter          :: SIGNIF = 0.01_R8P !< gnuplot's rounding tolerance, in steps.
+   character(len=:), allocatable :: format    !< Label format.
+   real(R8P)                     :: step      !< Tick step [s].
+   real(R8P)                     :: lmin      !< Smaller end.
+   real(R8P)                     :: lmax      !< Larger end.
+   real(R8P)                     :: start     !< First tick before justification.
+   real(R8P)                     :: last      !< Last tick before justification.
+   real(R8P)                     :: tmin      !< Smallest tick kept.
+   real(R8P)                     :: tmax      !< Largest tick kept.
+   real(R8P)                     :: tic       !< Tick before justification.
+   real(R8P)                     :: internal  !< Justified tick.
+   real(R8P)                     :: ministep  !< Minor step [s], 0 for none.
+   real(R8P)                     :: miniend   !< Minor ticks end within a step.
+   real(R8P)                     :: mplace    !< Minor tick offset.
+   real(R8P)                     :: v         !< Fixed start or end.
+   integer(I8P)                  :: m         !< Step mantissa.
+   integer(I8P)                  :: k         !< Tick counter.
+   integer(I8P)                  :: nsteps    !< Ticks.
+   integer(I4P)                  :: e         !< Step exponent.
+   integer(I4P)                  :: level     !< Time level of the step.
+   type(tick_object)             :: tick      !< One tick.
+   logical                       :: has_start !< Fixed start.
+   logical                       :: has_end   !< Fixed end.
+
+   allocate(ticks(0))
+   if (tics%mode == TICS_NONE .or. lo == hi .or. .not. (abs(hi - lo) <= huge(1.0_R8P))) return
+   has_start = .false.
+   has_end = .false.
+   if (tics%mode == TICS_FIXED) then
+      step = abs(decimal_value(tics%step))
+      if (.not. (step > 0.0_R8P)) return
+      level = time_level(step)
+      if (allocated(tics%start)) has_start = len(tics%start) > 0
+      if (allocated(tics%end)) has_end = len(tics%end) > 0
+   else
+      call gnuplot_step(abs(hi - lo), m, e)
+      step = grid_value(m, e)
+      call quantize_time_tics(step, abs(hi - lo), level)
+   endif
+   ! autoscaled ends outward to the step, then to a whole time unit
+   if (lo <= hi) then
+      if (extend_lo .and. .not. has_start) lo = outward(lo, .false.)
+      if (extend_hi .and. .not. has_end) hi = outward(hi, .true.)
+   else
+      if (extend_lo .and. .not. has_start) lo = outward(lo, .true.)
+      if (extend_hi .and. .not. has_end) hi = outward(hi, .false.)
+   endif
+   if (tics%has_format()) then
+      format = time_tick_format(tics%format, level, lo, hi, timefmt)
+   else
+      format = time_tick_format('', level, lo, hi, timefmt)
+   endif
+   lmin = min(lo, hi)
+   lmax = max(lo, hi)
+   start = step * real(floor(lmin / step, I8P), R8P)
+   last = step * real(ceiling(lmax / step, I8P), R8P)
+   if (has_start) then
+      v = decimal_value(tics%start)
+      start = v
+   endif
+   if (has_end) then
+      v = decimal_value(tics%end)
+      last = v
+   endif
+   last = last + SIGNIF * step
+   if (step < abs(lmax) + abs(lmin)) then
+      tmin = lmin - SIGNIF * step
+      tmax = lmax + SIGNIF * step
+   else
+      tmin = lmin
+      tmax = lmax
+   endif
+   if ((tmax - tmin) / step > real(MAX_TICKS, R8P) .or. last < start) return
+   nsteps = int((last - start) / step, I8P) + 1_I8P
+   ! minor steps
+   ministep = 0.0_R8P
+   miniend = step
+   if (tics%minor > 1_I4P) then
+      ministep = step / real(tics%minor, R8P)
+   elseif (tics%minor == MINOR_AUTO) then
+      ministep = auto_time_minitics(level, step)
+      miniend = 0.9_R8P * step
+   endif
+   do k = 0_I8P, nsteps - 1_I8P
+      tic = start + real(k, R8P) * step
+      internal = time_justify(level, tic)
+      if (internal > tmax) exit
+      if (internal >= tmin) then
+         tick%value = internal
+         if (abs(internal) < step * SIGNIF) tick%value = 0.0_R8P
+         tick%major = .true.
+         tick%label = strftime(format, tick%value)
+         tick%sup = ''
+         call push(ticks, tick)
+      endif
+      if (ministep > 0.0_R8P) then
+         mplace = ministep
+         do while (mplace < miniend)
+            if (internal + mplace >= tmin .and. internal + mplace <= tmax .and. &
+                internal + mplace >= start - step * SIGNIF .and. internal + mplace <= last) then
+               tick%value = internal + mplace
+               tick%major = .false.
+               tick%label = ''
+               tick%sup = ''
+               call push(ticks, tick)
+            endif
+            mplace = mplace + ministep
+         enddo
+      endif
+   enddo
+   call sort_ticks(ticks)
+   contains
+      pure function outward(input, upwards) result(edge)
+      !< gnuplot's `round_outward` of a time axis end: to the step grid, then to the whole time unit beyond it.
+      real(R8P), intent(in) :: input   !< Axis end.
+      logical,   intent(in) :: upwards !< Extend upwards.
+      real(R8P)             :: edge    !< Extended end.
+      real(R8P)             :: ontime  !< Justified end.
+
+      if (upwards) then
+         edge = step * real(ceiling(input / step, I8P), R8P)
+      else
+         edge = step * real(floor(input / step, I8P), R8P)
+      endif
+      ontime = time_justify(level, edge)
+      if ((upwards .and. ontime > edge) .or. (.not. upwards .and. ontime < edge)) edge = ontime
+      endfunction outward
+   endsubroutine time_ticks
+
+   pure function time_tick_format(format, level, lo, hi, timefmt) result(chosen)
+   !< Label format of a time axis: `format` if it is a time format (not a numeric printf one), else gnuplot's invented
+   !< one (`copy_or_invent_formatstring`): within one day `%H:%M` (`:%S` for steps under a minute, `%M` alone at the
+   !< day level); over days `%m/%d` (`%d/%m` when `timefmt` has the day first, then `/%y` or `/%Y` across years) and
+   !< `\n%H:%M` below the week level.
+   character(len=*), intent(in)  :: format  !< Format set, empty for none.
+   integer(I4P),     intent(in)  :: level   !< Time level of the step.
+   real(R8P),        intent(in)  :: lo      !< Axis start.
+   real(R8P),        intent(in)  :: hi      !< Axis end.
+   character(len=*), intent(in)  :: timefmt !< Input time format.
+   character(len=:), allocatable :: chosen  !< Label format.
+   integer(I8P)                  :: a(9)    !< Parts of the justified start.
+   integer(I8P)                  :: b(9)    !< Parts of the justified end.
+   real(R8P)                     :: frac    !< Fraction of a second.
+   logical                       :: month_first !< `%m` before `%d` in `timefmt`.
+
+   if (len(format) > 0) then
+      if (len(time_format_check(format)) == 0 .and. .not. looks_numeric(format)) then
+         chosen = format
+         return
+      endif
+   endif
+   call time_parts(time_justify(level, lo), a(1), a(2), a(3), a(4), a(5), a(6), frac, a(8), a(9))
+   call time_parts(time_justify(level, hi), b(1), b(2), b(3), b(4), b(5), b(6), frac, b(8), b(9))
+   ! gnuplot compares strchr positions: a missing letter is a null pointer, before any other
+   month_first = index(timefmt, 'm') < index(timefmt, 'd')
+   chosen = ''
+   if (a(1) == b(1) .and. a(8) == b(8)) then
+      if (a(4) /= b(4)) chosen = '%H'
+      if (level < 3_I4P) then
+         if (len(chosen) > 0) chosen = chosen//':'
+         chosen = chosen//'%M'
+      endif
+      if (level < 2_I4P) chosen = chosen//':%S'
+   else
+      if (a(1) /= b(1)) then
+         chosen = merge('%m/%d/%', '%d/%m/%', month_first)
+         if (a(1) / 100_I8P /= b(1) / 100_I8P) then
+            chosen = chosen//'Y'
+         else
+            chosen = chosen//'y'
+         endif
+      else
+         chosen = merge('%m/%d', '%d/%m', month_first)
+      endif
+      if (level < 4_I4P) chosen = chosen//new_line('a')//'%H:%M'
+   endif
+   endfunction time_tick_format
+
+   pure function looks_numeric(format) result(numeric)
+   !< gnuplot's `looks_like_numeric`: the first conversion is a numeric printf one (`%5.2f`, `%g`, `%e`, ...).
+   character(len=*), intent(in) :: format  !< Format.
+   logical                      :: numeric !< Numeric.
+   integer(I4P)                 :: i       !< Position.
+
+   numeric = .false.
+   i = index(format, '%', kind=I4P)
+   if (i == 0_I4P) return
+   i = i + 1_I4P
+   do while (i <= len(format, kind=I4P))
+      if (scan(format(i:i), '0123456789.-+ #') == 0) exit
+      i = i + 1_I4P
+   enddo
+   if (i <= len(format)) numeric = scan(format(i:i), 'efgEFGh') > 0 .and. format(i:i) /= 'h'
+   endfunction looks_numeric
+
+   pure subroutine quantize_time_tics(tic, xr, level)
+   !< gnuplot's `quantize_time_tics`: the step `tic` rounded to whole seconds, minutes, hours, days, weeks, months or
+   !< years for a range `xr` [s], and its `level` (0 seconds ... 6 years).
+   real(R8P),    intent(inout) :: tic   !< Step [s].
+   real(R8P),    intent(in)    :: xr    !< Range [s].
+   integer(I4P), intent(out)   :: level !< Time level.
+   integer(I4P), parameter     :: GUIDE12 = 12_I4P !< Guide of the duodecimal rounding (20 * 3 / 5).
+   integer(I8P)                :: m     !< Step mantissa.
+   integer(I4P)                :: e     !< Step exponent.
+
+   level = 0_I4P
+   if (tic > 5.0_R8P) then
+      tic = duodecimal(xr / 60.0_R8P, GUIDE12) * 60.0_R8P
+      if (tic >= 60.0_R8P) level = 1_I4P
+   endif
+   if (tic > 300.0_R8P) then
+      tic = duodecimal(xr / 3600.0_R8P, GUIDE12) * 3600.0_R8P
+      if (tic >= 3600.0_R8P) level = 2_I4P
+   endif
+   if (tic > 3600.0_R8P) then
+      tic = duodecimal(xr / DAY_SEC, GUIDE12) * DAY_SEC
+      if (tic >= DAY_SEC) level = 3_I4P
+   endif
+   if (tic > 2.0_R8P * DAY_SEC) then
+      call gnuplot_step(xr / WEEK_SEC, m, e)
+      tic = max(grid_value(m, e) * WEEK_SEC, WEEK_SEC)
+      level = 4_I4P
+   endif
+   if (tic > 3.0_R8P * WEEK_SEC) then
+      call gnuplot_step(xr / MON_SEC, m, e)
+      tic = max(grid_value(m, e) * MON_SEC, MON_SEC)
+      level = 5_I4P
+   endif
+   if (tic > MON_SEC) then
+      tic = duodecimal(xr / YEAR_SEC, GUIDE12) * YEAR_SEC
+      if (tic >= YEAR_SEC) level = 6_I4P
+   endif
+   endsubroutine quantize_time_tics
+
+   pure function duodecimal(arg, guide) result(tic)
+   !< gnuplot's `quantize_duodecimal_tics`: a step for `arg` in a duodecimal reference (12 or 60 based).
+   real(R8P),    intent(in) :: arg   !< Range in the unit.
+   integer(I4P), intent(in) :: guide !< Approximate number of ticks.
+   real(R8P)                :: tic   !< Step in the unit.
+   real(R8P)                :: power !< Power of 12 below `arg`.
+   real(R8P)                :: xnorm !< `arg` over it.
+   real(R8P)                :: posns !< Ticks per power.
+
+   power = 12.0_R8P**floor(log(arg) / log(12.0_R8P))
+   xnorm = arg / power
+   posns = real(guide, R8P) / xnorm
+   if (posns > 24.0_R8P) then
+      tic = power / 24.0_R8P
+   elseif (posns > 12.0_R8P) then
+      tic = power / 12.0_R8P
+   elseif (posns > 6.0_R8P) then
+      tic = power / 6.0_R8P
+   elseif (posns > 4.0_R8P) then
+      tic = power / 4.0_R8P
+   elseif (posns > 2.0_R8P) then
+      tic = power / 2.0_R8P
+   elseif (posns > 1.0_R8P) then
+      tic = power
+   elseif (posns > 0.5_R8P) then
+      tic = power * 2.0_R8P
+   elseif (posns > 1.0_R8P / 3.0_R8P) then
+      tic = power * 3.0_R8P
+   else
+      tic = power * ceiling(xnorm)
+   endif
+   endfunction duodecimal
+
+   pure function time_level(step) result(level)
+   !< Time level of a fixed step [s], as gnuplot's `setup_tics`.
+   real(R8P), intent(in) :: step  !< Step [s].
+   integer(I4P)          :: level !< Time level.
+
+   if (step >= 365.0_R8P * DAY_SEC) then
+      level = 6_I4P
+   elseif (step >= 28.0_R8P * DAY_SEC) then
+      level = 5_I4P
+   elseif (step >= WEEK_SEC) then
+      level = 4_I4P
+   elseif (step >= DAY_SEC) then
+      level = 3_I4P
+   elseif (step >= 3600.0_R8P) then
+      level = 2_I4P
+   elseif (step >= 60.0_R8P) then
+      level = 1_I4P
+   else
+      level = 0_I4P
+   endif
+   endfunction time_level
+
+   pure function auto_time_minitics(level, incr) result(tinc)
+   !< gnuplot's `make_auto_time_minitics`: the minor step [s] of a time step `incr` at `level`, 0 for none.
+   integer(I4P), intent(in) :: level !< Time level.
+   real(R8P),    intent(in) :: incr  !< Major step [s].
+   real(R8P)                :: tinc  !< Minor step [s].
+
+   tinc = 0.0_R8P
+   select case (level)
+   case (0_I4P, 1_I4P)
+      if (incr >= 5.0_R8P) tinc = 1.0_R8P
+      if (incr >= 10.0_R8P) tinc = 5.0_R8P
+      if (incr >= 20.0_R8P) tinc = 10.0_R8P
+      if (incr >= 60.0_R8P) tinc = 20.0_R8P
+      if (incr >= 120.0_R8P) tinc = 60.0_R8P
+      if (incr >= 360.0_R8P) tinc = 120.0_R8P
+      if (incr >= 720.0_R8P) tinc = 180.0_R8P
+      if (incr >= 1440.0_R8P) tinc = 360.0_R8P
+   case (2_I4P)
+      if (incr >= 1200.0_R8P) tinc = 600.0_R8P
+      if (incr >= 3600.0_R8P) tinc = 1800.0_R8P
+      if (incr >= 7200.0_R8P) tinc = 3600.0_R8P
+      if (incr >= 21600.0_R8P) tinc = 7200.0_R8P
+      if (incr >= 43200.0_R8P) tinc = 10800.0_R8P
+      if (incr >= 86400.0_R8P) tinc = 21600.0_R8P
+   case (3_I4P)
+      if (incr > 7200.0_R8P) tinc = 3600.0_R8P
+      if (incr > 14400.0_R8P) tinc = 7200.0_R8P
+      if (incr > 25200.0_R8P) tinc = 10800.0_R8P
+      if (incr > 46800.0_R8P) tinc = 21600.0_R8P
+      if (incr > DAY_SEC) tinc = 43200.0_R8P
+      if (incr > 2.0_R8P * DAY_SEC) tinc = DAY_SEC
+   case (4_I4P)
+      if (incr > 2.0_R8P * DAY_SEC) tinc = DAY_SEC
+      if (incr > 7.0_R8P * DAY_SEC) tinc = 7.0_R8P * DAY_SEC
+   case (5_I4P)
+      if (incr > 2.0_R8P * DAY_SEC) tinc = DAY_SEC
+      if (incr > 15.0_R8P * DAY_SEC) tinc = 10.0_R8P * DAY_SEC
+      if (incr > 2.0_R8P * MON_SEC) tinc = MON_SEC
+      if (incr > 6.0_R8P * MON_SEC) tinc = 3.0_R8P * MON_SEC
+      if (incr > 2.0_R8P * YEAR_SEC) tinc = YEAR_SEC
+   case default
+      if (incr > 2.0_R8P * MON_SEC) tinc = MON_SEC
+      if (incr > 6.0_R8P * MON_SEC) tinc = 3.0_R8P * MON_SEC
+      if (incr > 2.0_R8P * YEAR_SEC) tinc = YEAR_SEC
+      if (incr > 10.0_R8P * YEAR_SEC) tinc = 5.0_R8P * YEAR_SEC
+      if (incr > 50.0_R8P * YEAR_SEC) tinc = 10.0_R8P * YEAR_SEC
+      if (incr > 100.0_R8P * YEAR_SEC) tinc = 20.0_R8P * YEAR_SEC
+      if (incr > 200.0_R8P * YEAR_SEC) tinc = 50.0_R8P * YEAR_SEC
+      if (incr > 300.0_R8P * YEAR_SEC) tinc = 100.0_R8P * YEAR_SEC
+   endselect
+   endfunction auto_time_minitics
+
+   pure function decimal_value(text) result(v)
+   !< Value of a decimal text (a fixed tick start, step or end).
+   character(len=*), intent(in) :: text !< Decimal text.
+   real(R8P)                    :: v    !< Value.
+   integer(I8P)                 :: n    !< Mantissa.
+   integer(I4P)                 :: e    !< Exponent.
+   logical                      :: ok   !< Parsed.
+
+   call parse_decimal(text, n, e, ok)
+   v = 0.0_R8P
+   if (ok) v = grid_value(n, e)
+   endfunction decimal_value
+
+   pure subroutine sort_ticks(ticks)
+   !< Sort the ticks by value (insertion sort: few ticks, the majors and minors interleaved).
+   type(tick_object), intent(inout) :: ticks(:) !< Ticks.
+   type(tick_object)                :: held     !< Tick being placed.
+   integer(I4P)                     :: i        !< Counter.
+   integer(I4P)                     :: j        !< Counter.
+
+   do i = 2_I4P, size(ticks, kind=I4P)
+      held = ticks(i)
+      j = i - 1_I4P
+      do while (j >= 1_I4P)
+         if (ticks(j)%value <= held%value) exit
+         ticks(j + 1_I4P) = ticks(j)
+         j = j - 1_I4P
+      enddo
+      ticks(j + 1_I4P) = held
+   enddo
+   endsubroutine sort_ticks
 
    pure subroutine linear_ticks(lo, hi, npx, extend_lo, extend_hi, ticks, tics)
    !< Major ticks of a linear axis (`npx` pixels long, kept for the interface: gnuplot's density does not depend on it);

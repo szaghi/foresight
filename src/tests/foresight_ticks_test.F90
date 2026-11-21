@@ -4,7 +4,7 @@ program foresight_ticks_test
 !<
 !< The fixed-step ranges and ticks are those gnuplot 6.0 produces for the same data (0.07..2.93, 3..170).
 use, intrinsic :: iso_fortran_env, only : output_unit
-use foresight_ticks, only : linear_ticks, log_ticks, nice_step, tick_object, tics_object, TICS_NONE
+use foresight_ticks, only : linear_ticks, log_ticks, nice_step, tick_object, tics_object, time_ticks, TICS_NONE
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -16,7 +16,7 @@ integer(I4P)                   :: e               !< Step exponent.
 type(tics_object)              :: tics            !< User tick settings.
 type(tics_object)              :: fresh_tics !< Default settings (nvfortran: no empty constructor).
 character(len=:), allocatable  :: message         !< Settings problem.
-logical                        :: test_passed(22) !< Per-check outcome.
+logical                        :: test_passed(28) !< Per-check outcome.
 
 ! nice steps
 call nice_step(0.4_R8P, m, e)
@@ -127,11 +127,60 @@ test_passed(21) = index(message, 'positive') > 0 .and. tics%step == '10'
 call tics%set_fixed('1e-10', '1e10', '', message)
 test_passed(22) = index(message, 'differ too much') > 0
 
-write(output_unit, '(A,22L2)') 'foresight_ticks checks:', test_passed
+! time axes: the major tick labels gnuplot 6.0 writes over the same fixed ranges (set xdata time, set timefmt "%s"),
+! the same cases as viewer_test.js
+tics = fresh_tics
+test_passed(23) = same_labels(0.0_R8P, 30.0_R8P, [character(len=11) :: '00:00', '00:05', '00:10', '00:15', '00:20', &
+                                                   '00:25', '00:30'])
+test_passed(24) = same_labels(1709287200.0_R8P, 1709288400.0_R8P, [character(len=11) :: '00:00', '02:00', '04:00', &
+                                                                   '06:00', '08:00', '10:00', '12:00', '14:00', &
+                                                                   '16:00', '18:00', '20:00'])
+test_passed(25) = same_labels(1709287200.0_R8P, 1709366400.0_R8P, [character(len=11) :: '01/03'//new_line('a')//'10:00', &
+                              '01/03'//new_line('a')//'12:00', '01/03'//new_line('a')//'14:00', &
+                              '01/03'//new_line('a')//'16:00', '01/03'//new_line('a')//'18:00', &
+                              '01/03'//new_line('a')//'20:00', '01/03'//new_line('a')//'22:00', &
+                              '02/03'//new_line('a')//'00:00', '02/03'//new_line('a')//'02:00', &
+                              '02/03'//new_line('a')//'04:00', '02/03'//new_line('a')//'06:00', &
+                              '02/03'//new_line('a')//'08:00'])
+test_passed(26) = same_labels(1709251200.0_R8P, 1714521600.0_R8P, [character(len=11) :: '07/03', '14/03', '21/03', &
+                                                                   '28/03', '04/04', '11/04', '18/04', '25/04'])
+test_passed(27) = same_labels(946684800.0_R8P, 1577836800.0_R8P, [character(len=11) :: '01/01/00', '01/01/02', &
+                                                                  '01/01/04', '01/01/06', '01/01/08', '01/01/10', &
+                                                                  '01/01/12', '01/01/14', '01/01/16', '01/01/18', &
+                                                                  '01/01/20'])
+test_passed(28) = same_labels(1709287201.5_R8P, 1709287205.0_R8P, [character(len=11) :: '00:01', '00:02', '00:02', &
+                                                                   '00:03', '00:03', '00:04', '00:04', '00:05'])
+
+write(output_unit, '(A,28L2)') 'foresight_ticks checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function same_labels(a, b, expected) result(same)
+   !< Whether the major ticks of the time range [`a`, `b`] (not extended) carry the `expected` labels.
+   real(R8P),        intent(in) :: a           !< Range start.
+   real(R8P),        intent(in) :: b           !< Range end.
+   character(len=*), intent(in) :: expected(:) !< Labels.
+   logical                      :: same        !< Same labels.
+   type(tick_object), allocatable :: found(:)  !< Ticks.
+   real(R8P)                    :: x           !< Range start.
+   real(R8P)                    :: y           !< Range end.
+   integer(I4P)                 :: k           !< Counter.
+   integer(I4P)                 :: j           !< Major counter.
+
+   x = a
+   y = b
+   call time_ticks(x, y, .false., .false., found, tics, '%s')
+   same = count(found%major) == size(expected)
+   if (.not. same) return
+   j = 0_I4P
+   do k = 1_I4P, size(found, kind=I4P)
+      if (.not. found(k)%major) cycle
+      j = j + 1_I4P
+      same = same .and. found(k)%label == trim(expected(j))
+   enddo
+   endfunction same_labels
+
    subroutine fixed_linear(tics)
    !< Autoscaled linear ticks of the data range 0.07..2.93 on 500 px with `tics`.
    type(tics_object), intent(in) :: tics !< User tick settings.

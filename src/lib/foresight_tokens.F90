@@ -3,9 +3,9 @@ module foresight_tokens
 !< foresight_tokens, lexer of the gnuplot-like command language.
 !<
 !< A line is split into statements at `;` and cut at `#` (both outside quotes); a statement into tokens: words,
-!< quoted strings (single quotes literal, double quotes with `\t` for a tab and `\` taking the next character literally,
-!< so `\"` and `\\`, as gnuplot), commas and bracketed ranges `[a:b]`. Each token remembers where it lies in the
-!< statement, so that a plot item can be quoted as written. Inside parentheses a word goes on across blanks and commas:
+!< quoted strings (single quotes literal, double quotes with `\t` for a tab, `\n` for a new line and `\` taking the
+!< next character literally, so `\"` and `\\`, as gnuplot), commas and bracketed ranges `[a:b]`. Each token remembers
+!< where it lies in the statement, so that a plot item can be quoted as written. Inside parentheses a word goes on across blanks and commas:
 !< `($2 * 1e3)` and `atan2($2, $1)` are single words; quotes inside a word keep their content, blanks included, and a
 !< quoted string followed by `:` starts a word: `1:"the res"` and `"it":"res"` are `using` specifications.
 use penf, only : I4P
@@ -224,8 +224,8 @@ contains
             if (statement(i:i) == '"') exit
             if (statement(i:i) == '\' .and. i < n) then
                i = i + 1_I4P
-               if (statement(i:i) == 't') then
-                  token%text = token%text//achar(9)
+               if (statement(i:i) == 't' .or. statement(i:i) == 'n') then
+                  token%text = token%text//merge(achar(9), achar(10), statement(i:i) == 't')
                   i = i + 1_I4P
                   cycle
                endif

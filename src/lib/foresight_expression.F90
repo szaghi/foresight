@@ -34,6 +34,7 @@ module foresight_expression
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
 use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, gnuplot_real, &
                              int_str, real_from_decimal
+use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -89,13 +90,15 @@ integer(I4P), parameter :: OP_SUBSTRING    = 31_I4P !< `s[i:j]`: the string and 
 integer(I4P), parameter :: OP_CALL         = 32_I4P !< String function `arg` of the top `v%i` values.
 integer(I4P), parameter :: OP_STRCOL       = 33_I4P !< Replace the top with the text of the column it numbers or names.
 integer(I4P), parameter :: OP_COLUMNHEAD   = 34_I4P !< Replace the top with the header text of the column it numbers.
+integer(I4P), parameter :: OP_TIMECOLUMN   = 35_I4P !< Column (under the top) read as a time with the format (top).
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
-character(len=*), parameter :: ROW_FUNCTIONS(4) = [character(len=12) :: 'strcol', 'stringcolumn', 'columnhead', &
-                                                   'columnheader']
+character(len=*), parameter :: ROW_FUNCTIONS(5) = [character(len=12) :: 'strcol', 'stringcolumn', 'columnhead', &
+                                                   'columnheader', 'timecolumn']
 
 integer(I4P), parameter :: NO_COLUMN = -huge(1_I4P) !< Column of a header name found nowhere: reads nothing.
+character(len=*), parameter :: DEFAULT_TIMEFMT = '%d/%m/%y,%H:%M' !< gnuplot's default `set timefmt`.
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
 character(len=*), parameter :: FUNCTIONS(19) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
@@ -103,10 +106,11 @@ character(len=*), parameter :: FUNCTIONS(19) = [character(len=5) :: 'abs', 'acos
                                                 'sqrt', 'tan', 'tanh', 'real']
 
 ! functions of strings, the `OP_CALL` argument is the index; their least and most arguments
-character(len=*), parameter :: STRING_FUNCTIONS(8) = [character(len=7) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
-                                                      'strstrt', 'words', 'word', 'trim']
-integer(I4P),     parameter :: LEAST_ARGS(8) = [1_I4P, 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P]
-integer(I4P),     parameter :: MOST_ARGS(8)  = [huge(1_I4P), 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P]
+character(len=*), parameter :: STRING_FUNCTIONS(10) = [character(len=8) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
+                                                       'strstrt', 'words', 'word', 'trim', 'strftime', 'strptime']
+integer(I4P),     parameter :: LEAST_ARGS(10) = [1_I4P, 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, 2_I4P]
+integer(I4P),     parameter :: MOST_ARGS(10)  = [huge(1_I4P), 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, &
+                                                 2_I4P]
 
 ! errors of typed values (a constant expression reports them, a data row is undefined)
 integer(I4P), parameter :: E_NONE       = 0_I4P !< No error.
@@ -184,6 +188,8 @@ type :: symbols_object
    !< time); recursion is not supported.
    type(user_variable), allocatable, private :: variables(:) !< Variables.
    type(user_function), allocatable, private :: functions(:) !< Functions.
+   character(len=:),    allocatable          :: timefmt      !< Time format of `timecolumn(N)` (gnuplot `set timefmt`),
+                                                             !< `%d/%m/%y,%H:%M` if unallocated.
    contains
       procedure, pass(self) :: assign   !< `name = expression`.
       procedure, pass(self) :: clear    !< Forget every symbol.
@@ -211,8 +217,11 @@ type :: expression_object
    integer(I4P)                          :: depth = 0_I4P !< Stack size needed.
    logical                               :: degrees = .false. !< Angles of the trigonometric functions in degrees
                                                               !< (gnuplot `set angles degrees`), else radians.
+   character(len=:),         allocatable :: timefmt       !< Time format of a time field (`set xdata time`): a plain
+                                                          !< column then reads a time with it.
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
+      procedure, pass(self) :: set_time     !< Read a plain column as a time.
       procedure, pass(self) :: evaluate     !< Value on a data row.
       procedure, pass(self) :: evaluate_text !< Text on a data row (a label).
       procedure, pass(self) :: uses_text    !< Whether the row cell texts are read.
@@ -698,6 +707,34 @@ contains
          elseif (name == 'atan2') then
             if (nargs /= 2_I4P) call syntax('atan2 needs 2 arguments', at)
             call emit(OP_ATAN2)
+         elseif (name == 'timecolumn') then
+            if (present(variable)) then
+               call syntax(name//' is only valid in using, not in a function', at)
+            elseif (nargs /= 1_I4P .and. nargs /= 2_I4P) then
+               call syntax(name//' needs a column and an optional time format', at)
+            else
+               ! without a format, the timefmt now
+               if (nargs == 1_I4P) then
+                  if (present(symbols)) then
+                     if (allocated(symbols%timefmt)) then
+                        call emit(OP_CONSTANT, v=string_value(symbols%timefmt))
+                     else
+                        call emit(OP_CONSTANT, v=string_value(DEFAULT_TIMEFMT))
+                     endif
+                  else
+                     call emit(OP_CONSTANT, v=string_value(DEFAULT_TIMEFMT))
+                  endif
+               endif
+               call emit(OP_TIMECOLUMN)
+            endif
+         elseif (name == 'time') then
+            ! time(0) the integer seconds now, time(0.0) with their fraction, time("format") the time now as text: a
+            ! constant of the compilation
+            if (nargs /= 1_I4P) then
+               call syntax('time needs 1 argument', at)
+            else
+               call time_now
+            endif
          elseif (any(ROW_FUNCTIONS == name)) then
             if (present(variable)) then
                call syntax(name//' is only valid in using, not in a function', at)
@@ -734,6 +771,32 @@ contains
          call syntax('unexpected end')
       endselect
       endsubroutine parse_primary
+
+      subroutine time_now
+      !< `time(x)`, the last instruction its argument: the time now (UTC) replaces it, as an integer (`x` an integer), a
+      !< real (`x` a real) or, `x` a format, as the text `strftime(x, now)`.
+      integer(I4P) :: last     !< Last instruction.
+      integer(I4P) :: dt(8)    !< date_and_time values.
+      real(R8P)    :: now      !< Seconds since 1970 UTC.
+      type(value_object) :: v  !< Result.
+
+      last = size(self%code, kind=I4P)
+      if (self%code(last)%op /= OP_CONSTANT) then
+         call syntax('time takes a constant: time(0), time(0.0) or time("format")')
+         return
+      endif
+      call date_and_time(values=dt)
+      now = civil_time(int(dt(1), I8P), int(dt(2), I8P), int(dt(3), I8P), int(dt(5), I8P), int(dt(6), I8P), &
+                       real(dt(7), R8P) + 0.001_R8P * real(dt(8), R8P)) - 60.0_R8P * real(dt(4), R8P)
+      if (self%code(last)%v%is_string) then
+         v = string_value(strftime(self%code(last)%v%s, now))
+      elseif (self%code(last)%v%is_int) then
+         v = int_value(floor(now, I8P))
+      else
+         v = value_object(r=now)
+      endif
+      self%code(last)%v = v
+      endsubroutine time_now
 
       subroutine column_of
       !< `column(...)`: of a string constant (a user variable), the column of that header, as `column("name")`.
@@ -973,7 +1036,7 @@ contains
    call check_name(name, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. any(ROW_FUNCTIONS == name) .or. &
-       name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists') then
+       name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists' .or. name == 'time') then
       iostat = 1_I4P
       iomsg = '"'//name//'" is a builtin function'
       return
@@ -1298,10 +1361,55 @@ contains
    integer(I4P)                                   :: err      !< Type error.
 
    v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   ! a time field: its plain column read with the time format
+   if (allocated(self%timefmt) .and. present(cells)) then
+      if (size(self%code) == 1) then
+         if (self%code(1)%op == OP_COLUMN .and. self%code(1)%arg >= 1_I4P) then
+            if (self%code(1)%arg <= size(cells, kind=I4P)) v = cells_time(cells, self%code(1)%arg, self%timefmt)
+            return
+         endif
+      endif
+   endif
    call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
    if (defined .and. top%is_string) call numeric(top, defined, err)
    if (defined) v = real_of(top)
    endfunction evaluate
+
+   pure function cells_time(cells, c, format) result(t)
+   !< The time `format` reads from cell `c` on, the following cells joined by a blank as many times as the format has
+   !< blanks (a time `2024-03-01 10:00` spans two whitespace separated cells, as gnuplot reads it); NaN if it does not
+   !< match.
+   type(name_object), intent(in) :: cells(:) !< Row cell texts.
+   integer(I4P),      intent(in) :: c        !< First cell.
+   character(len=*),  intent(in) :: format   !< Time format.
+   real(R8P)                     :: t        !< Time [s].
+   character(len=:), allocatable :: text     !< Joined cells.
+   integer(I4P)                  :: k        !< Cell counter.
+   integer(I4P)                  :: blanks   !< Blanks of the format.
+   logical                       :: ok       !< Matched.
+
+   blanks = 0_I4P
+   do k = 1_I4P, len(format, kind=I4P)
+      if (format(k:k) == ' ') blanks = blanks + 1_I4P
+   enddo
+   text = cells(c)%text
+   do k = c + 1_I4P, min(c + blanks, size(cells, kind=I4P))
+      text = text//' '//cells(k)%text
+   enddo
+   call strptime(format, text, t, ok)
+   endfunction cells_time
+
+   pure subroutine set_time(self, timefmt)
+   !< Make the field a time field: a plain column is read with `timefmt` (empty: a number again).
+   class(expression_object), intent(inout) :: self    !< Expression.
+   character(len=*),         intent(in)    :: timefmt !< Time format.
+
+   if (len(timefmt) == 0) then
+      if (allocated(self%timefmt)) deallocate(self%timefmt)
+   else
+      self%timefmt = timefmt
+   endif
+   endsubroutine set_time
 
    pure function evaluate_text(self, row, point, cells, heads, place) result(text)
    !< Text on a data row (arguments as `evaluate`), as gnuplot's label and tick label fields: a string value as it is;
@@ -1346,8 +1454,8 @@ contains
    class(expression_object), intent(in) :: self !< Expression.
    logical                              :: uses !< Cell texts read.
 
-   uses = .false.
-   if (allocated(self%code)) uses = any(self%code%op == OP_STRCOL)
+   uses = allocated(self%timefmt)
+   if (allocated(self%code)) uses = uses .or. any(self%code%op == OP_STRCOL) .or. any(self%code%op == OP_TIMECOLUMN)
    endfunction uses_text
 
    pure subroutine run(self, row, point, top, defined, error, cells, heads, place)
@@ -1407,6 +1515,9 @@ contains
             call column_text(stack(sp), ok)
          case (OP_COLUMNHEAD)
             call header_text(stack(sp), ok, err)
+         case (OP_TIMECOLUMN)
+            call time_cell(stack(sp - 1_I4P), stack(sp), ok, err)
+            sp = sp - 1_I4P
          case (OP_NEGATE)
             if (stack(sp)%is_string) call numeric(stack(sp), ok, err)
             if (.not. ok) then
@@ -1547,6 +1658,37 @@ contains
       if (ok) value = string_value(cells(c)%text)
       endsubroutine column_text
 
+      pure subroutine time_cell(value, format, ok, err)
+      !< `timecolumn(value, format)`: the column `value` numbers read as a time with `format` (the cells after it
+      !< joined by blanks, as a format with blanks spans them), undefined if it does not match.
+      type(value_object), intent(inout) :: value  !< Column number; its time.
+      type(value_object), intent(in)    :: format !< Time format.
+      logical,            intent(inout) :: ok     !< Defined.
+      integer(I4P),       intent(inout) :: err    !< Type error.
+      integer(I8P)                      :: c      !< Column.
+      real(R8P)                         :: t      !< Time.
+
+      c = -1_I8P
+      if (.not. format%is_string) then
+         ok = .false.
+         err = E_NOTSTRING
+         return
+      endif
+      if (value%is_string) call numeric(value, ok, err)
+      if (.not. ok) return
+      if (value%is_int) then
+         c = value%i
+      elseif (abs(value%r) < INT_LIMIT) then
+         c = int(value%r, I8P)
+      endif
+      ok = present(cells)
+      if (ok) ok = c >= 1_I8P .and. c <= size(cells, kind=I8P)
+      if (.not. ok) return
+      t = cells_time(cells, int(c, I4P), format%s)
+      ok = .not. ieee_is_nan(t)
+      if (ok) value = value_object(r=t)
+      endsubroutine time_cell
+
       pure subroutine header_text(value, ok, err)
       !< `columnhead(value)`: the text of column `value` in the first row of the dataset, undefined if none.
       type(value_object), intent(inout) :: value !< Column number; its header text.
@@ -1593,6 +1735,8 @@ contains
 
    c = 0_I4P
    if (.not. allocated(self%code)) return
+   ! a time field reads text
+   if (allocated(self%timefmt)) return
    ! a compiled expression keeps its source text, a plain column (set_column, set_name) has none
    if (allocated(self%text)) then
       if (len(self%text) > 0) return
@@ -2401,8 +2545,10 @@ contains
    c = value_object()
    ! the string arguments (sprintf and gprintf check their own)
    select case (trim(STRING_FUNCTIONS(f)))
-   case ('strlen', 'substr', 'words', 'word', 'trim')
+   case ('strlen', 'substr', 'words', 'word', 'trim', 'strftime')
       ok = args(1)%is_string
+   case ('strptime')
+      ok = args(1)%is_string .and. args(2)%is_string
    case ('strstrt')
       ok = args(1)%is_string .and. args(2)%is_string
    endselect
@@ -2444,6 +2590,20 @@ contains
       if (ok) c = string_value(nth_word(args(1)%s, n))
    case ('trim')
       c = string_value(trim_blanks(args(1)%s))
+   case ('strftime')
+      x = args(2)
+      if (x%is_string) call numeric(x, ok, error)
+      if (.not. ok) return
+      c = string_value(strftime(args(1)%s, real_of(x)))
+   case ('strptime')
+      block
+         real(R8P) :: t       !< Time read.
+         logical   :: matched !< Text matched.
+
+         call strptime(args(1)%s, args(2)%s, t, matched)
+         ok = matched
+         if (ok) c = value_object(r=t)
+      endblock
    endselect
    endsubroutine string_function
 

@@ -127,6 +127,33 @@ check("parse decimal", d.n === -25 && d.e === -2 && viewer.parseDecimal("1.2.3")
 d = viewer.decimalOf(0.1);
 check("decimal of", d.n === 1 && d.e === -1);
 
+// time axes: the labels gnuplot 6.0 writes over the same ranges (as foresight_ticks_test.F90)
+function timeLabels(lo, hi) {
+  return labels(viewer.timeTicks(lo, hi, viewer.readTics("", ""), "%s")).map(function (t) {
+    return t.label;
+  }).join("|");
+}
+check("time seconds", timeLabels(0, 30) === "00:00|00:05|00:10|00:15|00:20|00:25|00:30");
+check("time minutes", timeLabels(1709287200, 1709288400) ===
+  "00:00|02:00|04:00|06:00|08:00|10:00|12:00|14:00|16:00|18:00|20:00");
+check("time hours", timeLabels(1709287200, 1709366400) === ["01/03\n10:00", "01/03\n12:00",
+  "01/03\n14:00", "01/03\n16:00", "01/03\n18:00", "01/03\n20:00", "01/03\n22:00", "02/03\n00:00",
+  "02/03\n02:00", "02/03\n04:00", "02/03\n06:00", "02/03\n08:00"].join("|"));
+check("time weeks", timeLabels(1709251200, 1714521600) ===
+  "07/03|14/03|21/03|28/03|04/04|11/04|18/04|25/04");
+check("time years", timeLabels(946684800, 1577836800) === "01/01/00|01/01/02|01/01/04|" +
+  "01/01/06|01/01/08|01/01/10|01/01/12|01/01/14|01/01/16|01/01/18|01/01/20");
+check("time half seconds", timeLabels(1709287201.5, 1709287205) ===
+  "00:01|00:02|00:02|00:03|00:03|00:04|00:04|00:05");
+// strftime: gnuplot 6.0's own conversions (probed)
+check("strftime", viewer.strftime(
+  "%a|%A|%b|%B|%d|%D|%F|%T|%r|%j|%s|%y|%w|%U|%W|%.3S|%tH|%tM|%tS", 1709287265.4321) ===
+  "Fri|Friday|Mar|March|01|03/01/24|2024-03-01|10:01:05|10:01:05 am|061|" +
+  "1709287265|24|05|09|09|05.432|474802|01|05");
+check("strftime before 1970",
+  viewer.strftime("%F %T %p %k|%l|%tH|%tM|%tS", -86400 * 400 + 5025.5) ===
+  "1968-11-27 01:23:45 am  1| 1|-9598|36|14");
+
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });
 console.log("Are all tests passed? " + (failed.length === 0 ? "T" : "F"));

@@ -10,6 +10,7 @@ use foresight_script, only : script_object
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_sys, only : rename_file, sleep_ms
 use foresight_theme, only : THEMES
+use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R4P, R8P
 
 implicit none
@@ -29,6 +30,10 @@ public :: stats_report
 public :: stats_result
 ! expose foresight gnuplot-subset interpreter
 public :: script_object
+! expose gnuplot's time conversions (seconds since 1970 UTC)
+public :: civil_time
+public :: strftime
+public :: strptime
 ! expose foresight system services
 public :: file_fingerprint
 public :: rename_file

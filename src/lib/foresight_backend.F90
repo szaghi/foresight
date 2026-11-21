@@ -48,6 +48,10 @@ type :: axes_view
    logical   :: x2mirror  = .false.  !< x2 ticks mirrored on the bottom border.
    character(len=:), allocatable :: x2tics   !< x2 tick positions for the viewer, empty for auto.
    character(len=:), allocatable :: x2format !< x2 tick label format, empty for the default.
+   character(len=:), allocatable :: xtime  !< Input time format of a time x axis (its `timefmt`), empty if numeric.
+   character(len=:), allocatable :: ytime  !< Input time format of a time y axis, empty if numeric.
+   character(len=:), allocatable :: y2time !< Input time format of a time y2 axis, empty if numeric.
+   character(len=:), allocatable :: x2time !< Input time format of a time x2 axis, empty if numeric.
 endtype axes_view
 
 type, abstract :: backend_object

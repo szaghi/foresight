@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(106)                           !< Per-check outcome.
+logical                       :: test_passed(107)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1942,6 +1942,66 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_blocks.txt')
 close(unit, status='delete')
 
+! time data, as gnuplot 6.0: set xdata time, set timefmt (a time over two whitespace columns), time ranges, the time
+! functions, time formats only on time axes
+open(newunit=unit, file='foresight_script_test_time.dat', action='write', status='replace')
+write(unit, '(A)') '2024-03-01 10:00:00 1.5', '2024-03-01 10:30:00 2.5', '2024-03-01 12:15:30 2.0', &
+                   '2024-03-02 08:00:00 3.0'
+close(unit)
+call interpreter%run_text('set output "foresight_script_test_time.svg"'//new_line('a')// &
+                          'set xdata time; set timefmt "%Y-%m-%d %H:%M:%S"'//new_line('a')// &
+                          'set format x "%H:%M"'//new_line('a')// &
+                          'plot "foresight_script_test_time.dat" using 1:3, "" using (timecolumn(1) + 3600):3'// &
+                          new_line('a')// &
+                          't_a = strptime("%Y-%m-%d", "2024-03-01"); t_b = strftime("%d %b %Y %H:%M", t_a + 5400)'// &
+                          new_line('a')// &
+                          't_c = strftime("%tH:%tM", 361800)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(107) = iostat == 0_I4P
+if (test_passed(107)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(107) = panel%xaxis%time .and. size(panel%series(1)%x) == 4 .and. &
+                         panel%series(1)%x(1) == 1709287200.0_R8P .and. panel%series(1)%x(3) == 1709295330.0_R8P .and. &
+                         panel%series(2)%x(1) == 1709290800.0_R8P .and. panel%series(1)%y(4) == 3.0_R8P
+      ! gnuplot's ticks: 10:00 to 10:00 next day (the second item an hour later), every 2 hours
+      test_passed(107) = test_passed(107) .and. panel%xaxis%ticks(1)%label == '10:00' .and. &
+                         panel%xaxis%lo == 1709287200.0_R8P .and. panel%xaxis%hi == 1709373600.0_R8P
+   endassociate
+   block
+      character(len=:), allocatable :: text  !< String value.
+      logical                       :: found !< Variable found.
+
+      call interpreter%symbols%string_of('t_b', text, found)
+      test_passed(107) = test_passed(107) .and. text == '01 Mar 2024 01:30'
+      call interpreter%symbols%string_of('t_c', text, found)
+      test_passed(107) = test_passed(107) .and. text == '100:30'
+   endblock
+endif
+call interpreter%run_text('set xrange ["2024-03-01 12:00:00":"2024-03-01 18:00:00"]; set xtics 7200*1.5; '// &
+                          'plot "foresight_script_test_time.dat" using 1:3', iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat == 0_I4P
+if (test_passed(107)) then
+   associate(axis => interpreter%figure%panels(1)%xaxis)
+      test_passed(107) = axis%lo == 1709294400.0_R8P .and. axis%hi == 1709316000.0_R8P .and. size(axis%ticks) == 3 &
+                         .and. axis%ticks(2)%label == '15:00'
+   endassociate
+endif
+call interpreter%run_text('set xrange ["2024-03-01":*]', iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'does not match the timefmt') > 0
+call interpreter%run_text("set xdata; set format y '%H'", iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion') > 0
+call interpreter%run_text("set format x '%d/%m' timedate", iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%time
+call interpreter%run_text("set xdata blah", iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'time or nothing expected') > 0
+call interpreter%run_text('set format x "%g"; set xrange [*:*]; set xtics autofreq; set timefmt; set xdata; '// &
+                          'set format x "%g" numeric', iostat, iomsg)
+test_passed(107) = test_passed(107) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%xaxis%time
+open(newunit=unit, file='foresight_script_test_time.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_time.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1950,7 +2010,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,106L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,107L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

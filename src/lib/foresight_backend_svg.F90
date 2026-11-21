@@ -118,7 +118,8 @@ contains
    character(len=:), allocatable     :: logs  !< Log flags: x, y, and y2 when active.
 
    extra = attribute('data-xtics', view%xtics)//attribute('data-ytics', view%ytics)// &
-           attribute('data-xformat', view%xformat)//attribute('data-yformat', view%yformat)
+           attribute('data-xformat', view%xformat)//attribute('data-yformat', view%yformat)// &
+           attribute('data-xtime', view%xtime)//attribute('data-ytime', view%ytime)
    if (any(view%mirror .neqv. [.true., .true., .false.])) &
       extra = extra//' data-mirror="'//flag(view%mirror(1))//' '//flag(view%mirror(2))//' '//flag(view%mirror(3))//'"'
    y2 = ''
@@ -126,14 +127,16 @@ contains
    if (view%y2_active) then
       y2 = ' data-y2="'//real_str(view%y2(1))//' '//real_str(view%y2(2))//'"'
       logs = logs//' '//flag(view%y2log)
-      extra = extra//attribute('data-y2tics', view%y2tics)//attribute('data-y2format', view%y2format)
+      extra = extra//attribute('data-y2tics', view%y2tics)//attribute('data-y2format', view%y2format)// &
+              attribute('data-y2time', view%y2time)
    endif
    ! the second x axis, only when drawn: its range, log flag, ticks mirrored at the bottom, tick settings
    if (view%x2_active) then
       extra = extra//' data-x2="'//real_str(view%x2(1))//' '//real_str(view%x2(2))//'"'
       if (view%x2log) extra = extra//' data-x2log="1"'
       if (view%x2mirror) extra = extra//' data-x2mirror="1"'
-      extra = extra//attribute('data-x2tics', view%x2tics)//attribute('data-x2format', view%x2format)
+      extra = extra//attribute('data-x2tics', view%x2tics)//attribute('data-x2format', view%x2format)// &
+              attribute('data-x2time', view%x2time)
    endif
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &

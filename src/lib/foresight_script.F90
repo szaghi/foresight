@@ -74,6 +74,9 @@ module foresight_script
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
 !<   [opaque|noopaque] [size H]`, `unset readout`;
+!< - time data: `set xdata|ydata|x2data|y2data [time]` (the x or y field read with `set timefmt "fmt"`, the axis
+!<   ticked and labelled in time units), `set format x "%H:%M" [timedate|numeric]`, time strings as range ends and
+!<   tick positions, `timecolumn(N[, "fmt"])`, `strftime(fmt, t)`, `strptime(fmt, s)`, `time(0)` (see foresight_time);
 !< - datablocks `$NAME << WORD` (the lines up to one starting with WORD) plotted, fitted, stated as a file (`plot $D`),
 !<   `print $NAME`, `load FILE`, `call FILE ARG1 ...` (ARG0..ARG9, ARGC, restored after it), `eval STRING`, macros
 !<   `@name` (a string variable's value), `undefine NAME|NAME*|$NAME`;
@@ -89,8 +92,9 @@ use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_serie
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_variable, symbols_object
 use foresight_figure, only : figure_object
-use foresight_format, only : c_real, format_check, int_str, real_from_decimal
+use foresight_format, only : c_real, decimal_of, decimal_str, format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
+use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
@@ -170,6 +174,8 @@ type :: script_object
                                                                !< standard error (none by default, unlike gnuplot).
    character(len=:), allocatable   :: fit_logfile              !< `set fit logfile`, empty for none (the default).
    logical                         :: fit_errorvariables = .true. !< `set fit errorvariables`: NAME_err set.
+   character(len=:), allocatable   :: timefmt                  !< Input time format, gnuplot `set timefmt`.
+   logical                         :: time_data(4) = .false.   !< Time data on x, y, y2, x2 (`set xdata time`).
    character(len=:), allocatable   :: print_file               !< `set print`: '' the standard error (gnuplot's
                                                                !< default), '-' the standard output, else a file.
    integer(I4P)                    :: loop_depth = 0_I4P       !< Loops (`do for`, `while`) being run.
@@ -185,6 +191,8 @@ type :: script_object
       procedure, pass(self), private :: print_command !< `print`.
       procedure, pass(self), private :: stats_command !< `stats`.
       procedure, pass(self), private :: load_data     !< Load a data file or a datablock.
+      procedure, pass(self), private :: set_time_data !< `set xdata time`, `set xdata`.
+      procedure, pass(self), private :: range_value   !< Value of a range end.
       procedure, pass(self), private :: call_command  !< `load`, `call`.
       procedure, pass(self), private :: expand_macros !< `@name` substitution.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
@@ -244,6 +252,9 @@ contains
    self%rgbmax = 255.0_R8P
    call self%symbols%clear
    call self%symbols%set_value('ARGC', 0.0_R8P, is_int=.true.)
+   self%timefmt = '%d/%m/%y,%H:%M'
+   self%symbols%timefmt = self%timefmt
+   self%time_data = .false.
    self%fit_options = fit_settings()
    self%fit_verbosity = 'quiet'
    self%fit_logfile = ''
@@ -1776,6 +1787,7 @@ contains
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 1 for an expression, 0 for none.
    type(expression_object)                      :: label_field !< Field of the text labels (`xtic(...)`, labels).
    logical                                      :: needs_text !< The cell texts are read (`strcol`, labels).
+   logical                                      :: time_axis(2) !< Time data on the x and y axes of the item.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
    logical                                      :: weight_one !< The single column is x, each point of weight 1.
@@ -2397,7 +2409,9 @@ contains
          endif
       endif
       ! reloaded to keep the cell texts, for the labels and strcol
-      needs_text = label_col > 0_I4P
+      time_axis(1) = merge(self%time_data(4), self%time_data(1), axes(2:2) == '2')
+      time_axis(2) = merge(self%time_data(3), self%time_data(2), axes(4:4) == '2')
+      needs_text = label_col > 0_I4P .or. any(time_axis)
       if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
       if (file /= loaded .or. (needs_text .and. .not. data%has_text)) then
          call self%load_data(data, file, iostat, iomsg, keep_text=needs_text)
@@ -2447,6 +2461,11 @@ contains
          call point%set_column(0_I4P)
          kept = [point, fields(1)]
          call move_alloc(kept, fields)
+      endif
+      ! time data (gnuplot `set xdata time`): the x field and the y field read with the timefmt
+      if (.not. one_field) then
+         if (time_axis(1)) call fields(1)%set_time(self%timefmt)
+         if (time_axis(2) .and. size(fields) >= 2) call fields(2)%set_time(self%timefmt)
       endif
       ! lc variable: the last field is the color column, out of the style's fields
       lcvar = .false.
@@ -3288,7 +3307,9 @@ contains
 
       body = text
       equal = index(text, '=', kind=I4P)
-      colon = index(text, ':', kind=I4P)
+      colon = top_colon(text)
+      ! a quoted time holds no dummy variable
+      if (scan(text, '"'//"'") > 0 .and. equal > scan(text, '"'//"'")) equal = 0_I4P
       if (first .and. equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
          dummy = trim(adjustl(text(1:equal - 1_I4P)))
          if (len(dummy) == 0) then
@@ -3301,7 +3322,7 @@ contains
             return
          endif
          body = text(equal + 1_I4P:)
-         colon = index(body, ':', kind=I4P)
+         colon = top_colon(body)
       endif
       if (len_trim(body) == 0) return
       if (colon == 0_I4P) then
@@ -3327,13 +3348,10 @@ contains
       real(R8P)                       :: v     !< Parsed value.
 
       if (len_trim(text) == 0 .or. trim(adjustl(text)) == '*') return
-      if (.not. to_number(trim(adjustl(text)), v)) then
-         call self%symbols%constant(trim(adjustl(text)), v, iostat, iomsg, &
-                                    degrees=self%figure%panels(self%figure%current)%degrees)
-         if (iostat /= 0_I4P) then
-            iomsg = 'plot: inline range: '//iomsg
-            return
-         endif
+      call self%range_value(trim(adjustl(text)), v, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'plot: inline range: '//iomsg
+         return
       endif
       fixed = .true.
       value = v
@@ -3822,6 +3840,54 @@ contains
    enddo
    endsubroutine expand_macros
 
+   subroutine range_value(self, text, v, iostat, iomsg)
+   !< Value of a range end: a number, a constant expression (`2*pi`, user variables), or a string: a time read with the
+   !< timefmt (`set xrange ["2024-03-01":"2024-03-02"]` on a time axis).
+   class(script_object),          intent(in)  :: self      !< Interpreter.
+   character(len=*),              intent(in)  :: text      !< End text.
+   real(R8P),                     intent(out) :: v         !< Value.
+   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
+   character(len=:), allocatable              :: value     !< Value as text.
+   logical                                    :: is_string !< A string value.
+   logical                                    :: ok        !< Time read.
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (to_number(text, v)) return
+   call self%symbols%text_of(text, value, is_string, iostat, iomsg, &
+                             degrees=self%figure%panels(self%figure%current)%degrees)
+   if (iostat /= 0_I4P) return
+   if (is_string) then
+      call strptime(self%timefmt, value, v, ok)
+      if (.not. ok) call fail('the time "'//value//'" does not match the timefmt "'//self%timefmt//'"', iostat, iomsg)
+      return
+   endif
+   call self%symbols%constant(text, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
+   endsubroutine range_value
+
+   subroutine set_time_data(self, option, on)
+   !< `set xdata|ydata|y2data|x2data [time]` (`option` the option word): the data of that axis read as times with the
+   !< timefmt (`on`), or as numbers; the axis ticked and labelled as times or numbers.
+   class(script_object), intent(inout) :: self   !< Interpreter.
+   character(len=*),     intent(in)    :: option !< Option word, `xdata`, `y2da`, ...
+   logical,              intent(in)    :: on     !< Time data.
+   character(len=2)                    :: axis   !< Axis name.
+
+   axis = option(1:index(option, 'd') - 1)
+   select case (trim(axis))
+   case ('x')
+      self%time_data(1) = on
+   case ('y')
+      self%time_data(2) = on
+   case ('y2')
+      self%time_data(3) = on
+   case ('x2')
+      self%time_data(4) = on
+   endselect
+   call self%figure%set_time_axes(trim(axis), on=on, timefmt=self%timefmt)
+   endsubroutine set_time_data
+
    subroutine load_data(self, data, file, iostat, iomsg, keep_text)
    !< Load the data file `file`, or the datablock it names (`$DATA`), with the `set datafile` options.
    class(script_object),          intent(in)           :: self      !< Interpreter.
@@ -3923,6 +3989,27 @@ contains
    elseif (keyword(option, 'x2label', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_x2label(text)
+   elseif (is_word(option, 'xdata ydata y2data x2data xda yda y2da x2da xdat ydat y2dat x2dat')) then
+      ! `set xdata time`: the x data are times read with the timefmt, the axis ticked and labelled as times
+      if (size(tokens) > 2) then
+         call fail('set '//option//': time or nothing expected', iostat, iomsg)
+         return
+      endif
+      text = ''
+      if (size(tokens) == 2) then
+         if (.not. keyword(tokens(2)%text, 'time', 1_I4P)) then
+            call fail('set '//option//': time or nothing expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+            return
+         endif
+         text = 'time'
+      endif
+      call self%set_time_data(option, len(text) > 0)
+   elseif (keyword(option, 'timefmt', 5_I4P)) then
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      if (len(text) == 0) text = '%d/%m/%y,%H:%M'
+      self%timefmt = text
+      self%symbols%timefmt = text
+      call self%figure%set_timefmt(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
@@ -4224,7 +4311,7 @@ contains
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
          return
       endif
-      colon = index(tokens(2)%text, ':', kind=I4P)
+      colon = top_colon(tokens(2)%text)
       if (tokens(2)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
          return
@@ -4245,13 +4332,10 @@ contains
          fixed = .false.
          return
       endif
-      if (.not. to_number(trim(adjustl(text)), v)) then
-         call self%symbols%constant(trim(adjustl(text)), v, iostat, iomsg, &
-                                    degrees=self%figure%panels(self%figure%current)%degrees)
-         if (iostat /= 0_I4P) then
-            iomsg = 'set '//option//': '//iomsg
-            return
-         endif
+      call self%range_value(trim(adjustl(text)), v, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set '//option//': '//iomsg
+         return
       endif
       fixed = .true.
       value = v
@@ -5109,6 +5193,8 @@ contains
       real(R8P)                        :: angle   !< Rotation angle [deg].
       logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
       integer(I4P)                     :: n       !< Position tokens.
+      integer(I4P)                     :: k       !< Position counter.
+      real(R8P)                        :: v       !< Position value.
 
       if (present(words)) then
          toks = words
@@ -5209,7 +5295,7 @@ contains
          return
       endif
       ok = mod(n, 2_I4P) == 1_I4P .and. n <= 5_I4P
-      if (ok) ok = all(args(1:n:2)%kind == TOKEN_WORD)
+      if (ok) ok = all(args(1:n:2)%kind == TOKEN_WORD .or. args(1:n:2)%kind == TOKEN_STRING)
       if (ok .and. n > 1_I4P) ok = all(args(2:n:2)%kind == TOKEN_COMMA)
       if (.not. ok) then
          call fail('set '//option//': supported forms are STEP, START,STEP, START,STEP,END and auto, with mirror or '// &
@@ -5217,6 +5303,25 @@ contains
          return
       endif
       message = ''
+      ! expressions (`7200*3`) and times (`"2024-03-01"`, read with the timefmt) as decimal texts
+      do k = 1_I4P, n, 2_I4P
+         if (k == 1_I4P .and. n == 1_I4P .and. keyword(args(1)%text, 'autofreq', 4_I4P)) exit
+         if (args(k)%kind == TOKEN_STRING) args(k)%text = '"'//args(k)%text//'"'
+         if (.not. to_number(args(k)%text, v)) then
+            call self%range_value(args(k)%text, v, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'set '//option//': '//iomsg
+               return
+            endif
+            block
+               integer(I8P) :: dn !< Mantissa.
+               integer(I4P) :: de !< Exponent.
+
+               call decimal_of(v, dn, de)
+               args(k)%text = decimal_str(dn, -de)
+            endblock
+         endif
+      enddo
       ! positions without add forget an explicit list, as gnuplot
       if (.not. add) call tics%clear_list
       select case (n)
@@ -5462,10 +5567,13 @@ contains
       endsubroutine samples_option
 
       subroutine format_option
-      !< `set format [x|y|y2|cb|x2|xy...] ["format"]` (all axes by default): no format restores the default labels.
+      !< `set format [x|y|y2|cb|x2|xy...] ["format"] [timedate|numeric]` (all axes by default): no format restores the
+      !< default labels; a time format (`%H:%M`) labels time axes; `timedate` makes the axes time axes (ticks and
+      !< labels, the data read as numbers), `numeric` numeric ones.
       character(len=:), allocatable :: axes    !< Axes letters.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Problem.
+      character(len=:), allocatable :: kind    !< `timedate`, `numeric` or empty.
 
       axes = 'xyy2cbx2'
       format = ''
@@ -5492,20 +5600,54 @@ contains
             iomsg = 'set format: '//iomsg
             return
          endif
+         kind = ''
+         if (i + 1_I4P == size(tokens, kind=I4P)) then
+            if (is_word(tokens(i + 1_I4P)%text, 'timedate numeric')) then
+               kind = tokens(i + 1_I4P)%text
+               i = i + 1_I4P
+            endif
+         endif
          if (i < size(tokens, kind=I4P)) then
             call fail('set format: unexpected "'//tokens(i + 1_I4P)%text//'" after the format', iostat, iomsg)
             return
          endif
          if (len(format) > 0) then
+            ! a time format only for time axes (`%d` is a day there, not an integer)
             message = format_check(format)
+            if (len(message) > 0 .and. (kind == 'timedate' .or. time_axes(axes))) then
+               if (len(time_format_check(format)) == 0) message = ''
+            endif
             if (len(message) > 0) then
                call fail('set format: '//message, iostat, iomsg)
                return
             endif
          endif
+         if (len(kind) > 0) then
+            if (axes == 'xyy2cbx2') axes = 'xyy2x2'
+            if (index(axes, 'cb') > 0) then
+               call fail('set format: the color axis is not a time axis', iostat, iomsg)
+               return
+            endif
+            call self%figure%set_time_axes(axes, on=kind == 'timedate')
+         endif
       endif
       call self%figure%set_format(format, axes)
       endsubroutine format_option
+
+      function time_axes(names) result(time)
+      !< Whether one of the axes `names` (`x`, `y`, `y2`, `x2` concatenated) is a time axis (`set xdata time`, `set
+      !< format ... timedate`).
+      character(len=*), intent(in)  :: names   !< Axes names.
+      logical                       :: time    !< A time axis named.
+      character(len=:), allocatable :: bad     !< Unknown name.
+      logical                       :: named(5) !< x, y, y2, cb, x2 named.
+
+      call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
+      associate(panel => self%figure%panels(self%figure%current))
+         time = (named(1) .and. panel%xaxis%time) .or. (named(2) .and. panel%yaxis%time) .or. &
+                (named(3) .and. panel%y2axis%time) .or. (named(5) .and. panel%x2axis%time)
+      endassociate
+      endfunction time_axes
 
       subroutine style_option
       !< `set style data|function STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
@@ -5796,6 +5938,12 @@ contains
       call self%figure%set_cblabel('')
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call self%figure%set_boxwidth()
+   elseif (is_word(option, 'xdata ydata y2data x2data xda yda y2da x2da xdat ydat y2dat x2dat')) then
+      call self%set_time_data(option, .false.)
+   elseif (keyword(option, 'timefmt', 5_I4P)) then
+      self%timefmt = '%d/%m/%y,%H:%M'
+      self%symbols%timefmt = self%timefmt
+      call self%figure%set_timefmt(self%timefmt)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       call self%figure%set_xrange()
    elseif (keyword(option, 'yrange', 2_I4P)) then
@@ -5834,6 +5982,33 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure function top_colon(text) result(colon)
+   !< Position of the first `:` outside quotes and parentheses, 0 if none.
+   character(len=*), intent(in) :: text  !< Text.
+   integer(I4P)                 :: colon !< Position.
+   character(len=1)             :: quote !< Open quote, blank if none.
+   integer(I4P)                 :: depth !< Parenthesis depth.
+   integer(I4P)                 :: i     !< Character counter.
+
+   colon = 0_I4P
+   quote = ' '
+   depth = 0_I4P
+   do i = 1_I4P, len(text, kind=I4P)
+      if (quote /= ' ') then
+         if (text(i:i) == quote) quote = ' '
+      elseif (text(i:i) == '"' .or. text(i:i) == "'") then
+         quote = text(i:i)
+      elseif (text(i:i) == '(') then
+         depth = depth + 1_I4P
+      elseif (text(i:i) == ')') then
+         depth = depth - 1_I4P
+      elseif (text(i:i) == ':' .and. depth == 0_I4P) then
+         colon = i
+         return
+      endif
+   enddo
+   endfunction top_colon
+
    pure function is_datablock(word) result(yes)
    !< Whether `word` names a datablock: `$`, then a letter or `_`, then letters, digits, `_` (gnuplot `$DATA`).
    character(len=*), intent(in) :: word !< Word.

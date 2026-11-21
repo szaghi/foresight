@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(91)                  !< Per-figure outcome.
+logical                     :: test_passed(94)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -116,7 +116,10 @@ test_passed(88) = check('theme_night.html', figure_identity('night'))
 test_passed(89) = check('lc_palette_keys.svg', figure_lc_palette())
 test_passed(90) = check('key_at.svg', figure_key_at())
 test_passed(91) = check('x2_rotate.svg', figure_x2_rotate())
-write(output_unit, '(A,91L2)') 'foresight golden checks:', test_passed
+test_passed(92) = check('time_axis.svg', figure_time_axis())
+test_passed(93) = check('time_axis.txt', figure_time_axis())
+test_passed(94) = check('time_axis.html', figure_time_axis())
+write(output_unit, '(A,94L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -460,6 +463,29 @@ contains
    call fig%set_xtics(mirror=.false.)
    call fig%plot(x, cos(x), title='cos')
    endfunction figure_x2_rotate
+
+   function figure_time_axis() result(fig)
+   !< Time axes (gnuplot `set xdata time`): a day of half-hourly values over midnight, gnuplot's invented two-line
+   !< labels `%d/%m\n%H:%M` (the timefmt has the day first); five weeks labelled `%d %b`, minor ticks by day.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: t(:) !< Times [s since 1970].
+   integer(I4P)           :: i    !< Counter.
+
+   ! 2024-03-01 10:00 UTC, every 30 minutes for a day
+   t = [(1709287200.0_R8P + 1800.0_R8P * real(i, R8P), i = 0, 48)]
+   call fig%init(width=720_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P, title='time axes')
+   call fig%set_title('a day')
+   call fig%set_time_axes('x', timefmt='%d/%m/%Y %H:%M')
+   call fig%plot(t, 20.0_R8P + 5.0_R8P * sin(real([(i, i = 0, 48)], R8P) * 0.13_R8P), title='T [C]')
+   call fig%next_panel()
+   call fig%set_title('five weeks')
+   call fig%set_time_axes('x')
+   call fig%set_format('%d %b', 'x')
+   call fig%set_mxtics(7_I4P)
+   t = [(1709251200.0_R8P + 86400.0_R8P * real(i, R8P), i = 0, 35)]
+   call fig%plot(t, real([(mod(i * 7, 11), i = 0, 35)], R8P), title='jobs', with='linespoints')
+   endfunction figure_time_axis
 
    function figure_key_at() result(fig)
    !< The key at a position (gnuplot `set key at`): two panels, the bottom left corner of a boxed key on the data point

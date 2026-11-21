@@ -23,6 +23,7 @@ use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
 use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
+use foresight_time, only : time_format_check
 use foresight_style, only : fill_style, sequence_colors
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
@@ -74,6 +75,8 @@ type :: figure_object
       procedure, pass(self) :: set_cbrange     !< gnuplot `set cbrange`.
       procedure, pass(self) :: set_colorbox    !< gnuplot `set colorbox` / `unset colorbox`.
       procedure, pass(self) :: set_format      !< gnuplot `set format`.
+      procedure, pass(self) :: set_time_axes   !< gnuplot `set xdata time`.
+      procedure, pass(self) :: set_timefmt     !< gnuplot `set timefmt`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
@@ -639,7 +642,8 @@ contains
    subroutine set_format(self, format, axes)
    !< Tick label `format` of the `axes` named `x`, `y`, `y2`, `cb` (all when absent), as gnuplot `set format`: text
    !< with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
-   !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels.
+   !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels. On a time axis
+   !< (`set_time_axes`) a time format, `'%H:%M'` (see foresight_time `strftime`).
    class(figure_object), intent(inout)        :: self    !< Figure.
    character(len=*),     intent(in)           :: format  !< Label format.
    character(len=*),     intent(in), optional :: axes    !< Axes names, e.g. `y`, `xy` or `y2`.
@@ -648,7 +652,7 @@ contains
 
    if (len(format) > 0) then
       message = format_check(format)
-      if (len(message) > 0) error stop 'foresight: set_format: '//message
+      if (len(message) > 0 .and. len(time_format_check(format)) > 0) error stop 'foresight: set_format: '//message
    endif
    named = which_axes(axes, 'set_format')
    call self%ensure_panels
@@ -660,6 +664,52 @@ contains
       if (named(5)) panel%x2axis%tics%format = format
    endassociate
    endsubroutine set_format
+
+   subroutine set_time_axes(self, axes, on, timefmt)
+   !< Time axes, as gnuplot `set xdata time`: the values of the `axes` named `x`, `y`, `y2`, `x2` (all when absent) are
+   !< seconds since 1970-01-01 00:00 UTC, ticked in whole time units and labelled by a time format (`set_format`, or
+   !< one invented from the range); `on` false turns them back to numbers. `timefmt` (gnuplot `set timefmt`, default
+   !< `%d/%m/%y,%H:%M`) orders day and month in the invented labels.
+   class(figure_object), intent(inout)        :: self    !< Figure.
+   character(len=*),     intent(in), optional :: axes    !< Axes names, e.g. `x` or `xy2`.
+   logical,              intent(in), optional :: on      !< Time axes (default), or numbers.
+   character(len=*),     intent(in), optional :: timefmt !< Input time format.
+   logical                                    :: named(5) !< x, y, y2, cb, x2 named.
+   logical                                    :: time     !< Time axes.
+
+   named = which_axes(axes, 'set_time_axes')
+   if (named(4) .and. present(axes)) error stop 'foresight: set_time_axes: the color axis is not a time axis'
+   time = .true.
+   if (present(on)) time = on
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (named(1)) panel%xaxis%time = time
+      if (named(2)) panel%yaxis%time = time
+      if (named(3)) panel%y2axis%time = time
+      if (named(5)) panel%x2axis%time = time
+      if (present(timefmt)) then
+         panel%xaxis%timefmt = timefmt
+         panel%yaxis%timefmt = timefmt
+         panel%y2axis%timefmt = timefmt
+         panel%x2axis%timefmt = timefmt
+      endif
+   endassociate
+   endsubroutine set_time_axes
+
+   subroutine set_timefmt(self, timefmt)
+   !< The input time format (gnuplot `set timefmt`) of every axis of the current panel: the day and month order of
+   !< the labels invented for time axes.
+   class(figure_object), intent(inout) :: self    !< Figure.
+   character(len=*),     intent(in)    :: timefmt !< Input time format.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%xaxis%timefmt = timefmt
+      panel%yaxis%timefmt = timefmt
+      panel%y2axis%timefmt = timefmt
+      panel%x2axis%timefmt = timefmt
+   endassociate
+   endsubroutine set_timefmt
 
    subroutine set_paxis(self, n, min, max, step, start, end, tics, label)
    !< Parallel axis `n` of the parallel axis and spider plots, as gnuplot `set paxis n range [min:max]` (an absent end

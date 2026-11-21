@@ -7,7 +7,8 @@
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
 // with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
-// second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme. The page is parsed
+// second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
+// time labels redrawn by a zoom. The page is parsed
 // by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
@@ -256,6 +257,20 @@ var readoutText = p.document.querySelector("svg > text[font-size='10']");
 check("dark theme overlays in the theme colors", helpBox !== null && helpBox.getAttribute("fill") === "#130d0f" &&
   helpBox.getAttribute("stroke") === "#e8ecf0" && readoutText !== null &&
   readoutText.getAttribute("fill") === "#e8ecf0");
+
+// time axes: a zoom regenerates time labels (two lines on the x axis), the readout shows a date
+page = strip(path.join(__dirname, "..", "tests", "goldens", "time_axis.html"));
+p = load("");
+var xticks = panel(0).querySelector(".fs-xticks"), xHome = xticks.innerHTML;
+wheel(0);
+var zoomed = Array.prototype.map.call(xticks.querySelectorAll("text"), function (t) {
+  return t.textContent;
+});
+check("a zoom redraws time labels", xticks.innerHTML !== xHome && zoomed.length > 0 &&
+  zoomed.every(function (t) { return /^\d\d\/\d\d\d\d:\d\d$/.test(t); }) &&
+  xticks.querySelectorAll("tspan").length === zoomed.length);
+key("a");
+check("autoscale restores the time labels", xticks.innerHTML === xHome);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);
