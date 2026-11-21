@@ -1,11 +1,14 @@
-!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`).
+!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`).
 module foresight_theme
-!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`).
+!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`).
 !<
 !< A theme recolors the output, never the figure: the layout draws with gnuplot's colors (black frame and text, grey
 !< grid, white page, the linetype colors) and the devices map them through `map` as they write. `classic` maps nothing,
 !< so the default output is unchanged; `vfd` is a vacuum fluorescent display (black glass, emissive colors, labels
-!< printed in blue, glowing data); `lcd` a backlit liquid crystal display (pale green glass, dark segments). Colors
+!< printed in blue, glowing data); `lcd` a backlit liquid crystal display (pale green glass, dark segments). `washi`
+!< and `night` are the two faces of foresight's own identity, its documentation's light and dark modes: ink on warm
+!< paper with a crimson first series, and light text on a near-black red ground with a rose first series; every
+!< series color contrasts with its ground at least 3:1 (WCAG non-text contrast). Colors
 !< other than the frame, grid, page and palette ones (an `lc '#123456'` of the user) are kept.
 use penf, only : I4P, R8P
 use foresight_style, only : default_color
@@ -16,7 +19,7 @@ public :: theme_object
 public :: theme_named
 public :: THEMES
 
-character(len=*), parameter :: THEMES = 'classic vfd lcd' !< Theme names.
+character(len=*), parameter :: THEMES = 'classic vfd lcd washi night' !< Theme names.
 
 type :: theme_object
    !< Output theme.
@@ -54,6 +57,18 @@ contains
       theme%grid = '#a3ad98'
       theme%palette = ['#0b3d2e', '#8a3a10', '#1f3a7a', '#6b1f5e', '#4d4d00', '#2f5f8f', '#8f2f2f', '#1e2a22']
       theme%ghost = 0.1_R8P
+   case ('washi')
+      theme%name = 'washi'
+      theme%background = '#f3ede1'
+      theme%frame = '#1d1b18'
+      theme%grid = '#a69a85'
+      theme%palette = ['#b3163f', '#1f5f8b', '#2e7d4f', '#b86a00', '#6b3fa0', '#0f7c80', '#8a5a2b', '#1d1b18']
+   case ('night')
+      theme%name = 'night'
+      theme%background = '#130d0f'
+      theme%frame = '#e8ecf0'
+      theme%grid = '#5c4950'
+      theme%palette = ['#ff7092', '#6cb6ff', '#6fd99a', '#ffb454', '#c49bff', '#45d4d4', '#e6a87c', '#e8ecf0']
    endselect
    endfunction theme_named
 

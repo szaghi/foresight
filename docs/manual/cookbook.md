@@ -591,6 +591,23 @@ bars into cells over the y range, the unlit ones drawn faintly. See
 `theme lcd`: the pale green glass and dark segments of a backlit LCD, here with a segmented gauge and segmented bars.
 See [Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
 
+### Light and dark pages
+
+<<< @/examples/snippets/cb_identity.gp{gnuplot}
+
+<Plot name="cb_identity" svg :width="560" :height="320" />
+
+The same script, no theme in it, drawn in the two faces of foresight's identity by the command line:
+
+```bash
+foresight -t washi -o light.svg cb_identity.gp   # ink on warm paper, a crimson first series
+foresight -t night -o dark.svg cb_identity.gp    # light text on a near-black ground, a rose first series
+```
+
+These are the colors of this site: its figures follow the light and dark switch at the top of the page. A script that
+sets its own theme (`set terminal svg theme vfd`) keeps it. See
+[Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
+
 ### Seven-segment readouts
 
 <<< @/examples/snippets/cb_readout.gp{gnuplot}

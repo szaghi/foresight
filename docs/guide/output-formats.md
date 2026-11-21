@@ -84,9 +84,11 @@ data) with `image-rendering: pixelated`, so a pixel stays a sharp square at any 
 
 ## Themes
 
-`set terminal ... theme vfd` (or `lcd`, `classic`) recolors any output as a 1980s digital dashboard: see
+`set terminal ... theme vfd` (or `lcd`) recolors any output as a 1980s digital dashboard, `theme washi` (or `night`)
+in the light (or dark) colors of foresight's identity, `classic` back to gnuplot's: see
 [Themes and segmented fills](gnuplot-subset#themes-and-segmented-fills). SVG and HTML take the page, frame, grid and
-series colors and, for `vfd`, a glow; text takes the series colors only.
+series colors and, for `vfd`, a glow; text takes the series colors only. `foresight --theme NAME` sets the theme of
+every plot of a run, unless the script sets its own.
 
 ## Atomic writes
 

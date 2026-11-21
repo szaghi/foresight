@@ -2,16 +2,18 @@
 program foresight_cli
 !< foresight command line tool: gnuplot-like scripts rendered to SVG/HTML.
 !<
-!< `foresight [-e COMMANDS] [-o OUTPUT] [-w [SECONDS]] [SCRIPT]` runs `COMMANDS` then `SCRIPT`. With `--watch` the run
+!< `foresight [-e COMMANDS] [-o OUTPUT] [-t THEME] [-w [SECONDS]] [SCRIPT]` runs `COMMANDS` then `SCRIPT`, in the output
+!< `THEME` unless a `set terminal ... theme` of theirs says otherwise. With `--watch` the run
 !< is repeated whenever the script or a data file it plotted changes (size or content, see foresight_fingerprint), the
 !< HTML output reloading itself in the browser; errors in a cycle are reported and watching goes on.
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : file_fingerprint, I4P, I8P, R8P, script_object, sleep_ms
+use foresight, only : file_fingerprint, I4P, I8P, R8P, script_object, sleep_ms, THEMES
 
 implicit none
 character(len=:), allocatable :: script      !< Script file, empty for none.
 character(len=:), allocatable :: commands    !< Commands of `-e`, run first.
 character(len=:), allocatable :: output      !< Default output.
+character(len=:), allocatable :: theme       !< Default output theme, empty for classic.
 integer(I8P),     allocatable :: prints(:,:) !< Watched file fingerprints.
 type(script_object)           :: interpreter !< Interpreter.
 real(R8P)                     :: period      !< Watch period [s], 0 for no watch.
@@ -48,6 +50,7 @@ contains
    script = ''
    commands = ''
    output = ''
+   theme = ''
    period = 0.0_R8P
    max_cycles = -1_I4P
    n = command_argument_count()
@@ -63,6 +66,10 @@ contains
          commands = commands//value//new_line('a')
       case ('-o', '--output')
          output = option_value(a)
+      case ('-t', '--theme')
+         theme = option_value(a)
+         if (index(' '//THEMES//' ', ' '//theme//' ') == 0) &
+            call usage_error('unknown theme "'//theme//'" (supported: '//THEMES//')')
       case ('-w', '--watch')
          period = 1.0_R8P
          if (a < n) then
@@ -101,7 +108,7 @@ contains
    integer(I4P)                  :: status !< 0 on success.
    character(len=:), allocatable :: iomsg  !< Error message.
 
-   call interpreter%init(output)
+   call interpreter%init(output, theme=theme)
    if (period > 0.0_R8P) interpreter%live_refresh = max(1_I4P, nint(period, I4P))
    status = 0_I4P
    if (len(commands) > 0) call interpreter%run_text(commands, status, iomsg, source='-e')
@@ -179,6 +186,7 @@ contains
    write(output_unit, '(A)') 'options:'
    write(output_unit, '(A)') '  -e, --execute COMMANDS  run COMMANDS before SCRIPT (repeatable)'
    write(output_unit, '(A)') '  -o, --output FILE       default output file (.html or .svg)'
+   write(output_unit, '(A)') '  -t, --theme NAME        default output theme: '//THEMES
    write(output_unit, '(A)') '  -w, --watch [SECONDS]   re-run when SCRIPT or its data files change (default 1 s)'
    write(output_unit, '(A)') '      --max-cycles N      stop watching after N polls'
    write(output_unit, '(A)') '  -h, --help              show this help'

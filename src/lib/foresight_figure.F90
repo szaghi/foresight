@@ -987,7 +987,8 @@ contains
 
    subroutine set_theme(self, name, glow)
    !< Output theme (a foresight extension): `name` `classic` (the default), `vfd` (a vacuum fluorescent display: black
-   !< glass, emissive colors, glowing data) or `lcd` (a backlit liquid crystal display); `glow` overrides the theme's
+   !< glass, emissive colors, glowing data), `lcd` (a backlit liquid crystal display), `washi` or `night` (foresight's
+   !< identity, light and dark: see foresight_theme); `glow` overrides the theme's
    !< glow (on in `vfd`). Text output takes the theme colors of the series only (`ansi` colors).
    class(figure_object), intent(inout)        :: self !< Figure.
    character(len=*),     intent(in), optional :: name !< Theme name.

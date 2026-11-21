@@ -208,6 +208,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 ### Dashboards of the 1980s
 
 <div class="fs-gallery">
+  <Plot name="cb_identity" svg :width="560" :height="320" caption="light and dark: washi and night" />
   <Plot name="cb_vfd" svg :width="640" :height="440" caption="a vacuum-fluorescent run monitor" />
   <Plot name="cb_lcd" svg :width="640" :height="300" caption="a liquid-crystal dashboard" />
   <Plot name="cb_gauges" svg :width="600" :height="240" caption="sweep gauges" />

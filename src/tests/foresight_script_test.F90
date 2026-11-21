@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(89)                           !< Per-check outcome.
+logical                       :: test_passed(90)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1342,6 +1342,18 @@ associate(panel => interpreter%figure%panels(1))
 endassociate
 call interpreter%run_text('set x2tics rotate', iostat, iomsg)
 test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics only') > 0
+
+! the identity themes washi and night; a default theme given to init (foresight --theme), which a script overrides
+call interpreter%init(scratch, theme='night')
+test_passed(90) = interpreter%figure%theme%name == 'night'
+call interpreter%run_text('set terminal svg theme washi', iostat, iomsg)
+test_passed(90) = test_passed(90) .and. iostat == 0_I4P .and. interpreter%figure%theme%name == 'washi' .and. &
+                  interpreter%figure%theme%background == '#f3ede1'
+call interpreter%run_text('set terminal svg theme sepia', iostat, iomsg)
+test_passed(90) = test_passed(90) .and. iostat /= 0_I4P .and. &
+                  index(iomsg, 'unknown theme "sepia" (supported: classic vfd lcd washi night)') > 0
+call interpreter%init(scratch)
+test_passed(90) = test_passed(90) .and. interpreter%figure%theme%is_classic()
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1359,7 +1371,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,89L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,90L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

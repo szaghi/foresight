@@ -71,7 +71,7 @@ that did what it says.
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
-| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`theme classic`\|`vfd`\|`lcd`] [`glow`\|`noglow`] | output format, size in px, HTML reload period; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
+| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
@@ -689,8 +689,9 @@ plot 'blocks.dat' matrix w image notitle
 
 In SVG and HTML an image is an embedded PNG, its pixels kept sharp at any zoom; the HTML page zooms it with the data.
 In text each character takes the pixel at its centre, denser for brighter pixels (` .:-=+*#%@`), in its color with
-`ansi`. A theme other than `classic` replaces the default palette with its own: with `vfd`, the dark glass for the
-lowest values up to the emissive colors, and `maxcolors` turns the heatmap into a grid of lit levels.
+`ansi`. The `vfd` and `lcd` themes replace the default palette with their own: with `vfd`, the dark glass for the
+lowest values up to the emissive colors, and `maxcolors` turns the heatmap into a grid of lit levels; `washi` and
+`night` keep it.
 
 <Plot name="cb_image_vfd" svg :width="560" :height="400" />
 
@@ -883,7 +884,8 @@ and theta labels are hidden while zoomed. Unlike gnuplot, points beyond rmax are
 
 ## Themes and segmented fills
 
-Foresight extensions: the look of the digital dashboards of 1980s cars, for monitoring and showcase pages.
+Foresight extensions: the look of the digital dashboards of 1980s cars, for monitoring and showcase pages, and the
+two faces of foresight's own identity, the colors of this site in its light and dark modes.
 
 ```gnuplot
 set terminal svg size 640,440 theme vfd
@@ -903,7 +905,10 @@ unset multiplot
 
 **Themes** recolor the output, never the figure: `classic` (the default) changes nothing; `vfd` is a vacuum
 fluorescent display, black glass, emissive series colors (cyan-green, amber, red, ...), the frame and labels printed in
-blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments. The default linetype
+blue, the data glowing; `lcd` a backlit liquid crystal display, pale green glass and dark segments; `washi` ink on warm
+paper with a crimson first series, and `night` light text on a near-black red ground with a rose first series, the
+light and dark modes of this site (its figures are drawn in them), every series color at least 3:1 against its ground.
+The default linetype
 colors (not another `set colorsequence`), the frame, grid and page become the theme ones; a color you give (`lc '#123456'`) is kept. `glow` and
 `noglow` override the theme (only `vfd` glows by default); the glow is an SVG filter, so converters that do not render
 filters (some PDF ones) drop or rasterize it. In the HTML page, the ticks and grid redrawn by a zoom take the theme

@@ -63,8 +63,8 @@ module foresight_script
 !<   counterclockwise|ccw]`, `set rrange [min:max]`, `set|unset rtics [...]` (as xtics), `set|unset ttics [[START,]STEP]
 !<   [format "fmt"]`, `set|unset raxis`, `set grid [polar [STEP]]`, `set border [MASK] [polar]`, `unset border`,
 !<   `set size [square|nosquare|ratio R|noratio] [W,H]`;
-!< - foresight extensions: `set terminal ... theme classic|vfd|lcd [glow|noglow]` (any terminal), the colors of a
-!<   1980s display (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style);
+!< - foresight extensions: `set terminal ... theme classic|vfd|lcd|washi|night [glow|noglow]` (any terminal), the colors
+!<   of a 1980s display or of foresight's identity (see foresight_theme); `fs ... segments N`, bars cut into N cells over the y range (foresight_style);
 !<   `plot ... with readout [format "fmt"]`, the last finite value of the item in seven-segment
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
@@ -84,6 +84,7 @@ use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_smooth, only : CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
+use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
@@ -154,12 +155,17 @@ type :: script_object
 endtype script_object
 
 contains
-   subroutine init(self, output)
-   !< Reset the interpreter; plots go to `output` until `set output`.
-   class(script_object), intent(inout) :: self   !< Interpreter.
-   character(len=*),     intent(in)    :: output !< Default output file.
+   subroutine init(self, output, theme)
+   !< Reset the interpreter; plots go to `output` until `set output`, in the output `theme` (see foresight_theme, blank
+   !< or absent: `classic`) until `set terminal ... theme`.
+   class(script_object), intent(inout)        :: self   !< Interpreter.
+   character(len=*),     intent(in)           :: output !< Default output file.
+   character(len=*),     intent(in), optional :: theme  !< Default output theme.
 
    call self%figure%init
+   if (present(theme)) then
+      if (len_trim(theme) > 0) call self%figure%set_theme(name=trim(theme))
+   endif
    self%output = output
    self%output_set = .false.
    self%multiplot = .false.
@@ -2156,12 +2162,11 @@ contains
          elseif (tokens(i)%text == 'theme') then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
-               call fail('set terminal: theme needs a name (classic, vfd, lcd)', iostat, iomsg)
+               call fail('set terminal: theme needs a name ('//THEMES//')', iostat, iomsg)
                return
             endif
-            if (.not. is_word(tokens(i)%text, 'classic vfd lcd')) then
-               call fail('set terminal: unknown theme "'//tokens(i)%text//'" (supported: classic, vfd, lcd)', iostat, &
-                         iomsg)
+            if (.not. is_word(tokens(i)%text, THEMES)) then
+               call fail('set terminal: unknown theme "'//tokens(i)%text//'" (supported: '//THEMES//')', iostat, iomsg)
                return
             endif
             call self%figure%set_theme(name=tokens(i)%text)

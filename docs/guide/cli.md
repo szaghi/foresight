@@ -12,6 +12,7 @@ Render a gnuplot-like SCRIPT to an interactive HTML page (default SCRIPT.html) o
 options:
   -e, --execute COMMANDS  run COMMANDS before SCRIPT (repeatable)
   -o, --output FILE       default output file (.html or .svg)
+  -t, --theme NAME        default output theme: classic vfd lcd washi night
   -w, --watch [SECONDS]   re-run when SCRIPT or its data files change (default 1 s)
       --max-cycles N      stop watching after N polls
   -h, --help              show this help
@@ -29,6 +30,16 @@ foresight residuals.gp                          # residuals.html
 foresight -o report.svg residuals.gp            # report.svg
 foresight -e "set terminal svg" residuals.gp    # residuals.svg
 foresight -e "set logscale y" -e "plot 'log.dat' u 1:3"   # foresight.html, no script file
+```
+
+## Theme
+
+`-t NAME` (`--theme NAME`) draws every plot of the run in the theme `NAME`, as `set terminal ... theme NAME` would,
+unless the script sets a theme of its own: the same scripts in the light and dark colors of a site, for instance.
+
+```bash
+foresight -t washi -o light.svg residuals.gp
+foresight -t night -o dark.svg residuals.gp
 ```
 
 ## `-e`

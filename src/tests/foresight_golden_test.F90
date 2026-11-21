@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(85)                  !< Per-figure outcome.
+logical                     :: test_passed(88)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -108,7 +108,11 @@ test_passed(82) = check('tics_rotate.txt', figure_tics_rotate())
 test_passed(83) = check('lc_variable.svg', figure_lc_variable())
 test_passed(84) = check('x2.svg', figure_x2())
 test_passed(85) = check('x2.html', figure_x2())
-write(output_unit, '(A,85L2)') 'foresight golden checks:', test_passed
+test_passed(86) = check('theme_washi.svg', figure_identity('washi'))
+test_passed(87) = check('theme_night.svg', figure_identity('night'))
+! also the page of the viewer DOM test of a dark theme (src/js/viewer_dom_test.js)
+test_passed(88) = check('theme_night.html', figure_identity('night'))
+write(output_unit, '(A,88L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -488,6 +492,28 @@ contains
    call fig%plot([0.0_R8P, 1.0_R8P, 2.0_R8P], [2.0_R8P, 1.0_R8P, 4.0_R8P], title='io', with='histograms', &
                  fs='solid segments 12')
    endfunction figure_theme
+
+   function figure_identity(name) result(fig)
+   !< foresight's identity themes: the eight series colors on the grid, with the key, the labels and the title.
+   character(len=*), intent(in) :: name  !< Theme name.
+   type(figure_object)          :: fig   !< Figure.
+   real(R8P), allocatable       :: t(:)  !< Abscissae.
+   integer(I4P)                 :: i     !< Counter.
+   integer(I4P)                 :: k     !< Series counter.
+
+   t = [(0.25_R8P * real(i, R8P), i = 0, 24)]
+   call fig%init(width=560_I4P, height=320_I4P)
+   call fig%set_theme(name=name)
+   call fig%set_title('series colors of '//name)
+   call fig%set_xlabel('t')
+   call fig%set_ylabel('u')
+   call fig%set_grid
+   call fig%set_key(position='outside')
+   do k = 1_I4P, 8_I4P
+      call fig%plot(t, sin(t + 0.4_R8P * real(k, R8P)) + 0.5_R8P * real(k, R8P), title='lt '//achar(48 + k), &
+                    with='linespoints', pt=7_I4P, ps=0.6_R8P)
+   enddo
+   endfunction figure_identity
 
    function figure_theme_block() result(fig)
    !< The vfd display on the block device in true colors: the theme recolors the series only.

@@ -7,7 +7,8 @@
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
 // with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
-// second x axis ticks redrawn by a zoom. The page is parsed by linkedom; the SVG
+// second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme. The page is parsed
+// by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -246,6 +247,15 @@ check("a zoom redraws the x2 ticks for the x window", box(0)[2] < 1 && x2ticks.i
   x2labels().length > 0);
 key("a");
 check("autoscale restores the x2 ticks", x2ticks.innerHTML === x2Home);
+
+// a dark theme: the help box on the page color, the readout and the zoom box in the frame color, never black on black
+page = strip(path.join(__dirname, "..", "tests", "goldens", "theme_night.html"));
+p = load("");
+var helpBox = p.document.querySelector("rect[width='310']");
+var readoutText = p.document.querySelector("svg > text[font-size='10']");
+check("dark theme overlays in the theme colors", helpBox !== null && helpBox.getAttribute("fill") === "#130d0f" &&
+  helpBox.getAttribute("stroke") === "#e8ecf0" && readoutText !== null &&
+  readoutText.getAttribute("fill") === "#e8ecf0");
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

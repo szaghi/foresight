@@ -7,6 +7,7 @@ use foresight_figure, only : figure_object
 use foresight_fingerprint, only : file_fingerprint
 use foresight_script, only : script_object
 use foresight_sys, only : rename_file, sleep_ms
+use foresight_theme, only : THEMES
 use penf, only : I4P, I8P, R4P, R8P
 
 implicit none
@@ -19,6 +20,8 @@ public :: script_object
 public :: file_fingerprint
 public :: rename_file
 public :: sleep_ms
+! expose the output theme names
+public :: THEMES
 ! expose PENF kinds
 public :: I4P, I8P, R4P, R8P
 endmodule foresight
