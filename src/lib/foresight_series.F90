@@ -126,9 +126,19 @@ contains
       xmax = max(xmax, maxval(self%x, mask=mask) + 1.0_R8P)
    endif
    if (self%spanned) then
-      ! the outer bin edges widen x, unless only the y autoscale is asked (a window); y = 0 widens y, as gnuplot
-      if (.not. present(xwindow)) call widen(self%span(1:2), xaxis, xmin, xmax, .true.)
-      call widen(self%span(3:4), yaxis, ymin, ymax, .true.)
+      ! the outer bin edges widen x, unless only the y autoscale is asked (a window); y = 0 widens y, as gnuplot.
+      ! Inline, not through `widen` with an optional argument: that made nvfortran 26.9 -O2 crash (fort1 signal 11)
+      ! on one compilation in three.
+      do i = 1_I4P, 2_I4P
+         if (.not. present(xwindow) .and. xaxis%accepts(self%span(i))) then
+            xmin = min(xmin, self%span(i))
+            xmax = max(xmax, self%span(i))
+         endif
+         if (yaxis%accepts(self%span(2_I4P + i))) then
+            ymin = min(ymin, self%span(2_I4P + i))
+            ymax = max(ymax, self%span(2_I4P + i))
+         endif
+      enddo
    endif
    if (allocated(self%xlow)) call widen(self%xlow, xaxis, xmin, xmax)
    if (allocated(self%xhigh)) call widen(self%xhigh, xaxis, xmin, xmax)
@@ -158,20 +168,15 @@ contains
       enddo
    endif
    contains
-      pure subroutine widen(ends, axis, lo, hi, whole)
-      !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points (`whole`: to all the placeable `ends`).
-      real(R8P),         intent(in)           :: ends(:) !< Bar ends.
-      type(axis_object), intent(in)           :: axis    !< Axis of the bar ends.
-      real(R8P),         intent(inout)        :: lo      !< Extent start.
-      real(R8P),         intent(inout)        :: hi      !< Extent end.
-      logical,           intent(in), optional :: whole   !< Not per point: every placeable end counts.
-      logical, allocatable                    :: ok(:)   !< Counted placeable ends.
+      pure subroutine widen(ends, axis, lo, hi)
+      !< Widen [`lo`, `hi`] to the placeable bar `ends` of the counted points.
+      real(R8P),         intent(in)    :: ends(:) !< Bar ends.
+      type(axis_object), intent(in)    :: axis    !< Axis of the bar ends.
+      real(R8P),         intent(inout) :: lo      !< Extent start.
+      real(R8P),         intent(inout) :: hi      !< Extent end.
+      logical, allocatable             :: ok(:)   !< Counted placeable ends.
 
-      if (present(whole)) then
-         ok = axis%accepts(ends)
-      else
-         ok = mask .and. axis%accepts(ends)
-      endif
+      ok = mask .and. axis%accepts(ends)
       if (.not. any(ok)) return
       lo = min(lo, minval(ends, mask=ok))
       hi = max(hi, maxval(ends, mask=ok))
