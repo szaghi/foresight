@@ -12,7 +12,9 @@ use penf, only : I4P
 
 implicit none
 private
+public :: brace_balance
 public :: split_statements
+public :: strip_comment
 public :: token_object
 public :: tokenize
 public :: TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
@@ -40,15 +42,18 @@ endtype token_object
 
 contains
    subroutine split_statements(line, statements)
-   !< Split `line` at `;` outside quotes, dropping the `#` comment; blank statements are skipped.
+   !< Split `line` at `;` (and new lines) outside quotes and braces, dropping the `#` comment; blank statements are
+   !< skipped. A block `do for [...] { ...; ... }` is one statement.
    character(len=*),                intent(in)  :: line          !< Source line.
    type(token_object), allocatable, intent(out) :: statements(:) !< Statements (kind word).
    character(len=1)                             :: quote         !< Open quote, blank if none.
    integer(I4P)                                 :: i             !< Character counter.
    integer(I4P)                                 :: start         !< Current statement start.
    integer(I4P)                                 :: last          !< Last character of the code part.
+   integer(I4P)                                 :: depth         !< Brace depth.
 
    allocate(statements(0))
+   depth = 0_I4P
    quote = ' '
    start = 1_I4P
    last = len(line, kind=I4P)
@@ -67,9 +72,15 @@ contains
          case ('#')
             last = i - 1_I4P
             exit
-         case (';')
-            call add(line(start:i - 1_I4P))
-            start = i + 1_I4P
+         case ('{')
+            depth = depth + 1_I4P
+         case ('}')
+            depth = max(0_I4P, depth - 1_I4P)
+         case (';', achar(10))
+            if (depth == 0_I4P) then
+               call add(line(start:i - 1_I4P))
+               start = i + 1_I4P
+            endif
          endselect
       endif
       i = i + 1_I4P
@@ -80,12 +91,72 @@ contains
       !< Append a non-blank statement.
       character(len=*), intent(in) :: statement !< Statement.
       type(token_object)           :: token     !< New statement.
+      integer(I4P)                 :: first     !< First character kept.
+      integer(I4P)                 :: last      !< Last character kept.
 
-      if (len_trim(statement) == 0) return
-      token%text = trim(adjustl(statement))
+      ! blanks, tabs and line ends around the statement removed (a block's body spans lines)
+      first = verify(statement, ' '//achar(9)//achar(10)//achar(13), kind=I4P)
+      if (first == 0_I4P) return
+      last = verify(statement, ' '//achar(9)//achar(10)//achar(13), back=.true., kind=I4P)
+      token%text = statement(first:last)
       call push(statements, token)
       endsubroutine add
    endsubroutine split_statements
+
+   pure function strip_comment(line) result(code)
+   !< `line` without its `#` comment (a `#` outside quotes).
+   character(len=*), intent(in)  :: line  !< Line.
+   character(len=:), allocatable :: code  !< Code part.
+   character(len=1)              :: quote !< Open quote, blank if none.
+   integer(I4P)                  :: i     !< Character counter.
+
+   quote = ' '
+   code = line
+   i = 1_I4P
+   do while (i <= len(line, kind=I4P))
+      if (quote /= ' ') then
+         if (quote == '"' .and. line(i:i) == '\') then
+            i = i + 1_I4P
+         elseif (line(i:i) == quote) then
+            quote = ' '
+         endif
+      elseif (line(i:i) == '"' .or. line(i:i) == "'") then
+         quote = line(i:i)
+      elseif (line(i:i) == '#') then
+         code = line(1:i - 1_I4P)
+         return
+      endif
+      i = i + 1_I4P
+   enddo
+   endfunction strip_comment
+
+   pure function brace_balance(code) result(balance)
+   !< Braces opened minus closed in `code` (no comment), outside quotes: a block goes on while it is positive.
+   character(len=*), intent(in) :: code    !< Code.
+   integer(I4P)                 :: balance !< Open braces.
+   character(len=1)             :: quote   !< Open quote, blank if none.
+   integer(I4P)                 :: i       !< Character counter.
+
+   balance = 0_I4P
+   quote = ' '
+   i = 1_I4P
+   do while (i <= len(code, kind=I4P))
+      if (quote /= ' ') then
+         if (quote == '"' .and. code(i:i) == '\') then
+            i = i + 1_I4P
+         elseif (code(i:i) == quote) then
+            quote = ' '
+         endif
+      elseif (code(i:i) == '"' .or. code(i:i) == "'") then
+         quote = code(i:i)
+      elseif (code(i:i) == '{') then
+         balance = balance + 1_I4P
+      elseif (code(i:i) == '}') then
+         balance = balance - 1_I4P
+      endif
+      i = i + 1_I4P
+   enddo
+   endfunction brace_balance
 
    pure subroutine tokenize(statement, tokens, iostat, iomsg)
    !< Split `statement` into tokens.

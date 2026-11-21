@@ -39,6 +39,7 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: expression_object
+public :: saved_variable
 public :: symbols_object
 public :: push
 
@@ -160,6 +161,13 @@ type :: user_function
    character(len=:), allocatable  :: body      !< Body text.
 endtype user_function
 
+type :: saved_variable
+   !< A variable's state, kept to be restored: the variable of a `do for` loop is local to the loop, as gnuplot's.
+   character(len=:), allocatable, private :: name           !< Name.
+   logical,                       private :: found = .false. !< It existed.
+   type(value_object),            private :: v              !< Its value.
+endtype saved_variable
+
 type :: symbols_object
    !< User variables and functions of a script, gnuplot's: `a = 2` stores the value now (integer or real), `f(x) = a*x`
    !< stores the text, compiled inline where it is called, so its variables take their values at that moment (plot
@@ -174,6 +182,8 @@ type :: symbols_object
       procedure, pass(self) :: value_of !< Value of a variable.
       procedure, pass(self) :: set_value !< Set a variable to a number.
       procedure, pass(self) :: set_string !< Set a variable to a string.
+      procedure, pass(self) :: save_variable !< Keep a variable's state.
+      procedure, pass(self) :: restore  !< Restore a kept variable's state.
       procedure, pass(self) :: string_of !< Value of a string variable.
       procedure, pass(self) :: text_of  !< Value of a constant expression as text.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
@@ -1083,6 +1093,42 @@ contains
 
    call self%store(name, string_value(text))
    endsubroutine set_string
+
+   pure subroutine save_variable(self, name, saved)
+   !< The state of the variable `name` (its value, or that it does not exist), for `restore`.
+   class(symbols_object), intent(in)  :: self  !< Symbols.
+   character(len=*),      intent(in)  :: name  !< Variable name.
+   type(saved_variable),  intent(out) :: saved !< State.
+   integer(I4P)                       :: k     !< Index.
+
+   saved%name = name
+   k = self%variable_index(name)
+   saved%found = k > 0_I4P
+   if (saved%found) saved%v = self%variables(k)%v
+   endsubroutine save_variable
+
+   pure subroutine restore(self, saved)
+   !< Restore a variable kept by `save_variable`: its value, or remove it if it did not exist.
+   class(symbols_object), intent(inout) :: self  !< Symbols.
+   type(saved_variable),  intent(in)    :: saved !< State.
+   type(user_variable), allocatable     :: kept(:) !< Variables but the removed one.
+   integer(I4P)                         :: k     !< Index.
+   integer(I4P)                         :: j     !< Counter.
+
+   if (saved%found) then
+      call self%store(saved%name, saved%v)
+      return
+   endif
+   k = self%variable_index(saved%name)
+   if (k == 0_I4P) return
+   ! by a push loop into another variable: nvfortran 26.9 corrupts `list = list(...)` of items holding deferred-length
+   ! characters
+   allocate(kept(0))
+   do j = 1_I4P, size(self%variables, kind=I4P)
+      if (j /= k) call push(kept, self%variables(j))
+   enddo
+   call move_alloc(kept, self%variables)
+   endsubroutine restore
 
    pure subroutine string_of(self, name, text, found)
    !< Value of the string variable `name`; `found` false (and `text` empty) if there is none or it is a number.

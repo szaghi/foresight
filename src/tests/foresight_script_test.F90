@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(100)                           !< Per-check outcome.
+logical                       :: test_passed(101)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1671,6 +1671,48 @@ close(unit, status='delete')
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 
+! blocks and flow control, as gnuplot 6.0 (the printed lines of the same script)
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_blocks.txt'"//new_line('a')// &
+                          "do for [i=1:10:4] { print i }"//new_line('a')// &
+                          "i = 7; do for [i=1:2] { }; print i"//new_line('a')// &
+                          "do for [i=3:1] { print i }; print 'end'"//new_line('a')// &
+                          "do for [i=3:1:-1] { print i }"//new_line('a')// &
+                          "do for [s in ""a bb c""] { print s }"//new_line('a')// &
+                          "do for [i=1:2] {"//new_line('a')// &
+                          achar(9)//"do for [j=1:2] {"//new_line('a')// &
+                          "      print i, j   # a comment {"//new_line('a')// &
+                          "   }"//new_line('a')// &
+                          "}"//new_line('a')// &
+                          "do for [i=1:3] { if (i==2) { continue }; print i }"//new_line('a')// &
+                          "do for [i=1:3] { if (i==2) { break }; print i }"//new_line('a')// &
+                          "do for [x=0.5:2] { print x }"//new_line('a')// &
+                          "do for [w in 'x y'] for [i=1:2] { print w, i }"//new_line('a')// &
+                          "k=0; while (k<3) { k=k+1; print k }"//new_line('a')// &
+                          "if (0) { print 'y' } else if (1) { print 'm' } else { print 'n' }"//new_line('a')// &
+                          "do for [i=1:3] { i = 10; print i }"//new_line('a')// &
+                          "print exists('j'), exists('w')"//new_line('a')// &
+                          "set print", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(101) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_blocks.txt', [character(len=5) :: '1', '5', '9', '7', 'end', '3', '2', '1', 'a', 'bb', &
+           'c', '1 1', '1 2', '2 1', '2 2', '1', '3', '1', '0', '1', '2', 'x 1', 'x 2', 'y 1', 'y 2', '1', '2', '3', 'm', &
+           '10', '10', '10', '0 0'])
+call interpreter%run_text("break", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'break outside a loop') > 0
+call interpreter%run_text("if (1) print 1", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'the old one-line form is not supported') > 0
+call interpreter%run_text("do for [i=1:2] {"//new_line('a')//"print i", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'script:1: "{" not closed') > 0
+call interpreter%run_text("do for [i=1:*] { }", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'unbounded iteration') > 0
+call interpreter%run_text("if ('a') { }", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'a string used as a condition') > 0
+call interpreter%run_text("do for [i=1:2] { print undefined_name }", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: undefined_name') > 0
+open(newunit=unit, file='foresight_script_test_blocks.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1679,7 +1721,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,100L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,101L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

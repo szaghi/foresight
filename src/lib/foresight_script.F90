@@ -81,7 +81,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object, push, symbols_object
+use foresight_expression, only : expression_object, push, saved_variable, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
@@ -92,8 +92,8 @@ use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
-use foresight_tokens, only : push, split_statements, token_object, tokenize, TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, &
-                             TOKEN_WORD
+use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
+                             TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -156,6 +156,8 @@ type :: script_object
    logical                         :: fit_errorvariables = .true. !< `set fit errorvariables`: NAME_err set.
    character(len=:), allocatable   :: print_file               !< `set print`: '' the standard error (gnuplot's
                                                                !< default), '-' the standard output, else a file.
+   integer(I4P)                    :: loop_depth = 0_I4P       !< Loops (`do for`, `while`) being run.
+   integer(I4P)                    :: loop_signal = 0_I4P      !< `break` (1) or `continue` (2) pending, else 0.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -165,6 +167,11 @@ type :: script_object
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
+      procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
+      procedure, pass(self), private :: while_block   !< `while (...) { ... }`.
+      procedure, pass(self), private :: if_block      !< `if (...) { ... } else ...`.
+      procedure, pass(self), private :: run_body      !< The statements of a block.
+      procedure, pass(self), private :: run_loops     !< Nested `for` clauses of a block.
       procedure, pass(self), private :: string_expression !< A string expression across tokens.
       procedure, pass(self), private :: string_argument   !< The string after a set option.
       procedure, pass(self), private :: register_file !< Remember a data file.
@@ -221,6 +228,8 @@ contains
    self%fit_logfile = ''
    self%fit_errorvariables = .true.
    self%print_file = ''
+   self%loop_depth = 0_I4P
+   self%loop_signal = 0_I4P
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -265,9 +274,16 @@ contains
    integer(I4P)                                        :: finish     !< Current physical line end.
    integer(I4P)                                        :: lineno     !< Current physical line number.
    integer(I4P)                                        :: first_line !< First physical line of the logical line.
+   character(len=:), allocatable                       :: block      !< Lines of an open block, `{` not yet closed.
+   character(len=:), allocatable                       :: code       !< Logical line without its comment.
+   integer(I4P)                                        :: depth      !< Open braces of the block.
+   integer(I4P)                                        :: block_line !< First line of the block.
 
    iostat = 0_I4P
    iomsg = ''
+   block = ''
+   depth = 0_I4P
+   block_line = 0_I4P
    name = 'script'
    if (present(source)) name = source
    line = ''
@@ -294,16 +310,41 @@ contains
             cycle
          endif
       endif
-      call process(line)
+      call take(line)
       if (iostat /= 0_I4P) return
       line = ''
    enddo
    ! a continuation on the last line
-   if (len(line) > 0) call process(line)
+   if (len(line) > 0) call take(line)
+   if (iostat /= 0_I4P) return
+   if (len(block) > 0) then
+      call fail('"{" not closed', iostat, iomsg)
+      iomsg = name//':'//int_str(int(block_line, I8P))//': '//iomsg
+   endif
    contains
-      subroutine process(logical_line)
-      !< Execute the statements of a logical line.
+      subroutine take(logical_line)
+      !< Execute a logical line, or keep it while a block (`do for [...] {`, `if (...) {`) is open.
+      character(len=*), intent(in) :: logical_line !< Logical line.
+
+      code = strip_comment(logical_line)
+      if (len(block) == 0 .and. brace_balance(code) <= 0) then
+         call process(logical_line, first_line)
+         return
+      endif
+      if (len(block) == 0) block_line = first_line
+      block = block//code//new_line('a')
+      depth = depth + brace_balance(code)
+      if (depth <= 0_I4P) then
+         call process(block, block_line)
+         block = ''
+         depth = 0_I4P
+      endif
+      endsubroutine take
+
+      subroutine process(logical_line, at)
+      !< Execute the statements of a logical line (or of a block over several lines) starting at line `at`.
       character(len=*), intent(in)    :: logical_line  !< Logical line.
+      integer(I4P),     intent(in)    :: at            !< Its first line.
       type(token_object), allocatable :: statements(:) !< Statements.
       integer(I4P)                    :: s             !< Statement counter.
 
@@ -311,14 +352,14 @@ contains
       do s = 1_I4P, size(statements, kind=I4P)
          call self%execute(statements(s)%text, iostat, iomsg)
          if (iostat /= 0_I4P) then
-            iomsg = name//':'//int_str(int(first_line, I8P))//': '//iomsg
+            iomsg = name//':'//int_str(int(at, I8P))//': '//iomsg
             return
          endif
       enddo
       endsubroutine process
    endsubroutine run_text
 
-   subroutine execute(self, statement, iostat, iomsg)
+   recursive subroutine execute(self, statement, iostat, iomsg)
    !< Execute one statement.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    character(len=*),              intent(in)    :: statement !< Statement.
@@ -327,6 +368,33 @@ contains
    type(token_object), allocatable              :: tokens(:) !< Statement tokens.
    character(len=:), allocatable                :: command   !< Command word.
 
+   ! blocks, flow control
+   command = leading_word(statement)
+   select case (command)
+   case ('do')
+      call self%do_block(statement, iostat, iomsg)
+      return
+   case ('while')
+      call self%while_block(statement, iostat, iomsg)
+      return
+   case ('if')
+      call self%if_block(statement, iostat, iomsg)
+      return
+   case ('else')
+      call fail('else without if (else follows "}" on the same line)', iostat, iomsg)
+      return
+   case ('break', 'continue')
+      iostat = 0_I4P
+      iomsg = ''
+      if (trim(adjustl(statement)) /= command) then
+         call fail(command//' takes nothing after it', iostat, iomsg)
+      elseif (self%loop_depth == 0_I4P) then
+         call fail(command//' outside a loop', iostat, iomsg)
+      else
+         self%loop_signal = merge(1_I4P, 2_I4P, command == 'break')
+      endif
+      return
+   endselect
    if (self%assignment(statement, iostat, iomsg)) return
    call tokenize(statement, tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
@@ -434,6 +502,336 @@ contains
       ok = .false.
    endif
    endfunction string_argument
+
+   recursive subroutine do_block(self, statement, iostat, iomsg)
+   !< gnuplot `do for [i = a:b[:c]] [for [...]] { ... }` and `do for [w in "words"] { ... }`: the body run for each value,
+   !< the clauses nested left to right; the loop variable is local to the loop (its value before is restored, or it is
+   !< removed), bounds are truncated to integers, `break` leaves the whole `do`, `continue` its innermost clause.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< The whole statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(token_object), allocatable              :: specs(:)  !< `for` clauses, brackets removed.
+   type(token_object)                           :: spec      !< One clause.
+   character(len=:), allocatable                :: rest      !< Text still to read.
+   character(len=:), allocatable                :: after     !< Text after a part read.
+   character(len=:), allocatable                :: body      !< Block body.
+   integer(I4P)                                 :: close     !< Closing bracket.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(specs(0))
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(3:)))
+   do while (leading_word(rest) == 'for')
+      rest = trim(adjustl(rest(4:)))
+      close = 0_I4P
+      if (len(rest) > 0) then
+         if (rest(1:1) == '[') close = matching(rest, 1_I4P)
+      endif
+      if (close == 0_I4P) then
+         call fail('do for: [i = a:b] or [w in "words"] expected', iostat, iomsg)
+         return
+      endif
+      spec%text = rest(2:close - 1_I4P)
+      call push(specs, spec)
+      rest = trim(adjustl(rest(close + 1_I4P:)))
+   enddo
+   if (size(specs) == 0) then
+      call fail('do: for [...] expected', iostat, iomsg)
+      return
+   endif
+   if (.not. block_body(rest, body, after)) then
+      call fail('do for: { ... } expected after the clauses', iostat, iomsg)
+      return
+   endif
+   rest = after
+   if (len(rest) > 0) then
+      call fail('do for: unexpected "'//rest//'" after the block', iostat, iomsg)
+      return
+   endif
+   self%loop_depth = self%loop_depth + 1_I4P
+   call self%run_loops(specs, 1_I4P, body, iostat, iomsg)
+   self%loop_depth = self%loop_depth - 1_I4P
+   self%loop_signal = 0_I4P
+   endsubroutine do_block
+
+   recursive subroutine run_loops(self, specs, level, body, iostat, iomsg)
+   !< Run clause `level` of `specs`, the inner clauses (or the body) for each of its values.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: specs(:)  !< `for` clauses.
+   integer(I4P),                  intent(in)    :: level     !< Clause.
+   character(len=*),              intent(in)    :: body      !< Block body.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(saved_variable)                         :: saved     !< The loop variable before the loop.
+   character(len=:), allocatable                :: name      !< Loop variable.
+   character(len=:), allocatable                :: words     !< `in` list.
+   integer(I8P)                                 :: bounds(3) !< First, last, step.
+   integer(I8P)                                 :: v         !< Loop value.
+   type(token_object), allocatable              :: list(:)   !< Words of the `in` list.
+   integer(I8P)                                 :: k         !< Word counter.
+   logical                                      :: is_words  !< `w in "..."`.
+
+   call for_clause(specs(level)%text, name, is_words, bounds, words, iostat, iomsg)
+   if (iostat /= 0_I4P) then
+      iomsg = 'do for ['//specs(level)%text//']: '//iomsg
+      return
+   endif
+   call self%symbols%save_variable(name, saved)
+   if (is_words) then
+      call split_words(words, list)
+      do k = 1_I8P, size(list, kind=I8P)
+         call self%symbols%set_string(name, list(k)%text)
+         call step
+         if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+      enddo
+   else
+      v = bounds(1)
+      do while ((bounds(3) > 0_I8P .and. v <= bounds(2)) .or. (bounds(3) < 0_I8P .and. v >= bounds(2)))
+         call self%symbols%set_value(name, real(v, R8P), .true.)
+         call step
+         if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+         v = v + bounds(3)
+      enddo
+   endif
+   call self%symbols%restore(saved)
+   contains
+      recursive subroutine step
+      !< One value: the inner clauses, or the body; a `continue` ends this value only.
+      if (level < size(specs, kind=I4P)) then
+         call self%run_loops(specs, level + 1_I4P, body, iostat, iomsg)
+      else
+         call self%run_body(body, iostat, iomsg)
+      endif
+      if (self%loop_signal == 2_I4P) self%loop_signal = 0_I4P
+      endsubroutine step
+
+      subroutine for_clause(text, var, in_words, range, list, status, message)
+      !< `var = a:b[:c]` (integers) or `var in "words"` (a string expression).
+      character(len=*),              intent(in)  :: text     !< Clause.
+      character(len=:), allocatable, intent(out) :: var      !< Variable.
+      logical,                       intent(out) :: in_words !< `in` form.
+      integer(I8P),                  intent(out) :: range(3) !< First, last, step.
+      character(len=:), allocatable, intent(out) :: list     !< Words.
+      integer(I4P),                  intent(out) :: status   !< 0 on success.
+      character(len=:), allocatable, intent(out) :: message  !< Error message.
+      character(len=:), allocatable :: parts(:) !< Range ends.
+      logical                       :: is_string !< A string.
+      integer(I4P)                  :: e      !< `=` or ` in `.
+      integer(I4P)                  :: j      !< Counter.
+      real(R8P)                     :: x      !< Bound.
+
+      status = 0_I4P
+      message = ''
+      range = [1_I8P, 0_I8P, 1_I8P]
+      list = ''
+      in_words = .false.
+      e = index(text, ' in ', kind=I4P)
+      if (e > 0_I4P .and. (index(text, '=') == 0 .or. index(text, '=') > e)) then
+         in_words = .true.
+         var = trim(adjustl(text(1:e - 1_I4P)))
+         call self%symbols%text_of(trim(adjustl(text(e + 4_I4P:))), list, is_string, status, message, &
+                                   degrees=self%figure%panels(self%figure%current)%degrees)
+         if (status == 0_I4P .and. .not. is_string) then
+            status = 1_I4P
+            message = 'a string of words is expected after in'
+         endif
+      else
+         e = index(text, '=', kind=I4P)
+         if (e == 0_I4P) then
+            status = 1_I4P
+            message = 'i = a:b[:c] or w in "words" expected'
+            return
+         endif
+         var = trim(adjustl(text(1:e - 1_I4P)))
+         call split_range(text(e + 1_I4P:), parts)
+         if (size(parts) < 2 .or. size(parts) > 3) then
+            status = 1_I4P
+            message = 'i = a:b[:c] expected'
+            return
+         endif
+         do j = 1_I4P, size(parts, kind=I4P)
+            if (trim(adjustl(parts(j))) == '*') then
+               status = 1_I4P
+               message = 'unbounded iteration is not accepted'
+               return
+            endif
+            call self%symbols%constant(trim(parts(j)), x, status, message, &
+                                       degrees=self%figure%panels(self%figure%current)%degrees)
+            if (status /= 0_I4P) return
+            if (abs(x) >= 9.0e18_R8P) then
+               status = 1_I4P
+               message = 'bound out of range'
+               return
+            endif
+            range(j) = int(x, I8P)
+         enddo
+         if (range(3) == 0_I8P) then
+            status = 1_I4P
+            message = 'the step must not be 0'
+            return
+         endif
+      endif
+      if (len(var) == 0 .or. verify(var, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
+         status = 1_I4P
+         message = 'invalid loop variable "'//var//'"'
+      endif
+      endsubroutine for_clause
+   endsubroutine run_loops
+
+   recursive subroutine while_block(self, statement, iostat, iomsg)
+   !< gnuplot `while (condition) { ... }`: the body run while the condition (a number, not 0) holds.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< The whole statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: rest      !< Text still to read.
+   character(len=:), allocatable                :: after     !< Text after a part read.
+   character(len=:), allocatable                :: condition !< Condition.
+   character(len=:), allocatable                :: body      !< Block body.
+   logical                                      :: holds     !< Condition true.
+
+   iostat = 0_I4P
+   iomsg = ''
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(6:)))
+   if (.not. parenthesized(rest, condition, after)) then
+      call fail('while: (condition) expected', iostat, iomsg)
+      return
+   endif
+   rest = after
+   if (.not. block_body(rest, body, after)) then
+      call fail('while: { ... } expected after the condition', iostat, iomsg)
+      return
+   endif
+   rest = after
+   if (len(rest) > 0) then
+      call fail('while: unexpected "'//rest//'" after the block', iostat, iomsg)
+      return
+   endif
+   self%loop_depth = self%loop_depth + 1_I4P
+   do
+      call truth_of(self, condition, holds, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'while: '//iomsg
+         exit
+      endif
+      if (.not. holds) exit
+      call self%run_body(body, iostat, iomsg)
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+      self%loop_signal = 0_I4P
+   enddo
+   self%loop_depth = self%loop_depth - 1_I4P
+   self%loop_signal = 0_I4P
+   endsubroutine while_block
+
+   recursive subroutine if_block(self, statement, iostat, iomsg)
+   !< gnuplot `if (condition) { ... } [else if (condition) { ... }]... [else { ... }]`: the first block whose condition
+   !< holds is run. gnuplot's old one-line form, `if (condition) command`, is not supported.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< The whole statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: rest      !< Text still to read.
+   character(len=:), allocatable                :: after     !< Text after a part read.
+   character(len=:), allocatable                :: condition !< Condition.
+   character(len=:), allocatable                :: body      !< Block body.
+   logical                                      :: holds     !< Condition true.
+   logical                                      :: done      !< A block was run.
+
+   iostat = 0_I4P
+   iomsg = ''
+   done = .false.
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(3:)))
+   do
+      if (.not. parenthesized(rest, condition, after)) then
+         call fail('if: (condition) expected', iostat, iomsg)
+         return
+      endif
+      rest = after
+      if (.not. block_body(rest, body, after)) then
+         call fail('if: { ... } expected after the condition (the old one-line form is not supported)', iostat, iomsg)
+         return
+      endif
+      rest = after
+      if (.not. done) then
+         call truth_of(self, condition, holds, iostat, iomsg)
+         if (iostat /= 0_I4P) then
+            iomsg = 'if: '//iomsg
+            return
+         endif
+         if (holds) then
+            call self%run_body(body, iostat, iomsg)
+            if (iostat /= 0_I4P) return
+            done = .true.
+         endif
+      endif
+      if (len(rest) == 0) return
+      if (leading_word(rest) /= 'else') then
+         call fail('if: unexpected "'//rest//'" after the block', iostat, iomsg)
+         return
+      endif
+      rest = trim(adjustl(rest(5:)))
+      if (leading_word(rest) == 'if') then
+         rest = trim(adjustl(rest(3:)))
+         cycle
+      endif
+      if (.not. block_body(rest, body, after)) then
+         call fail('else: { ... } expected', iostat, iomsg)
+         return
+      endif
+      rest = after
+      if (len(rest) > 0) then
+         call fail('else: unexpected "'//rest//'" after the block', iostat, iomsg)
+         return
+      endif
+      if (.not. done) call self%run_body(body, iostat, iomsg)
+      return
+   enddo
+   endsubroutine if_block
+
+   recursive subroutine run_body(self, body, iostat, iomsg)
+   !< Run the statements of a block body, stopping at a `break` or a `continue`.
+   class(script_object),          intent(inout) :: self          !< Interpreter.
+   character(len=*),              intent(in)    :: body          !< Body.
+   integer(I4P),                  intent(out)   :: iostat        !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg         !< Error message.
+   type(token_object), allocatable              :: statements(:) !< Statements.
+   integer(I4P)                                 :: s             !< Statement counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   call split_statements(body, statements)
+   do s = 1_I4P, size(statements, kind=I4P)
+      call self%execute(statements(s)%text, iostat, iomsg)
+      if (iostat /= 0_I4P .or. self%loop_signal /= 0_I4P) return
+   enddo
+   endsubroutine run_body
+
+   subroutine truth_of(self, condition, holds, iostat, iomsg)
+   !< Whether the constant expression `condition` holds (a number other than 0; a string is an error).
+   class(script_object),          intent(in)  :: self      !< Interpreter.
+   character(len=*),              intent(in)  :: condition !< Condition.
+   logical,                       intent(out) :: holds     !< True.
+   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
+   character(len=:), allocatable              :: text      !< Value.
+   logical                                    :: is_string !< A string.
+   real(R8P)                                  :: v         !< Value.
+
+   holds = .false.
+   call self%symbols%text_of(condition, text, is_string, iostat, iomsg, &
+                             degrees=self%figure%panels(self%figure%current)%degrees)
+   if (iostat /= 0_I4P) return
+   if (is_string) then
+      call fail('a string used as a condition: '//condition, iostat, iomsg)
+      return
+   endif
+   call self%symbols%constant(condition, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
+   holds = v /= 0.0_R8P
+   endsubroutine truth_of
 
    subroutine print_command(self, text, iostat, iomsg)
    !< gnuplot `print EXPRESSION, ...`: the values (strings as they are, numbers as gnuplot shows them) separated by a
@@ -4577,6 +4975,159 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure function leading_word(text) result(word)
+   !< The letters starting `text` (blanks skipped): `do`, `if`, `while`, `else`, `for`, `break`.
+   character(len=*), intent(in)  :: text !< Text.
+   character(len=:), allocatable :: word !< Leading word.
+   character(len=:), allocatable :: t    !< Text without leading blanks.
+   integer(I4P)                  :: e    !< First character after the word.
+
+   t = trim(adjustl(text))
+   e = verify(t, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_', kind=I4P)
+   if (e == 0_I4P) e = len(t, kind=I4P) + 1_I4P
+   word = t(1:e - 1_I4P)
+   endfunction leading_word
+
+   pure function matching(text, open) result(close)
+   !< Position of the bracket closing the one at `open` (`(`, `[` or `{`), quotes and nesting respected; 0 if none.
+   character(len=*), intent(in) :: text  !< Text.
+   integer(I4P),     intent(in) :: open  !< Opening bracket.
+   integer(I4P)                 :: close !< Closing bracket.
+   character(len=1)             :: left  !< Opening bracket.
+   character(len=1)             :: right !< Closing bracket.
+   character(len=1)             :: quote !< Open quote, blank if none.
+   integer(I4P)                 :: depth !< Nesting.
+
+   left = text(open:open)
+   right = merge(')', merge(']', '}', left == '['), left == '(')
+   quote = ' '
+   depth = 0_I4P
+   close = open
+   do while (close <= len(text, kind=I4P))
+      if (quote /= ' ') then
+         if (quote == '"' .and. text(close:close) == '\') then
+            close = close + 1_I4P
+         elseif (text(close:close) == quote) then
+            quote = ' '
+         endif
+      elseif (text(close:close) == '"' .or. text(close:close) == "'") then
+         quote = text(close:close)
+      elseif (text(close:close) == left) then
+         depth = depth + 1_I4P
+      elseif (text(close:close) == right) then
+         depth = depth - 1_I4P
+         if (depth == 0_I4P) return
+      endif
+      close = close + 1_I4P
+   enddo
+   close = 0_I4P
+   endfunction matching
+
+   function block_body(text, body, rest) result(ok)
+   !< `{ body } rest`: the body and the text after the closing brace.
+   character(len=*),              intent(in)  :: text !< Text starting with `{`.
+   character(len=:), allocatable, intent(out) :: body !< Body.
+   character(len=:), allocatable, intent(out) :: rest !< After the block.
+   logical                                    :: ok   !< A block found.
+   integer(I4P)                               :: close !< Closing brace.
+
+   body = ''
+   rest = text
+   ok = .false.
+   if (len(text) == 0) return
+   if (text(1:1) /= '{') return
+   close = matching(text, 1_I4P)
+   if (close == 0_I4P) return
+   body = text(2:close - 1_I4P)
+   rest = trim(adjustl(text(close + 1_I4P:)))
+   ok = .true.
+   endfunction block_body
+
+   function parenthesized(text, inside, rest) result(ok)
+   !< `( inside ) rest`.
+   character(len=*),              intent(in)  :: text   !< Text starting with `(`.
+   character(len=:), allocatable, intent(out) :: inside !< Inside the parentheses.
+   character(len=:), allocatable, intent(out) :: rest   !< After them.
+   logical                                    :: ok     !< Found.
+   integer(I4P)                               :: close  !< Closing parenthesis.
+
+   inside = ''
+   rest = text
+   ok = .false.
+   if (len(text) == 0) return
+   if (text(1:1) /= '(') return
+   close = matching(text, 1_I4P)
+   if (close == 0_I4P) return
+   inside = text(2:close - 1_I4P)
+   rest = trim(adjustl(text(close + 1_I4P:)))
+   ok = len_trim(inside) > 0
+   endfunction parenthesized
+
+   pure subroutine split_words(text, words)
+   !< The blank-separated words of `text` (blanks, tabs, new lines), as gnuplot's words() and word().
+   character(len=*),                intent(in)  :: text     !< Text.
+   type(token_object), allocatable, intent(out) :: words(:) !< Words.
+   type(token_object)                           :: word     !< One word.
+   integer(I4P)                                 :: i        !< Character counter.
+   integer(I4P)                                 :: start    !< Word start.
+
+   allocate(words(0))
+   i = 1_I4P
+   do while (i <= len(text, kind=I4P))
+      if (scan(text(i:i), ' '//achar(9)//achar(10)//achar(13)) > 0) then
+         i = i + 1_I4P
+         cycle
+      endif
+      start = i
+      do while (i <= len(text, kind=I4P))
+         if (scan(text(i:i), ' '//achar(9)//achar(10)//achar(13)) > 0) exit
+         i = i + 1_I4P
+      enddo
+      word%text = text(start:i - 1_I4P)
+      call push(words, word)
+   enddo
+   endsubroutine split_words
+
+   pure subroutine split_range(text, parts)
+   !< `a:b[:c]` cut at the colons outside parentheses and quotes.
+   character(len=*),              intent(in)  :: text     !< Range.
+   character(len=:), allocatable, intent(out) :: parts(:) !< Ends.
+   character(len=1)                           :: quote    !< Open quote, blank if none.
+   integer(I4P)                               :: depth    !< Parenthesis depth.
+   integer(I4P)                               :: start    !< Part start.
+   integer(I4P)                               :: i        !< Character counter.
+   integer(I4P)                               :: n        !< Parts.
+   integer(I4P)                               :: cuts(4)  !< Part starts.
+
+   quote = ' '
+   depth = 0_I4P
+   n = 1_I4P
+   cuts(1) = 1_I4P
+   do i = 1_I4P, len(text, kind=I4P)
+      if (quote /= ' ') then
+         if (text(i:i) == quote) quote = ' '
+      elseif (text(i:i) == '"' .or. text(i:i) == "'") then
+         quote = text(i:i)
+      elseif (text(i:i) == '(') then
+         depth = depth + 1_I4P
+      elseif (text(i:i) == ')') then
+         depth = depth - 1_I4P
+      elseif (text(i:i) == ':' .and. depth == 0_I4P .and. n < 4_I4P) then
+         n = n + 1_I4P
+         cuts(n) = i + 1_I4P
+      endif
+   enddo
+   allocate(character(len=len(text)) :: parts(n))
+   do i = 1_I4P, n
+      start = cuts(i)
+      if (i < n) then
+         parts(i) = text(start:cuts(i + 1_I4P) - 2_I4P)
+      else
+         parts(i) = text(start:)
+      endif
+   enddo
+   endsubroutine split_range
+
    pure subroutine split_arguments(text, parts)
    !< `text` cut at the commas outside quotes, parentheses and brackets (`print a, sprintf("%d,%d", 1, 2)`); no text
    !< is no part.
