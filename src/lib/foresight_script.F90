@@ -126,6 +126,15 @@ type :: line_style_object
    real(R8P)                     :: palette = 0.0_R8P !< Value of `lc palette cb V` or `frac F`.
 endtype line_style_object
 
+type :: loop_level
+   !< One `for [...]` clause of a plot item: its variable, values, the value in use and the variable before the loop.
+   character(len=:), allocatable   :: name           !< Loop variable.
+   type(token_object), allocatable :: values(:)      !< Values, as text.
+   logical                         :: words = .false. !< String values.
+   integer(I4P)                    :: pos = 1_I4P    !< Value in use.
+   type(saved_variable)            :: saved          !< The variable before the loop.
+endtype loop_level
+
 type :: script_object
    !< Script interpreter state.
    type(figure_object)             :: figure                   !< Figure being built.
@@ -566,35 +575,21 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(saved_variable)                         :: saved     !< The loop variable before the loop.
    character(len=:), allocatable                :: name      !< Loop variable.
-   character(len=:), allocatable                :: words     !< `in` list.
-   integer(I8P)                                 :: bounds(3) !< First, last, step.
-   integer(I8P)                                 :: v         !< Loop value.
    type(token_object), allocatable              :: list(:)   !< Words of the `in` list.
    integer(I8P)                                 :: k         !< Word counter.
    logical                                      :: is_words  !< `w in "..."`.
 
-   call for_clause(specs(level)%text, name, is_words, bounds, words, iostat, iomsg)
+   call for_values(self, specs(level)%text, name, list, is_words, iostat, iomsg)
    if (iostat /= 0_I4P) then
       iomsg = 'do for ['//specs(level)%text//']: '//iomsg
       return
    endif
    call self%symbols%save_variable(name, saved)
-   if (is_words) then
-      call split_words(words, list)
-      do k = 1_I8P, size(list, kind=I8P)
-         call self%symbols%set_string(name, list(k)%text)
-         call step
-         if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
-      enddo
-   else
-      v = bounds(1)
-      do while ((bounds(3) > 0_I8P .and. v <= bounds(2)) .or. (bounds(3) < 0_I8P .and. v >= bounds(2)))
-         call self%symbols%set_value(name, real(v, R8P), .true.)
-         call step
-         if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
-         v = v + bounds(3)
-      enddo
-   endif
+   do k = 1_I8P, size(list, kind=I8P)
+      call set_loop_variable(self, name, list(k)%text, is_words)
+      call step
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+   enddo
    call self%symbols%restore(saved)
    contains
       recursive subroutine step
@@ -607,78 +602,102 @@ contains
       if (self%loop_signal == 2_I4P) self%loop_signal = 0_I4P
       endsubroutine step
 
-      subroutine for_clause(text, var, in_words, range, list, status, message)
-      !< `var = a:b[:c]` (integers) or `var in "words"` (a string expression).
-      character(len=*),              intent(in)  :: text     !< Clause.
-      character(len=:), allocatable, intent(out) :: var      !< Variable.
-      logical,                       intent(out) :: in_words !< `in` form.
-      integer(I8P),                  intent(out) :: range(3) !< First, last, step.
-      character(len=:), allocatable, intent(out) :: list     !< Words.
-      integer(I4P),                  intent(out) :: status   !< 0 on success.
-      character(len=:), allocatable, intent(out) :: message  !< Error message.
-      character(len=:), allocatable :: parts(:) !< Range ends.
-      logical                       :: is_string !< A string.
-      integer(I4P)                  :: e      !< `=` or ` in `.
-      integer(I4P)                  :: j      !< Counter.
-      real(R8P)                     :: x      !< Bound.
-
-      status = 0_I4P
-      message = ''
-      range = [1_I8P, 0_I8P, 1_I8P]
-      list = ''
-      in_words = .false.
-      e = index(text, ' in ', kind=I4P)
-      if (e > 0_I4P .and. (index(text, '=') == 0 .or. index(text, '=') > e)) then
-         in_words = .true.
-         var = trim(adjustl(text(1:e - 1_I4P)))
-         call self%symbols%text_of(trim(adjustl(text(e + 4_I4P:))), list, is_string, status, message, &
-                                   degrees=self%figure%panels(self%figure%current)%degrees)
-         if (status == 0_I4P .and. .not. is_string) then
-            status = 1_I4P
-            message = 'a string of words is expected after in'
-         endif
-      else
-         e = index(text, '=', kind=I4P)
-         if (e == 0_I4P) then
-            status = 1_I4P
-            message = 'i = a:b[:c] or w in "words" expected'
-            return
-         endif
-         var = trim(adjustl(text(1:e - 1_I4P)))
-         call split_range(text(e + 1_I4P:), parts)
-         if (size(parts) < 2 .or. size(parts) > 3) then
-            status = 1_I4P
-            message = 'i = a:b[:c] expected'
-            return
-         endif
-         do j = 1_I4P, size(parts, kind=I4P)
-            if (trim(adjustl(parts(j))) == '*') then
-               status = 1_I4P
-               message = 'unbounded iteration is not accepted'
-               return
-            endif
-            call self%symbols%constant(trim(parts(j)), x, status, message, &
-                                       degrees=self%figure%panels(self%figure%current)%degrees)
-            if (status /= 0_I4P) return
-            if (abs(x) >= 9.0e18_R8P) then
-               status = 1_I4P
-               message = 'bound out of range'
-               return
-            endif
-            range(j) = int(x, I8P)
-         enddo
-         if (range(3) == 0_I8P) then
-            status = 1_I4P
-            message = 'the step must not be 0'
-            return
-         endif
-      endif
-      if (len(var) == 0 .or. verify(var, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
-         status = 1_I4P
-         message = 'invalid loop variable "'//var//'"'
-      endif
-      endsubroutine for_clause
    endsubroutine run_loops
+
+   subroutine for_values(self, text, var, values, words, iostat, iomsg)
+   !< The values of a `for` clause: `var = a:b[:c]` (integers, bounds truncated, `c` 1 by default) or `var in "w1 w2"`
+   !< (the words of a string expression, `words` true).
+   class(script_object),            intent(in)  :: self      !< Interpreter.
+   character(len=*),                intent(in)  :: text      !< Clause, brackets removed.
+   character(len=:), allocatable,   intent(out) :: var       !< Loop variable.
+   type(token_object), allocatable, intent(out) :: values(:) !< Values, as text.
+   logical,                         intent(out) :: words     !< `in` form: the values are strings.
+   integer(I4P),                    intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable,   intent(out) :: iomsg     !< Error message.
+   character(len=:), allocatable :: parts(:)  !< Range ends.
+   character(len=:), allocatable :: list      !< `in` words.
+   type(token_object)            :: item      !< One value.
+   logical                       :: is_string !< A string.
+   integer(I8P)                  :: range(3)  !< First, last, step.
+   integer(I8P)                  :: v         !< Value.
+   integer(I4P)                  :: e         !< `=` or ` in `.
+   integer(I4P)                  :: j         !< Counter.
+   real(R8P)                     :: x         !< Bound.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(values(0))
+   words = .false.
+   e = index(text, ' in ', kind=I4P)
+   if (e > 0_I4P .and. (index(text, '=') == 0 .or. index(text, '=') > e)) then
+      words = .true.
+      var = trim(adjustl(text(1:e - 1_I4P)))
+      call self%symbols%text_of(trim(adjustl(text(e + 4_I4P:))), list, is_string, iostat, iomsg, &
+                                degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat /= 0_I4P) return
+      if (.not. is_string) then
+         call fail('a string of words is expected after in', iostat, iomsg)
+         return
+      endif
+      call split_words(list, values)
+   else
+      e = index(text, '=', kind=I4P)
+      if (e == 0_I4P) then
+         call fail('i = a:b[:c] or w in "words" expected', iostat, iomsg)
+         return
+      endif
+      var = trim(adjustl(text(1:e - 1_I4P)))
+      call split_range(text(e + 1_I4P:), parts)
+      if (size(parts) < 2 .or. size(parts) > 3) then
+         call fail('i = a:b[:c] expected', iostat, iomsg)
+         return
+      endif
+      range = [1_I8P, 0_I8P, 1_I8P]
+      do j = 1_I4P, size(parts, kind=I4P)
+         if (trim(adjustl(parts(j))) == '*') then
+            call fail('unbounded iteration is not accepted', iostat, iomsg)
+            return
+         endif
+         call self%symbols%constant(trim(parts(j)), x, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) return
+         if (abs(x) >= 9.0e18_R8P) then
+            call fail('bound out of range', iostat, iomsg)
+            return
+         endif
+         range(j) = int(x, I8P)
+      enddo
+      if (range(3) == 0_I8P) then
+         call fail('the step must not be 0', iostat, iomsg)
+         return
+      endif
+      v = range(1)
+      do while ((range(3) > 0_I8P .and. v <= range(2)) .or. (range(3) < 0_I8P .and. v >= range(2)))
+         item%text = int_str(v)
+         call push(values, item)
+         v = v + range(3)
+      enddo
+   endif
+   if (len(var) == 0 .or. verify(var, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
+      call fail('invalid loop variable "'//var//'"', iostat, iomsg)
+   endif
+   endsubroutine for_values
+
+   subroutine set_loop_variable(self, name, value, is_string)
+   !< Set the loop variable `name` to `value`: a string (a word) or an integer in decimal.
+   class(script_object), intent(inout) :: self      !< Interpreter.
+   character(len=*),     intent(in)    :: name      !< Variable.
+   character(len=*),     intent(in)    :: value     !< Value.
+   logical,              intent(in)    :: is_string !< A string.
+   integer(I8P)                        :: v         !< Integer value.
+
+   if (is_string) then
+      call self%symbols%set_string(name, value)
+   else
+      read(value, *) v
+      call self%symbols%set_value(name, real(v, R8P), .true.)
+   endif
+   endsubroutine set_loop_variable
 
    recursive subroutine while_block(self, statement, iostat, iomsg)
    !< gnuplot `while (condition) { ... }`: the body run while the condition (a number, not 0) holds.
@@ -1279,6 +1298,10 @@ contains
    logical                                      :: has_title !< Title given (or notitle).
    logical                                      :: is_function !< The item is a function, else a data file.
    logical                                      :: is_head     !< `title columnhead[(N)]`.
+   integer(I4P)                                 :: head_column !< Column of `title columnhead(N)`.
+   type(loop_level), allocatable                :: levels(:)   !< `for [...]` clauses of the current item.
+   integer(I4P)                                 :: item_start  !< First token of an iterated item.
+   logical                                      :: skip_item   !< An iteration without values.
    logical                                      :: polar_ok !< The item can be drawn on a polar panel.
    logical                                      :: headed    !< The first row of each dataset is a header.
    integer(I4P)                                 :: title_column !< Header column titling the item: 0 the y one,
@@ -1320,11 +1343,27 @@ contains
       call fail('plot: nothing to plot', iostat, iomsg)
       return
    endif
+   allocate(levels(0))
    do
       ! data file or function
       if (i > size(tokens, kind=I4P)) then
          call fail('plot: missing item after ","', iostat, iomsg)
          return
+      endif
+      ! plot for [...] item: the item parsed again for each value of its clauses
+      if (size(levels) == 0) then
+         call iteration_start
+         if (iostat /= 0_I4P) return
+         if (skip_item) then
+            ! an empty iteration: no series, as gnuplot
+            do while (i <= size(tokens, kind=I4P))
+               if (tokens(i)%kind == TOKEN_COMMA) exit
+               i = i + 1_I4P
+            enddo
+            if (i > size(tokens, kind=I4P)) exit
+            i = i + 1_I4P
+            cycle
+         endif
       endif
       is_function = tokens(i)%kind == TOKEN_WORD
       quote = ' '
@@ -1656,7 +1695,8 @@ contains
             endif
             ! columnhead_title sets title_column: called on words only (Fortran does not short-circuit .and.)
             is_head = .false.
-            if (tokens(i)%kind == TOKEN_WORD) is_head = columnhead_title(tokens(i)%text, title_column)
+            if (tokens(i)%kind == TOKEN_WORD) is_head = columnhead_title(tokens(i)%text, head_column)
+            if (is_head) title_column = head_column
             if (is_head) then
                if (is_function) then
                   call fail('plot: a function has no column header', iostat, iomsg)
@@ -1682,7 +1722,8 @@ contains
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
                        keyword(word, 'linetype', 5_I4P))) shaping = word
-            if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors)) then
+            if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
+                                  self%symbols)) then
                iomsg = 'plot: '//iomsg
                return
             endif
@@ -1779,6 +1820,13 @@ contains
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
          endassociate
+         if (size(levels) > 0) then
+            if (next_values()) then
+               i = item_start
+               cycle
+            endif
+            call iteration_end
+         endif
          if (i > size(tokens, kind=I4P)) exit
          i = i + 1_I4P
          cycle
@@ -2315,6 +2363,13 @@ contains
             panel%series(size(panel%series))%span = [bin_edges(1), bin_edges(2), 0.0_R8P, 0.0_R8P]
          endassociate
       endif
+      if (size(levels) > 0) then
+         if (next_values()) then
+            i = item_start
+            cycle
+         endif
+         call iteration_end
+      endif
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
@@ -2325,6 +2380,89 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine iteration_start
+      !< The `for [...]` clauses before the item at `i`: their values, the loop variables set to the first ones, `i` the
+      !< first token of the item. No value in a clause: `skip_item`.
+      type(loop_level), allocatable :: grown(:) !< Levels, one more.
+      type(loop_level)              :: level    !< New level.
+      integer(I4P)                  :: n        !< Levels.
+      integer(I4P)                  :: k        !< Counter.
+
+      skip_item = .false.
+      do while (i < size(tokens, kind=I4P))
+         if (tokens(i)%kind /= TOKEN_WORD) exit
+         if (tokens(i)%text /= 'for') exit
+         if (tokens(i + 1_I4P)%kind /= TOKEN_RANGE) exit
+         do k = 1_I4P, size(levels, kind=I4P)
+            if (mentions(tokens(i + 1_I4P)%text, levels(k)%name)) then
+               call fail('plot: for ['//tokens(i + 1_I4P)%text//']: bounds depending on the outer variable '// &
+                         levels(k)%name//' are not supported in a plot (they are in do for)', iostat, iomsg)
+               return
+            endif
+         enddo
+         call for_values(self, tokens(i + 1_I4P)%text, level%name, level%values, level%words, iostat, iomsg)
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: for ['//tokens(i + 1_I4P)%text//']: '//iomsg
+            return
+         endif
+         call self%symbols%save_variable(level%name, level%saved)
+         level%pos = 1_I4P
+         if (size(level%values) == 0) skip_item = .true.
+         n = size(levels, kind=I4P)
+         allocate(grown(n + 1_I4P))
+         do k = 1_I4P, n
+            grown(k) = levels(k)
+         enddo
+         grown(n + 1_I4P) = level
+         call move_alloc(grown, levels)
+         i = i + 2_I4P
+      enddo
+      if (size(levels) == 0) return
+      if (skip_item) then
+         call iteration_end
+         return
+      endif
+      if (i > size(tokens, kind=I4P)) then
+         call fail('plot: for [...]: an item is expected', iostat, iomsg)
+         return
+      endif
+      do k = 1_I4P, size(levels, kind=I4P)
+         call set_loop_variable(self, levels(k)%name, levels(k)%values(1)%text, levels(k)%words)
+      enddo
+      item_start = i
+      endsubroutine iteration_start
+
+      function next_values() result(more)
+      !< Advance the clauses to their next values, the last clause first; false when all are done.
+      logical      :: more !< Values left.
+      integer(I4P) :: k    !< Clause.
+
+      more = .false.
+      k = size(levels, kind=I4P)
+      do while (k >= 1_I4P)
+         if (levels(k)%pos < size(levels(k)%values, kind=I4P)) then
+            levels(k)%pos = levels(k)%pos + 1_I4P
+            call set_loop_variable(self, levels(k)%name, levels(k)%values(levels(k)%pos)%text, levels(k)%words)
+            more = .true.
+            return
+         endif
+         levels(k)%pos = 1_I4P
+         call set_loop_variable(self, levels(k)%name, levels(k)%values(1)%text, levels(k)%words)
+         k = k - 1_I4P
+      enddo
+      endfunction next_values
+
+      subroutine iteration_end
+      !< Restore the loop variables (the innermost first) and forget the clauses.
+      integer(I4P) :: k !< Clause.
+
+      do k = size(levels, kind=I4P), 1_I4P, -1_I4P
+         call self%symbols%restore(levels(k)%saved)
+      enddo
+      deallocate(levels)
+      allocate(levels(0))
+      endsubroutine iteration_end
+
       function gauge_range(token) result(ok)
       !< The gauge scale of the range token `[A:B]`, both ends numbers; fails the plot if not.
       type(token_object), intent(in) :: token !< Range token.
@@ -5063,6 +5201,31 @@ contains
    ok = len_trim(inside) > 0
    endfunction parenthesized
 
+   pure function mentions(text, name) result(yes)
+   !< Whether the identifier `name` appears in `text` (not as part of a longer identifier).
+   character(len=*), intent(in) :: text !< Text.
+   character(len=*), intent(in) :: name !< Identifier.
+   logical                      :: yes  !< Mentioned.
+   character(len=*), parameter  :: WORD = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789'
+   integer(I4P)                 :: k    !< Occurrence.
+   integer(I4P)                 :: from !< Search start.
+
+   yes = .false.
+   from = 1_I4P
+   do
+      k = index(text(from:), name, kind=I4P)
+      if (k == 0_I4P) return
+      k = from + k - 1_I4P
+      yes = .true.
+      if (k > 1_I4P) yes = scan(text(k - 1_I4P:k - 1_I4P), WORD) == 0
+      if (yes .and. k + len(name) <= len(text)) then
+         yes = scan(text(k + len(name):k + len(name)), WORD) == 0
+      endif
+      if (yes) return
+      from = k + 1_I4P
+   enddo
+   endfunction mentions
+
    pure subroutine split_words(text, words)
    !< The blank-separated words of `text` (blanks, tabs, new lines), as gnuplot's words() and word().
    character(len=*),                intent(in)  :: text     !< Text.
@@ -5391,13 +5554,14 @@ contains
    found = len(word) > 0 .and. index(' '//words//' ', ' '//word//' ') > 0
    endfunction is_word
 
-   function next_integer(tokens, i, value, iostat, iomsg) result(ok)
+   function next_integer(tokens, i, value, iostat, iomsg, symbols) result(ok)
    !< Advance `i` to the next token, which must be an integer.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
    integer(I4P),                  intent(out)   :: value     !< Integer.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(symbols_object),          intent(in), optional :: symbols !< User variables: a constant expression too.
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: word      !< Token text.
 
@@ -5408,17 +5572,30 @@ contains
    if (ok) then
       read(word, *, iostat=iostat) value
       ok = iostat == 0_I4P
+   elseif (present(symbols)) then
+      ! a constant expression, `lc i` in a plot for
+      block
+         real(R8P)                     :: v       !< Value.
+         character(len=:), allocatable :: message !< Not a constant.
+         integer(I4P)                  :: status  !< Constant status.
+
+         call symbols%constant(word, v, status, message)
+         if (status == 0_I4P) ok = abs(v) < 2.0e9_R8P
+         if (ok) ok = v == aint(v)
+         if (ok) value = int(v, I4P)
+      endblock
    endif
    if (.not. ok) call fail('an integer was expected, found "'//word//'"', iostat, iomsg)
    endfunction next_integer
 
-   function next_real(tokens, i, value, iostat, iomsg) result(ok)
+   function next_real(tokens, i, value, iostat, iomsg, symbols) result(ok)
    !< Advance `i` to the next token, which must be a number.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
    real(R8P),                     intent(out)   :: value     !< Number.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(symbols_object),          intent(in), optional :: symbols !< User variables: a constant expression too.
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: word      !< Token text.
 
@@ -5426,6 +5603,16 @@ contains
    ok = next_word(tokens, i, word, iostat, iomsg)
    if (.not. ok) return
    ok = to_number(word, value)
+   if (.not. ok .and. present(symbols)) then
+      ! a constant expression, `lw w`
+      block
+         character(len=:), allocatable :: message !< Not a constant.
+         integer(I4P)                  :: status  !< Constant status.
+
+         call symbols%constant(word, value, status, message)
+         ok = status == 0_I4P
+      endblock
+   endif
    if (.not. ok) call fail('a number was expected, found "'//word//'"', iostat, iomsg)
    endfunction next_real
 
@@ -5526,6 +5713,9 @@ contains
             call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
             return
          endif
+      elseif (constant_column(text)) then
+         ! a constant expression, `using 1:i` in a plot for: a number is the column, a string a header name
+         continue
       else
          call fail('using: field "'//text//'" is neither a column number, a "header" nor a parenthesized '// &
                    'expression (write ($2*1e3), not $2*1e3)', iostat, iomsg)
@@ -5564,6 +5754,30 @@ contains
       enddo
       yes = k == len(text, kind=I4P)
       endfunction is_parenthesized
+      function constant_column(expression) result(ok)
+      !< Whether `expression` is a constant giving a column (a whole number >= 0) or a header name; `field` set to it.
+      character(len=*), intent(in)  :: expression !< Field text.
+      logical                       :: ok         !< A constant column.
+      character(len=:), allocatable :: value      !< Its value.
+      character(len=:), allocatable :: message    !< Not a constant.
+      integer(I4P)                  :: status     !< Constant status.
+      logical                       :: is_string  !< A string.
+      real(R8P)                     :: v          !< Number.
+
+      ok = .false.
+      call symbols%text_of(expression, value, is_string, status, message, degrees=degrees)
+      if (status /= 0_I4P) return
+      if (is_string) then
+         call field%set_name(value)
+         ok = .true.
+         return
+      endif
+      call symbols%constant(expression, v, status, message, degrees=degrees)
+      if (status /= 0_I4P) return
+      if (v < 0.0_R8P .or. v > 1.0e9_R8P .or. v /= aint(v)) return
+      call field%set_column(int(v, I4P))
+      ok = .true.
+      endfunction constant_column
    endsubroutine parse_using
 
    pure subroutine apply_line_style(styles, id, line, colors)
@@ -5645,7 +5859,7 @@ contains
         .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)
    endfunction is_line_option
 
-   function line_option(tokens, i, line, iostat, iomsg, colors) result(ok)
+   function line_option(tokens, i, line, iostat, iomsg, colors, symbols) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
    !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lc palette [z|cb V|frac F]` (markers,
    !< the value in `line%palette`), `lt N` (linetype color N), `lw W`,
@@ -5656,6 +5870,7 @@ contains
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    character(len=7),              intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
+   type(symbols_object),          intent(in), optional :: symbols   !< User variables: `lc i`, `lw w`.
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: word      !< Property word.
    integer(I4P)                                 :: number    !< Integer value.
@@ -5715,27 +5930,27 @@ contains
          line%lc = tokens(i)%text
       else
          i = i - 1_I4P
-         ok = next_integer(tokens, i, number, iostat, iomsg)
+         ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
          if (ok) line%lc = default_color(number, colors)
       endif
    elseif (word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) then
-      ok = next_integer(tokens, i, number, iostat, iomsg)
+      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok) line%lc = default_color(number, colors)
    elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
-      ok = next_real(tokens, i, value, iostat, iomsg)
+      ok = next_real(tokens, i, value, iostat, iomsg, symbols)
       if (ok) line%lw = value
    elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
-      ok = next_integer(tokens, i, number, iostat, iomsg)
+      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok) line%dt = number
    elseif (word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) then
-      ok = next_integer(tokens, i, number, iostat, iomsg)
+      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok .and. number < 0_I4P) then
          call fail('pt needs a point type >= 0, not '//int_str(int(number, I8P)), iostat, iomsg)
          ok = .false.
       endif
       if (ok) line%pt = number
    else
-      ok = next_real(tokens, i, value, iostat, iomsg)
+      ok = next_real(tokens, i, value, iostat, iomsg, symbols)
       if (ok) line%ps = value
    endif
    endfunction line_option

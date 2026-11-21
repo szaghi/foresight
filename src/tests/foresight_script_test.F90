@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(101)                           !< Per-check outcome.
+logical                       :: test_passed(102)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1713,6 +1713,51 @@ test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 open(newunit=unit, file='foresight_script_test_blocks.txt')
 close(unit, status='delete')
 
+! plot for, as gnuplot 6.0: an item per value, titles as written, colors advancing, '' the previous file
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 1 2 3', '2 2 3 4', '3 3 4 5'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("plot for [i=2:4] '"//data_file//"' u 1:i w l", iostat, iomsg)
+test_passed(102) = iostat == 0_I4P
+if (test_passed(102)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(102) = size(panel%series) == 3
+      if (test_passed(102)) test_passed(102) = panel%series(1)%title == "'"//data_file//"' u 1:i" .and. &
+                                               panel%series(3)%y(3) == 5.0_R8P .and. &
+                                               panel%series(1)%style%color == '#9400d3' .and. &
+                                               panel%series(3)%style%color == '#56b4e9'
+   endassociate
+endif
+call interpreter%run_text("plot for [i=2:3] '"//data_file//"' u 1:i t sprintf('col %d', i) lc i, "// &
+                          "for [i=4:2:-1] '' u 1:i, for [f in '"//data_file//" "//data_file//"'] f u 1:2, "// &
+                          "for [i=3:1] x, for [i=1:2] for [j=1:2] i*j*x", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(102) = test_passed(102) .and. iostat == 0_I4P
+if (test_passed(102)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(102) = size(panel%series) == 11
+      if (test_passed(102)) test_passed(102) = panel%series(1)%title == 'col 2' .and. &
+                                               panel%series(2)%title == 'col 3' .and. &
+                                               panel%series(1)%style%color == '#009e73' .and. &
+                                               panel%series(2)%style%color == '#56b4e9' .and. &
+                                               panel%series(3)%y(1) == 3.0_R8P .and. panel%series(5)%y(1) == 1.0_R8P .and. &
+                                               panel%series(6)%title == 'f u 1:2' .and. &
+                                               panel%series(11)%title == 'i*j*x'
+   endassociate
+endif
+block
+   real(R8P) :: v     !< Value.
+   logical   :: found !< Variable found.
+
+   call interpreter%symbols%value_of('i', v, found)
+   test_passed(102) = test_passed(102) .and. .not. found
+endblock
+call interpreter%run_text("plot for [i=1:2] for [j=1:i] x", iostat, iomsg)
+test_passed(102) = test_passed(102) .and. iostat /= 0_I4P .and. index(iomsg, 'depending on the outer variable i') > 0
+open(newunit=unit, file=data_file)
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1721,7 +1766,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,101L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,102L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
