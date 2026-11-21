@@ -27,12 +27,14 @@ that did what it says.
 | **uns**et *option* | reset an option |
 | *name* `=` *expression* | a [user variable](#user-variables-and-functions): the value now, integer or real |
 | *name*`(`*p1*`, ...) =` *expression* | a [user function](#user-variables-and-functions) |
+| **fit** [`[min:max]`] *f(x)* `'file'` [*modifiers*] `via` *a*`,` *b* ... | [fit](#fit) the parameters of a function to data |
 
 ## `set` / `unset` options
 
 | Option | `set` | `unset` |
 |---|---|---|
 | **tit**le `"text"` | panel title | no title |
+| `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
@@ -293,6 +295,44 @@ plot 'run.dat' u 5:2 bins=20 binvalue=avg with histeps        # the mean residua
 ```
 
 The [cookbook](/manual/cookbook#a-histogram-of-a-sample) overlays the density of the same sample.
+
+## Fit
+
+```gnuplot
+f(x) = c*x**p
+fit f(x) 'convergence.dat' using 1:2 via c, p                 # c and p fitted, c_err, p_err, FIT_* set
+fit [0.01:0.1] a*x + b 'run.dat' using 1:2:3 via a, b         # an x range, the third column the errors of y
+```
+
+`fit` is gnuplot 6.0's: nonlinear least squares by the Marquardt-Levenberg method, translated from gnuplot's sources
+step by step (prescaled parameters, one-sided derivatives, Givens rotations, the same lambda updates and stopping
+rule), so the parameters, their errors and the iterations agree with gnuplot's to its printed digits.
+
+- The model is any expression of `x`, user functions included; the parameters after `via` are user variables: an
+  undefined one starts at 1. After the fit they hold the fitted values.
+- Modifiers: `using X:Y` (the default `1:2`) or `X:Y:YERROR` (`yerrors` optional), the weights `1/YERROR**2`;
+  `unitweights` with two columns (three are gnuplot's x:y:z, refused);
+  `index`, `every`; a range `[min:max]` before the function keeps the points with x inside.
+- Set after a fit: *name*`_err`, the asymptotic standard errors (scaled by sqrt(WSSR/ndf), gnuplot's `errorscaling`),
+  `FIT_NDF`, `FIT_WSSR`, `FIT_STDFIT`, `FIT_P`, `FIT_NITER`, `FIT_CONVERGED`. `FIT_LIMIT` and `FIT_MAXITER`, when
+  defined, set the stopping change and the most iterations.
+- On failure (a singular matrix, an undefined model value) the statement fails with gnuplot's message and the
+  parameters keep their values.
+
+**Silent by default**, unlike gnuplot, which reports on the terminal and in `fit.log`:
+
+| `set fit` option | Effect |
+|---|---|
+| `quiet` (default) \| `results` \| `brief` | no report; gnuplot's results on the standard error; with the progress lines too |
+| `logfile "file"` \| `nologfile` (default) | append the full report to a file; no log file |
+| `limit E` \| `limit_abs E` | stop when chi-square changes by less than E times itself (1e-5) plus `limit_abs` (0) |
+| `maxiter N` \| `maxiter default` | at most N iterations; no limit |
+| `start-lambda L` \| `lambda-factor F` | the first lambda (gnuplot's estimate by default); its factor (10) |
+| [`no`]`prescale` \| [`no`]`errorscaling` \| [`no`]`errorvariables` | parameters scaled by their initial values; errors scaled by the reduced chi-square; *name*`_err` set (all on) |
+
+Not supported: `via 'file'`, more than one independent variable, `set fit verbose`, `set fit covariancevariables`.
+The [cookbook](/manual/cookbook#fitting-a-model) fits an order of accuracy; Fortran programs call `fit` directly
+([library](library.md#fitting-a-model)).
 
 ## Second y axis
 
@@ -1006,7 +1046,7 @@ text). Zooming magnifies the cells with the data.
 ## Not supported
 
 Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `splot`,
-`fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
+`fit` beyond [its subset](#fit), log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the

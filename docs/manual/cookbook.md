@@ -294,6 +294,20 @@ Inline ranges set x, then y, for that plot only: `set xrange` is left alone. `t=
 
 A function is sampled over the x range of the data of the same plot.
 
+### Fitting a model
+
+<<< @/examples/snippets/cb_fit.gp{gnuplot}
+
+<<< @/examples/output/cb_fit.txt{text}
+
+<Plot name="cb_fit" svg :width="560" :height="320" />
+
+`fit` adjusts the parameters after `via` (user variables; an undefined one starts at 1) by gnuplot's
+Marquardt-Levenberg method, to gnuplot's digits, and sets `c_err`, `p_err` and the `FIT_*` variables. It is silent
+unless asked: `set fit results` prints gnuplot's report, `set fit logfile 'fit.log'` appends it to a file. Here the
+slope `p` is the observed order of accuracy of a scheme. From Fortran, `call fit(model, x, y, params)` does the same
+([library](../guide/library.md)).
+
 ### Histogram and distribution
 
 <<< @/examples/snippets/cb_smooth.gp{gnuplot}

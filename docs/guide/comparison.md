@@ -21,7 +21,8 @@ none of them covers: pure Fortran, interactive pages that need nothing to view, 
 | Functions of x (`plot sin(x)`) | yes | yes | yes (`--equation`) | yes | no | no | no |
 | 2D plot styles | every gnuplot 2D style (lines to spider plots, heatmaps, polar); pies, gauges, readouts | all | through gnuplot | through gnuplot | through matplotlib | many | many |
 | Smoothing, histograms | `smooth`, 11 filters; `bins` | `smooth`, 13 filters; `bins` | through gnuplot | through gnuplot | histograms | histograms | histograms |
-| 3D, contours, fitting | no | yes | through gnuplot | through gnuplot | contours, 3D; no fit | contours, 3D axes; no fit | contours, 3D lines; no fit |
+| Fitting | `fit`, gnuplot's Marquardt-Levenberg, in scripts and from Fortran | `fit` | through gnuplot | through gnuplot | no | no | no |
+| 3D, contours | no | yes | through gnuplot | through gnuplot | contours, 3D | contours, 3D axes | contours, 3D lines |
 
 The rows on other projects summarise their documentation as of October 2026
 ([feedgnuplot](https://github.com/dkogan/feedgnuplot), [fplotlib](https://github.com/certik/fplotlib),
@@ -43,5 +44,5 @@ The rows on other projects summarise their documentation as of October 2026
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.
 - **Raster output** (PNG), contours, maps or 3D from pure Fortran: fplotlib, fortplot.
-- **The full gnuplot language** (`fit`, `splot`, string variables, loops, recursive functions): gnuplot itself.
+- **The full gnuplot language** (`splot`, string variables, loops, recursive functions): gnuplot itself.
 - **Fields on meshes**: ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran).

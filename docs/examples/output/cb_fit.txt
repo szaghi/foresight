@@ -1,0 +1,20 @@
+$ foresight cb_fit.gp
+
+After 9 iterations the fit converged.
+final sum of squares of residuals : 1.80725e-11
+rel. change during last iteration : -5.36663e-11
+
+degrees of freedom    (FIT_NDF)                        : 3
+rms of residuals      (FIT_STDFIT) = sqrt(WSSR/ndf)    : 2.45442e-06
+variance of residuals (reduced chisquare) = WSSR/ndf   : 6.02417e-12
+
+Final set of parameters            Asymptotic Standard Error
+=======================            ==========================
+c               = 0.20607          +/- 0.002962     (1.438%)
+p               = 1.99174          +/- 0.006114     (0.307%)
+
+correlation matrix of the fit parameters:
+                c      p      
+c               1.000 
+p               0.997  1.000 
+foresight: cb_fit.svg

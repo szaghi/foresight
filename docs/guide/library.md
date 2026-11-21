@@ -177,6 +177,43 @@ call gp%execute('replot', iostat, iomsg)        ! one statement
 After a run, `gp%output` is the current output file, and `gp%data_files(k)%text`, for `k` up to
 `size(gp%data_files)`, are the data files read.
 
+## Fitting a model
+
+`fit` is gnuplot's `fit` for a Fortran function `model(x, p)`: the same Marquardt-Levenberg steps, so the same
+parameters, errors and iterations as gnuplot to its printed digits. It is silent unless `report` is given:
+
+```fortran
+use foresight, only : fit, fit_result
+real(R8P)        :: h(5) = [0.1_R8P, 0.05_R8P, 0.025_R8P, 0.0125_R8P, 0.00625_R8P]
+real(R8P)        :: e(5) = [2.10e-3_R8P, 5.30e-4_R8P, 1.29e-4_R8P, 3.33e-5_R8P, 8.20e-6_R8P]
+real(R8P)        :: q(2) = [1.0_R8P, 1.0_R8P]    ! initial c, p; fitted on return
+type(fit_result) :: r
+
+call fit(power_law, h, e, q, names=['c', 'p'], result=r)                  ! silent
+call fit(power_law, h, e, q, names=['c', 'p'], report='-')                ! gnuplot's report on the standard error
+call fit(power_law, h, e, q, names=['c', 'p'], report='fit.log')          ! appended to a file
+if (len(r%message) > 0) print '(A)', r%message   ! e.g. Singular matrix in Invert_RtR; q unchanged
+contains
+   function power_law(x, p) result(f)
+   real(R8P), intent(in) :: x, p(:)
+   real(R8P)             :: f
+   f = p(1) * x**p(2)
+   endfunction power_law
+```
+
+| Argument | Purpose |
+|---|---|
+| `model` | `function model(x, p)`, real `x`, real `p(:)`: the model at `x` (interface `model_function`) |
+| `x`, `y` | the data |
+| `params` | initial values in, fitted values out (unchanged on failure) |
+| `names` | parameter names in the report (`p1`, `p2`, ... if absent) |
+| `err` | errors of `y`: weights `1/err**2` (unit weights if absent) |
+| `settings` | `fit_settings`: `limit` (1e-5), `limit_abs`, `maxiter` (0, none), `start_lambda`, `lambda_factor` (10), `prescale`, `errorscaling` (gnuplot's `set fit` options) |
+| `result` | `fit_result`: `params`, `errors` (gnuplot's `a_err`), `correlation`, `wssr`, `stdfit`, `p`, `ndf`, `niter`, `converged`, `message` (empty on success), `progress` |
+| `report` | `'-'` the standard error (progress lines and results, as gnuplot's terminal), a file name (appended, gnuplot's `fit.log`) |
+
+Scripts fit user functions with `fit f(x) 'file' using 1:2 via a, b` ([gnuplot subset](gnuplot-subset.md#fit)).
+
 ## Errors
 
 The figure API stops with `error stop` on programming errors: `x` and `y` of different sizes, an unsupported
