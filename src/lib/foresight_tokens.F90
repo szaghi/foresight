@@ -226,7 +226,12 @@ contains
             if (statement(i:i) == '\' .and. i < n) then
                i = i + 1_I4P
                if (statement(i:i) == 't' .or. statement(i:i) == 'n') then
-                  token%text = token%text//merge(achar(9), achar(10), statement(i:i) == 't')
+                  ! if/else, not merge(achar(9), achar(10), ...): ifx 2026.2 aborts on that (internal error #5623)
+                  if (statement(i:i) == 't') then
+                     token%text = token%text//achar(9)
+                  else
+                     token%text = token%text//achar(10)
+                  endif
                   i = i + 1_I4P
                   cycle
                endif
