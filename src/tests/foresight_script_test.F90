@@ -7,7 +7,7 @@ program foresight_script_test
 !< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference file.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : I4P, R8P, script_object
+use foresight, only : fit, fit_result, I4P, R8P, script_object
 use foresight_ticks, only : MINOR_AUTO, TICS_NONE
 use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(96)                           !< Per-check outcome.
+logical                       :: test_passed(97)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1526,6 +1526,27 @@ call interpreter%run_text("set terminal dumb size 60,14; set output 'foresight_s
 test_passed(96) = iostat == 0_I4P .and. consecutive('foresight_script_test_x2.txt', ['T  ', 'top', '-10'])
 open(newunit=unit, file='foresight_script_test_x2.txt')
 close(unit, status='delete')
+
+! fit from Fortran, as gnuplot 6.0 (fit c*h**p, print): the same parameters, errors, WSSR and iterations to 15 digits
+block
+   real(R8P)        :: h(5) = [0.1_R8P, 0.05_R8P, 0.025_R8P, 0.0125_R8P, 0.00625_R8P] !< Mesh sizes.
+   real(R8P)        :: e(5) = [2.10e-3_R8P, 5.30e-4_R8P, 1.29e-4_R8P, 3.33e-5_R8P, 8.20e-6_R8P] !< Errors.
+   real(R8P)        :: q(2) !< Parameters.
+   type(fit_result) :: r    !< Outcome.
+
+   q = 1.0_R8P
+   call fit(power_law, h, e, q, names=['c', 'p'], result=r)
+   test_passed(97) = len(r%message) == 0 .and. near15(q(1), 0.206069615792187_R8P) .and. &
+                     near15(q(2), 1.99174433662703_R8P) .and. near15(r%errors(1), 0.00296226159940231_R8P) .and. &
+                     near15(r%errors(2), 0.00611411344647372_R8P) .and. r%ndf == 3 .and. &
+                     near15(r%wssr, 1.80725180545772e-11_R8P) .and. near15(r%stdfit, 2.45441901167243e-06_R8P) .and. &
+                     r%niter == 9 .and. r%converged
+   ! a zero start is 1e-30, unscaled, as gnuplot: 69 iterations to the same minimum
+   q = [0.0_R8P, 1.0_R8P]
+   call fit(power_law, h, e, q, result=r)
+   test_passed(97) = test_passed(97) .and. len(r%message) == 0 .and. near15(q(1), 0.206069699039651_R8P) .and. &
+                     near15(q(2), 1.9917445095641_R8P) .and. r%niter == 69
+endblock
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1543,7 +1564,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,96L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,97L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1596,6 +1617,25 @@ contains
    enddo
    close(u)
    endfunction consecutive
+
+   elemental function near15(a, b) result(close)
+   !< Whether `a` is `b` to 1e-10 relative: fits match gnuplot's 15 printed digits with gfortran, 12 to 14 with
+   !< nvfortran (its x**p rounds differently in the last bit).
+   real(R8P), intent(in) :: a     !< Value.
+   real(R8P), intent(in) :: b     !< Reference.
+   logical               :: close !< Close.
+
+   close = abs(a - b) <= 1.0e-10_R8P * max(1.0e-300_R8P, abs(b))
+   endfunction near15
+
+   function power_law(x, q) result(f)
+   !< c * x**p, the model of the fit check.
+   real(R8P), intent(in) :: x    !< Mesh size.
+   real(R8P), intent(in) :: q(:) !< c, p.
+   real(R8P)             :: f    !< Error.
+
+   f = q(1) * x**q(2)
+   endfunction power_law
 
    elemental function near(a, b) result(close)
    !< Whether `a` is `b` to 1e-5 relative (gnuplot prints 6 significant digits).

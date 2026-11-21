@@ -4,6 +4,7 @@ module foresight
 !<
 !< Library entry point: re-exports the public API of all foresight modules.
 use foresight_figure, only : figure_object
+use foresight_fit, only : fit, fit_report, fit_result, fit_settings, model_function
 use foresight_fingerprint, only : file_fingerprint
 use foresight_script, only : script_object
 use foresight_sys, only : rename_file, sleep_ms
@@ -14,6 +15,12 @@ implicit none
 private
 ! expose foresight figure (gnuplot-like API)
 public :: figure_object
+! expose gnuplot's fit (Marquardt-Levenberg) for Fortran models
+public :: fit
+public :: fit_report
+public :: fit_result
+public :: fit_settings
+public :: model_function
 ! expose foresight gnuplot-subset interpreter
 public :: script_object
 ! expose foresight system services
