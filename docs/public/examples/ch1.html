@@ -676,6 +676,11 @@
     this.y2 = group.hasAttribute("data-y2") ? new Axis(numbers(group.getAttribute("data-y2")),
       logs[2] === 1, readTics(group.getAttribute("data-y2tics"),
         group.getAttribute("data-y2format"))) : null;
+    // second x axis: only when drawn, its series share the unit view as well
+    this.x2 = group.hasAttribute("data-x2") ? new Axis(numbers(group.getAttribute("data-x2")),
+      group.getAttribute("data-x2log") === "1", readTics(group.getAttribute("data-x2tics"),
+        group.getAttribute("data-x2format"))) : null;
+    this.x2mirror = group.getAttribute("data-x2mirror") === "1";
     // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
     this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
     this.fontSize = Number(group.getAttribute("data-font-size"));
@@ -689,6 +694,7 @@
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
     this.y2ticks = group.querySelector(".fs-y2ticks");
+    this.x2ticks = group.querySelector(".fs-x2ticks");
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.marks = group.querySelector(".fs-marks");
@@ -699,7 +705,7 @@
     this.original = [this.gridGroup.innerHTML, this.xticks.innerHTML, this.yticks.innerHTML,
       this.caps ? this.caps.innerHTML : "", this.y2ticks ? this.y2ticks.innerHTML : "",
       this.marks ? this.marks.innerHTML : "", this.heads ? this.heads.innerHTML : "",
-      this.labels ? this.labels.innerHTML : ""];
+      this.labels ? this.labels.innerHTML : "", this.x2ticks ? this.x2ticks.innerHTML : ""];
     this.view = {u0: 0, u1: 1, v0: 0, v1: 1};
     this.history = [];
     this.hidden = {};  // series numbers hidden by a click on their key entry
@@ -841,6 +847,7 @@
       if (this.marks) this.marks.innerHTML = this.original[5];
       if (this.heads) this.heads.innerHTML = this.original[6];
       if (this.labels) this.labels.innerHTML = this.original[7];
+      if (this.x2ticks) this.x2ticks.innerHTML = this.original[8];
     } else {
       this.drawTicks();
       this.drawCaps();
@@ -994,6 +1001,7 @@
       if (self.polarGrid) return;
       line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
     });
+    this.drawX2Ticks();
     if (!this.y2ticks) return;
     clear(this.y2ticks);
     this.y2.ticks(v.v0, v.v1, h).forEach(function (t) {
@@ -1008,6 +1016,27 @@
       if (t.major) {
         label(self.y2ticks, self.right + GAP + (y2t.out ? TICK_MAJOR : 0), p + 0.35 * fs, t,
           "start");
+      }
+    });
+  };
+
+  // second x axis ticks above the top border (mirror of the x2 part of draw_frame)
+  Panel.prototype.drawX2Ticks = function () {
+    var self = this, v = this.view, fs = this.fontSize, w = this.right - this.left;
+    if (!this.x2ticks) return;
+    clear(this.x2ticks);
+    var x2t = this.x2.tics || {}, s2 = x2t.out ? -1 : 1;
+    this.x2.ticks(v.u0, v.u1, w).forEach(function (t) {
+      var p = self.left + (self.x2.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
+      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      if (p < self.left - 0.5 || p > self.right + 0.5) return;
+      line(self.x2ticks, p, self.top, p, self.top + s2 * length, FRAME_COLOR, 1);
+      if (self.x2mirror) {
+        line(self.x2ticks, p, self.bottom, p, self.bottom - s2 * length, FRAME_COLOR, 1);
+      }
+      if (t.major) {
+        label(self.x2ticks, p, self.top - (x2t.out ? TICK_MAJOR : 0) - GAP - 0.25 * fs, t,
+          "middle");
       }
     });
   };
@@ -1198,7 +1227,8 @@
       c = panel.unitAt(p);
       readout.textContent = "x = " + shortNumber(panel.x.toData(c.u)) +
         "   y = " + shortNumber(panel.y.toData(c.v)) +
-        (panel.y2 ? "   y2 = " + shortNumber(panel.y2.toData(c.v)) : "");
+        (panel.y2 ? "   y2 = " + shortNumber(panel.y2.toData(c.v)) : "") +
+        (panel.x2 ? "   x2 = " + shortNumber(panel.x2.toData(c.u)) : "");
     }
 
     svg.addEventListener("contextmenu", function (evt) { evt.preventDefault(); });

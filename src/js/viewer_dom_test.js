@@ -6,8 +6,8 @@
 // entry, and neither zoom nor follow mode touch it; boxes.html, boxes hidden by their key entry; and
 // histograms.html, text labels of the data as x ticks; theme_vfd.html, ticks redrawn in the theme color;
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
-// with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom. The page
-// is parsed by linkedom; the SVG
+// with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
+// second x axis ticks redrawn by a zoom. The page is parsed by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
 //
@@ -232,6 +232,20 @@ check("a zoom redraws the heads and moves the labels", box(0)[2] < 1 && heads.in
 key("a");
 check("autoscale restores heads and labels", heads.innerHTML === headsHome &&
   Number(labels.querySelector(".fs-label").getAttribute("x")) === x0);
+
+// a second x axis: its ticks on the top border, redrawn for the x window by a zoom, back to the original at autoscale
+page = strip(path.join(__dirname, "..", "tests", "goldens", "x2.html"));
+p = load("");
+var x2ticks = panel(0).querySelector(".fs-x2ticks"), x2Home = x2ticks.innerHTML;
+function x2labels() {
+  return Array.prototype.map.call(x2ticks.querySelectorAll("text"), function (t) { return t.textContent; });
+}
+check("x2 tick labels on the top border", x2labels().join("|") === "0|50|100|150|200|250|300");
+wheel(0);
+check("a zoom redraws the x2 ticks for the x window", box(0)[2] < 1 && x2ticks.innerHTML !== x2Home &&
+  x2labels().length > 0);
+key("a");
+check("autoscale restores the x2 ticks", x2ticks.innerHTML === x2Home);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

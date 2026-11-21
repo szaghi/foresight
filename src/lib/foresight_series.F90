@@ -68,6 +68,7 @@ type :: series_object
                                                     !< image.
    type(style_object)            :: style !< Drawing style.
    logical                       :: y2 = .false. !< On the second y axis (gnuplot `axes x1y2`), else on the first.
+   logical                       :: x2 = .false. !< On the second x axis (gnuplot `axes x2y1`), else on the first.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

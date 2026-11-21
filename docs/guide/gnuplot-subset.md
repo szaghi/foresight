@@ -33,9 +33,9 @@ that did what it says.
 | Option | `set` | `unset` |
 |---|---|---|
 | **tit**le `"text"` | panel title | no title |
-| **xl**abel / **yl**abel / **y2l**abel `"text"` | axis label (`y2` on the right) | no label |
-| **xr**ange / **yr**ange / **y2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
-| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
+| **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
+| **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
+| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
 | **gr**id [**po**lar [`STEP`]\|**spider**plot] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
@@ -46,7 +46,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` is off by default, see [below](#second-y-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **dataf**ile **mis**sing [`"string"`\|`NaN`] | the cells holding `string` are missing data: a point reading one is left out, its line not broken, see [Data Files](data-files#missing-data-and-comments); no argument: none | none |
@@ -56,7 +56,7 @@ that did what it says.
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`]\|[`transparent`] `pattern` [`N`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `pattern N` one of the 8 patterns of gnuplot's svg terminal, cycling over the filled items from N; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
-| **mxti**cs / **myti**cs / **my2ti**cs / **mcbti**cs [`N`\|`default`] | minor ticks: `N` intervals between major ticks, gnuplot's count without it; `default`: by default (none, 2..9 on log axes); see [below](#ticks-and-label-formats) | no minor ticks |
+| **mxti**cs / **myti**cs / **my2ti**cs / **mx2ti**cs / **mcbti**cs [`N`\|`default`] | minor ticks: `N` intervals between major ticks, gnuplot's count without it; `default`: by default (none, 2..9 on log axes); see [below](#ticks-and-label-formats) | no minor ticks |
 | `paxis` `N` `range [min:max]`\|`tics [...]`\|`label "text"` | parallel axis N of the [parallel axis and spider plots](#parallel-axes-and-spider-plots): its range (autoscaled to its values, not extended), ticks (off by default), label | `unset paxis N tics`: no ticks |
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
@@ -83,8 +83,8 @@ that did what it says.
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
 plot 'file' [using SPEC] [index N] [every N] [smooth FILTER] [with STYLE] [title "text" | notitle]
-            [axes x1y1|x1y2] [lc [rgb] "color" | lc N | lc [rgb] variable] [lw W] [dt N] [ps S], ...
-plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2] [lc ...] [lw W] [dt N] [ps S], ...
+            [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable] [lw W] [dt N] [ps S], ...
+plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
 Inline ranges `[min:max]` before the first item set the x range, then the y range, of that plot only, over `set
@@ -114,7 +114,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
-| **ax**es `x1y1` / `x1y2` | plot against the first (default) or the [second y axis](#second-y-axis) |
+| **ax**es `x1y1` / `x1y2` / `x2y1` / `x2y2` | plot against the first axes (default), the [second y axis](#second-y-axis), the [second x axis](#second-x-axis), or both second axes |
 | `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the color of linetype `N` |
 | `lc` [**rgb**] **var**iable | a color per point from the last `using` column (`using 1:2:3`): the linetype color of its number (cycling as `lc N`), or with `rgb` the 24-bit color `0xRRGGBB`; with `lines` (each segment in the color of its end point, the key sample in the first point's), `points`, `linespoints` and `impulses`, not with `smooth` |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
@@ -275,6 +275,23 @@ mirrored on the right unless `set ytics nomirror`. The axis is drawn only when i
 ends; `y2label` reads upward on the right, as `ylabel` on the left. In the HTML page the y2 ticks follow the zoom and
 the readout shows the y2 value too.
 
+## Second x axis
+
+```gnuplot
+set xrange [0:100]; set xtics nomirror; set xlabel 'frequency [Hz]'
+set x2range [0:2]; set x2tics 0.25; set x2label 'Strouhal number'
+plot 'spectrum.dat' w impulses
+```
+
+The x2 axis is the top border's, as the y2 axis is the right one's: `axes x2y1` (or `x2y2`) scales an item on it,
+autoscaled on those items alone, with its own `x2range`, `logscale x2`, `format x2`, `mx2tics`. Its ticks and labels
+are off until `set x2tics`, not mirrored at the bottom (`set x2tics mirror` does); `x2label` goes above the tick
+labels. As in gnuplot, `set x2tics` with no item on the axis spans the range of the first x axis, so a fixed
+`x2range` relabels the top border in another unit, as above; a function plotted on x2 is sampled over the x2 range.
+The axis is drawn when it has ticks, items or a range fixed at both ends. In the HTML page the x2 ticks follow the
+zoom and the readout shows the x2 value too. gnuplot's `set link x2 via ... inverse ...` is
+[not supported](#not-supported).
+
 ## Column headers
 
 ```gnuplot
@@ -347,7 +364,7 @@ set mytics 4             # 4 intervals between major ticks
 unset mytics             # none, also the 2..9 of a log axis
 ```
 
-`out` points the ticks (and their mirrors) outward, the plot area making room for them, `in` back inward (x, y and y2
+`out` points the ticks (and their mirrors) outward, the plot area making room for them, `in` back inward (x, y, y2 and x2
 ticks). `rotate` turns the x tick labels by 90 degrees, reading upward and right-justified; `rotate by A` by `A`
 degrees counterclockwise, left-justified unless `left`, `right` or `center` follows; `norotate` restores them. As in
 gnuplot, the glyphs of a rotated label are centred on its tick and a left-justified one at a positive angle runs up
@@ -900,8 +917,8 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-Recursive user functions, inline ranges in polar mode, the second
-x axis (`x2`, `axes x2y1`), `splot`, `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
+Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate` of the x2 tick labels, `splot`,
+`fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the

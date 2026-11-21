@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(88)                           !< Per-check outcome.
+logical                       :: test_passed(89)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -227,17 +227,24 @@ associate(panel => interpreter%figure%panels(1))
                      .not. panel%yaxis%tics%mirror .and. panel%y2_active
 endassociate
 
-! axes names: y and y2 are distinct, x2 is not supported
+! axes names: y and y2 are distinct, x2 is the second x axis
 call interpreter%init('x.html')
 call interpreter%run_text("set logscale xy2; set format y2 '%.1f'", iostat, iomsg)
 associate(panel => interpreter%figure%panels(1))
    test_passed(33) = iostat == 0_I4P .and. panel%xaxis%log .and. .not. panel%yaxis%log .and. panel%y2axis%log .and. &
                      panel%y2axis%tics%format == '%.1f' .and. .not. panel%yaxis%tics%has_format()
 endassociate
-call interpreter%run_text('set logscale x2', iostat, iomsg)
-test_passed(34) = iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2, cb expected') > 0
-call interpreter%run_text("plot '"//data_file//"' axes x2y1", iostat, iomsg)
-test_passed(35) = iostat /= 0_I4P .and. index(iomsg, 'axes x1y1 or x1y2 expected, found "x2y1"') > 0
+call interpreter%run_text("set logscale x2; set format x2 '%.2f'", iostat, iomsg)
+test_passed(34) = iostat == 0_I4P .and. interpreter%figure%panels(1)%x2axis%log .and. &
+                  interpreter%figure%panels(1)%x2axis%tics%format == '%.2f' .and. .not. interpreter%figure%panels(1)%yaxis%log
+call interpreter%run_text('set logscale z', iostat, iomsg)
+test_passed(34) = test_passed(34) .and. iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2, cb, x2 expected') > 0
+call interpreter%run_text("unset logscale; set output '"//scratch//"'; plot sin(x) axes x2y1", iostat, iomsg)
+test_passed(35) = iostat == 0_I4P .and. interpreter%figure%panels(1)%series(1)%x2 .and. &
+                  .not. interpreter%figure%panels(1)%series(1)%y2
+call interpreter%run_text("plot '"//data_file//"' axes x3y1", iostat, iomsg)
+test_passed(35) = test_passed(35) .and. iostat /= 0_I4P .and. &
+                  index(iomsg, 'axes x1y1, x1y2, x2y1 or x2y2 expected, found "x3y1"') > 0
 
 ! set xtics without positions keeps the last ones, also after unset xtics; auto forgets them (gnuplot 6.0)
 call interpreter%init('x.html')
@@ -1308,6 +1315,33 @@ call interpreter%run_text("plot '"//data_file//"' u 1:2 w p lc variable", iostat
 test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable needs using x:y:color') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w l lc var smooth unique", iostat, iomsg)
 test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable does not go with smooth') > 0
+
+! the second x axis, as gnuplot 6.0: set x2tics alone spans the first x axis range, series on x2 scale it on their own,
+! functions on x2 are sampled over its range; off again with unset x2tics
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 1', '2 4', '3 9'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set x2tics; plot '"//data_file//"' w l", iostat, iomsg)
+   test_passed(89) = iostat == 0_I4P .and. panel%x2_active .and. panel%x2axis%lo == panel%xaxis%lo .and. &
+                     panel%x2axis%hi == panel%xaxis%hi
+   call interpreter%run_text("set x2label 'top'; plot '"//data_file//"', '' u ($1*100):2 axes x2y1", iostat, iomsg)
+   test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. panel%x2axis%lo == 100.0_R8P .and. &
+                     panel%x2axis%hi == 300.0_R8P .and. panel%xaxis%lo == 1.0_R8P .and. panel%xaxis%hi == 3.0_R8P .and. &
+                     panel%series(2)%x2 .and. panel%x2axis%label == 'top'
+   call interpreter%run_text("unset x2tics; plot '"//data_file//"'", iostat, iomsg)
+   test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. .not. panel%x2_active
+   call interpreter%run_text("set x2range [0:10]; plot x axes x2y1, '"//data_file//"'", iostat, iomsg)
+   test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. panel%series(1)%x(1) == 0.0_R8P .and. &
+                     panel%series(1)%x(size(panel%series(1)%x)) == 10.0_R8P .and. panel%x2_active .and. &
+                     panel%x2axis%hi == 10.0_R8P
+   call interpreter%run_text('set x2tics out; set mx2tics 4; unset x2range; unset x2label', iostat, iomsg)
+   test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. panel%x2axis%tics%out .and. &
+                     panel%x2axis%tics%minor == 4_I4P .and. .not. panel%x2axis%min_fixed .and. .not. panel%x2axis%has_label()
+endassociate
+call interpreter%run_text('set x2tics rotate', iostat, iomsg)
+test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics only') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1325,7 +1359,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,88L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,89L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

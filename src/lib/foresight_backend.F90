@@ -42,6 +42,12 @@ type :: axes_view
    logical   :: y2log     = .false.  !< Log y2 axis.
    character(len=:), allocatable :: y2tics   !< y2 tick positions for the viewer, empty for auto.
    character(len=:), allocatable :: y2format !< y2 tick label format, empty for the default.
+   logical   :: x2_active = .false. !< Second x axis drawn; the `x2*` components are meaningful only then.
+   real(R8P) :: x2(2)     = 0.0_R8P  !< x2 axis values at the axis start and end.
+   logical   :: x2log     = .false.  !< Log x2 axis.
+   logical   :: x2mirror  = .false.  !< x2 ticks mirrored on the bottom border.
+   character(len=:), allocatable :: x2tics   !< x2 tick positions for the viewer, empty for auto.
+   character(len=:), allocatable :: x2format !< x2 tick label format, empty for the default.
 endtype axes_view
 
 type, abstract :: backend_object

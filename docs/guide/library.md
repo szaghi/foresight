@@ -30,14 +30,14 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels], [radius], [angles], [donut], [scale], [linear])` | one item of `plot` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
-| `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label` |
-| `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)` | `set xrange [min:max]` |
-| `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2`, `cb` (all when absent) |
+| `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
+| `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)`, `set_x2range(...)` | `set xrange [min:max]` |
+| `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2`, `x2`, `cb` (all when absent) |
 | `set_grid([on], [polar], [spider])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid); `spider=.true.`: `set grid spiderplot` |
 | `set_key([on], [position], [box])` | `set key bottom left box`, `set key outside`, `set key below`, `unset key` |
-| `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
+| `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)`, `set_x2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
 | `set_cbtics([step], [start], [end])`, `unset_cbtics()` | `set cbtics START,STEP,END`, `unset cbtics`: the ticks of the color box |
-| `unset_xtics()`, `unset_ytics()`, `unset_y2tics()` | `unset xtics` |
+| `unset_xtics()`, `unset_ytics()`, `unset_y2tics()`, `unset_x2tics()` | `unset xtics` |
 | `set_format(format, [axes])` | `set format y "%.1e"`, `set format cb "%.2f"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size([width, height], [ratio])` | `set origin`, `set size`: page fractions, not with a layout; `ratio=1._R8P`: `set size square` (0: `noratio`) |
@@ -96,7 +96,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `pt` | gnuplot point type: 0 a dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond, 14-15 pentagon (odd ones from 5 filled), cycling every 15 | round dot |
 | `ylow`, `yhigh` | vertical error bar ends, for `yerrorbars`, `xyerrorbars` | — |
 | `xlow`, `xhigh` | horizontal error bar ends, for `xerrorbars`, `xyerrorbars` | — |
-| `axes` | `x1y1`, or `x1y2` for the second y axis (scaled on its own, ticks off until `set_y2tics`) | `x1y1` |
+| `axes` | `x1y1`; `x1y2` for the second y axis, `x2y1` for the second x axis, `x2y2` both (each scaled on its own, ticks off until `set_y2tics`/`set_x2tics`) | `x1y1` |
 
 `x` and `y` may contain NaN: those points, and non-positive values on log axes, are gaps in the line.
 

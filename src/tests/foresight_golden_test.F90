@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(83)                  !< Per-figure outcome.
+logical                     :: test_passed(85)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -106,7 +106,9 @@ test_passed(80) = check('mtics.svg', figure_mtics())
 test_passed(81) = check('tics_rotate.svg', figure_tics_rotate())
 test_passed(82) = check('tics_rotate.txt', figure_tics_rotate())
 test_passed(83) = check('lc_variable.svg', figure_lc_variable())
-write(output_unit, '(A,83L2)') 'foresight golden checks:', test_passed
+test_passed(84) = check('x2.svg', figure_x2())
+test_passed(85) = check('x2.html', figure_x2())
+write(output_unit, '(A,85L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -181,6 +183,31 @@ contains
    call fig%plot(t, 300.0_R8P + 2.0_R8P * t, title='T')
    call fig%plot(t, 10.0_R8P**(0.1_R8P * t + 0.5_R8P), title='p', with='points', axes='x1y2')
    endfunction figure_y2
+
+   function figure_x2() result(fig)
+   !< Second x axis through the library API: a series on x2y2, its axis on the top border with outward ticks, minor
+   !< ticks and a label; x and y ticks not mirrored.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: t(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   t = [(real(i, R8P), i = 0, 20)]
+   call fig%init(width=500_I4P, height=340_I4P)
+   call fig%set_title('two x axes')
+   call fig%set_xlabel('time [s]')
+   call fig%set_x2label('distance [m]')
+   call fig%set_ylabel('speed [m/s]')
+   call fig%set_y2label('energy [J]')
+   call fig%set_xtics(mirror=.false.)
+   call fig%set_ytics(mirror=.false.)
+   call fig%set_x2tics(out=.true.)
+   call fig%set_mx2tics(2_I4P)
+   call fig%set_y2tics()
+   call fig%set_key(position='top left')
+   call fig%plot(t, 2.0_R8P + 0.3_R8P * t, title='speed')
+   call fig%plot(12.0_R8P * t + 0.15_R8P * t**2, 50.0_R8P * (2.0_R8P + 0.3_R8P * t)**2, title='energy', &
+                 with='linespoints', axes='x2y2')
+   endfunction figure_x2
 
    function figure_slopes() result(fig)
    !< Text device: segments of every slope; a Bresenham error update once overshot some ends and never stopped.

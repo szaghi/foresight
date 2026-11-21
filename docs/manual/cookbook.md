@@ -128,6 +128,15 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 
 <Plot name="cb_y2" svg :width="560" :height="320" />
 
+### Two x axes
+
+<<< @/examples/snippets/cb_x2.gp{gnuplot}
+
+<Plot name="cb_x2" svg :width="560" :height="320" />
+
+The top border in another unit: with no item on it, the x2 axis takes the `x2range` given, here the frequency scaled
+to the Strouhal number. Items plotted `axes x2y1` scale it on their own instead.
+
 ### The key below the plot
 
 <<< @/examples/snippets/cb_key.gp{gnuplot}

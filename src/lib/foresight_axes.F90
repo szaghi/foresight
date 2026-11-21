@@ -9,7 +9,8 @@ module foresight_axes
 !<
 !< A second y axis (gnuplot `y2`) scales the series plotted on it (`axes x1y2`) on its own, autoscaled from them alone;
 !< as gnuplot, its ticks and labels are off until `set y2tics` (on the right border, not mirrored), and it is drawn only
-!< when it has data or a fully fixed range.
+!< when it has data or a fully fixed range. A second x axis (gnuplot `x2`, `axes x2y1|x2y2`) likewise, on the top border;
+!< as gnuplot, `set x2tics` alone draws it over the range of the first x axis when no series is plotted on it.
 !< Text extents are measured by the output device (estimated for vector formats, whose viewer renders the glyphs).
 !<
 !< Boxes stand on y = 0 (`boxes`) and fills reach their baseline (`filledcurves y=V`): the box edges and the baselines
@@ -142,6 +143,9 @@ type :: axes_object
    type(axis_object)                :: y2axis         !< Second vertical axis, on the right: no ticks until set
                                                       !< (gnuplot), see `set_defaults`.
    logical                          :: y2_active = .false. !< The second y axis is drawn, set by `setup_axes`.
+   type(axis_object)                :: x2axis         !< Second horizontal axis, on the top: no ticks until set
+                                                      !< (gnuplot), see `set_defaults`.
+   logical                          :: x2_active = .false. !< The second x axis is drawn, set by `setup_axes`.
    type(series_object), allocatable :: series(:)      !< Plotted series.
    character(len=:), allocatable    :: title          !< Panel title, empty for none.
    logical                          :: grid = .false. !< Draw grid lines at the major ticks.
@@ -199,6 +203,9 @@ type :: axes_object
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
+      procedure, pass(self) :: series_extent               !< Extent of a series on its axes.
+      procedure, pass(self) :: axes_extent                 !< Extent of the placeable data, per axis.
+      procedure, pass(self) :: x2_room                     !< Room of the second x axis above the plot.
       procedure, pass(self) :: render                      !< Render the panel.
       procedure, pass(self) :: set_defaults                !< Settings of a new panel beyond its components' defaults.
       procedure, pass(self), private :: xlabels_extent !< Extent of the rotated x tick labels.
@@ -236,7 +243,8 @@ contains
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
-   !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default) or `x1y2`, the second y axis. A `readout` takes its `format`
+   !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default), `x1y2`, `x2y1` or `x2y2`: `x2` the second x axis, `y2` the
+   !< second y axis. A `readout` takes its `format`
    !< (`DEFAULT_READOUT_FORMAT` if absent) and only the color among the style options.
    !<
    !< `boxes` take the box widths `width` (NaN for the default), else the panel `boxwidth`, else touching boxes;
@@ -268,7 +276,7 @@ contains
    real(R8P),          intent(in), optional :: xhigh(:) !< Horizontal error bar ends.
    real(R8P),          intent(in), optional :: ylow(:)  !< Vertical error bar starts.
    real(R8P),          intent(in), optional :: yhigh(:) !< Vertical error bar ends.
-   character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1` or `x1y2`.
+   character(len=*),   intent(in), optional :: axes     !< Axes of the series: `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    integer(I4P),       intent(in), optional :: pt       !< gnuplot point type: 0 a dot, 1.. the shapes.
    character(len=*),   intent(in), optional :: format   !< Readout format.
    real(R8P),          intent(in), optional :: width(:) !< Box widths.
@@ -316,8 +324,10 @@ contains
    endif
    if (size(x) /= size(y)) error stop 'foresight: plot: x and y have different sizes'
    if (present(axes)) then
-      if (axes /= 'x1y1' .and. axes /= 'x1y2') error stop 'foresight: plot: axes must be x1y1 or x1y2, not "'//axes//'"'
-      series%y2 = axes == 'x1y2'
+      if (all(axes /= ['x1y1', 'x1y2', 'x2y1', 'x2y2'])) &
+         error stop 'foresight: plot: axes must be x1y1, x1y2, x2y1 or x2y2, not "'//axes//'"'
+      series%x2 = axes(1:2) == 'x2'
+      series%y2 = axes(3:4) == 'y2'
    endif
    if (.not. allocated(self%series)) allocate(self%series(0))
    series%x = x
@@ -999,32 +1009,98 @@ contains
    endsubroutine add_series
 
    pure subroutine data_extent(self, xmin, xmax, ymin, ymax, found)
-   !< Extent of the series points placeable on their axes, the whole data before any range is set: x over every series,
-   !< y per axis (1 the first, 2 the second).
-   class(axes_object), intent(in)  :: self     !< Panel.
-   real(R8P),          intent(out) :: xmin     !< Smallest abscissa.
-   real(R8P),          intent(out) :: xmax     !< Largest abscissa.
-   real(R8P),          intent(out) :: ymin(2)  !< Smallest ordinate, per y axis.
-   real(R8P),          intent(out) :: ymax(2)  !< Largest ordinate, per y axis.
-   logical,            intent(out) :: found(2) !< Any placeable point, per y axis.
-   integer(I4P)                    :: s        !< Series counter.
-   integer(I4P)                    :: k        !< y axis of the series: 1 or 2.
+   !< Extent of the series points placeable on their axes, the whole data before any range is set: x over the series on
+   !< the first x axis, y per axis (1 the first, 2 the second); see `axes_extent`.
+   class(axes_object), intent(in)  :: self      !< Panel.
+   real(R8P),          intent(out) :: xmin      !< Smallest abscissa, first x axis.
+   real(R8P),          intent(out) :: xmax      !< Largest abscissa, first x axis.
+   real(R8P),          intent(out) :: ymin(2)   !< Smallest ordinate, per y axis.
+   real(R8P),          intent(out) :: ymax(2)   !< Largest ordinate, per y axis.
+   logical,            intent(out) :: found(2)  !< Any placeable point, per y axis.
+   real(R8P)                       :: x0(2)     !< Smallest abscissa, per x axis.
+   real(R8P)                       :: x1(2)     !< Largest abscissa, per x axis.
+   logical                         :: xfound(2) !< Any placeable point, per x axis.
+
+   call self%axes_extent(x0, x1, ymin, ymax, found, xfound)
+   xmin = x0(1)
+   xmax = x1(1)
+   endsubroutine data_extent
+
+   pure subroutine axes_extent(self, xmin, xmax, ymin, ymax, found, xfound)
+   !< Extent of the series points placeable on their axes, the whole data before any range is set, per axis (1 the
+   !< first, 2 the second): x over the series on each x axis, y over the series on each y axis.
+   class(axes_object), intent(in)  :: self      !< Panel.
+   real(R8P),          intent(out) :: xmin(2)   !< Smallest abscissa, per x axis.
+   real(R8P),          intent(out) :: xmax(2)   !< Largest abscissa, per x axis.
+   real(R8P),          intent(out) :: ymin(2)   !< Smallest ordinate, per y axis.
+   real(R8P),          intent(out) :: ymax(2)   !< Largest ordinate, per y axis.
+   logical,            intent(out) :: found(2)  !< Any placeable point, per y axis.
+   logical,            intent(out) :: xfound(2) !< Any placeable point, per x axis.
+   integer(I4P)                    :: s         !< Series counter.
 
    xmin = huge(1.0_R8P)
    xmax = -huge(1.0_R8P)
    ymin = huge(1.0_R8P)
    ymax = -huge(1.0_R8P)
    found = .false.
+   xfound = .false.
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
-      k = merge(2_I4P, 1_I4P, self%series(s)%y2)
-      if (k == 2_I4P) then
-         call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k))
-      else
-         call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin(k), ymax(k), found(k))
-      endif
+      call self%series_extent(s, .false., xmin, xmax, ymin, ymax, found, xfound)
    enddo
-   endsubroutine data_extent
+   endsubroutine axes_extent
+
+   pure subroutine series_extent(self, s, windowed, xmin, xmax, ymin, ymax, found, xfound)
+   !< Widen the extent of the axes of the `s`-th series (index 1 the first axis, 2 the second) to its placeable points;
+   !< `windowed`: only the points inside the range of its x axis (y autoscaling, as gnuplot).
+   class(axes_object), intent(in)    :: self      !< Panel.
+   integer(I4P),       intent(in)    :: s         !< Series index.
+   logical,            intent(in)    :: windowed  !< Count only the points inside the x range.
+   real(R8P),          intent(inout) :: xmin(2)   !< Smallest abscissa, per x axis.
+   real(R8P),          intent(inout) :: xmax(2)   !< Largest abscissa, per x axis.
+   real(R8P),          intent(inout) :: ymin(2)   !< Smallest ordinate, per y axis.
+   real(R8P),          intent(inout) :: ymax(2)   !< Largest ordinate, per y axis.
+   logical,            intent(inout) :: found(2)  !< Any placeable point, per y axis.
+   logical,            intent(inout) :: xfound(2) !< Any placeable point, per x axis.
+   logical                           :: hit       !< The series has a counted point.
+   integer(I4P)                      :: kx        !< x axis of the series: 1 or 2.
+   integer(I4P)                      :: ky        !< y axis of the series: 1 or 2.
+
+   kx = merge(2_I4P, 1_I4P, self%series(s)%x2)
+   ky = merge(2_I4P, 1_I4P, self%series(s)%y2)
+   hit = .false.
+   if (kx == 2_I4P) then
+      if (ky == 2_I4P) then
+         call widen(self%x2axis, self%y2axis, xmin(kx), xmax(kx), ymin(ky), ymax(ky), hit)
+      else
+         call widen(self%x2axis, self%yaxis, xmin(kx), xmax(kx), ymin(ky), ymax(ky), hit)
+      endif
+   elseif (ky == 2_I4P) then
+      call widen(self%xaxis, self%y2axis, xmin(kx), xmax(kx), ymin(ky), ymax(ky), hit)
+   else
+      call widen(self%xaxis, self%yaxis, xmin(kx), xmax(kx), ymin(ky), ymax(ky), hit)
+   endif
+   found(ky) = found(ky) .or. hit
+   xfound(kx) = xfound(kx) .or. hit
+   contains
+      pure subroutine widen(xaxis, yaxis, x0, x1, y0, y1, any)
+      !< Widen by the series against its axes; the extent is an argument: a pure procedure defines no host-associated
+      !< variable (F2018 C1594).
+      type(axis_object), intent(in)    :: xaxis !< Horizontal axis.
+      type(axis_object), intent(in)    :: yaxis !< Vertical axis.
+      real(R8P),         intent(inout) :: x0    !< Smallest abscissa.
+      real(R8P),         intent(inout) :: x1    !< Largest abscissa.
+      real(R8P),         intent(inout) :: y0    !< Smallest ordinate.
+      real(R8P),         intent(inout) :: y1    !< Largest ordinate.
+      logical,           intent(inout) :: any   !< A counted point.
+
+      if (windowed) then
+         call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any, xwindow=[xaxis%lo, xaxis%hi])
+      else
+         call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any)
+      endif
+      endsubroutine widen
+   endsubroutine series_extent
 
    pure subroutine set_defaults(self)
    !< Settings of a new panel that its components' default initialization does not give: the second y axis without
@@ -1035,6 +1111,8 @@ contains
 
    self%y2axis%tics%mode = TICS_NONE
    self%y2axis%tics%mirror = .false.
+   self%x2axis%tics%mode = TICS_NONE
+   self%x2axis%tics%mirror = .false.
    self%cbaxis%tight = .true.
    self%ttics%mode = TICS_NONE
    endsubroutine set_defaults
@@ -1145,6 +1223,15 @@ contains
       view%y2format = ''
       if (self%y2axis%tics%has_format()) view%y2format = self%y2axis%tics%format
    endif
+   view%x2_active = self%x2_active
+   if (self%x2_active) then
+      view%x2 = [self%x2axis%lo, self%x2axis%hi]
+      view%x2log = self%x2axis%log
+      view%x2mirror = self%x2axis%tics%mirror
+      view%x2tics = self%x2axis%tics%attribute(self%x2axis%lo, self%x2axis%hi)
+      view%x2format = ''
+      if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
+   endif
    call backend%begin_axes(view)
    ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
    call backend%begin_group('fs-grid', visible=self%grid)
@@ -1160,10 +1247,14 @@ contains
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)
-      if (self%series(s)%y2) then
-         call self%draw_series(backend, s, self%y2axis, area, font_size)
+      if (self%series(s)%x2 .and. self%series(s)%y2) then
+         call self%draw_series(backend, s, self%x2axis, self%y2axis, area, font_size)
+      elseif (self%series(s)%x2) then
+         call self%draw_series(backend, s, self%x2axis, self%yaxis, area, font_size)
+      elseif (self%series(s)%y2) then
+         call self%draw_series(backend, s, self%xaxis, self%y2axis, area, font_size)
       else
-         call self%draw_series(backend, s, self%yaxis, area, font_size)
+         call self%draw_series(backend, s, self%xaxis, self%yaxis, area, font_size)
       endif
       call backend%end_group
    enddo
@@ -1273,6 +1364,20 @@ contains
       enddo
    enddo
    endfunction rotated_extent
+
+   pure function x2_room(self, font_size) result(room)
+   !< Room above the top border of the second x axis [px]: its outward ticks, its tick labels row and its label.
+   class(axes_object), intent(in) :: self      !< Panel.
+   real(R8P),          intent(in) :: font_size !< Font size [px].
+   real(R8P)                      :: room      !< Room [px].
+
+   room = 0.0_R8P
+   if (self%x2_active) then
+      if (self%x2axis%tics%out .and. size(self%x2axis%ticks) > 0) room = TICK_MAJOR
+      if (any(self%x2axis%ticks%major)) room = room + GAP + LINE_HEIGHT * font_size
+   endif
+   if (self%x2axis%has_label()) room = room + LINE_HEIGHT * font_size + GAP
+   endfunction x2_room
 
    pure function xlabels_extent(self, backend, font_size) result(extent)
    !< Depth below the base, reach left and right of the tick [px] of the rotated x tick labels, the largest over the
@@ -1387,6 +1492,31 @@ contains
          enddo
          call backend%end_group
       endif
+      if (self%x2_active) then
+         ! above the top border, labels on a line ending a quarter font size above it (descenders)
+         call backend%begin_group('fs-x2ticks')
+         do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
+            p = left + self%x2axis%to_unit(self%x2axis%ticks(t)%value) * (right - left)
+            length = merge(TICK_MAJOR, TICK_MINOR, self%x2axis%ticks(t)%major)
+            if (self%x2axis%tics%out) then
+               call backend%polyline([p, p], [top, top - length], FRAME_COLOR, 1.0_R8P, '')
+               if (self%x2axis%tics%mirror) &
+                  call backend%polyline([p, p], [bottom, bottom + length], FRAME_COLOR, 1.0_R8P, '')
+            else
+               call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
+               if (self%x2axis%tics%mirror) &
+                  call backend%polyline([p, p], [bottom, bottom - length], FRAME_COLOR, 1.0_R8P, '')
+            endif
+            if (self%x2axis%ticks(t)%major) call backend%text(p, top - merge(TICK_MAJOR, 0.0_R8P, &
+                                                              self%x2axis%tics%out) - GAP - 0.25_R8P * font_size, &
+                                                              self%x2axis%ticks(t)%label, 'middle', &
+                                                              sup=self%x2axis%ticks(t)%sup)
+         enddo
+         call backend%end_group
+      endif
+      if (self%x2axis%has_label()) call backend%text(0.5_R8P * (left + right), &
+                                                     top - self%x2_room(font_size) + (LINE_HEIGHT - 0.25_R8P) * &
+                                                     font_size, self%x2axis%label, 'middle')
       if (self%xaxis%has_label()) then
          if (angle /= 0.0_R8P .or. self%xaxis%tics%out) then
             ! below the rotated or moved tick labels
@@ -1582,7 +1712,7 @@ contains
             left = 0.5_R8P * (area(1) + area(2) - width)
          endselect
          if (self%key_place() == 'top') then
-            top = area(3) - GAP - height
+            top = area(3) - self%x2_room(font_size) - GAP - height
          else
             top = box(4) - PAD - height
          endif
@@ -1839,12 +1969,13 @@ contains
    endif
    endfunction key_place
 
-   subroutine draw_series(self, backend, s, yaxis, area, font_size)
-   !< Draw the `s`-th series in the plot area against its vertical axis `yaxis`; unplaceable points (NaN, non-positive
+   subroutine draw_series(self, backend, s, xaxis, yaxis, area, font_size)
+   !< Draw the `s`-th series in the plot area against its axes `xaxis` and `yaxis`; unplaceable points (NaN, non-positive
    !< on log axes) break the line.
    class(axes_object),    intent(in)    :: self     !< Panel.
    class(backend_object), intent(inout) :: backend  !< Output device.
    integer(I4P),          intent(in)    :: s        !< Series index.
+   type(axis_object),     intent(in)    :: xaxis    !< Horizontal axis of the series.
    type(axis_object),     intent(in)    :: yaxis    !< Vertical axis of the series.
    real(R8P),             intent(in)    :: area(4)  !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px], for the label offsets.
@@ -1858,12 +1989,12 @@ contains
 
    associate(series => self%series(s))
       n = size(series%x, kind=I4P)
-      valid = series%valid(self%xaxis, yaxis)
+      valid = series%valid(xaxis, yaxis)
       allocate(u(n), v(n))
       u = 0.0_R8P
       v = 0.0_R8P
       where (valid)
-         u = self%xaxis%to_unit(series%x)
+         u = xaxis%to_unit(series%x)
          v = yaxis%to_unit(series%y)
       endwhere
       if (series%style%with == WITH_IMAGE) then
@@ -1919,7 +2050,7 @@ contains
       endif
       if (series%style%with == WITH_IMPULSES) call draw_impulses
       if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
-      if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, self%xaxis, .false.)
+      if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) then
          if (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
@@ -1969,14 +2100,14 @@ contains
                pv(2::2) = v(i1 + 1_I4P:i2)
             endif
          case (WITH_HISTEPS)
-            if (.not. (all(self%xaxis%accepts(series%xlow(i1:i2))) .and. all(self%xaxis%accepts(series%xhigh(i1:i2))))) &
+            if (.not. (all(xaxis%accepts(series%xlow(i1:i2))) .and. all(xaxis%accepts(series%xhigh(i1:i2))))) &
                return
             v0 = -1.0_R8P
             if (yaxis%accepts(0.0_R8P)) v0 = yaxis%to_unit(0.0_R8P)
             allocate(pu(2_I4P * m + 2_I4P), pv(2_I4P * m + 2_I4P))
             do k = 1_I4P, m
-               pu(2_I4P * k) = self%xaxis%to_unit(series%xlow(i1 + k - 1_I4P))
-               pu(2_I4P * k + 1_I4P) = self%xaxis%to_unit(series%xhigh(i1 + k - 1_I4P))
+               pu(2_I4P * k) = xaxis%to_unit(series%xlow(i1 + k - 1_I4P))
+               pu(2_I4P * k + 1_I4P) = xaxis%to_unit(series%xhigh(i1 + k - 1_I4P))
                pv(2_I4P * k : 2_I4P * k + 1_I4P) = v(i1 + k - 1_I4P)
             enddo
             pu(1) = pu(2)
@@ -2013,14 +2144,14 @@ contains
             ok(i) = valid(i) .and. ieee_is_finite(series%tips(1, i)) .and. ieee_is_finite(series%tips(2, i))
             if (.not. ok(i)) cycle
             if (series%style%with == WITH_VECTORS) then
-               ok(i) = self%xaxis%accepts(series%tips(1, i)) .and. yaxis%accepts(series%tips(2, i))
+               ok(i) = xaxis%accepts(series%tips(1, i)) .and. yaxis%accepts(series%tips(2, i))
                if (.not. ok(i)) cycle
-               tu(i) = self%xaxis%to_unit(series%tips(1, i))
+               tu(i) = xaxis%to_unit(series%tips(1, i))
                tv(i) = yaxis%to_unit(series%tips(2, i))
             else
                l = series%tips(1, i)
                if (l > 0.0_R8P) then
-                  l = l * w / abs(self%xaxis%hi - self%xaxis%lo)
+                  l = l * w / abs(xaxis%hi - xaxis%lo)
                else
                   l = abs(l) * w
                endif
@@ -2058,9 +2189,9 @@ contains
             phi = series%shape(3, i) * (PI_R8 / 180.0_R8P)
             if (ieee_is_finite(series%shape(1, i))) then
                ! semi-axes in pixels: the unit extents of the diameters about the centre
-               if (.not. (self%xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
+               if (.not. (xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
                           yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(2, i)))) cycle
-               a = abs(self%xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
+               a = abs(xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
                b = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(2, i)) - v(i)) * h
             else
                a = 0.025_R8P * w
@@ -2141,9 +2272,9 @@ contains
       associate(series => self%series(s))
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
-            if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)) .and. &
+            if (.not. (xaxis%accepts(series%xlow(i)) .and. xaxis%accepts(series%xhigh(i)) .and. &
                        yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
-            call backend%data_polygon(self%xaxis%to_unit([series%xlow(i), series%xhigh(i), series%xhigh(i), &
+            call backend%data_polygon(xaxis%to_unit([series%xlow(i), series%xhigh(i), series%xhigh(i), &
                                                           series%xlow(i)]), &
                                       yaxis%to_unit([series%ylow(i), series%ylow(i), series%yhigh(i), series%yhigh(i)]), &
                                       series%style%fill_color(), series%style%density, series%style%stroke_color(), &
@@ -2193,12 +2324,12 @@ contains
             endif
             if (series%style%with == WITH_BOXPLOT) then
                ! the box: the middle third of the autoscale extent
-               ul = self%xaxis%to_unit(series%x(i) - (series%x(i) - series%xlow(i)) / 3.0_R8P)
-               ur = self%xaxis%to_unit(series%x(i) + (series%xhigh(i) - series%x(i)) / 3.0_R8P)
+               ul = xaxis%to_unit(series%x(i) - (series%x(i) - series%xlow(i)) / 3.0_R8P)
+               ur = xaxis%to_unit(series%x(i) + (series%xhigh(i) - series%x(i)) / 3.0_R8P)
             elseif (allocated(series%xlow)) then
-               if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)))) cycle
-               ul = self%xaxis%to_unit(series%xlow(i))
-               ur = self%xaxis%to_unit(series%xhigh(i))
+               if (.not. (xaxis%accepts(series%xlow(i)) .and. xaxis%accepts(series%xhigh(i)))) cycle
+               ul = xaxis%to_unit(series%xlow(i))
+               ur = xaxis%to_unit(series%xhigh(i))
             else
                ul = u(i) - tick
                ur = u(i) + tick
@@ -2247,10 +2378,10 @@ contains
          ox = series%outliers(1, :)
          oy = series%outliers(2, :)
       endassociate
-      ok = self%xaxis%accepts(ox) .and. yaxis%accepts(oy)
+      ok = xaxis%accepts(ox) .and. yaxis%accepts(oy)
       if (.not. any(ok)) return
       associate(series => self%series(s))
-         call backend%data_dots(self%xaxis%to_unit(pack(ox, ok)), yaxis%to_unit(pack(oy, ok)), series%style%color, &
+         call backend%data_dots(xaxis%to_unit(pack(ox, ok)), yaxis%to_unit(pack(oy, ok)), series%style%color, &
                                 series%style%point_diameter(), pt=self%boxplot%pointtype, &
                                 line_width=series%style%linewidth)
       endassociate
@@ -2287,15 +2418,15 @@ contains
       associate(series => self%series(s))
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
-            if (.not. (self%xaxis%accepts(series%xlow(i)) .and. self%xaxis%accepts(series%xhigh(i)))) cycle
+            if (.not. (xaxis%accepts(series%xlow(i)) .and. xaxis%accepts(series%xhigh(i)))) cycle
             v0 = -1.0_R8P
             if (yaxis%accepts(series%ylow(i))) v0 = yaxis%to_unit(series%ylow(i))
             if (series%style%segments > 0_I4P) then
-               call draw_cells(self%xaxis%to_unit(series%xlow(i)), self%xaxis%to_unit(series%xhigh(i)), v0, v(i))
+               call draw_cells(xaxis%to_unit(series%xlow(i)), xaxis%to_unit(series%xhigh(i)), v0, v(i))
                cycle
             endif
-            call backend%data_polygon([self%xaxis%to_unit(series%xlow(i)), self%xaxis%to_unit(series%xhigh(i)), &
-                                       self%xaxis%to_unit(series%xhigh(i)), self%xaxis%to_unit(series%xlow(i))], &
+            call backend%data_polygon([xaxis%to_unit(series%xlow(i)), xaxis%to_unit(series%xhigh(i)), &
+                                       xaxis%to_unit(series%xhigh(i)), xaxis%to_unit(series%xlow(i))], &
                                       [v0, v0, v(i), v(i)], series%style%fill_color(), series%style%density, &
                                       series%style%stroke_color(), series%style%linewidth)
          enddo
@@ -2319,8 +2450,8 @@ contains
             if (.not. valid(i)) cycle
             r = 0.02_R8P * w
             if (ieee_is_finite(series%radius(i))) then
-               if (.not. self%xaxis%accepts(series%x(i) + series%radius(i))) cycle
-               r = abs(self%xaxis%to_unit(series%x(i) + series%radius(i)) - u(i)) * w
+               if (.not. xaxis%accepts(series%x(i) + series%radius(i))) cycle
+               r = abs(xaxis%to_unit(series%x(i) + series%radius(i)) - u(i)) * w
             endif
             if (allocated(series%arcs)) then
                call outline(r, 0.0_R8P, series%arcs(1, i), series%arcs(2, i), px, py)
@@ -2344,8 +2475,8 @@ contains
       integer(I4P)              :: jj          !< Pixel row, top to bottom.
 
       associate(series => self%series(s))
-         if (.not. (all(self%xaxis%accepts(series%x)) .and. all(yaxis%accepts(series%y)))) return
-         u = self%xaxis%to_unit(series%x)
+         if (.not. (all(xaxis%accepts(series%x)) .and. all(yaxis%accepts(series%y)))) return
+         u = xaxis%to_unit(series%x)
          w = yaxis%to_unit(series%y)
          allocate(rgba(4, size(series%grid, 1), size(series%grid, 2)))
          do j = 1_I4P, size(series%grid, 2, kind=I4P)
@@ -2452,8 +2583,8 @@ contains
             w = 1.0_R8P
          endif
          if (series%curve_to == 3_I4P) then
-            if (.not. (self%xaxis%accepts(series%curve_point(1)) .and. yaxis%accepts(series%curve_point(2)))) return
-            p = [self%xaxis%to_unit(series%curve_point(1)), yaxis%to_unit(series%curve_point(2))]
+            if (.not. (xaxis%accepts(series%curve_point(1)) .and. yaxis%accepts(series%curve_point(2)))) return
+            p = [xaxis%to_unit(series%curve_point(1)), yaxis%to_unit(series%curve_point(2))]
          endif
          a = 1_I4P
          do while (a <= n)
@@ -3455,7 +3586,7 @@ contains
    case default
       ok = .false.
    endselect
-   ok = ok .and. .not. series%y2
+   ok = ok .and. .not. (series%y2 .or. series%x2)
    endfunction polar_series
 
    function parallel_axis(self, k, npx) result(axis)
@@ -3816,7 +3947,14 @@ contains
       margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
-   margins(3) = margins(3) + above
+   margins(3) = margins(3) + above + self%x2_room(font_size)
+   ! the rightmost x2 tick label sticks out as the x one
+   if (self%x2_active) then
+      do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
+         if (self%x2axis%ticks(t)%major) margins(2) = max(margins(2), &
+            0.5_R8P * backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size))
+      enddo
+   endif
    ! the row of the x tick labels only if there are labels (gnuplot: 36 px with them, 16.8 without, at 400x300)
    margins(4) = PAD + 0.5_R8P * font_size
    if (any(self%xaxis%ticks%major)) then
@@ -4008,7 +4146,8 @@ contains
 
    subroutine setup_axes(self, area, raw)
    !< Effective ranges and ticks for the plot area: x from every series, each y axis from its own series and the points
-   !< inside the x range, as gnuplot. The second y axis is active when it has data or both its ends are fixed.
+   !< inside the x range, as gnuplot. The second y axis is active when it has data or both its ends are fixed; the second
+   !< x axis also when its ticks are set, then on the range of the first one without data of its own (gnuplot).
    !<
    !< A polar panel sets up its r axis from the series as given (`raw`, theta:r), projects them into its series, and
    !< autoscales x and y to the disc of the largest radius, as gnuplot.
@@ -4016,26 +4155,39 @@ contains
    real(R8P),           intent(in)           :: area(4) !< Plot area: left, right, top, bottom [px].
    type(series_object), intent(in), optional :: raw(:)  !< Series of a polar panel, theta:r.
    real(R8P)                         :: radius    !< Disc radius of a polar panel [r units from the pole].
-   real(R8P)                         :: xmin      !< Smallest abscissa.
-   real(R8P)                         :: xmax      !< Largest abscissa.
+   real(R8P)                         :: xmin(2)   !< Smallest abscissa, per x axis.
+   real(R8P)                         :: xmax(2)   !< Largest abscissa, per x axis.
    real(R8P)                         :: ymin(2)   !< Smallest ordinate, per y axis.
    real(R8P)                         :: ymax(2)   !< Largest ordinate, per y axis.
    logical                           :: found(2)  !< Any placeable point, per y axis.
+   logical                           :: xfound(2) !< Any placeable point, per x axis.
    integer(I4P)                      :: s         !< Series counter.
-   integer(I4P)                      :: k         !< y axis of the series: 1 or 2.
 
    if (self%polar) then
       call setup_polar
    else
-      call self%data_extent(xmin, xmax, ymin, ymax, found)
+      call self%axes_extent(xmin, xmax, ymin, ymax, found, xfound)
    endif
    ! a panel with an image fits its pixel edges, as gnuplot
    self%xaxis%tight = self%has_image()
    self%yaxis%tight = self%has_image()
    call collect_labels
-   call self%xaxis%setup(xmin, xmax, any(found), area(2) - area(1))
+   call self%xaxis%setup(xmin(1), xmax(1), xfound(1), area(2) - area(1))
+   self%x2_active = .not. self%polar .and. (xfound(2) .or. (self%x2axis%min_fixed .and. self%x2axis%max_fixed) .or. &
+                                            self%x2axis%tics%mode /= TICS_NONE)
+   if (self%x2_active) then
+      ! no data of its own: the range of the first x axis, as is (gnuplot)
+      self%x2axis%tight = self%has_image() .or. .not. xfound(2)
+      if (xfound(2)) then
+         call self%x2axis%setup(xmin(2), xmax(2), .true., area(2) - area(1))
+      else
+         call self%x2axis%setup(min(self%xaxis%lo, self%xaxis%hi), max(self%xaxis%lo, self%xaxis%hi), .true., &
+                                area(2) - area(1))
+      endif
+   endif
    xmin = huge(1.0_R8P)
    xmax = -huge(1.0_R8P)
+   xfound = .false.
    ymin = huge(1.0_R8P)
    ymax = -huge(1.0_R8P)
    found = .false.
@@ -4046,14 +4198,7 @@ contains
    endif
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s) .or. self%polar) cycle
-      k = merge(2_I4P, 1_I4P, self%series(s)%y2)
-      if (k == 2_I4P) then
-         call self%series(s)%extent(self%xaxis, self%y2axis, xmin, xmax, ymin(k), ymax(k), found(k), &
-                                    xwindow=[self%xaxis%lo, self%xaxis%hi])
-      else
-         call self%series(s)%extent(self%xaxis, self%yaxis, xmin, xmax, ymin(k), ymax(k), found(k), &
-                                    xwindow=[self%xaxis%lo, self%xaxis%hi])
-      endif
+      call self%series_extent(s, .true., xmin, xmax, ymin, ymax, found, xfound)
    enddo
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
@@ -4076,9 +4221,10 @@ contains
       self%series = raw
       call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed, self%degrees, self%theta_origin, &
                          self%theta_clockwise)
-      xmin = -radius
-      xmax = radius
+      xmin(1) = -radius
+      xmax(1) = radius
       found = [.true., .false.]
+      xfound = [.true., .false.]
       endsubroutine setup_polar
 
       subroutine setup_colors
@@ -4135,16 +4281,17 @@ contains
       endsubroutine collect_labels
    endsubroutine setup_axes
 
-   pure subroutine axes_names(names, x, y, y2, bad, cb)
-   !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`, `cb`: each found one sets its flag
-   !< (the others are left unchanged); `bad` is the first unsupported rest (`x2` included, `cb` without `cb` present),
-   !< empty if none.
+   pure subroutine axes_names(names, x, y, y2, bad, cb, x2)
+   !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`, `cb`, `x2`: each found one sets its
+   !< flag (the others are left unchanged); `bad` is the first unsupported rest (`cb` or `x2` without their flag
+   !< present), empty if none.
    character(len=*),              intent(in)    :: names !< Axis names.
    logical,                       intent(inout) :: x     !< x named.
    logical,                       intent(inout) :: y     !< y named.
    logical,                       intent(inout) :: y2    !< y2 named.
    character(len=:), allocatable, intent(out)   :: bad   !< Unsupported rest, empty if none.
    logical,             optional, intent(inout) :: cb    !< cb (color axis) named.
+   logical,             optional, intent(inout) :: x2    !< x2 named.
    integer(I4P)                                 :: i     !< Character counter.
    logical                                      :: two   !< A `2` follows.
 
@@ -4162,6 +4309,8 @@ contains
       endif
       if (names(i:i) == 'y' .and. two) then
          y2 = .true.
+      elseif (names(i:i) == 'x' .and. two .and. present(x2)) then
+         x2 = .true.
       elseif (names(i:i) == 'x' .and. .not. two) then
          x = .true.
       elseif (names(i:i) == 'y') then

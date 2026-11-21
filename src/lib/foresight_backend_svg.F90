@@ -128,6 +128,13 @@ contains
       logs = logs//' '//flag(view%y2log)
       extra = extra//attribute('data-y2tics', view%y2tics)//attribute('data-y2format', view%y2format)
    endif
+   ! the second x axis, only when drawn: its range, log flag, ticks mirrored at the bottom, tick settings
+   if (view%x2_active) then
+      extra = extra//' data-x2="'//real_str(view%x2(1))//' '//real_str(view%x2(2))//'"'
+      if (view%x2log) extra = extra//' data-x2log="1"'
+      if (view%x2mirror) extra = extra//' data-x2mirror="1"'
+      extra = extra//attribute('data-x2tics', view%x2tics)//attribute('data-x2format', view%x2format)
+   endif
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
                  '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'"'//y2//' data-log="'//logs// &

@@ -6,21 +6,22 @@ module foresight_script
 !<
 !< - `NAME = expression` (a user variable, its value now), `NAME(P1, ...) = expression` (a user function, see
 !<   foresight_expression); expressions take them everywhere, range ends included (`set xrange [0:2*pi]`);
-!< - `set|unset title|xlabel|ylabel|y2label ["text"]`, `set xrange|yrange|y2range [min:max]` (`*` or empty autoscales
-!<   an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, e.g. `xy2`; all when absent),
+!< - `set|unset title|xlabel|ylabel|y2label|x2label ["text"]`, `set xrange|yrange|y2range|x2range [min:max]` (`*` or
+!<   empty autoscales an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, x2, cb, e.g. `xy2`; all when
+!<   absent),
 !<   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
 !< - `set terminal dumb [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text, default 79x24 on standard output `-`),
 !<   `set terminal block [half|quadrants|sextants|braille] [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text drawn
 !<   with Unicode block or Braille characters);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
 !<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
-!< - `set xtics|ytics|y2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 ticks are off until set),
-!<   `unset xtics|ytics|y2tics`, `set format [AXES] ["fmt"]`, `unset format`,
+!< - `set xtics|ytics|y2tics|x2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 and x2 ticks are off until
+!<   set), `unset xtics|ytics|y2tics|x2tics`, `set format [AXES] ["fmt"]`, `unset format`,
 !<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [autotitle [columnhead]|noautotitle]`,
 !<   `set style data|function STYLE`, `unset style function`, `set style line N [lc ...] [lt N] [lw W] [dt N] [pt N]
 !<   [ps S]`;
 !< - `set datafile separator [whitespace|tab|comma|"chars"]`, `unset datafile [separator]`; `set samples N[,M]`;
-!< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2]
+!< - `plot 'file' [using [X:]Y[:...]] [index N] [every I:J:K:L:M:N] [with STYLE] [title "t"|notitle] [axes x1y1|x1y2|x2y1|x2y2]
 !<   [smooth unique|frequency|fnormal|cumulative|cnormal] [lc [rgb] "color"|N] [lw W] [dt N] [pt N] [ps S], ...` (`''`
 !<   repeats the previous file; smooth: see foresight_smooth), STYLE `lines|points|linespoints|impulses|steps|fsteps|
 !<   histeps|dots|yerrorbars|xerrorbars|xyerrorbars|yerrorlines|xerrorlines|xyerrorlines` (error bars: `x:y:dy` or
@@ -407,7 +408,7 @@ contains
    type(expression_object)                      :: func      !< Current function.
    type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
    integer(I4P),            allocatable         :: slots(:)  !< Series index of each function.
-   character(len=:), allocatable                :: axes      !< Item axes, `x1y1` or `x1y2`.
+   character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
    character(len=:), allocatable                :: spec      !< `using` specification as written, empty if none.
@@ -773,8 +774,8 @@ contains
          elseif (keyword(word, 'axes', 2_I4P)) then
             shaping = word
             if (.not. next_word(tokens, i, axes, iostat, iomsg)) return
-            if (axes /= 'x1y1' .and. axes /= 'x1y2') then
-               call fail('plot: axes x1y1 or x1y2 expected, found "'//axes//'" (no second x axis)', iostat, iomsg)
+            if (all(axes /= ['x1y1', 'x1y2', 'x2y1', 'x2y2'])) then
+               call fail('plot: axes x1y1, x1y2, x2y1 or x2y2 expected, found "'//axes//'"', iostat, iomsg)
                return
             endif
          elseif (keyword(word, 'title', 1_I4P)) then
@@ -867,7 +868,7 @@ contains
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
             polar_ok = is_word(with, 'lines points linespoints filledcurves sectors readout') .and. .not. allocated(base)
-            if (allocated(axes)) polar_ok = polar_ok .and. axes /= 'x1y2'
+            if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
             if (.not. polar_ok) then
                call fail('plot: '//POLAR_STYLES, iostat, iomsg)
                return
@@ -1132,11 +1133,8 @@ contains
       elseif (len(filter) > 0) then
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
-            if (axes == 'x1y2') then
-               call smooth(filter, values(:, 1), values(:, 2), panel%xaxis%log, panel%y2axis%log, x, y)
-            else
-               call smooth(filter, values(:, 1), values(:, 2), panel%xaxis%log, panel%yaxis%log, x, y)
-            endif
+            call smooth(filter, values(:, 1), values(:, 2), merge(panel%x2axis%log, panel%xaxis%log, axes(1:2) == 'x2'), &
+                        merge(panel%y2axis%log, panel%yaxis%log, axes(3:4) == 'y2'), x, y)
          endassociate
       endif
       if (allocated(xlow)) deallocate(xlow, xhigh)
@@ -1532,14 +1530,16 @@ contains
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
-         call panel%xaxis%range_of(minval(values(:, 1), mask=finite), maxval(values(:, 1), mask=finite), .true., lo, hi)
-         if (axes == 'x1y2') then
-            call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
-                              panel%xaxis%log, panel%y2axis%log, x, y, problem)
+         if (axes(1:2) == 'x2') then
+            call panel%x2axis%range_of(minval(values(:, 1), mask=finite), maxval(values(:, 1), mask=finite), .true., &
+                                       lo, hi)
          else
-            call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
-                              panel%xaxis%log, panel%yaxis%log, x, y, problem)
+            call panel%xaxis%range_of(minval(values(:, 1), mask=finite), maxval(values(:, 1), mask=finite), .true., &
+                                      lo, hi)
          endif
+         call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
+                           merge(panel%x2axis%log, panel%xaxis%log, axes(1:2) == 'x2'), &
+                           merge(panel%y2axis%log, panel%yaxis%log, axes(3:4) == 'y2'), x, y, problem)
       endassociate
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
@@ -1806,18 +1806,20 @@ contains
 
       subroutine sample_functions
       !< Sample the functions at `self%samples` abscissae over the x range of the data before its tick extension (the
-      !< user ends, the data extent, else the axis default range): evenly, in log x on a log axis.
+      !< user ends, the data extent, else the axis default range): evenly, in log x on a log axis. A function on the
+      !< second x axis over its range, that of the first x axis if it has neither data nor ends of its own (gnuplot).
       real(R8P), allocatable :: xs(:)     !< Sample abscissae.
+      real(R8P), allocatable :: xs2(:)    !< Sample abscissae on the second x axis.
       real(R8P), allocatable :: ys(:)     !< Sample values.
-      real(R8P)              :: xmin      !< Smallest data abscissa.
-      real(R8P)              :: xmax      !< Largest data abscissa.
+      real(R8P)              :: xmin(2)   !< Smallest data abscissa, per x axis.
+      real(R8P)              :: xmax(2)   !< Largest data abscissa, per x axis.
       real(R8P)              :: ymin(2)   !< Smallest data ordinates, unused.
       real(R8P)              :: ymax(2)   !< Largest data ordinates, unused.
       real(R8P)              :: lo        !< Range start.
       real(R8P)              :: hi        !< Range end.
-      real(R8P)              :: a         !< Range start, log10 on a log axis.
-      real(R8P)              :: step      !< Sample spacing, in log10 on a log axis.
       logical                :: found(2)  !< Any data per y axis.
+      logical                :: xfound(2) !< Any data per x axis.
+      logical                :: ok(2)     !< Placeable samples, per x axis.
       integer(I4P)           :: n         !< Samples.
       integer(I4P)           :: f         !< Function counter.
       integer(I4P)           :: j         !< Sample counter.
@@ -1845,35 +1847,68 @@ contains
             return
          endif
          ! the functions are still empty: the extent is the data one
-         call panel%data_extent(xmin, xmax, ymin, ymax, found)
-         call panel%xaxis%range_of(xmin, xmax, any(found), lo, hi)
-         ! a log axis on a non-positive range is reported by the rendering
-         if (panel%xaxis%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) return
-         a = lo
-         if (panel%xaxis%log) a = log10(lo)
-         ! never hi - lo, which overflows on extreme ends
-         if (panel%xaxis%log) then
-            step = log10(hi) / real(n - 1_I4P, R8P) - a / real(n - 1_I4P, R8P)
-         else
-            step = hi / real(n - 1_I4P, R8P) - lo / real(n - 1_I4P, R8P)
-         endif
-         allocate(xs(n), ys(n))
-         do j = 1_I4P, n
-            xs(j) = a + real(j - 1_I4P, R8P) * step
-            if (panel%xaxis%log) xs(j) = 10.0_R8P**xs(j)
-         enddo
-         ! exact ends: a sample past an autoscaled end would widen the axis by a rounding error
-         xs(1) = lo
-         xs(n) = hi
+         call panel%axes_extent(xmin, xmax, ymin, ymax, found, xfound)
+         call panel%xaxis%range_of(xmin(1), xmax(1), xfound(1), lo, hi)
+         call sample_grid(panel%xaxis%log, lo, hi, xs, ok(1))
+         if (xfound(2) .or. panel%x2axis%min_fixed .or. panel%x2axis%max_fixed .or. panel%x2axis%plot_min_fixed .or. &
+             panel%x2axis%plot_max_fixed) call panel%x2axis%range_of(xmin(2), xmax(2), xfound(2), lo, hi)
+         call sample_grid(panel%x2axis%log, lo, hi, xs2, ok(2))
+         allocate(ys(n))
          do f = 1_I4P, size(functions, kind=I4P)
-            do j = 1_I4P, n
-               ys(j) = functions(f)%value_at(xs(j))
-            enddo
-            panel%series(slots(f))%x = xs
-            panel%series(slots(f))%y = ys
+            associate(series => panel%series(slots(f)))
+               ! a log axis on a non-positive range is reported by the rendering
+               if (.not. ok(merge(2_I4P, 1_I4P, series%x2))) cycle
+               do j = 1_I4P, n
+                  if (series%x2) then
+                     ys(j) = functions(f)%value_at(xs2(j))
+                  else
+                     ys(j) = functions(f)%value_at(xs(j))
+                  endif
+               enddo
+               if (series%x2) then
+                  series%x = xs2
+               else
+                  series%x = xs
+               endif
+               series%y = ys
+            endassociate
          enddo
       endassociate
       endsubroutine sample_functions
+
+      subroutine sample_grid(log, lo, hi, xs, ok)
+      !< `self%samples` abscissae from `lo` to `hi`, evenly, in log x on a `log` axis; `ok` false (no samples) for a log
+      !< axis on a non-positive range.
+      logical,                intent(in)  :: log   !< Log axis.
+      real(R8P),              intent(in)  :: lo    !< Range start.
+      real(R8P),              intent(in)  :: hi    !< Range end.
+      real(R8P), allocatable, intent(out) :: xs(:) !< Sample abscissae.
+      logical,                intent(out) :: ok    !< Samples placeable.
+      real(R8P)                           :: a     !< Range start, log10 on a log axis.
+      real(R8P)                           :: step  !< Sample spacing, in log10 on a log axis.
+      integer(I4P)                        :: m     !< Samples.
+      integer(I4P)                        :: j     !< Sample counter.
+
+      m = self%samples
+      ok = .not. (log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P))
+      if (.not. ok) return
+      a = lo
+      if (log) a = log10(lo)
+      ! never hi - lo, which overflows on extreme ends
+      if (log) then
+         step = log10(hi) / real(m - 1_I4P, R8P) - a / real(m - 1_I4P, R8P)
+      else
+         step = hi / real(m - 1_I4P, R8P) - lo / real(m - 1_I4P, R8P)
+      endif
+      allocate(xs(m))
+      do j = 1_I4P, m
+         xs(j) = a + real(j - 1_I4P, R8P) * step
+         if (log) xs(j) = 10.0_R8P**xs(j)
+      enddo
+      ! exact ends: a sample past an autoscaled end would widen the axis by a rounding error
+      xs(1) = lo
+      xs(m) = hi
+      endsubroutine sample_grid
    endsubroutine plot_command
 
    subroutine register_file(self, file)
@@ -1948,6 +1983,9 @@ contains
    elseif (keyword(option, 'y2label', 3_I4P)) then
       if (.not. string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_y2label(text)
+   elseif (keyword(option, 'x2label', 3_I4P)) then
+      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      call self%figure%set_x2label(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
@@ -1958,6 +1996,10 @@ contains
       endassociate
    elseif (keyword(option, 'y2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%y2axis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+      endassociate
+   elseif (keyword(option, 'x2range', 3_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%x2axis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
@@ -2149,6 +2191,8 @@ contains
       call tics_option(self%figure%panels(self%figure%current)%yaxis%tics)
    elseif (keyword(option, 'y2tics', 4_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%y2axis%tics)
+   elseif (keyword(option, 'x2tics', 4_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%x2axis%tics)
    elseif (keyword(option, 'cbtics', 4_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'mxtics', 3_I4P)) then
@@ -2157,6 +2201,8 @@ contains
       call minor_option(self%figure%panels(self%figure%current)%yaxis%tics)
    elseif (keyword(option, 'my2tics', 4_I4P)) then
       call minor_option(self%figure%panels(self%figure%current)%y2axis%tics)
+   elseif (keyword(option, 'mx2tics', 4_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%x2axis%tics)
    elseif (keyword(option, 'mcbtics', 4_I4P)) then
       call minor_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'datafile', 5_I4P)) then
@@ -2954,9 +3000,11 @@ contains
                call fail('set '//option//': rotate is supported on xtics only', iostat, iomsg)
                return
             endif
-            if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P)]) &
+            if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P), &
+                           keyword(option, 'x2tics', 4_I4P)]) &
                 .and. (toks(i)%text == 'in' .or. toks(i)%text == 'out')) then
-               call fail('set '//option//': in and out are supported on xtics, ytics and y2tics only', iostat, iomsg)
+               call fail('set '//option//': in and out are supported on xtics, ytics, y2tics and x2tics only', iostat, &
+                         iomsg)
                return
             endif
             select case (toks(i)%text)
@@ -3286,19 +3334,19 @@ contains
       endsubroutine samples_option
 
       subroutine format_option
-      !< `set format [x|y|y2|cb|xy...] ["format"]` (all axes by default): no format restores the default labels.
+      !< `set format [x|y|y2|cb|x2|xy...] ["format"]` (all axes by default): no format restores the default labels.
       character(len=:), allocatable :: axes    !< Axes letters.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Problem.
 
-      axes = 'xyy2cb'
+      axes = 'xyy2cbx2'
       format = ''
       i = 2_I4P
       if (i <= size(tokens, kind=I4P)) then
          if (tokens(i)%kind == TOKEN_WORD) then
             axes = tokens(i)%text
             if (.not. valid_axes(axes)) then
-               call fail('set format: axes must be among x, y, y2, cb (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
+               call fail('set format: axes must be among x, y, y2, cb, x2 (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
                return
             endif
             i = i + 1_I4P
@@ -3579,6 +3627,8 @@ contains
       call self%figure%set_ylabel('')
    elseif (keyword(option, 'y2label', 3_I4P)) then
       call self%figure%set_y2label('')
+   elseif (keyword(option, 'x2label', 3_I4P)) then
+      call self%figure%set_x2label('')
    elseif (keyword(option, 'grid', 2_I4P)) then
       call self%figure%set_grid(.false., polar=0.0_R8P)
    elseif (keyword(option, 'polar', 3_I4P)) then
@@ -3614,12 +3664,16 @@ contains
       call self%figure%set_yrange()
    elseif (keyword(option, 'y2range', 3_I4P)) then
       call self%figure%set_y2range()
+   elseif (keyword(option, 'x2range', 3_I4P)) then
+      call self%figure%set_x2range()
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then
       call self%figure%unset_ytics
    elseif (keyword(option, 'y2tics', 4_I4P)) then
       call self%figure%unset_y2tics
+   elseif (keyword(option, 'x2tics', 4_I4P)) then
+      call self%figure%unset_x2tics
    elseif (keyword(option, 'cbtics', 4_I4P)) then
       call self%figure%unset_cbtics
    elseif (keyword(option, 'mxtics', 3_I4P)) then
@@ -3628,6 +3682,8 @@ contains
       call self%figure%set_mytics(0_I4P)
    elseif (keyword(option, 'my2tics', 4_I4P)) then
       call self%figure%set_my2tics(0_I4P)
+   elseif (keyword(option, 'mx2tics', 4_I4P)) then
+      call self%figure%set_mx2tics(0_I4P)
    elseif (keyword(option, 'mcbtics', 4_I4P)) then
       call self%figure%set_mcbtics(0_I4P)
    elseif (keyword(option, 'format', 3_I4P)) then
@@ -3654,7 +3710,7 @@ contains
    endfunction after_command
 
    function axes_argument(tokens, axes, iostat, iomsg) result(ok)
-   !< Optional axes names after a `logscale` option (default all: `xyy2cb`); a base other than 10 is an error.
+   !< Optional axes names after a `logscale` option (default all: `xyy2cbx2`); a base other than 10 is an error.
    type(token_object),            intent(in)  :: tokens(:) !< Option tokens.
    character(len=:), allocatable, intent(out) :: axes      !< Axes letters.
    integer(I4P),                  intent(out) :: iostat    !< 0 on success.
@@ -3663,12 +3719,12 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
-   axes = 'xyy2cb'
+   axes = 'xyy2cbx2'
    ok = .true.
    if (size(tokens) >= 2) then
       axes = tokens(2)%text
       if (.not. valid_axes(axes)) then
-         call fail('logscale: axes among x, y, y2, cb expected (e.g. y or xy2), found "'//axes//'"', iostat, iomsg)
+         call fail('logscale: axes among x, y, y2, cb, x2 expected (e.g. y or xy2), found "'//axes//'"', iostat, iomsg)
          ok = .false.
          return
       endif
@@ -4238,14 +4294,14 @@ contains
    endfunction string_argument
 
    pure function valid_axes(names) result(ok)
-   !< Whether `names` concatenates supported axis names: x, y, y2, cb.
+   !< Whether `names` concatenates supported axis names: x, y, y2, cb, x2.
    character(len=*), intent(in)  :: names !< Axis names.
    logical                       :: ok    !< Supported.
    character(len=:), allocatable :: bad   !< Unsupported rest.
-   logical                       :: named(4) !< x, y, y2, cb named.
+   logical                       :: named(5) !< x, y, y2, cb, x2 named.
 
    named = .false.
-   call axes_names(names, named(1), named(2), named(3), bad, cb=named(4))
+   call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
    ok = len(names) > 0 .and. len(bad) == 0
    endfunction valid_axes
 
