@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.10.0] — 2026-11-21
+### Added
+- **axes**: Rotated x2 tick labels, as gnuplot 6.0
+
+- **fit**: Gnuplot's fit for Fortran models
+
+- **script**: Fit in scripts, as gnuplot 6.0
+
+
+### Documentation
+- **fit**: Fit in the reference, the cookbook, the gallery and the library
+
+
+### Fixed
+- **key**: The point sample of a color per point in the last point's color
+
+- **dumb**: No empty row between the title, the x2 label and its ticks
+
+- **fit**: Build with ifx 2026.2
+
+
 ## [0.9.0] — 2026-11-21
 ### Added
 - **smooth**: Bins, as gnuplot 6.0
