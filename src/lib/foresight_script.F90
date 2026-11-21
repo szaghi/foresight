@@ -165,6 +165,8 @@ type :: script_object
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
+      procedure, pass(self), private :: string_expression !< A string expression across tokens.
+      procedure, pass(self), private :: string_argument   !< The string after a set option.
       procedure, pass(self), private :: register_file !< Remember a data file.
       procedure, pass(self), private :: save_output   !< Render to the current output.
       procedure, pass(self), private :: set_command   !< `set`.
@@ -370,6 +372,68 @@ contains
       call fail('unsupported command "'//command//'"', iostat, iomsg)
    endif
    endsubroutine execute
+
+   function string_expression(self, tokens, i, text, iostat, iomsg) result(ok)
+   !< The string expression starting at token `i`, as gnuplot takes one wherever a string goes: a quoted string, or
+   !< an expression of strings, string variables and functions (`"run".i.".dat"`, `sprintf("p = %.2f", p)`, `name`). On
+   !< return `i` is its last token. A number is an error.
+   class(script_object),          intent(in)    :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens.
+   integer(I4P),                  intent(inout) :: i         !< First token in, last token out.
+   character(len=:), allocatable, intent(out)   :: text      !< String.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Success.
+   integer(I4P)                                 :: last      !< Last token.
+   logical                                      :: is_string !< A string value.
+
+   iostat = 0_I4P
+   iomsg = ''
+   text = ''
+   ok = .false.
+   last = expression_end(tokens, i)
+   if (last == i .and. tokens(i)%kind == TOKEN_STRING) then
+      text = tokens(i)%text
+      ok = .true.
+      return
+   endif
+   call self%symbols%text_of(expression_source(tokens(i:last)), text, is_string, iostat, iomsg, &
+                             degrees=self%figure%panels(self%figure%current)%degrees)
+   if (iostat /= 0_I4P) return
+   if (.not. is_string) then
+      call fail('a string is expected, found the number '//text, iostat, iomsg)
+      return
+   endif
+   i = last
+   ok = .true.
+   endfunction string_expression
+
+   function string_argument(self, tokens, text, iostat, iomsg) result(ok)
+   !< Optional string expression after an option (`set title "T"`, `set output name . ".svg"`); absent means empty.
+   class(script_object),          intent(in)  :: self      !< Interpreter.
+   type(token_object),            intent(in)  :: tokens(:) !< Option tokens.
+   character(len=:), allocatable, intent(out) :: text      !< String.
+   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
+   logical                                    :: ok        !< Success.
+   integer(I4P)                               :: i         !< Last token of the string.
+
+   iostat = 0_I4P
+   iomsg = ''
+   text = ''
+   ok = .true.
+   if (size(tokens) < 2) return
+   i = 2_I4P
+   ok = self%string_expression(tokens, i, text, iostat, iomsg)
+   if (.not. ok) then
+      iomsg = 'set '//tokens(1)%text//': '//iomsg
+      return
+   endif
+   if (i < size(tokens, kind=I4P)) then
+      call fail('set '//tokens(1)%text//': unexpected "'//tokens(i + 1_I4P)%text//'" after the string', iostat, iomsg)
+      ok = .false.
+   endif
+   endfunction string_argument
 
    subroutine print_command(self, text, iostat, iomsg)
    !< gnuplot `print EXPRESSION, ...`: the values (strings as they are, numbers as gnuplot shows them) separated by a
@@ -816,6 +880,7 @@ contains
    integer(I4P)                                 :: head      !< First token of a function.
    logical                                      :: has_title !< Title given (or notitle).
    logical                                      :: is_function !< The item is a function, else a data file.
+   logical                                      :: is_head     !< `title columnhead[(N)]`.
    logical                                      :: polar_ok !< The item can be drawn on a polar panel.
    logical                                      :: headed    !< The first row of each dataset is a header.
    integer(I4P)                                 :: title_column !< Header column titling the item: 0 the y one,
@@ -864,6 +929,9 @@ contains
          return
       endif
       is_function = tokens(i)%kind == TOKEN_WORD
+      quote = ' '
+      ! a word joined to strings or substrings is a string expression, a file name: d[1:3] . "x.dat"
+      if (is_function) is_function = all(tokens(i:expression_end(tokens, i))%kind == TOKEN_WORD)
       if (tokens(i)%kind == TOKEN_RANGE) then
          call fail('plot: inline ranges go before the first item, found "['//tokens(i)%text//']"', iostat, iomsg)
          return
@@ -879,14 +947,51 @@ contains
             i = i + 1_I4P
          enddo
          written = text(tokens(head)%first:tokens(i)%last)
-         associate(panel => self%figure%panels(self%figure%current))
-            call func%compile(written, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
-                              symbols=self%symbols)
-         endassociate
-         if (iostat /= 0_I4P) then
+         ! a constant string expression is a data file name, as gnuplot's `plot name u 1:2`
+         block
+            character(len=:), allocatable :: value     !< Constant value.
+            character(len=:), allocatable :: message   !< Not a constant.
+            integer(I4P)                  :: status    !< Constant status.
+            logical                       :: is_string !< A string.
+
+            call self%symbols%text_of(written, value, is_string, status, message, &
+                                      degrees=self%figure%panels(self%figure%current)%degrees)
+            if (status == 0_I4P .and. is_string) then
+               is_function = .false.
+               file = value
+            endif
+         endblock
+         if (is_function) then
+            associate(panel => self%figure%panels(self%figure%current))
+               call func%compile(written, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
+                                 symbols=self%symbols)
+            endassociate
+            if (iostat /= 0_I4P) then
+               iomsg = 'plot: '//iomsg
+               return
+            endif
+         else
+            if (len(file) == 0) file = self%previous_file
+            if (len(file) == 0) then
+               call fail('plot: '''' needs a previous data file', iostat, iomsg)
+               return
+            endif
+            self%previous_file = file
+         endif
+      elseif (expression_end(tokens, i) > i) then
+         ! a string expression as the file name: "run".i.".dat"
+         head = i
+         if (.not. self%string_expression(tokens, i, file, iostat, iomsg)) then
             iomsg = 'plot: '//iomsg
             return
          endif
+         written = text(tokens(head)%first:tokens(i)%last)
+         if (len(file) == 0) file = self%previous_file
+         if (len(file) == 0) then
+            call fail('plot: '''' needs a previous data file', iostat, iomsg)
+            return
+         endif
+         self%previous_file = file
       else
          file = tokens(i)%text
          written = file
@@ -1151,21 +1256,23 @@ contains
                call fail('plot: title needs a quoted string or columnhead', iostat, iomsg)
                return
             endif
-            if (tokens(i)%kind == TOKEN_WORD) then
-               if (.not. columnhead_title(tokens(i)%text, title_column)) then
-                  call fail('plot: title needs a quoted string or columnhead, found "'//tokens(i)%text//'"', &
-                            iostat, iomsg)
-                  return
-               endif
+            ! columnhead_title sets title_column: called on words only (Fortran does not short-circuit .and.)
+            is_head = .false.
+            if (tokens(i)%kind == TOKEN_WORD) is_head = columnhead_title(tokens(i)%text, title_column)
+            if (is_head) then
                if (is_function) then
                   call fail('plot: a function has no column header', iostat, iomsg)
                   return
                endif
-            elseif (tokens(i)%kind /= TOKEN_STRING) then
-               call fail('plot: title needs a quoted string or columnhead', iostat, iomsg)
-               return
+            elseif (tokens(i)%kind == TOKEN_WORD .or. tokens(i)%kind == TOKEN_STRING) then
+               ! a string expression: "speed", 'f' . i, sprintf("p = %.2f", p)
+               if (.not. self%string_expression(tokens, i, title, iostat, iomsg)) then
+                  iomsg = 'plot: title: '//iomsg
+                  return
+               endif
             else
-               title = tokens(i)%text
+               call fail('plot: title needs a string or columnhead', iostat, iomsg)
+               return
             endif
             has_title = .true.
          elseif (keyword(word, 'notitle', 3_I4P)) then
@@ -1506,7 +1613,7 @@ contains
             title_column = 0_I4P
          case ('file')
             ! gnuplot: the item as written, '' included
-            title = quote//written//quote
+            title = trim(quote)//written//trim(quote)
             if (len(spec) > 0) title = title//' '//using//' '//spec
          endselect
       endif
@@ -2189,7 +2296,7 @@ contains
       character(len=:), allocatable :: problem     !< Grid problem.
 
       if (.not. has_title .and. self%autotitle == 'file') then
-         title = quote//written//quote
+         title = trim(quote)//written//trim(quote)
          if (len(spec) > 0) title = title//' '//using//' '//spec
       endif
       if (is_matrix) then
@@ -2545,19 +2652,19 @@ contains
    endif
    option = tokens(1)%text
    if (keyword(option, 'title', 3_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_title(text)
    elseif (keyword(option, 'xlabel', 2_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_xlabel(text)
    elseif (keyword(option, 'ylabel', 2_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_ylabel(text)
    elseif (keyword(option, 'y2label', 3_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_y2label(text)
    elseif (keyword(option, 'x2label', 3_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_x2label(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
@@ -2662,14 +2769,14 @@ contains
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_cblabel(text)
    elseif (keyword(option, 'colorbox', 4_I4P)) then
       call colorbox_option
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call boxwidth_option
    elseif (keyword(option, 'output', 2_I4P)) then
-      if (.not. string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) then
          call fail('set output: a file name is required', iostat, iomsg)
          return
@@ -2815,11 +2922,10 @@ contains
                call fail('set multiplot: title needs a quoted string', iostat, iomsg)
                return
             endif
-            if (tokens(i)%kind /= TOKEN_STRING) then
-               call fail('set multiplot: title needs a quoted string', iostat, iomsg)
+            if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+               iomsg = 'set multiplot: title: '//iomsg
                return
             endif
-            text = tokens(i)%text
          else
             call fail('set multiplot: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
             return
@@ -2896,39 +3002,48 @@ contains
       subroutine print_option
       !< `set print ["file" [append] | "-"]`: where `print` writes; a file is emptied unless `append`; bare, the
       !< standard error.
-      integer(I4P) :: unit !< File unit.
+      character(len=:), allocatable :: name   !< File name.
+      integer(I4P)                  :: unit   !< File unit.
+      integer(I4P)                  :: k      !< Last token of the name.
+      logical                       :: append !< `append` given.
 
       if (size(tokens) == 1) then
          self%print_file = ''
          return
       endif
-      if (tokens(2)%kind /= TOKEN_STRING .or. size(tokens) > 3) then
+      k = 2_I4P
+      if (tokens(2)%kind == TOKEN_STRING .or. tokens(2)%kind == TOKEN_WORD) then
+         if (.not. keyword(tokens(2)%text, 'append', 3_I4P) .or. tokens(2)%kind == TOKEN_STRING) then
+            if (.not. self%string_expression(tokens, k, name, iostat, iomsg)) then
+               iomsg = 'set print: '//iomsg
+               return
+            endif
+         endif
+      endif
+      append = .false.
+      if (k == size(tokens, kind=I4P) - 1_I4P) append = keyword(tokens(k + 1_I4P)%text, 'append', 3_I4P)
+      if (.not. allocated(name) .or. (k < size(tokens, kind=I4P) .and. .not. append) .or. &
+          k < size(tokens, kind=I4P) - 1_I4P) then
          call fail('set print: "file" [append] or "-" expected', iostat, iomsg)
          return
       endif
-      if (size(tokens) == 3) then
-         if (.not. keyword(tokens(3)%text, 'append', 3_I4P)) then
-            call fail('set print: "file" [append] or "-" expected', iostat, iomsg)
-            return
-         endif
-      endif
-      if (tokens(2)%text == '-') then
+      if (name == '-') then
          self%print_file = '-'
          return
       endif
-      if (len(tokens(2)%text) == 0) then
+      if (len(name) == 0) then
          self%print_file = ''
          return
       endif
-      if (size(tokens) == 2) then
-         open(newunit=unit, file=tokens(2)%text, status='replace', action='write', iostat=iostat)
+      if (.not. append) then
+         open(newunit=unit, file=name, status='replace', action='write', iostat=iostat)
          if (iostat /= 0_I4P) then
-            call fail('set print: cannot write "'//tokens(2)%text//'"', iostat, iomsg)
+            call fail('set print: cannot write "'//name//'"', iostat, iomsg)
             return
          endif
          close(unit)
       endif
-      self%print_file = tokens(2)%text
+      self%print_file = name
       endsubroutine print_option
 
       subroutine fit_option
@@ -4098,8 +4213,9 @@ contains
       axes = 'xyy2cbx2'
       format = ''
       i = 2_I4P
-      if (i <= size(tokens, kind=I4P)) then
-         if (tokens(i)%kind == TOKEN_WORD) then
+      ! a lone word before the format names the axes
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i)%kind == TOKEN_WORD .and. expression_end(tokens, i) == i) then
             axes = tokens(i)%text
             if (.not. valid_axes(axes)) then
                call fail('set format: axes must be among x, y, y2, cb, x2 (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
@@ -4107,13 +4223,22 @@ contains
             endif
             i = i + 1_I4P
          endif
+      elseif (i == size(tokens, kind=I4P)) then
+         if (tokens(i)%kind == TOKEN_WORD .and. valid_axes(tokens(i)%text)) then
+            axes = tokens(i)%text
+            i = i + 1_I4P
+         endif
       endif
       if (i <= size(tokens, kind=I4P)) then
-         if (tokens(i)%kind /= TOKEN_STRING .or. i < size(tokens, kind=I4P)) then
-            call fail('set format: a single quoted format is expected', iostat, iomsg)
+         ! a string expression: "%.1f", fmt, "%" . ".1f"
+         if (.not. self%string_expression(tokens, i, format, iostat, iomsg)) then
+            iomsg = 'set format: '//iomsg
             return
          endif
-         format = tokens(i)%text
+         if (i < size(tokens, kind=I4P)) then
+            call fail('set format: unexpected "'//tokens(i + 1_I4P)%text//'" after the format', iostat, iomsg)
+            return
+         endif
          if (len(format) > 0) then
             message = format_check(format)
             if (len(message) > 0) then
@@ -5111,26 +5236,77 @@ contains
    enddo
    endfunction plain_columns
 
-   function string_argument(tokens, text, iostat, iomsg) result(ok)
-   !< Optional single quoted string after an option; absent means empty.
-   type(token_object),            intent(in)  :: tokens(:) !< Option tokens.
-   character(len=:), allocatable, intent(out) :: text      !< String.
-   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
-   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
-   logical                                    :: ok        !< Success.
+   function expression_end(tokens, first) result(last)
+   !< Last token of the expression starting at token `first`: tokens join where an operator lies between them (a word
+   !< ending or starting with one of `.+-*/%?:<>=!&|`, or `eq`, `ne`), and a range glued to its left neighbour is a
+   !< substring, `s[1:2]`: `"run".i.".dat"`, `'f' . i`, `sprintf("%d", n)`.
+   type(token_object), intent(in) :: tokens(:) !< Tokens.
+   integer(I4P),       intent(in) :: first     !< First token.
+   integer(I4P)                   :: last      !< Last token.
 
-   iostat = 0_I4P
-   iomsg = ''
-   text = ''
-   ok = .true.
-   if (size(tokens) < 2) return
-   if (tokens(2)%kind /= TOKEN_STRING .or. size(tokens) > 2) then
-      call fail('set '//tokens(1)%text//': a single quoted string is expected', iostat, iomsg)
-      ok = .false.
-      return
-   endif
-   text = tokens(2)%text
-   endfunction string_argument
+   last = first
+   do while (last < size(tokens, kind=I4P))
+      if (.not. joined(tokens(last), tokens(last + 1_I4P))) exit
+      last = last + 1_I4P
+   enddo
+   contains
+      pure function joined(a, b) result(yes)
+      !< Whether `b` continues the expression ending with `a`.
+      type(token_object), intent(in) :: a   !< Left token.
+      type(token_object), intent(in) :: b   !< Right token.
+      logical                        :: yes !< Joined.
+      character(len=*), parameter    :: OPERATORS = '.+-*/%?:<>=!&|' !< Operator characters.
+
+      yes = .false.
+      if (a%kind == TOKEN_COMMA .or. b%kind == TOKEN_COMMA) return
+      if (b%kind == TOKEN_RANGE) then
+         yes = b%first == a%last + 1_I4P
+         return
+      endif
+      if (a%kind == TOKEN_WORD .and. len(a%text) > 0) then
+         yes = scan(a%text(len(a%text):len(a%text)), OPERATORS) > 0 .or. a%text == 'eq' .or. a%text == 'ne'
+      endif
+      if (b%kind == TOKEN_WORD .and. len(b%text) > 0 .and. .not. yes) then
+         yes = scan(b%text(1:1), OPERATORS) > 0 .or. b%text == 'eq' .or. b%text == 'ne'
+      endif
+      endfunction joined
+   endfunction expression_end
+
+   pure function expression_source(tokens) result(source)
+   !< Expression text of `tokens`: quoted strings quoted again (escapes restored in double quotes), ranges bracketed.
+   type(token_object), intent(in) :: tokens(:) !< Tokens.
+   character(len=:), allocatable  :: source    !< Expression.
+   integer(I4P)                   :: k         !< Token counter.
+   integer(I4P)                   :: c         !< Character counter.
+
+   source = ''
+   do k = 1_I4P, size(tokens, kind=I4P)
+      select case (tokens(k)%kind)
+      case (TOKEN_STRING)
+         if (tokens(k)%quote == "'") then
+            source = source//" '"//tokens(k)%text//"'"
+         else
+            source = source//' "'
+            do c = 1_I4P, len(tokens(k)%text, kind=I4P)
+               select case (tokens(k)%text(c:c))
+               case ('"', '\')
+                  source = source//'\'//tokens(k)%text(c:c)
+               case (achar(9))
+                  source = source//'\t'
+               case default
+                  source = source//tokens(k)%text(c:c)
+               endselect
+            enddo
+            source = source//'"'
+         endif
+      case (TOKEN_RANGE)
+         source = source//'['//tokens(k)%text//']'
+      case default
+         source = source//' '//tokens(k)%text
+      endselect
+   enddo
+   source = trim(adjustl(source))
+   endfunction expression_source
 
    pure function valid_axes(names) result(ok)
    !< Whether `names` concatenates supported axis names: x, y, y2, cb, x2.

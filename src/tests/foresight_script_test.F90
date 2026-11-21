@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(99)                           !< Per-check outcome.
+logical                       :: test_passed(100)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1634,6 +1634,43 @@ test_passed(99) = test_passed(99) .and. iostat /= 0_I4P .and. interpreter%print_
 open(newunit=unit, file='foresight_script_test_print.txt')
 close(unit, status='delete')
 
+! string expressions wherever a string goes, as gnuplot 6.0: set options, plot file names and titles
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2 3', '2 3 4', '3 4 5'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text("i = 2; name = 'foresight_script_test_strings'; d = '"//data_file//"'"//new_line('a')// &
+                          "set terminal svg size 300,200; set output name . '.svg'"//new_line('a')// &
+                          "set title sprintf('run %d', i); set xlabel 'x' . ' [m]'; set format y '%' . '.1f'"// &
+                          new_line('a')//"plot d u 1:2 t 'col' . i, d[1:3] . d[4:] u 1:3, '' u 1:2 notitle", &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(100) = iostat == 0_I4P
+if (test_passed(100)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(100) = interpreter%output == 'foresight_script_test_strings.svg' .and. panel%title == 'run 2' .and. &
+                         panel%xaxis%label == 'x [m]' .and. panel%yaxis%tics%format == '%.1f' .and. &
+                         size(panel%series) == 3
+      if (test_passed(100)) test_passed(100) = panel%series(1)%title == 'col2' .and. &
+                                               panel%series(2)%title == 'd[1:3] . d[4:] u 1:3' .and. &
+                                               panel%series(3)%y(3) == 4.0_R8P .and. panel%series(2)%y(3) == 5.0_R8P
+   endassociate
+endif
+call interpreter%run_text("set title 5", iostat, iomsg)
+test_passed(100) = test_passed(100) .and. iostat /= 0_I4P .and. &
+                   index(iomsg, 'set title: a string is expected, found the number 5') > 0
+call interpreter%run_text("set output 'a' 'b'", iostat, iomsg)
+test_passed(100) = test_passed(100) .and. iostat /= 0_I4P .and. index(iomsg, 'unexpected "b" after the string') > 0
+call interpreter%run_text("plot x t 3", iostat, iomsg)
+test_passed(100) = test_passed(100) .and. iostat /= 0_I4P .and. &
+                   index(iomsg, 'plot: title: a string is expected, found the number 3') > 0
+call interpreter%run_text("set format zz '%g'", iostat, iomsg)
+test_passed(100) = test_passed(100) .and. iostat /= 0_I4P .and. index(iomsg, 'axes must be among') > 0
+open(newunit=unit, file='foresight_script_test_strings.svg')
+close(unit, status='delete')
+open(newunit=unit, file=data_file)
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1642,7 +1679,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,99L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,100L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
