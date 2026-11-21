@@ -51,7 +51,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use foresight_axis, only : axis_object
 use foresight_format, only : int_str
 use foresight_backend, only : axes_view, backend_object
-use foresight_palette, only : palette_object, palette_words
+use foresight_palette, only : hex_color, palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : push, series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
@@ -239,8 +239,14 @@ endtype axes_object
 contains
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
-                         length, angle, major, minor, labels, label, head, origins, curve, channels, at, colors)
+                         length, angle, major, minor, labels, label, head, origins, curve, channels, at, colors, &
+                         palette_z, palette_cb, palette_frac)
    !< Add the series (`x`, `y`) with gnuplot-like style options; unset options take gnuplot defaults.
+   !<
+   !< The color from the palette, as gnuplot `lc palette`: `palette_z` maps a value per point over the color axis (`z`,
+   !< lines, points, linespoints and impulses; a segment takes the color of its end point, an undefined value leaves a
+   !< gap), `palette_cb` one color axis value, `palette_frac` one fraction of the palette (0 to 1) for the whole
+   !< series. The color axis then spans the `palette_z` values too, and the color box is drawn.
    !<
    !< Error bar styles need their bounds: `ylow`/`yhigh` for `yerrorbars`, `xlow`/`xhigh` for `xerrorbars`, all four for
    !< `xyerrorbars`. `axes` is gnuplot's `x1y1` (default), `x1y2`, `x2y1` or `x2y2`: `x2` the second x axis, `y2` the
@@ -313,6 +319,9 @@ contains
                                                                !< green, blue, alpha; `z` then its red ones.
    real(R8P),          intent(in), optional :: at        !< Position of a parallel axis (its number if absent).
    character(len=*),   intent(in), optional :: colors(:) !< Color of each point (gnuplot `lc variable`).
+   real(R8P),          intent(in), optional :: palette_z(:) !< Palette value of each point (gnuplot `lc palette z`).
+   real(R8P),          intent(in), optional :: palette_cb   !< A color axis value (gnuplot `lc palette cb`).
+   real(R8P),          intent(in), optional :: palette_frac !< A fraction of the palette (gnuplot `lc palette frac`).
    type(series_object)                      :: series !< New series.
    character(len=:), allocatable            :: bad    !< Unknown fill style word.
    character(len=:), allocatable            :: message !< Readout format problem.
@@ -577,6 +586,24 @@ contains
       allocate(series%colors(size(colors)))
       series%colors(:) = colors
       if (size(colors) > 0) series%style%color = colors(1) ! the key sample: the first point's color (gnuplot)
+   endif
+   if (count([present(palette_z), present(palette_cb), present(palette_frac), present(colors)]) > 1) &
+      error stop 'foresight: plot: one of colors, palette_z, palette_cb, palette_frac'
+   if (present(palette_z)) then
+      if (size(palette_z) /= size(x)) error stop 'foresight: plot: palette_z and x have different sizes'
+      if (.not. any(series%style%with == [WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_IMPULSES])) &
+         error stop 'foresight: plot: palette_z (lc palette z) applies to lines, points, linespoints and impulses'
+      series%palette_mode = 1_I4P
+      series%zvalues = palette_z
+      ! a point of undefined color value is undefined, as gnuplot
+      where (.not. ieee_is_finite(palette_z)) series%y = ieee_value(1.0_R8P, ieee_quiet_nan)
+   elseif (present(palette_cb) .or. present(palette_frac)) then
+      if (any(series%style%with == [WITH_READOUT, WITH_GAUGE, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_PARALLELAXES, &
+                                    WITH_SPIDERPLOT, WITH_LABELS])) &
+         error stop 'foresight: plot: palette_cb and palette_frac do not apply to readouts, panel charts and labels'
+      series%palette_mode = merge(2_I4P, 3_I4P, present(palette_cb))
+      if (present(palette_cb)) series%palette_value = palette_cb
+      if (present(palette_frac)) series%palette_value = palette_frac
    endif
    if (series%style%with == WITH_FILLEDCURVES .and. present(ylow)) then
       if (size(ylow) /= size(y)) error stop 'foresight: plot: ylow and y have different sizes'
@@ -1204,6 +1231,9 @@ contains
       call self%setup_axes(area, raw)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
+   ! the series colored by the palette, over the color axis just set up
+   if (self%has_image(palette=.true.)) call paint_series(self%series, effective_palette(self%palette, &
+                                                                                     backend%theme%name), self%cbaxis)
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
@@ -2695,7 +2725,7 @@ contains
 
    pure subroutine image_range(all, zmin, zmax, found, positive)
    !< Range of the finite values (the positive ones with `positive`, for a log color axis) of the images among the
-   !< series `all`. A module procedure on the series array, as `layout_histograms`: gfortran 16 debug builds misread
+   !< series `all`, and of the `lc palette z` values. A module procedure on the series array, as `layout_histograms`: gfortran 16 debug builds misread
    !< `self%series(s)%grid` through the class dummy.
    type(series_object), intent(in)  :: all(:)   !< Series of the panel.
    real(R8P),           intent(out) :: zmin     !< Smallest value.
@@ -2710,6 +2740,16 @@ contains
    zmax = -huge(1.0_R8P)
    found = .false.
    do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%palette_mode == 1_I4P .and. allocated(all(s)%zvalues)) then
+         ! lc palette z: the values of the points
+         do i = 1_I4P, size(all(s)%zvalues, kind=I4P)
+            if (.not. ieee_is_finite(all(s)%zvalues(i))) cycle
+            if (positive .and. all(s)%zvalues(i) <= 0.0_R8P) cycle
+            found = .true.
+            zmin = min(zmin, all(s)%zvalues(i))
+            zmax = max(zmax, all(s)%zvalues(i))
+         enddo
+      endif
       if (all(s)%style%with /= WITH_IMAGE .or. allocated(all(s)%channels)) cycle
       do j = 1_I4P, size(all(s)%grid, 2, kind=I4P)
          do i = 1_I4P, size(all(s)%grid, 1, kind=I4P)
@@ -3832,7 +3872,8 @@ contains
    endfunction is_panel_chart
 
    pure function has_image(self, palette) result(has)
-   !< Whether the panel has an image; with `palette` true, an image of values colored by the palette (not RGB).
+   !< Whether the panel has an image; with `palette` true, an image of values colored by the palette (not RGB) or a
+   !< series colored by it (`lc palette`): the color axis and its box are then drawn.
    class(axes_object), intent(in)           :: self    !< Panel.
    logical,            intent(in), optional :: palette !< Palette images only.
    logical                                  :: has     !< An image is plotted.
@@ -3856,11 +3897,56 @@ contains
 
    has = .false.
    do s = 1_I4P, size(all, kind=I4P)
+      ! a series colored by the palette (lc palette) needs the color axis and its box, as a palette image
+      if (palette .and. all(s)%palette_mode > 0_I4P) has = .true.
       if (all(s)%style%with /= WITH_IMAGE) cycle
       if (palette .and. allocated(all(s)%channels)) cycle
       has = .true.
    enddo
    endfunction any_image
+
+   pure subroutine paint_series(all, p, cbaxis)
+   !< The colors of the series of `all` colored by the palette `p` (gnuplot `lc palette`): per point over the color
+   !< axis `cbaxis` (`z`; the key sample takes the first point's color), one color axis value (`cb`) or one fraction
+   !< (`frac`). A value not placeable on a log color axis takes its low end, as the images. A module procedure on the
+   !< series array, as `image_range`.
+   type(series_object),  intent(inout) :: all(:) !< Series of the panel.
+   type(palette_object), intent(in)    :: p      !< Effective palette.
+   type(axis_object),    intent(in)    :: cbaxis !< Color axis.
+   integer(I4P)                        :: s      !< Series counter.
+   integer(I4P)                        :: i      !< Point counter.
+
+   do s = 1_I4P, size(all, kind=I4P)
+      select case (all(s)%palette_mode)
+      case (1_I4P)
+         if (.not. allocated(all(s)%zvalues)) cycle
+         if (allocated(all(s)%colors)) deallocate(all(s)%colors)
+         allocate(all(s)%colors(size(all(s)%zvalues)))
+         do i = 1_I4P, size(all(s)%zvalues, kind=I4P)
+            all(s)%colors(i) = cb_color(all(s)%zvalues(i))
+         enddo
+         if (size(all(s)%colors) > 0) all(s)%style%color = all(s)%colors(1)
+      case (2_I4P)
+         all(s)%style%color = cb_color(all(s)%palette_value)
+      case (3_I4P)
+         all(s)%style%color = hex_color(p%rgb(all(s)%palette_value))
+      endselect
+   enddo
+   contains
+      pure function cb_color(value) result(hex)
+      !< Color of the color axis `value`.
+      real(R8P), intent(in) :: value !< Value.
+      character(len=7)      :: hex   !< Color.
+
+      if (.not. ieee_is_finite(value)) then
+         hex = hex_color(p%rgb(0.0_R8P))
+      elseif (cbaxis%log .and. value <= 0.0_R8P) then
+         hex = hex_color(p%rgb(merge(0.0_R8P, 1.0_R8P, cbaxis%lo < cbaxis%hi)))
+      else
+         hex = hex_color(p%rgb(cbaxis%to_unit(value)))
+      endif
+      endfunction cb_color
+   endsubroutine paint_series
 
    function effective_palette(palette, theme) result(p)
    !< `palette`, or the palette of the `theme` if it has the default colors: from the dark glass to the emissive colors

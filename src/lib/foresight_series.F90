@@ -27,7 +27,13 @@ type :: series_object
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    character(len=:), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
-   character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none.
+   character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none;
+                                               !< of `lc palette z`, set at each rendering.
+   integer(I4P)                  :: palette_mode = 0_I4P !< Color from the palette (gnuplot `lc palette`): 0 none, 1 a
+                                                         !< value per point (`z`, `zvalues`), 2 a color axis value
+                                                         !< (`cb`), 3 a fraction of the palette (`frac`); `value`.
+   real(R8P)                     :: palette_value = 0.0_R8P !< The `cb` value or the `frac` fraction.
+   real(R8P), allocatable        :: zvalues(:) !< Palette value of each point (`lc palette z`), unallocated for none.
    real(R8P), allocatable        :: values(:) !< Values of a histogram, `y` being the top of its bar or stack segment.
    real(R8P), allocatable        :: grid(:,:) !< Values of an image (column, row), rows upward; `x` and `y` are then its
                                               !< left and right, bottom and top pixel edges.

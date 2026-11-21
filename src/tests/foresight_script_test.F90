@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(92)                           !< Per-check outcome.
+logical                       :: test_passed(93)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1424,6 +1424,39 @@ associate(panel => interpreter%figure%panels(1))
 endassociate
 call interpreter%run_text("unset xrange; plot '"//data_file//"' every ::0::0 smooth mcsplines", iostat, iomsg)
 test_passed(92) = test_passed(92) .and. iostat /= 0_I4P .and. index(iomsg, 'mcsplines need at least 2 points') > 0
+
+! lc palette, as gnuplot 6.0 (svg probes): z (the default) colors each point by the last using column over the color
+! axis, which spans those values; cb V and frac F color the whole item, any style but the panel charts
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 1 0', '2 3 5', '3 2 10', '4 4 2', '5 2 NaN'
+close(unit)
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w lp lc palette z, '' u 1:2 w l lc palette frac 0.25, "// &
+                             "'' u 1:2 w boxes lc palette cb 5, sin(x) lc palette frac 1", iostat, iomsg)
+   test_passed(93) = iostat == 0_I4P
+   if (test_passed(93)) test_passed(93) = &
+      all(panel%series(1)%colors(1:4) == ['#000000', '#b42000', '#ffff00', '#7202f3']) .and. &
+      ieee_is_nan(panel%series(1)%y(5)) .and. panel%series(1)%style%color == '#000000' .and. &
+      panel%series(2)%style%color == '#8004ff' .and. panel%series(3)%style%color == '#b42000' .and. &
+      panel%series(4)%style%color == '#ffff00' .and. panel%cbaxis%lo == 0.0_R8P .and. panel%cbaxis%hi == 10.0_R8P
+   ! without z values the color axis keeps gnuplot's default [-10:10]: cb 5 is three quarters of the palette
+   call interpreter%run_text("set style line 3 lc palette cb 5 lw 2; plot '"//data_file//"' u 1:2 w l ls 3", &
+                             iostat, iomsg)
+   test_passed(93) = test_passed(93) .and. iostat == 0_I4P .and. panel%series(1)%style%color == '#dd6c00'
+endassociate
+call interpreter%run_text("plot sin(x) lc palette z", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z needs using x:y:z') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z needs using x:y:z') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w boxes lc palette z", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z applies to lines') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette viridis", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'no named colormap') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette frac 2", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'a fraction from 0 to 1') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2 w pie lc palette frac 0.5", iostat, iomsg)
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette does not apply to pie') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1441,7 +1474,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,92L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,93L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

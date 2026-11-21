@@ -268,10 +268,13 @@ contains
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
                    xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
-                   minor, labels, label, head, origins, curve, at, colors)
+                   minor, labels, label, head, origins, curve, at, colors, palette_z, palette_cb, palette_frac)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`. `colors` gives each point its color (gnuplot `lc variable`) with lines, points, linespoints and
    !< impulses: a line segment takes the color of its end point, the key sample that of the first point.
+   !< `palette_z` colors each point by its value through the palette over the color axis (gnuplot `lc palette z`, the
+   !< same styles and rules; the color axis spans these values and its box is drawn); `palette_cb` (a color axis value)
+   !< and `palette_frac` (a fraction of the palette, 0 to 1) color the whole series (`lc palette cb|frac`).
    !<
    !< Error bar styles (`yerrorbars`, `xerrorbars`, `xyerrorbars`) take the bar bounds `ylow`/`yhigh`, `xlow`/`xhigh`.
    !< `axes='x1y2'` plots the series against the second y axis, scaled on its own, `x2y1` against the second x axis
@@ -353,6 +356,9 @@ contains
    character(len=*),     intent(in), optional :: curve      !< Filled curve options (`'x1'`, `'above'`, `'xy=0,1'`).
    real(R8P),            intent(in), optional :: at         !< Position of a parallel axis.
    character(len=*),     intent(in), optional :: colors(:)  !< Color of each point (gnuplot `lc variable`).
+   real(R8P),            intent(in), optional :: palette_z(:) !< Palette value of each point (`lc palette z`).
+   real(R8P),            intent(in), optional :: palette_cb   !< A color axis value (`lc palette cb`).
+   real(R8P),            intent(in), optional :: palette_frac !< A fraction of the palette (`lc palette frac`).
 
    call self%ensure_panels
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
@@ -362,7 +368,8 @@ contains
                                              close=close, whiskerbars=whiskerbars, factors=factors, dx=dx, dy=dy, &
                                              length=length, angle=angle, major=major, minor=minor, labels=labels, &
                                              label=label, head=head, origins=origins, curve=curve, at=at, &
-                                             colors=colors)
+                                             colors=colors, palette_z=palette_z, palette_cb=palette_cb, &
+                                             palette_frac=palette_frac)
    endsubroutine plot
 
    subroutine save(self, file)

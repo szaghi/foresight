@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(88)                  !< Per-figure outcome.
+logical                     :: test_passed(89)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -112,7 +112,8 @@ test_passed(86) = check('theme_washi.svg', figure_identity('washi'))
 test_passed(87) = check('theme_night.svg', figure_identity('night'))
 ! also the page of the viewer DOM test of a dark theme (src/js/viewer_dom_test.js)
 test_passed(88) = check('theme_night.html', figure_identity('night'))
-write(output_unit, '(A,88L2)') 'foresight golden checks:', test_passed
+test_passed(89) = check('lc_palette.svg', figure_lc_palette())
+write(output_unit, '(A,89L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -432,6 +433,23 @@ contains
    call fig%set_ytics(out=.true.)
    call fig%plot(X, Y, title='out', with='linespoints')
    endfunction figure_tics_rotate
+
+   function figure_lc_palette() result(fig)
+   !< Colors from the palette, gnuplot `lc palette`: a spiral colored by its radius (`z`, the color box spanning it),
+   !< points by their value, and a constant fraction of the palette.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: t(:) !< Parameter.
+   integer(I4P)           :: i    !< Counter.
+
+   t = [(0.15_R8P * real(i, R8P), i = 0, 60)]
+   call fig%init(width=520_I4P, height=320_I4P)
+   call fig%set_cblabel('radius')
+   call fig%plot(t * cos(t), t * sin(t), title='spiral', with='lines', lw=2.0_R8P, palette_z=t)
+   call fig%plot(t(::6) * cos(t(::6)) + 1.0_R8P, -t(::6) * sin(t(::6)), title='points', with='points', pt=7_I4P, &
+                 palette_z=t(::6))
+   call fig%plot([-9.0_R8P, -4.0_R8P], [-6.5_R8P, -6.5_R8P], title='frac 0.8', with='lines', lw=3.0_R8P, &
+                 palette_frac=0.8_R8P)
+   endfunction figure_lc_palette
 
    function figure_lc_variable() result(fig)
    !< Colors per point, gnuplot `lc variable`: a line whose segments take the color of their end point, points by

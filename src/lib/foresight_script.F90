@@ -106,6 +106,9 @@ endinterface push
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
 character(len=12), parameter :: LC_VARIABLE     = '*variable'    !< `lc variable` marker in a line color.
 character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb variable` marker in a line color.
+character(len=12), parameter :: LC_PALETTE_Z    = '*palettez'    !< `lc palette [z]` marker in a line color.
+character(len=12), parameter :: LC_PALETTE_CB   = '*palettecb'   !< `lc palette cb V` marker in a line color.
+character(len=12), parameter :: LC_PALETTE_FRAC = '*palettefrac' !< `lc palette frac F` marker in a line color.
 character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps or dots' !< Styles
                                                  !< drawing functions.
 
@@ -117,6 +120,7 @@ type :: line_style_object
    integer(I4P),     allocatable :: dt         !< Dash type.
    real(R8P),        allocatable :: ps         !< Point size.
    integer(I4P),     allocatable :: pt         !< Point type.
+   real(R8P)                     :: palette = 0.0_R8P !< Value of `lc palette cb V` or `frac F`.
 endtype line_style_object
 
 type :: script_object
@@ -434,6 +438,9 @@ contains
    logical                                      :: binavg    !< `binvalue=avg`.
    real(R8P)                                    :: bin_edges(2) !< Outer edges of the bins.
    logical                                      :: lcvar     !< lc variable: the colors from the last using column.
+   logical                                      :: lcz       !< lc palette z: the palette values from the last column.
+   character(len=:), allocatable                :: palette_lc !< `lc palette` marker of the item, empty for none.
+   real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
    character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
@@ -877,6 +884,13 @@ contains
             return
          endif
       endif
+      if (allocated(line%lc)) then
+         if (index(line%lc, '*palette') == 1 .and. is_word(with, 'readout gauge pie radar rose parallelaxes '// &
+                                                                 'spiderplot labels image rgbimage rgbalpha')) then
+            call fail('plot: lc palette does not apply to '//with, iostat, iomsg)
+            return
+         endif
+      endif
       if (allocated(at_x) .and. with /= 'parallelaxes') then
          call fail('plot: at applies to parallelaxes only', iostat, iomsg)
          return
@@ -912,8 +926,19 @@ contains
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') title = written
+         palette_lc = ''
+         if (allocated(line%lc)) then
+            if (line%lc == LC_PALETTE_Z) then
+               call fail('plot: lc palette z needs using x:y:z, not the function "'//written//'"', iostat, iomsg)
+               return
+            elseif (index(line%lc, '*palette') == 1) then
+               palette_lc = line%lc
+               deallocate(line%lc)
+            endif
+         endif
          call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
                                dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
+         if (len(palette_lc) > 0) call paint_last
          call push(functions, func)
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
@@ -1025,23 +1050,28 @@ contains
       endif
       ! lc variable: the last field is the color column, out of the style's fields
       lcvar = .false.
-      if (allocated(line%lc)) lcvar = line%lc(1:1) == '*'
-      if (lcvar) then
+      lcz = .false.
+      if (allocated(line%lc)) then
+         lcvar = line%lc == LC_VARIABLE .or. line%lc == LC_RGB_VARIABLE
+         lcz = line%lc == LC_PALETTE_Z
+      endif
+      if (lcvar .or. lcz) then
+         word = trim(merge('lc palette z', 'lc variable ', lcz))
          if (.not. is_word(with, 'lines points linespoints impulses')) then
-            call fail('plot: lc variable applies to lines, points, linespoints and impulses, not to '//with, iostat, &
+            call fail('plot: '//word//' applies to lines, points, linespoints and impulses, not to '//with, iostat, &
                       iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
-            call fail('plot: lc variable needs using x:y:color', iostat, iomsg)
+            call fail('plot: '//word//' needs using x:y:'//trim(merge('z    ', 'color', lcz)), iostat, iomsg)
             return
          endif
          if (len(filter) > 0 .or. binned) then
-            call fail('plot: lc variable does not go with smooth nor bins', iostat, iomsg)
+            call fail('plot: '//word//' does not go with smooth nor bins', iostat, iomsg)
             return
          endif
       endif
-      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar)
+      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar .or. lcz)
       if (binned .and. nbar /= 0_I4P) then
          call fail('plot: bins need using X or X:Y', iostat, iomsg)
          return
@@ -1173,6 +1203,15 @@ contains
       x = values(:, 1)
       y = values(:, 2)
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
+      if (lcz) zcolors = values(:, size(values, 2))
+      ! lc palette: the series gets its palette colors once added (paint_last); no SVG color meanwhile
+      palette_lc = ''
+      if (allocated(line%lc)) then
+         if (index(line%lc, '*palette') == 1) then
+            palette_lc = line%lc
+            deallocate(line%lc)
+         endif
+      endif
       if (binned) then
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
@@ -1433,6 +1472,7 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels)
       endif
+      if (len(palette_lc) > 0) call paint_last
       if (binned) then
          ! the autoscale spans the outer bin edges and y = 0, as gnuplot
          associate(panel => self%figure%panels(self%figure%current))
@@ -1541,6 +1581,28 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine paint_last
+      !< Color the series just added from the palette (`lc palette`, marker `palette_lc`): its `z` values (a point of
+      !< undefined value then undefined, as gnuplot), the color axis value or the fraction of `line%palette`.
+      integer(I4P) :: last !< Series just added.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         last = size(panel%series, kind=I4P)
+         select case (palette_lc)
+         case (LC_PALETTE_Z)
+            panel%series(last)%palette_mode = 1_I4P
+            panel%series(last)%zvalues = zcolors
+            where (.not. ieee_is_finite(zcolors)) panel%series(last)%y = ieee_value(1.0_R8P, ieee_quiet_nan)
+         case (LC_PALETTE_CB)
+            panel%series(last)%palette_mode = 2_I4P
+            panel%series(last)%palette_value = line%palette
+         case default
+            panel%series(last)%palette_mode = 3_I4P
+            panel%series(last)%palette_value = line%palette
+         endselect
+      endassociate
+      endsubroutine paint_last
 
       function bins_option() result(ok)
       !< The `bins` option at token `i` (`word`), advancing `i` past its value: `bins[=N]`, `binrange [LO:HI]`,
@@ -4277,7 +4339,10 @@ contains
 
    do s = 1_I4P, size(styles, kind=I4P)
       if (styles(s)%id /= id) cycle
-      if (allocated(styles(s)%lc)) line%lc = styles(s)%lc
+      if (allocated(styles(s)%lc)) then
+         line%lc = styles(s)%lc
+         line%palette = styles(s)%palette
+      endif
       if (allocated(styles(s)%lw)) line%lw = styles(s)%lw
       if (allocated(styles(s)%dt)) line%dt = styles(s)%dt
       if (allocated(styles(s)%ps)) line%ps = styles(s)%ps
@@ -4345,7 +4410,8 @@ contains
 
    function line_option(tokens, i, line, iostat, iomsg, colors) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
-   !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lt N` (linetype color N), `lw W`,
+   !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lc palette [z|cb V|frac F]` (markers,
+   !< the value in `line%palette`), `lt N` (linetype color N), `lw W`,
    !< `dt N`, `ps S`, `pt N`.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< Token counter.
@@ -4378,6 +4444,36 @@ contains
       elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'variable', 3_I4P)) then
          ! the colors from the last using column: linetype numbers, or 24-bit RGB with rgb (gnuplot)
          line%lc = trim(merge(LC_RGB_VARIABLE, LC_VARIABLE, rgb))
+      elseif (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'palette', 3_I4P) .and. .not. rgb) then
+         ! the palette: by the last using column (z, the default), a color axis value (cb V) or a fraction (frac F)
+         line%lc = trim(LC_PALETTE_Z)
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%kind == TOKEN_WORD) then
+               select case (tokens(i + 1_I4P)%text)
+               case ('z')
+                  i = i + 1_I4P
+               case ('cb')
+                  i = i + 1_I4P
+                  ok = next_real(tokens, i, line%palette, iostat, iomsg)
+                  line%lc = trim(LC_PALETTE_CB)
+               case ('frac')
+                  i = i + 1_I4P
+                  ok = next_real(tokens, i, line%palette, iostat, iomsg)
+                  if (ok .and. (line%palette < 0.0_R8P .or. line%palette > 1.0_R8P)) then
+                     call fail('lc palette frac needs a fraction from 0 to 1', iostat, iomsg)
+                     ok = .false.
+                  endif
+                  line%lc = trim(LC_PALETTE_FRAC)
+               case default
+                  if (.not. (is_item_option(tokens(i + 1_I4P)%text) .or. &
+                             is_line_option(tokens(i + 1_I4P)%text))) then
+                     call fail('lc palette '//tokens(i + 1_I4P)%text//': only z, cb V and frac F (no named colormap)', &
+                               iostat, iomsg)
+                     ok = .false.
+                  endif
+               endselect
+            endif
+         endif
       elseif (tokens(i)%kind == TOKEN_STRING) then
          line%lc = tokens(i)%text
       else

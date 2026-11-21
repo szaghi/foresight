@@ -185,7 +185,18 @@ and the range ends take expressions. See [User variables and functions](/guide/g
 <Plot name="cb_lc_variable" svg :width="560" :height="320" />
 
 `lc variable` reads the color of each point from the last `using` column, a linetype number; a segment takes the color
-of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`).
+of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`). See
+[Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+
+### Colors from the palette
+
+<<< @/examples/snippets/cb_lc_palette.gp{gnuplot}
+
+<Plot name="cb_lc_palette" svg :width="560" :height="320" />
+
+`lc palette z` colors each point by the last `using` column through the palette: here the iteration, so the path of
+the run reads from dark to light, and the color box gives the scale. `lc palette frac F` takes one color of the
+palette for a whole item. See [Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
 
 ### Color sequences
 

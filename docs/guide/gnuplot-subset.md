@@ -83,7 +83,8 @@ that did what it says.
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
 plot 'file' [using SPEC] [index N] [every N] [smooth FILTER | bins[=N] ...] [with STYLE] [title "text" | notitle]
-            [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable] [lw W] [dt N] [ps S], ...
+            [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable | lc palette ...] [lw W] [dt N]
+            [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
@@ -448,6 +449,30 @@ yellow, blue, red, black), `podo` (black, orange, sky blue, green, yellow, blue,
 the first 6 colors of a categorical order of the Scientific colour maps (`actonS` ... `turkuS`, 22 orders of 100
 colors of the [named palettes](#named-palettes), the most distinct first; 8 by default; any case). The sequence
 applies to the series added after it and carries over to the next multiplot panels.
+
+### Colors per point and from the palette
+
+```gnuplot
+plot 'run.dat' u 1:2:3 w lp lc variable          # linetype N of column 3 per point
+plot 'run.dat' u 1:2:($3*65536) w p lc rgb var    # 24-bit 0xRRGGBB of the last column
+plot 'run.dat' u 1:2:4 w l lc palette z           # column 4 through the palette, over the color axis
+plot 'run.dat' u 1:2 w boxes lc palette frac 0.3  # one color: 30% along the palette
+plot 'run.dat' u 1:2 w l lc palette cb 0.5        # one color: the value 0.5 of the color axis
+```
+
+| Color | Meaning |
+|---|---|
+| `lc variable` | the last `using` column is a linetype number per point, its color in the [color sequence](#styles) |
+| `lc rgb variable` | the last `using` column is a 24-bit color, `0xRRGGBB` |
+| `lc palette` [`z`] | the last `using` column is a value per point, colored through the [palette](#images-and-palettes) over the color axis; the color axis spans these values (unless `set cbrange`) and the color box is drawn |
+| `lc palette cb V` | one color for the item: the value V of the color axis (gnuplot's default [-10:10] when nothing sets or spans it) |
+| `lc palette frac F` | one color for the item: the fraction F (0 to 1) of the palette |
+
+As gnuplot, a line segment takes the color of its end point, and a point whose color value is undefined is left out.
+The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints` and `impulses`, and not with
+`smooth` or `bins`; `palette cb` and `frac` to every style but the readouts, the panel charts and `labels`, and to
+functions; all of them in `set style line`. The key sample takes the color of the first point (gnuplot draws its
+point sample in the color of the last one). Not supported: `lc palette NAME` (a named colormap of gnuplot 6).
 
 ## Lines, steps and impulses
 
@@ -962,7 +987,7 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
 `%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
-at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` with other styles than lines, points, linespoints and impulses, `lc palette`, `set style boxplot labels x2`; `set style histogram
+at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` and `lc palette z` with other styles than lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

@@ -27,7 +27,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | Method | gnuplot equivalent |
 |---|---|
 | `init([width], [height], [font_size])` | `reset`, `set terminal ... size` |
-| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels], [radius], [angles], [donut], [scale], [linear])` | one item of `plot` |
+| `plot(x, y, [title], [with], [lc], [lw], [dt], [ps], [xlow], [xhigh], [ylow], [yhigh], [axes], [pt], [format], [width], [base], [fs], [xlabels], [radius], [angles], [donut], [scale], [linear], [close], [whiskerbars], [factors], [dx], [dy], [length], [angle], [major], [minor], [labels], [label], [head], [origins], [curve], [at], [colors], [palette_z], [palette_cb], [palette_frac])` | one item of `plot`; the arguments of each style are in the `plot` documentation of the [API](/api/); `colors(:)`: `lc variable` (a color per point), `palette_z(:)`: `lc palette z` (a value per point through the palette), `palette_cb`, `palette_frac`: `lc palette cb V`, `frac F` |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
