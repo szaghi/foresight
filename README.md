@@ -1,54 +1,97 @@
-# foresight
+<div align="center">
 
->#### FORtran Easy Svg Interactive Gnuplot-like Html Tool
-> gnuplot-like plots from pure Fortran — a library and a command line tool rendering interactive HTML, SVG and text, with no dependency beyond a Fortran compiler.
+<picture>
+  <source media="(prefers-color-scheme: dark)"  srcset="docs/public/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/public/logo.svg">
+  <img src="docs/public/logo.svg" alt="FORESIGHT: Fuji plotted on two axes, the sun ahead" width="320">
+</picture>
 
-[![GitHub tag](https://img.shields.io/github/v/tag/szaghi/foresight)](https://github.com/szaghi/foresight/tags)
-[![GitHub issues](https://img.shields.io/github/issues/szaghi/foresight)](https://github.com/szaghi/foresight/issues)
+#### *gnuplot-like plots from pure Fortran: interactive HTML, SVG and text*
+
+### **FOR**tran **E**asy **S**vg **I**nteractive **G**nuplot-like **H**tml **T**ool
+
+> A library and a command line tool that draw what gnuplot draws, from your solver or from a gnuplot script: one
+> self-contained page per plot, zoomable in the browser, re-rendered live while the run writes its logs. No dependency
+> beyond a Fortran compiler.
+
+[![Version](https://img.shields.io/github/v/release/szaghi/foresight?label=version)](https://github.com/szaghi/foresight/releases)
 [![CI](https://github.com/szaghi/foresight/actions/workflows/ci.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
 [![Matrix](https://github.com/szaghi/foresight/actions/workflows/matrix.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/matrix.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://szaghi.github.io/foresight/coverage.json)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-GPLv3%20%7C%20BSD%20%7C%20MIT-blue.svg)](#copyrights)
+[![Fortran](https://img.shields.io/badge/Fortran-modern-734f96?logo=fortran&logoColor=white)](https://fortran-lang.org/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue)](LICENSE.gpl3.md)
+[![License: BSD-2](https://img.shields.io/badge/license-BSD--2--Clause-blue)](LICENSE.bsd-2.md)
+[![License: BSD-3](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE.bsd-3.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE.mit.md)
 
-| 🖱️ **Interactive HTML**<br>One self-contained page per plot: wheel zoom, pan, box zoom, gnuplot hotkeys, series hidden from the key, dashboard panels zoomed together | 📈 **gnuplot Semantics**<br>Autoscale to the tick grid, reversed and log axes, blocks and datasets, user variables and functions, gnuplot linetype colors and dash types | 🛰️ **Live Monitoring**<br>`foresight --watch` re-renders while a job appends to its logs; the page reloads keeping your zoom, or following the newest data | 🧩 **Library and CLI**<br>`fig%plot(...)` from your solver, or gnuplot-subset scripts from the shell — the same interpreter |
-|:---:|:---:|:---:|:---:|
-| 🎯 **Exact & Reproducible**<br>Tick labels built from integers (`0.3`, never `0.30000000000000004`), byte-exact golden tests | 🪶 **Pure Fortran**<br>Fortran 2018 plus libc `rename` and `nanosleep` — no Python, no gnuplot, no graphics library | 📟 **Text Terminal**<br>gnuplot `dumb` and `block` output, characters or Braille dots in ANSI colors: plots over plain ssh, redrawn in place while watching | 📦 **FoBiS**<br>Static library and command line tool, built and tested with FoBiS |
-| 📊 **Every 2D Plot Style**<br>Lines, steps, impulses, error bars; boxes, histograms, box plots, candlesticks; filled curves and patterns; vectors, ellipses, polygons, labels | 🧭 **Polar and Radial**<br>`set polar`, sectors and wind roses, parallel axes and spider plots, radars and roses | 🌈 **Heatmaps**<br>`with image` and `rgbimage`, gnuplot palettes (`rgbformulae`, `defined`, `cubehelix`, `file`, `viridis`) and named perceptual ones (`batlow`, `vik`, `magma`, ...), the color box | 🕹️ **1980s Dashboards**<br>Seven-segment readouts, sweep gauges, pies and donuts, segmented bars in VFD or LCD colors |
+<div>
+<table>
+<tr>
+<td><b>🖱️ Interactive pages, from Fortran</b><br><sub>One self-contained HTML page per plot: wheel and box zoom, pan, gnuplot's hotkeys, series hidden from the key, dashboard panels zoomed together, live coordinates; the same figure as SVG, or as text in the terminal (<code>dumb</code>, <code>block</code>, Braille, ANSI colors). <a href="https://szaghi.github.io/foresight/guide/viewer">Interactive viewer</a> · <a href="https://szaghi.github.io/foresight/guide/output-formats">Output formats</a></sub></td>
+<td><b>📈 gnuplot's semantics, checked against gnuplot</b><br><sub>A gnuplot 6.0 subset, each feature probed on gnuplot before it is written: autoscale to the tick grid, log and reversed axes, two x and two y axes, tick lists and minor ticks, blocks, datasets and CSV, user variables and functions, gnuplot's linetype colors and dash types. <a href="https://szaghi.github.io/foresight/guide/gnuplot-subset">gnuplot subset</a> · <a href="https://szaghi.github.io/foresight/guide/features">Feature map</a></sub></td>
+</tr>
+<tr>
+<td><b>📊 Every 2-D style</b><br><sub>Lines, steps, impulses, error bars; boxes, histograms, box plots, candlesticks; filled curves and patterns; vectors, ellipses, polygons, labels; <code>smooth</code> splines, Bézier and kernel density; colors per point (<code>lc variable</code>); polar plots, wind roses, parallel axes and spider plots; heatmaps with gnuplot's palettes and named perceptual ones. <a href="https://szaghi.github.io/foresight/manual/cookbook">Cookbook</a></sub></td>
+<td><b>🛰️ Live monitoring</b><br><sub><code>foresight --watch</code> re-renders while a job appends to its logs: the page reloads keeping your zoom, or following the newest data; in the terminal the text plot is redrawn in place, over plain ssh. <a href="https://szaghi.github.io/foresight/guide/monitoring">Live monitoring</a> · <a href="https://szaghi.github.io/foresight/manual/tutorial/08-live">Tutorial</a></sub></td>
+</tr>
+<tr>
+<td><b>🎌 Themes, light and dark</b><br><sub><code>washi</code> and <code>night</code>, ink on warm paper and light on a near-black ground, the colors of the documentation (its figures follow its light and dark modes); <code>vfd</code> and <code>lcd</code>, the dashboards of 1980s cars, with seven-segment readouts, gauges and segmented bars. <code>foresight --theme</code> or <code>FORESIGHT_THEME</code> picks the default. <a href="https://szaghi.github.io/foresight/guide/gnuplot-subset#themes-and-segmented-fills">Themes</a></sub></td>
+<td><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code> and <code>nanosleep</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 11 test programs, 96 byte-exact golden files, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
+</tr>
+</table>
+</div>
 
-For full documentation (guide, gnuplot subset reference, examples, API, etc...) see the [foresight website](https://szaghi.github.io/foresight/).
+**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [tutorial](https://szaghi.github.io/foresight/manual/tutorial/01-first-plot) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
 
----
+<picture>
+  <source media="(prefers-color-scheme: dark)"  srcset="docs/public/examples/cb_multiplot-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/public/examples/cb_multiplot.svg">
+  <img src="docs/public/examples/cb_multiplot.svg" alt="Two panels of a run: a residual and the drag coefficient">
+</picture>
 
-## Authors
-
-- Stefano Zaghi — [@szaghi](https://github.com/szaghi)
-
-Contributions are welcome — see the [Contributing](https://szaghi.github.io/foresight/guide/contributing) page.
-
-## Copyrights
-
-This project is distributed under a multi-licensing system:
-
-- **FOSS projects**: [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html)
-- **Closed source / commercial**: [BSD 2-Clause](http://opensource.org/licenses/BSD-2-Clause), [BSD 3-Clause](http://opensource.org/licenses/BSD-3-Clause), or [MIT](http://opensource.org/licenses/MIT)
-
-The named palettes carry third-party color tables: the *Scientific colour maps* by Fabio Crameri (MIT,
-[doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862)), matplotlib's magma, inferno, plasma and
-viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial Institute's licence),
-and Kenneth Moreland's black_body (CC0);
-their notices are in `src/lib/foresight_colormaps.F90`.
-
-> Anyone interested in using, developing, or contributing to this project is welcome — pick the license that best fits your needs.
+</div>
 
 ---
 
 ## Quick start
 
-From Fortran:
+```bash
+git clone https://github.com/szaghi/foresight && cd foresight
+fobis fetch                                                   # PENF, BeFoR64, FACE, StringiFor, into src/third_party/
+fobis build --mode foresight-gnu                              # the command line tool: bin/foresight
+fobis build --mode foresight-static-gnu                       # the library: lib/libforesight.a, modules in lib/mod
+fobis build --mode tests-gnu && bash scripts/run_tests.sh     # the 11 test programs, golden files included
+```
+
+or the one-line installer, the latest release into `~/.local`, usable through pkg-config:
+
+```bash
+curl -fsSL https://github.com/szaghi/foresight/releases/latest/download/install.sh | bash
+```
+
+as a FoBiS dependency, in the `fobos` of your project (then `fobis fetch && fobis build`):
+
+```ini
+[dependencies]
+deps_dir   = src/third_party
+PENF       = https://github.com/szaghi/PENF :: branch=master       # foresight's own dependencies: fobis fetch
+BeFoR64    = https://github.com/szaghi/BeFoR64 :: branch=master    # is not transitive
+FACE       = https://github.com/szaghi/FACE :: branch=master
+StringiFor = https://github.com/szaghi/StringiFor :: branch=master
+foresight  = https://github.com/szaghi/foresight :: branch=master
+```
+
+or as an fpm dependency, in your `fpm.toml`:
+
+```toml
+[dependencies]
+foresight = { git = "https://github.com/szaghi/foresight", branch = "master" }
+```
+
+A plot from Fortran:
 
 ```fortran
 use foresight, only : figure_object, I4P, R8P
-implicit none
 type(figure_object)    :: fig
 real(R8P), allocatable :: t(:)
 integer(I4P)           :: i
@@ -60,79 +103,45 @@ call fig%plot(t, exp(-0.3_R8P * t), title='envelope', dt=2_I4P)
 call fig%save('quickstart.html')   ! interactive page; .svg static, .txt text
 ```
 
-From the shell, with a gnuplot script:
-
-```gnuplot
-# residuals.gp
-set title "Residuals"
-set logscale y
-set grid
-plot 'residuals.dat' using 1:2 with lines title 'continuity', \
-     ''              using 1:3 with lines title 'momentum'
-```
+or from the shell, with a gnuplot script:
 
 ```bash
 foresight residuals.gp                                  # residuals.html
-foresight --watch residuals.gp                          # re-render while residuals.dat grows
+foresight --watch residuals.gp                          # re-rendered while residuals.dat grows
 foresight --watch -e "set terminal dumb" residuals.gp   # the same, as text in the terminal
+foresight -t night -o residuals.svg residuals.gp        # an SVG in the dark theme
 ```
 
-![Two panels of a run: a residual and the drag coefficient](docs/public/examples/cb_multiplot.svg)
+The [tutorial](https://szaghi.github.io/foresight/manual/tutorial/01-first-plot) goes from a first plot to a live
+dashboard of a running solver; the [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) lists every
+command, option and style, and where foresight departs from gnuplot.
 
----
+## Authors
 
-## Install
+**[Stefano Zaghi](https://github.com/szaghi)** · stefano.zaghi@gmail.com
+> *Chief Yak Shaver & Serial Library Resurrector* — wanted his solvers to draw their own plots, live, without leaving
+> Fortran
 
-### One-line install
+**[Claude](https://claude.ai)** (Anthropic)
+> *Omniscient Code Oracle & Tireless Rubber Duck* — AI pair programmer, responsible for probing gnuplot 6.0 before every
+> feature and for running the golden tests all night so humans don't have to
 
-```bash
-curl -fsSL https://github.com/szaghi/foresight/releases/latest/download/install.sh | bash
-```
+Contributions are welcome: see the [Contributing](https://szaghi.github.io/foresight/guide/contributing) page.
 
-It installs the latest release of the library into `~/.local` with the build system you choose among those foresight
-ships (`--build fobis|fpm`: a menu asks when you do not say), the compiler you name (`--fc`, `--gnu`, `--intel`), one
-install per compiler (`lib/foresight/<compiler>-<version>/`, `include/foresight/<compiler>-<version>/`), and makes it
-usable through pkg-config (`pkg-config --cflags --libs foresight`, with `PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig`).
-The release carries foresight's dependencies (PENF, BeFoR64, FACE, StringiFor). The fpm build also installs the
-command line tool, `bin/foresight`; the fobis build installs the library only. Pass options after `bash -s --`, e.g.
-`... | bash -s -- --build fpm --prefix /opt/foresight`; `--help` lists them all, `--uninstall` removes the install.
-The installer is FoBiS's ([One-line installer](https://szaghi.github.io/FoBiS/cookbook/installer)).
+## License
 
-### FoBiS
+foresight is available under your choice of license:
 
-**Standalone** — clone, fetch dependencies, and build:
+| License | SPDX | File |
+|---|---|---|
+| GNU General Public License v3 | `GPL-3.0-or-later` | [LICENSE.gpl3.md](LICENSE.gpl3.md) |
+| BSD 2-Clause | `BSD-2-Clause` | [LICENSE.bsd-2.md](LICENSE.bsd-2.md) |
+| BSD 3-Clause | `BSD-3-Clause` | [LICENSE.bsd-3.md](LICENSE.bsd-3.md) |
+| MIT | `MIT` | [LICENSE.mit.md](LICENSE.mit.md) |
 
-```bash
-git clone https://github.com/szaghi/foresight && cd foresight
-fobis fetch                                  # fetch PENF and the other dependencies
-fobis build --mode foresight-gnu             # command line tool: bin/foresight
-fobis build --mode foresight-static-gnu      # static library: lib/libforesight.a, modules in lib/mod
-```
+The named palettes carry third-party color tables: the *Scientific colour maps* by Fabio Crameri (MIT,
+[doi:10.5281/zenodo.1243862](https://doi.org/10.5281/zenodo.1243862)), matplotlib's magma, inferno, plasma and
+viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial Institute's licence),
+and Kenneth Moreland's black_body (CC0); their notices are in `src/lib/foresight_colormaps.F90`.
 
-Link the library into your program:
-
-```bash
-gfortran -I foresight/lib/mod my_program.f90 foresight/lib/libforesight.a -o my_program
-```
-
-**As a project dependency** — declare foresight and PENF in your `fobos` and run `fetch`:
-
-```ini
-[dependencies]
-deps_dir  = src/third_party
-PENF      = https://github.com/szaghi/PENF
-foresight = https://github.com/szaghi/foresight
-```
-
-```bash
-fobis fetch           # fetch the sources
-fobis build           # foresight modules are compiled with your project
-```
-
-**Tests**
-
-```bash
-fobis build --mode tests-gnu-debug
-bash scripts/run_tests.sh            # Fortran tests, byte-exact golden files included
-fobis rule --ex test-js              # viewer tick rules (needs node)
-```
+© [Stefano Zaghi](https://github.com/szaghi)
