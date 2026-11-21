@@ -1,0 +1,32 @@
+$ foresight cb_stats.gp
+
+* FILE: 
+  Records:           41
+  Out of range:       0
+  Invalid:           79
+  Header records:     0
+  Blank:              1
+  Data Blocks:        1
+
+* COLUMN: 
+  Mean:               0.2996
+  Std Dev:            0.0035
+  Sample StdDev:      0.0036
+  Skewness:          -0.0909
+  Kurtosis:           2.0367
+  Avg Dev:            0.0031
+  Sum:               12.2836
+  Sum Sq.:            3.6807
+
+  Mean Err.:          0.0005
+  Std Dev Err.:       0.0004
+  Skewness Err.:      0.3825
+  Kurtosis Err.:      0.7651
+
+  Minimum:            0.2941 [13]
+  Maximum:            0.3073 [ 0]
+  Quartile:           0.2963 
+  Median:             0.3008 
+  Quartile:           0.3024 
+
+foresight: cb_stats.svg

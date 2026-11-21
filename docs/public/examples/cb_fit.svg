@@ -163,12 +163,12 @@
 <text x="309.23" y="307" text-anchor="middle">mesh size h</text>
 <text x="22" y="142" text-anchor="middle" transform="rotate(-90 22 142)">error</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M170,29.5A5.4,5.4 0 1 0 180.8,29.5A5.4,5.4 0 1 0 170,29.5Z"/>
-<text x="151.4" y="33.7" text-anchor="end">measured</text>
+<path fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M236,29.5A5.4,5.4 0 1 0 246.8,29.5A5.4,5.4 0 1 0 236,29.5Z"/>
+<text x="217.4" y="33.7" text-anchor="end">measured</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<polyline fill="none" stroke="#1f5f8b" stroke-width="2" points="157.4,44.5 193.4,44.5"/>
-<text x="151.4" y="48.7" text-anchor="end">fit c h^p</text>
+<polyline fill="none" stroke="#1f5f8b" stroke-width="2" points="223.4,44.5 259.4,44.5"/>
+<text x="217.4" y="48.7" text-anchor="end">fit c h^p, p = 1.99</text>
 </g>
 </g>
 </svg>

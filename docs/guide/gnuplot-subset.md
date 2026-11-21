@@ -28,6 +28,9 @@ that did what it says.
 | *name* `=` *expression* | a [user variable](#user-variables-and-functions): the value now, integer or real |
 | *name*`(`*p1*`, ...) =` *expression* | a [user function](#user-variables-and-functions) |
 | **fit** [`[min:max]`] *f(x)* `'file'` [*modifiers*] `via` *a*`,` *b* ... | [fit](#fit) the parameters of a function to data |
+| **stat**s [`[x]`] [`[y]`] `'file'` [*modifiers*] [`name "P"`] [`output`] | [statistics](#stats) of a column or a pair |
+| **pr**int *expression*`,` ... | [print](#print) values |
+| `do for [`*i*`=`*a*`:`*b*`] {` ... `}`, `while (`*c*`) {` ... `}`, `if (`*c*`) {` ... `} else {` ... `}` | [blocks](#blocks-and-loops): loops and conditions, `break`, `continue` |
 
 ## `set` / `unset` options
 
@@ -35,6 +38,7 @@ that did what it says.
 |---|---|---|
 | **tit**le `"text"` | panel title | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
+| **pr**int [`"file"` [`append`] \| `"-"`] | where [print](#print) writes: a file (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
@@ -141,6 +145,22 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | `gauge` | `y` (the last finite value), or `x:y` |
 | `radar`, `rose` | `y`, one spoke or sector per row; `y:xtic(N)` names them |
 
+## Iteration
+
+```gnuplot
+plot for [i = 2:4] 'run.dat' u 1:i w l t word('continuity momentum energy', i - 1)
+plot 'run.dat' u 1:2, for [i = 3:4] '' u 1:i lc i
+plot for [k in 'a.dat b.dat'] k u 1:2, for [i = 1:3] for [j = 1:2] i*j*x
+```
+
+`plot for [...] ITEM` plots the item once per value, with gnuplot's clauses (`i = a:b[:c]`, `w in "words"`, several
+of them, the last varying fastest); the item's `using` fields, title and options read the variable: a `using`
+field that is a constant expression is the column it gives (`u 1:i`; a string, the column of that header name), the
+line options take expressions (`lc i`, `lw w`). Each value adds a series with the next color, the default title is the
+item as written (`'run.dat' u 1:i`), `''` is the previous file, an empty range plots nothing; iterated and plain items
+mix. The loop variable is restored afterwards. Departure: in a plot an inner clause's bounds may not depend on an outer
+variable (`for [i = 1:3] for [j = 1:i]` is an error; `do for` supports it).
+
 ## Expressions in `using`
 
 A field in parentheses is an expression evaluated on each row, with gnuplot's semantics:
@@ -196,7 +216,78 @@ xrange [0:2*tau]`, also `[-pi:pi]`). The plot's dummy variable wins over a user 
 inside a function body (there `x` is the user variable `x`). Names are case sensitive (`a_1`, `A`), `pi` may be
 assigned, the builtin functions may not be redefined. Errors as gnuplot: `undefined variable: c`, `function f requires
 1 variable`. Not supported: recursive functions (gnuplot evaluates `fact(n) = n <= 1 ? 1 : n*fact(n-1)`; foresight
-reports `recursive function fact is not supported`), `print`, string variables, `undefine`.
+reports `recursive function fact is not supported`), `undefine`. Variables also hold [strings](#strings).
+
+## Strings
+
+```gnuplot
+run = 'cavity'; n = 3
+file = run . '_' . n . '.dat'                  # cavity_3.dat
+set title sprintf('%s, mesh %d', run, n)
+plot file u 1:2 t 'res ' . substr(file, 1, 6), '' u 1:3 t sprintf('p = %.2f', p)
+```
+
+Strings are gnuplot's: in double quotes with the escapes `\t`, `\n`, `\"`, `\\`, or in single quotes as they are.
+A variable holds a string as well as a number, a user function may return one, `?:` chooses between them.
+
+| Operation | Value |
+|---|---|
+| `a . b` | `a` joined to `b`; `b` a string or an integer (`'x' . 3` is `x3`; a real is an error) |
+| `a eq b`, `a ne b` | 1 or 0; both strings |
+| `s[i:j]`, `s[i:]`, `s[:j]`, `s[*:j]` | characters `i` to `j` (1-based), the ends clamped to the string, empty if they cross |
+| `strlen(s)`, `substr(s, i, j)`, `strstrt(s, t)` | length; `s[i:j]`; position of `t` in `s`, 0 if none |
+| `words(s)`, `word(s, n)`, `trim(s)` | number of blank-separated words; word `n` (empty if none); `s` without leading and trailing blanks |
+| `sprintf(format, ...)` | C's `printf`: `%d %i %u %o %x %X %c` (the integer part), `%f %F %e %E %g %G` (the real), `%s`, flags `-+ 0#`, width, precision, `%%`; conversions left without an argument are copied as written |
+| `gprintf(format, x)` | `x` with a [`set format`](#ticks-and-label-formats) format |
+| `value("name")`, `exists("name")` | the variable's value (NaN if none); 1 if it exists |
+| `int(s)`, `real(s)` | the number a string starts with, truncated or real |
+
+Arithmetic and `==` read a string's leading number, as gnuplot: `"3" + 1` is 4, `"2" / "4"` is 0 (two integers),
+`"0x10" + 0` is 16; a string without one is an error (`non-numeric string found where a numeric expression was
+expected`), as is a string used as a condition. `.` binds as `+` (`"a" . 2*3` is `a6`), `eq` and `ne` as `==`.
+`sprintf` converts a real from its exact binary value, as C does: `sprintf("%.2f", 2.675)` is `2.67`.
+
+A string goes wherever a string is taken, as an expression: titles and axis labels (`set title`, `set xlabel`,
+...), `set output`, `set format`, `set print`, `set multiplot title`, plot titles (`t 'col' . i`) and plot file names
+(`plot file u 1:2`, `plot 'run_' . n . '.dat'`; a plot item whose constant value is a string is a file). A number
+where a string goes is an error (`set title 5`). Not supported: `stringcolumn()`/`strcol()`, `strftime`, `strptime`,
+`system()`, string arrays.
+
+## Print
+
+```gnuplot
+print 'mean ', STATS_mean, ' after ', FIT_NITER, ' iterations'
+set print 'summary.txt' append
+print sprintf('%-10s %9.3e', 'cd', cd_mean)
+```
+
+`print` writes its values on one line separated by a blank: strings as they are, integers in decimal, reals as
+gnuplot shows them (`%.15g`, `.0` appended when integral: `100.0`, `0.333333333333333`, `1e+20`). The line goes to
+the standard error, as gnuplot's; `set print "file"` empties the file and sends the lines there, `set print "file"
+append` keeps its content, `set print "-"` sends them to the standard output, `set print` and `unset print` back to the
+standard error.
+
+## Blocks and loops
+
+```gnuplot
+do for [i = 1:3] {
+   set output sprintf('panel_%d.svg', i)
+   plot 'run.dat' u 1:(column(i + 1)) t word('continuity momentum energy', i)
+}
+k = 0
+while (k < 3) { k = k + 1; print k }
+if (exists('STATS_mean')) { print STATS_mean } else { print 'no stats yet' }
+```
+
+As gnuplot's: `do for [i = a:b[:c]] { ... }` runs the block for each integer from `a` to `b` by `c` (bounds
+truncated to integers, a negative step counts down, an empty range none), `do for [w in "x y z"] { ... }` for each
+word of a string; clauses may follow one another, `do for [w in "a b"] for [i = 1:2] { ... }`, the last one varying
+fastest. The loop variable is local to the loop: its value before is restored afterwards, or it is removed.
+`while (c) { ... }` runs while `c` is not 0, `if (c) { ... } else if (c) { ... } else { ... }` the first block whose
+condition holds; `else` follows `}` on the same line. `break` leaves the loop (the whole `do`, all its clauses),
+`continue` goes on with the next value. A block may span lines, with statements on new lines or separated by `;` and
+comments inside it. A string as a condition, an unbounded range (`[i = 1:*]`) and gnuplot's old one-line form
+`if (c) command` are errors.
 
 ## Functions
 
@@ -333,6 +424,29 @@ rule), so the parameters, their errors and the iterations agree with gnuplot's t
 Not supported: `via 'file'`, more than one independent variable, `set fit verbose`, `set fit covariancevariables`.
 The [cookbook](/manual/cookbook#fitting-a-model) fits an order of accuracy; Fortran programs call `fit` directly
 ([library](library.md#fitting-a-model)).
+
+## Stats
+
+```gnuplot
+stats 'run.dat' u 5 every ::100 name 'cd'           # cd_mean, cd_stddev, cd_min, ... of the last iterations
+stats [0:1000] 'run.dat' u 1:5 output               # STATS_slope, STATS_correlation, ...; the report printed
+plot 'run.dat' u 1:5 w l, cd_mean w l dt 2 t sprintf('mean %.4f', cd_mean)
+```
+
+`stats` is gnuplot 6.0's, translated from its sources: of one column the mean, the population and sample standard
+deviations, skewness, kurtosis, mean absolute deviation, their standard errors, sum, sum of squares, minimum and
+maximum with their 0-based index, median and quartiles; of two columns (`using N:M`) these of each (`_x`, `_y`) and the
+least squares line (slope, intercept, their errors), the correlation, the sum of the products and the x of the y
+minimum and maximum. They are set as gnuplot's variables, `STATS_mean` ... `STATS_slope`, or with `name "P"` as
+`P_mean` ...; the variables of an earlier `stats` with the same prefix are forgotten first. `STATS_records`,
+`STATS_invalid` (a used value undefined), `STATS_outofrange` (outside the ranges `[x] [y]` before the file),
+`STATS_blank`, `STATS_blocks`, `STATS_headers` and `STATS_columns` count the file.
+
+**Silent by default**, as `fit` (gnuplot prints its report): `output` writes gnuplot's report where
+[print](#print) writes, its screen layout on the standard error or output, its name-tab-value lines in a `set print`
+file. A missing file is not an error, as gnuplot's (a script may test `exists("STATS_records")`). Modifiers: `using`
+(as plot's; without it the first two columns if the first line has two), `index`, `every`. Not supported: `matrix`,
+`name columnheader`, the voxel grid form.
 
 ## Second y axis
 

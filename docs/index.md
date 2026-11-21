@@ -51,7 +51,7 @@ features:
       width: 44
       height: 44
     title: The gnuplot language
-    details: using expressions, index and every, CSV with column headers, two y axes, functions, fit, smooth, styles, point types, multiplot, polar plots, palettes — the gnuplot scripts you already have.
+    details: using expressions, index and every, CSV with column headers, two y axes, functions, strings and sprintf, loops and plot for, fit, stats, smooth, styles, point types, multiplot, polar plots, palettes — the gnuplot scripts you already have.
     link: /guide/gnuplot-subset
     linkText: The subset
   - icon:
@@ -204,6 +204,8 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_inline_range" svg :width="560" :height="320" caption="inline ranges" />
   <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
   <Plot name="cb_fit" svg :width="560" :height="320" caption="a fitted model" />
+  <Plot name="cb_plot_for" svg :width="560" :height="320" caption="one line per column" />
+  <Plot name="cb_stats" svg :width="560" :height="320" caption="statistics of a run" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
   <Plot name="cb_unique" svg :width="760" :height="320" caption="block averages and running totals (smooth)" />
   <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
@@ -286,6 +288,8 @@ foresight --watch residuals.gp                # re-render while the solver write
 <<< @/examples/output/cb_readout_dumb.txt{text} [readouts in dumb]
 
 <<< @/examples/output/cb_dumb.txt{text} [dumb]
+
+<<< @/examples/output/cb_loops.txt{text} [a printed summary]
 
 :::
 

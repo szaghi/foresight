@@ -214,6 +214,30 @@ contains
 
 Scripts fit user functions with `fit f(x) 'file' using 1:2 via a, b` ([gnuplot subset](gnuplot-subset.md#fit)).
 
+## Statistics
+
+`stats` is gnuplot's `stats` for Fortran arrays, the same values as gnuplot's `STATS_*` variables:
+
+```fortran
+use foresight, only : stats, stats_report, stats_result
+type(stats_result) :: r
+
+r = stats(cd)                                  ! one column: r%y%mean, r%y%stddev, r%y%median, ...
+r = stats(h, error)                            ! two columns: r%x, r%y, r%slope, r%intercept, r%correlation, ...
+print '(A,F8.5,A,F8.5)', 'cd = ', r%y%mean, ' +- ', r%y%stddev
+call stats_report(r, unit=error_unit, formatted=.true.)   ! gnuplot's report
+```
+
+| Component | Value |
+|---|---|
+| `records` | number of values |
+| `x`, `y` (`stats_column`) | `mean`, `stddev`, `ssd` (sample), `skewness`, `kurtosis`, `adev`, `mean_err`, `stddev_err`, `skewness_err`, `kurtosis_err`, `sum`, `sumsq`, `min`, `max`, `median`, `lo_quartile`, `up_quartile`, `index_min`, `index_max` (0-based); `y` is the only column of `stats(y)` |
+| `two` | two columns given |
+| `slope`, `intercept`, `slope_err`, `intercept_err`, `correlation`, `sumxy`, `pos_min_y`, `pos_max_y` | the least squares line of two columns, gnuplot's |
+
+`stats_report(r, unit, formatted)` writes gnuplot's report: its screen layout (`formatted`), or the name-tab-value
+lines gnuplot writes to a `set print` file. Scripts call `stats 'file' using N[:M]` ([gnuplot subset](gnuplot-subset.md#stats)).
+
 ## Errors
 
 The figure API stops with `error stop` on programming errors: `x` and `y` of different sizes, an unsupported

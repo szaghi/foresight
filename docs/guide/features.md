@@ -17,6 +17,11 @@ Everything foresight does, and where it is documented. The [tutorial](/manual/) 
 | Column headers | `using 1:"residual"`, `title columnhead`, `set key autotitle columnhead` | [Column headers](gnuplot-subset#column-headers) |
 | Functions | `plot sin(x)/x`, sampled over the data x range, `set samples`, `set style function` | [Functions](gnuplot-subset#functions) |
 | Smoothing | `smooth unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`: averages of repeated x, histograms, distributions; curves `csplines`, `acsplines`, `bezier`, `sbezier`, `mcsplines`, `kdensity [bandwidth B]`; `bins[=N]` with `binrange`, `binwidth`, `binvalue` | [Smoothing](gnuplot-subset#smoothing), [Bins](gnuplot-subset#bins) |
+| Strings | literals, `.`, `eq`/`ne`, `s[i:j]`, `sprintf` (C's, from the exact binary value), `strlen`, `substr`, `strstrt`, `words`, `word`, `trim`, `gprintf`; string variables and functions; string expressions wherever a string goes (titles, labels, file names, output) | [Strings](gnuplot-subset#strings) |
+| Print | `print` values, `set print "file" [append]` | [Print](gnuplot-subset#print) |
+| Blocks | `do for [i=a:b]`, `do for [w in "..."]`, `while`, `if/else`, `break`, `continue`, blocks over lines | [Blocks and loops](gnuplot-subset#blocks-and-loops) |
+| Iteration | `plot for [i=a:b] ...`, nested clauses, `using 1:i`, `lc i` | [Iteration](gnuplot-subset#iteration) |
+| Statistics | `stats [x] [y] 'file' using N[:M] [name "P"] [output]`: gnuplot's STATS_* variables and report, silent unless asked; `stats(y)`, `stats(x, y)` from Fortran | [Stats](gnuplot-subset#stats), [Library](library#statistics) |
 | Fitting | `fit [min:max] f(x) 'file' using X:Y[:ERR] via a, b`, gnuplot's Marquardt-Levenberg to its digits; `a_err`, `FIT_*` variables; silent unless `set fit results` / `logfile`; `fit(model, x, y, params)` from Fortran | [Fit](gnuplot-subset#fit), [Library](library#fitting-a-model) |
 | Layout | multiplot grids with a title, panels in `origin`/`size` boxes (insets) | [Multiplot](gnuplot-subset#multiplot) |
 | Output | interactive HTML (one self-contained page), SVG, text with characters (`dumb`) or Unicode blocks and Braille (`block`), in ANSI colors; atomic rewrites | [Output Formats](output-formats) |

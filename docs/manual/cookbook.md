@@ -294,6 +294,36 @@ Inline ranges set x, then y, for that plot only: `set xrange` is left alone. `t=
 
 A function is sampled over the x range of the data of the same plot.
 
+### One line per column
+
+<<< @/examples/snippets/cb_plot_for.gp{gnuplot}
+
+<Plot name="cb_plot_for" svg :width="560" :height="320" />
+
+`plot for` plots the item once per value of `i`: `u 1:i` reads column `i`, `word(names, i-1)` titles it, the colors
+advance as for separate items.
+
+### Statistics of a run
+
+<<< @/examples/snippets/cb_stats.gp{gnuplot}
+
+<<< @/examples/output/cb_stats.txt{text}
+
+<Plot name="cb_stats" svg :width="560" :height="320" />
+
+`stats` sets `cd_mean`, `cd_stddev` and the other `cd_*` values of the iterations kept (the condition makes the
+others invalid); `output` prints gnuplot's report, silent otherwise. The mean is then a constant to plot, and
+`sprintf` writes it in the title.
+
+### A summary in the terminal
+
+<<< @/examples/snippets/cb_loops.gp{gnuplot}
+
+<<< @/examples/output/cb_loops.txt{text}
+
+`do for` runs the block per column, `stats` (silent with `nooutput`, as in gnuplot) measures it, `print` and
+`sprintf` write the table: a report at the end of a run, without a plot.
+
 ### Fitting a model
 
 <<< @/examples/snippets/cb_fit.gp{gnuplot}

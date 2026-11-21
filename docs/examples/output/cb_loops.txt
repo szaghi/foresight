@@ -1,0 +1,5 @@
+$ foresight cb_loops.gp
+residual           max        min  orders
+continuity   1.005e+00  5.019e-06     5.3
+momentum     4.510e-01  6.553e-06     4.8
+energy       1.778e+00  1.995e-06     6.0
