@@ -156,27 +156,52 @@ foresight --watch residuals.gp                # re-render while the solver write
 <p class="fs-lead">Every image here is an actual foresight output, regenerated from the
 <a href="./manual/cookbook">cookbook</a> recipes and checked by the CI.</p>
 
-### Lines, points and error bars
+### Data and columns
 
 <div class="fs-gallery">
-  <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
-  <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
-  <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
+  <Plot name="cb_columns" svg :width="560" :height="320" caption="two columns of a file" />
+  <Plot name="cb_single_column" svg :width="560" :height="320" caption="a single column" />
+  <Plot name="cb_every" svg :width="560" :height="320" caption="one point every N" />
+  <Plot name="cb_index" svg :width="560" :height="320" caption="one dataset of a file" />
+  <Plot name="cb_expression" svg :width="560" :height="320" caption="scaled and shifted columns" />
+  <Plot name="cb_filter" svg :width="560" :height="320" caption="only some points" />
+  <Plot name="cb_csv_header" svg :width="560" :height="320" caption="CSV with a header row" />
+  <Plot name="cb_missing" svg :width="560" :height="320" caption="missing data" />
+</div>
+
+### Axes, ticks and key
+
+<div class="fs-gallery">
+  <Plot name="cb_logscale" svg :width="560" :height="320" caption="a log axis with exponent labels" />
+  <Plot name="cb_reversed" svg :width="560" :height="320" caption="a reversed axis" />
+  <Plot name="cb_ticks" svg :width="560" :height="320" caption="tick steps and label formats" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
   <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
   <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />
-  <Plot name="cb_inline_range" svg :width="560" :height="320" caption="inline ranges" />
-  <Plot name="cb_missing" svg :width="560" :height="320" caption="missing data" />
-  <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
-  <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
-  <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
+  <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
+  <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
+  <Plot name="cb_key" svg :width="560" :height="320" caption="the key below the plot" />
+  <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
+  <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />
+  <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
+</div>
+
+### Lines, points and error bars
+
+<div class="fs-gallery">
+  <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
   <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />
   <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
-  <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
+  <Plot name="cb_errorbars" svg :width="560" :height="320" caption="error bars" />
+  <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
+  <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
+  <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
+  <Plot name="cb_inline_range" svg :width="560" :height="320" caption="inline ranges" />
+  <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
   <Plot name="cb_unique" svg :width="760" :height="320" caption="block averages and running totals (smooth)" />
   <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
@@ -186,13 +211,14 @@ foresight --watch residuals.gp                # re-render while the solver write
 ### Bars and statistics
 
 <div class="fs-gallery">
-  <Plot name="cb_histograms" svg :width="560" :height="320" caption="grouped bars with category labels" />
+  <Plot name="cb_boxes" svg :width="560" :height="320" caption="a bar chart" />
   <Plot name="cb_bins" svg :width="560" :height="320" caption="a histogram of a sample (bins)" />
+  <Plot name="cb_histograms" svg :width="560" :height="320" caption="grouped bars with category labels" />
   <Plot name="cb_rowstacked" svg :width="560" :height="320" caption="stacked bars" />
   <Plot name="cb_boxerrorbars" svg :width="560" :height="320" caption="bars with error bars" />
   <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />
-  <Plot name="cb_boxplot" svg :width="560" :height="320" caption="box plots by category" />
   <Plot name="cb_candlesticks" svg :width="560" :height="320" caption="candlesticks and finance bars" />
+  <Plot name="cb_boxplot" svg :width="560" :height="320" caption="box plots by category" />
 </div>
 
 ### Areas and shapes
@@ -260,6 +286,13 @@ foresight --watch residuals.gp                # re-render while the solver write
 <<< @/examples/output/cb_dumb.txt{text} [dumb]
 
 :::
+
+### From Fortran
+
+<div class="fs-gallery">
+  <Plot name="cb_gaps" svg :width="560" :height="320" caption="gaps in the data, from Fortran" />
+  <Plot name="cb_script" svg :width="560" :height="320" caption="gnuplot commands, from Fortran" />
+</div>
 
 ## Authors
 
