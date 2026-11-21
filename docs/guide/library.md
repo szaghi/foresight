@@ -34,7 +34,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)`, `set_x2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2`, `x2`, `cb` (all when absent) |
 | `set_grid([on], [polar], [spider])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid); `spider=.true.`: `set grid spiderplot` |
-| `set_key([on], [position], [box])` | `set key bottom left box`, `set key outside`, `set key below`, `unset key` |
+| `set_key([on], [position], [box], [at], [system])` | `set key bottom left box`, `set key outside`, `set key below`, `set key lmargin`, `unset key`; `at=[60._R8P, 1._R8P], position='left top'`: `set key at 60,1 left top`, `system='graph'` (or `'first screen'`, x then y): `set key at graph ...` |
 | `set_xtics([step], [start], [end], [mirror])`, `set_ytics(...)`, `set_y2tics(...)`, `set_x2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions |
 | `set_cbtics([step], [start], [end])`, `unset_cbtics()` | `set cbtics START,STEP,END`, `unset cbtics`: the ticks of the color box |
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()`, `unset_x2tics()` | `unset xtics` |

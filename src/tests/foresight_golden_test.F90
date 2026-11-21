@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(89)                  !< Per-figure outcome.
+logical                     :: test_passed(90)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -113,7 +113,8 @@ test_passed(87) = check('theme_night.svg', figure_identity('night'))
 ! also the page of the viewer DOM test of a dark theme (src/js/viewer_dom_test.js)
 test_passed(88) = check('theme_night.html', figure_identity('night'))
 test_passed(89) = check('lc_palette.svg', figure_lc_palette())
-write(output_unit, '(A,89L2)') 'foresight golden checks:', test_passed
+test_passed(90) = check('key_at.svg', figure_key_at())
+write(output_unit, '(A,90L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -433,6 +434,28 @@ contains
    call fig%set_ytics(out=.true.)
    call fig%plot(X, Y, title='out', with='linespoints')
    endfunction figure_tics_rotate
+
+   function figure_key_at() result(fig)
+   !< The key at a position (gnuplot `set key at`): two panels, the bottom left corner of a boxed key on the data point
+   !< (2, 0.5), a key centred on the plot area in graph coordinates, one in the right margin (gnuplot `rmargin`).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.1_R8P * real(i, R8P), i = 0, 40)]
+   call fig%init(width=720_I4P, height=300_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=3_I4P, title='set key at, rmargin')
+   call fig%set_key(position='left bottom', box=.true., at=[2.0_R8P, 0.5_R8P])
+   call fig%plot(x, sin(x), title='sin')
+   call fig%plot(x, cos(x), title='cos')
+   call fig%next_panel()
+   call fig%set_key(position='center center', at=[0.5_R8P, 0.5_R8P], system='graph')
+   call fig%plot(x, x**2, title='x^2')
+   call fig%next_panel()
+   call fig%set_key(position='rmargin bottom')
+   call fig%set_xtics(step=2.0_R8P)
+   call fig%plot(x, exp(-x), title='exp(-x)')
+   endfunction figure_key_at
 
    function figure_lc_palette() result(fig)
    !< Colors from the palette, gnuplot `lc palette`: a spiral colored by its radius (`z`, the color box spanning it),

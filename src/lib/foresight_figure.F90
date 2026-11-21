@@ -751,15 +751,23 @@ contains
    endif
    endsubroutine set_grid
 
-   subroutine set_key(self, on, position, box)
+   subroutine set_key(self, on, position, box, at, system)
    !< Draw the key (`on` absent or true), as gnuplot `set key`, or not; `position` takes gnuplot's words, e.g.
    !< `'bottom left'`, `'center'` (inside the plot area, top right by default), `'outside'`, `'below'`, `'above'`,
-   !< `'horizontal'`; `box` draws a box around it.
+   !< `'lmargin'`, `'tmargin left'`, `'horizontal'`; `box` draws a box around it. `at` places it at a position
+   !< (gnuplot `set key at`), its box aligned there by the position words as a text (`'left bottom'`: its bottom left
+   !< corner), in the coordinates of `system`: one or two words of `first` (the default: the x and y values), `second`
+   !< (x2, y2), `graph` (fractions of the plot area), `screen` (fractions of the page), for x then y. `inside`,
+   !< `outside`, the margins, `below` and `above` cancel `at`.
    class(figure_object), intent(inout)        :: self     !< Figure.
    logical,              intent(in), optional :: on       !< Key on.
    character(len=*),     intent(in), optional :: position !< Position words: left, right, center, top, bottom.
    logical,              intent(in), optional :: box      !< Box around the key.
+   real(R8P),            intent(in), optional :: at(2)    !< Position of the key.
+   character(len=*),     intent(in), optional :: system   !< Coordinate systems of `at`, x then y.
    character(len=:), allocatable              :: bad      !< Unknown position word.
+   character(len=6)                           :: systems(2) !< Coordinate systems of `at`.
+   integer(I4P)                               :: blank    !< Word separator.
 
    call self%ensure_panels
    associate(panel => self%panels(self%current))
@@ -769,8 +777,28 @@ contains
          call key_position(position, panel%key_h, panel%key_v, panel%key_outside, panel%key_margin, &
                            panel%key_horizontal, bad)
          if (len(bad) > 0) error stop 'foresight: set_key: unknown position "'//bad//'"'
+         if (has_region(position)) panel%key_at = .false.
       endif
       if (present(box)) panel%key_box = box
+      if (present(at)) then
+         systems = 'first'
+         if (present(system)) then
+            blank = index(trim(adjustl(system)), ' ', kind=I4P)
+            if (blank == 0_I4P) then
+               systems = trim(adjustl(system))
+            else
+               systems(1) = trim(adjustl(system(:blank)))
+               systems(2) = trim(adjustl(system(blank:)))
+            endif
+         endif
+         if (any(systems /= 'first' .and. systems /= 'second' .and. systems /= 'graph' .and. systems /= 'screen')) &
+            error stop 'foresight: set_key: the coordinate systems are first, second, graph, screen'
+         panel%key_at = .true.
+         panel%key_xy = at
+         panel%key_system = systems
+         panel%key_outside = .false.
+         panel%key_margin = ''
+      endif
    endassociate
    endsubroutine set_key
 
@@ -1628,4 +1656,19 @@ contains
    call tics%set_fixed(real_str(step), first, last, message)
    if (len(message) > 0) error stop 'foresight: '//caller//': '//message
    endsubroutine set_tics
+   pure function has_region(words) result(has)
+   !< Whether the key position `words` name a region (`inside`, `outside`, a margin, `below`, `above`): they cancel
+   !< `set key at`, as gnuplot.
+   character(len=*), intent(in) :: words !< Position words.
+   logical                      :: has   !< A region is named.
+   character(len=*), parameter  :: REGIONS(16) = [character(len=7) :: 'inside', 'ins', 'outside', 'out', 'lmargin', &
+                                                  'lm', 'rmargin', 'rm', 'tmargin', 'tm', 'bmargin', 'bm', 'below', &
+                                                  'under', 'above', 'over'] !< Region words.
+   integer(I4P)                 :: k     !< Counter.
+
+   has = .false.
+   do k = 1_I4P, size(REGIONS, kind=I4P)
+      has = has .or. index(' '//words//' ', ' '//trim(REGIONS(k))//' ') > 0
+   enddo
+   endfunction has_region
 endmodule foresight_figure

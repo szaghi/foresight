@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(93)                           !< Per-check outcome.
+logical                       :: test_passed(94)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -137,8 +137,8 @@ call interpreter%run_text("set format z '%g'", iostat, iomsg)
 test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be among x, y, y2') > 0
 call interpreter%run_text("set format y '%d'", iostat, iomsg)
 test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
-call interpreter%run_text('set key lmargin', iostat, iomsg)
-test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "lmargin"') > 0
+call interpreter%run_text('set key offset 1,1', iostat, iomsg)
+test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "offset"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
 call interpreter%run_text('set style line 1 pi 2', iostat, iomsg)
@@ -1457,6 +1457,38 @@ call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette frac 2", 
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'a fraction from 0 to 1') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w pie lc palette frac 0.5", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette does not apply to pie') > 0
+
+! the key at a position and in a margin, as gnuplot 6.0 (show key): at keeps through position words, a region cancels
+! it; lmargin/rmargin are outside left/right, tmargin/bmargin above/below keeping the alignment and the layout
+call interpreter%init(scratch)
+associate(panel => interpreter%figure%panels(1))
+   call interpreter%run_text("set key at 5,5", iostat, iomsg)
+   test_passed(94) = iostat == 0_I4P .and. panel%key_at .and. all(panel%key_xy == [5.0_R8P, 5.0_R8P]) .and. &
+                     all(panel%key_system == 'first')
+   call interpreter%run_text("set key left bottom", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. panel%key_at .and. panel%key_h == 'left'
+   call interpreter%run_text("set key at graph 0.2, 0.8 box", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. all(panel%key_system == 'graph') .and. panel%key_box
+   call interpreter%run_text("set key at 1, screen 0.5", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. panel%key_system(1) == 'first' .and. &
+                     panel%key_system(2) == 'screen' .and. panel%key_xy(2) == 0.5_R8P
+   call interpreter%run_text("set key inside", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. .not. panel%key_at
+   call interpreter%run_text("set key at 2,3; set key lmargin", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. .not. panel%key_at .and. panel%key_outside .and. &
+                     panel%key_h == 'left' .and. len_trim(panel%key_margin) == 0
+   call interpreter%run_text("set key tmargin right vertical", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. panel%key_margin == 'top' .and. &
+                     panel%key_h == 'right' .and. .not. panel%key_horizontal
+   call interpreter%run_text("set key bm; plot x", iostat, iomsg)
+   test_passed(94) = test_passed(94) .and. iostat == 0_I4P .and. panel%key_margin == 'bottom'
+endassociate
+call interpreter%run_text("set key at character 2, 3", iostat, iomsg)
+test_passed(94) = test_passed(94) .and. iostat /= 0_I4P .and. index(iomsg, 'character coordinates are not supported') > 0
+call interpreter%run_text("set key at 2", iostat, iomsg)
+test_passed(94) = test_passed(94) .and. iostat /= 0_I4P .and. index(iomsg, 'set key at: X, Y expected') > 0
+call interpreter%run_text("set key at 2, y", iostat, iomsg)
+test_passed(94) = test_passed(94) .and. iostat /= 0_I4P .and. index(iomsg, 'a number is expected, found "y"') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1474,7 +1506,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,93L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,94L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

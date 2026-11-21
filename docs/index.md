@@ -161,6 +161,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
+  <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
   <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
   <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />

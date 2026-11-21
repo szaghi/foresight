@@ -157,6 +157,10 @@ type :: axes_object
    character(len=6)                 :: key_margin = ''  !< `top` or `bottom` margin (gnuplot `above`, `below`), else
                                                         !< empty.
    logical                          :: key_horizontal = .false. !< Entries side by side, in rows.
+   logical                          :: key_at = .false. !< Key placed at `key_xy` (gnuplot `set key at`).
+   real(R8P)                        :: key_xy(2) = 0.0_R8P !< Key position, in `key_system` coordinates.
+   character(len=6)                 :: key_system(2) = 'first' !< Coordinate systems of `key_xy`: `first`,
+                                                               !< `second`, `graph`, `screen`.
    real(R8P)                        :: origin(2) = [0.0_R8P, 0.0_R8P] !< Bottom left corner, page fraction (`set origin`).
    real(R8P)                        :: size(2)   = [1.0_R8P, 1.0_R8P] !< Width, height, page fraction (`set size`).
    type(style_object)               :: fill_default     !< Fill of the filled styles, `set style fill` (its fill
@@ -1715,6 +1719,10 @@ contains
 
    associate(width => extent(1), height => extent(2))
       entry = (width + GAP) / real(grid(2), R8P)
+      if (self%key_at) then
+         ! gnuplot `set key at`: the key box aligned on the position as a text, by left/right/center, top/bottom/center
+         call key_anchor(left, top)
+      else
       select case (self%key_place())
       case ('left', 'right')
          ! beside the plot, aligned with its border
@@ -1764,6 +1772,7 @@ contains
             top = area(3) + GAP
          endselect
       endselect
+      endif
       if (self%key_box) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
                                           FRAME_COLOR, 'none', 1.0_R8P)
    endassociate
@@ -1799,6 +1808,57 @@ contains
       call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
       call backend%end_group
    enddo
+   contains
+      subroutine key_anchor(left, top)
+      !< Left and top [px] of the key placed at `key_xy`: its box edge (`left`, `right`) or centre on the abscissa, its
+      !< top, bottom or centre on the ordinate; `first` and `second` are the values of the x/y and x2/y2 axes, `graph`
+      !< fractions of the plot area and `screen` of the page, from the bottom left.
+      real(R8P), intent(out) :: left !< Key left [px].
+      real(R8P), intent(out) :: top  !< Key top [px].
+      real(R8P)              :: ax   !< Anchor abscissa [px].
+      real(R8P)              :: ay   !< Anchor ordinate [px].
+
+      select case (trim(self%key_system(1)))
+      case ('graph')
+         ax = area(1) + self%key_xy(1) * (area(2) - area(1))
+      case ('screen')
+         ax = self%key_xy(1) * self%canvas(1)
+      case default
+         if (trim(self%key_system(1)) == 'second' .and. self%x2_active) then
+            ax = area(1) + self%x2axis%to_unit(self%key_xy(1)) * (area(2) - area(1))
+         else
+            ax = area(1) + self%xaxis%to_unit(self%key_xy(1)) * (area(2) - area(1))
+         endif
+      endselect
+      select case (trim(self%key_system(2)))
+      case ('graph')
+         ay = area(4) - self%key_xy(2) * (area(4) - area(3))
+      case ('screen')
+         ay = (1.0_R8P - self%key_xy(2)) * self%canvas(2)
+      case default
+         if (trim(self%key_system(2)) == 'second' .and. self%y2_active) then
+            ay = area(4) - self%y2axis%to_unit(self%key_xy(2)) * (area(4) - area(3))
+         else
+            ay = area(4) - self%yaxis%to_unit(self%key_xy(2)) * (area(4) - area(3))
+         endif
+      endselect
+      select case (trim(self%key_h))
+      case ('left')
+         left = ax + GAP
+      case ('center')
+         left = ax - 0.5_R8P * extent(1)
+      case default
+         left = ax - extent(1) - GAP
+      endselect
+      select case (trim(self%key_v))
+      case ('bottom')
+         top = ay - extent(2) - 0.5_R8P * GAP
+      case ('center')
+         top = ay - 0.5_R8P * extent(2)
+      case default
+         top = ay + 0.5_R8P * GAP
+      endselect
+      endsubroutine key_anchor
    endsubroutine draw_key
 
    subroutine draw_readouts(self, backend, area, font_size, fill)
@@ -4430,8 +4490,10 @@ contains
    pure subroutine key_position(words, horizontal, vertical, outside, margin, layout, bad)
    !< Update the key position from gnuplot `set key` position words, applied in order: `left`, `right`, `top`,
    !< `bottom`, and `center`, which centres the direction not given yet by `words` (both if none, as gnuplot);
-   !< `inside`, `outside`; `below` (`under`) and `above` (`over`), centred rows below or above the plot; `horizontal`,
-   !< `vertical` the layout of the entries.
+   !< `inside`, `outside`; `below` (`under`) and `above` (`over`), centred rows below or above the plot; the margins
+   !< `lmargin`, `rmargin` (outside, left or right, keeping the vertical position), `tmargin`, `bmargin` (above or below
+   !< the plot, keeping the horizontal position and the layout), as gnuplot; `horizontal`, `vertical` the layout of the
+   !< entries.
    character(len=*),              intent(in)    :: words      !< Blank separated words.
    character(len=6),              intent(inout) :: horizontal !< Horizontal position.
    character(len=6),              intent(inout) :: vertical   !< Vertical position.
@@ -4489,6 +4551,13 @@ contains
          horizontal = 'center'
          h_set = .false.
          layout = .true.
+      case ('lmargin', 'lm', 'rmargin', 'rm')
+         outside = .true.
+         margin = ''
+         horizontal = merge('left ', 'right', word(1:1) == 'l')
+         h_set = .true.
+      case ('tmargin', 'tm', 'bmargin', 'bm')
+         margin = merge('top   ', 'bottom', word(1:1) == 't')
       case ('horizontal', 'horiz')
          layout = .true.
       case ('vertical', 'vert')

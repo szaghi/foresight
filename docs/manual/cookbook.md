@@ -145,6 +145,16 @@ to the Strouhal number. Items plotted `axes x2y1` scale it on their own instead.
 
 `outside` moves the key to the right margin (or `outside left`, `outside top center`, ...); `below` and `above` lay it out in rows.
 
+### The key at a position
+
+<<< @/examples/snippets/cb_key_at.gp{gnuplot}
+
+<Plot name="cb_key_at" svg :width="560" :height="320" />
+
+`at` puts the key where the data leave room: `left top` aligns its top left corner on the point, in data coordinates
+by default, `graph` or `screen` fractions otherwise. `lmargin`, `rmargin`, `tmargin` and `bmargin` put it in a margin
+instead. See [Key](/guide/gnuplot-subset#key).
+
 ### No key
 
 <<< @/examples/snippets/cb_no_key.gp{gnuplot}

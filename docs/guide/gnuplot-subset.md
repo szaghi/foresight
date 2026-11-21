@@ -45,7 +45,7 @@ that did what it says.
 | **tti**cs [[`START,`]`STEP`] [`format "fmt"`] | theta labels around the polar plot, in degrees; every 45 degrees without `STEP` (gnuplot: none) | no theta labels (the default) |
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
-| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
+| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
 | **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
@@ -424,6 +424,11 @@ set key outside          # right of the plot, top aligned
 set key outside left bottom
 set key below            # a row below the plot (above: over it), wrapping when the panel is narrow
 set key inside           # back inside, keeping the rows
+set key lmargin          # in the left margin (rmargin: the right one), aligned with the top of the plot
+set key bmargin left     # below the plot, at its left (tmargin: above it), keeping the layout
+set key at 60, 1e-2 left top          # its top left corner at x = 60, y = 0.01
+set key at graph 0.5, 0.5 center      # centred on the plot area
+set key at screen 0.98, screen 0.98   # its top right corner near the top right of the page
 ```
 
 Position words apply in order; `center` centres the direction not named yet, as in gnuplot. Titles are right-aligned
@@ -432,6 +437,18 @@ aligned with the top, centre or bottom of the plot; centred horizontally, above 
 plot; centred both ways it stays inside, as gnuplot. `below` and `above` centre a row of entries under the x label or
 between the title and the plot (`below left` aligns it to the left); `horizontal` and `vertical` choose rows or a
 column anywhere. The plot shrinks to make room for a key outside it.
+
+The margins place it as gnuplot: `lmargin` and `rmargin` are `outside` on that side, aligned with the top, centre or
+bottom of the plot; `tmargin` and `bmargin` above and below the plot, at its left, centre or right, keeping the
+layout (`above` and `below` also centre it and lay it out in rows).
+
+`at POSITION` places the key anywhere, its box aligned on the position as a text: `left`, `right`, `center` put the
+left edge, the right edge or the centre of the box there, `top`, `bottom`, `center` its top, bottom or centre (top
+right by default). POSITION is `[SYSTEM] X, [SYSTEM] Y`, SYSTEM one of `first` (the x and y values, the default),
+`second` (x2 and y2), `graph` (0 to 1 across the plot area, from the bottom left), `screen` (0 to 1 across the page);
+y takes the system of x unless given. The plot does not shrink for it. Position words keep `at`; `inside`,
+`outside`, a margin, `below` and `above` cancel it, as gnuplot. Not supported: `character` and `polar` coordinates,
+`offset`, `fixed`.
 
 ## Styles
 
@@ -986,8 +1003,7 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
-`%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; the key
-at a position (`at`) or in a named margin (`lmargin`, ...); `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` and `lc palette z` with other styles than lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; `set style histogram
+`%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` and `lc palette z` with other styles than lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; `set style histogram
 columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.
