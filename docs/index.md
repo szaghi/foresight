@@ -101,6 +101,29 @@ features:
     linkText: Install
 ---
 
+<script setup>
+import { withBase } from 'vitepress'
+import { VPTeamMembers } from 'vitepress/theme'
+
+const authors = [
+  {
+    avatar: 'https://github.com/szaghi.png',
+    name: 'Stefano Zaghi',
+    title: 'Chief Yak Shaver & Serial Library Resurrector',
+    desc: 'Trusts no plotting tool he has not rewritten, and has now rewritten one.',
+    links: [{ icon: 'github', link: 'https://github.com/szaghi' }],
+  },
+  {
+    avatar: withBase('/avatars/claude.svg'),
+    name: 'Claude',
+    org: 'Anthropic',
+    orgLink: 'https://claude.ai',
+    title: 'Omniscient Code Oracle & Tireless Rubber Duck',
+    desc: "AI pair programmer, responsible for probing gnuplot 6.0 before every feature and for running the golden tests all night so humans don't have to.",
+  },
+]
+</script>
+
 <div class="fs-home">
 
 ## One run, one page
@@ -234,13 +257,31 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 ## Authors
 
-- Stefano Zaghi — [@szaghi](https://github.com/szaghi)
+</div>
 
-## Copyrights
+<VPTeamMembers size="medium" :members="authors" />
 
-foresight is distributed under a multi-licensing system:
+<div class="fs-home">
 
-- **FOSS projects**: [GPL v3](http://www.gnu.org/licenses/gpl-3.0.html)
-- **Closed source / commercial**: [BSD 2-Clause](http://opensource.org/licenses/BSD-2-Clause), [BSD 3-Clause](http://opensource.org/licenses/BSD-3-Clause), or [MIT](http://opensource.org/licenses/MIT)
+<p class="fs-lead">Contributions are welcome: see the <a href="./guide/contributing">Contributing</a> page.</p>
+
+## License
+
+<p class="fs-lead">foresight is available under your choice of license.</p>
+
+| License | SPDX | File |
+|---|---|---|
+| GNU General Public License v3 | `GPL-3.0-or-later` | [LICENSE.gpl3.md](https://github.com/szaghi/foresight/blob/master/LICENSE.gpl3.md) |
+| BSD 2-Clause | `BSD-2-Clause` | [LICENSE.bsd-2.md](https://github.com/szaghi/foresight/blob/master/LICENSE.bsd-2.md) |
+| BSD 3-Clause | `BSD-3-Clause` | [LICENSE.bsd-3.md](https://github.com/szaghi/foresight/blob/master/LICENSE.bsd-3.md) |
+| MIT | `MIT` | [LICENSE.mit.md](https://github.com/szaghi/foresight/blob/master/LICENSE.mit.md) |
+
+<p class="fs-lead">The named palettes carry third-party color tables: the <em>Scientific colour maps</em> by Fabio
+Crameri (MIT, <a href="https://doi.org/10.5281/zenodo.1243862">doi:10.5281/zenodo.1243862</a>), matplotlib's magma,
+inferno, plasma and viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial
+Institute's licence), and Kenneth Moreland's black_body (CC0); their notices are in
+<code>src/lib/foresight_colormaps.F90</code>.</p>
+
+<p class="fs-lead">© <a href="https://github.com/szaghi">Stefano Zaghi</a></p>
 
 </div>

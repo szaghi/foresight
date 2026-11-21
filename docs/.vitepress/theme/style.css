@@ -82,6 +82,18 @@
   margin: 0.5rem auto 1.5rem;
 }
 
+.fs-home table {
+  display: table;
+  margin: 0 auto;
+}
+
+/* the authors: VitePress' own VPTeamMembers cards, at the width of the sections around them */
+.VPHome .VPTeamMembers {
+  max-width: 1152px;
+  margin: 0 auto 1rem;
+  padding: 0 24px;
+}
+
 .fs-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
