@@ -140,6 +140,7 @@ type :: symbols_object
       procedure, pass(self) :: constant !< Value of a constant expression.
       procedure, pass(self) :: define   !< `name(params) = body`.
       procedure, pass(self) :: value_of !< Value of a variable.
+      procedure, pass(self) :: set_value !< Set a variable to a number.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
       procedure, pass(self), private :: variable_index !< Index of a variable, 0 if none.
 endtype symbols_object
@@ -863,6 +864,32 @@ contains
    if (allocated(self%variables)) deallocate(self%variables)
    if (allocated(self%functions)) deallocate(self%functions)
    endsubroutine clear
+
+   pure subroutine set_value(self, name, v, is_int)
+   !< Set the variable `name` to the real `v` (an integer with `is_int`), creating it: `fit` sets its parameters and
+   !< results so. The name is not checked.
+   class(symbols_object), intent(inout) :: self   !< Symbols.
+   character(len=*),      intent(in)    :: name   !< Variable name.
+   real(R8P),             intent(in)    :: v      !< Value.
+   logical,               intent(in)    :: is_int !< Integer value.
+   type(value_object)                   :: value  !< Value.
+   integer(I4P)                         :: k      !< Index.
+
+   value%is_int = is_int
+   if (is_int) then
+      value%i = nint(v, I8P)
+      value%r = real(value%i, R8P)
+   else
+      value%r = v
+   endif
+   if (.not. allocated(self%variables)) allocate(self%variables(0))
+   k = self%variable_index(name)
+   if (k > 0_I4P) then
+      self%variables(k)%v = value
+   else
+      call push(self%variables, user_variable(name=name, v=value))
+   endif
+   endsubroutine set_value
 
    pure subroutine value_of(self, name, v, found, is_int)
    !< Value of the variable `name` (real), `found` false (and NaN) if none; `is_int` whether an integer.

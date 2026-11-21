@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(97)                           !< Per-check outcome.
+logical                       :: test_passed(98)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1547,6 +1547,61 @@ block
    test_passed(97) = test_passed(97) .and. len(r%message) == 0 .and. near15(q(1), 0.206069699039651_R8P) .and. &
                      near15(q(2), 1.9917445095641_R8P) .and. r%niter == 69
 endblock
+
+! fit in scripts, as gnuplot 6.0 (print after fit): the parameters (undefined ones start at 1), their _err, FIT_*;
+! a third using column (or yerrors) weights the points; [min:max] restricts x; silent; a log file on request
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '1 2.1 0.1', '2 3.9 0.2', '3 6.2 0.1', '4 7.8 0.3', '5 10.1 0.2'
+close(unit)
+call interpreter%init(scratch)
+block
+   real(R8P) :: v(8) !< Variable values.
+   logical   :: ok   !< All found.
+
+   call interpreter%run_text("fit m*x+q '"//data_file//"' using 1:2 via m, q", iostat, iomsg)
+   test_passed(98) = iostat == 0_I4P
+   call values(['m       ', 'q       ', 'm_err   ', 'q_err   ', 'FIT_WSSR', 'FIT_NITE', 'FIT_NDF ', 'FIT_CONV'], v, ok)
+   test_passed(98) = test_passed(98) .and. ok .and. near15(v(1), 1.98999999990952_R8P) .and. &
+                     near15(v(2), 0.050000000326559_R8P) .and. near15(v(3), 0.0597215762239003_R8P) .and. &
+                     near15(v(4), 0.198074060222589_R8P) .and. near15(v(5), 0.107_R8P) .and. v(6) == 4.0_R8P .and. &
+                     v(7) == 3.0_R8P .and. v(8) == 1.0_R8P
+   call interpreter%run_text("m = 1; q = 1; fit m*x+q '"//data_file//"' using 1:2:3 via m, q", iostat, iomsg)
+   call values(['m       ', 'q       ', 'm_err   ', 'q_err   ', 'FIT_WSSR', 'FIT_P   ', 'FIT_NITE', 'FIT_NDF '], v, ok)
+   test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. ok .and. near15(v(1), 2.00626151010991_R8P) .and. &
+                     near15(v(2), 0.0915285451764245_R8P) .and. near15(v(3), 0.0478216551485147_R8P) .and. &
+                     near15(v(4), 0.129093971639277_R8P) .and. near15(v(5), 2.97237569060776_R8P) .and. &
+                     abs(v(6) - 0.395903940519543_R8P) < 1.0e-12_R8P
+   call interpreter%run_text("m = 1; q = 1; fit [2:4] m*x+q '"//data_file//"' using 1:2 via m, q", iostat, iomsg)
+   call values(['m       ', 'q       ', 'FIT_NDF '], v(1:3), ok)
+   test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. ok .and. near15(v(1), 1.94999999430012_R8P) .and. &
+                     near15(v(2), 0.116666684913463_R8P) .and. v(3) == 1.0_R8P
+   call interpreter%run_text("fit zz*x '"//data_file//"' via zz", iostat, iomsg)
+   call values(['zz      '], v(1:1), ok)
+   test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. ok .and. near15(v(1), 2.00363636363636_R8P)
+   ! a log file appended on request, gnuplot's layout
+   call interpreter%run_text("set fit logfile 'foresight_script_test_fit.log'; m = 1; q = 1; "// &
+                             "fit m*x+q '"//data_file//"' via m, q", iostat, iomsg)
+   test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. &
+                     consecutive('foresight_script_test_fit.log', ['Final  ', '=======', 'm      '])
+   open(newunit=unit, file='foresight_script_test_fit.log')
+   close(unit, status='delete')
+endblock
+call interpreter%run_text("set fit nologfile; m = 0; q = 1; fit m*x+q '"//data_file//"' via m, q", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'Singular matrix in Invert_RtR') > 0
+call interpreter%run_text("fit m*x+q '"//data_file//"'", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'via and the names of the parameters') > 0
+call interpreter%run_text("fit m*x+q '"//data_file//"' via 'p.par'", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'via a parameter file is not supported') > 0
+call interpreter%run_text("set fit verbose", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "verbose"') > 0
+call interpreter%run_text("fit m*x+q '"//data_file//"' using 1:2:3 unitweights via m, q", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'fits a function of two variables') > 0
+call interpreter%run_text("set fit limit 1e-9 maxiter 3 results noerrorvariables", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. interpreter%fit_options%limit == 1.0e-9_R8P .and. &
+                  interpreter%fit_options%maxiter == 3_I4P .and. interpreter%fit_verbosity == 'results' .and. &
+                  .not. interpreter%fit_errorvariables
+call interpreter%run_text("set fit", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. interpreter%fit_verbosity == 'quiet'
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 open(newunit=unit, file=scratch)
@@ -1564,7 +1619,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,97L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,98L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1617,6 +1672,28 @@ contains
    enddo
    close(u)
    endfunction consecutive
+
+   subroutine values(names, v, ok)
+   !< The values `v` of the script variables `names` (8 characters, the leading ones of longer names: FIT_NITER is
+   !< FIT_NITE), `ok` if all exist.
+   character(len=*), intent(in)  :: names(:) !< Names.
+   real(R8P),        intent(out) :: v(:)     !< Values.
+   logical,          intent(out) :: ok       !< All found.
+   character(len=*), parameter   :: FULL(3) = [character(len=13) :: 'FIT_NITER', 'FIT_CONVERGED', 'FIT_NDF'] !< Long.
+   character(len=:), allocatable :: name     !< Full name.
+   logical                       :: found    !< Found.
+   integer(I4P)                  :: j        !< Counter.
+
+   ok = .true.
+   do j = 1_I4P, size(names, kind=I4P)
+      name = trim(names(j))
+      if (name == 'FIT_NITE') name = trim(FULL(1))
+      if (name == 'FIT_CONV') name = trim(FULL(2))
+      call interpreter%symbols%value_of(name, v(j), found)
+      if (.not. found) v(j) = 0.0_R8P
+      ok = ok .and. found
+   enddo
+   endsubroutine values
 
    elemental function near15(a, b) result(close)
    !< Whether `a` is `b` to 1e-10 relative: fits match gnuplot's 15 printed digits with gfortran, 12 to 14 with

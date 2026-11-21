@@ -83,6 +83,7 @@ use foresight_expression, only : expression_object, push, symbols_object
 use foresight_figure, only : figure_object
 use foresight_format, only : format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
+use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
@@ -146,6 +147,11 @@ type :: script_object
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
+   type(fit_settings)              :: fit_options              !< `set fit` limit, maxiter, lambda, scaling options.
+   character(len=7)                :: fit_verbosity = 'quiet'  !< `set fit quiet|results|brief`: the report on the
+                                                               !< standard error (none by default, unlike gnuplot).
+   character(len=:), allocatable   :: fit_logfile              !< `set fit logfile`, empty for none (the default).
+   logical                         :: fit_errorvariables = .true. !< `set fit errorvariables`: NAME_err set.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -153,11 +159,24 @@ type :: script_object
       procedure, pass(self) :: run_text               !< Run script text.
       procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
+      procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: register_file !< Remember a data file.
       procedure, pass(self), private :: save_output   !< Render to the current output.
       procedure, pass(self), private :: set_command   !< `set`.
       procedure, pass(self), private :: unset_command !< `unset`.
 endtype script_object
+
+type, extends(fit_model) :: script_model
+   !< A `fit` model: a user expression of x whose parameters are user variables, set and the expression compiled again
+   !< for each parameter vector (a user variable is a constant of a compiled expression).
+   character(len=:), allocatable  :: text     !< Model expression.
+   character(len=32), allocatable :: names(:) !< Parameter names.
+   real(R8P), allocatable         :: x(:)     !< Abscissae.
+   logical                        :: degrees = .false. !< Angles in degrees.
+   type(symbols_object)           :: symbols  !< User variables and functions, a copy of the script's.
+   contains
+      procedure, pass(self) :: values => script_model_values !< Values at the abscissae.
+endtype script_model
 
 contains
    subroutine init(self, output, theme)
@@ -190,6 +209,10 @@ contains
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
    call self%symbols%clear
+   self%fit_options = fit_settings()
+   self%fit_verbosity = 'quiet'
+   self%fit_logfile = ''
+   self%fit_errorvariables = .true.
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -324,6 +347,8 @@ contains
    elseif (keyword(command, 'plot', 1_I4P)) then
       self%last_plot = after_command(statement)
       call self%plot_command(tokens(2:), statement, iostat, iomsg)
+   elseif (command == 'fit') then
+      call self%fit_command(tokens(2:), statement, iostat, iomsg)
    elseif (keyword(command, 'replot', 3_I4P)) then
       if (len(self%last_plot) == 0) then
          call fail('replot: no previous plot', iostat, iomsg)
@@ -337,6 +362,251 @@ contains
       call fail('unsupported command "'//command//'"', iostat, iomsg)
    endif
    endsubroutine execute
+
+   subroutine fit_command(self, tokens, statement, iostat, iomsg)
+   !< gnuplot `fit [[min:max]] EXPRESSION 'file' [using X:Y[:ERR]] [index N] [every ...] [yerrors|unitweights]
+   !< via P1, P2, ...`: the parameters (user variables; an undefined one starts at 1) fitted by foresight_fit, then
+   !< set to the result, with `P_err` (`set fit errorvariables`) and FIT_NDF, FIT_WSSR, FIT_STDFIT, FIT_P, FIT_NITER,
+   !< FIT_CONVERGED. The report goes to the standard error with `set fit results|brief`, to a file with `set fit
+   !< logfile`; silent by default. On failure the parameters keep their values.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens after `fit`.
+   character(len=*),              intent(in)    :: statement !< The whole statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(datafile_object)                        :: data      !< Data file.
+   type(expression_object), allocatable         :: fields(:) !< `using` fields.
+   type(expression_object)                      :: model     !< Compiled model.
+   type(fit_result)                             :: result    !< Fit outcome.
+   type(fit_settings)                           :: options   !< Fit options.
+   type(script_model)                           :: fitted    !< Model fitted.
+   character(len=:), allocatable                :: text      !< Model expression.
+   character(len=:), allocatable                :: file      !< Data file name.
+   character(len=:), allocatable                :: spec      !< `using` as written.
+   character(len=:), allocatable                :: word      !< Current word.
+   character(len=32), allocatable               :: names(:)  !< Parameter names.
+   character(len=32), allocatable               :: kept(:)   !< Names grown (through a temporary).
+   real(R8P), allocatable                       :: values(:,:) !< `using` values.
+   real(R8P), allocatable                       :: x(:)      !< Abscissae.
+   real(R8P), allocatable                       :: z(:)      !< Data.
+   real(R8P), allocatable                       :: err(:)    !< Errors of the data.
+   real(R8P), allocatable                       :: start(:)  !< Initial parameters.
+   logical, allocatable                         :: use(:)    !< Points fitted.
+   real(R8P)                                    :: range(2)  !< x range, inline.
+   real(R8P)                                    :: v         !< Number.
+   logical                                      :: ranged    !< x range given.
+   logical                                      :: found     !< Variable found.
+   logical                                      :: weighted  !< Errors given.
+   logical                                      :: unit      !< `unitweights` given.
+   integer(I4P)                                 :: set_index !< Dataset, -1 for all.
+   integer(I4P)                                 :: every(6)  !< `every` fields.
+   integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: k         !< Counter.
+   integer(I4P)                                 :: colon     !< Range separator.
+   integer(I4P)                                 :: first     !< First token of the model.
+
+   iostat = 0_I4P
+   iomsg = ''
+   ranged = .false.
+   i = 1_I4P
+   if (size(tokens) == 0) then
+      call fail('fit: a function, a data file and via are expected', iostat, iomsg)
+      return
+   endif
+   if (tokens(1)%kind == TOKEN_RANGE) then
+      colon = index(tokens(1)%text, ':', kind=I4P)
+      if (colon == 0_I4P .or. index(tokens(1)%text, '=') > 0) then
+         call fail('fit: the range is [min:max], of x', iostat, iomsg)
+         return
+      endif
+      call self%symbols%constant(trim(adjustl(tokens(1)%text(1:colon - 1_I4P))), range(1), iostat, iomsg)
+      if (iostat == 0_I4P) call self%symbols%constant(trim(adjustl(tokens(1)%text(colon + 1_I4P:))), range(2), &
+                                                      iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'fit: range: '//iomsg
+         return
+      endif
+      ranged = .true.
+      i = 2_I4P
+   endif
+   ! the model: the text up to the data file name
+   first = i
+   do while (i <= size(tokens, kind=I4P))
+      if (tokens(i)%kind == TOKEN_STRING) exit
+      i = i + 1_I4P
+   enddo
+   if (i > size(tokens, kind=I4P) .or. i == first) then
+      call fail('fit: a function then a quoted data file are expected', iostat, iomsg)
+      return
+   endif
+   text = trim(adjustl(statement(tokens(first)%first:tokens(i)%first - 1_I4P)))
+   file = tokens(i)%text
+   spec = ''
+   set_index = -1_I4P
+   every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+   weighted = .false.
+   unit = .false.
+   allocate(names(0))
+   i = i + 1_I4P
+   do while (i <= size(tokens, kind=I4P))
+      word = tokens(i)%text
+      if (keyword(word, 'using', 1_I4P)) then
+         if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+         call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+         if (iostat /= 0_I4P) return
+      elseif (keyword(word, 'index', 1_I4P)) then
+         if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
+      elseif (keyword(word, 'every', 2_I4P)) then
+         if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+         call parse_every(word, every, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+      elseif (word == 'yerrors' .or. word == 'yerror' .or. word == 'zerror' .or. word == 'zerrors') then
+         weighted = .true.
+         unit = .false.
+      elseif (word == 'unitweights') then
+         weighted = .false.
+         unit = .true.
+      elseif (word == 'via') then
+         i = i + 1_I4P
+         do while (i <= size(tokens, kind=I4P))
+            if (tokens(i)%kind == TOKEN_STRING) then
+               call fail('fit: via a parameter file is not supported (via the parameter names is)', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind == TOKEN_WORD) then
+               allocate(kept(size(names) + 1))
+               kept(1:size(names)) = names
+               kept(size(kept)) = tokens(i)%text
+               call move_alloc(kept, names)
+            endif
+            i = i + 1_I4P
+         enddo
+         exit
+      else
+         call fail('fit: unsupported option "'//word//'"', iostat, iomsg)
+         return
+      endif
+      i = i + 1_I4P
+   enddo
+   if (size(names) == 0) then
+      call fail('fit: via and the names of the parameters are expected', iostat, iomsg)
+      return
+   endif
+   ! the data: x, z and the errors of z (`using 1:2:3`, gnuplot's version 4 syntax, or with yerrors)
+   if (.not. allocated(fields)) fields = plain_columns([1_I4P, 2_I4P])
+   if (size(fields) == 1 .or. size(fields) > 3) then
+      call fail('fit: using X:Y or X:Y:YERROR (one independent variable)', iostat, iomsg)
+      return
+   endif
+   ! three columns with unitweights are gnuplot's x:y:z, a function of x and y
+   if (size(fields) == 3 .and. unit) then
+      call fail('fit: using X:Y:Z unitweights fits a function of two variables (one independent variable is '// &
+                'supported)', iostat, iomsg)
+      return
+   endif
+   if (size(fields) == 3) weighted = .true.
+   if (weighted .and. size(fields) /= 3) then
+      call fail('fit: yerrors needs using X:Y:YERROR', iostat, iomsg)
+      return
+   endif
+   call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments)
+   if (iostat /= 0_I4P) then
+      iomsg = 'fit: '//iomsg
+      return
+   endif
+   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P))
+   allocate(use(size(values, 1)))
+   use = ieee_is_finite(values(:, 1)) .and. ieee_is_finite(values(:, 2))
+   if (weighted) use = use .and. ieee_is_finite(values(:, 3))
+   if (ranged) then
+      do k = 1_I4P, size(use, kind=I4P)
+         if (use(k)) use(k) = values(k, 1) >= min(range(1), range(2)) .and. values(k, 1) <= max(range(1), range(2))
+      enddo
+   endif
+   x = pack(values(:, 1), use)
+   z = pack(values(:, 2), use)
+   if (weighted) then
+      err = pack(values(:, 3), use)
+   else
+      allocate(err(size(z)))
+      err = 1.0_R8P
+   endif
+   ! the parameters: their values now, 1 if undefined (gnuplot)
+   allocate(start(size(names)))
+   do k = 1_I4P, size(names, kind=I4P)
+      call self%symbols%value_of(trim(names(k)), v, found)
+      if (.not. found) v = 1.0_R8P
+      start(k) = v
+      call self%symbols%set_value(trim(names(k)), v, .false.)
+   enddo
+   call model%compile(text, iostat, iomsg, variable='x', degrees=self%figure%panels(self%figure%current)%degrees, &
+                      symbols=self%symbols)
+   if (iostat /= 0_I4P) then
+      iomsg = 'fit: '//iomsg
+      return
+   endif
+   options = self%fit_options
+   ! gnuplot's variables FIT_LIMIT and FIT_MAXITER, when defined
+   call self%symbols%value_of('FIT_LIMIT', v, found)
+   if (found) then
+      if (v > 0.0_R8P) options%limit = v
+   endif
+   call self%symbols%value_of('FIT_MAXITER', v, found)
+   if (found) then
+      if (v >= 0.0_R8P) options%maxiter = nint(v, I4P)
+   endif
+   call self%symbols%set_value('FIT_CONVERGED', 0.0_R8P, .true.)
+   fitted%text = text
+   fitted%names = names
+   fitted%x = x
+   fitted%degrees = self%figure%panels(self%figure%current)%degrees
+   fitted%symbols = self%symbols
+   call levenberg_marquardt(fitted, z, err, start, options, result, weighted)
+   if (len(result%message) > 0) then
+      do k = 1_I4P, size(names, kind=I4P)
+         call self%symbols%set_value(trim(names(k)), start(k), .false.)
+      enddo
+   else
+      do k = 1_I4P, size(names, kind=I4P)
+         call self%symbols%set_value(trim(names(k)), result%params(k), .false.)
+         if (self%fit_errorvariables) call self%symbols%set_value(trim(names(k))//'_err', result%errors(k), .false.)
+      enddo
+      call self%symbols%set_value('FIT_NDF', real(result%ndf, R8P), .true.)
+      call self%symbols%set_value('FIT_WSSR', result%wssr, .false.)
+      call self%symbols%set_value('FIT_STDFIT', result%stdfit, .false.)
+      call self%symbols%set_value('FIT_P', result%p, .false.)
+      call self%symbols%set_value('FIT_NITER', real(result%niter, R8P), .true.)
+      call self%symbols%set_value('FIT_CONVERGED', merge(1.0_R8P, 0.0_R8P, result%converged), .true.)
+   endif
+   if (self%fit_verbosity /= 'quiet') call fit_report(result, names, '-', "'"//file//"'"//trim(' using '//spec), &
+                                                      text, self%fit_verbosity == 'brief')
+   if (len(self%fit_logfile) > 0) call fit_report(result, names, self%fit_logfile, &
+                                                  "'"//file//"'"//trim(' using '//spec), text, .false.)
+   if (len(result%message) > 0) call fail('fit: '//result%message, iostat, iomsg)
+   endsubroutine fit_command
+
+   subroutine script_model_values(self, p, f, ok)
+   !< The model at every abscissa, the parameters set as user variables of the model's own symbols.
+   class(script_model), intent(inout) :: self !< Model.
+   real(R8P),           intent(in)    :: p(:) !< Parameters.
+   real(R8P),           intent(out)   :: f(:) !< Values.
+   logical,             intent(out)   :: ok   !< All defined.
+   type(expression_object)            :: e    !< Model at these parameters.
+   character(len=:), allocatable      :: msg  !< Compilation message.
+   integer(I4P)                       :: ios  !< Compilation status.
+   integer(I4P)                       :: q    !< Counter.
+
+   do q = 1_I4P, size(p, kind=I4P)
+      call self%symbols%set_value(trim(self%names(q)), p(q), .false.)
+   enddo
+   call e%compile(self%text, ios, msg, variable='x', degrees=self%degrees, symbols=self%symbols)
+   ok = ios == 0_I4P
+   if (.not. ok) return
+   do q = 1_I4P, size(self%x, kind=I4P)
+      f(q) = e%value_at(self%x(q))
+   enddo
+   ok = all(ieee_is_finite(f))
+   endsubroutine script_model_values
 
    ! private procedures
    function assignment(self, statement, iostat, iomsg) result(done)
@@ -2449,6 +2719,8 @@ contains
       call minor_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'datafile', 5_I4P)) then
       call datafile_option
+   elseif (option == 'fit') then
+      call fit_option
    elseif (keyword(option, 'samples', 3_I4P)) then
       call samples_option
    elseif (keyword(option, 'format', 3_I4P)) then
@@ -2559,6 +2831,88 @@ contains
       fixed = .true.
       value = v
       endsubroutine range_end
+      subroutine fit_option
+      !< `set fit [quiet|results|brief] [logfile "file"|nologfile] [limit E] [limit_abs E] [maxiter N|default]
+      !< [start-lambda L] [lambda-factor F] [[no]prescale] [[no]errorscaling] [[no]errorvariables]`; bare, the defaults
+      !< (silent, no log file, gnuplot's limits).
+      character(len=:), allocatable :: word !< Option word.
+      real(R8P)                     :: v    !< Number.
+      integer(I4P)                  :: n    !< Integer.
+
+      if (size(tokens) == 1) then
+         self%fit_options = fit_settings()
+         self%fit_verbosity = 'quiet'
+         self%fit_logfile = ''
+         self%fit_errorvariables = .true.
+         return
+      endif
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         word = tokens(i)%text
+         select case (word)
+         case ('quiet', 'results', 'brief')
+            self%fit_verbosity = word
+         case ('logfile')
+            if (i == size(tokens, kind=I4P)) then
+               call fail('set fit logfile: a "file" is expected', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            if (tokens(i)%kind /= TOKEN_STRING .or. len(tokens(i)%text) == 0) then
+               call fail('set fit logfile: a "file" is expected', iostat, iomsg)
+               return
+            endif
+            self%fit_logfile = tokens(i)%text
+         case ('nologfile')
+            self%fit_logfile = ''
+         case ('limit', 'limit_abs', 'start-lambda', 'lambda-factor')
+            if (.not. next_real(tokens, i, v, iostat, iomsg)) then
+               iomsg = 'set fit '//word//': '//iomsg
+               return
+            endif
+            if (.not. v > 0.0_R8P .and. word /= 'limit_abs' .and. word /= 'start-lambda') then
+               call fail('set fit '//word//': a positive number is expected', iostat, iomsg)
+               return
+            endif
+            select case (word)
+            case ('limit')
+               self%fit_options%limit = v
+            case ('limit_abs')
+               self%fit_options%limit_abs = max(0.0_R8P, v)
+            case ('start-lambda')
+               self%fit_options%start_lambda = max(0.0_R8P, v)
+            case default
+               self%fit_options%lambda_factor = v
+            endselect
+         case ('maxiter')
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'default') then
+                  self%fit_options%maxiter = 0_I4P
+                  i = i + 2_I4P
+                  cycle
+               endif
+            endif
+            if (.not. next_integer(tokens, i, n, iostat, iomsg)) then
+               iomsg = 'set fit maxiter: '//iomsg
+               return
+            endif
+            self%fit_options%maxiter = max(0_I4P, n)
+         case ('prescale', 'noprescale')
+            self%fit_options%prescale = word == 'prescale'
+         case ('errorscaling', 'noerrorscaling')
+            self%fit_options%errorscaling = word == 'errorscaling'
+         case ('errorvariables', 'noerrorvariables')
+            self%fit_errorvariables = word == 'errorvariables'
+         case default
+            call fail('set fit: unsupported option "'//word//'" (supported: quiet, results, brief, logfile, '// &
+                      'nologfile, limit, limit_abs, maxiter, start-lambda, lambda-factor, [no]prescale, '// &
+                      '[no]errorscaling, [no]errorvariables)', iostat, iomsg)
+            return
+         endselect
+         i = i + 1_I4P
+      enddo
+      endsubroutine fit_option
+
       subroutine key_option
       !< `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [inside|outside|below|above|lmargin|
       !< rmargin|tmargin|bmargin|at POSITION] [horizontal|vertical] [autotitle [columnhead]|noautotitle]`; POSITION is
