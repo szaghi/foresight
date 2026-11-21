@@ -364,7 +364,9 @@ contains
    integer(I4P)           :: i        !< Counter.
 
    n = size(x, kind=I4P)
-   h = x(2:) - x(:n - 1)
+   ! allocated before the assignment: nvfortran 26.9 reads h(1) as 0 in the loops below when h is allocated by it
+   allocate(h(n - 1_I4P))
+   h(:) = x(2:) - x(:n - 1)
    allocate(c(0:3, n), diag(n), rhs(n))
    ! half the second derivatives s(i) = c(2, i): s(1) = s(n) = 0, and for the inner knots
    ! h(i-1) s(i-1) + 2 (h(i-1) + h(i)) s(i) + h(i) s(i+1) = 3 ((y(i+1) - y(i)) / h(i) - (y(i) - y(i-1)) / h(i-1))
@@ -409,7 +411,9 @@ contains
 
    n = size(x, kind=I4P)
    m = n - 2_I4P
-   h = x(2:) - x(:n - 1)
+   ! allocated before the assignment, as in natural_spline (nvfortran 26.9)
+   allocate(h(n - 1_I4P))
+   h(:) = x(2:) - x(:n - 1)
    allocate(c(0:3, n), band(-2:2, m), rhs(m))
    band = 0.0_R8P
    ! row r (inner knot r+1) for the half second derivatives s(2..n-1): the cubic spline conditions with the knot values

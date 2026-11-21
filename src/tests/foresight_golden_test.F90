@@ -435,14 +435,20 @@ contains
    type(figure_object)         :: fig     !< Figure.
    real(R8P)                   :: t(13)   !< Abscissae.
    character(len=7), parameter :: C(3) = ['#9400d3', '#009e73', '#e69f00'] !< Class colors.
+   character(len=7)            :: phase(13) !< Colors of the line, by class.
+   character(len=7)            :: sign(13)  !< Colors of the impulses, by sign.
    integer(I4P)                :: i       !< Counter.
 
    t = [(0.5_R8P * real(i, R8P), i = 0, 12)]
+   ! a loop: nvfortran 26.9 returns the first argument of a character merge in an implied-do constructor
+   do i = 1, 13
+      phase(i) = C(1 + modulo(int(t(i)), 3))
+      sign(i) = C(3)
+      if (cos(t(i)) >= 0.0_R8P) sign(i) = C(2)
+   enddo
    call fig%init(width=520_I4P, height=320_I4P)
-   call fig%plot(t, sin(t), title='phase', with='linespoints', &
-                 colors=[(C(1 + modulo(int(t(i)), 3)), i = 1, 13)])
-   call fig%plot(t, cos(t) - 1.5_R8P, title='sign', with='impulses', &
-                 colors=[(merge(C(2), C(3), cos(t(i)) - 1.5_R8P >= -1.5_R8P), i = 1, 13)])
+   call fig%plot(t, sin(t), title='phase', with='linespoints', colors=phase)
+   call fig%plot(t, cos(t) - 1.5_R8P, title='sign', with='impulses', colors=sign)
    endfunction figure_lc_variable
 
    function figure_segments() result(fig)
