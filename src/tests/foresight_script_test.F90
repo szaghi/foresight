@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(98)                           !< Per-check outcome.
+logical                       :: test_passed(99)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1611,6 +1611,29 @@ open(newunit=unit, file=data_file)
 close(unit, status='delete')
 open(newunit=unit, file=csv_file)
 close(unit, status='delete')
+! print, as gnuplot 6.0: values separated by a blank (reals as %.15g, .0 when integral), to set print's file
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_print.txt'; s = sprintf('%.3f', pi); "// &
+                          "print s, 1/3., 100.0, 7, ""a"" . 'b'; print 'x\ty', ""x\ty""; "// &
+                          "set print 'foresight_script_test_print.txt' append; print 2**63; set print", iostat, iomsg)
+test_passed(99) = iostat == 0_I4P .and. interpreter%print_file == '' .and. &
+                  file_is('foresight_script_test_print.txt', &
+                          [character(len=40) :: '3.142 0.333333333333333 100.0 7 ab', 'x\ty x'//achar(9)//'y', &
+                           '9.22337203685478e+18'])
+call interpreter%run_text("set print 'foresight_script_test_print.txt'; print 1", iostat, iomsg)
+test_passed(99) = test_passed(99) .and. file_is('foresight_script_test_print.txt', [character(len=1) :: '1'])
+call interpreter%run_text("print", iostat, iomsg)
+test_passed(99) = test_passed(99) .and. iostat /= 0_I4P .and. index(iomsg, 'print: an expression is expected') > 0
+call interpreter%run_text("print 1/0", iostat, iomsg)
+test_passed(99) = test_passed(99) .and. iostat /= 0_I4P .and. index(iomsg, 'print: undefined value: 1/0') > 0
+call interpreter%run_text("print 'a' + 1", iostat, iomsg)
+test_passed(99) = test_passed(99) .and. iostat /= 0_I4P .and. index(iomsg, 'non-numeric string') > 0
+call interpreter%run_text("unset print; set print 'a' b", iostat, iomsg)
+test_passed(99) = test_passed(99) .and. iostat /= 0_I4P .and. interpreter%print_file == '' .and. &
+                  index(iomsg, 'set print: "file" [append] or "-" expected') > 0
+open(newunit=unit, file='foresight_script_test_print.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -1619,7 +1642,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,98L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,99L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -1672,6 +1695,31 @@ contains
    enddo
    close(u)
    endfunction consecutive
+
+   function file_is(file, lines) result(ok)
+   !< Whether `file` holds exactly `lines` (trailing blanks of each ignored).
+   character(len=*), intent(in) :: file     !< Text file.
+   character(len=*), intent(in) :: lines(:) !< Expected lines.
+   logical                      :: ok       !< Same lines.
+   character(len=500)           :: line     !< Line read.
+   integer(I4P)                 :: u        !< Unit.
+   integer(I4P)                 :: ios      !< I/O status.
+   integer(I4P)                 :: k        !< Lines read.
+
+   ok = .false.
+   open(newunit=u, file=file, action='read', iostat=ios)
+   if (ios /= 0_I4P) return
+   k = 0_I4P
+   do
+      read(u, '(A)', iostat=ios) line
+      if (ios /= 0_I4P) exit
+      k = k + 1_I4P
+      if (k > size(lines, kind=I4P)) exit
+      if (trim(line) /= trim(lines(k))) exit
+   enddo
+   close(u)
+   ok = ios /= 0_I4P .and. k == size(lines, kind=I4P)
+   endfunction file_is
 
    subroutine values(names, v, ok)
    !< The values `v` of the script variables `names` (8 characters, the leading ones of longer names: FIT_NITER is

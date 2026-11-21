@@ -78,6 +78,7 @@ module foresight_script
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
+use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, symbols_object
@@ -153,6 +154,8 @@ type :: script_object
                                                                !< standard error (none by default, unlike gnuplot).
    character(len=:), allocatable   :: fit_logfile              !< `set fit logfile`, empty for none (the default).
    logical                         :: fit_errorvariables = .true. !< `set fit errorvariables`: NAME_err set.
+   character(len=:), allocatable   :: print_file               !< `set print`: '' the standard error (gnuplot's
+                                                               !< default), '-' the standard output, else a file.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -161,6 +164,7 @@ type :: script_object
       procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: fit_command   !< `fit`.
+      procedure, pass(self), private :: print_command !< `print`.
       procedure, pass(self), private :: register_file !< Remember a data file.
       procedure, pass(self), private :: save_output   !< Render to the current output.
       procedure, pass(self), private :: set_command   !< `set`.
@@ -214,6 +218,7 @@ contains
    self%fit_verbosity = 'quiet'
    self%fit_logfile = ''
    self%fit_errorvariables = .true.
+   self%print_file = ''
    endsubroutine init
 
    subroutine run_file(self, file, iostat, iomsg)
@@ -350,6 +355,8 @@ contains
       call self%plot_command(tokens(2:), statement, iostat, iomsg)
    elseif (command == 'fit') then
       call self%fit_command(tokens(2:), statement, iostat, iomsg)
+   elseif (keyword(command, 'print', 2_I4P)) then
+      call self%print_command(after_command(statement), iostat, iomsg)
    elseif (keyword(command, 'replot', 3_I4P)) then
       if (len(self%last_plot) == 0) then
          call fail('replot: no previous plot', iostat, iomsg)
@@ -363,6 +370,58 @@ contains
       call fail('unsupported command "'//command//'"', iostat, iomsg)
    endif
    endsubroutine execute
+
+   subroutine print_command(self, text, iostat, iomsg)
+   !< gnuplot `print EXPRESSION, ...`: the values (strings as they are, numbers as gnuplot shows them) separated by a
+   !< blank, on one line of the standard error, or where `set print` sends it.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: text      !< Text after `print`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(token_object), allocatable              :: parts(:)  !< Expressions.
+   character(len=:), allocatable                :: line      !< Printed line.
+   character(len=:), allocatable                :: value     !< One value.
+   integer(I4P)                                 :: k         !< Counter.
+   integer(I4P)                                 :: unit      !< Output unit.
+   logical                                      :: is_string !< A string value.
+
+   iostat = 0_I4P
+   iomsg = ''
+   line = ''
+   call split_arguments(text, parts)
+   if (size(parts) == 0) then
+      call fail('print: an expression is expected', iostat, iomsg)
+      return
+   endif
+   do k = 1_I4P, size(parts, kind=I4P)
+      if (len_trim(parts(k)%text) == 0) then
+         call fail('print: an expression is expected', iostat, iomsg)
+         return
+      endif
+      call self%symbols%text_of(parts(k)%text, value, is_string, iostat, iomsg, &
+                                degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat /= 0_I4P) then
+         iomsg = 'print: '//iomsg
+         return
+      endif
+      if (k > 1_I4P) line = line//' '
+      line = line//value
+   enddo
+   select case (self%print_file)
+   case ('')
+      write(error_unit, '(A)') line
+   case ('-')
+      write(output_unit, '(A)') line
+   case default
+      open(newunit=unit, file=self%print_file, position='append', action='write', iostat=iostat)
+      if (iostat /= 0_I4P) then
+         call fail('print: cannot write "'//self%print_file//'"', iostat, iomsg)
+         return
+      endif
+      write(unit, '(A)') line
+      close(unit)
+   endselect
+   endsubroutine print_command
 
    subroutine fit_command(self, tokens, statement, iostat, iomsg)
    !< gnuplot `fit [[min:max]] EXPRESSION 'file' [using X:Y[:ERR]] [index N] [every ...] [yerrors|unitweights]
@@ -2722,6 +2781,8 @@ contains
       call datafile_option
    elseif (option == 'fit') then
       call fit_option
+   elseif (keyword(option, 'print', 2_I4P)) then
+      call print_option
    elseif (keyword(option, 'samples', 3_I4P)) then
       call samples_option
    elseif (keyword(option, 'format', 3_I4P)) then
@@ -2832,6 +2893,44 @@ contains
       fixed = .true.
       value = v
       endsubroutine range_end
+      subroutine print_option
+      !< `set print ["file" [append] | "-"]`: where `print` writes; a file is emptied unless `append`; bare, the
+      !< standard error.
+      integer(I4P) :: unit !< File unit.
+
+      if (size(tokens) == 1) then
+         self%print_file = ''
+         return
+      endif
+      if (tokens(2)%kind /= TOKEN_STRING .or. size(tokens) > 3) then
+         call fail('set print: "file" [append] or "-" expected', iostat, iomsg)
+         return
+      endif
+      if (size(tokens) == 3) then
+         if (.not. keyword(tokens(3)%text, 'append', 3_I4P)) then
+            call fail('set print: "file" [append] or "-" expected', iostat, iomsg)
+            return
+         endif
+      endif
+      if (tokens(2)%text == '-') then
+         self%print_file = '-'
+         return
+      endif
+      if (len(tokens(2)%text) == 0) then
+         self%print_file = ''
+         return
+      endif
+      if (size(tokens) == 2) then
+         open(newunit=unit, file=tokens(2)%text, status='replace', action='write', iostat=iostat)
+         if (iostat /= 0_I4P) then
+            call fail('set print: cannot write "'//tokens(2)%text//'"', iostat, iomsg)
+            return
+         endif
+         close(unit)
+      endif
+      self%print_file = tokens(2)%text
+      endsubroutine print_option
+
       subroutine fit_option
       !< `set fit [quiet|results|brief] [logfile "file"|nologfile] [limit E] [limit_abs E] [maxiter N|default]
       !< [start-lambda L] [lambda-factor F] [[no]prescale] [[no]errorscaling] [[no]errorvariables]`; bare, the defaults
@@ -4345,12 +4444,60 @@ contains
       call self%figure%set_mcbtics(0_I4P)
    elseif (keyword(option, 'format', 3_I4P)) then
       call self%figure%set_format('')
+   elseif (keyword(option, 'print', 2_I4P)) then
+      self%print_file = ''
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif
    endsubroutine unset_command
 
    ! helpers
+   pure subroutine split_arguments(text, parts)
+   !< `text` cut at the commas outside quotes, parentheses and brackets (`print a, sprintf("%d,%d", 1, 2)`); no text
+   !< is no part.
+   character(len=*),                intent(in)  :: text     !< Text.
+   type(token_object), allocatable, intent(out) :: parts(:) !< Parts, trimmed.
+   type(token_object)                           :: part     !< One part.
+   character(len=1)                             :: quote    !< Open quote, blank if none.
+   integer(I4P)                                 :: depth    !< Parenthesis and bracket depth.
+   integer(I4P)                                 :: start    !< Part start.
+   integer(I4P)                                 :: i        !< Character counter.
+
+   allocate(parts(0))
+   if (len_trim(text) == 0) return
+   quote = ' '
+   depth = 0_I4P
+   start = 1_I4P
+   i = 1_I4P
+   do while (i <= len(text, kind=I4P))
+      if (quote /= ' ') then
+         if (quote == '"' .and. text(i:i) == '\') then
+            i = i + 1_I4P
+         elseif (text(i:i) == quote) then
+            quote = ' '
+         endif
+      else
+         select case (text(i:i))
+         case ('"', "'")
+            quote = text(i:i)
+         case ('(', '[')
+            depth = depth + 1_I4P
+         case (')', ']')
+            depth = max(0_I4P, depth - 1_I4P)
+         case (',')
+            if (depth == 0_I4P) then
+               part%text = trim(adjustl(text(start:i - 1_I4P)))
+               call push(parts, part)
+               start = i + 1_I4P
+            endif
+         endselect
+      endif
+      i = i + 1_I4P
+   enddo
+   part%text = trim(adjustl(text(start:)))
+   call push(parts, part)
+   endsubroutine split_arguments
+
    pure function after_command(statement) result(rest)
    !< Text of `statement` after its first word.
    character(len=*), intent(in)  :: statement !< Statement.
