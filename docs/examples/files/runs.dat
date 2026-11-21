@@ -1,0 +1,6 @@
+# solver   cells  time   speedup
+"gmres"     1e5   41.2   1.0
+"bicgstab"  1e5   35.8   1.15
+"gmres"     1e6   402    1.0
+"bicgstab"  1e6   311    1.29
+"multigrid" 1e6   96     4.19

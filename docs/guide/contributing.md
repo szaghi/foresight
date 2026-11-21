@@ -24,8 +24,11 @@ is welcome. The project follows a KISS (Keep It Simple and Stupid) philosophy.
    the viewer (`src/js/viewer.js`), regenerate its Fortran copy (`fobis rule --ex embed-js`) and run its tests,
    `npm ci --prefix src/js && npm test --prefix src/js` (node only: tick rules, then key entries, linked zoom and
    follow mode in a parsed page)
-4. Check for unnecessary whitespace: `git diff --check`
-5. Submit a pull request with a clear commit message
+4. A change of the output changes golden files (`src/tests/goldens`), compared byte for byte: run the golden test,
+   look at the new `foresight_golden_NAME` files it writes (render them), and copy the ones you checked over
+   `src/tests/goldens/NAME`; `FORESIGHT_UPDATE_GOLDEN=1` rewrites all of them at once (inspect before committing)
+5. Check for unnecessary whitespace: `git diff --check`
+6. Submit a pull request with a clear commit message
 
 ## Fortran Coding Style
 
@@ -65,6 +68,9 @@ builds the library and the command line, runs every example, and regenerates `do
 Each plot is written twice, `NAME.svg` (or `.html`) in the washi theme and `NAME-dark.svg` in the night one: the runs
 happen twice, with `FORESIGHT_THEME=washi` and `night`, and `<Plot>` shows the one of the page mode. A recipe that sets
 its own theme (`theme vfd`) keeps it in both.
+The animations of the pages (`docs/public/examples/anim_*.svg`) are made by the same script from frames foresight
+renders (`docs/examples/anim/*.gp`, run once per frame with `foresight -c SCRIPT FRAME`), assembled into one animated
+SVG by `scripts/svg_frames.sh`.
 Commit the regenerated files with the change: the CI runs the script and fails if any of them differs.
 
 ## Commit style

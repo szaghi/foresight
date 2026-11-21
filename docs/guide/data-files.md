@@ -28,7 +28,7 @@ title: Data Files
 | Two blank lines | end a dataset, selected with `index N` (0-based) |
 | `?`, words, empty cells | no number: a point that reads one in a plain column (`using 1:2`) is skipped, its line goes on to the next point; through an expression (`using 1:($2)`) it is undefined, a gap that breaks the line, as gnuplot |
 | `NaN`, `inf` | numbers, undefined: a gap that breaks the line |
-| Numbers | read as gnuplot (C `strtod`): the longest leading number counts, `3abc` is 3, `1.2.3` is 1.2, `1d3` is 1; hexadecimal too, `0x10` is 16; beyond the real range, a gap |
+| Numbers | read as gnuplot (C `strtod`): the longest leading number counts, `3abc` is 3, `1.2.3` is 1.2, `1d3` is 1; hexadecimal too, `0x10` is 16, and C's hexadecimal reals, `0x1.8p1` is 3; beyond the real range, a gap |
 | `"quoted cell"` | one cell, blanks included; not a number |
 | Short rows | a plain column beyond the row skips the point, as a cell with no number |
 | Column 0 | the number of the point among those plotted in its dataset, from 0 (after `every`, as gnuplot) |

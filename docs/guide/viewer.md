@@ -24,8 +24,10 @@ network, no external files — and works opened straight from the disk.
 | `f` | follow the end of the data: see [below](#following-a-live-run) |
 | `h` or `?` | show or hide the help |
 
-The cursor coordinates, in data values, show at the bottom left while the pointer is over a plot (with the y2 value
-when the panel has a second y axis). In a multiplot the mouse acts on the panel under the pointer, keys on the last
+The cursor coordinates, in data values, show at the bottom left while the pointer is over a plot (with the y2 and x2
+values when the panel has those axes; a date and time on a [time axis](gnuplot-subset#time-data)). Shortcuts are
+ignored while Ctrl, Meta or Alt is held, and the right-click menu is replaced by the box zoom. The wheel zoom and the
+drag pan are not recorded for `u` (box zooms and `a` are). A reload waits while a drag is in progress. In a multiplot the mouse acts on the panel under the pointer, keys on the last
 panel hovered.
 
 ## Hiding a series
@@ -54,9 +56,24 @@ The data are never re-plotted: they live in a nested SVG whose coordinates span 
 its `viewBox` only. Line widths stay constant thanks to `vector-effect="non-scaling-stroke"`. What does change is
 regenerated:
 
-- **ticks, tick labels and grid** (y2 ticks included), with a line-by-line port of the Fortran tick rules
-  (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals;
-- **error bar caps** and **point type markers** (`pt`), kept at their pixel size in separate overlays.
+- **ticks, tick labels and grid** (y2 and x2 ticks included), with a line-by-line port of the Fortran tick rules
+  (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals; on time axes the time
+  steps and the labels (two-line ones included) by the same rules as the Fortran side;
+- **error bar caps**, **point type markers** (`pt`), **arrowheads** of `vectors` and `arrows`, and the texts of `with
+  labels`, kept at their pixel size in separate overlays;
+- what does not follow the data is hidden while zoomed and shown again by `a`: the r and theta labels of a polar
+  panel, the titles of histogram groups (`newhistogram`), and the [labels and arrows](gnuplot-subset#labels-arrows-and-objects)
+  placed at axis values (objects at axis values are data geometry and zoom with it); readouts and gauges are left
+  alone.
+
+Try it on this page: the wheel zooms about the pointer, a right drag zooms on a box, `a` goes back.
+
+<Plot name="cb_annotations" :width="640" :height="400" />
+
+The animation below shows what the viewer regenerates: the same data at narrower and narrower x windows, each frame
+rendered by foresight with the ticks the viewer computes (exact decimals at every scale).
+
+<Plot name="anim_zoom" svg :width="640" :height="320" caption="ticks regenerated while zooming (an animation)" />
 
 Back at the original view (`a`), the ticks written by Fortran are restored exactly.
 

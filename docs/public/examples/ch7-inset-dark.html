@@ -829,10 +829,317 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     return ticks;
   }
 
+  // ---- time axes (set xdata time): mirrors foresight_time and the time ticks ----
+
+  var DAY_SEC = 86400, WEEK_SEC = 7 * DAY_SEC, YEAR_SEC = 365.25 * DAY_SEC, MON_SEC = YEAR_SEC / 12;
+  var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December"];
+
+  // days from 1970-01-01 to y-m-d (H. Hinnant's algorithm), m and d may overflow
+  function daysFromCivil(y, m, d) {
+    var yy = y + Math.floor((m - 1) / 12), mm = modulo(m - 1, 12) + 1;
+    if (mm <= 2) yy -= 1;
+    var era = Math.floor(yy / 400), yoe = yy - era * 400;
+    var doy = Math.trunc((153 * (mm + (mm > 2 ? -3 : 9)) + 2) / 5) + d - 1;
+    var doe = yoe * 365 + Math.trunc(yoe / 4) - Math.trunc(yoe / 100) + doy;
+    return era * 146097 + doe - 719468;
+  }
+
+  function civilFromDays(days) {
+    var z = days + 719468, era = Math.floor(z / 146097), doe = z - era * 146097;
+    var yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36524) -
+      Math.trunc(doe / 146096)) / 365);
+    var y = yoe + era * 400, doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
+    var mp = Math.trunc((5 * doy + 2) / 153), d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
+    var m = mp + (mp < 10 ? 3 : -9);
+    if (m <= 2) y += 1;
+    return {y: y, m: m, d: d};
+  }
+
+  function civilTime(y, mo, d, h, mi, s) {
+    return daysFromCivil(y, mo, d) * DAY_SEC + (h * 3600 + mi * 60) + s;
+  }
+
+  function timeParts(t) {
+    var whole = Math.floor(t), days = Math.floor(whole / DAY_SEC), rest = whole - days * 86400;
+    var c = civilFromDays(days);
+    return {year: c.y, month: c.m, day: c.d, hour: Math.trunc(rest / 3600),
+      minute: Math.trunc((rest % 3600) / 60), second: rest % 60, fraction: t - whole,
+      yday: days - daysFromCivil(c.y, 1, 1) + 1, wday: modulo(days + 4, 7)};
+  }
+
+  function padded(n, width, pad) {
+    var text = String(Math.abs(n));
+    while (text.length < width) text = pad + text;
+    return n < 0 ? "-" + text : text;
+  }
+
+  // gnuplot's strftime (see foresight_time)
+  function strftime(format, t) {
+    var text = "", i = 0, c, prec, p, h12, a, n;
+    if (!isFinite(t)) return "";
+    p = timeParts(t);
+    h12 = modulo(p.hour + 11, 12) + 1;
+    var hasTH = format.indexOf("%tH") >= 0, hasTM = format.indexOf("%tM") >= 0;
+    while (i < format.length) {
+      if (format[i] !== "%" || i === format.length - 1) { text += format[i]; i++; continue; }
+      i++;
+      prec = -1;
+      if (format[i] === "." && i < format.length - 1 && /[0-9]/.test(format[i + 1])) {
+        prec = Number(format[i + 1]);
+        i += 2;
+        if (i >= format.length) break;
+      }
+      c = format[i];
+      switch (c) {
+        case "a": text += DAY_NAMES[p.wday].slice(0, 3); break;
+        case "A": text += DAY_NAMES[p.wday]; break;
+        case "b": case "h": text += MONTH_NAMES[p.month - 1].slice(0, 3); break;
+        case "B": text += MONTH_NAMES[p.month - 1]; break;
+        case "d": text += padded(p.day, 2, "0"); break;
+        case "D": text += padded(p.month, 2, "0") + "/" + padded(p.day, 2, "0") + "/" +
+          padded(modulo(p.year, 100), 2, "0"); break;
+        case "F": text += padded(p.year, 4, "0") + "-" + padded(p.month, 2, "0") + "-" +
+          padded(p.day, 2, "0"); break;
+        case "H": text += padded(p.hour, 2, "0"); break;
+        case "I": text += padded(h12, 2, "0"); break;
+        case "k": text += padded(p.hour, 2, " "); break;
+        case "l": text += padded(h12, 2, " "); break;
+        case "p": text += p.hour < 12 ? "am" : "pm"; break;
+        case "j": text += padded(p.yday, 3, "0"); break;
+        case "m": text += padded(p.month, 2, "0"); break;
+        case "M": text += padded(p.minute, 2, "0"); break;
+        case "S":
+          text += padded(p.second, 2, "0");
+          if (prec > 0) {
+            text += "." + padded(Math.trunc(p.fraction * Math.pow(10, prec)), prec, "0");
+          }
+          break;
+        case "s": text += padded(Math.floor(t), 1, "0"); break;
+        case "T": text += padded(p.hour, 2, "0") + ":" + padded(p.minute, 2, "0") + ":" +
+          padded(p.second, 2, "0"); break;
+        case "R": text += padded(p.hour, 2, "0") + ":" + padded(p.minute, 2, "0"); break;
+        case "r": text += padded(h12, 2, "0") + ":" + padded(p.minute, 2, "0") + ":" +
+          padded(p.second, 2, "0") + " " + (p.hour < 12 ? "am" : "pm"); break;
+        case "w": text += padded(p.wday, 2, "0"); break;
+        case "U": text += padded(Math.trunc((p.yday + 7 - p.wday) / 7), 2, "0"); break;
+        case "W":
+          text += padded(Math.trunc((p.yday + 7 - modulo(p.wday + 6, 7)) / 7), 2, "0");
+          break;
+        case "y": text += padded(modulo(p.year, 100), 2, "0"); break;
+        case "Y": text += padded(p.year, 4, "0"); break;
+        case "%": text += "%"; break;
+        case "t":
+          if (i < format.length - 1) {
+            i++;
+            a = Math.abs(t);
+            if (format[i] === "H") {
+              text += (t < 0 ? "-" : "") + padded(Math.trunc(a / 3600), 1, "0");
+            } else if (format[i] === "M") {
+              n = hasTH ? Math.trunc((a - 3600 * Math.trunc(a / 3600)) / 60) : Math.trunc(a / 60);
+              text += (!hasTH && t < 0 ? "-" : "") + padded(n, 2, "0");
+            } else if (format[i] === "S") {
+              n = hasTH || hasTM ? Math.trunc(a - 60 * Math.trunc(a / 60)) : Math.trunc(a);
+              text += (!(hasTH || hasTM) && t < 0 ? "-" : "") + padded(n, 2, "0");
+            }
+          }
+          break;
+      }
+      i++;
+    }
+    return text;
+  }
+
+  // t moved to a whole time unit of the level (gnuplot's time_tic_just)
+  function timeJustify(level, t) {
+    if (level <= 0 || !isFinite(t)) return t;
+    var p = timeParts(t), frac = p.fraction;
+    if (level >= 3) { p.hour = 0; p.minute = 0; p.second = 0; frac = 0; }
+    if (level >= 1) { if (p.second > 55) p.minute++; p.second = 0; frac = 0; }
+    if (level >= 2) { if (p.minute > 55) p.hour++; p.minute = 0; }
+    if (level >= 5) { if (p.day > 25) p.month++; p.day = 1; }
+    return civilTime(p.year, p.month, p.day, p.hour, p.minute, p.second + frac);
+  }
+
+  function duodecimal(arg, guide) {
+    var power = Math.pow(12, Math.floor(Math.log(arg) / Math.log(12)));
+    var xnorm = arg / power, posns = guide / xnorm;
+    if (posns > 24) return power / 24;
+    if (posns > 12) return power / 12;
+    if (posns > 6) return power / 6;
+    if (posns > 4) return power / 4;
+    if (posns > 2) return power / 2;
+    if (posns > 1) return power;
+    if (posns > 0.5) return power * 2;
+    if (posns > 1 / 3) return power * 3;
+    return power * Math.ceil(xnorm);
+  }
+
+  // gnuplot's quantize_time_tics: the step in whole time units and its level
+  function quantizeTimeTics(tic, xr) {
+    var level = 0, ns;
+    if (tic > 5) { tic = duodecimal(xr / 60, 12) * 60; if (tic >= 60) level = 1; }
+    if (tic > 300) { tic = duodecimal(xr / 3600, 12) * 3600; if (tic >= 3600) level = 2; }
+    if (tic > 3600) { tic = duodecimal(xr / DAY_SEC, 12) * DAY_SEC; if (tic >= DAY_SEC) level = 3; }
+    if (tic > 2 * DAY_SEC) {
+      ns = gnuplotStep(xr / WEEK_SEC);
+      tic = Math.max(scale10(ns.m, ns.e) * WEEK_SEC, WEEK_SEC);
+      level = 4;
+    }
+    if (tic > 3 * WEEK_SEC) {
+      ns = gnuplotStep(xr / MON_SEC);
+      tic = Math.max(scale10(ns.m, ns.e) * MON_SEC, MON_SEC);
+      level = 5;
+    }
+    if (tic > MON_SEC) {
+      tic = duodecimal(xr / YEAR_SEC, 12) * YEAR_SEC;
+      if (tic >= YEAR_SEC) level = 6;
+    }
+    return {tic: tic, level: level};
+  }
+
+  function timeLevel(step) {
+    if (step >= 365 * DAY_SEC) return 6;
+    if (step >= 28 * DAY_SEC) return 5;
+    if (step >= WEEK_SEC) return 4;
+    if (step >= DAY_SEC) return 3;
+    if (step >= 3600) return 2;
+    if (step >= 60) return 1;
+    return 0;
+  }
+
+  function autoTimeMinitics(level, incr) {
+    var t = 0, rules;
+    if (level <= 1) rules = [[5, 1], [10, 5], [20, 10], [60, 20], [120, 60], [360, 120], [720, 180],
+      [1440, 360]];
+    else if (level === 2) rules = [[1200, 600], [3600, 1800], [7200, 3600], [21600, 7200],
+      [43200, 10800], [86400, 21600]];
+    if (rules) {
+      rules.forEach(function (r) { if (incr >= r[0]) t = r[1]; });
+      return t;
+    }
+    if (level === 3) rules = [[7200, 3600], [14400, 7200], [25200, 10800], [46800, 21600],
+      [DAY_SEC, 43200], [2 * DAY_SEC, DAY_SEC]];
+    else if (level === 4) rules = [[2 * DAY_SEC, DAY_SEC], [7 * DAY_SEC, 7 * DAY_SEC]];
+    else if (level === 5) rules = [[2 * DAY_SEC, DAY_SEC], [15 * DAY_SEC, 10 * DAY_SEC],
+      [2 * MON_SEC, MON_SEC], [6 * MON_SEC, 3 * MON_SEC], [2 * YEAR_SEC, YEAR_SEC]];
+    else rules = [[2 * MON_SEC, MON_SEC], [6 * MON_SEC, 3 * MON_SEC], [2 * YEAR_SEC, YEAR_SEC],
+      [10 * YEAR_SEC, 5 * YEAR_SEC], [50 * YEAR_SEC, 10 * YEAR_SEC],
+      [100 * YEAR_SEC, 20 * YEAR_SEC],
+      [200 * YEAR_SEC, 50 * YEAR_SEC], [300 * YEAR_SEC, 100 * YEAR_SEC]];
+    rules.forEach(function (r) { if (incr > r[0]) t = r[1]; });
+    return t;
+  }
+
+  // gnuplot's looks_like_numeric: the first conversion is a numeric printf one
+  function looksNumeric(format) {
+    var i = format.indexOf("%");
+    if (i < 0) return false;
+    i++;
+    while (i < format.length && /[0-9.\-+ #]/.test(format[i])) i++;
+    return i < format.length && /[efgEFG]/.test(format[i]);
+  }
+
+  var TIME_CONVERSIONS = "aAbBhdDFHIklpjmMSsTRrwUWyY%";
+  function isTimeFormat(format) {
+    for (var i = 0; i < format.length; i++) {
+      if (format[i] !== "%") continue;
+      i++;
+      if (i >= format.length) return false;
+      if (format[i] === "." && /[0-9]/.test(format[i + 1] || "") && format[i + 2] === "S") {
+        i += 2;
+        continue;
+      }
+      if (format[i] === "t" && /[HMS]/.test(format[i + 1] || "")) { i++; continue; }
+      if (TIME_CONVERSIONS.indexOf(format[i]) < 0) return false;
+    }
+    return true;
+  }
+
+  // the label format of a time axis (mirror of time_tick_format)
+  function timeTickFormat(format, level, lo, hi, timefmt) {
+    if (format && isTimeFormat(format) && !looksNumeric(format)) return format;
+    var a = timeParts(timeJustify(level, lo)), b = timeParts(timeJustify(level, hi));
+    var monthFirst = timefmt.indexOf("m") + 1 < timefmt.indexOf("d") + 1, chosen = "";
+    if (a.year === b.year && a.yday === b.yday) {
+      if (a.hour !== b.hour) chosen = "%H";
+      if (level < 3) chosen += (chosen ? ":" : "") + "%M";
+      if (level < 2) chosen += ":%S";
+    } else {
+      if (a.year !== b.year) {
+        chosen = (monthFirst ? "%m/%d/%" : "%d/%m/%") +
+          (Math.trunc(a.year / 100) !== Math.trunc(b.year / 100) ? "Y" : "y");
+      } else {
+        chosen = monthFirst ? "%m/%d" : "%d/%m";
+      }
+      if (level < 4) chosen += "\n%H:%M";
+    }
+    return chosen;
+  }
+
+  // ticks of a time axis over [lo, hi] (either order; mirror of time_ticks, without extension)
+  function timeTicks(lo, hi, tics, timefmt) {
+    var SIGNIF = 0.01, ticks = [], step, level, q, ns, start, last, tmin, tmax, k, nsteps;
+    var tic, internal, value, ministep = 0, miniend, mplace, format;
+    tics = tics || {mode: "auto", minor: "", format: ""};
+    if (tics.mode === "none" || lo === hi || !isFinite(hi - lo)) return ticks;
+    var hasStart = false, hasEnd = false;
+    if (tics.mode === "fixed") {
+      step = Math.abs(Number(tics.step));
+      if (!(step > 0)) return ticks;
+      level = timeLevel(step);
+      hasStart = tics.start !== "";
+      hasEnd = tics.end !== "";
+    } else {
+      ns = gnuplotStep(Math.abs(hi - lo));
+      q = quantizeTimeTics(scale10(ns.m, ns.e), Math.abs(hi - lo));
+      step = q.tic;
+      level = q.level;
+    }
+    format = timeTickFormat(tics.format || "", level, lo, hi, timefmt);
+    var lmin = Math.min(lo, hi), lmax = Math.max(lo, hi);
+    start = hasStart ? Number(tics.start) : step * Math.floor(lmin / step);
+    last = (hasEnd ? Number(tics.end) : step * Math.ceil(lmax / step)) + SIGNIF * step;
+    if (step < Math.abs(lmax) + Math.abs(lmin)) {
+      tmin = lmin - SIGNIF * step;
+      tmax = lmax + SIGNIF * step;
+    } else {
+      tmin = lmin;
+      tmax = lmax;
+    }
+    if ((tmax - tmin) / step > MAX_TICKS || last < start) return ticks;
+    nsteps = Math.trunc((last - start) / step) + 1;
+    miniend = step;
+    if (typeof tics.minor === "number" && tics.minor > 1) ministep = step / tics.minor;
+    else if (tics.minor === "auto") {
+      ministep = autoTimeMinitics(level, step);
+      miniend = 0.9 * step;
+    }
+    for (k = 0; k < nsteps; k++) {
+      tic = start + k * step;
+      internal = timeJustify(level, tic);
+      if (internal > tmax) break;
+      if (internal >= tmin) {
+        value = Math.abs(internal) < step * SIGNIF ? 0 : internal;
+        ticks.push({value: value, major: true, label: strftime(format, value), sup: ""});
+      }
+      if (ministep > 0) {
+        for (mplace = ministep; mplace < miniend; mplace += ministep) {
+          if (internal + mplace >= tmin && internal + mplace <= tmax &&
+            internal + mplace >= start - step * SIGNIF && internal + mplace <= last) {
+            ticks.push({value: internal + mplace, major: false, label: "", sup: ""});
+          }
+        }
+      }
+    }
+    return ticks.sort(function (x, y) { return x.value - y.value; });
+  }
+
   var core = {niceStep: niceStep, gnuplotStep: gnuplotStep,
     decimalStr: decimalStr, linearTicks: linearTicks,
     logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
-    decimalOf: decimalOf, readTics: readTics};
+    decimalOf: decimalOf, readTics: readTics, strftime: strftime, timeTicks: timeTicks};
   if (typeof module === "object" && module.exports) {
     module.exports = core;
     return;
@@ -840,9 +1147,10 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
 
   // ---- axis mapping: unit coordinate [0, 1] <-> data value ----
 
-  function Axis(range, log, tics) {
+  function Axis(range, log, tics, timefmt) {
     this.log = log;
     this.tics = tics;
+    this.timefmt = timefmt || "";
     this.a = log ? Math.log10(range[0]) : range[0];
     this.b = log ? Math.log10(range[1]) : range[1];
   }
@@ -853,8 +1161,13 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     var t = this.a + u * (this.b - this.a);
     return this.log ? Math.pow(10, t) : t;
   };
+  // a value as the coordinate readout shows it: a time as a date and time on a time axis
+  Axis.prototype.show = function (v) {
+    return this.timefmt && !this.log ? strftime("%Y-%m-%d %H:%M:%S", v) : shortNumber(v);
+  };
   Axis.prototype.ticks = function (u0, u1, npx) {
     var lo = this.toData(u0), hi = this.toData(u1);
+    if (this.timefmt && !this.log) return timeTicks(lo, hi, this.tics, this.timefmt);
     return this.log ? logTicks(lo, hi, npx, this.tics) : linearTicks(lo, hi, npx, this.tics);
   };
 
@@ -875,11 +1188,16 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     return element(parent, "line", attributes);
   }
 
-  function label(parent, x, y, tick, anchor, rotate) {
+  // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks
+  function label(parent, x, y, tick, anchor, rotate, lines) {
     var attributes = {x: x, y: y, "text-anchor": anchor};
     if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
-    var node = element(parent, "text", attributes);
-    node.appendChild(document.createTextNode(tick.label));
+    var node = element(parent, "text", attributes), parts = String(tick.label).split("\n");
+    if (!lines || rotate) parts = [parts.join(" ")];
+    node.appendChild(document.createTextNode(parts[0]));
+    parts.slice(1).forEach(function (part) {
+      element(node, "tspan", {x: x, dy: "1.25em"}).textContent = part;
+    });
     if (tick.sup) {
       element(node, "tspan", {dy: "-0.45em", "font-size": "0.75em"}).textContent = tick.sup;
     }
@@ -903,17 +1221,19 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     this.top = area[2];
     this.bottom = area[3];
     this.x = new Axis(numbers(group.getAttribute("data-x")), logs[0] === 1,
-      readTics(group.getAttribute("data-xtics"), group.getAttribute("data-xformat")));
+      readTics(group.getAttribute("data-xtics"), group.getAttribute("data-xformat")),
+      group.getAttribute("data-xtime"));
     this.y = new Axis(numbers(group.getAttribute("data-y")), logs[1] === 1,
-      readTics(group.getAttribute("data-ytics"), group.getAttribute("data-yformat")));
+      readTics(group.getAttribute("data-ytics"), group.getAttribute("data-yformat")),
+      group.getAttribute("data-ytime"));
     // second y axis: only when drawn; its series share the unit view of the plot area
     this.y2 = group.hasAttribute("data-y2") ? new Axis(numbers(group.getAttribute("data-y2")),
       logs[2] === 1, readTics(group.getAttribute("data-y2tics"),
-        group.getAttribute("data-y2format"))) : null;
+        group.getAttribute("data-y2format")), group.getAttribute("data-y2time")) : null;
     // second x axis: only when drawn, its series share the unit view as well
     this.x2 = group.hasAttribute("data-x2") ? new Axis(numbers(group.getAttribute("data-x2")),
       group.getAttribute("data-x2log") === "1", readTics(group.getAttribute("data-x2tics"),
-        group.getAttribute("data-x2format"))) : null;
+        group.getAttribute("data-x2format")), group.getAttribute("data-x2time")) : null;
     this.x2mirror = group.getAttribute("data-x2mirror") === "1";
     // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
     this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
@@ -925,6 +1245,10 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     // theta labels page geometry, hidden while zoomed
     this.polarGrid = group.querySelector(".fs-pgrid");
     this.polarLabels = group.querySelector(".fs-polar");
+    // titles of the histogram groups under the x axis: page geometry, hidden while zoomed; so
+    // are the labels and arrows placed at data coordinates (set label, set arrow)
+    this.groupTitles = group.querySelector(".fs-groups");
+    this.anchored = Array.prototype.slice.call(group.querySelectorAll(".fs-anchored"));
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
     this.y2ticks = group.querySelector(".fs-y2ticks");
@@ -1069,6 +1393,11 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     this.plot.setAttribute("viewBox", [v.u0, 1 - v.v1, v.u1 - v.u0, v.v1 - v.v0].join(" "));
     this.gridGroup.setAttribute("display", this.grid ? "inline" : "none");
     if (this.polarGrid) this.polarGrid.setAttribute("display", this.grid ? "inline" : "none");
+    if (this.groupTitles) {
+      this.groupTitles.setAttribute("display", this.isHome() ? "inline" : "none");
+    }
+    var home = this.isHome();
+    this.anchored.forEach(function (g) { g.setAttribute("display", home ? "inline" : "none"); });
     if (this.polarLabels) {
       this.polarLabels.setAttribute("display", this.isHome() ? "inline" : "none");
     }
@@ -1215,7 +1544,7 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
         label(self.xticks, p + 0.35 * fs * Math.sin(rad),
           self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle);
       } else {
-        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle");
+        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true);
       }
       if (self.polarGrid) return;
       line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
@@ -1461,10 +1790,10 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
       if (!hit) { readout.textContent = ""; return; }
       panel = hit;
       c = panel.unitAt(p);
-      readout.textContent = "x = " + shortNumber(panel.x.toData(c.u)) +
-        "   y = " + shortNumber(panel.y.toData(c.v)) +
-        (panel.y2 ? "   y2 = " + shortNumber(panel.y2.toData(c.v)) : "") +
-        (panel.x2 ? "   x2 = " + shortNumber(panel.x2.toData(c.u)) : "");
+      readout.textContent = "x = " + panel.x.show(panel.x.toData(c.u)) +
+        "   y = " + panel.y.show(panel.y.toData(c.v)) +
+        (panel.y2 ? "   y2 = " + panel.y2.show(panel.y2.toData(c.v)) : "") +
+        (panel.x2 ? "   x2 = " + panel.x2.show(panel.x2.toData(c.u)) : "");
     }
 
     svg.addEventListener("contextmenu", function (evt) { evt.preventDefault(); });

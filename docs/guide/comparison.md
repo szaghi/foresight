@@ -44,5 +44,5 @@ The rows on other projects summarise their documentation as of October 2026
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.
 - **Raster output** (PNG), contours, maps or 3D from pure Fortran: fplotlib, fortplot.
-- **The full gnuplot language** (`splot`, arrays, recursive functions, time functions): gnuplot itself.
+- **The full gnuplot language** (`splot`, arrays, recursive functions, `system()`): gnuplot itself.
 - **Fields on meshes**: ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran).

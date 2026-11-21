@@ -13,8 +13,12 @@ that did what it says.
 - One statement per line, or several separated by `;`
 - `#` starts a comment (outside quotes)
 - A line ending with `\` continues on the next one
-- Strings in single quotes are literal; in double quotes `\t` is a tab and `\` takes the next character literally
-  (`\"`, `\\`)
+- Strings in single quotes are literal; in double quotes `\t` is a tab, `\n` a new line (an x tick label on two
+  lines; a blank in titles and labels) and `\` takes the next character literally (`\"`, `\\`)
+- `@name` (outside quotes) is replaced by the value of the string variable `name`, a gnuplot macro:
+  `cmd = 'set logscale y'; @cmd`
+- A line `$NAME << WORD` starts a [datablock](#datablocks-and-scripts), its lines read as they are up to one starting
+  with `WORD`
 - Keywords accept gnuplot abbreviations: the shortest accepted form is in bold below
 
 ## Commands
@@ -28,9 +32,14 @@ that did what it says.
 | *name* `=` *expression* | a [user variable](#user-variables-and-functions): the value now, integer or real |
 | *name*`(`*p1*`, ...) =` *expression* | a [user function](#user-variables-and-functions) |
 | **fit** [`[min:max]`] *f(x)* `'file'` [*modifiers*] `via` *a*`,` *b* ... | [fit](#fit) the parameters of a function to data |
-| **stat**s [`[x]`] [`[y]`] `'file'` [*modifiers*] [`name "P"`] [`output`] | [statistics](#stats) of a column or a pair |
+| **stat**s [`[x]`] [`[y]`] `'file'` [*modifiers*] [`name`\|`prefix "P"`] [`output`\|`nooutput`] | [statistics](#stats) of a column or a pair |
 | **pr**int *expression*`,` ... | [print](#print) values |
 | `do for [`*i*`=`*a*`:`*b*`] {` ... `}`, `while (`*c*`) {` ... `}`, `if (`*c*`) {` ... `} else {` ... `}` | [blocks](#blocks-and-loops): loops and conditions, `break`, `continue` |
+| `$NAME << WORD` ... `WORD` | a [datablock](#datablocks-and-scripts): data inside the script, `plot $NAME` |
+| **l**oad `'file'` | run a [script file](#datablocks-and-scripts) |
+| **cal**l `'file'` [*arg* ...] | run a script file with arguments: `ARG1` ... `ARG9`, `ARGC` |
+| **eva**l *string* | run a string as script lines |
+| **undef**ine *name* ... | forget variables (`name*`: those starting with `name`) and datablocks (`$NAME`) |
 
 ## `set` / `unset` options
 
@@ -52,8 +61,13 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
-| **for**mat [*axes*] [`"format"`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats) | default labels |
+| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **for**mat [*axes*] [`"format"`] [`timedate`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `numeric` numeric ones | default labels |
+| **xda**ta / **yda**ta / **x2da**ta / **y2da**ta [`time`] | the data of the axis are [times](#time-data), read with the `timefmt`; the axis ticked and labelled in time units | numbers |
+| **timef**mt `"format"` | the input [time format](#time-data), `%d/%m/%y,%H:%M` by default | the default |
+| **lab**el [`N`] ... | a [label](#labels-arrows-and-objects) | `unset label [N]`: all, or tag `N` |
+| **arr**ow [`N`] ... | an [arrow](#labels-arrows-and-objects) | `unset arrow [N]` |
+| **obj**ect [`N`] ... | an [object](#labels-arrows-and-objects): a rectangle, circle, ellipse or polygon | `unset object [N]` |
 | **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **dataf**ile **mis**sing [`"string"`\|`NaN`] | the cells holding `string` are missing data: a point reading one is left out, its line not broken, see [Data Files](data-files#missing-data-and-comments); no argument: none | none |
 | **dataf**ile **com**mentschars [`"chars"`] | the characters starting a comment in data files; no argument: `#` | `#` |
@@ -62,7 +76,7 @@ that did what it says.
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
 | **st**yle **fi**ll `empty`\|[`transparent`] `solid` [`D`]\|[`transparent`] `pattern` [`N`] [`border` [`lc C`\|`-1`]\|`noborder`] [`segments N`] | fill of the [boxes and filled curves](#boxes-and-filled-curves) plotted next; `empty` with border by default; `pattern N` one of the 8 patterns of gnuplot's svg terminal, cycling over the filled items from N; `segments N` a foresight extension, see [below](#themes-and-segmented-fills) | — |
-| **mxti**cs / **myti**cs / **my2ti**cs / **mx2ti**cs / **mcbti**cs [`N`\|`default`] | minor ticks: `N` intervals between major ticks, gnuplot's count without it; `default`: by default (none, 2..9 on log axes); see [below](#ticks-and-label-formats) | no minor ticks |
+| **mxt**ics / **myt**ics / **my2t**ics / **mx2t**ics / **mcbt**ics [`N`\|`default`] | minor ticks: `N` intervals between major ticks, gnuplot's count without it; `default`: by default (none, 2..9 on log axes); see [below](#ticks-and-label-formats) | no minor ticks |
 | `paxis` `N` `range [min:max]`\|`tics [...]`\|`label "text"` | parallel axis N of the [parallel axis and spider plots](#parallel-axes-and-spider-plots): its range (autoscaled to its values, not extended), ticks (off by default), label | `unset paxis N tics`: no ticks |
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
@@ -74,7 +88,7 @@ that did what it says.
 | **colo**rbox [`vertical`\|`horizontal`] [`default`\|`user`] [`origin X,Y`] [`size W,H`] [`border`\|`bdefault`\|`noborder`] [`invert`\|`noinvert`] [`front`] | color box of the images, see [below](#images-and-palettes) | no color box, every option reset |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle `boxplot` [`range R`\|`fraction F`] [`outliers`\|`nooutliers`] [`pointtype P`] [`candlesticks`\|`financebars`] [`medianlinewidth W`] [`separation S`] [`labels off`\|`auto`\|`x`] [`sorted`\|`unsorted`] | layout of the [boxplots](#box-finance-and-boxplot-styles) plotted next | — |
-| **st**yle **hist**ogram `clustered` [`gap G`]\|`rowstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
+| **st**yle **hist**ogram `clustered` [`gap G`]\|`errorbars` [`gap G`] [`lw W`]\|`rowstacked`\|`columnstacked` | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
@@ -111,11 +125,13 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 |---|---|
 | `'file'` | data file; `''` repeats the previous one |
 | *function* | an expression of `x`, see [below](#functions) |
-| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below; a last field `xtic(N)` (`xticlabels(N)`) labels the points with the text of column N, see [Histograms](#histograms) |
+| **u**sing `SPEC` | fields separated by `:`, each a column number (0 is the point number), a quoted [column header](#column-headers) or a parenthesized [expression](#expressions-in-using): `Y`, `X:Y`, or the error bar layouts below; a last field `xtic(N)` (`xticlabels(N)`) labels the points with the text of column N, or `xtic(EXPR)` with a [string expression](#string-columns) (`xtic(strcol(1) . ' K')`), see [Histograms](#histograms) |
+| `$NAME` | a [datablock](#datablocks-and-scripts), as a file |
+| **newhist**ogram [`"title"`] [`lt N`] [`fs FILL`] [`at X`] | a new group of [histograms](#histograms), before the histograms of the group |
 | **i**ndex `N` | dataset `N` (0-based) of the file |
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
-| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, see [below](#smoothing) |
+| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, see [below](#smoothing); `bins` see [Bins](#bins) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
@@ -127,6 +143,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
+| long forms | **linec**olor, **linet**ype, **linew**idth, **dasht**ype, **points**ize, **lines**tyle (`rgbcolor` for `rgb`), as gnuplot |
 
 `using` defaults as gnuplot: `1:2`, or `0:1` for single-column files; `1:2:3` for `yerrorbars` and `xerrorbars`,
 `1:2:3:4` for `xyerrorbars` (the same for the `errorlines`). Error bar layouts:
@@ -173,9 +190,9 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 
 | | |
 |---|---|
-| Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")` |
+| Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")`; `column(-1)` the block, `column(-2)` the dataset; the text of a column: [`strcol(N)`](#string-columns) |
 | Operators, loosest first | `?:` · `\|\|` · `&&` · `==` `!=` · `<` `<=` `>` `>=` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` · `**` |
-| Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh` |
+| Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 real sgn sin sinh sqrt tan tanh`; the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`](#time-data) |
 | Constants | numbers (`2`, `1.5`, `.5`, `1e-3`), `pi` |
 
 The rules are gnuplot's, checked against gnuplot 6.0:
@@ -193,8 +210,8 @@ A field must be a column number or one parenthesized expression, as in gnuplot: 
 errors. Syntax errors point at the character: `using: unexpected ")" at character 6 of "($2 +)"`.
 
 Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
-stops the plot. Expressions take [user variables and functions](#user-variables-and-functions). Not supported: string
-values (`stringcolumn`, string operators), bitwise operators, the pseudo-columns -1 and -2.
+stops the plot. Expressions take [user variables and functions](#user-variables-and-functions) and
+[strings](#strings), the text of columns included ([`strcol`](#string-columns)). Not supported: bitwise operators.
 
 ## User variables and functions
 
@@ -250,8 +267,111 @@ expected`), as is a string used as a condition. `.` binds as `+` (`"a" . 2*3` is
 A string goes wherever a string is taken, as an expression: titles and axis labels (`set title`, `set xlabel`,
 ...), `set output`, `set format`, `set print`, `set multiplot title`, plot titles (`t 'col' . i`) and plot file names
 (`plot file u 1:2`, `plot 'run_' . n . '.dat'`; a plot item whose constant value is a string is a file). A number
-where a string goes is an error (`set title 5`). Not supported: `stringcolumn()`/`strcol()`, `strftime`, `strptime`,
-`system()`, string arrays.
+where a string goes is an error (`set title 5`). The text of data columns is [`strcol`](#string-columns), times are
+[`strftime` and `strptime`](#time-data). Not supported: `system()`, string arrays.
+
+## String columns
+
+```gnuplot
+plot 'runs.dat' u 0:2:xtic(strcol(1) . ' K')                          # tick labels built from the text of column 1
+plot 'runs.dat' u 2:3:(sprintf('%s: %.1f', strcol(1), $3)) w labels    # labels mixing text and numbers
+plot 'runs.dat' u 0:(strcol('solver') eq 'gmres' ? $2 : 1/0)           # the rows chosen by their text
+plot 'runs.dat' u 0:2:xtic(columnhead(3))                              # every tick named by a header cell
+```
+
+| Function | Value |
+|---|---|
+| `strcol(N)`, `stringcolumn(N)` | the text of column `N` of the row (quotes removed); `N` a header name: `strcol("solver")` |
+| `columnhead(N)`, `columnheader(N)` | the text of column `N` in the first row of the dataset |
+| `column(-1)`, `column(-2)` | the block of the row within its dataset (blocks are parted by one blank line) and its dataset (two), from 0 |
+| `timecolumn(N[, "format"])` | column `N` read as a [time](#time-data) |
+
+As gnuplot, `strcol("name")` and `columnhead(N)` read the first row without making it a header (it stays a row, counted
+by `$0`), unlike `column("name")`; a column beyond the end of its row is undefined (gnuplot stops the plot). The text
+of `labels` and of `xtic(...)` is any string expression; a number there gives the text of the first column the
+expression reads, as gnuplot (`u 1:2:($2*2) w labels` writes column 2 as it is), or the number as `%g` when it reads
+none. The cell texts are kept in memory only for the items that read them. Labels and tick labels longer than 128
+characters are cut.
+
+## Datablocks and scripts
+
+```gnuplot
+$RUN << EOD
+# iteration  residual
+1  0.50
+2  0.31
+3  0.12
+EOD
+plot $RUN u 1:2 w lp, 'run.dat' u 1:2      # a datablock is plotted, fitted, stated as a file
+stats $RUN u 2 nooutput
+print $RUN                                 # its lines, then an empty one
+load 'style.gp'                            # another script
+call 'panel.gp' 'cd' 3                     # ARG1 = "cd", ARG2 = "3", ARGC = 2
+eval sprintf('set title "%s"', name)       # a string run as script lines
+cmd = 'set logscale y'; @cmd               # a macro
+undefine tmp_* $RUN                        # forget variables and datablocks
+```
+
+A datablock `$NAME << WORD` holds the lines after it, as they are (comments, blank lines and their dataset breaks
+included), up to the line starting with `WORD`. Wherever a data file goes (`plot`, `fit`, `stats`, `set palette file`)
+`$NAME` reads them instead; `exists("$NAME")` tells whether it is defined, `undefine $NAME` forgets it. A datablock is
+read outside blocks (`do for {...}`) only; its lines are not an array (`$NAME[i]`, `|$NAME|` are not supported).
+
+`load 'file'` runs the script `file` (a string expression), `ARG0` its name; `call 'file' arg1 ... arg9` also sets
+`ARG1` to `ARG9` and `ARGC`, as gnuplot 6.0: a quoted argument as it is, a number as written (`2.50`), a variable or
+a parenthesized expression its value, a number as `%g` (`pi` is `3.14159`, `(n+1)` is `6`); the arguments not given
+are empty. The `ARG` variables are restored after the script, as gnuplot's (`ARGC` is 0 outside). The command line
+does the same: [`foresight -c script.gp arg1 ...`](cli#options), as `gnuplot -c`. A loaded script is watched by
+`--watch` as the data files are. `eval STRING` runs the string as script lines. `@name` substitutes the value of the
+string variable `name` in the statement before it runs (gnuplot's macros; outside quotes; a number variable is an
+error, where gnuplot warns and drops it). `undefine a b*` forgets the variable `a` and those whose name starts with
+`b`; the `ARGV` array is not supported.
+
+## Time data
+
+```gnuplot
+set xdata time
+set timefmt '%Y-%m-%d %H:%M:%S'           # the time spans two blank-separated columns: y is column 3
+plot 'log.dat' u 1:3 w l                  # x ticked in whole hours, labels invented from the range
+set format x '%H:%M'                      # or set: a time format
+set xrange ['2024-03-01 06:00:00':'2024-03-01 18:00:00']
+set xtics '2024-03-01 06:00:00', 3*3600   # tick positions as times, steps in seconds
+plot 'log.dat' u (timecolumn(1) + 3600):3  # an expression on a time
+print strftime('%a %d %b %Y %H:%M', strptime('%Y-%m-%d', '2024-03-01') + 5400)   # Fri 01 Mar 2024 01:30
+```
+
+As gnuplot, a time is the number of seconds since 1970-01-01 00:00 UTC (proleptic Gregorian calendar, no leap
+seconds, no time zone). `set xdata time` (`ydata`, `x2data`, `y2data`) reads the x (y) field of each plot item with the
+`timefmt`, a time spanning as many blank-separated columns as the format has blanks (as gnuplot: `using 1:3` above);
+an unreadable time is a gap. Range ends, tick positions and [label](#labels-arrows-and-objects) coordinates take time
+strings on a time axis, read with the `timefmt`.
+
+The ticks are gnuplot 6.0's: the step is the automatic one rounded to whole seconds, minutes, hours (1, 2, 3, 4, 6,
+12, ...: duodecimal steps), days, weeks, months or years, the ticks fall on whole units of it (days at 0 AM, months on
+the 1st), an autoscaled end extends to the step and then to a whole unit. A fixed step (`set xtics 3600`, an
+expression: `3*3600`) is in seconds. Without a time format the labels are gnuplot's invented ones: within a day `%H:%M`
+(`%H:%M:%S` under a minute, `%M:%S` within an hour), over days `%d/%m` (or `%m/%d` when the `timefmt` has the month
+first) and `%H:%M` on a second line below a week, the year (`%y`, `%Y` across centuries) when the range crosses years.
+`set mxtics N` divides each step, `set mxtics` gnuplot's automatic minor time steps; none by default. The HTML page
+regenerates the time ticks after a zoom by the same rules and shows the cursor position as a date.
+
+| Conversion | `strftime` writes, `strptime` reads |
+|---|---|
+| `%Y` `%y` `%m` `%d` `%j` | the year (4 digits, or 2: 69..99 the 1900s), month, day, day of the year |
+| `%H` `%M` `%S` | hours, minutes, seconds (`%.3S` with decimals; `strptime` reads a fraction) |
+| `%b` `%B` `%a` `%A` | month and weekday names, abbreviated or full (`strptime` reads either, skips the weekday) |
+| `%s` | the seconds since 1970 |
+| `%p` | `am`, `pm` (`strptime`: `pm` adds 12 hours) |
+| `%tH` `%tM` `%tS` | elapsed hours, minutes, seconds: the largest unit of the format unbounded (`%tH:%tM` of 361800 s is `100:30`) |
+| `%I` `%k` `%l` `%D` `%F` `%T` `%R` `%r` `%w` `%U` `%W` `%%` | `strftime` only, as C's (`%p` lowercase, as gnuplot) |
+
+`strftime("format", t)` writes a time, `strptime("format", "text")` reads one (undefined if the text does not match),
+`timecolumn(N[, "format"])` reads column N (with the `timefmt` without a format), `time(0)` is the time now (`time(0.0)`
+with its fraction, `time("format")` as text), taken when the expression is read. In `strptime` a blank matches any run
+of blanks; fields take up to their width in digits (`%Y%m%d` reads `20240301`) and may overflow (`25:70` is 26:10).
+Conversions gnuplot does not know write nothing, as gnuplot's. `set format x "%H:%M" timedate` makes the x axis a time
+axis for its ticks and labels without reading the data as times, `numeric` turns it back. Not supported: time zones,
+`set mxtics` in time units (`set mxtics 4 hours`), `%tH` with decimals.
 
 ## Print
 
@@ -402,7 +522,7 @@ rule), so the parameters, their errors and the iterations agree with gnuplot's t
 - The model is any expression of `x`, user functions included; the parameters after `via` are user variables: an
   undefined one starts at 1. After the fit they hold the fitted values.
 - Modifiers: `using X:Y` (the default `1:2`) or `X:Y:YERROR` (`yerrors` optional), the weights `1/YERROR**2`;
-  `unitweights` with two columns (three are gnuplot's x:y:z, refused);
+  `unitweights` with two columns (three are gnuplot's x:y:z, refused); `yerror`, `zerror`, `zerrors` as `yerrors`;
   `index`, `every`; a range `[min:max]` before the function keeps the points with x inside.
 - Set after a fit: *name*`_err`, the asymptotic standard errors (scaled by sqrt(WSSR/ndf), gnuplot's `errorscaling`),
   `FIT_NDF`, `FIT_WSSR`, `FIT_STDFIT`, `FIT_P`, `FIT_NITER`, `FIT_CONVERGED`. `FIT_LIMIT` and `FIT_MAXITER`, when
@@ -442,7 +562,8 @@ minimum and maximum. They are set as gnuplot's variables, `STATS_mean` ... `STAT
 `STATS_invalid` (a used value undefined), `STATS_outofrange` (outside the ranges `[x] [y]` before the file),
 `STATS_blank`, `STATS_blocks`, `STATS_headers` and `STATS_columns` count the file.
 
-**Silent by default**, as `fit` (gnuplot prints its report): `output` writes gnuplot's report where
+**Silent by default**, as `fit` (gnuplot prints its report; `nooutput` is gnuplot's silence, accepted; `prefix "P"`
+is `name "P"`): `output` writes gnuplot's report where
 [print](#print) writes, its screen layout on the standard error or output, its name-tab-value lines in a `set print`
 file. A missing file is not an error, as gnuplot's (a script may test `exists("STATS_records")`). Modifiers: `using`
 (as plot's; without it the first two columns if the first line has two), `index`, `every`. Not supported: `matrix`,
@@ -714,6 +835,46 @@ moves them with the data. Labels are black (the frame color of a theme) unless `
 gnuplot, sectors widen the autoscale to their whole extent. Not supported: `arrowstyle`, variable colors and
 rotations, `units xx|yy`, label fonts and `hypertext`.
 
+## Labels, arrows and objects
+
+```gnuplot
+set label 1 'peak' at pi/2, 1 point pt 7 offset 1,0
+set label 'mean' at graph 0.5, first 0.2 center front tc rgb '#b3163f'
+set arrow from 3,-0.2 to 4.6,-0.9                            # gnuplot's default head: two barbs
+set arrow 2 from 3,0.2 rto 1.6,0.6 heads filled lw 2 lc rgb '#9400d3'
+set arrow from graph 0.05,0.1 to graph 0.25,0.1 nohead dt 2 front
+set object 1 rect from 4, graph 0 to 6, graph 1 fc rgb '#56b4e9' fs solid 0.25 noborder behind
+set object circle at 2,-0.5 size 0.6 fc '#e69f00' fs solid 0.5 border
+set object ellipse at 7,-0.6 size 1.6,0.5 angle 30
+set object polygon from 0.5,0.6 to 1.5,0.6 to 1,0.95 to 0.5,0.6 fc lt 2 fs solid 0.6 front
+unset label 1; unset arrow                                   # one tag, or all
+```
+
+<Plot name="cb_annotations" svg :width="640" :height="400" />
+
+A position is `x, y`, each coordinate in its system: `first` (the values of the x and y axes, the default), `second`
+(the x2, y2 axes), `graph` (fractions of the plot area from its bottom left) or `screen` (fractions of the page); the
+system of x is also y's unless y names one (`graph 0.5, first 3`). A coordinate is a constant expression, or a time
+string on a [time axis](#time-data).
+
+| Command | Options (gnuplot 6.0's, defaults first) |
+|---|---|
+| `set label [N] ["text"] [at POS]` | `left`\|`center`\|`right`, `norotate`\|`rotate [by A]`, `back`\|`front`, `tc`/`textcolor` `rgb "c"`\|`"c"`\|`lt N`, `nopoint`\|`point [pt N] [ps S]`, `offset X,Y` (characters), `font "f"` (read, ignored), `noenhanced` |
+| `set arrow [N] from POS to\|rto POS` | `head`\|`nohead`\|`backhead`\|`heads`, `size [SYS] L,A` (head length in x axis values, or graph, screen; barb angle [deg]), `nofilled` (two barbs)\|`filled`\|`empty`\|`noborder`, `back`\|`front`, `lc`, `lt`, `lw`, `dt` |
+| `set object [N] rectangle from POS to\|rto POS` \| `rectangle center\|at POS size W,H` | `fc`/`fillcolor`, `fs`/`fillstyle` (as `set style fill`), `lw`, `back`\|`front`\|`behind`, `clip`\|`noclip`, `default`; a rectangle in the page color (`fc bgnd`) with a black border, as gnuplot |
+| `set object [N] circle [at POS] size R [arc [A:B]]` | as rectangle; empty with a black border; `R` in x axis values (round on the page), an arc a wedge from the centre |
+| `set object [N] ellipse [at POS] size W,H [angle A]` | as circle; the axes in the units of x and y, turned by `A` in those units (gnuplot's `units xy`) |
+| `set object [N] polygon from POS to POS to POS ...` | as circle |
+
+`N` is a tag: an existing one is replaced, or changed when no position is given (`set object 3 fc rgb "red"`), as
+gnuplot; without it the next free tag. `rto` is relative to the previous point. Layers: `back` behind the data,
+`front` over the frame and the data, `behind` (objects) behind the grid too. Labels and arrows are not clipped, as
+gnuplot's; objects are clipped by the plot area (`noclip` lets them out), as gnuplot's. Objects whose points are all
+axis values are data geometry: the HTML page zooms them with the data; labels and arrows at axis values are hidden
+while zoomed, shown again by `a`, those in graph and screen coordinates stay in place. Text devices draw labels upright
+and fill objects with characters. Not supported: `character` coordinates, `boxed`, `hypertext`, arrow styles (`as N`,
+`set style arrow`), `set style rectangle|circle|ellipse`, the dash type of an object border, `units xx|yy`.
+
 ## Parallel axes and spider plots
 
 ```gnuplot
@@ -849,7 +1010,32 @@ reaches 0 for clustered bars too (gnuplot leaves it out, as for [boxes](#boxes-a
 
 `using Y:xtic(N)` labels each row with the text of column N (quoted, it may hold blanks): when any item has labels,
 they replace the x ticks, at their rows, as gnuplot; the HTML page keeps them through a zoom. `xtic` works with any
-style, `using 0:2:xtic(1) w boxes` too.
+style, `using 0:2:xtic(1) w boxes` too, and takes a [string expression](#string-columns).
+
+```gnuplot
+set style histogram errorbars gap 1 lw 2
+plot 'timings.dat' u 2:3:xtic(1) t 'mesh', '' u 4:5 t 'fluxes'          # y:err, or y:low:high
+set style histogram columnstacked
+plot 'shares.dat' u 2 t columnhead, '' u 3 t columnhead, '' u 4:key(1) t columnhead
+set style histogram clustered gap 1
+plot newhistogram 'CPU', 'cpu.dat' u 2:xtic(1) t 'mesh', '' u 3 t 'solve', \
+     newhistogram 'GPU' lt 1 fs pattern 4, 'gpu.dat' u 2:xtic(1) notitle, '' u 3 notitle
+```
+
+- `set style histogram errorbars [gap G] [lw W]` lays the bars out as `clustered`, each with its error bar at its
+  centre: `using Y:ERR` (from `Y - ERR` to `Y + ERR`) or `using Y:LOW:HIGH`, in the border color of the fill (the item
+  color without a border), `W` px wide.
+- `set style histogram columnstacked` makes one stack per item at 0, 1, 2, ...: its rows stacked (positive values up,
+  negative ones down), each row in the color of its linetype, as gnuplot. `key(N)` names the rows in the key (the
+  last row first, as gnuplot); `title columnhead` labels the stack on the x axis.
+- `newhistogram ["title"] [lt N] [fs FILL] [at X]` starts a group of histograms in the plot: its rows (or stacks)
+  from `X`, else 2 rows after the last one of the previous group (the first group from its rows), its title centred
+  below the x tick labels (the HTML page hides it while zoomed), the default colors of its items from linetype `N`,
+  their fill `FILL`. The gap and the bar widths are those of each group (`1/(k + gap)` for its k items).
+
+The rows of a histogram are its abscissae as given (the point numbers from a script): a header row that is not a
+number counts, as gnuplot. Not supported: `set style histogram title`, `nokeyseparators`, `set errorbars` (the error
+bar caps are the default ones).
 
 ## Readouts
 
@@ -974,7 +1160,7 @@ set colorbox vertical user origin 0.86,0.3 size 0.02,0.45 invert
 <Plot name="cb_colorbox" svg :width="760" :height="320" />
 
 Not supported: `functions` palettes, `set palette gamma` (1.5), `set palette model` other than RGB, `set colorbox back`
-and border line types, `set mcbtics`, `pm3d`.
+and border line types, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,
 the components from 0 to `set rgbmax` (255; 1.0 for fractions), without palette nor color box; an undefined component
@@ -1164,7 +1350,10 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `splot`
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
 `scale`; `set mxtics` with time units, `set grid mxtics`; in `set format`, the
-`%s`, `%L`, `%T` conversions; `set datafile` options other than `separator`, `missing` and `commentschars`; `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` and `lc palette z` with other styles than lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; `set style histogram
-columnstacked|errorbars`, `newhistogram`, `ytic()`, `x2tic()`, `xtic()` of an expression or a header name; `pointinterval` (`pi`); the `smooth` filters
+`%L` conversion and gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing` and
+`commentschars`; `filledcurves y1`, `y2`, `x1=V`, `r=`; `lc variable` and `lc palette z` with other styles than
+lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; `set style histogram
+title`, `ytic()`, `x2tic()`; `pointinterval` (`pi`); arrays (`array A[3]`, `$DATA[i]`, `ARGV`), `system()`, `reset`,
+`pause`, `reread`, `set table`, function blocks; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.

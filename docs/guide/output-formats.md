@@ -37,7 +37,8 @@ A standalone SVG document, 600 x 480 px by default (`set terminal svg size W,H`)
 
 The SVG document inline in a minimal page, followed by the viewer script. The page loads nothing from the network.
 `set terminal html refresh S` (or `fig%set_refresh(S)`) makes it reload itself every `S` seconds; watch mode sets it
-automatically.
+automatically. The page title (`<title>`) is the multiplot title, else the title of the first panel, else
+`foresight`.
 
 ## Text
 

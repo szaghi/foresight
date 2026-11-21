@@ -25,9 +25,16 @@ foresight --watch residuals.gp
 ```
 
 The script is run once, then the script and its data files are polled every second; on any change the
-script runs again and rewrites `residuals.html`. The page reloads itself at the same period and **keeps your zoom**,
-because the view is stored in its URL as data values, not as screen positions. Rewrites are atomic (a temporary file
-renamed over the page), so a reload never catches half a page.
+script runs again and rewrites `residuals.html`. The page reloads itself every period (rounded to whole seconds, at
+least 1; a script's own `set terminal html refresh S` wins) and **keeps your zoom**, because the view is stored in its
+URL as data values, not as screen positions. Rewrites are atomic (a temporary file renamed over the page), so a reload
+never catches half a page.
+
+<Plot name="anim_watch" svg :width="640" :height="380" caption="a watched run (an animation)" />
+
+The page above is a run as `--watch` shows it: the residuals growing as the solver writes them, the seven-segment
+readouts on the last values, the time axis of the wall clock advancing (each frame is the page foresight writes after
+one more block of iterations).
 
 A longer period for slow jobs: `foresight --watch 10 residuals.gp`.
 
@@ -43,7 +50,10 @@ foresight --watch -e "set terminal block braille ansi" residuals.gp
 ```
 
 The plot is drawn in text on the standard output; each re-render clears the screen and redraws in place. No browser,
-no X forwarding, no port to open. `block braille` draws with Braille dots, 2 x 4 per character, and `ansi` colors the
+no X forwarding, no port to open.
+
+<Plot name="anim_term" svg :width="680" :height="330" caption="the terminal redrawn in place (an animation)" />
+ `block braille` draws with Braille dots, 2 x 4 per character, and `ansi` colors the
 series ([Output Formats](output-formats#block-characters)): the curves of a terminal plot then read almost as a
 picture.
 

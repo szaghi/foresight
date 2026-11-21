@@ -1,0 +1,5 @@
+phase   cpu   gpu   mixed
+mesh    30    12    20
+fluxes  45    20    30
+comm    15    50    35
+io      10    18    15

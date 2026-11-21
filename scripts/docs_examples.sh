@@ -8,6 +8,7 @@
 #                              #run ID COMMAND, # region NAME, # endregion NAME; a script without #run lines is run as
 #                              `foresight SCRIPT` with its output not shown
 #   docs/examples/files/       input files, copied into the directory where the runs happen
+#   docs/examples/anim/        animation scripts, run once per frame (see below)
 #   docs/examples/snippets/    generated: each source without the markers, and <source>-<region>.<ext>, dedented
 #   docs/examples/output/      generated: <ID>.txt, "$ COMMAND" then its output (standard output and error)
 #   docs/public/examples/      generated: every plot the runs write (.svg, .html), served as /examples/<file> and
@@ -102,6 +103,36 @@ pass() { # pass DIR THEME OUT: every run and script
 mkdir -p "$build/output-dark"
 pass "$run_dir" washi "$ex/output"
 pass "$dark_dir" night "$build/output-dark"
+
+# animations: docs/examples/anim/NAME.gp is run once per frame, `foresight -c NAME.gp K` for K = 1..N, its frames
+# (in frames/ of the run directory) assembled by svg_frames.sh into NAME.svg (washi) and NAME-dark.svg (night); its
+# first line `# frames N SECONDS [text W,H]` gives the frames, their time, and for text frames the page size
+for src in "$ex"/anim/*.gp; do
+  [ -e "$src" ] || continue
+  name=$(basename "$src" .gp)
+  read -r _ _ nframes seconds kind size < <(head -n 1 "$src")
+  for dir in "$run_dir" "$dark_dir"; do
+    theme=washi colors='#f3ede1,#1d1b18'
+    if [ "$dir" = "$dark_dir" ]; then theme=night colors='#130d0f,#e8ecf0'; fi
+    cp "$src" "$dir/"
+    mkdir -p "$dir/frames"
+    for k in $(seq 1 "$nframes"); do
+      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+                   foresight -c "$name.gp" "$k" > /dev/null) || { echo "docs_examples: $name frame $k failed" >&2; exit 1; }
+    done
+    target="$public/$name.svg"
+    if [ "$dir" = "$dark_dir" ]; then target="$public/$name-dark.svg"; fi
+    if [ "${kind:-}" = text ]; then
+      frames=$(ls "$dir"/frames/"$name"_*.txt)
+      last=$(ls "$dir"/frames/"$name"_*.txt | tail -n 1)
+      bash "$root/scripts/svg_frames.sh" --text "$size" "$colors" "$target" "$seconds" $frames "$last" "$last"
+    else
+      frames=$(ls "$dir"/frames/"$name"_*.svg)
+      last=$(ls "$dir"/frames/"$name"_*.svg | tail -n 1)
+      bash "$root/scripts/svg_frames.sh" "$target" "$seconds" $frames "$last" "$last"
+    fi
+  done
+done
 
 # plots: the washi ones as they are, the night ones with -dark before the extension
 find "$run_dir" -maxdepth 1 \( -name '*.svg' -o -name '*.html' \) -exec cp {} "$public/" \;

@@ -74,6 +74,36 @@ Quoted names select columns by header; `title columnhead` titles with the header
 
 The `-` cells are missing data: those points are left out and the lines go on; `%` starts the comments of this file.
 
+### Text columns: names and labels
+
+<<< @/examples/snippets/cb_strcol.gp{gnuplot}
+
+<Plot name="cb_strcol" svg :width="560" :height="320" />
+
+`strcol(1)` is the text of column 1: joined with a formatted number on a second line it names each bar (`xtic`), in
+`sprintf` it builds the label of each bar (`with labels`), compared with `eq` it keeps one solver. See
+[String columns](/guide/gnuplot-subset#string-columns).
+
+### Data inside the script
+
+<<< @/examples/snippets/cb_datablock.gp{gnuplot}
+
+<Plot name="cb_datablock" svg :width="560" :height="320" />
+
+A datablock keeps the data in the script itself: `plot`, `fit` and `stats` read `$CONV` as a file. See
+[Datablocks and scripts](/guide/gnuplot-subset#datablocks-and-scripts).
+
+### A script with arguments
+
+<<< @/examples/snippets/cb_call.gp{gnuplot}
+
+<<< @/examples/files/panel.gp{gnuplot}
+
+<Plot name="cb_call" svg :width="760" :height="300" />
+
+`call` runs `panel.gp` with `ARG1` the column and `ARG2` the title; `column(ARG1 + 0)` reads the column the string
+names. From the shell, `foresight -c panel.gp 2 continuity` does the same.
+
 ## Axes, ticks and key
 
 ### A log axis with exponent labels
@@ -121,6 +151,16 @@ An explicit list replaces the ticks: names at chosen positions, `""` with level 
 
 Long category names fit rotated: `rotate by 30 right` ends each label at its tick, below the axis. `out` points the
 ticks away from the plot; `nomirror` leaves the opposite border bare.
+
+### A time axis
+
+<<< @/examples/snippets/cb_time.gp{gnuplot}
+
+<Plot name="cb_time" svg :width="640" :height="480" />
+
+`set xdata time` reads the x field with the `timefmt`: the time spans two columns, so the residual is column 4. The
+ticks fall on whole time units, the labels invented from the range as gnuplot's (`%H:%M:%S` within a day at minute
+steps), or written by `set format x`; range ends are times. See [Time data](/guide/gnuplot-subset#time-data).
 
 ### Two y axes
 
@@ -197,6 +237,15 @@ and the range ends take expressions. See [User variables and functions](/guide/g
 <Plot name="cb_styles" svg :width="560" :height="320" />
 
 `set style line N` defines a style once; `ls N` applies it, the options after it override it.
+
+### Point and dash types
+
+<<< @/examples/snippets/cb_point_types.gp{gnuplot}
+
+<Plot name="cb_point_types" svg :width="640" :height="300" />
+
+The 16 point types (`pt 0` a dot, odd ones from 5 filled) and the 5 dash types, for picking one; a one-line datablock
+gives the point its place, `plot for` repeats it.
 
 ### A color per point
 
@@ -426,6 +475,31 @@ by the bin width, lands on the same scale. See [Bins](/guide/gnuplot-subset#bins
 `boxerrorbars` is `boxes` with the y error bars: `x:y:ydelta`, `x:y:ydelta:width` or `x:y:ylow:yhigh:width`; `xtic(4)`
 names the bars. See [Box, finance and boxplot styles](/guide/gnuplot-subset#box-finance-and-boxplot-styles).
 
+### Groups of bars
+
+<<< @/examples/snippets/cb_hist_groups.gp{gnuplot}
+
+<Plot name="cb_hist_groups" svg :width="560" :height="320" />
+
+`newhistogram` starts a group 2 rows after the previous one, its title below the axis, its colors from `lt 3`.
+
+### One stack per column
+
+<<< @/examples/snippets/cb_hist_columns.gp{gnuplot}
+
+<Plot name="cb_hist_columns" svg :width="560" :height="320" />
+
+`columnstacked` stacks each column: the rows in their linetype colors, named in the key by `key(1)`, the stacks named
+by the column headers (`title columnhead`).
+
+### Clustered bars with error bars
+
+<<< @/examples/snippets/cb_hist_errorbars.gp{gnuplot}
+
+<Plot name="cb_hist_errorbars" svg :width="560" :height="320" />
+
+`errorbars` lays the bars out as `clustered` and draws the error of each (`using Y:ERR`, or `Y:LOW:HIGH`), `lw 2` wide.
+
 ### Pattern fills
 
 <<< @/examples/snippets/cb_patterns.gp{gnuplot}
@@ -528,6 +602,24 @@ HTML page the heads and the labels keep their size while the zoom moves them wit
 
 `polygons` closes each block of the file (blocks end at a blank line) into a polygon in the fill style: mesh cells,
 regions, outlines.
+
+### The area under a curve
+
+<<< @/examples/snippets/cb_area.gp{gnuplot}
+
+<Plot name="cb_area" svg :width="560" :height="320" />
+
+`filledcurves x1` fills down to the bottom of the plot, `closed` fills the polygon of the points.
+
+### Labels, arrows and objects
+
+<<< @/examples/snippets/cb_annotations.gp{gnuplot}
+
+<Plot name="cb_annotations" svg :width="640" :height="400" />
+
+Positions mix data (`first`), plot area (`graph`) and page (`screen`) coordinates; the band in `graph` y covers the
+whole height behind the grid, the polygon is in front of the curve. In the HTML page the objects zoom with the data.
+See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
 ## Heatmaps and images
 
@@ -724,6 +816,14 @@ These are the colors of this site: its figures follow the light and dark switch 
 sets its own theme (`set terminal svg theme vfd`) keeps it. See
 [Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
 
+### A heatmap of lit levels
+
+<<< @/examples/snippets/cb_image_vfd.gp{gnuplot}
+
+<Plot name="cb_image_vfd" svg :width="560" :height="400" />
+
+An image in the `vfd` theme: the palette mapped to the glow of the display.
+
 ### Seven-segment readouts
 
 <<< @/examples/snippets/cb_readout.gp{gnuplot}
@@ -768,6 +868,15 @@ NaN values are gaps, as gnuplot's undefined points; `save` writes any of the for
 <Plot name="cb_gaps" svg :width="560" :height="320" />
 
 <<< @/examples/output/cb_gaps.txt{text}
+
+### From Fortran: fit, stats, times, annotations
+
+`fit` and `stats` work on Fortran arrays as gnuplot's commands on files; `civil_time` makes times for a time axis;
+labels, arrows and objects are figure methods.
+
+<<< @/examples/snippets/cb_fortran_tools.f90{fortran}
+
+<Plot name="cb_fortran_tools" svg :width="760" :height="320" />
 
 ### From Fortran: run gnuplot commands
 

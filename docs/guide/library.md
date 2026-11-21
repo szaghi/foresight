@@ -36,9 +36,11 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_grid([on], [polar], [spider])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid); `spider=.true.`: `set grid spiderplot` |
 | `set_key([on], [position], [box], [at], [system])` | `set key bottom left box`, `set key outside`, `set key below`, `set key lmargin`, `unset key`; `at=[60._R8P, 1._R8P], position='left top'`: `set key at 60,1 left top`, `system='graph'` (or `'first screen'`, x then y): `set key at graph ...` |
 | `set_xtics([step], [start], [end], [mirror], [positions], [labels], [minor], [add], [rotate], [justify], [out])`, `set_ytics(...)`, `set_y2tics(...)`, `set_x2tics(...)` | `set xtics START,STEP,END [no]mirror`; automatic without `step`; `mirror` alone keeps the positions; an explicit list (`positions`, `labels`, `minor`, `add`); `rotate=30._R8P, justify='right'`: `set xtics rotate by 30 right` (x and x2); `out=.true.`: `set xtics out` |
-| `set_cbtics([step], [start], [end])`, `unset_cbtics()` | `set cbtics START,STEP,END`, `unset cbtics`: the ticks of the color box |
+| `set_cbtics([step], [start], [end], [mirror], [positions], [labels], [minor], [add])`, `unset_cbtics()` | `set cbtics START,STEP,END`, `unset cbtics`: the ticks of the color box; an explicit list as `set_xtics` |
+| `set_mxtics([intervals])`, `set_mytics(...)`, `set_my2tics(...)`, `set_mx2tics(...)`, `set_mcbtics(...)` | `set mxtics N`: `intervals` between major ticks; gnuplot's count when absent; 0 or 1 for none (`unset mxtics`) |
+| `set_time_axes([axes], [on], [timefmt])`, `set_timefmt(timefmt)` | `set xdata time` ([Time data](gnuplot-subset#time-data)): the values of the `axes` (`x`, `y`, `y2`, `x2`; all when absent) are seconds since 1970 UTC, ticked in whole time units and labelled by `set_format('%H:%M', 'x')` or a format invented from the range; `timefmt` (`set timefmt`) orders day and month in the invented labels; `on=.false.` back to numbers |
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()`, `unset_x2tics()` | `unset xtics` |
-| `set_format(format, [axes])` | `set format y "%.1e"`, `set format cb "%.2f"`; an empty format restores the default; all axes when absent |
+| `set_format(format, [axes])` | `set format y "%.1e"`, `set format cb "%.2f"`, on a time axis `set format x "%d %b"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
 | `set_origin(x, y)`, `set_size([width, height], [ratio])` | `set origin`, `set size`: page fractions, not with a layout; `ratio=1._R8P`: `set size square` (0: `noratio`) |
 | `set_polar([on])`, `set_angles(unit)`, `set_theta([origin], [clockwise])` | `set polar`, `set angles degrees`, `set theta top clockwise` ([Polar plots](gnuplot-subset#polar-plots)): `plot(theta, r)` |
@@ -56,7 +58,12 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_paxis(n, [min], [max], [step], [start], [end], [tics], [label])` | `set paxis 2 range [0:100]`, `set paxis 2 tics 25`, `set paxis 1 label "speed"` |
 | `set_spiderplot([on])`, `set_style_spiderplot(words)` | `set spiderplot`, `set style spiderplot fs transparent solid 0.2 border lw 2` |
 | `set_style_boxplot(words)` | `set style boxplot nooutliers sorted fraction 0.95` |
-| `set_style_histogram(style, [gap])` | `set style histogram clustered gap 1`, `set style histogram rowstacked` |
+| `set_style_histogram(style, [gap], [lw])` | `set style histogram clustered gap 1`, `rowstacked`, `columnstacked` (one stack per series, `labels` its row names), `errorbars gap 1 lw 2` (`plot(..., ylow, yhigh)` the error bar ends) |
+| `new_histogram([title], [at], [lt])` | `plot newhistogram "title" at X lt N, ...`: the histograms plotted next form a new group of the plot |
+| `set_label(text, x, y, [tag], [system], [justify], [rotate], [color], [front], [point], [pt], [ps], [offset])`, `unset_label([tag])` | `set label 1 "peak" at 3,1 right rotate by 30 tc "red" front point pt 7 offset 1,0`; `system='graph'` or `'graph first'` (x then y): the coordinate systems, `first` by default ([Labels, arrows and objects](gnuplot-subset#labels-arrows-and-objects)) |
+| `set_arrow(x1, y1, x2, y2, [tag], [system], [to_system], [relative], [head], [length], [angle], [filled], [front], [lc], [lw], [dt])`, `unset_arrow([tag])` | `set arrow from 1,2 to 3,4 heads size 0.2,20 filled lw 2`; `relative`: `rto`; `head` `head`, `nohead`, `backhead`, `heads`; `filled` `nofilled` (default), `filled`, `empty`, `noborder` |
+| `set_object(kind, x, y, [tag], [system], [width], [height], [radius], [angle], [arc], [fc], [fs], [lw], [layer], [clip])`, `unset_object([tag])` | `set object rect from 1,2 to 3,4`, `rect center 2,3 size 1,1` (`width`, `height`), `circle at 2,0 size 0.5 arc [0:90]`, `ellipse ... angle 30`, `polygon from ... to ...`; `fc`, `fs` the fill, `layer` `behind`, `back`, `front` |
+| `add_label(label)`, `add_arrow(arrow)`, `add_object(object)` | the same from the `label_object`, `arrow_object`, `shape_object` of `foresight_annotations` (each coordinate in its own system), as the interpreter builds them |
 | `set_boxwidth([width], [relative])` | `set boxwidth 0.5`, `set boxwidth 0.8 relative`; no `width`: boxes touching |
 | `set_readout([on], [position], [opaque], [size])` | `set readout top right horizontal noopaque size 30`, `unset readout` (foresight extension, see [Readouts](gnuplot-subset#readouts)) |
 | `set_refresh(seconds)` | reload period of the HTML page |
@@ -82,19 +89,19 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `labels`, `label` | labels: the texts, and gnuplot option words `'left rotate by 30 offset 1,0 point tc "red"'` | required, none |
 | `width`, `origins` | sectors: annular widths, and centres `(2, n)` | required, `[0, 0]` |
 | `at` | parallelaxes: the position of the axis | its number |
-| `labels` | also the row names of a spider plot (its key), on any of its items | none |
+| `labels` | also the row names of a spider plot (its key), on any of its items, and of a column stack (`columnstacked` histograms) | none |
 | `curve` | filledcurves: gnuplot words `'x1'`, `'x2'`, `'xy=2,0'`, `'above'`, `'below'` (with `base` or a band `ylow`) | closed, or to `base`/`ylow` |
 | `xlabels` | text labels of the points (gnuplot `xtic(N)`), blank for none: they replace the x ticks | — |
 | `width` | boxes only: the width of each box (NaN: the default) | `set_boxwidth`, else touching |
 | `base` | filledcurves only: fill down to the line y = `base` (with `ylow`: the band between `ylow` and `y`) | the closed polygon |
-| `fs` | boxes and filledcurves: gnuplot fill style words, `'solid 0.5 noborder'` | `set_style_fill` |
+| `fs` | the filled styles (boxes, filledcurves, histograms, circles, pie, gauge, radar, rose, boxerrorbars, boxxyerror, candlesticks, boxplot, ellipses, polygons, sectors): gnuplot fill style words, `'solid 0.5 noborder'` | `set_style_fill` |
 | `format` | readouts only: printf format with a field width, `'%9.2e'`; a readout takes `lc`, no other style option | `'%10.3e'` |
 | `lc` | color, any SVG color (`'#e51e10'`, `'red'`) | the linetype colors, by series |
 | `lw` | line width [px] | 1 |
 | `dt` | dash type 1..5 | 1 (solid) |
 | `ps` | point size factor | 1 |
 | `pt` | gnuplot point type: 0 a dot, 1 plus, 2 cross, 3 star, 4-5 square, 6-7 circle, 8-9 triangle, 10-11 inverted triangle, 12-13 diamond, 14-15 pentagon (odd ones from 5 filled), cycling every 15 | round dot |
-| `ylow`, `yhigh` | vertical error bar ends, for `yerrorbars`, `xyerrorbars` | — |
+| `ylow`, `yhigh` | vertical error bar ends, for `yerrorbars`, `xyerrorbars`, and `histograms` with `set_style_histogram('errorbars')` | — |
 | `xlow`, `xhigh` | horizontal error bar ends, for `xerrorbars`, `xyerrorbars` | — |
 | `axes` | `x1y1`; `x1y2` for the second y axis, `x2y1` for the second x axis, `x2y2` both (each scaled on its own, ticks off until `set_y2tics`/`set_x2tics`) | `x1y1` |
 
@@ -169,13 +176,33 @@ call gp%execute('replot', iostat, iomsg)        ! one statement
 
 | Procedure | Purpose |
 |---|---|
-| `init(output)` | reset; plots go to `output` until `set output` |
-| `run_file(file, iostat, iomsg)` | run a script file |
+| `init(output, [theme])` | reset; plots go to `output` until `set output`; `theme` the default output theme |
+| `run_file(file, iostat, iomsg, [args])` | run a script file; `args(:)` (at most 9) are `ARG1` ... `ARG9`, `ARGC` their number, `ARG0` the file, as `gnuplot -c` |
 | `run_text(text, iostat, iomsg, [source])` | run script text, `source` names it in messages |
 | `execute(statement, iostat, iomsg)` | run one statement |
 
-After a run, `gp%output` is the current output file, and `gp%data_files(k)%text`, for `k` up to
-`size(gp%data_files)`, are the data files read.
+After a run, `gp%output` is the current output file, `gp%data_files(k)%text`, for `k` up to
+`size(gp%data_files)`, are the data files read (and the scripts loaded), `gp%last_plot` the items of the last
+`plot`, and `gp%figure` the `figure_object` the script built: a program can go on with the API on it, or save it
+elsewhere. `gp%symbols%value_of(name, v, found)` and `gp%symbols%string_of(name, text, found)` read the script
+variables (`STATS_mean`, `FIT_WSSR`, ...).
+
+## Times
+
+`use foresight` exports gnuplot's time conversions, seconds since 1970-01-01 00:00 UTC
+([Time data](gnuplot-subset#time-data)):
+
+```fortran
+use foresight, only : civil_time, strftime, strptime
+real(R8P) :: t
+logical   :: ok
+
+t = civil_time(2024_I8P, 3_I8P, 1_I8P, 10_I8P, 30_I8P, 0.0_R8P)    ! 2024-03-01 10:30:00
+print '(A)', strftime('%a %d %b %Y %H:%M', t)                      ! Fri 01 Mar 2024 10:30
+call strptime('%Y-%m-%d %H:%M', '2024-03-02 08:00', t, ok)         ! ok false if the text does not match
+call fig%set_time_axes('x')
+call fig%set_format('%H:%M', 'x')
+```
 
 ## Fitting a model
 
@@ -209,10 +236,12 @@ contains
 | `names` | parameter names in the report (`p1`, `p2`, ... if absent) |
 | `err` | errors of `y`: weights `1/err**2` (unit weights if absent) |
 | `settings` | `fit_settings`: `limit` (1e-5), `limit_abs`, `maxiter` (0, none), `start_lambda`, `lambda_factor` (10), `prescale`, `errorscaling` (gnuplot's `set fit` options) |
-| `result` | `fit_result`: `params`, `errors` (gnuplot's `a_err`), `correlation`, `wssr`, `stdfit`, `p`, `ndf`, `niter`, `converged`, `message` (empty on success), `progress` |
+| `result` | `fit_result`: `params`, `errors` (gnuplot's `a_err`), `correlation`, `wssr`, `stdfit`, `p`, `ndf`, `niter`, `converged`, `message` (empty on success), `progress`, `stop_text` (why it stopped), `last_wssr`, `has_errors`, `weighted` |
 | `report` | `'-'` the standard error (progress lines and results, as gnuplot's terminal), a file name (appended, gnuplot's `fit.log`) |
 
-Scripts fit user functions with `fit f(x) 'file' using 1:2 via a, b` ([gnuplot subset](gnuplot-subset.md#fit)).
+`fit_report(result, names, destination, [source], [function_text], [progress])` writes gnuplot's report of a
+`fit_result` (`destination` `'-'` the standard error, else a file, appended). Scripts fit user functions with
+`fit f(x) 'file' using 1:2 via a, b` ([gnuplot subset](gnuplot-subset.md#fit)).
 
 ## Statistics
 
@@ -231,6 +260,7 @@ call stats_report(r, unit=error_unit, formatted=.true.)   ! gnuplot's report
 | Component | Value |
 |---|---|
 | `records` | number of values |
+| `invalid`, `blank`, `blocks`, `headers`, `outofrange`, `columns` | the counts gnuplot reports of a file (a script's `stats`) |
 | `x`, `y` (`stats_column`) | `mean`, `stddev`, `ssd` (sample), `skewness`, `kurtosis`, `adev`, `mean_err`, `stddev_err`, `skewness_err`, `kurtosis_err`, `sum`, `sumsq`, `min`, `max`, `median`, `lo_quartile`, `up_quartile`, `index_min`, `index_max` (0-based); `y` is the only column of `stats(y)` |
 | `two` | two columns given |
 | `slope`, `intercept`, `slope_err`, `intercept_err`, `correlation`, `sumxy`, `pos_min_y`, `pos_max_y` | the least squares line of two columns, gnuplot's |
