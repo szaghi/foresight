@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(108)                           !< Per-check outcome.
+logical                       :: test_passed(109)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2057,6 +2057,60 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_hist.svg')
 close(unit, status='delete')
 
+! labels, arrows, objects, as gnuplot 6.0: tags, positions in several systems, a tag modified, unset
+call interpreter%run_text('set output "foresight_script_test_notes.svg"; set xrange [0:10]'//new_line('a')// &
+                          'set label 1 "peak" at pi/2, 1 point pt 7 offset 1,0'//new_line('a')// &
+                          'set label "mid" at graph 0.5, first 2 center rotate by 30 tc rgb "red" front'//new_line('a')// &
+                          'set label 1 right'//new_line('a')// &
+                          'set arrow from 1,2 rto 3,-1 heads filled size screen 0.02,20 lc rgb "blue" lw 2 dt 2'// &
+                          new_line('a')// &
+                          'set object 3 rect from 4, graph 0 to 6, graph 1 fc lt 2 fs solid 0.3 noborder behind'// &
+                          new_line('a')// &
+                          'set object circle at 2,0 size 0.5 arc [0:90] fc "#e69f00" front'//new_line('a')// &
+                          'set object 9 polygon from 0,0 to 1,0 to 1,1 to 0,0'//new_line('a')// &
+                          'plot sin(x)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(109) = iostat == 0_I4P
+if (test_passed(109)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(109) = size(panel%notes) == 2 .and. panel%notes(1)%tag == 1_I4P .and. panel%notes(2)%tag == 2_I4P &
+                         .and. panel%notes(1)%justify == 'right' .and. panel%notes(1)%point .and. &
+                         panel%notes(1)%pt == 7_I4P .and. abs(panel%notes(1)%at%x - 2.0_R8P * atan(1.0_R8P)) < 1e-12_R8P &
+                         .and. panel%notes(2)%at%sx == 'graph' .and. panel%notes(2)%at%sy == 'first' .and. &
+                         panel%notes(2)%color == 'red' .and. panel%notes(2)%front .and. panel%notes(2)%rotate == 30.0_R8P
+      test_passed(109) = test_passed(109) .and. size(panel%arrows) == 1 .and. panel%arrows(1)%relative .and. &
+                         panel%arrows(1)%head == 3_I4P .and. panel%arrows(1)%fill == 'filled' .and. &
+                         panel%arrows(1)%length_system == 'screen' .and. panel%arrows(1)%angle == 20.0_R8P .and. &
+                         panel%arrows(1)%color == 'blue' .and. len(panel%arrows(1)%dashes) > 0
+      test_passed(109) = test_passed(109) .and. size(panel%objects) == 3 .and. panel%objects(1)%tag == 3_I4P .and. &
+                         panel%objects(1)%layer == 'behind' .and. panel%objects(1)%points(1)%sy == 'graph' .and. &
+                         panel%objects(1)%style%color == '#009e73' .and. panel%objects(2)%tag == 4_I4P .and. &
+                         panel%objects(2)%kind == 'circle' .and. panel%objects(2)%arc(2) == 90.0_R8P .and. &
+                         panel%objects(3)%kind == 'polygon' .and. size(panel%objects(3)%points) == 4
+   endassociate
+endif
+call interpreter%run_text('unset label 1; unset arrow; set object 3 fc rgb "red"', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat == 0_I4P
+if (test_passed(109)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(109) = size(panel%notes) == 1 .and. .not. allocated(panel%arrows) .and. &
+                         panel%objects(1)%style%color == 'red' .and. panel%objects(1)%kind == 'rectangle' .and. &
+                         panel%objects(1)%layer == 'behind'
+   endassociate
+endif
+call interpreter%run_text('set label "x" at character 1,1', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, 'character coordinates') > 0
+call interpreter%run_text('set arrow 2 nohead', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, 'from POS to|rto POS') > 0
+call interpreter%run_text('set object 7 polygon from 0,0 to 1,1', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, '3 vertices') > 0
+call interpreter%run_text('set label 3 "a" at 1 2', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, 'a position is') > 0
+call interpreter%run_text('unset label; unset object; unset arrow; set xrange [*:*]', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat == 0_I4P
+open(newunit=unit, file='foresight_script_test_notes.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2065,7 +2119,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,108L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,109L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

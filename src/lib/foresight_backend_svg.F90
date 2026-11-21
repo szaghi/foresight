@@ -279,8 +279,8 @@ contains
                  '"'//IMAGE_ATTRIBUTES//' xlink:href="data:image/png;base64,'//png_base64(rgba)//'"/>')
    endsubroutine image
 
-   subroutine text(self, x, y, string, anchor, sup, rotate)
-   !< Text whose baseline passes through the anchor point (`x`, `y`) [px].
+   subroutine text(self, x, y, string, anchor, sup, rotate, color)
+   !< Text whose baseline passes through the anchor point (`x`, `y`) [px], in `color` if given.
    class(backend_svg), intent(inout)        :: self   !< Device.
    real(R8P),          intent(in)           :: x      !< Anchor abscissa [px].
    real(R8P),          intent(in)           :: y      !< Anchor ordinate (baseline) [px].
@@ -288,11 +288,13 @@ contains
    character(len=*),   intent(in)           :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
    character(len=*),   intent(in), optional :: sup    !< Superscript appended to `string`.
    real(R8P),          intent(in), optional :: rotate !< Rotation about the anchor point [deg, clockwise].
+   character(len=*),   intent(in), optional :: color  !< Text color, the frame's if absent.
    character(len=:), allocatable            :: line   !< Output line.
 
    line = '<text x="'//px(x)//'" y="'//px(y)//'"'
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
+   if (present(color)) line = line//' fill="'//self%theme%map(color)//'"'
    line = line//'>'//xml_escape(string)
    if (present(sup)) then
       if (len(sup) > 0) line = line//'<tspan dy="-0.45em" font-size="0.75em">'//xml_escape(sup)//'</tspan>'

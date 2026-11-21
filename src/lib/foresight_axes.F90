@@ -50,6 +50,8 @@ module foresight_axes
 !< row, placed inside the plot area as the key is (top left by default) over a window hiding the curves below. A panel
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
+use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
+                                  label_object, shape_object
 use foresight_axis, only : axis_object
 use foresight_format, only : int_str
 use foresight_backend, only : axes_view, backend_object
@@ -191,6 +193,9 @@ type :: axes_object
    logical                          :: colorbox = .true. !< Draw the color box of the images.
    type(colorbox_object)            :: cbox              !< Color box placement and look, `set colorbox`.
    real(R8P)                        :: canvas(2) = 0.0_R8P !< Page width and height being rendered [px].
+   type(label_object), allocatable  :: notes(:)   !< Labels, gnuplot `set label`.
+   type(arrow_object), allocatable  :: arrows(:)  !< Arrows, gnuplot `set arrow`.
+   type(shape_object), allocatable  :: objects(:) !< Objects, gnuplot `set object`.
    real(R8P)                        :: x2_rise = 0.0_R8P   !< Height of the rotated x2 tick labels above their gap [px],
                                                            !< 0 if not rotated (set by `render` from the text widths).
    logical                          :: readout = .true. !< Draw the readouts.
@@ -1313,11 +1318,17 @@ contains
    view%y2time = time_attribute(self%y2axis)
    view%x2time = time_attribute(self%x2axis)
    call backend%begin_axes(view)
+   ! annotations: objects behind the grid, then the back layer (labels, arrows, objects on the page)
+   call annotate('behind', .false.)
    ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
    call backend%begin_group('fs-grid', visible=self%grid)
    call self%draw_grid(backend, area)
    call backend%end_group
+   call annotate('back', .false.)
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
+   ! the objects in data space, clipped and zoomed with the data, behind it
+   call annotate('behind', .true.)
+   call annotate('back', .true.)
    ! the polar grid and border are data geometry, zoomed with the series
    if (self%polar .and. self%grid_polar > 0.0_R8P) then
       call backend%begin_group('fs-pgrid', visible=self%grid)
@@ -1346,8 +1357,10 @@ contains
                                                        self%yaxis%to_unit([0.0_R8P, 0.0_R8P]), FRAME_COLOR, 1.0_R8P, '')
       endassociate
    endif
+   call annotate('front', .true.)
    call backend%end_plot_area
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   call annotate('front', .false.)
    if (self%polar) then
       call backend%begin_group('fs-polar')
       call self%draw_polar_axes(backend, area, font_size)
@@ -1362,6 +1375,20 @@ contains
    call backend%end_axes
    if (self%polar) call move_alloc(raw, self%series)
    contains
+      subroutine annotate(layer, data_space)
+      !< The annotations of `layer`: the objects in data space (`data_space`), or the page ones with the labels and
+      !< arrows of the layer (`front`, else the back one).
+      character(len=*), intent(in) :: layer      !< `behind`, `back` or `front`.
+      logical,          intent(in) :: data_space !< The data space objects, else the page annotations.
+
+      if (allocated(self%objects)) call draw_shapes(self%objects, layer, data_space, backend, area, self%canvas, &
+                                                    self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (data_space .or. layer == 'behind') return
+      if (allocated(self%notes)) call draw_notes(self%notes, layer == 'front', backend, area, self%canvas, font_size, &
+                                                  self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (allocated(self%arrows)) call draw_note_arrows(self%arrows, layer == 'front', backend, area, self%canvas, &
+                                                   self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      endsubroutine annotate
       pure function circle_u(rho) result(u)
       !< Unit abscissae of the circle of radius `rho` [r units] about the pole.
       real(R8P), intent(in)  :: rho  !< Radius.

@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(96)                  !< Per-figure outcome.
+logical                     :: test_passed(99)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -121,7 +121,10 @@ test_passed(93) = check('time_axis.txt', figure_time_axis())
 test_passed(94) = check('time_axis.html', figure_time_axis())
 test_passed(95) = check('histogram_layouts.svg', figure_histogram_layouts())
 test_passed(96) = check('histogram_layouts.txt', figure_histogram_layouts())
-write(output_unit, '(A,96L2)') 'foresight golden checks:', test_passed
+test_passed(97) = check('annotations.svg', figure_annotations())
+test_passed(98) = check('annotations.txt', figure_annotations())
+test_passed(99) = check('annotations.html', figure_annotations())
+write(output_unit, '(A,99L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -465,6 +468,38 @@ contains
    call fig%set_xtics(mirror=.false.)
    call fig%plot(x, cos(x), title='cos')
    endfunction figure_x2_rotate
+
+   function figure_annotations() result(fig)
+   !< Labels, arrows and objects (gnuplot `set label`, `set arrow`, `set object`): a label at a data point marked by a
+   !< point, one centred in graph coordinates, a rotated one in red, one in screen coordinates at the front; arrows with
+   !< the head styles and a relative one; a shaded band behind the grid, a rectangle in the page color, a circle, an
+   !< ellipse, a polygon.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.1_R8P * real(i, R8P), i = 0, 100)]
+   call fig%init(width=640_I4P, height=400_I4P)
+   call fig%set_title('labels, arrows, objects')
+   call fig%set_grid(.true.)
+   call fig%set_object('rectangle', [4.0_R8P, 6.0_R8P], [0.0_R8P, 1.0_R8P], system='first graph', fc='#56b4e9', &
+                       fs='solid 0.25 noborder', layer='behind')
+   call fig%set_object('rectangle', [8.0_R8P, 9.8_R8P], [0.6_R8P, 0.95_R8P], lw=1.0_R8P)
+   call fig%set_object('circle', [2.0_R8P], [-0.5_R8P], radius=0.6_R8P, fc='#e69f00', fs='solid 0.5 border')
+   call fig%set_object('ellipse', [7.0_R8P], [-0.6_R8P], width=1.6_R8P, height=0.5_R8P, angle=30.0_R8P)
+   call fig%set_object('polygon', [0.5_R8P, 1.5_R8P, 1.0_R8P], [0.6_R8P, 0.6_R8P, 0.95_R8P], fc='#009e73', &
+                       fs='solid 0.6', layer='front')
+   call fig%set_label('peak', 1.5708_R8P, 1.0_R8P, point=.true., pt=7_I4P, offset=[1.0_R8P, 0.0_R8P])
+   call fig%set_label('centre', 0.5_R8P, 0.5_R8P, system='graph', justify='center')
+   call fig%set_label('rotated', 9.2_R8P, -0.9_R8P, rotate=60.0_R8P, color='red')
+   call fig%set_label('screen', 0.98_R8P, 0.03_R8P, system='screen', justify='right', front=.true.)
+   call fig%set_arrow(3.0_R8P, -0.2_R8P, 4.6_R8P, -0.9_R8P)
+   call fig%set_arrow(3.0_R8P, 0.2_R8P, 4.6_R8P, 0.8_R8P, head='heads', filled='filled', lc='#9400d3', lw=2.0_R8P)
+   call fig%set_arrow(8.9_R8P, 0.2_R8P, -1.0_R8P, 0.3_R8P, relative=.true., head='backhead', filled='empty', &
+                      length=0.3_R8P, angle=25.0_R8P)
+   call fig%set_arrow(0.05_R8P, 0.1_R8P, 0.25_R8P, 0.1_R8P, system='graph', head='nohead', dt=2_I4P, front=.true.)
+   call fig%plot(x, sin(x), title='sin(x)')
+   endfunction figure_annotations
 
    function figure_histogram_layouts() result(fig)
    !< The histogram layouts of gnuplot 6.0: groups (`newhistogram`, the second from linetype 4, titled below the x

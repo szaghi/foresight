@@ -363,8 +363,9 @@ contains
       endfunction hex_of
    endsubroutine image
 
-   subroutine text(self, x, y, string, anchor, sup, rotate)
-   !< Text in the row of its baseline; superscripts appended after `^`; rotated text written top to bottom.
+   subroutine text(self, x, y, string, anchor, sup, rotate, color)
+   !< Text in the row of its baseline; superscripts appended after `^`; rotated text written top to bottom; the color
+   !< is not drawn.
    class(backend_dumb), intent(inout)        :: self   !< Device.
    real(R8P),           intent(in)           :: x      !< Anchor abscissa [px].
    real(R8P),           intent(in)           :: y      !< Anchor ordinate (baseline) [px].
@@ -372,6 +373,7 @@ contains
    character(len=*),    intent(in)           :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
    character(len=*),    intent(in), optional :: sup    !< Superscript appended to `string`.
    real(R8P),           intent(in), optional :: rotate !< Rotation [deg].
+   character(len=*),    intent(in), optional :: color  !< Text color (not drawn).
    character(len=:), allocatable             :: full   !< Text with superscript.
    integer(I4P)                              :: c      !< Start column.
    integer(I4P)                              :: r      !< Row.

@@ -24,7 +24,8 @@ use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_time, only : time_format_check
-use foresight_style, only : fill_style, sequence_colors, WITH_HISTOGRAMS
+use foresight_style, only : fill_style, sequence_colors, style_object, FILL_EMPTY, FILL_SOLID, WITH_HISTOGRAMS
+use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
@@ -78,6 +79,15 @@ type :: figure_object
       procedure, pass(self) :: set_time_axes   !< gnuplot `set xdata time`.
       procedure, pass(self) :: set_timefmt     !< gnuplot `set timefmt`.
       procedure, pass(self) :: new_histogram   !< gnuplot `plot newhistogram`.
+      procedure, pass(self) :: add_label       !< Add a label object (gnuplot `set label`).
+      procedure, pass(self) :: add_arrow       !< Add an arrow object (gnuplot `set arrow`).
+      procedure, pass(self) :: add_object      !< Add a shape object (gnuplot `set object`).
+      procedure, pass(self) :: set_label       !< gnuplot `set label`.
+      procedure, pass(self) :: set_arrow       !< gnuplot `set arrow`.
+      procedure, pass(self) :: set_object      !< gnuplot `set object`.
+      procedure, pass(self) :: unset_label     !< gnuplot `unset label`.
+      procedure, pass(self) :: unset_arrow     !< gnuplot `unset arrow`.
+      procedure, pass(self) :: unset_object    !< gnuplot `unset object`.
       procedure, pass(self) :: set_grid        !< gnuplot `set grid` / `unset grid`.
       procedure, pass(self) :: set_key         !< gnuplot `set key` / `unset key`.
       procedure, pass(self) :: set_logscale    !< gnuplot `set logscale`.
@@ -767,6 +777,316 @@ contains
       panel%x2axis%timefmt = timefmt
    endassociate
    endsubroutine set_timefmt
+
+   subroutine add_label(self, label)
+   !< Add `label` to the current panel: tag 0 takes the next free tag, an existing tag is replaced (gnuplot `set label
+   !< N`).
+   class(figure_object), intent(inout) :: self  !< Figure.
+   type(label_object),   intent(in)    :: label !< Label.
+   type(label_object)                  :: item  !< Label with its tag.
+   integer(I4P)                        :: k     !< Counter.
+
+   call self%ensure_panels
+   item = label
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%notes)) allocate(panel%notes(0))
+      if (item%tag <= 0_I4P) item%tag = 1_I4P + maxval([0_I4P, panel%notes%tag])
+      do k = 1_I4P, size(panel%notes, kind=I4P)
+         if (panel%notes(k)%tag == item%tag) then
+            panel%notes(k) = item
+            return
+         endif
+      enddo
+      call push(panel%notes, item)
+   endassociate
+   endsubroutine add_label
+
+   subroutine add_arrow(self, arrow)
+   !< Add `arrow` to the current panel: tag 0 takes the next free tag, an existing tag is replaced.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   type(arrow_object),   intent(in)    :: arrow !< Arrow.
+   type(arrow_object)                  :: item  !< Arrow with its tag.
+   integer(I4P)                        :: k     !< Counter.
+
+   call self%ensure_panels
+   item = arrow
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%arrows)) allocate(panel%arrows(0))
+      if (item%tag <= 0_I4P) item%tag = 1_I4P + maxval([0_I4P, panel%arrows%tag])
+      do k = 1_I4P, size(panel%arrows, kind=I4P)
+         if (panel%arrows(k)%tag == item%tag) then
+            panel%arrows(k) = item
+            return
+         endif
+      enddo
+      call push(panel%arrows, item)
+   endassociate
+   endsubroutine add_arrow
+
+   subroutine add_object(self, object)
+   !< Add `object` to the current panel: tag 0 takes the next free tag, an existing tag is replaced.
+   class(figure_object), intent(inout) :: self   !< Figure.
+   type(shape_object),   intent(in)    :: object !< Object.
+   type(shape_object)                  :: item   !< Object with its tag.
+   integer(I4P)                        :: k      !< Counter.
+
+   call self%ensure_panels
+   item = object
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%objects)) allocate(panel%objects(0))
+      if (item%tag <= 0_I4P) item%tag = 1_I4P + maxval([0_I4P, panel%objects%tag])
+      do k = 1_I4P, size(panel%objects, kind=I4P)
+         if (panel%objects(k)%tag == item%tag) then
+            panel%objects(k) = item
+            return
+         endif
+      enddo
+      call push(panel%objects, item)
+   endassociate
+   endsubroutine add_object
+
+   subroutine unset_label(self, tag)
+   !< Remove the label `tag` of the current panel, every label without it (gnuplot `unset label [N]`).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   integer(I4P),         intent(in), optional :: tag  !< Tag.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%notes)) return
+      if (present(tag)) then
+         panel%notes = pack(panel%notes, panel%notes%tag /= tag)
+      else
+         deallocate(panel%notes)
+      endif
+   endassociate
+   endsubroutine unset_label
+
+   subroutine unset_arrow(self, tag)
+   !< Remove the arrow `tag` of the current panel, every arrow without it (gnuplot `unset arrow [N]`).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   integer(I4P),         intent(in), optional :: tag  !< Tag.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%arrows)) return
+      if (present(tag)) then
+         panel%arrows = pack(panel%arrows, panel%arrows%tag /= tag)
+      else
+         deallocate(panel%arrows)
+      endif
+   endassociate
+   endsubroutine unset_arrow
+
+   subroutine unset_object(self, tag)
+   !< Remove the object `tag` of the current panel, every object without it (gnuplot `unset object [N]`).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   integer(I4P),         intent(in), optional :: tag  !< Tag.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%objects)) return
+      if (present(tag)) then
+         panel%objects = pack(panel%objects, panel%objects%tag /= tag)
+      else
+         deallocate(panel%objects)
+      endif
+   endassociate
+   endsubroutine unset_object
+
+   subroutine set_label(self, text, x, y, tag, system, justify, rotate, color, front, point, pt, ps, offset)
+   !< A label at (`x`, `y`), as gnuplot `set label [tag] "text" at x,y`: `system` the coordinate systems (`first`, the
+   !< default, `second`, `graph`, `screen`; two words for x and y: `'graph first'`), `justify` `left` (default),
+   !< `center` or `right`, `rotate` [deg], `color` of the text, `front` over the frame (else behind the data), `point`
+   !< a marker (`pt`, `ps`) at the position, `offset` the text offset [characters].
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   character(len=*),     intent(in)           :: text      !< Text.
+   real(R8P),            intent(in)           :: x         !< Abscissa.
+   real(R8P),            intent(in)           :: y         !< Ordinate.
+   integer(I4P),         intent(in), optional :: tag       !< Tag, 0 or absent: the next free one.
+   character(len=*),     intent(in), optional :: system    !< Coordinate systems.
+   character(len=*),     intent(in), optional :: justify   !< `left`, `center`, `right`.
+   real(R8P),            intent(in), optional :: rotate    !< Angle [deg, counterclockwise].
+   character(len=*),     intent(in), optional :: color     !< Text color.
+   logical,              intent(in), optional :: front     !< Over the frame.
+   logical,              intent(in), optional :: point     !< A point at the position.
+   integer(I4P),         intent(in), optional :: pt        !< Point type.
+   real(R8P),            intent(in), optional :: ps        !< Point size.
+   real(R8P),            intent(in), optional :: offset(2) !< Text offset [characters].
+   type(label_object)                         :: label     !< Label.
+
+   label%text = text
+   label%at = place(x, y, system, 'set_label')
+   if (present(tag)) label%tag = tag
+   if (present(justify)) then
+      if (all(justify /= ['left  ', 'center', 'right '])) &
+         error stop 'foresight: set_label: justify must be left, center or right, not "'//justify//'"'
+      label%justify = justify
+   endif
+   if (present(rotate)) label%rotate = rotate
+   label%color = ''
+   if (present(color)) label%color = color
+   if (present(front)) label%front = front
+   if (present(point)) label%point = point
+   if (present(pt)) label%pt = pt
+   if (present(ps)) label%ps = ps
+   if (present(offset)) label%offset = offset
+   call self%add_label(label)
+   endsubroutine set_label
+
+   subroutine set_arrow(self, x1, y1, x2, y2, tag, system, to_system, relative, head, length, angle, filled, front, lc, &
+                        lw, dt)
+   !< An arrow from (`x1`, `y1`) to (`x2`, `y2`), as gnuplot `set arrow [tag] from x1,y1 to x2,y2`: `system` the
+   !< coordinate systems of the tail (as `set_label`), `to_system` those of the tip (the tail's by default), `relative`
+   !< the tip relative to the tail (`rto`); `head` `head` (default), `nohead`, `backhead` or `heads`; `length` (x
+   !< axis values) and `angle` [deg] of the heads; `filled` `nofilled` (default, two barbs), `filled`, `empty` or
+   !< `noborder`; `front` over the frame; `lc`, `lw`, `dt` the line.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   real(R8P),            intent(in)           :: x1        !< Tail abscissa.
+   real(R8P),            intent(in)           :: y1        !< Tail ordinate.
+   real(R8P),            intent(in)           :: x2        !< Tip abscissa.
+   real(R8P),            intent(in)           :: y2        !< Tip ordinate.
+   integer(I4P),         intent(in), optional :: tag       !< Tag, 0 or absent: the next free one.
+   character(len=*),     intent(in), optional :: system    !< Coordinate systems of the tail.
+   character(len=*),     intent(in), optional :: to_system !< Coordinate systems of the tip.
+   logical,              intent(in), optional :: relative  !< The tip relative to the tail.
+   character(len=*),     intent(in), optional :: head      !< `head`, `nohead`, `backhead`, `heads`.
+   real(R8P),            intent(in), optional :: length    !< Head length [x axis values].
+   real(R8P),            intent(in), optional :: angle     !< Head angle [deg].
+   character(len=*),     intent(in), optional :: filled    !< `nofilled`, `filled`, `empty`, `noborder`.
+   logical,              intent(in), optional :: front     !< Over the frame.
+   character(len=*),     intent(in), optional :: lc        !< Line color.
+   real(R8P),            intent(in), optional :: lw        !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt        !< Dash type, 1..5.
+   type(arrow_object)                         :: arrow     !< Arrow.
+
+   arrow%from = place(x1, y1, system, 'set_arrow')
+   if (present(to_system)) then
+      arrow%to = place(x2, y2, to_system, 'set_arrow')
+   else
+      arrow%to = place(x2, y2, system, 'set_arrow')
+   endif
+   if (present(tag)) arrow%tag = tag
+   if (present(relative)) arrow%relative = relative
+   if (present(head)) then
+      select case (head)
+      case ('nohead')
+         arrow%head = 0_I4P
+      case ('head')
+         arrow%head = 1_I4P
+      case ('backhead')
+         arrow%head = 2_I4P
+      case ('heads')
+         arrow%head = 3_I4P
+      case default
+         error stop 'foresight: set_arrow: head must be head, nohead, backhead or heads, not "'//head//'"'
+      endselect
+   endif
+   if (present(length)) arrow%length = length
+   if (present(angle)) arrow%angle = angle
+   if (present(filled)) then
+      if (all(filled /= ['nofilled', 'filled  ', 'empty   ', 'noborder'])) &
+         error stop 'foresight: set_arrow: filled must be nofilled, filled, empty or noborder, not "'//filled//'"'
+      arrow%fill = filled
+   endif
+   if (present(front)) arrow%front = front
+   arrow%color = ''
+   if (present(lc)) arrow%color = lc
+   if (present(lw)) arrow%lw = lw
+   arrow%dashes = ''
+   if (present(dt)) then
+      block
+         type(style_object) :: line !< Line of the dash type.
+
+         line%dashtype = dt
+         line%linewidth = arrow%lw
+         arrow%dashes = line%dasharray()
+      endblock
+   endif
+   call self%add_arrow(arrow)
+   endsubroutine set_arrow
+
+   subroutine set_object(self, kind, x, y, tag, system, width, height, radius, angle, arc, fc, fs, lw, layer, clip)
+   !< An object, as gnuplot `set object [tag] rectangle|circle|ellipse|polygon`: a `rectangle` from the corner (`x(1)`,
+   !< `y(1)`) to (`x(2)`, `y(2)`), or centred on (`x(1)`, `y(1)`) with `width` and `height`; a `circle` centred on
+   !< (`x(1)`, `y(1)`) of `radius` (x axis values), its `arc` [deg] a wedge if partial; an `ellipse` centred there,
+   !< `width` and `height` (axis values), `angle` [deg]; a `polygon` of the vertices (`x`, `y`). `system` the
+   !< coordinate systems (as `set_label`), `fc` the fill color, `fs` the fill style words (`'solid 0.3 border'`),
+   !< `lw` the border width, `layer` `behind`, `back` (default) or `front`, `clip` false to draw beyond the plot area.
+   !< By default, as gnuplot, a rectangle is filled with the page color and bordered black, the others empty, black.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   character(len=*),     intent(in)           :: kind   !< `rectangle`, `circle`, `ellipse`, `polygon`.
+   real(R8P),            intent(in)           :: x(:)   !< Abscissae.
+   real(R8P),            intent(in)           :: y(:)   !< Ordinates.
+   integer(I4P),         intent(in), optional :: tag    !< Tag, 0 or absent: the next free one.
+   character(len=*),     intent(in), optional :: system !< Coordinate systems.
+   real(R8P),            intent(in), optional :: width  !< Rectangle or ellipse width.
+   real(R8P),            intent(in), optional :: height !< Rectangle or ellipse height.
+   real(R8P),            intent(in), optional :: radius !< Circle radius.
+   real(R8P),            intent(in), optional :: angle  !< Ellipse angle [deg].
+   real(R8P),            intent(in), optional :: arc(2) !< Circle arc [deg].
+   character(len=*),     intent(in), optional :: fc     !< Fill color.
+   character(len=*),     intent(in), optional :: fs     !< Fill style words.
+   real(R8P),            intent(in), optional :: lw     !< Border width [px].
+   character(len=*),     intent(in), optional :: layer  !< `behind`, `back`, `front`.
+   logical,              intent(in), optional :: clip   !< Clipped by the plot area.
+   type(shape_object)                         :: object !< Object.
+   character(len=:), allocatable              :: bad    !< Unknown fill word.
+   integer(I4P)                               :: k      !< Counter.
+
+   if (size(x) /= size(y) .or. size(x) == 0) error stop 'foresight: set_object: x and y need the same, nonzero size'
+   if (all(kind /= ['rectangle', 'circle   ', 'ellipse  ', 'polygon  '])) &
+      error stop 'foresight: set_object: kind must be rectangle, circle, ellipse or polygon, not "'//kind//'"'
+   object%kind = kind
+   allocate(object%points(size(x)))
+   do k = 1_I4P, size(x, kind=I4P)
+      object%points(k) = place(x(k), y(k), system, 'set_object')
+   enddo
+   object%size%sx = object%points(1)%sx
+   object%size%sy = object%points(1)%sy
+   select case (kind)
+   case ('rectangle')
+      if (present(width) .neqv. present(height)) error stop 'foresight: set_object: a rectangle takes width and height'
+      object%sized = present(width)
+      if (.not. object%sized .and. size(x) /= 2) &
+         error stop 'foresight: set_object: a rectangle takes two corners, or a centre with width and height'
+      if (object%sized) object%size = place_object(x=width, y=height, sx=object%points(1)%sx, sy=object%points(1)%sy)
+      object%style%fill = FILL_SOLID
+      object%style%density = 1.0_R8P
+      object%style%color = 'white'
+      object%style%border_color = 'black'
+   case ('circle')
+      if (.not. present(radius)) error stop 'foresight: set_object: a circle takes its radius'
+      object%size%x = radius
+      if (present(arc)) object%arc = arc
+      object%style%color = 'black'
+   case ('ellipse')
+      if (.not. (present(width) .and. present(height))) error stop 'foresight: set_object: an ellipse takes width and height'
+      object%size = place_object(x=width, y=height, sx=object%points(1)%sx, sy=object%points(1)%sy)
+      if (present(angle)) object%angle = angle
+      object%style%color = 'black'
+   case ('polygon')
+      if (size(x) < 3) error stop 'foresight: set_object: a polygon takes 3 vertices at least'
+      object%style%color = 'black'
+   endselect
+   object%style%border = .true.
+   if (present(fc)) then
+      object%style%color = fc
+      if (allocated(object%style%border_color) .and. kind /= 'rectangle') deallocate(object%style%border_color)
+   endif
+   if (present(fs)) then
+      call fill_style(fs, object%style, bad)
+      if (len(bad) > 0) error stop 'foresight: set_object: unsupported fill style "'//bad//'"'
+   endif
+   if (present(lw)) object%style%linewidth = lw
+   if (present(layer)) then
+      if (all(layer /= ['behind', 'back  ', 'front '])) &
+         error stop 'foresight: set_object: layer must be behind, back or front, not "'//layer//'"'
+      object%layer = layer
+   endif
+   if (present(clip)) object%clip = clip
+   if (present(tag)) object%tag = tag
+   call self%add_object(object)
+   endsubroutine set_object
 
    subroutine set_paxis(self, n, min, max, step, start, end, tics, label)
    !< Parallel axis `n` of the parallel axis and spider plots, as gnuplot `set paxis n range [min:max]` (an absent end
@@ -1643,6 +1963,33 @@ contains
    enddo
    call backend%end_page
    endsubroutine render
+
+   function place(x, y, system, caller) result(p)
+   !< The position (`x`, `y`) in `system` (`first` when absent; one word for both coordinates, or two: x then y);
+   !< unknown systems stop.
+   real(R8P),        intent(in)           :: x      !< Abscissa.
+   real(R8P),        intent(in)           :: y      !< Ordinate.
+   character(len=*), intent(in), optional :: system !< Coordinate systems.
+   character(len=*), intent(in)           :: caller !< Procedure name, for messages.
+   type(place_object)                     :: p      !< Position.
+   character(len=:), allocatable          :: words  !< Systems.
+   integer(I4P)                           :: k      !< Blank position.
+
+   p%x = x
+   p%y = y
+   if (.not. present(system)) return
+   words = trim(adjustl(system))
+   k = index(words, ' ', kind=I4P)
+   if (k == 0_I4P) then
+      p%sx = words
+      p%sy = words
+   else
+      p%sx = words(1:k - 1_I4P)
+      p%sy = trim(adjustl(words(k + 1_I4P:)))
+   endif
+   if (all(p%sx /= ['first ', 'second', 'graph ', 'screen']) .or. all(p%sy /= ['first ', 'second', 'graph ', 'screen'])) &
+      error stop 'foresight: '//caller//': coordinate systems are first, second, graph or screen, not "'//system//'"'
+   endfunction place
 
    function which_axes(axes, caller) result(named)
    !< Axes named in `axes` (`x`, `y`, `y2`, `cb`, `x2`, concatenated), all when absent; unsupported names stop.

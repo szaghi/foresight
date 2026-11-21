@@ -76,6 +76,8 @@ module foresight_script
 !<   digits on a glass of `fmt` (a printf conversion with a field width, `%10.3e` by default; see foresight_readout),
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
 !<   [opaque|noopaque] [size H]`, `unset readout`;
+!< - `set label [N] "text" at POS ...`, `set arrow [N] from POS to|rto POS ...`, `set object [N] rectangle|circle|ellipse|
+!<   polygon ...`, `unset label|arrow|object [N]` (see `annotation_option`, foresight_annotations);
 !< - time data: `set xdata|ydata|x2data|y2data [time]` (the x or y field read with `set timefmt "fmt"`, the axis
 !<   ticked and labelled in time units), `set format x "%H:%M" [timedate|numeric]`, time strings as range ends and
 !<   tick positions, `timecolumn(N[, "fmt"])`, `strftime(fmt, t)`, `strptime(fmt, s)`, `time(0)` (see foresight_time);
@@ -93,6 +95,7 @@ use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_variable, symbols_object
+use foresight_annotations, only : arrow_object, label_object, place_object, shape_object
 use foresight_figure, only : figure_object
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, int_str, real_from_decimal
 use foresight_readout, only : readout_check
@@ -103,7 +106,8 @@ use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOO
 use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
-                            STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT
+                            STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
+                            FILL_SOLID
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
@@ -195,6 +199,7 @@ type :: script_object
       procedure, pass(self), private :: load_data     !< Load a data file or a datablock.
       procedure, pass(self), private :: set_time_data !< `set xdata time`, `set xdata`.
       procedure, pass(self), private :: range_value   !< Value of a range end.
+      procedure, pass(self), private :: annotation_option !< `set label`, `set arrow`, `set object`.
       procedure, pass(self), private :: call_command  !< `load`, `call`.
       procedure, pass(self), private :: expand_macros !< `@name` substitution.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
@@ -3968,6 +3973,534 @@ contains
    enddo
    endsubroutine expand_macros
 
+   subroutine annotation_option(self, tokens, iostat, iomsg)
+   !< `set label [N] ["text"] [at POS] [left|center|right] [norotate|rotate [by A]] [front|back] [tc COLOR] [point
+   !< [pt N] [ps S] [lc C]|nopoint] [offset X,Y] [font F] [noenhanced]`,
+   !< `set arrow [N] [from POS to|rto POS] [nohead|head|backhead|heads] [size [SYS] L,A[,B]] [filled|empty|nofilled|
+   !< noborder] [front|back] [lc C] [lt N] [lw W] [dt N]`,
+   !< `set object [N] rectangle [from POS to|rto POS|center|at POS size W,H] | circle [at|center POS] size R [arc
+   !< [A:B]] | ellipse [at|center POS] size W,H [angle A] | polygon from POS to POS ... [front|back|behind] [clip|noclip]
+   !< [fc|fillcolor COLOR] [fs FILL] [lw W] [dt N] [default]`; `set label|arrow|object N ...` without a position changes
+   !< tag N (gnuplot's). A position is `[SYS] x, [SYS] y`, SYS among first (default), second, graph, screen, the
+   !< system of x also y's unless given; each coordinate an expression, or a time string on a time axis.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Option tokens (the option first).
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: option    !< `label`, `arrow` or `object`.
+   character(len=:), allocatable                :: word      !< Current word.
+   character(len=:), allocatable                :: text      !< String.
+   type(label_object)                           :: label     !< Label.
+   type(arrow_object)                           :: arrow     !< Arrow.
+   type(shape_object)                           :: object    !< Object.
+   type(place_object)                           :: p         !< A position.
+   type(line_style_object)                      :: line      !< Line properties read.
+   integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: tag       !< Tag.
+   integer(I4P)                                 :: k         !< Counter.
+   logical                                      :: found     !< The tag exists.
+   logical                                      :: placed    !< A position given.
+   logical                                      :: kind_set  !< An object kind given.
+   real(R8P)                                    :: v         !< A number.
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (keyword(tokens(1)%text, 'label', 3_I4P)) then
+      option = 'label'
+   elseif (keyword(tokens(1)%text, 'arrow', 3_I4P)) then
+      option = 'arrow'
+   else
+      option = 'object'
+   endif
+   i = 2_I4P
+   tag = 0_I4P
+   ! a tag: a number (or an expression) before anything else
+   if (i <= size(tokens, kind=I4P)) then
+      if (tokens(i)%kind == TOKEN_WORD .and. .not. is_annotation_word(tokens(i)%text)) then
+         call self%symbols%value_of(tokens(i)%text, v, found)
+         if (to_number(tokens(i)%text, v) .or. scan(tokens(i)%text(1:1), '0123456789(') > 0 .or. found) then
+            k = i - 1_I4P
+            if (.not. next_integer(tokens, k, tag, iostat, iomsg, self%symbols)) return
+            if (tag < 1_I4P) then
+               call fail('set '//option//': the tag must be positive', iostat, iomsg)
+               return
+            endif
+            i = k + 1_I4P
+         endif
+      endif
+   endif
+   ! an existing tag is modified (gnuplot): start from it
+   found = .false.
+   associate(panel => self%figure%panels(self%figure%current))
+      select case (option)
+      case ('label')
+         if (allocated(panel%notes) .and. tag > 0_I4P) then
+            do k = 1_I4P, size(panel%notes, kind=I4P)
+               if (panel%notes(k)%tag == tag) then
+                  label = panel%notes(k)
+                  found = .true.
+               endif
+            enddo
+         endif
+      case ('arrow')
+         if (allocated(panel%arrows) .and. tag > 0_I4P) then
+            do k = 1_I4P, size(panel%arrows, kind=I4P)
+               if (panel%arrows(k)%tag == tag) then
+                  arrow = panel%arrows(k)
+                  found = .true.
+               endif
+            enddo
+         endif
+      case default
+         if (allocated(panel%objects) .and. tag > 0_I4P) then
+            do k = 1_I4P, size(panel%objects, kind=I4P)
+               if (panel%objects(k)%tag == tag) then
+                  object = panel%objects(k)
+                  found = .true.
+               endif
+            enddo
+         endif
+      endselect
+   endassociate
+   if (.not. found) then
+      label%text = ''
+      label%color = ''
+      arrow%color = ''
+      arrow%dashes = ''
+      object%kind = 'rectangle'
+      call default_object(object)
+   endif
+   label%tag = tag
+   arrow%tag = tag
+   object%tag = tag
+   placed = found
+   kind_set = found
+   select case (option)
+   case ('label')
+      call label_words
+   case ('arrow')
+      call arrow_words
+   case default
+      call object_words
+   endselect
+   if (iostat /= 0_I4P) return
+   select case (option)
+   case ('label')
+      call self%figure%add_label(label)
+   case ('arrow')
+      if (.not. placed) then
+         call fail('set arrow: from POS to|rto POS expected', iostat, iomsg)
+         return
+      endif
+      call self%figure%add_arrow(arrow)
+   case default
+      if (.not. allocated(object%points)) then
+         call fail('set object: a rectangle, circle, ellipse or polygon with its position expected', iostat, iomsg)
+         return
+      endif
+      call self%figure%add_object(object)
+   endselect
+   contains
+      pure function is_annotation_word(w) result(yes)
+      !< Whether `w` is an option word of the annotations (not a tag).
+      character(len=*), intent(in) :: w   !< Word.
+      logical                      :: yes !< An option word.
+
+      yes = is_word(w, 'at from to rto left center centre right rotate norotate front back behind tc textcolor '// &
+                    'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
+                    'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
+                    'backhead heads filled empty nofilled noborder clip noclip default units boxed')
+      endfunction is_annotation_word
+
+      subroutine position(q)
+      !< A position `[SYS] x, [SYS] y` from token `i` (left on its last token).
+      type(place_object), intent(out) :: q !< Position.
+
+      q = place_object()
+      call coordinate(q%x, q%sx)
+      if (iostat /= 0_I4P) return
+      q%sy = q%sx
+      if (i >= size(tokens, kind=I4P)) then
+         call fail('set '//option//': a position is "x, y"', iostat, iomsg)
+         return
+      endif
+      if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+         call fail('set '//option//': a position is "x, y", found "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+         return
+      endif
+      i = i + 1_I4P
+      call coordinate(q%y, q%sy)
+      endsubroutine position
+
+      subroutine coordinate(value, system)
+      !< One coordinate `[SYS] value` after token `i`, `i` left on its value.
+      real(R8P),        intent(out)   :: value  !< Value.
+      character(len=6), intent(inout) :: system !< Its system (kept if not given).
+      character(len=:), allocatable   :: written !< Value as written.
+
+      value = 0.0_R8P
+      i = i + 1_I4P
+      if (i > size(tokens, kind=I4P)) then
+         call fail('set '//option//': a coordinate is missing', iostat, iomsg)
+         return
+      endif
+      if (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'first second graph screen character')) then
+         if (tokens(i)%text == 'character') then
+            call fail('set '//option//': character coordinates are not supported (first, second, graph, screen)', &
+                      iostat, iomsg)
+            return
+         endif
+         system = tokens(i)%text
+         i = i + 1_I4P
+         if (i > size(tokens, kind=I4P)) then
+            call fail('set '//option//': a coordinate is missing after '//trim(system), iostat, iomsg)
+            return
+         endif
+      endif
+      written = tokens(i)%text
+      if (tokens(i)%kind == TOKEN_STRING) written = '"'//written//'"'
+      call self%range_value(written, value, iostat, iomsg)
+      if (iostat /= 0_I4P) iomsg = 'set '//option//': '//iomsg
+      endsubroutine coordinate
+
+      subroutine pair(values, system)
+      !< Two numbers `[SYS] a, b` after token `i` (an object size, an arrow head size), `i` left on the last.
+      real(R8P),        intent(out)   :: values(2) !< Numbers.
+      character(len=6), intent(inout) :: system    !< System of the first.
+      character(len=6)                :: second    !< System of the second (ignored).
+
+      call coordinate(values(1), system)
+      if (iostat /= 0_I4P) return
+      values(2) = 0.0_R8P
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+            i = i + 1_I4P
+            second = system
+            call coordinate(values(2), second)
+         endif
+      endif
+      endsubroutine pair
+
+      subroutine label_words
+      !< The words of `set label`.
+      do while (i <= size(tokens, kind=I4P))
+         word = tokens(i)%text
+         if (tokens(i)%kind == TOKEN_STRING .or. (tokens(i)%kind == TOKEN_WORD .and. .not. is_annotation_word(word))) &
+            then
+            if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+               iomsg = 'set label: '//iomsg
+               return
+            endif
+            label%text = text
+         elseif (word == 'at') then
+            call position(label%at)
+         elseif (is_word(word, 'left center centre right')) then
+            label%justify = word
+            if (word == 'centre') label%justify = 'center'
+         elseif (word == 'norotate') then
+            label%rotate = 0.0_R8P
+         elseif (word == 'rotate') then
+            label%rotate = 90.0_R8P
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'by') then
+                  i = i + 1_I4P
+                  if (.not. next_real(tokens, i, label%rotate, iostat, iomsg, self%symbols)) return
+               endif
+            endif
+         elseif (word == 'front' .or. word == 'back') then
+            label%front = word == 'front'
+         elseif (word == 'tc' .or. keyword(word, 'textcolor', 5_I4P)) then
+            call color_words(label%color)
+         elseif (word == 'point') then
+            label%point = .true.
+            do while (i < size(tokens, kind=I4P))
+               if (.not. is_line_option(tokens(i + 1_I4P)%text)) exit
+               i = i + 1_I4P
+               if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)% &
+                                     linecolors, self%symbols)) return
+            enddo
+            if (allocated(line%pt)) label%pt = line%pt
+            if (allocated(line%ps)) label%ps = line%ps
+         elseif (word == 'nopoint') then
+            label%point = .false.
+         elseif (word == 'offset') then
+            block
+               character(len=6) :: system !< Offset system (characters only).
+
+               system = 'first'
+               call pair(label%offset, system)
+            endblock
+         elseif (word == 'font') then
+            ! the font is the page's: the name is read and ignored
+            i = i + 1_I4P
+         elseif (is_word(word, 'noenhanced enhanced')) then
+            continue
+         else
+            call fail('set label: unsupported option "'//word//'"', iostat, iomsg)
+            return
+         endif
+         if (iostat /= 0_I4P) return
+         i = i + 1_I4P
+      enddo
+      endsubroutine label_words
+
+      subroutine arrow_words
+      !< The words of `set arrow`.
+      real(R8P) :: size2(2) !< Head length and angle.
+
+      do while (i <= size(tokens, kind=I4P))
+         word = tokens(i)%text
+         if (word == 'from') then
+            call position(arrow%from)
+            placed = .true.
+         elseif (word == 'to' .or. word == 'rto') then
+            call position(arrow%to)
+            arrow%relative = word == 'rto'
+         elseif (is_word(word, 'nohead head backhead heads')) then
+            arrow%head = merge(0_I4P, merge(1_I4P, merge(2_I4P, 3_I4P, word == 'backhead'), word == 'head'), &
+                               word == 'nohead')
+         elseif (word == 'size') then
+            arrow%length_system = 'first'
+            call pair(size2, arrow%length_system)
+            arrow%length = size2(1)
+            if (size2(2) /= 0.0_R8P) arrow%angle = size2(2)
+            ! a back angle is read and ignored
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) i = i + 2_I4P
+            endif
+         elseif (is_word(word, 'filled empty nofilled noborder')) then
+            arrow%fill = word
+         elseif (word == 'front' .or. word == 'back') then
+            arrow%front = word == 'front'
+         elseif (is_line_option(word)) then
+            if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
+                                  self%symbols)) return
+            if (allocated(line%lc)) arrow%color = line%lc
+            if (allocated(line%lw)) arrow%lw = line%lw
+            if (allocated(line%dt)) then
+               block
+                  type(style_object) :: dashes !< Line of the dash type.
+
+                  dashes%dashtype = line%dt
+                  dashes%linewidth = arrow%lw
+                  arrow%dashes = dashes%dasharray()
+               endblock
+            endif
+         elseif (word == 'fixed') then
+            continue
+         else
+            call fail('set arrow: unsupported option "'//word//'"', iostat, iomsg)
+            return
+         endif
+         if (iostat /= 0_I4P) return
+         i = i + 1_I4P
+      enddo
+      endsubroutine arrow_words
+
+      subroutine object_words
+      !< The words of `set object`.
+      real(R8P)                     :: size2(2) !< Width and height.
+      character(len=6)              :: system   !< System of a size.
+      character(len=:), allocatable :: bad      !< Unknown fill word.
+      character(len=:), allocatable :: fill     !< Fill words.
+      type(place_object)            :: corner   !< A corner.
+      type(place_object)            :: vertices(1) !< A vertex to push.
+
+      do while (i <= size(tokens, kind=I4P))
+         word = tokens(i)%text
+         if (keyword(word, 'rectangle', 4_I4P) .or. is_word(word, 'circle ellipse polygon')) then
+            if (keyword(word, 'rectangle', 4_I4P)) word = 'rectangle'
+            if (kind_set .and. trim(object%kind) /= word) then
+               ! another kind: a new object of that kind, its style the default
+               object%kind = word
+               call default_object(object)
+               if (allocated(object%points)) deallocate(object%points)
+            endif
+            object%kind = word
+            call default_object_style(object)
+            kind_set = .true.
+         elseif (word == 'from') then
+            call position(p)
+            if (iostat /= 0_I4P) return
+            if (allocated(object%points)) deallocate(object%points)
+            allocate(object%points(1))
+            object%points(1) = p
+            object%sized = .false.
+         elseif (word == 'to' .or. word == 'rto') then
+            if (.not. allocated(object%points)) then
+               call fail('set object: to needs a from first', iostat, iomsg)
+               return
+            endif
+            call position(p)
+            if (iostat /= 0_I4P) return
+            if (word == 'rto') then
+               corner = object%points(size(object%points))
+               p%x = corner%x + p%x
+               p%y = corner%y + p%y
+               p%sx = corner%sx
+               p%sy = corner%sy
+            endif
+            vertices(1) = p
+            object%points = [object%points, vertices]
+         elseif (word == 'at' .or. word == 'center' .or. word == 'centre') then
+            call position(p)
+            if (iostat /= 0_I4P) return
+            if (allocated(object%points)) deallocate(object%points)
+            allocate(object%points(1))
+            object%points(1) = p
+            if (trim(object%kind) == 'rectangle') object%sized = .true.
+         elseif (word == 'size') then
+            system = 'first'
+            if (allocated(object%points)) system = object%points(1)%sx
+            call pair(size2, system)
+            if (iostat /= 0_I4P) return
+            object%size%x = size2(1)
+            object%size%y = size2(2)
+            object%size%sx = system
+            object%size%sy = system
+            if (allocated(object%points)) object%size%sy = object%points(1)%sy
+            if (trim(object%kind) == 'rectangle') object%sized = .true.
+         elseif (word == 'arc') then
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set object: arc [A:B] expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind /= TOKEN_RANGE .or. index(tokens(i)%text, ':') == 0) then
+               call fail('set object: arc [A:B] expected', iostat, iomsg)
+               return
+            endif
+            k = index(tokens(i)%text, ':', kind=I4P)
+            call self%range_value(trim(adjustl(tokens(i)%text(1:k - 1_I4P))), object%arc(1), iostat, iomsg)
+            if (iostat == 0_I4P) call self%range_value(trim(adjustl(tokens(i)%text(k + 1_I4P:))), object%arc(2), iostat, &
+                                                       iomsg)
+         elseif (word == 'angle') then
+            if (.not. next_real(tokens, i, object%angle, iostat, iomsg, self%symbols)) return
+         elseif (word == 'units') then
+            i = i + 1_I4P
+            if (i <= size(tokens, kind=I4P)) then
+               if (tokens(i)%text /= 'xy') then
+                  call fail('set object: units xy only', iostat, iomsg)
+                  return
+               endif
+            endif
+         elseif (is_word(word, 'wedge nowedge')) then
+            continue
+         elseif (is_word(word, 'front back behind')) then
+            object%layer = word
+         elseif (word == 'clip' .or. word == 'noclip') then
+            object%clip = word == 'clip'
+         elseif (word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) then
+            block
+               character(len=:), allocatable :: color !< Fill color.
+
+               call color_words(color)
+               if (iostat /= 0_I4P) return
+               if (color == 'bgnd') color = 'white'
+               object%style%color = color
+               if (trim(object%kind) /= 'rectangle' .and. allocated(object%style%border_color)) &
+                  deallocate(object%style%border_color)
+            endblock
+         elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
+            fill = ''
+            do while (i < size(tokens, kind=I4P))
+               if (is_annotation_word(tokens(i + 1_I4P)%text) .and. .not. is_word(tokens(i + 1_I4P)%text, &
+                   'empty noborder')) exit
+               i = i + 1_I4P
+               fill = fill//' '//tokens(i)%text
+            enddo
+            call fill_style(fill, object%style, bad)
+            if (len(bad) > 0) then
+               call fail('set object: unsupported fill style "'//bad//'"', iostat, iomsg)
+               return
+            endif
+         elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
+            if (.not. next_real(tokens, i, object%style%linewidth, iostat, iomsg, self%symbols)) return
+         elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
+            ! the border of an object is solid: the dash type is read and ignored
+            if (.not. next_integer(tokens, i, k, iostat, iomsg, self%symbols)) return
+         elseif (word == 'default') then
+            call default_object_style(object)
+         else
+            call fail('set object: unsupported option "'//word//'"', iostat, iomsg)
+            return
+         endif
+         if (iostat /= 0_I4P) return
+         i = i + 1_I4P
+      enddo
+      if (.not. allocated(object%points)) return
+      select case (trim(object%kind))
+      case ('rectangle')
+         if (.not. object%sized .and. size(object%points) /= 2) then
+            call fail('set object: a rectangle is from POS to POS, or at POS size W,H', iostat, iomsg)
+         endif
+      case ('circle')
+         if (object%size%x <= 0.0_R8P) object%size%x = 1.0_R8P
+      case ('polygon')
+         if (size(object%points) < 3) call fail('set object: a polygon has 3 vertices at least', iostat, iomsg)
+      endselect
+      endsubroutine object_words
+
+      subroutine color_words(color)
+      !< A color after `tc`, `fc` (token `i`): `rgb "color"`, `"color"`, `lt N`, `N`, `bgnd`, `black`; `i` left on its
+      !< last token.
+      character(len=:), allocatable, intent(out) :: color !< Color.
+      type(token_object), allocatable            :: copy(:) !< Tokens with `lc` for the color word.
+      type(line_style_object)                    :: probe   !< Color read.
+
+      color = ''
+      if (i >= size(tokens, kind=I4P)) then
+         call fail('set '//option//': '//tokens(i)%text//' needs a color', iostat, iomsg)
+         return
+      endif
+      if (is_word(tokens(i + 1_I4P)%text, 'bgnd black')) then
+         i = i + 1_I4P
+         color = merge('white', 'black', tokens(i)%text == 'bgnd')
+         return
+      endif
+      if (keyword(tokens(i + 1_I4P)%text, 'linetype', 5_I4P) .or. tokens(i + 1_I4P)%text == 'lt') i = i + 1_I4P
+      copy = tokens
+      if (.not. (copy(i)%text == 'lt' .or. keyword(copy(i)%text, 'linetype', 5_I4P))) copy(i)%text = 'lc'
+      if (.not. line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
+                            self%symbols)) return
+      if (allocated(probe%lc)) color = probe%lc
+      if (index(color, '*') == 1) then
+         call fail('set '//option//': variable and palette colors do not apply', iostat, iomsg)
+         return
+      endif
+      endsubroutine color_words
+
+      subroutine default_object(shape)
+      !< gnuplot's default object: no points, its kind's style.
+      type(shape_object), intent(inout) :: shape !< Object.
+
+      shape%sized = .false.
+      shape%angle = 0.0_R8P
+      shape%arc = [0.0_R8P, 360.0_R8P]
+      shape%size = place_object()
+      shape%layer = 'back'
+      shape%clip = .true.
+      call default_object_style(shape)
+      endsubroutine default_object
+
+      subroutine default_object_style(shape)
+      !< gnuplot's default style of an object: a rectangle filled with the page color, bordered black; the others empty,
+      !< black.
+      type(shape_object), intent(inout) :: shape !< Object.
+
+      shape%style = style_object()
+      shape%style%border = .true.
+      if (trim(shape%kind) == 'rectangle') then
+         shape%style%fill = FILL_SOLID
+         shape%style%density = 1.0_R8P
+         shape%style%color = 'white'
+         shape%style%border_color = 'black'
+      else
+         shape%style%color = 'black'
+      endif
+      endsubroutine default_object_style
+   endsubroutine annotation_option
+
    subroutine range_value(self, text, v, iostat, iomsg)
    !< Value of a range end: a number, a constant expression (`2*pi`, user variables), or a string: a time read with the
    !< timefmt (`set xrange ["2024-03-01":"2024-03-02"]` on a time axis).
@@ -4117,6 +4650,9 @@ contains
    elseif (keyword(option, 'x2label', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_x2label(text)
+   elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
+      then
+      call self%annotation_option(tokens, iostat, iomsg)
    elseif (is_word(option, 'xdata ydata y2data x2data xda yda y2da x2da xdat ydat y2dat x2dat')) then
       ! `set xdata time`: the x data are times read with the timefmt, the axis ticked and labelled as times
       if (size(tokens) > 2) then
@@ -6035,7 +6571,11 @@ contains
       self%comments = '#'
       return
    endif
-   if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+   ! labels, arrows, objects take a tag (handled below)
+   if (.not. (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. &
+              keyword(option, 'object', 3_I4P))) then
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+   endif
    if (keyword(option, 'multiplot', 5_I4P)) then
       if (self%multiplot .and. self%output == '-') then
          call self%save_output(iostat, iomsg)
@@ -6083,6 +6623,41 @@ contains
       call self%figure%set_cblabel('')
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call self%figure%set_boxwidth()
+   elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
+      then
+      ! unset label|arrow|object [N]
+      block
+         integer(I4P) :: n !< Tag.
+         integer(I4P) :: j !< Token counter.
+
+         if (size(tokens) > 2) then
+            call fail('unset '//option//': a tag or nothing expected', iostat, iomsg)
+            return
+         endif
+         if (size(tokens) == 2) then
+            j = 1_I4P
+            if (.not. next_integer(tokens, j, n, iostat, iomsg, self%symbols)) return
+         endif
+         if (keyword(option, 'label', 3_I4P)) then
+            if (size(tokens) == 2) then
+               call self%figure%unset_label(n)
+            else
+               call self%figure%unset_label()
+            endif
+         elseif (keyword(option, 'arrow', 3_I4P)) then
+            if (size(tokens) == 2) then
+               call self%figure%unset_arrow(n)
+            else
+               call self%figure%unset_arrow()
+            endif
+         else
+            if (size(tokens) == 2) then
+               call self%figure%unset_object(n)
+            else
+               call self%figure%unset_object()
+            endif
+         endif
+      endblock
    elseif (is_word(option, 'xdata ydata y2data x2data xda yda y2da x2da xdat ydat y2dat x2dat')) then
       call self%set_time_data(option, .false.)
    elseif (keyword(option, 'timefmt', 5_I4P)) then

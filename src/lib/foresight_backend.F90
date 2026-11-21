@@ -201,7 +201,7 @@ abstract interface
    real(R8P),             intent(in), optional :: line_width !< Marker line width [px].
    endsubroutine dots_interface
 
-   subroutine text_interface(self, x, y, string, anchor, sup, rotate)
+   subroutine text_interface(self, x, y, string, anchor, sup, rotate, color)
    !< Text whose baseline passes through the anchor point (`x`, `y`) [px].
    import :: backend_object, R8P
    class(backend_object), intent(inout)        :: self   !< Device.
@@ -211,6 +211,7 @@ abstract interface
    character(len=*),      intent(in)           :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
    character(len=*),      intent(in), optional :: sup    !< Superscript appended to `string`.
    real(R8P),             intent(in), optional :: rotate !< Rotation about the anchor point [deg, clockwise].
+   character(len=*),      intent(in), optional :: color  !< Text color, the frame's if absent.
    endsubroutine text_interface
 
    pure function text_width_interface(self, string, sup, font_size) result(width)

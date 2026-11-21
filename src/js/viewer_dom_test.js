@@ -8,7 +8,8 @@
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
 // with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
 // second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
-// time labels redrawn by a zoom. The page is parsed
+// time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed. The
+// page is parsed
 // by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
 // client coordinates.
@@ -271,6 +272,19 @@ check("a zoom redraws time labels", xticks.innerHTML !== xHome && zoomed.length 
   xticks.querySelectorAll("tspan").length === zoomed.length);
 key("a");
 check("autoscale restores the time labels", xticks.innerHTML === xHome);
+
+// labels and arrows at data coordinates: hidden while zoomed, shown again at home; the others kept
+page = strip(path.join(__dirname, "..", "tests", "goldens", "annotations.html"));
+p = load("");
+var anchoredGroups = panel(0).querySelectorAll(".fs-anchored");
+var pageGroups = panel(0).querySelectorAll(".fs-annotations");
+wheel(0);
+check("a zoom hides the annotations at data coordinates", anchoredGroups.length > 0 &&
+  Array.prototype.every.call(anchoredGroups, function (g) { return g.getAttribute("display") === "none"; }) &&
+  Array.prototype.every.call(pageGroups, function (g) { return g.getAttribute("display") !== "none"; }));
+key("a");
+check("autoscale shows them again",
+  Array.prototype.every.call(anchoredGroups, function (g) { return g.getAttribute("display") === "inline"; }));
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

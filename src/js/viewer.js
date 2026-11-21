@@ -908,8 +908,10 @@
     // theta labels page geometry, hidden while zoomed
     this.polarGrid = group.querySelector(".fs-pgrid");
     this.polarLabels = group.querySelector(".fs-polar");
-    // titles of the histogram groups under the x axis: page geometry, hidden while zoomed
+    // titles of the histogram groups under the x axis: page geometry, hidden while zoomed; so
+    // are the labels and arrows placed at data coordinates (set label, set arrow)
     this.groupTitles = group.querySelector(".fs-groups");
+    this.anchored = Array.prototype.slice.call(group.querySelectorAll(".fs-anchored"));
     this.xticks = group.querySelector(".fs-xticks");
     this.yticks = group.querySelector(".fs-yticks");
     this.y2ticks = group.querySelector(".fs-y2ticks");
@@ -1057,6 +1059,8 @@
     if (this.groupTitles) {
       this.groupTitles.setAttribute("display", this.isHome() ? "inline" : "none");
     }
+    var home = this.isHome();
+    this.anchored.forEach(function (g) { g.setAttribute("display", home ? "inline" : "none"); });
     if (this.polarLabels) {
       this.polarLabels.setAttribute("display", this.isHome() ? "inline" : "none");
     }
