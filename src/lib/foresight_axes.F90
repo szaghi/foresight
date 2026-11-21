@@ -176,6 +176,8 @@ type :: axes_object
    logical                          :: colorbox = .true. !< Draw the color box of the images.
    type(colorbox_object)            :: cbox              !< Color box placement and look, `set colorbox`.
    real(R8P)                        :: canvas(2) = 0.0_R8P !< Page width and height being rendered [px].
+   real(R8P)                        :: x2_rise = 0.0_R8P   !< Height of the rotated x2 tick labels above their gap [px],
+                                                           !< 0 if not rotated (set by `render` from the text widths).
    logical                          :: readout = .true. !< Draw the readouts.
    character(len=6)                 :: readout_h = 'left' !< Readout block horizontal position: left, center, right.
    character(len=6)                 :: readout_v = 'top'  !< Readout block vertical position: top, center, bottom.
@@ -1229,8 +1231,10 @@ contains
       area = [bx + 6.0_R8P * font_size, bx + bw - 2.0_R8P * font_size, &
               by + 2.0_R8P * font_size + above, by + bh - 4.0_R8P * font_size]
       call self%setup_axes(area, raw)
+      self%x2_rise = x2labels_rise(self, backend, font_size)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
       call self%setup_axes(area, raw)
+      self%x2_rise = x2labels_rise(self, backend, font_size)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
    ! the series colored by the palette, over the color axis just set up
@@ -1397,6 +1401,95 @@ contains
    enddo
    endfunction rotated_extent
 
+   pure function rotated_rise(width, angle, anchor, font_size) result(rise)
+   !< Lowest and highest page ordinates [px, downward] from its anchor of a tick label `width` [px] wide rotated by
+   !< `angle` [deg, counterclockwise] with `anchor` (`start`, `end`, `middle`): the glyphs from 0.25 font sizes below
+   !< the baseline to 0.75 above, as `rotated_extent`.
+   real(R8P),        intent(in) :: width     !< Label width [px].
+   real(R8P),        intent(in) :: angle     !< Label angle [deg].
+   character(len=*), intent(in) :: anchor    !< `start`, `end` or `middle`.
+   real(R8P),        intent(in) :: font_size !< Font size [px].
+   real(R8P)                    :: rise(2)   !< Lowest (largest) and highest (smallest) ordinate [px].
+   real(R8P)                    :: s(2)      !< Baseline ends from the anchor [px].
+   real(R8P)                    :: t(2)      !< Glyph bottom and top from the baseline [px].
+   real(R8P)                    :: y         !< Corner ordinate [px].
+   integer(I4P)                 :: i         !< Baseline end counter.
+   integer(I4P)                 :: j         !< Glyph side counter.
+
+   select case (trim(anchor))
+   case ('end')
+      s = [-width, 0.0_R8P]
+   case ('middle')
+      s = [-0.5_R8P * width, 0.5_R8P * width]
+   case default
+      s = [0.0_R8P, width]
+   endselect
+   t = [-0.25_R8P * font_size, 0.75_R8P * font_size]
+   rise = [-huge(1.0_R8P), huge(1.0_R8P)]
+   do i = 1_I4P, 2_I4P
+      do j = 1_I4P, 2_I4P
+         ! the text runs along (cos, -sin) on the page, its glyphs rise along (-sin, -cos)
+         y = -s(i) * sin(angle * PI_R8 / 180.0_R8P) - t(j) * cos(angle * PI_R8 / 180.0_R8P)
+         rise = [max(rise(1), y), min(rise(2), y)]
+      enddo
+   enddo
+   endfunction rotated_rise
+
+   pure function rotated_reach(width, angle, anchor, font_size) result(reach)
+   !< Reach right of its tick [px] of an x2 tick label `width` [px] wide rotated by `angle` [deg] with `anchor`, drawn
+   !< 0.35 font sizes times the sine of the angle right of the tick (see `draw_frame`).
+   real(R8P),        intent(in) :: width     !< Label width [px].
+   real(R8P),        intent(in) :: angle     !< Label angle [deg].
+   character(len=*), intent(in) :: anchor    !< `start`, `end` or `middle`.
+   real(R8P),        intent(in) :: font_size !< Font size [px].
+   real(R8P)                    :: reach     !< Reach [px].
+   real(R8P)                    :: s(2)      !< Baseline ends from the anchor [px].
+   real(R8P)                    :: t(2)      !< Glyph bottom and top from the baseline [px].
+   real(R8P)                    :: c         !< Cosine.
+   real(R8P)                    :: n         !< Sine.
+   integer(I4P)                 :: i         !< Counter.
+   integer(I4P)                 :: j         !< Counter.
+
+   select case (trim(anchor))
+   case ('end')
+      s = [-width, 0.0_R8P]
+   case ('middle')
+      s = [-0.5_R8P * width, 0.5_R8P * width]
+   case default
+      s = [0.0_R8P, width]
+   endselect
+   t = [-0.25_R8P * font_size, 0.75_R8P * font_size]
+   c = cos(angle * PI_R8 / 180.0_R8P)
+   n = sin(angle * PI_R8 / 180.0_R8P)
+   reach = 0.0_R8P
+   do i = 1_I4P, 2_I4P
+      do j = 1_I4P, 2_I4P
+         reach = max(reach, 0.35_R8P * font_size * n + s(i) * c - t(j) * n)
+      enddo
+   enddo
+   endfunction rotated_reach
+
+   pure function x2labels_rise(self, backend, font_size) result(height)
+   !< Height [px] of the rotated x2 tick labels, the largest over the major ticks (see `rotated_rise`); 0 if they are
+   !< not rotated, or the device writes text horizontally.
+   class(axes_object),    intent(in) :: self      !< Panel.
+   class(backend_object), intent(in) :: backend   !< Output device, for text widths.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: height    !< Height [px].
+   real(R8P)                         :: r(2)      !< Rise of a label [px].
+   integer(I4P)                      :: t         !< Tick counter.
+
+   height = 0.0_R8P
+   if (.not. (self%x2_active .and. backend%rotates_text() .and. self%x2axis%tics%rotate /= 0.0_R8P)) return
+   if (.not. allocated(self%x2axis%ticks)) return
+   do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
+      if (.not. self%x2axis%ticks(t)%major) cycle
+      r = rotated_rise(backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size), &
+                       self%x2axis%tics%rotate, self%x2axis%tics%anchor(), font_size)
+      height = max(height, r(1) - r(2))
+   enddo
+   endfunction x2labels_rise
+
    pure function x2_room(self, font_size) result(room)
    !< Room above the top border of the second x axis [px]: its outward ticks, its tick labels row and its label.
    class(axes_object), intent(in) :: self      !< Panel.
@@ -1406,7 +1499,8 @@ contains
    room = 0.0_R8P
    if (self%x2_active) then
       if (self%x2axis%tics%out .and. size(self%x2axis%ticks) > 0) room = TICK_MAJOR
-      if (any(self%x2axis%ticks%major)) room = room + GAP + LINE_HEIGHT * font_size
+      if (any(self%x2axis%ticks%major)) room = room + GAP + merge(self%x2_rise, LINE_HEIGHT * font_size, &
+                                                                   self%x2_rise > 0.0_R8P)
    endif
    if (self%x2axis%has_label()) room = room + LINE_HEIGHT * font_size + GAP
    endfunction x2_room
@@ -1444,6 +1538,8 @@ contains
    real(R8P)                            :: shift     !< x labels moved down by outward ticks [px].
    real(R8P)                            :: depth     !< Room of the x tick labels below the border [px].
    real(R8P)                            :: label_y   !< Baseline of the x2 label [px].
+   real(R8P)                            :: rise(2)   !< Lowest and highest page ordinates of a rotated x2 label from its
+                                                     !< anchor [px].
    real(R8P)                            :: title_y   !< Baseline of the title [px].
    real(R8P)                            :: ax        !< Label anchor abscissa [px].
    real(R8P)                            :: ay        !< Label anchor ordinate [px].
@@ -1541,10 +1637,19 @@ contains
                if (self%x2axis%tics%mirror) &
                   call backend%polyline([p, p], [bottom, bottom - length], FRAME_COLOR, 1.0_R8P, '')
             endif
-            if (self%x2axis%ticks(t)%major) call backend%text(p, top - merge(TICK_MAJOR, 0.0_R8P, &
-                                                              self%x2axis%tics%out) - GAP - 0.25_R8P * font_size, &
-                                                              self%x2axis%ticks(t)%label, 'middle', &
-                                                              sup=self%x2axis%ticks(t)%sup)
+            if (.not. self%x2axis%ticks(t)%major) cycle
+            if (self%x2_rise > 0.0_R8P) then
+               ! rotated: centred on the tick, the lowest glyph GAP above the border (or the outward ticks)
+               rise = rotated_rise(backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size), &
+                                   self%x2axis%tics%rotate, self%x2axis%tics%anchor(), font_size)
+               call backend%text(p + 0.35_R8P * font_size * sin(self%x2axis%tics%rotate * PI_R8 / 180.0_R8P), &
+                                 top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - rise(1), &
+                                 self%x2axis%ticks(t)%label, trim(self%x2axis%tics%anchor()), &
+                                 sup=self%x2axis%ticks(t)%sup, rotate=-self%x2axis%tics%rotate)
+            else
+               call backend%text(p, top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - 0.25_R8P * font_size, &
+                                 self%x2axis%ticks(t)%label, 'middle', sup=self%x2axis%ticks(t)%sup)
+            endif
          enddo
          call backend%end_group
       endif
@@ -4156,11 +4261,18 @@ contains
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
    margins(3) = margins(3) + above + self%x2_room(font_size)
-   ! the rightmost x2 tick label sticks out as the x one
+   ! the rightmost x2 tick label sticks out as the x one; rotated, by its reach right of the tick
    if (self%x2_active) then
       do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
-         if (self%x2axis%ticks(t)%major) margins(2) = max(margins(2), &
-            0.5_R8P * backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size))
+         if (.not. self%x2axis%ticks(t)%major) cycle
+         if (self%x2_rise > 0.0_R8P) then
+            margins(2) = max(margins(2), rotated_reach(backend%text_width(self%x2axis%ticks(t)%label, &
+                                                                          self%x2axis%ticks(t)%sup, font_size), &
+                                                       self%x2axis%tics%rotate, self%x2axis%tics%anchor(), font_size))
+         else
+            margins(2) = max(margins(2), &
+                             0.5_R8P * backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size))
+         endif
       enddo
    endif
    ! the row of the x tick labels only if there are labels (gnuplot: 36 px with them, 16.8 without, at 400x300)

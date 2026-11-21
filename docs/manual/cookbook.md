@@ -138,6 +138,15 @@ The top border in another unit: the x2 axis takes the `x2range` given, here the 
 number. The points are the same peaks plotted `axes x2y1`, against x2: each lands on its impulse, the check that the
 two scales agree. Without a set `x2range`, items on x2 autoscale it on their own.
 
+### Rotated labels on top
+
+<<< @/examples/snippets/cb_x2_rotate.gp{gnuplot}
+
+<Plot name="cb_x2_rotate" svg :width="560" :height="340" />
+
+Named x2 ticks read the frequency axis as periods; `rotate by 45` turns them from their tick, away from the plot,
+and the top margin grows to fit them. See [Ticks](/guide/gnuplot-subset#ticks-and-label-formats).
+
 ### The key below the plot
 
 <<< @/examples/snippets/cb_key.gp{gnuplot}

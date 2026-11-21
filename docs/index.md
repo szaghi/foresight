@@ -180,6 +180,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
+  <Plot name="cb_x2_rotate" svg :width="560" :height="340" caption="rotated labels on top" />
   <Plot name="cb_key" svg :width="560" :height="320" caption="the key below the plot" />
   <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
   <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />

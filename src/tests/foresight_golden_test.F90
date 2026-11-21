@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(90)                  !< Per-figure outcome.
+logical                     :: test_passed(91)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -115,7 +115,8 @@ test_passed(88) = check('theme_night.html', figure_identity('night'))
 ! the key point sample in the last point's color, as gnuplot (lc_palette.svg had the first's: 2026-11-21)
 test_passed(89) = check('lc_palette_keys.svg', figure_lc_palette())
 test_passed(90) = check('key_at.svg', figure_key_at())
-write(output_unit, '(A,90L2)') 'foresight golden checks:', test_passed
+test_passed(91) = check('x2_rotate.svg', figure_x2_rotate())
+write(output_unit, '(A,91L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -435,6 +436,30 @@ contains
    call fig%set_ytics(out=.true.)
    call fig%plot(X, Y, title='out', with='linespoints')
    endfunction figure_tics_rotate
+
+   function figure_x2_rotate() result(fig)
+   !< Rotated x2 tick labels (gnuplot `set x2tics rotate`): 90 degrees from the tick, and 45 with outward ticks, a
+   !< title and an x2 label above them; the right margin takes the reach of the last label.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.25_R8P * real(i, R8P), i = 0, 40)]
+   call fig%init(width=720_I4P, height=300_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_title('rotate')
+   call fig%set_x2range(0.0_R8P, 1000.0_R8P)
+   call fig%set_x2tics(step=250.0_R8P, rotate=90.0_R8P)
+   call fig%set_xtics(mirror=.false.)
+   call fig%plot(x, sin(x), title='sin')
+   call fig%next_panel()
+   call fig%set_title('rotate by 45, out')
+   call fig%set_x2label('wavelength [nm]')
+   call fig%set_x2range(0.0_R8P, 1000.0_R8P)
+   call fig%set_x2tics(step=250.0_R8P, rotate=45.0_R8P, out=.true.)
+   call fig%set_xtics(mirror=.false.)
+   call fig%plot(x, cos(x), title='cos')
+   endfunction figure_x2_rotate
 
    function figure_key_at() result(fig)
    !< The key at a position (gnuplot `set key at`): two panels, the bottom left corner of a boxed key on the data point

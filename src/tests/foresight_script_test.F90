@@ -1204,7 +1204,7 @@ call interpreter%run_text('set ytics out; set y2tics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%yaxis%tics%out .and. &
                   interpreter%figure%panels(1)%y2axis%tics%out
 call interpreter%run_text('set ytics rotate', iostat, iomsg)
-test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics only') > 0
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics and x2tics only') > 0
 call interpreter%run_text('set cbtics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'in and out are supported on xtics') > 0
 call interpreter%run_text('set xtics right', iostat, iomsg)
@@ -1340,8 +1340,18 @@ associate(panel => interpreter%figure%panels(1))
    test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. panel%x2axis%tics%out .and. &
                      panel%x2axis%tics%minor == 4_I4P .and. .not. panel%x2axis%min_fixed .and. .not. panel%x2axis%has_label()
 endassociate
+! rotated x2 labels, as gnuplot: rotate is 90 degrees from the tick (start), rotate by A too
 call interpreter%run_text('set x2tics rotate', iostat, iomsg)
-test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics only') > 0
+test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. &
+                  interpreter%figure%panels(1)%x2axis%tics%rotate == 90.0_R8P .and. &
+                  interpreter%figure%panels(1)%x2axis%tics%anchor() == 'start'
+call interpreter%run_text('set x2tics rotate by 45 right', iostat, iomsg)
+test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. &
+                  interpreter%figure%panels(1)%x2axis%tics%rotate == 45.0_R8P .and. &
+                  interpreter%figure%panels(1)%x2axis%tics%anchor() == 'end'
+call interpreter%run_text('set y2tics rotate', iostat, iomsg)
+test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. &
+                  index(iomsg, 'rotate is supported on xtics and x2tics only') > 0
 
 ! the identity themes washi and night; a default theme given to init (foresight --theme), which a script overrides
 call interpreter%init(scratch, theme='night')

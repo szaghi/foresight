@@ -1291,7 +1291,9 @@ contains
    !< `positions` is an explicit list, labelled by `labels` (as written, or a format with a conversion; the axis
    !< labels without them), `minor` marking minor ticks; `add` adds it to the ticks instead of replacing them,
    !< as gnuplot `set ytics [add] ("label" pos level, ...)`.
-   !< `out` points the ticks outward (gnuplot `out`); alone it keeps the tick positions.
+   !< `out` points the ticks outward (gnuplot `out`); `rotate` turns the labels [deg, counterclockwise] from their tick,
+   !< reading away from the plot, left-justified unless `justify` (gnuplot `rotate by A`; `rotate` is 90); alone they
+   !< keep the tick positions.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: step   !< Tick step, a factor on log axes.
    real(R8P),            intent(in), optional :: start  !< First tick.
@@ -1370,7 +1372,7 @@ contains
    call self%panels(self%current)%x2axis%set_range(min=min, max=max)
    endsubroutine set_x2range
 
-   subroutine set_x2tics(self, step, start, end, mirror, positions, labels, minor, add, out)
+   subroutine set_x2tics(self, step, start, end, mirror, positions, labels, minor, add, out, rotate, justify)
    !< Ticks and labels of the second x axis on the top border, as gnuplot `set x2tics START,STEP,END` (automatic without
    !< `step`); off by default, as in gnuplot. Without series of its own the axis spans the first x axis range.
    !< `mirror` true draws the ticks on the bottom border too. `positions` is an explicit list, labelled by `labels` (as
@@ -1387,10 +1389,12 @@ contains
    logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks (gnuplot level 1).
    logical,              intent(in), optional :: add          !< Add the list to the ticks (gnuplot `add`).
    logical,              intent(in), optional :: out          !< Ticks outward, gnuplot `out`.
+   real(R8P),            intent(in), optional :: rotate       !< Label angle [deg, counterclockwise], gnuplot `rotate by`.
+   character(len=*),     intent(in), optional :: justify      !< Rotated label justification: left, right, center.
 
    call self%ensure_panels
    call set_tics(self%panels(self%current)%x2axis%tics, 'set_x2tics', step, start, end, mirror, positions, labels, minor, &
-                 add, out=out)
+                 add, rotate=rotate, justify=justify, out=out)
    endsubroutine set_x2tics
 
    subroutine unset_logscale(self, axes)

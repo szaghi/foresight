@@ -404,7 +404,10 @@ ticks). `rotate` turns the x tick labels by 90 degrees, reading upward and right
 degrees counterclockwise, left-justified unless `left`, `right` or `center` follows; `norotate` restores them. As in
 gnuplot, the glyphs of a rotated label are centred on its tick and a left-justified one at a positive angle runs up
 into the plot: give it `right`, or a negative angle. The bottom margin grows to the labels that hang below the axis.
-Text devices write the labels upright, as gnuplot's dumb terminal.
+`set x2tics rotate` turns the x2 tick labels the same way above the plot: from their tick, reading away from it
+(`rotate` is 90 degrees, left-justified there, as gnuplot), the top margin growing to them and the right one to the
+reach of the last label. Unlike gnuplot, a negative angle keeps them above the border (gnuplot lets them run into
+the plot). Text devices write the labels upright, as gnuplot's dumb terminal.
 
 ```gnuplot
 set xtics rotate by 30 right out nomirror   # long category names, outward ticks
@@ -1002,7 +1005,7 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `rotate` of the x2 tick labels, `splot`,
+Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `splot`,
 `fit`, log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,

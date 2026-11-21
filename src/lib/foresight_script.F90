@@ -3296,8 +3296,9 @@ contains
       i = 2_I4P
       do while (i <= size(toks, kind=I4P))
          if (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['in      ', 'out     ', 'rotate  ', 'norotate'])) then
-            if (.not. keyword(option, 'xtics', 3_I4P) .and. (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
-               call fail('set '//option//': rotate is supported on xtics only', iostat, iomsg)
+            if (.not. (keyword(option, 'xtics', 3_I4P) .or. keyword(option, 'x2tics', 4_I4P)) .and. &
+                (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
+               call fail('set '//option//': rotate is supported on xtics and x2tics only', iostat, iomsg)
                return
             endif
             if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P), &
@@ -3316,9 +3317,10 @@ contains
                tics%rotate = 0.0_R8P
                tics%justify = ''
             case default
-               ! rotate: 90 degrees right-justified; rotate by ANGLE: left-justified (gnuplot)
+               ! rotate: 90 degrees, right-justified below the plot, from the tick above it; rotate by ANGLE:
+               ! left-justified (gnuplot)
                tics%rotate = 90.0_R8P
-               tics%justify = 'right'
+               tics%justify = trim(merge('     ', 'right', keyword(option, 'x2tics', 4_I4P)))
                if (i < size(toks, kind=I4P)) then
                   if (toks(i + 1_I4P)%text == 'by') then
                      if (i + 2_I4P > size(toks, kind=I4P)) then
