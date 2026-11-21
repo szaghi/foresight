@@ -9,7 +9,8 @@ module foresight_theme
 !< and `night` are the two faces of foresight's own identity, its documentation's light and dark modes: ink on warm
 !< paper with a crimson first series, and light text on a near-black red ground with a rose first series; every
 !< series color contrasts with its ground at least 3:1 (WCAG non-text contrast). Colors
-!< other than the frame, grid, page and palette ones (an `lc '#123456'` of the user) are kept.
+!< other than the frame, grid, page and palette ones (an `lc '#123456'` of the user) are kept. A new figure takes the
+!< theme of the environment variable `FORESIGHT_THEME` (an unknown name ignored) until one is set (foresight_figure).
 use penf, only : I4P, R8P
 use foresight_style, only : default_color
 

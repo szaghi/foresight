@@ -41,4 +41,5 @@ bash scripts/docs_examples.sh
 ```
 
 builds the library and the command line, compiles and runs every example, and regenerates the snippets, outputs and
-plots these pages include. The CI runs it too and fails if any of them differs from the committed one.
+plots these pages include. Every plot is drawn twice, in the washi theme for the light mode of these pages and in the
+night theme for the dark mode (`FORESIGHT_THEME`): the switch at the top of the page shows the other. The CI runs it too and fails if any of them differs from the committed one.

@@ -4,10 +4,12 @@
   <Plot name="cb_logscale" svg />  the static SVG image
   width/height are the plot page size [px] (set terminal ... size W,H), 640x380 by default. A page wider than the
   column is scaled down as a whole (CSS transform): the viewer maps the mouse through it, zoom and pan keep working.
+  Each plot exists twice, drawn in the site's two themes: <name>.<ext> in washi (light mode), <name>-dark.<ext> in
+  night (dark mode); the one shown follows the mode switch.
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { withBase } from 'vitepress'
+import { useData, withBase } from 'vitepress'
 
 const props = withDefaults(defineProps<{
   name: string
@@ -17,7 +19,9 @@ const props = withDefaults(defineProps<{
   caption?: string
 }>(), { svg: false, width: 640, height: 380, caption: '' })
 
-const src = computed(() => withBase(`/examples/${props.name}.${props.svg ? 'svg' : 'html'}`))
+const { isDark } = useData()
+const src = computed(() =>
+  withBase(`/examples/${props.name}${isDark.value ? '-dark' : ''}.${props.svg ? 'svg' : 'html'}`))
 const canvas = ref<HTMLElement | null>(null)
 const scale = ref(1)
 let observer: ResizeObserver | undefined

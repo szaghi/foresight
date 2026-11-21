@@ -36,6 +36,8 @@ foresight -e "set logscale y" -e "plot 'log.dat' u 1:3"   # foresight.html, no s
 
 `-t NAME` (`--theme NAME`) draws every plot of the run in the theme `NAME`, as `set terminal ... theme NAME` would,
 unless the script sets a theme of its own: the same scripts in the light and dark colors of a site, for instance.
+Without `-t`, the environment variable `FORESIGHT_THEME` gives the default (see
+[Output Formats](output-formats#themes)).
 
 ```bash
 foresight -t washi -o light.svg residuals.gp

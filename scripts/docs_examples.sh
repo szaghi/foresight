@@ -11,7 +11,9 @@
 #   docs/examples/snippets/    generated: each source without the markers, and <source>-<region>.<ext>, dedented
 #   docs/examples/output/      generated: <ID>.txt, "$ COMMAND" then its output (standard output and error)
 #   docs/public/examples/      generated: every plot the runs write (.svg, .html), served as /examples/<file> and
-#                              embedded live by the pages
+#                              embedded live by the pages, twice: <name>.<ext> in the washi theme and <name>-dark.<ext>
+#                              in the night one (FORESIGHT_THEME, the light and dark modes of the site; a source that
+#                              sets its own theme keeps it in both)
 #
 # The program solver runs first: it writes the logs (run.dat, run.csv) the other examples read. Then the other programs
 # and the scripts run, in the order of the files and of the lines. foresight writes byte-identical files from the same
@@ -26,6 +28,7 @@ ex=$root/docs/examples
 public=$root/docs/public/examples
 build=$root/build/docs-examples # git-ignored
 run_dir=$build/run
+dark_dir=$build/run-dark          # the same runs in the dark theme
 home=/home/user                 # how the run directory is shown
 
 fc=${FC:-gfortran}
@@ -35,7 +38,7 @@ mkdir -p "$root/build"
                fobis build --mode foresight-gnu --fc "$fc" --jobs 1) > "$root/build/docs-examples.log" 2>&1 || {
   cat "$root/build/docs-examples.log"; echo "docs_examples: library build failed" >&2; exit 1; }
 rm -rf -- "$build"
-mkdir -p "$build/bin" "$run_dir" "$ex/snippets" "$ex/output" "$public"
+mkdir -p "$build/bin" "$run_dir" "$dark_dir" "$ex/snippets" "$ex/output" "$public"
 rm -f -- "$ex"/snippets/* "$ex"/output/*.txt "$public"/*.svg "$public"/*.html "$public"/*.txt
 
 # snippets: the whole source and each region, without the markers, dedented
@@ -61,16 +64,19 @@ for src in "$ex"/src/*.f90; do
 done
 cp "$root/bin/foresight" "$build/bin/"
 
-# runs, in the run directory holding the input files and the scripts
-if [ -d "$ex/files" ]; then cp -R "$ex/files/." "$run_dir/"; fi
-cp "$ex"/src/*.gp "$run_dir/"
-run() { # run ID COMMAND
+# runs, in a run directory holding the input files and the scripts: the washi pass (its outputs are the shown ones),
+# then the night pass in its own directory (its outputs discarded)
+for dir in "$run_dir" "$dark_dir"; do
+  if [ -d "$ex/files" ]; then cp -R "$ex/files/." "$dir/"; fi
+  cp "$ex"/src/*.gp "$dir/"
+done
+run() { # run ID COMMAND, in $dir with the theme $theme, the shown output into $out
   local id=$1; shift
   {
     printf '$ %s\n' "$*"
-    (cd "$run_dir" && env -i HOME="$run_dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C \
-                     GFORTRAN_UNBUFFERED_PRECONNECTED=y bash -c "$*" 2>&1) || printf '[exit status %d]\n' "$?"
-  } | sed -e "s|$run_dir|$home|g" > "$ex/output/$id.txt"
+    (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+                 GFORTRAN_UNBUFFERED_PRECONNECTED=y bash -c "$*" 2>&1) || printf '[exit status %d]\n' "$?"
+  } | sed -e "s|$dir|$home|g" > "$out/$id.txt"
 }
 runs() { # runs SOURCE MARKER: the marked runs of SOURCE
   while IFS= read -r line; do
@@ -78,21 +84,33 @@ runs() { # runs SOURCE MARKER: the marked runs of SOURCE
     run "${line%% *}" "${line#* }"
   done < <(grep -E "^ *$2 " "$1" || true)
 }
-runs "$ex/src/solver.f90" '!run'
-for src in "$ex"/src/*.f90; do
-  [ "$(basename "$src")" = solver.f90 ] || runs "$src" '!run'
-done
-for src in "$ex"/src/*.gp; do
-  if grep -qE '^ *#run ' "$src"; then
-    runs "$src" '#run'
-  else
-    (cd "$run_dir" && env -i HOME="$run_dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C \
-                     foresight "$(basename "$src")" > /dev/null) || { echo "docs_examples: $src failed" >&2; exit 1; }
-  fi
-done
+pass() { # pass DIR THEME OUT: every run and script
+  dir=$1 theme=$2 out=$3
+  runs "$ex/src/solver.f90" '!run'
+  for src in "$ex"/src/*.f90; do
+    [ "$(basename "$src")" = solver.f90 ] || runs "$src" '!run'
+  done
+  for src in "$ex"/src/*.gp; do
+    if grep -qE '^ *#run ' "$src"; then
+      runs "$src" '#run'
+    else
+      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+                   foresight "$(basename "$src")" > /dev/null) || { echo "docs_examples: $src failed" >&2; exit 1; }
+    fi
+  done
+}
+mkdir -p "$build/output-dark"
+pass "$run_dir" washi "$ex/output"
+pass "$dark_dir" night "$build/output-dark"
 
-# plots
+# plots: the washi ones as they are, the night ones with -dark before the extension
 find "$run_dir" -maxdepth 1 \( -name '*.svg' -o -name '*.html' \) -exec cp {} "$public/" \;
-if grep -l 'exit status' "$ex"/output/*.txt; then echo "docs_examples: a run failed (see above)" >&2; exit 1; fi
+for f in "$dark_dir"/*.svg "$dark_dir"/*.html; do
+  [ -e "$f" ] || continue
+  b=$(basename "$f"); cp "$f" "$public/${b%.*}-dark.${b##*.}"
+done
+if grep -l 'exit status' "$ex"/output/*.txt "$build"/output-dark/*.txt; then
+  echo "docs_examples: a run failed (see above)" >&2; exit 1
+fi
 echo "docs_examples: $(ls "$ex"/src/*.f90 "$ex"/src/*.gp | wc -l) sources, $(ls "$ex"/output/*.txt | wc -l) shown runs," \
      "$(ls "$public" | wc -l) plots"

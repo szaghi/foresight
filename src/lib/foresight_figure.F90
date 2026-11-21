@@ -50,6 +50,7 @@ type :: figure_object
    character(len=7)               :: text_colors  = 'mono'    !< Text output colors: `mono`, `ansi`, `ansi256`,
                                                               !< `ansirgb`.
    type(theme_object)             :: theme                    !< Output theme (foresight_theme), `classic` by default.
+   logical                        :: theme_chosen = .false.   !< The theme was set: FORESIGHT_THEME no longer applies.
    integer(I4P)                   :: rows         = 1_I4P     !< Panel grid rows.
    integer(I4P)                   :: cols         = 1_I4P     !< Panel grid columns.
    integer(I4P)                   :: current      = 1_I4P     !< Current panel, filled row by row.
@@ -125,6 +126,7 @@ type :: figure_object
       procedure, pass(self) :: unset_ytics     !< gnuplot `unset ytics`.
       procedure, pass(self) :: unset_y2tics    !< gnuplot `unset y2tics`.
       procedure, pass(self) :: unset_x2tics    !< gnuplot `unset x2tics`.
+      procedure, pass(self), private :: environment_theme !< The theme of FORESIGHT_THEME, unless one was set.
       procedure, pass(self), private :: ensure_panels !< Allocate the single default panel if needed.
       procedure, pass(self), private :: render        !< Render on a device.
 endtype figure_object
@@ -232,6 +234,7 @@ contains
    self%text_charset = fresh%text_charset
    self%text_colors = fresh%text_colors
    self%theme = fresh%theme
+   self%theme_chosen = .false.
    self%rows = fresh%rows
    self%cols = fresh%cols
    self%current = fresh%current
@@ -998,6 +1001,7 @@ contains
       if (index(' '//THEMES//' ', ' '//trim(name)//' ') == 0) &
          error stop 'foresight: set_theme: unknown theme "'//trim(name)//'" (supported: '//THEMES//')'
       self%theme = theme_named(name)
+      self%theme_chosen = .true.
    endif
    if (present(glow)) self%theme%glow = glow
    endsubroutine set_theme
@@ -1421,11 +1425,26 @@ contains
    endsubroutine unset_x2tics
 
    ! private procedures
+   subroutine environment_theme(self)
+   !< The theme named by the environment variable `FORESIGHT_THEME` (see foresight_theme), as gnuplot's `GNUTERM`
+   !< names a default terminal: for a fresh figure, unless a theme was set; an unknown name is ignored.
+   class(figure_object), intent(inout) :: self   !< Figure.
+   character(len=32)                   :: name   !< Theme name.
+   integer(I4P)                        :: status !< Variable status: 0 when set and fitting.
+
+   if (self%theme_chosen) return
+   call get_environment_variable('FORESIGHT_THEME', name, status=status)
+   if (status /= 0_I4P .or. len_trim(name) == 0) return
+   if (index(' '//THEMES//' ', ' '//trim(name)//' ') == 0) return
+   self%theme = theme_named(trim(name))
+   endsubroutine environment_theme
+
    subroutine ensure_panels(self)
    !< Allocate the single default panel of a fresh figure.
    class(figure_object), intent(inout) :: self !< Figure.
 
    if (allocated(self%panels)) return
+   call self%environment_theme
    allocate(self%panels(1))
    ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
    associate(panel => self%panels(1))

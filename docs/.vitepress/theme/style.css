@@ -1,12 +1,12 @@
 /* foresight docs: page components. The identity tokens (Fugaku in Kurenai) live in custom.css. */
 
-/* a live plot: the page foresight wrote, white as on paper in both themes */
+/* a live plot: the page foresight wrote in the theme of the mode (washi or night), on the page ground */
 .fs-plot {
   margin: 1.5rem auto;
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
   overflow: hidden;
-  background: #fff;
+  background: var(--vp-c-bg);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
 }
 

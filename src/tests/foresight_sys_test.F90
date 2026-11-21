@@ -1,14 +1,15 @@
-!< foresight_sys test: atomic rename over an existing file, and sleep duration.
+!< foresight_sys test: atomic rename over an existing file, sleep duration, the theme of FORESIGHT_THEME.
 program foresight_sys_test
-!< foresight_sys test: atomic rename over an existing file, and sleep duration.
+!< foresight_sys test: atomic rename over an existing file, sleep duration, the theme of FORESIGHT_THEME.
+use, intrinsic :: iso_c_binding, only : c_char, c_int, c_null_char
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : I4P, I8P, R8P, rename_file, sleep_ms
+use foresight, only : figure_object, I4P, I8P, R8P, rename_file, sleep_ms
 
 implicit none
 character(len=*), parameter :: old = 'foresight_sys_test.tmp'     !< Source of the rename.
 character(len=*), parameter :: new = 'foresight_sys_test.out.tmp' !< Pre-existing target of the rename.
 character(len=16)           :: line                               !< Line read back from the target.
-logical                     :: test_passed(4)                     !< Per-check outcome.
+logical                     :: test_passed(6)                     !< Per-check outcome.
 logical                     :: exists                             !< File existence flag.
 integer(I4P)                :: unit                               !< Scratch unit.
 integer(I4P)                :: iostat                             !< I/O status.
@@ -16,6 +17,19 @@ integer(I8P)                :: count_rate                         !< Clock ticks
 integer(I8P)                :: t0                                 !< Clock at sleep start.
 integer(I8P)                :: t1                                 !< Clock at sleep end.
 real(R8P)                   :: elapsed_ms                         !< Measured sleep [ms].
+type(figure_object)         :: fresh                              !< Figure never initialized.
+type(figure_object)         :: reset                              !< Figure initialized.
+type(figure_object)         :: chosen                             !< Figure with a theme set.
+interface
+   function setenv(name, value, overwrite) bind(c, name='setenv') result(status)
+   !< POSIX setenv, for the test only.
+   import :: c_char, c_int
+   character(kind=c_char), intent(in) :: name(*)   !< Variable name, null-terminated.
+   character(kind=c_char), intent(in) :: value(*)  !< Value, null-terminated.
+   integer(c_int), value              :: overwrite !< Replace an existing value.
+   integer(c_int)                     :: status    !< 0 on success.
+   endfunction setenv
+endinterface
 
 test_passed = .false.
 
@@ -42,7 +56,22 @@ call system_clock(t1)
 elapsed_ms = real(t1 - t0, R8P) * 1000.0_R8P / real(count_rate, R8P)
 test_passed(4) = elapsed_ms >= 50.0_R8P
 
-write(output_unit, '(A,4L2)') 'foresight_sys checks:', test_passed
+! FORESIGHT_THEME names the theme of a new figure (initialized or not) unless one is set; an unknown name is ignored
+test_passed(5) = setenv('FORESIGHT_THEME'//c_null_char, 'night'//c_null_char, 1_c_int) == 0_c_int
+call fresh%plot([0.0_R8P, 1.0_R8P], [0.0_R8P, 1.0_R8P])
+call reset%init
+call chosen%set_theme(name='vfd')
+call chosen%plot([0.0_R8P, 1.0_R8P], [0.0_R8P, 1.0_R8P])
+test_passed(5) = test_passed(5) .and. fresh%theme%name == 'night' .and. reset%theme%name == 'night' .and. &
+                 chosen%theme%name == 'vfd'
+test_passed(6) = setenv('FORESIGHT_THEME'//c_null_char, 'sepia'//c_null_char, 1_c_int) == 0_c_int
+call reset%init
+test_passed(6) = test_passed(6) .and. reset%theme%is_classic()
+test_passed(6) = test_passed(6) .and. setenv('FORESIGHT_THEME'//c_null_char, ''//c_null_char, 1_c_int) == 0_c_int
+call chosen%init
+test_passed(6) = test_passed(6) .and. chosen%theme%is_classic()
+
+write(output_unit, '(A,6L2)') 'foresight_sys checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,F0.3,A)') 'measured sleep: ', elapsed_ms, ' ms'

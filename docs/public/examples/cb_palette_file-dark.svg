@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="400" viewBox="0 0 560 400" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
+<rect x="0" y="0" width="560" height="400" fill="#130d0f" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="29.2 466.6 16 369" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="77.21,369 77.21,16"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="162.55,369 162.55,16"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="247.9,369 247.9,16"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="333.25,369 333.25,16"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="418.59,369 418.59,16"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,329.15 466.6,329.15"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,283.6 466.6,283.6"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,238.05 466.6,238.05"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,192.5 466.6,192.5"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,146.95 466.6,146.95"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,101.4 466.6,101.4"/>
+<polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,55.85 466.6,55.85"/>
+</g>
+<svg class="fs-plot" x="29.2" y="16" width="437.4" height="353" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<image x="0" y="0" width="1" height="1" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACkAAAAfCAYAAAB6Q+RGAAAUBklEQVR4AQH7EwTsAOXZmf/l2Zn/5dmZ/+TYmP/j2Jf/4deW/97Wlf/b1JP/2NOR/9bSkP/U0o//1dKQ/9nTkf/f1pX/4Nec/8vRqv+zy7n/nMXI/4m/1P98vNz/d7vf/3y83P+Jv9T/nMXI/7PLuf/L0ar/4Nec/9/Wlf/Z05H/1dKQ/9TSj//W0pD/2NOR/9vUk//e1pX/4deW/+PYl//k2Jj/5dmZ/+XZmf/l2Zn/AOXZmf/l2Zn/5diZ/+PYmP/h15f/3taV/9rUkv/W0pD/0dCN/83Pi//Lzor/zM6K/9LQjf/c1ZP/3dae/7zNs/+Yw8v/dLrh/1my8v9YsPD/V6/v/1iw8P9ZsvL/dLrh/5jDy/+8zbP/3dae/9zVk//S0I3/zM6K/8vOiv/Nz4v/0dCN/9bSkP/a1JL/3taV/+HXl//j2Jj/5diZ/+XZmf/l2Zn/AOTYmv/l2Zn/5diY/+PYl//g1pb/29ST/9bSkP/Pz4z/yc2I/8PKhf/ByYP/wsqE/8rNif/Y05H/2tag/6vJvv94u9//WLDw/1as7P9Uqen/U6fo/1Sp6f9WrOz/WLDw/3i73/+ryb7/2tag/9jTkf/KzYn/wsqE/8HJg//DyoX/yc2I/8/PjP/W0pD/29ST/+DWlv/j2Jf/5diY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+LXl//e1pX/2NOR/9HQjf/JzYj/wMmD/7nGf/+2xX3/uMZ+/8HKhP/T0Y7/1tWj/5rEyf9ZsvL/Vavs/1Kl5v9QoeL/T6Dh/1Ch4v9Speb/Vavs/1my8v+axMn/1tWj/9PRjv/ByoT/uMZ+/7bFff+5xn//wMmD/8nNiP/R0I3/2NOR/97Wlf/i15f/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZT/1tKQ/83Pi//DyoX/ucZ//7HDev+twXj/r8J5/7vHgP/Q0Iz/1NSk/4zA0v9Yr+//U6fo/0+g4f9Mm93/S5nb/0yb3f9PoOH/U6fo/1iv7/+MwNL/1NSk/9DQjP+7x4D/r8J5/63BeP+xw3r/ucZ//8PKhf/Nz4v/1tKQ/9zVlP/h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZP/1NKP/8vOiv/ByYP/tsV9/63BeP+ov3X/q8B3/7fFfv/Oz4z/0tOl/4W+1v9Xru7/UqXm/06d3/9LmNr/SpbY/0uY2v9Ond//UqXm/1eu7v+Fvtb/0tOl/87PjP+3xX7/q8B3/6i/df+twXj/tsV9/8HJg//Lzor/1NKP/9zVk//h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZT/1dKQ/8zOiv/CyoT/uMZ+/6/Cef+rwHf/rsF4/7nGf//P0Iz/09Sl/4nA1P9Xr+//Uqbn/06f4P9Mmtz/S5ja/0ya3P9On+D/Uqbn/1ev7/+JwNT/09Sl/8/QjP+5xn//rsF4/6vAd/+vwnn/uMZ+/8LKhP/Mzor/1dKQ/9zVlP/h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+LXl//e1pX/2dOR/9LQjf/KzYn/wcqE/7vHgP+3xX7/ucZ//8PKhf/U0Y//19Wi/53Fx/9cs/D/Vqzs/1Km5/9QouP/UKHi/1Ci4/9Spuf/Vqzs/1yz8P+dxcf/19Wi/9TRj//DyoX/ucZ//7fFfv+7x4D/wcqE/8rNif/S0I3/2dOR/97Wlf/i15f/5NiY/+XZmf/k2Jr/AOXZmf/l2Zn/5dmZ/+TYmP/i15f/39aV/9zVk//Y05H/09GO/9DQjP/Oz4z/z9CM/9TRj//d1ZT/3tee/8HPsP+hxsX/gr3Z/2e26f9ZsvL/WbHx/1my8v9ntun/gr3Z/6HGxf/Bz7D/3tee/93VlP/U0Y//z9CM/87PjP/Q0Iz/09GO/9jTkf/c1ZP/39aV/+LXl//k2Jj/5dmZ/+XZmf/l2Zn/AOXZmf/l2Zn/5dmZ/+TYmv/i2Jv/4Nec/93Wnv/a1qD/1tWj/9TUpP/S06X/09Sl/9fVov/e157/5NiY/9zVlP/U0o//zc6L/8bMh//CyoT/wMmD/8LKhP/GzIf/zc6L/9TSj//c1ZT/5NiY/97Xnv/X1aL/09Sl/9LTpf/U1KT/1tWj/9rWoP/d1p7/4Nec/+LYm//k2Jr/5dmZ/+XZmf/l2Zn/AOXYmf/l2Zn/49ib/97Xnv/W1aP/y9Gq/7zNs/+ryb7/msTJ/4zA0v+Fvtb/icDU/53Fx//Bz7D/3NWU/7jGf/+QtWf/aqVR/02ZQP9RlkD/UpVA/1GWQP9NmUD/aqVR/5C1Z/+4xn//3NWU/8HPsP+dxcf/icDU/4W+1v+MwNL/msTJ/6vJvv+8zbP/y9Gq/9bVo//e157/49ib/+XZmf/l2Jn/AOTYmP/l2Zn/4dec/9fVov/I0az/s8u5/5jDy/94u9//WbLy/1iv7/9Xru7/V6/v/1yz8P+hxsX/1NKP/5C1Z/9OmED/Wo5A/2SGQP9rgUD/bX9A/2uBQP9khkD/Wo5A/06YQP+QtWf/1NKP/6HGxf9cs/D/V6/v/1eu7v9Yr+//WbLy/3i73/+Yw8v/s8u5/8jRrP/X1aL/4dec/+XZmf/k2Jj/AOPYmP/l2Zn/39ed/9HTpv+7zbT/nMXI/3S64f9YsPD/Vavs/1On6P9Speb/Uqbn/1as7P+Cvdn/zc6L/2qlUf9ajkD/bIBA/3t0QP+EbED/iGlA/4RsQP97dED/bIBA/1qOQP9qpVH/zc6L/4K92f9WrOz/Uqbn/1Kl5v9Tp+j/Vavs/1iw8P90uuH/nMXI/7vNtP/R06b/39ed/+XZmf/j2Jj/AOPYl//l2Zn/3dae/8zSqv+wyrv/ib/U/1my8v9WrOz/UqXm/0+g4f9Ond//Tp/g/1Km5/9ntun/xsyH/02ZQP9khkD/e3RA/5BqRf+1nYT/wq6a/7WdhP+QakX/e3RA/2SGQP9NmUD/xsyH/2e26f9Spuf/Tp/g/06d3/9PoOH/UqXm/1as7P9ZsvL/ib/U/7DKu//M0qr/3dae/+XZmf/j2Jf/AOLXl//l2Jn/3Naf/8jRrP+oyMD/fLzc/1iw8P9Uqen/UKHi/0yb3f9LmNr/TJrc/1Ci4/9ZsvL/wsqE/1GWQP9rgUD/hGxA/7WdhP/g1sz/7+rl/+DWzP+1nYT/hGxA/2uBQP9RlkD/wsqE/1my8v9QouP/TJrc/0uY2v9Mm93/UKHi/1Sp6f9YsPD/fLzc/6jIwP/I0az/3Naf/+XYmf/i15f/AOLXl//l2Jn/29af/8fQrf+mx8L/d7vf/1ev7/9Tp+j/T6Dh/0uZ2/9Kltj/S5ja/1Ch4v9ZsfH/wMmD/1KVQP9tf0D/iGlA/8Kumv/v6uX//////+/q5f/Crpr/iGlA/21/QP9SlUD/wMmD/1mx8f9QoeL/S5ja/0qW2P9Lmdv/T6Dh/1On6P9Xr+//d7vf/6bHwv/H0K3/29af/+XYmf/i15f/AOLXl//l2Jn/3Naf/8jRrP+oyMD/fLzc/1iw8P9Uqen/UKHi/0yb3f9LmNr/TJrc/1Ci4/9ZsvL/wsqE/1GWQP9rgUD/hGxA/7WdhP/g1sz/7+rl/+DWzP+1nYT/hGxA/2uBQP9RlkD/wsqE/1my8v9QouP/TJrc/0uY2v9Mm93/UKHi/1Sp6f9YsPD/fLzc/6jIwP/I0az/3Naf/+XYmf/i15f/AOPYl//l2Zn/3dae/8zSqv+wyrv/ib/U/1my8v9WrOz/UqXm/0+g4f9Ond//Tp/g/1Km5/9ntun/xsyH/02ZQP9khkD/e3RA/5BqRf+1nYT/wq6a/7WdhP+QakX/e3RA/2SGQP9NmUD/xsyH/2e26f9Spuf/Tp/g/06d3/9PoOH/UqXm/1as7P9ZsvL/ib/U/7DKu//M0qr/3dae/+XZmf/j2Jf/AOPYmP/l2Zn/39ed/9HTpv+7zbT/nMXI/3S64f9YsPD/Vavs/1On6P9Speb/Uqbn/1as7P+Cvdn/zc6L/2qlUf9ajkD/bIBA/3t0QP+EbED/iGlA/4RsQP97dED/bIBA/1qOQP9qpVH/zc6L/4K92f9WrOz/Uqbn/1Kl5v9Tp+j/Vavs/1iw8P90uuH/nMXI/7vNtP/R06b/39ed/+XZmf/j2Jj/AOTYmP/l2Zn/4dec/9fVov/I0az/s8u5/5jDy/94u9//WbLy/1iv7/9Xru7/V6/v/1yz8P+hxsX/1NKP/5C1Z/9OmED/Wo5A/2SGQP9rgUD/bX9A/2uBQP9khkD/Wo5A/06YQP+QtWf/1NKP/6HGxf9cs/D/V6/v/1eu7v9Yr+//WbLy/3i73/+Yw8v/s8u5/8jRrP/X1aL/4dec/+XZmf/k2Jj/AOXYmf/l2Zn/49ib/97Xnv/W1aP/y9Gq/7zNs/+ryb7/msTJ/4zA0v+Fvtb/icDU/53Fx//Bz7D/3NWU/7jGf/+QtWf/aqVR/02ZQP9RlkD/UpVA/1GWQP9NmUD/aqVR/5C1Z/+4xn//3NWU/8HPsP+dxcf/icDU/4W+1v+MwNL/msTJ/6vJvv+8zbP/y9Gq/9bVo//e157/49ib/+XZmf/l2Jn/AOXZmf/l2Zn/5dmZ/+TYmv/i2Jv/4Nec/93Wnv/a1qD/1tWj/9TUpP/S06X/09Sl/9fVov/e157/5NiY/9zVlP/U0o//zc6L/8bMh//CyoT/wMmD/8LKhP/GzIf/zc6L/9TSj//c1ZT/5NiY/97Xnv/X1aL/09Sl/9LTpf/U1KT/1tWj/9rWoP/d1p7/4Nec/+LYm//k2Jr/5dmZ/+XZmf/l2Zn/AOXZmf/l2Zn/5dmZ/+TYmP/i15f/39aV/9zVk//Y05H/09GO/9DQjP/Oz4z/z9CM/9TRj//d1ZT/3tee/8HPsP+hxsX/gr3Z/2e26f9ZsvL/WbHx/1my8v9ntun/gr3Z/6HGxf/Bz7D/3tee/93VlP/U0Y//z9CM/87PjP/Q0Iz/09GO/9jTkf/c1ZP/39aV/+LXl//k2Jj/5dmZ/+XZmf/l2Zn/AOTYmv/l2Zn/5NiY/+LXl//e1pX/2dOR/9LQjf/KzYn/wcqE/7vHgP+3xX7/ucZ//8PKhf/U0Y//19Wi/53Fx/9cs/D/Vqzs/1Km5/9QouP/UKHi/1Ci4/9Spuf/Vqzs/1yz8P+dxcf/19Wi/9TRj//DyoX/ucZ//7fFfv+7x4D/wcqE/8rNif/S0I3/2dOR/97Wlf/i15f/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZT/1dKQ/8zOiv/CyoT/uMZ+/6/Cef+rwHf/rsF4/7nGf//P0Iz/09Sl/4nA1P9Xr+//Uqbn/06f4P9Mmtz/S5ja/0ya3P9On+D/Uqbn/1ev7/+JwNT/09Sl/8/QjP+5xn//rsF4/6vAd/+vwnn/uMZ+/8LKhP/Mzor/1dKQ/9zVlP/h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZP/1NKP/8vOiv/ByYP/tsV9/63BeP+ov3X/q8B3/7fFfv/Oz4z/0tOl/4W+1v9Xru7/UqXm/06d3/9LmNr/SpbY/0uY2v9Ond//UqXm/1eu7v+Fvtb/0tOl/87PjP+3xX7/q8B3/6i/df+twXj/tsV9/8HJg//Lzor/1NKP/9zVk//h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+HXlv/c1ZT/1tKQ/83Pi//DyoX/ucZ//7HDev+twXj/r8J5/7vHgP/Q0Iz/1NSk/4zA0v9Yr+//U6fo/0+g4f9Mm93/S5nb/0yb3f9PoOH/U6fo/1iv7/+MwNL/1NSk/9DQjP+7x4D/r8J5/63BeP+xw3r/ucZ//8PKhf/Nz4v/1tKQ/9zVlP/h15b/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5NiY/+LXl//e1pX/2NOR/9HQjf/JzYj/wMmD/7nGf/+2xX3/uMZ+/8HKhP/T0Y7/1tWj/5rEyf9ZsvL/Vavs/1Kl5v9QoeL/T6Dh/1Ch4v9Speb/Vavs/1my8v+axMn/1tWj/9PRjv/ByoT/uMZ+/7bFff+5xn//wMmD/8nNiP/R0I3/2NOR/97Wlf/i15f/5NiY/+XZmf/k2Jr/AOTYmv/l2Zn/5diY/+PYl//g1pb/29ST/9bSkP/Pz4z/yc2I/8PKhf/ByYP/wsqE/8rNif/Y05H/2tag/6vJvv94u9//WLDw/1as7P9Uqen/U6fo/1Sp6f9WrOz/WLDw/3i73/+ryb7/2tag/9jTkf/KzYn/wsqE/8HJg//DyoX/yc2I/8/PjP/W0pD/29ST/+DWlv/j2Jf/5diY/+XZmf/k2Jr/AOXZmf/l2Zn/5diZ/+PYmP/h15f/3taV/9rUkv/W0pD/0dCN/83Pi//Lzor/zM6K/9LQjf/c1ZP/3dae/7zNs/+Yw8v/dLrh/1my8v9YsPD/V6/v/1iw8P9ZsvL/dLrh/5jDy/+8zbP/3dae/9zVk//S0I3/zM6K/8vOiv/Nz4v/0dCN/9bSkP/a1JL/3taV/+HXl//j2Jj/5diZ/+XZmf/l2Zn/AOXZmf/l2Zn/5dmZ/+TYmP/j2Jf/4deW/97Wlf/b1JP/2NOR/9bSkP/U0o//1dKQ/9nTkf/f1pX/4Nec/8vRqv+zy7n/nMXI/4m/1P98vNz/d7vf/3y83P+Jv9T/nMXI/7PLuf/L0ar/4Nec/9/Wlf/Z05H/1dKQ/9TSj//W0pD/2NOR/9vUk//e1pX/4deW/+PYl//k2Jj/5dmZ/+XZmf/l2Zn/2RE8SuDFiNEAAAAASUVORK5CYII="/>
+</g>
+</svg>
+<rect x="29.2" y="16" width="437.4" height="353" fill="none" stroke="#e8ecf0" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="77.21,369 77.21,363"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="77.21,16 77.21,22"/>
+<text x="77.21" y="387" text-anchor="middle">-4</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="162.55,369 162.55,363"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="162.55,16 162.55,22"/>
+<text x="162.55" y="387" text-anchor="middle">-2</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="247.9,369 247.9,363"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="247.9,16 247.9,22"/>
+<text x="247.9" y="387" text-anchor="middle">0</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="333.25,369 333.25,363"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="333.25,16 333.25,22"/>
+<text x="333.25" y="387" text-anchor="middle">2</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="418.59,369 418.59,363"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="418.59,16 418.59,22"/>
+<text x="418.59" y="387" text-anchor="middle">4</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,329.15 35.2,329.15"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,329.15 460.6,329.15"/>
+<text x="23.2" y="333.35" text-anchor="end">-3</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,283.6 35.2,283.6"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,283.6 460.6,283.6"/>
+<text x="23.2" y="287.8" text-anchor="end">-2</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,238.05 35.2,238.05"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,238.05 460.6,238.05"/>
+<text x="23.2" y="242.25" text-anchor="end">-1</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,192.5 35.2,192.5"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,192.5 460.6,192.5"/>
+<text x="23.2" y="196.7" text-anchor="end">0</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,146.95 35.2,146.95"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,146.95 460.6,146.95"/>
+<text x="23.2" y="151.15" text-anchor="end">1</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,101.4 35.2,101.4"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,101.4 460.6,101.4"/>
+<text x="23.2" y="105.6" text-anchor="end">2</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="29.2,55.85 35.2,55.85"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="466.6,55.85 460.6,55.85"/>
+<text x="23.2" y="60.05" text-anchor="end">3</text>
+</g>
+<g class="fs-colorbox">
+<image x="472.6" y="16" width="18" height="353" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAFC0lEQVR4AQEABf/6AP79/f8A+/n4/wD49fP/APXx7v8A8u3p/wDv6eT/AOzl3/8A6eHa/wDm3dX/AOPZ0P8A4NXL/wDd0cb/ANrNwf8A18m8/wDUxbf/ANHBsv8Azr2t/wDLuaj/AMi1o/8AxbGe/wDCrZn/AL+plP8AvKWP/wC5oYr/ALadhf8As5mA/wCwlXv/AK2Rdv8Aqo1x/wCniWz/AKSFZ/8AoYFi/wCefl3/AJt6WP8AmHZT/wCVck7/AJJuSf8Aj2pE/wCMZkD/AItnQP8AimhA/wCJaED/AIhpQP8Ah2pA/wCGa0D/AIVsQP8AhGxA/wCDbUD/AIJuQP8AgW9A/wCAcED/AH9wQP8AfnFA/wB9ckD/AHxzQP8Ae3RA/wB6dED/AHl1QP8AeHZA/wB3d0D/AHZ4QP8AdXhA/wB0eUD/AHN6QP8AcntA/wBxfED/AHB8QP8Ab31A/wBufkD/AG1/QP8AbIBA/wBrgED/AGqBQP8AaYJA/wBog0D/AGeEQP8AZoRA/wBlhUD/AGSGQP8AY4dA/wBiiED/AGGIQP8AYIlA/wBfikD/AF6LQP8AXYxA/wBcjED/AFuNQP8AWo5A/wBZj0D/AFiQQP8AV5BA/wBWkUD/AFWSQP8AVJNA/wBTlED/AFKUQP8AUZVA/wBQlkD/AE+XQP8ATpdA/wBNmED/AE2ZQP8AU5xE/wBZnkf/AF+hS/8AZaNO/wBrplL/AHGoVf8Ad6tZ/wB9rVz/AIOwX/8AibJj/wCPtWb/AJW3av8Am7pt/wChvHH/AKe/dP8ArcF4/wCzxHv/ALnGf/8Av8mC/wDFy4b/AMvOif8A0dCN/wDX05D/AN3VlP8A49iX/wDg15z/ANXUo/8AytGq/wC/zrH/ALTLuP8Aqci//wCexcb/AJPCzf8AiL/U/wB9vNv/AHK54v8AZ7bp/wBds/D/AFmy8f8AWLDw/wBXr+//AFeu7v8AVq3t/wBVrOz/AFWq6/8AVKnq/wBTqOn/AFOn6P8AUqXm/wBRpOX/AFGj5P8AUKLj/wBPoeL/AE+f4f8ATp7g/wBNnd//AE2c3v8ATJvc/wBMmdv/AEuY2v8ASpfZ/wBKltj/AEmU1/8ASJPW/wBIktX/AEeR1P8ARpDS/wBGjtH/AEWN0P8ARIzP/wBEi87/AEOJzf8AQojM/wBCh8v/AEGGyv8AQIXJ/wBAg8f/AD+Cxv8APoHF/wA+gMT/AD1/w/8APH3C/wA8fMH/ADt7wP8AOnq//wA6eL3/ADl3vP8AOHa7/wA4dbr/ADd0uf8ANnK4/wA2cbf/ADVwtv8ANG+1/wA0bbP/ADNssv8AMmux/wAyarD/ADFpr/8AMGeu/wAwZq3/AC9lrP8ALmSr/wAuY6r/AC1hqP8ALGCn/wAsX6b/ACtepf8AKlyk/wAqW6P/AClaov8AKFmh/wAoWKD/ACdWnv8AJlWd/wAmVJz/ACVTm/8AJFGa/wAkUJn/ACNPmP8AIk6X/wAiTZb/ACFLlf8AIEqT/wAgSZL/AB9Ikf8AHkeQ/wAeRY//AB1Ejv8AHEON/wAcQoz/ABtAi/8AGj+J/wAaPoj/ABk9h/8AGDyG/wAYOoX/ABc5hP8AFjiD/wAWN4L/ABU1gf8AFDR//wAUM37/ABMyff8AEjF8/wASL3v/ABEuev8AEC15/wAQLHj/AA8rd/8ADil2/wAOKHT/AA0nc/9Mq3rG+pNjRwAAAABJRU5ErkJggg=="/>
+<rect x="472.6" y="16" width="18" height="353" fill="none" stroke="#e8ecf0" stroke-width="1"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="490.6,369 484.6,369"/>
+<text x="496.6" y="373.2">-1</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="490.6,280.75 484.6,280.75"/>
+<text x="496.6" y="284.95">-0.5</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="490.6,192.5 484.6,192.5"/>
+<text x="496.6" y="196.7">0</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="490.6,104.25 484.6,104.25"/>
+<text x="496.6" y="108.45">0.5</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="490.6,16 484.6,16"/>
+<text x="496.6" y="20.2">1</text>
+<text x="547" y="192.5" text-anchor="middle" transform="rotate(-90 547 192.5)">height</text>
+</g>
+</g>
+</svg>

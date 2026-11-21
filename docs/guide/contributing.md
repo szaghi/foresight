@@ -62,6 +62,9 @@ bash scripts/docs_examples.sh     # or: fobis rule --ex docs-examples
 
 builds the library and the command line, runs every example, and regenerates `docs/examples/snippets`,
 `docs/examples/output` and the plots in `docs/public/examples`, which the pages embed live with `<Plot name="..."/>`.
+Each plot is written twice, `NAME.svg` (or `.html`) in the washi theme and `NAME-dark.svg` in the night one: the runs
+happen twice, with `FORESIGHT_THEME=washi` and `night`, and `<Plot>` shows the one of the page mode. A recipe that sets
+its own theme (`theme vfd`) keeps it in both.
 Commit the regenerated files with the change: the CI runs the script and fails if any of them differs.
 
 ## Commit style

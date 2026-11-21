@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1280" viewBox="0 0 760 1280" font-family="Arial,Helvetica,sans-serif" font-size="12">
-<rect x="0" y="0" width="760" height="1280" fill="white" stroke="none" stroke-width="0"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1280" viewBox="0 0 760 1280" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
+<rect x="0" y="0" width="760" height="1280" fill="#f3ede1" stroke="none" stroke-width="0"/>
 <g class="fs-axes" data-area="16 243.33 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
 <g class="fs-grid" display="none">
 </g>

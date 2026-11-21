@@ -90,6 +90,10 @@ in the light (or dark) colors of foresight's identity, `classic` back to gnuplot
 series colors and, for `vfd`, a glow; text takes the series colors only. `foresight --theme NAME` sets the theme of
 every plot of a run, unless the script sets its own.
 
+The environment variable `FORESIGHT_THEME` names the theme of every new figure, of the library as of the command line,
+as gnuplot's `GNUTERM` names a default terminal: a `set_theme`, a `set terminal ... theme` or `--theme` wins over it,
+and an unknown name is ignored. This site draws each of its plots twice, with `FORESIGHT_THEME=washi` and `night`.
+
 ## Atomic writes
 
 Every file output is written to `<file>.tmp` and renamed over `<file>` when complete (POSIX `rename`), so a browser,
