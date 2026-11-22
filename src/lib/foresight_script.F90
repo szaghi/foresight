@@ -244,6 +244,7 @@ type :: script_object
       procedure, pass(self), private :: call_command  !< `load`, `call`.
       procedure, pass(self), private :: expand_macros !< `@name` substitution.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
+      procedure, pass(self), private :: set_for       !< `set for [...] OPTION`, `unset for [...] OPTION`.
       procedure, pass(self), private :: while_block   !< `while (...) { ... }`.
       procedure, pass(self), private :: if_block      !< `if (...) { ... } else ...`.
       procedure, pass(self), private :: run_body      !< The statements of a block.
@@ -692,6 +693,13 @@ contains
          return
       endif
    endif
+   ! `set for [...] ...`, `unset for [...] ...` (not `set format`)
+   if (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P)) then
+      if (for_follows(statement, command)) then
+         call self%set_for(statement, iostat, iomsg)
+         return
+      endif
+   endif
    select case (command)
    case ('do')
       call self%do_block(statement, iostat, iomsg)
@@ -971,31 +979,19 @@ contains
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    type(token_object), allocatable              :: specs(:)  !< `for` clauses, brackets removed.
-   type(token_object)                           :: spec      !< One clause.
    character(len=:), allocatable                :: rest      !< Text still to read.
    character(len=:), allocatable                :: after     !< Text after a part read.
    character(len=:), allocatable                :: body      !< Block body.
-   integer(I4P)                                 :: close     !< Closing bracket.
 
    iostat = 0_I4P
    iomsg = ''
-   allocate(specs(0))
    rest = trim(adjustl(statement))
    rest = trim(adjustl(rest(3:)))
-   do while (leading_word(rest) == 'for')
-      rest = trim(adjustl(rest(4:)))
-      close = 0_I4P
-      if (len(rest) > 0) then
-         if (rest(1:1) == '[') close = matching(rest, 1_I4P)
-      endif
-      if (close == 0_I4P) then
-         call fail('do for: [i = a:b] or [w in "words"] expected', iostat, iomsg)
-         return
-      endif
-      spec%text = rest(2:close - 1_I4P)
-      call push(specs, spec)
-      rest = trim(adjustl(rest(close + 1_I4P:)))
-   enddo
+   call for_clauses(rest, specs, iostat, iomsg)
+   if (iostat /= 0_I4P) then
+      iomsg = 'do '//iomsg
+      return
+   endif
    if (size(specs) == 0) then
       call fail('do: for [...] expected', iostat, iomsg)
       return
@@ -1014,6 +1010,63 @@ contains
    self%loop_depth = self%loop_depth - 1_I4P
    if (self%loop_signal < 3_I4P) self%loop_signal = 0_I4P
    endsubroutine do_block
+
+   subroutine for_clauses(rest, specs, iostat, iomsg)
+   !< The leading `for [...]` clauses of `rest` (brackets removed), `rest` left after them.
+   character(len=:), allocatable,   intent(inout) :: rest     !< Text, the clauses removed.
+   type(token_object), allocatable, intent(out)   :: specs(:) !< Clauses.
+   integer(I4P),                    intent(out)   :: iostat   !< 0 on success.
+   character(len=:), allocatable,   intent(out)   :: iomsg    !< Error message.
+   type(token_object)                             :: spec     !< One clause.
+   integer(I4P)                                   :: close    !< Closing bracket.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(specs(0))
+   do while (leading_word(rest) == 'for')
+      rest = trim(adjustl(rest(4:)))
+      close = 0_I4P
+      if (len(rest) > 0) then
+         if (rest(1:1) == '[') close = matching(rest, 1_I4P)
+      endif
+      if (close == 0_I4P) then
+         call fail('for: [i = a:b] or [w in "words"] expected', iostat, iomsg)
+         return
+      endif
+      spec%text = rest(2:close - 1_I4P)
+      call push(specs, spec)
+      rest = trim(adjustl(rest(close + 1_I4P:)))
+   enddo
+   endsubroutine for_clauses
+
+   recursive subroutine set_for(self, statement, iostat, iomsg)
+   !< gnuplot `set for [i = a:b] OPTION ...` and `unset for [...] OPTION`: the command run for each value of the
+   !< clauses (nested left to right), the loop variable local to it, as `do for`.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< The whole statement.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(token_object), allocatable              :: specs(:)  !< `for` clauses, brackets removed.
+   character(len=:), allocatable                :: command   !< `set` or `unset`, as written.
+   character(len=:), allocatable                :: rest      !< Text after the clauses.
+
+   rest = trim(adjustl(statement))
+   command = leading_word(rest)
+   rest = trim(adjustl(rest(len(command) + 1:)))
+   call for_clauses(rest, specs, iostat, iomsg)
+   if (iostat /= 0_I4P) then
+      iomsg = command//' '//iomsg
+      return
+   endif
+   if (len(rest) == 0) then
+      call fail(command//' for: an option is expected after the clauses', iostat, iomsg)
+      return
+   endif
+   self%loop_depth = self%loop_depth + 1_I4P
+   call self%run_loops(specs, 1_I4P, command//' '//rest, iostat, iomsg)
+   self%loop_depth = self%loop_depth - 1_I4P
+   if (self%loop_signal < 3_I4P) self%loop_signal = 0_I4P
+   endsubroutine set_for
 
    recursive subroutine run_loops(self, specs, level, body, iostat, iomsg)
    !< Run clause `level` of `specs`, the inner clauses (or the body) for each of its values.
@@ -8830,6 +8883,22 @@ contains
    terminator = rest(1:e)
    yes = .true.
    endfunction heredoc
+
+   pure function for_follows(statement, command) result(yes)
+   !< Whether `statement`, after its `command` word, goes on with `for [`.
+   character(len=*), intent(in)  :: statement !< Statement.
+   character(len=*), intent(in)  :: command   !< Its first word.
+   logical                       :: yes       !< `for [` follows.
+   character(len=:), allocatable :: rest      !< Text after the command.
+
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(len(command) + 1:)))
+   yes = leading_word(rest) == 'for'
+   if (.not. yes) return
+   rest = trim(adjustl(rest(4:)))
+   yes = .false.
+   if (len(rest) > 0) yes = rest(1:1) == '['
+   endfunction for_follows
 
    pure function leading_word(text) result(word)
    !< The letters starting `text` (blanks skipped): `do`, `if`, `while`, `else`, `for`, `break`.
