@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.14.0] — 2026-11-22
+### Added
+- **script**: Gnuplot's GPVAL variables, set encoding, exit and quit
+
+- **axes**: Set tics, unset tics, set ticscale and tick scales, as gnuplot 6.0
+
+- **axes**: Key reverse, Left, invert, opaque, samplen, width, offset, title; title offset
+
+- **axes**: Set lmargin, rmargin, tmargin, bmargin and set margins, as gnuplot 6.0
+
+- **script**: Rand, exist, the old one-line if, set dummy, set autoscale, range options, set bars
+
+- **axes**: Set grid lines, layer and style, as gnuplot 6.0
+
+- **axes**: Set border line options, set zeroaxis, set termoption, as gnuplot 6.0
+
+- **text**: Enhanced text in titles, labels, key and ticks, as gnuplot 6.0
+
+
+### Documentation
+- Tick scale, key layout, margins, grid, zero axes, border, GPVAL, exit, rand, old if
+
+- Enhanced text, reference, recipe and gallery
+
+
 ## [0.13.0] — 2026-11-22
 ### Added
 - **expression**: Recursive user functions, as gnuplot 6.0
