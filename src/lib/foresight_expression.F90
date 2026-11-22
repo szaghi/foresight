@@ -10,7 +10,8 @@ module foresight_expression
 !<   associative, so `-2**2` is -4 and `2**3**2` is 512); `&&`, `||` and `?:` evaluate only what they need;
 !< - operands: numbers, `$N` and `column(N)` (column N of the row, 0 is the point number), `column("name")` (the column
 !<   of that header, see `resolve`), `pi`, and the functions
-!<   `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`;
+!<   `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`, and gnuplot's special
+!<   functions of foresight_mathlib (`erf`, `gamma`, `igamma`, `besj0`, `lambertw`, ...);
 !< - with a `symbols_object`, user variables (`a = 2`: their value when the expression is compiled, integer or real)
 !<   and user functions (`f(x, y) = ...`: compiled inline where called, the arguments read from their stack slots; a
 !<   call of a function already being compiled, a recursion, jumps to a copy of its body compiled once after the main
@@ -39,6 +40,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_valu
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, format_value, &
                              gnuplot_real, int_str, real_from_decimal
+use foresight_mathlib, only : MATH_ARGS, MATH_FUNCTIONS, math_function, math_order
 use foresight_sys, only : command_output
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
@@ -118,6 +120,8 @@ integer(I4P), parameter :: OP_SHR          = 45_I4P !< `>>`, logical (gnuplot's 
 integer(I4P), parameter :: OP_BNOT         = 46_I4P !< `~`, unary.
 integer(I4P), parameter :: OP_BLOCK        = 47_I4P !< Call the function block `blocks(arg)` on its `v%i` arguments.
 integer(I4P), parameter :: OP_RAND         = 48_I4P !< gnuplot's rand(x) of the top: the next pseudo-random number.
+integer(I4P), parameter :: OP_SPECIAL      = 49_I4P !< A special function `MATH_FUNCTIONS(arg)` (foresight_mathlib) of
+                                                    !< its `MATH_ARGS(arg)` arguments.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -155,6 +159,7 @@ integer(I4P), parameter :: E_BLOCK      = 11_I4P !< A function block failed: its
 integer(I4P), parameter :: E_UNDEF      = 12_I4P !< The value is gnuplot's undefined one (`print` shows `<undefined>`).
 integer(I4P), parameter :: E_UNINIT     = 13_I4P !< An operation on gnuplot's undefined value.
 integer(I4P), parameter :: E_SEED       = 14_I4P !< rand(x): x not an integer seed.
+integer(I4P), parameter :: E_ORDER      = 15_I4P !< A real order of besjn, besyn, besin or expint (`order_message`).
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
@@ -969,6 +974,17 @@ contains
             endif
             return
          endif
+         if (any(MATH_FUNCTIONS == name)) then
+            ! gnuplot's special functions (foresight_mathlib)
+            f = findloc(MATH_FUNCTIONS, name, dim=1)
+            if (nargs /= MATH_ARGS(f)) then
+               call syntax(name//' needs '//trim(adjustl(int_text(MATH_ARGS(f))))//' argument'// &
+                           trim(merge('s', ' ', MATH_ARGS(f) /= 1_I4P)), at)
+            else
+               call emit(OP_SPECIAL, arg=f)
+            endif
+            return
+         endif
          f = findloc(FUNCTIONS, name, dim=1)
          if (any(STRING_FUNCTIONS == name)) then
             f = findloc(STRING_FUNCTIONS, name, dim=1)
@@ -1667,6 +1683,7 @@ contains
    call check_name(name, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. any(ROW_FUNCTIONS == name) .or. &
+       any(MATH_FUNCTIONS == name) .or. &
        name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists' .or. name == 'time') then
       iostat = 1_I4P
       iomsg = '"'//name//'" is a builtin function'
@@ -2761,6 +2778,11 @@ contains
             exit
          case (OP_RAND)
             call random_next(stack(sp), ok, err)
+         case (OP_SPECIAL)
+            n = MATH_ARGS(instruction%arg)
+            call special(instruction%arg, stack(sp - n + 1_I4P:sp), result, ok, err)
+            sp = sp - n + 1_I4P
+            stack(sp) = result
          case (OP_BLOCK)
             n = int(instruction%v%i, I4P)
             if (.not. associated(block_hook)) then
@@ -3614,10 +3636,49 @@ contains
       text = 'uninitialized user variable'
    case (E_SEED)
       text = 'Illegal seed value'
+   case (E_ORDER)
+      text = 'the order of besjn, besyn, besin and expint must be an integer'
    case default
       text = 'undefined value'
    endselect
    endfunction error_text
+
+   pure subroutine special(f, args, c, ok, error)
+   !< `c` = special function `f` (MATH_FUNCTIONS) of `args`: strings read as numbers; an order (besjn, besyn, besin,
+   !< expint) must be an integer, as gnuplot (E_ORDER); undefined (`ok` false) where gnuplot's is, and for a NaN or an
+   !< infinity.
+   integer(I4P),       intent(in)    :: f       !< Function.
+   type(value_object), intent(inout) :: args(:) !< Arguments.
+   type(value_object), intent(out)   :: c       !< Value.
+   logical,            intent(inout) :: ok      !< Defined.
+   integer(I4P),       intent(inout) :: error   !< Type error.
+   real(R8P)                         :: x(3)    !< Arguments, real.
+   real(R8P)                         :: r       !< Value.
+   logical                           :: is_int  !< Integer value.
+   integer(I4P)                      :: k       !< Counter.
+
+   c = value_object()
+   x = 0.0_R8P
+   do k = 1_I4P, size(args, kind=I4P)
+      if (args(k)%is_string) call numeric(args(k), ok, error)
+      if (.not. ok) return
+      x(k) = real_of(args(k))
+   enddo
+   if (len(math_order(f)) > 0) then
+      if (.not. args(1)%is_int) then
+         ok = .false.
+         error = E_ORDER
+         return
+      endif
+   endif
+   call math_function(f, x(1:size(args)), args(1)%i, r, is_int, ok)
+   if (.not. ok) return
+   if (is_int) then
+      c = int_value(int(r, I8P))
+   else
+      c%r = r
+   endif
+   endsubroutine special
 
    pure subroutine numeric(a, ok, error)
    !< Replace the string `a` by its leading number, as gnuplot reads a string in arithmetic: blanks, a sign, `0x` and hex
