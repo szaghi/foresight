@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.13.0] — 2026-11-22
+### Added
+- **expression**: Recursive user functions, as gnuplot 6.0
+
+- **expression**: Bitwise operators and hex and octal integers, as gnuplot 6.0
+
+- **script**: Array slices, as gnuplot 6.0
+
+- **script**: Set print $NAME, as gnuplot 6.0
+
+- **script**: Plot with table and set table separator, as gnuplot 6.0
+
+- **script**: Function blocks and gnuplot's undefined value, as gnuplot 6.0
+
+
+### Documentation
+- Recursive functions, bitwise operators, slices, with table, set print $NAME, function blocks
+
+
+### Fixed
+- **script**: Undefine as gnuplot 6.0 on what is not a name
+
+
 ## [0.12.0] — 2026-11-22
 ### Added
 - **expression**: String columns, strcol and columnhead, as gnuplot 6.0
