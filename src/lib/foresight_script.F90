@@ -219,6 +219,9 @@ type :: script_object
    logical                         :: returned = .false.       !< `return EXPR` gave the running block a value.
    type(value_object)              :: return_value             !< That value.
    type(local_state), allocatable  :: locals(:)                !< Variables made `local` by the running blocks.
+   character(len=:), allocatable   :: encoding                 !< `set encoding`: GPVAL_ENCODING, `default` or `utf8`.
+   character(len=:), allocatable   :: term_name                !< The terminal: GPVAL_TERM.
+   integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -249,6 +252,7 @@ type :: script_object
       procedure, pass(self), private :: save_output   !< Render to the current output.
       procedure, pass(self), private :: set_command   !< `set`.
       procedure, pass(self), private :: unset_command !< `unset`.
+      procedure, pass(self), private :: exit_command  !< `exit`, `quit`.
 endtype script_object
 
 type, extends(fit_model) :: script_model
@@ -315,9 +319,42 @@ contains
    self%returned = .false.
    if (allocated(self%locals)) deallocate(self%locals)
    allocate(self%locals(0))
+   self%exit_status = 0_I4P
+   self%encoding = 'default'
+   self%term_name = 'html'
+   if (len(output) > 4) then
+      if (output(len(output) - 3:) == '.svg') self%term_name = 'svg'
+   endif
+   call gnuplot_values(self)
    block_hook => run_block
    call default_styles(self)
    endsubroutine init
+
+   subroutine gnuplot_values(self)
+   !< gnuplot's GPVAL_* variables of foresight: the gnuplot version it follows (6.0, patchlevel 0), its compile options
+   !< (only those of gnuplot that foresight has: scripts test them to skip what is missing), the encoding, the
+   !< terminal and the terminals, the system.
+   class(script_object), intent(inout) :: self    !< Interpreter.
+   character(len=:), allocatable       :: text    !< Command output.
+   integer(I4P)                        :: status  !< Command status.
+
+   call self%symbols%set_value('GPVAL_VERSION', 6.0_R8P, is_int=.false.)
+   call self%symbols%set_string('GPVAL_PATCHLEVEL', '0')
+   call self%symbols%set_string('GPVAL_COMPILE_OPTIONS', '+OBJECTS +STATS +POLARGRID +FUNCTIONBLOCKS '// &
+                                '-LIBCERF -COMPLEX_FUNCS -CHI_SHAPES -WATCHPOINTS -EXTERNAL_FUNCTIONS')
+   call self%symbols%set_string('GPVAL_ENCODING', self%encoding)
+   call self%symbols%set_string('GPVAL_TERM', self%term_name)
+   call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html svg')
+   call self%symbols%set_string('GPVAL_DEGREE_SIGN', achar(194)//achar(176))
+   call command_output('uname -s', text, status)
+   if (status /= 0_I4P .or. len(text) == 0) text = 'unknown'
+   if (text(len(text):len(text)) == new_line('a')) text = text(1:len(text) - 1)
+   call self%symbols%set_string('GPVAL_SYSNAME', text)
+   call command_output('uname -m', text, status)
+   if (status /= 0_I4P .or. len(text) == 0) text = 'unknown'
+   if (text(len(text):len(text)) == new_line('a')) text = text(1:len(text) - 1)
+   call self%symbols%set_string('GPVAL_MACHINE', text)
+   endsubroutine gnuplot_values
 
    recursive subroutine run_block(name, args, result, ok, message)
    !< gnuplot 6.0 function block `name` called on `args` (foresight_expression's `block_hook`): its body run by the
@@ -469,6 +506,8 @@ contains
    logical                                             :: here_function !< A function block, not a datablock.
 
    active => self
+   ! after quit (or exit status N), nothing more runs
+   if (self%loop_signal == 4_I4P) return
    here_function = .false.
    iostat = 0_I4P
    iomsg = ''
@@ -548,8 +587,9 @@ contains
       call take(line)
       if (iostat /= 0_I4P) return
       line = ''
-      if (self%loop_signal == 3_I4P) exit
+      if (self%loop_signal >= 3_I4P) exit
    enddo
+   if (self%loop_signal == 4_I4P) return
    if (self%loop_signal == 3_I4P) then
       ! return: the rest is not run; outside a function block, script text run directly ends here
       if (self%block_depth == 0_I4P .and. .not. present(source)) self%loop_signal = 0_I4P
@@ -600,7 +640,7 @@ contains
             iomsg = name//':'//int_str(int(at, I8P))//': '//iomsg
             return
          endif
-         if (self%loop_signal == 3_I4P) return
+         if (self%loop_signal >= 3_I4P) return
       enddo
       endsubroutine process
    endsubroutine run_text
@@ -647,6 +687,13 @@ contains
       return
    case ('else')
       call fail('else without if (else follows "}" on the same line)', iostat, iomsg)
+      return
+   case ('exit', 'quit')
+      ! gnuplot: exit [message "text"] ends the script file being read (a load returns to its caller); quit, exit
+      ! gnuplot and exit status N end the whole run (N its status); exit error "text" fails with the text
+      iostat = 0_I4P
+      iomsg = ''
+      call self%exit_command(statement, command, iostat, iomsg)
       return
    case ('return')
       ! gnuplot 6.0: the value of the running function block; outside one, the end of the script file being read
@@ -804,6 +851,8 @@ contains
             return
          endif
          if (index(text(1:len(text) - 1), '*') > 0) cycle
+         ! gnuplot's own variables stay (undefine GPVAL_* does nothing to them)
+         if (index(text, 'GPVAL_') == 1) cycle
          if (text(len(text):len(text)) == '*') then
             call self%symbols%remove_prefix(text(1:len(text) - 1))
          else
@@ -946,7 +995,7 @@ contains
    self%loop_depth = self%loop_depth + 1_I4P
    call self%run_loops(specs, 1_I4P, body, iostat, iomsg)
    self%loop_depth = self%loop_depth - 1_I4P
-   if (self%loop_signal /= 3_I4P) self%loop_signal = 0_I4P
+   if (self%loop_signal < 3_I4P) self%loop_signal = 0_I4P
    endsubroutine do_block
 
    recursive subroutine run_loops(self, specs, level, body, iostat, iomsg)
@@ -972,7 +1021,7 @@ contains
    do k = 1_I8P, size(list, kind=I8P)
       call set_loop_variable(self, name, list(k)%text, is_words)
       call step
-      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal == 3_I4P) exit
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal >= 3_I4P) exit
    enddo
    call self%symbols%restore(saved)
    contains
@@ -1122,11 +1171,11 @@ contains
       endif
       if (.not. holds) exit
       call self%run_body(body, iostat, iomsg)
-      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal == 3_I4P) exit
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal >= 3_I4P) exit
       self%loop_signal = 0_I4P
    enddo
    self%loop_depth = self%loop_depth - 1_I4P
-   if (self%loop_signal /= 3_I4P) self%loop_signal = 0_I4P
+   if (self%loop_signal < 3_I4P) self%loop_signal = 0_I4P
    endsubroutine while_block
 
    recursive subroutine if_block(self, statement, iostat, iomsg)
@@ -4506,6 +4555,8 @@ contains
          call self%symbols%restore(saved(k))
       enddo
       call self%symbols%restore_array(argv)
+      ! gnuplot's own variables stay
+      call gnuplot_values(self)
    endif
    ! the current panel: its plot, place and linetypes kept
    kept = self%figure%panels(self%figure%current)
@@ -5701,6 +5752,32 @@ contains
       endif
       self%output = text
       self%output_set = .true.
+   elseif (keyword(option, 'encoding', 3_I4P)) then
+      ! gnuplot's encodings foresight writes faithfully: default (bytes as they are) and utf8 (locale, here)
+      text = 'default'
+      if (size(tokens) >= 2) then
+         if (tokens(2)%kind == TOKEN_WORD .and. is_word(tokens(2)%text, 'default utf8 locale')) then
+            text = tokens(2)%text
+         elseif (tokens(2)%kind == TOKEN_WORD .and. size(tokens) == 2 .and. &
+                 .not. string_variable_of(self%symbols, tokens(2)%text)) then
+            ! an encoding name (iso_8859_1, cp1252, ...), not a variable holding one
+            text = tokens(2)%text
+         else
+            i = 2_I4P
+            if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+               iomsg = 'set encoding: '//iomsg
+               return
+            endif
+         endif
+      endif
+      if (text == 'locale') text = 'utf8'
+      if (.not. is_word(text, 'default utf8')) then
+         call fail('set encoding: only default, utf8 and locale are supported (the output is UTF-8), not "'//text//'"', &
+                   iostat, iomsg)
+         return
+      endif
+      self%encoding = text
+      call self%symbols%set_string('GPVAL_ENCODING', text)
    elseif (keyword(option, 'terminal', 2_I4P)) then
       if (size(tokens) < 2) then
          call fail('set terminal: svg, html, dumb or block expected', iostat, iomsg)
@@ -5718,6 +5795,8 @@ contains
          call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, dumb, block)', iostat, iomsg)
          return
       endselect
+      self%term_name = text
+      call self%symbols%set_string('GPVAL_TERM', text)
       i = 3_I4P
       do while (i <= size(tokens, kind=I4P))
          if ((text == 'dumb' .or. text == 'block') .and. is_word(tokens(i)%text, 'mono ansi ansi256 ansirgb')) then
@@ -7872,6 +7951,79 @@ contains
    if (yes) yes = word(1:1) == '$' .and. scan(word(2:2), LETTERS) > 0
    if (yes) yes = verify(word(2:), LETTERS//'0123456789') == 0
    endfunction is_datablock
+
+   pure function string_variable_of(symbols, name) result(yes)
+   !< Whether `name` is a string variable of `symbols`.
+   type(symbols_object), intent(in) :: symbols !< Symbols.
+   character(len=*),     intent(in) :: name    !< Name.
+   logical                          :: yes     !< A string variable.
+   character(len=:), allocatable    :: text    !< Its value.
+
+   call symbols%string_of(name, text, yes)
+   endfunction string_variable_of
+
+   recursive subroutine exit_command(self, statement, command, iostat, iomsg)
+   !< gnuplot `exit`, `exit message "text"` (the text on the standard error), `exit error "text"`, `exit status N`,
+   !< `exit gnuplot`, `quit`: `exit` ends the script file being read, as `return` (signal 3); the others the run
+   !< (signal 4), `exit status N` with N its status.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: statement !< The statement.
+   character(len=*),              intent(in)    :: command   !< `exit` or `quit`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: rest      !< Text after the command.
+   character(len=:), allocatable                :: word      !< Option.
+   character(len=:), allocatable                :: text      !< Message.
+   logical                                      :: is_string !< A string value.
+   real(R8P)                                    :: v         !< Status.
+
+   iostat = 0_I4P
+   iomsg = ''
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(len(command) + 1:)))
+   if (command == 'quit') then
+      if (len(rest) > 0) then
+         call fail('quit takes nothing after it', iostat, iomsg)
+         return
+      endif
+      self%loop_signal = 4_I4P
+      return
+   endif
+   word = leading_word(rest)
+   if (len(word) > 0) rest = trim(adjustl(rest(len(word) + 1:)))
+   select case (word)
+   case ('')
+      if (len(rest) > 0) then
+         call fail('exit: message, error, status or gnuplot expected, found "'//rest//'"', iostat, iomsg)
+         return
+      endif
+      self%loop_signal = 3_I4P
+   case ('message', 'error')
+      call self%symbols%text_of(rest, text, is_string, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'exit '//word//': '//iomsg
+         return
+      endif
+      if (word == 'error') then
+         call fail(text, iostat, iomsg)
+         return
+      endif
+      write(error_unit, '(A)') text
+      self%loop_signal = 3_I4P
+   case ('status')
+      call self%symbols%constant(rest, v, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'exit status: '//iomsg
+         return
+      endif
+      self%exit_status = int(v, I4P)
+      self%loop_signal = 4_I4P
+   case ('gnuplot')
+      self%loop_signal = 4_I4P
+   case default
+      call fail('exit: message, error, status or gnuplot expected, found "'//word//'"', iostat, iomsg)
+   endselect
+   endsubroutine exit_command
 
    pure subroutine push_local(list, item)
    !< Append `item` to `list`, through a temporary (nvfortran 26.9: see foresight_tokens push).

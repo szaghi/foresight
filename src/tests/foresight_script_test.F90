@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(121)                           !< Per-check outcome.
+logical                       :: test_passed(122)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2554,6 +2554,34 @@ test_passed(121) = test_passed(121) .and. iostat /= 0_I4P .and. index(iomsg, '$b
 open(newunit=unit, file='foresight_script_test_blocks2.txt')
 close(unit, status='delete')
 
+! gnuplot's GPVAL_* variables (kept by reset session and undefine), set encoding, exit and quit
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_gpval.txt'"//new_line('a')// &
+                          'save = GPVAL_ENCODING; set encoding utf8; print save, GPVAL_ENCODING; set encoding save'// &
+                          new_line('a')//'undefine GPVAL_*; reset session; print GPVAL_ENCODING, GPVAL_VERSION, GPVAL_TERM'// &
+                          new_line('a')//'print strstrt(GPVAL_COMPILE_OPTIONS, "+STATS") > 0, '// &
+                          'strstrt(GPVAL_COMPILE_OPTIONS, "+LIBCERF") > 0'//new_line('a')// &
+                          'if (!strstrt(GPVAL_COMPILE_OPTIONS, "+LIBCERF")) { print "no libcerf"; exit }'// &
+                          new_line('a')//'print "not reached"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(122) = iostat == 0_I4P
+call interpreter%run_text("set print 'foresight_script_test_gpval.txt' append; print 'next'; quit; print 'no'", &
+                          iostat, iomsg)
+test_passed(122) = test_passed(122) .and. iostat == 0_I4P
+call interpreter%run_text("print 'after quit, nothing'", iostat, iomsg)
+call interpreter%init(scratch)
+call interpreter%run_text("exit status 3; print 'no'", iostat, iomsg)
+test_passed(122) = test_passed(122) .and. iostat == 0_I4P .and. interpreter%exit_status == 3_I4P .and. &
+   file_is('foresight_script_test_gpval.txt', [character(len=24) :: 'default utf8', 'default 6.0 svg', '1 0', &
+           'no libcerf', 'next'])
+call interpreter%init(scratch)
+call interpreter%run_text('exit error "boom"', iostat, iomsg)
+test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'boom') > 0
+call interpreter%run_text('set encoding iso_8859_1', iostat, iomsg)
+test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'only default, utf8 and locale') > 0
+open(newunit=unit, file='foresight_script_test_gpval.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2562,7 +2590,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,121L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,122L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

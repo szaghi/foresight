@@ -27,6 +27,8 @@ call parse_arguments
 status = run()
 if (period <= 0.0_R8P) then
    if (status /= 0_I4P) stop 1, quiet=.true.
+   ! gnuplot's exit status N
+   if (interpreter%exit_status /= 0_I4P) stop interpreter%exit_status, quiet=.true.
    stop
 endif
 prints = fingerprints()
