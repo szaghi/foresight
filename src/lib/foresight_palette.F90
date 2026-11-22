@@ -17,13 +17,14 @@ module foresight_palette
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use foresight_colormaps, only : colormap_hex, colormap_id
 use foresight_format, only : real_from_decimal
-use penf, only : I4P, R8P
+use penf, only : I4P, I8P, R8P
 
 implicit none
 private
 public :: palette_object
 public :: hex_color
 public :: named_color
+public :: gnuplot_color
 public :: palette_gradient
 public :: palette_words
 
@@ -34,6 +35,43 @@ integer(I4P), parameter :: PAL_TABLE    = 3_I4P !< A named palette of foresight_
 integer(I4P), parameter :: PAL_CUBEHELIX = 4_I4P !< `cubehelix`.
 real(R8P),    parameter :: CUBEHELIX_DEFAULT(3) = [0.5_R8P, -1.5_R8P, 1.0_R8P] !< gnuplot's start, cycles, saturation.
 real(R8P),    parameter :: PI = acos(-1.0_R8P) !< Pi.
+integer(I4P), parameter :: COLOR_NAMES_COUNT = 111 !< gnuplot's predefined colors (`show colornames`).
+character(len=17), parameter :: COLOR_NAMES(COLOR_NAMES_COUNT) = [ & !< gnuplot 6.0 color names.
+   'white            ', 'black            ', 'dark-grey        ', 'red              ', 'web-green        ', &
+   'web-blue         ', 'dark-magenta     ', 'dark-cyan        ', 'dark-orange      ', 'dark-yellow      ', &
+   'royalblue        ', 'goldenrod        ', 'dark-spring-green', 'purple           ', 'steelblue        ', &
+   'dark-red         ', 'dark-chartreuse  ', 'orchid           ', 'aquamarine       ', 'brown            ', &
+   'yellow           ', 'turquoise        ', 'grey0            ', 'grey10           ', 'grey20           ', &
+   'grey30           ', 'grey40           ', 'grey50           ', 'grey60           ', 'grey70           ', &
+   'grey             ', 'grey80           ', 'grey90           ', 'grey100          ', 'light-red        ', &
+   'light-green      ', 'light-blue       ', 'light-magenta    ', 'light-cyan       ', 'light-goldenrod  ', &
+   'light-pink       ', 'light-turquoise  ', 'gold             ', 'green            ', 'dark-green       ', &
+   'spring-green     ', 'forest-green     ', 'sea-green        ', 'blue             ', 'dark-blue        ', &
+   'midnight-blue    ', 'navy             ', 'medium-blue      ', 'skyblue          ', 'cyan             ', &
+   'magenta          ', 'dark-turquoise   ', 'dark-pink        ', 'coral            ', 'light-coral      ', &
+   'orange-red       ', 'salmon           ', 'dark-salmon      ', 'khaki            ', 'dark-khaki       ', &
+   'dark-goldenrod   ', 'beige            ', 'olive            ', 'orange           ', 'violet           ', &
+   'dark-violet      ', 'plum             ', 'dark-plum        ', 'dark-olivegreen  ', 'orangered4       ', &
+   'brown4           ', 'sienna4          ', 'orchid4          ', 'mediumpurple3    ', 'slateblue        ', &
+   'yellow4          ', 'sienna1          ', 'tan1             ', 'sandybrown       ', 'light-salmon     ', &
+   'pink             ', 'khaki1           ', 'lemonchiffon     ', 'bisque           ', 'honeydew         ', &
+   'slategrey        ', 'seagreen         ', 'antiquewhite     ', 'chartreuse       ', 'greenyellow      ', &
+   'gray             ', 'light-gray       ', 'light-grey       ', 'dark-gray        ', 'slategray        ', &
+   'gray0            ', 'gray10           ', 'gray20           ', 'gray30           ', 'gray40           ', &
+   'gray50           ', 'gray60           ', 'gray70           ', 'gray80           ', 'gray90           ', &
+   'gray100          ']
+character(len=6), parameter :: COLOR_VALUES(COLOR_NAMES_COUNT) = [ & !< Their RRGGBB values.
+   'ffffff', '000000', 'a0a0a0', 'ff0000', '00c000', '0080ff', 'c000ff', '00eeee', 'c04000', 'c8c800', '4169e1', &
+   'ffc020', '008040', 'c080ff', '306080', '8b0000', '408000', 'ff80ff', '7fffd4', 'a52a2a', 'ffff00', '40e0d0', &
+   '000000', '1a1a1a', '333333', '4d4d4d', '666666', '7f7f7f', '999999', 'b3b3b3', 'c0c0c0', 'cccccc', 'e5e5e5', &
+   'ffffff', 'f03232', '90ee90', 'add8e6', 'f055f0', 'e0ffff', 'eedd82', 'ffb6c1', 'afeeee', 'ffd700', '00ff00', &
+   '006400', '00ff7f', '228b22', '2e8b57', '0000ff', '00008b', '191970', '000080', '0000cd', '87ceeb', '00ffff', &
+   'ff00ff', '00ced1', 'ff1493', 'ff7f50', 'f08080', 'ff4500', 'fa8072', 'e9967a', 'f0e68c', 'bdb76b', 'b8860b', &
+   'f5f5dc', 'a08020', 'ffa500', 'ee82ee', '9400d3', 'dda0dd', '905040', '556b2f', '801400', '801414', '804014', &
+   '804080', '8060c0', '8060ff', '808000', 'ff8040', 'ffa040', 'ffa060', 'ffa070', 'ffc0c0', 'ffff80', 'ffffc0', &
+   'cdb79e', 'f0fff0', 'a0b6cd', 'c1ffc1', 'cdc0b0', '7cff40', 'a0ff20', 'bebebe', 'd3d3d3', 'd3d3d3', 'a0a0a0', &
+   'a0b6cd', '000000', '1a1a1a', '333333', '4d4d4d', '666666', '7f7f7f', '999999', 'b3b3b3', 'cccccc', 'e5e5e5', &
+   'ffffff']
 
 type :: palette_object
    !< Color palette.
@@ -129,62 +167,88 @@ contains
    endfunction hex_color
 
    pure subroutine named_color(name, c, ok)
-   !< Channels of a color: `#rrggbb` or one of gnuplot's names (black, white, red, green, blue, yellow, cyan, magenta,
-   !< gray, grey, orange, purple, dark-green, dark-blue, brown, violet, navy).
+   !< Channels of a palette color, as gnuplot `set palette defined`: `#rrggbb`, `0xrrggbb` or one of gnuplot's 111
+   !< color names (`show colornames`: `red`, `dark-green`, `gray90`, ..., case sensitive).
    character(len=*), intent(in)  :: name !< Color.
    integer(I4P),     intent(out) :: c(3) !< Red, green, blue, 0..255.
    logical,          intent(out) :: ok   !< Color known.
    character(len=:), allocatable :: hex  !< Hexadecimal digits.
+   integer(I4P)                  :: k    !< Name counter.
 
-   ok = .true.
-   select case (trim(name))
-   case ('black')
-      hex = '000000'
-   case ('white')
-      hex = 'ffffff'
-   case ('red')
-      hex = 'ff0000'
-   case ('green')
-      hex = '00ff00'
-   case ('blue')
-      hex = '0000ff'
-   case ('yellow')
-      hex = 'ffff00'
-   case ('cyan')
-      hex = '00ffff'
-   case ('magenta')
-      hex = 'ff00ff'
-   case ('gray')
-      hex = 'bebebe'
-   case ('grey')
-      hex = 'c0c0c0'
-   case ('orange')
-      hex = 'ffa500'
-   case ('purple')
-      hex = 'c080ff'
-   case ('dark-green')
-      hex = '006400'
-   case ('dark-blue')
-      hex = '00008b'
-   case ('brown')
-      hex = 'a52a2a'
-   case ('violet')
-      hex = 'ee82ee'
-   case ('navy')
-      hex = '000080'
-   case default
-      hex = ''
+   hex = ''
+   do k = 1_I4P, COLOR_NAMES_COUNT
+      if (name == COLOR_NAMES(k)) then
+         hex = COLOR_VALUES(k)
+         exit
+      endif
+   enddo
+   if (len(hex) == 0) then
       if (len_trim(name) == 7) then
          if (name(1:1) == '#' .and. verify(name(2:7), '0123456789abcdefABCDEF') == 0) hex = name(2:7)
+      elseif (len_trim(name) == 8) then
+         if ((name(1:2) == '0x' .or. name(1:2) == '0X') .and. verify(name(3:8), '0123456789abcdefABCDEF') == 0) &
+            hex = name(3:8)
       endif
-   endselect
-   c = 0_I4P
-   if (len(hex) == 0) then
-      ok = .false.
-      return
    endif
-   c = nint(hex_channels(hex), I4P)
+   c = 0_I4P
+   ok = len(hex) > 0
+   if (ok) c = nint(hex_channels(hex), I4P)
    endsubroutine named_color
+
+   pure subroutine gnuplot_color(spec, color, ok)
+   !< SVG color of a gnuplot color string, as `lc rgb "spec"`: one of gnuplot's 111 color names (`show colornames`,
+   !< case sensitive, trailing blanks allowed) as its `#rrggbb`, `black` and `white` kept as names (the themes restyle
+   !< them); or `#` or `0x` and 1 to 8 hexadecimal digits, read as gnuplot does as the number 0xAARRGGBB (`#0f0` is
+   !< 0x0000f0): `#rrggbb`, or with an alpha A (0 opaque, 255 transparent) `#rrggbbaa`, aa = 255 - A.
+   character(len=*),              intent(in)  :: spec   !< gnuplot color.
+   character(len=:), allocatable, intent(out) :: color  !< SVG color, empty if not a color.
+   logical,                       intent(out) :: ok     !< A color.
+   character(len=:), allocatable              :: digits !< Hexadecimal digits.
+   integer(I8P)                               :: v      !< Number 0xAARRGGBB.
+   integer(I4P)                               :: alpha  !< Alpha, 0 opaque.
+   integer(I4P)                               :: k      !< Counter.
+   integer(I4P)                               :: d      !< Digit value.
+   character(len=7)                           :: opacity !< Opacity 255 - A, as the red of `#rr0000`.
+
+   color = ''
+   ok = .false.
+   do k = 1_I4P, COLOR_NAMES_COUNT
+      if (spec == COLOR_NAMES(k)) then
+         if (spec == 'black' .or. spec == 'white') then
+            color = trim(spec)
+         else
+            color = '#'//COLOR_VALUES(k)
+         endif
+         ok = .true.
+         return
+      endif
+   enddo
+   digits = ''
+   if (len_trim(spec) >= 2) then
+      if (spec(1:1) == '#') then
+         digits = trim(spec(2:))
+      elseif (len_trim(spec) >= 3) then
+         if (spec(1:2) == '0x' .or. spec(1:2) == '0X') digits = trim(spec(3:))
+      endif
+   endif
+   if (len(digits) < 1 .or. len(digits) > 8) return
+   v = 0_I8P
+   do k = 1_I4P, len(digits, kind=I4P)
+      d = index('0123456789abcdef', digits(k:k), kind=I4P) - 1_I4P
+      if (d < 0_I4P) d = index('0123456789ABCDEF', digits(k:k), kind=I4P) - 1_I4P
+      if (d < 0_I4P) return
+      v = 16_I8P * v + int(d, I8P)
+   enddo
+   alpha = int(v / 16_I8P**6, I4P)
+   v = modulo(v, 16_I8P**6)
+   color = hex_color([int(v / 65536_I8P, I4P), int(modulo(v / 256_I8P, 256_I8P), I4P), int(modulo(v, 256_I8P), I4P)])
+   if (alpha > 0_I4P) then
+      ! the alpha's two digits: those of the red channel of hex_color (no substring of a function result)
+      opacity = hex_color([255_I4P - alpha, 0_I4P, 0_I4P])
+      color = color//opacity(2:3)
+   endif
+   ok = .true.
+   endsubroutine gnuplot_color
 
    subroutine palette_words(words, palette, bad)
    !< Update `palette` from gnuplot `set palette` words: none (the default), `rgbformulae R , G , B` (`rgb`),

@@ -134,23 +134,23 @@ M0.615689,0.866667L0.615689,0.733333"/>
 </g>
 <svg class="fs-plot" x="295.73" y="37" width="200.93" height="212" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
-<path class="fs-ybars" data-cap="18" fill="none" stroke="red" stroke-width="2" vector-effect="non-scaling-stroke" d="M0.115689,0.4L0.115689,0.133333M0.231378,0.533333L0.231378,0.333333M0.384311,0.733333L0.384311,0.533333M0.5,0.8L0.5,0.666667
+<path class="fs-ybars" data-cap="18" fill="none" stroke="#ff0000" stroke-width="2" vector-effect="non-scaling-stroke" d="M0.115689,0.4L0.115689,0.133333M0.231378,0.533333L0.231378,0.333333M0.384311,0.733333L0.384311,0.533333M0.5,0.8L0.5,0.666667
 M0.615689,0.866667L0.615689,0.733333"/>
 <path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#ff7092" fill="none" stroke="none" d="M0.115689,0.266667 M0.231378,0.433333 M0.384311,0.633333 M0.5,0.733333 M0.615689,0.8"/>
 </g>
 </svg>
 <svg class="fs-caps" x="295.73" y="37" width="200.93" height="212" viewBox="0 0 200.93 212" overflow="hidden">
 <g data-series="1">
-<line x1="14.25" y1="84.8" x2="32.25" y2="84.8" stroke="red" stroke-width="2"/>
-<line x1="14.25" y1="28.27" x2="32.25" y2="28.27" stroke="red" stroke-width="2"/>
-<line x1="37.49" y1="113.07" x2="55.49" y2="113.07" stroke="red" stroke-width="2"/>
-<line x1="37.49" y1="70.67" x2="55.49" y2="70.67" stroke="red" stroke-width="2"/>
-<line x1="68.22" y1="155.47" x2="86.22" y2="155.47" stroke="red" stroke-width="2"/>
-<line x1="68.22" y1="113.07" x2="86.22" y2="113.07" stroke="red" stroke-width="2"/>
-<line x1="91.47" y1="169.6" x2="109.47" y2="169.6" stroke="red" stroke-width="2"/>
-<line x1="91.47" y1="141.33" x2="109.47" y2="141.33" stroke="red" stroke-width="2"/>
-<line x1="114.71" y1="183.73" x2="132.71" y2="183.73" stroke="red" stroke-width="2"/>
-<line x1="114.71" y1="155.47" x2="132.71" y2="155.47" stroke="red" stroke-width="2"/>
+<line x1="14.25" y1="84.8" x2="32.25" y2="84.8" stroke="#ff0000" stroke-width="2"/>
+<line x1="14.25" y1="28.27" x2="32.25" y2="28.27" stroke="#ff0000" stroke-width="2"/>
+<line x1="37.49" y1="113.07" x2="55.49" y2="113.07" stroke="#ff0000" stroke-width="2"/>
+<line x1="37.49" y1="70.67" x2="55.49" y2="70.67" stroke="#ff0000" stroke-width="2"/>
+<line x1="68.22" y1="155.47" x2="86.22" y2="155.47" stroke="#ff0000" stroke-width="2"/>
+<line x1="68.22" y1="113.07" x2="86.22" y2="113.07" stroke="#ff0000" stroke-width="2"/>
+<line x1="91.47" y1="169.6" x2="109.47" y2="169.6" stroke="#ff0000" stroke-width="2"/>
+<line x1="91.47" y1="141.33" x2="109.47" y2="141.33" stroke="#ff0000" stroke-width="2"/>
+<line x1="114.71" y1="183.73" x2="132.71" y2="183.73" stroke="#ff0000" stroke-width="2"/>
+<line x1="114.71" y1="155.47" x2="132.71" y2="155.47" stroke="#ff0000" stroke-width="2"/>
 </g>
 </svg>
 <svg class="fs-marks" x="295.73" y="37" width="200.93" height="212" viewBox="0 0 200.93 212" overflow="hidden">

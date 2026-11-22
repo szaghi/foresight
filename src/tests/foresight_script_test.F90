@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(115)                           !< Per-check outcome.
+logical                       :: test_passed(117)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -397,7 +397,7 @@ test_passed(46) = iostat == 0_I4P
 if (test_passed(46)) then
    associate(panel => interpreter%figure%panels(1))
       test_passed(46) = panel%series(2)%style%with == WITH_READOUT .and. panel%series(2)%format == '%6.3f' .and. &
-                        panel%series(2)%style%color == 'red' .and. panel%readout_h == 'right' .and. &
+                        panel%series(2)%style%color == '#ff0000' .and. panel%readout_h == 'right' .and. &
                         panel%readout_v == 'bottom' .and. panel%readout_horizontal .and. .not. panel%readout_opaque &
                         .and. panel%readout_size == 20.0_R8P
       call panel%data_extent(xmin, xmax, ymin, ymax, found)
@@ -434,7 +434,7 @@ if (test_passed(48)) then
                         same(series(1)%xhigh * 2.0_R8P, [3, 6, 10]) .and. same(series(1)%ylow, [0, 0, 0]) .and. &
                         series(1)%style%fill == FILL_SOLID .and. series(1)%style%density == 0.5_R8P .and. &
                         .not. series(1)%style%border .and. same(series(2)%xlow * 10.0_R8P, [9, 19, 39]) .and. &
-                        series(2)%style%fill == FILL_EMPTY .and. series(2)%style%stroke_color() == 'red'
+                        series(2)%style%fill == FILL_EMPTY .and. series(2)%style%stroke_color() == '#ff0000'
       ! the autoscale reaches the box edges and 0
       call interpreter%figure%panels(1)%data_extent(xmin, xmax, ymin, ymax, found)
       test_passed(48) = test_passed(48) .and. xmin == 0.5_R8P .and. xmax == 5.0_R8P .and. ymin(1) == -2.0_R8P
@@ -831,7 +831,7 @@ if (test_passed(71)) then
                         panel%series(2)%head == 0_I4P .and. &
                         trim(panel%series(5)%texts(1)) == 'alpha' .and. trim(panel%series(5)%texts(4)) == 'c d' .and. &
                         panel%series(5)%text_anchor == 'end' .and. panel%series(5)%text_rotate == 45.0_R8P .and. &
-                        panel%series(5)%text_point .and. panel%series(5)%text_color == 'red' .and. &
+                        panel%series(5)%text_point .and. panel%series(5)%text_color == '#ff0000' .and. &
                         panel%series(5)%style%pointtype == 7_I4P .and. same(panel%series(5)%text_offset, [1, 2])
       arcs = panel%series(1)%tips
       test_passed(71) = test_passed(71) .and. same(arcs(1, :), [2, 4, -1, 5]) .and. same(arcs(2, :), [5, 2, -1, 2])
@@ -2081,11 +2081,11 @@ if (test_passed(109)) then
                          .and. panel%notes(1)%justify == 'right' .and. panel%notes(1)%point .and. &
                          panel%notes(1)%pt == 7_I4P .and. abs(panel%notes(1)%at%x - 2.0_R8P * atan(1.0_R8P)) < 1e-12_R8P &
                          .and. panel%notes(2)%at%sx == 'graph' .and. panel%notes(2)%at%sy == 'first' .and. &
-                         panel%notes(2)%color == 'red' .and. panel%notes(2)%front .and. panel%notes(2)%rotate == 30.0_R8P
+                         panel%notes(2)%color == '#ff0000' .and. panel%notes(2)%front .and. panel%notes(2)%rotate == 30.0_R8P
       test_passed(109) = test_passed(109) .and. size(panel%arrows) == 1 .and. panel%arrows(1)%relative .and. &
                          panel%arrows(1)%head == 3_I4P .and. panel%arrows(1)%fill == 'filled' .and. &
                          panel%arrows(1)%length_system == 'screen' .and. panel%arrows(1)%angle == 20.0_R8P .and. &
-                         panel%arrows(1)%color == 'blue' .and. len(panel%arrows(1)%dashes) > 0
+                         panel%arrows(1)%color == '#0000ff' .and. len(panel%arrows(1)%dashes) > 0
       test_passed(109) = test_passed(109) .and. size(panel%objects) == 3 .and. panel%objects(1)%tag == 3_I4P .and. &
                          panel%objects(1)%layer == 'behind' .and. panel%objects(1)%points(1)%sy == 'graph' .and. &
                          panel%objects(1)%style%color == '#009e73' .and. panel%objects(2)%tag == 4_I4P .and. &
@@ -2098,7 +2098,7 @@ test_passed(109) = test_passed(109) .and. iostat == 0_I4P
 if (test_passed(109)) then
    associate(panel => interpreter%figure%panels(1))
       test_passed(109) = size(panel%notes) == 1 .and. .not. allocated(panel%arrows) .and. &
-                         panel%objects(1)%style%color == 'red' .and. panel%objects(1)%kind == 'rectangle' .and. &
+                         panel%objects(1)%style%color == '#ff0000' .and. panel%objects(1)%kind == 'rectangle' .and. &
                          panel%objects(1)%layer == 'behind'
    endassociate
 endif
@@ -2261,12 +2261,12 @@ if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(113) = iostat == 0_I4P
 if (test_passed(113)) then
    associate(panel => interpreter%figure%panels(1))
-      test_passed(113) = panel%arrows(1)%color == 'green' .and. panel%arrows(1)%fill == 'filled' .and. &
+      test_passed(113) = panel%arrows(1)%color == '#00ff00' .and. panel%arrows(1)%fill == 'filled' .and. &
                          panel%arrows(1)%lw == 2.0_R8P .and. len(panel%arrows(1)%dashes) > 0 .and. &
                          panel%arrows(1)%length_system == 'screen' .and. panel%arrows(2)%head == 0_I4P .and. &
-                         panel%arrows(2)%color == 'blue' .and. panel%arrows(2)%lw == 1.0_R8P .and. &
-                         panel%objects(1)%style%color == 'yellow' .and. panel%objects(1)%style%density == 0.5_R8P .and. &
-                         panel%objects(1)%style%border_color == 'green' .and. panel%objects(1)%style%linewidth == 2.0_R8P &
+                         panel%arrows(2)%color == '#0000ff' .and. panel%arrows(2)%lw == 1.0_R8P .and. &
+                         panel%objects(1)%style%color == '#ffff00' .and. panel%objects(1)%style%density == 0.5_R8P .and. &
+                         panel%objects(1)%style%border_color == '#00ff00' .and. panel%objects(1)%style%linewidth == 2.0_R8P &
                          .and. panel%objects(1)%layer == 'back' .and. panel%objects(2)%style%dashtype == 3_I4P .and. &
                          panel%notes(1)%at%sx == 'character' .and. panel%notes(1)%at%sy == 'graph' .and. &
                          panel%arrows(3)%from%sx == 'character' .and. panel%arrows(3)%length_system == 'character'
@@ -2305,8 +2305,8 @@ if (test_passed(114)) then
    associate(panel => interpreter%figure%panels(1))
       test_passed(114) = panel%series(1)%label_axis == 'y' .and. panel%series(1)%pointinterval == 2_I4P .and. &
                          panel%series(2)%pointinterval == 2_I4P .and. panel%series(3)%label_axis == 'x2' .and. &
-                         panel%errorbar_size == 2.0_R8P .and. panel%errorbar_color == 'red' .and. &
-                         panel%errorbar_lw == 2.0_R8P .and. panel%hist_title_color == 'blue' .and. &
+                         panel%errorbar_size == 2.0_R8P .and. panel%errorbar_color == '#ff0000' .and. &
+                         panel%errorbar_lw == 2.0_R8P .and. panel%hist_title_color == '#0000ff' .and. &
                          all(panel%hist_title_offset == [1.0_R8P, -0.5_R8P])
       ! the y labels replace the y ticks; the x2 ones need set x2tics (as gnuplot 6.0)
       if (test_passed(114)) test_passed(114) = panel%yaxis%labelled() .and. .not. panel%x2axis%labelled()
@@ -2366,6 +2366,53 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_reset.html')
 close(unit, status='delete')
 
+! color strings as gnuplot reads them: its names (green is #00ff00, not SVG's #008000), # and 0x numbers with alpha;
+! an SVG-only name fails as gnuplot
+call interpreter%init(scratch)
+call interpreter%run_text('set object 1 rect from 0,0 to 1,1 fc rgb "0x8000ff00"'//new_line('a')// &
+                          'set label 1 "a" at 0,0 tc "dark-green"'//new_line('a')// &
+                          'plot x lc "green", 2*x linecolor rgbcolor "gray90"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(116) = iostat == 0_I4P
+if (test_passed(116)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(116) = panel%series(1)%style%color == '#00ff00' .and. panel%series(2)%style%color == '#e5e5e5' .and. &
+                         panel%objects(1)%style%color == '#00ff007f' .and. panel%notes(1)%color == '#006400'
+   endassociate
+endif
+call interpreter%run_text('plot x lc rgb "darkgreen"', iostat, iomsg)
+test_passed(116) = test_passed(116) .and. iostat /= 0_I4P .and. &
+                   index(iomsg, 'unrecognized color name "darkgreen" and not a string "#AARRGGBB"') > 0
+call interpreter%run_text('set palette defined (0 "dark-green", 1 "0xffffff"); plot x lc rgb "Green"', iostat, iomsg)
+test_passed(116) = test_passed(116) .and. iostat /= 0_I4P .and. index(iomsg, '"Green"') > 0
+
+! stats of a datablock counts its blank lines and blocks (gnuplot: 3 2 4); stats of a datablock or an array opens no
+! file of its name (nvfortran created an empty one)
+call interpreter%init(scratch)
+call interpreter%run_text('$S << EOD'//new_line('a')//'1 2'//new_line('a')//'2 3'//new_line('a')//''//new_line('a')// &
+                          '3 4'//new_line('a')//''//new_line('a')//''//new_line('a')//'5 6'//new_line('a')//'EOD'// &
+                          new_line('a')//'stats $S u 2 nooutput; b1 = STATS_blank; b2 = STATS_blocks; b3 = STATS_records'// &
+                          new_line('a')//'array R = [1, 2, 3]; stats R nooutput', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(117) = iostat == 0_I4P
+if (test_passed(117)) then
+   block
+      real(R8P) :: counts(4) !< b1, b2, b3, STATS_blank.
+      logical   :: known(4)  !< Variables defined.
+      logical   :: there     !< File exists.
+
+      call interpreter%symbols%value_of('b1', counts(1), known(1))
+      call interpreter%symbols%value_of('b2', counts(2), known(2))
+      call interpreter%symbols%value_of('b3', counts(3), known(3))
+      call interpreter%symbols%value_of('STATS_blank', counts(4), known(4))
+      test_passed(117) = all(known) .and. same(counts, [3, 2, 4, 0])
+      inquire(file='$S', exist=there)
+      test_passed(117) = test_passed(117) .and. .not. there
+      inquire(file='R', exist=there)
+      test_passed(117) = test_passed(117) .and. .not. there
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2374,7 +2421,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,115L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,117L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

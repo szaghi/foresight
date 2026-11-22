@@ -4,7 +4,7 @@ program foresight_palette_test
 !< foresight_palette test: palette colors against gnuplot 6.0 (`test palette` tables, its PNG images), palette words;
 !< the named palettes against their authors' 8-bit tables.
 use, intrinsic :: iso_fortran_env, only : output_unit
-use foresight_palette, only : hex_color, palette_object, palette_words
+use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_object, palette_words
 use penf, only : I4P, R8P
 
 implicit none
@@ -13,7 +13,10 @@ character(len=:), allocatable :: bad             !< Unknown word.
 type(palette_object)          :: q               !< Second palette.
 type(palette_object)          :: fresh           !< Default palette (nvfortran: no empty constructor of a type
                                                  !< with allocatable components).
-logical                       :: test_passed(16) !< Per-check outcome.
+logical                       :: test_passed(17) !< Per-check outcome.
+character(len=:), allocatable :: color           !< SVG color.
+integer(I4P)                  :: c(3)            !< Channels.
+logical                       :: ok              !< Color known.
 integer(I4P)                  :: k               !< Band counter.
 integer, parameter            :: BATLOW10(3, 10) = reshape([1, 25, 89, 16, 63, 96, 28, 90, 98, 60, 109, 86, &
                                                             104, 123, 62, 157, 137, 43, 210, 147, 67, 248, 161, 123, &
@@ -152,11 +155,53 @@ call palette_words('cubehelix negative start 1', p, bad)
 test_passed(16) = test_passed(16) .and. bad == 'start'
 call palette_words('cubehelix start', p, bad)
 test_passed(16) = test_passed(16) .and. index(bad, 'a number is expected') > 0
-write(output_unit, '(A,16L2)') 'foresight palette checks:', test_passed
+! gnuplot's color strings (`lc rgb "..."`), against gnuplot 6.0's `show colornames` and its svg output: names case
+! sensitive, trailing blanks allowed; # and 0x the number 0xAARRGGBB (#0f0 is 0x0000f0, gnuplot's blue 240)
+test_passed(17) = color_is('green', '#00ff00') .and. color_is('dark-green', '#006400') .and. &
+                  color_is('gray90', '#e5e5e5') .and. color_is('web-green', '#00c000') .and. color_is('grey', '#c0c0c0') &
+                  .and. color_is('gray', '#bebebe') .and. color_is('black', 'black') .and. color_is('white', 'white') &
+                  .and. color_is('green ', '#00ff00') .and. color_is('#0f0', '#0000f0') .and. &
+                  color_is('#00FF00', '#00ff00') .and. color_is('0x00ff00', '#00ff00') .and. &
+                  color_is('#8000ff00', '#00ff007f') .and. color_is('0x8000ff00', '#00ff007f')
+test_passed(17) = test_passed(17) .and. .not. (known('Green') .or. known(' green') .or. known('darkgreen') .or. &
+                  known('#') .or. known('#zz') .or. known('#123456789') .or. known('0x') .or. known(''))
+! palettes (set palette defined) take #rrggbb, 0xrrggbb and the names, as gnuplot ('#0f0' is refused there)
+call named_color('dark-green', c, ok)
+test_passed(17) = test_passed(17) .and. ok .and. same(c, [0, 100, 0])
+call named_color('0x00ff00', c, ok)
+test_passed(17) = test_passed(17) .and. ok .and. same(c, [0, 255, 0])
+call named_color('light-goldenrod', c, ok)
+test_passed(17) = test_passed(17) .and. ok .and. same(c, [238, 221, 130])
+call named_color('#0f0', c, ok)
+test_passed(17) = test_passed(17) .and. .not. ok
+write(output_unit, '(A,17L2)') 'foresight palette checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function color_is(spec, expected) result(equal)
+   !< Whether the gnuplot color `spec` is the SVG color `expected`.
+   character(len=*), intent(in)  :: spec     !< gnuplot color.
+   character(len=*), intent(in)  :: expected !< SVG color.
+   logical                       :: equal    !< Equal.
+   character(len=:), allocatable :: svg      !< SVG color.
+   logical                       :: valid    !< A color.
+
+   call gnuplot_color(spec, svg, valid)
+   equal = valid
+   if (equal) equal = svg == expected
+   if (.not. equal) write(output_unit, '(A)') 'gnuplot color "'//spec//'": "'//svg//'", expected "'//expected//'"'
+   endfunction color_is
+
+   function known(spec) result(valid)
+   !< Whether `spec` is a gnuplot color.
+   character(len=*), intent(in)  :: spec  !< gnuplot color.
+   logical                       :: valid !< A color.
+   character(len=:), allocatable :: svg   !< SVG color.
+
+   call gnuplot_color(spec, svg, valid)
+   endfunction known
+
    pure function same(c, expected) result(equal)
    !< Whether the channels `c` are `expected`.
    integer(I4P), intent(in) :: c(3)        !< Channels.

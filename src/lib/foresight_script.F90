@@ -117,7 +117,7 @@ use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
-use foresight_palette, only : palette_gradient, palette_object, palette_words
+use foresight_palette, only : gnuplot_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
@@ -538,6 +538,8 @@ contains
    call tokenize(statement, tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (size(tokens) == 0) return
+   call resolve_colors(tokens, iostat, iomsg)
+   if (iostat /= 0_I4P) return
    if (tokens(1)%kind /= TOKEN_WORD) then
       call fail('a command was expected, found "'//tokens(1)%text//'"', iostat, iomsg)
       return
@@ -638,6 +640,8 @@ contains
       endif
       if (size(tokens) > 1) self%last_plot = self%last_plot//', '//after_command(statement)
       call tokenize(self%last_plot, tokens, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call resolve_colors(tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
       call self%plot_command(tokens, self%last_plot, iostat, iomsg)
    else
@@ -1346,33 +1350,50 @@ contains
       endsubroutine copy_counts
 
       subroutine file_counts
-      !< Blank lines and blocks of the file (a block ends at two blank lines), header records, columns: gnuplot's.
-      character(len=:), allocatable :: text  !< File content.
-      character(len=256)            :: line  !< One line.
-      integer(I4P)                  :: u     !< Unit.
-      integer(I4P)                  :: ios   !< Status.
-      integer(I4P)                  :: run   !< Consecutive blank lines.
+      !< Blank lines and blocks of the file or datablock (a block ends at two blank lines), header records, columns:
+      !< gnuplot's.
+      character(len=:), allocatable :: text    !< File or datablock content, lines ended by new lines.
+      character(len=:), allocatable :: one     !< One line.
+      character(len=256)            :: line    !< One line read.
+      integer(I4P)                  :: u       !< Unit.
+      integer(I4P)                  :: ios     !< Status.
+      integer(I4P)                  :: run     !< Consecutive blank lines.
       integer(I4P)                  :: doubles !< Second blank lines.
+      integer(I4P)                  :: cut     !< End of a line.
+      logical                       :: found   !< Datablock defined.
 
       r%blank = 0_I4P
       doubles = 0_I4P
       run = 0_I4P
-      open(newunit=u, file=file, action='read', iostat=ios)
-      if (ios == 0_I4P) then
-         do
-            read(u, '(A)', iostat=ios) line
-            if (ios /= 0_I4P) exit
-            text = trim(line)
-            if (len(trim(adjustl(text))) == 0 .or. text == achar(13)) then
-               r%blank = r%blank + 1_I4P
-               run = run + 1_I4P
-               if (run == 2_I4P) doubles = doubles + 1_I4P
-            else
-               run = 0_I4P
-            endif
-         enddo
-         close(u)
+      text = ''
+      if (is_datablock(file)) then
+         call self%symbols%string_of(file, text, found)
+         if (.not. found) text = ''
+      elseif (.not. self%symbols%is_array(file)) then
+         ! status old: an open for reading must not create the file (nvfortran creates it otherwise)
+         open(newunit=u, file=file, status='old', action='read', iostat=ios)
+         if (ios == 0_I4P) then
+            do
+               read(u, '(A)', iostat=ios) line
+               if (ios /= 0_I4P) exit
+               text = text//trim(line)//new_line('a')
+            enddo
+            close(u)
+         endif
       endif
+      do while (len(text) > 0)
+         cut = index(text, new_line('a'), kind=I4P)
+         if (cut == 0_I4P) cut = len(text, kind=I4P) + 1_I4P
+         one = text(1:cut - 1_I4P)
+         text = text(min(cut + 1_I4P, len(text, kind=I4P) + 1_I4P):)
+         if (len_trim(adjustl(one)) == 0 .or. one == achar(13)) then
+            r%blank = r%blank + 1_I4P
+            run = run + 1_I4P
+            if (run == 2_I4P) doubles = doubles + 1_I4P
+         else
+            run = 0_I4P
+         endif
+      enddo
       r%blocks = doubles + 1_I4P
       r%headers = merge(1_I4P, 0_I4P, any(fields%name_count() > 0_I4P))
       r%columns = 0_I4P
@@ -8134,6 +8155,36 @@ contains
    is = .false.
    if (size(tokens) >= 2) is = keyword(tokens(2)%text, 'multiplot', 5_I4P)
    endfunction is_multiplot_option
+
+   pure subroutine resolve_colors(tokens, iostat, iomsg)
+   !< Replace each color string of a statement, a string after `rgb`, `lc`, `fc`, `tc` or `background` (and their
+   !< long forms), by its SVG color, as gnuplot reads it (`gnuplot_color`): `"green"` is `#00ff00`, gnuplot's, not
+   !< SVG's `#008000`. A string that is no color fails as gnuplot.
+   type(token_object),            intent(inout) :: tokens(:) !< Tokens.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: color     !< SVG color.
+   character(len=:), allocatable                :: w         !< Previous word.
+   logical                                      :: ok        !< A color.
+   integer(I4P)                                 :: i         !< Token counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   do i = 2_I4P, size(tokens, kind=I4P)
+      if (tokens(i)%kind /= TOKEN_STRING .or. tokens(i - 1_I4P)%kind /= TOKEN_WORD) cycle
+      w = tokens(i - 1_I4P)%text
+      if (.not. (keyword(w, 'rgbcolor', 3_I4P) .or. w == 'lc' .or. keyword(w, 'linecolor', 5_I4P) .or. &
+                 w == 'fc' .or. keyword(w, 'fillcolor', 5_I4P) .or. w == 'tc' .or. keyword(w, 'textcolor', 5_I4P) .or. &
+                 keyword(w, 'background', 5_I4P))) cycle
+      call gnuplot_color(tokens(i)%text, color, ok)
+      if (.not. ok) then
+         call fail('unrecognized color name "'//tokens(i)%text//'" and not a string "#AARRGGBB" or "0xAARRGGBB"', &
+                   iostat, iomsg)
+         return
+      endif
+      tokens(i)%text = color
+   enddo
+   endsubroutine resolve_colors
 
    pure subroutine fail(message, iostat, iomsg)
    !< Set an error.

@@ -151,7 +151,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
 | **t**itle **columnh**ead[`(N)`] | key entry from the [column header](#column-headers) of column `N`, or of the y column |
 | **ax**es `x1y1` / `x1y2` / `x2y1` / `x2y2` | plot against the first axes (default), the [second y axis](#second-y-axis), the [second x axis](#second-x-axis), or both second axes |
-| `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color, or the color of linetype `N` |
+| `lc` [**rgb**] `"color"` / `lc N` / `lt N` | color (a gnuplot [color name](#color-names) or `#RRGGBB`), or the color of linetype `N` |
 | `lc` [**rgb**] **var**iable | a color per point from the last `using` column (`using 1:2:3`): the linetype color of its number (cycling as `lc N`), or with `rgb` the 24-bit color `0xRRGGBB`; with `lines` (each segment in the color of its end point; in the key, the line sample in the first point's, the point sample in the last one's), `points`, `linespoints` and `impulses`, not with `smooth` |
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5, point size |
 | `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
@@ -879,6 +879,21 @@ the first 6 colors of a categorical order of the Scientific colour maps (`actonS
 colors of the [named palettes](#named-palettes), the most distinct first; 8 by default; any case). The sequence
 applies to the series added after it and carries over to the next multiplot panels.
 
+### Color names
+
+```gnuplot
+plot sin(x) lc 'green', cos(x) lc rgb 'dark-green', -sin(x) lc rgb '#c04000', -cos(x) lc rgb '#8000c0ff'
+```
+
+A color string (after `lc`, `rgb`, `fc`, `tc`, in every command) is read as gnuplot 6.0 reads it: one of its 111 names
+(`show colornames`: `red`, `dark-green`, `light-goldenrod`, `gray0` ... `gray100`, case sensitive), or `#` / `0x` and
+the hexadecimal number `0xRRGGBB` or `0xAARRGGBB`, the alpha `AA` from 0 (opaque) to 255 (transparent). The names
+take gnuplot's colors, not the SVG ones of the same name: `green` is `#00ff00` (SVG's `#008000`), `gray` `#bebebe`,
+`grey` `#c0c0c0`, `purple` `#c080ff`. An SVG name gnuplot does not know (`darkgreen`, `Green`) is an error, as in
+gnuplot: `unrecognized color name "darkgreen" and not a string "#AARRGGBB" or "0xAARRGGBB"`. As gnuplot too, `#0f0`
+is the number 0x0000f0, a blue, not CSS's short green. The [library](library) keeps SVG colors (`lc='green'` is
+`#008000` there).
+
 ### Colors per point and from the palette
 
 ```gnuplot
@@ -1244,8 +1259,7 @@ gnuplot. Undefined values are transparent.
 The palette maps the values over `cbrange` (autoscaled to the values, not extended) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
-`#rrggbb` or one of gnuplot's names black, white, red, green, blue, yellow, cyan, magenta, gray/grey, orange,
-purple, dark-green, dark-blue, brown, violet, navy), `cubehelix` (Dave Green's helix through the color cube, lightness
+`#rrggbb`, `0xrrggbb` or one of gnuplot's 111 [color names](#color-names)), `cubehelix` (Dave Green's helix through the color cube, lightness
 rising with gray: `start S` its starting hue, `cycles C` its turns, `saturation S`; gnuplot's 0.5, -1.5, 1, reset at
 each `cubehelix`, the options right after it), `file 'f'` (a gradient read from a data file, see below), `gray`,
 `viridis`, or a [named palette](#named-palettes);
