@@ -154,6 +154,40 @@ check("strftime before 1970",
   viewer.strftime("%F %T %p %k|%l|%tH|%tM|%tS", -86400 * 400 + 5025.5) ===
   "1968-11-27 01:23:45 am  1| 1|-9598|36|14");
 
+// enhanced text: the same <tspan> elements as foresight_enhanced (foresight_enhanced_test, 12 px)
+function spans(text) {
+  var r = viewer.runsSpans(viewer.enhancedRuns(text), 12);
+  if (r.length === 1 && Object.keys(r[0].attributes).length === 0) return r[0].text;
+  return r.map(function (x) {
+    return "<tspan" + Object.keys(x.attributes).map(function (k) {
+      return " " + k + "=\"" + x.attributes[k] + "\"";
+    }).join("") + ">" + x.text + "</tspan>";
+  }).join("");
+}
+check("enhanced nested", spans("x^{a^b}") === "<tspan>x</tspan><tspan font-size=\"9.6\" dy=\"-6\">a</tspan>" +
+  "<tspan font-size=\"7.68\" dy=\"-4.8\">b</tspan>" &&
+  spans("x_{i_j}") === "<tspan>x</tspan><tspan font-size=\"9.6\" dy=\"3.6\">i</tspan>" +
+  "<tspan font-size=\"7.68\" dy=\"2.88\">j</tspan>");
+check("enhanced sub after sup", spans("x^2_3") === "<tspan>x</tspan><tspan font-size=\"9.6\" dy=\"-6\">2</tspan>" +
+  "<tspan font-size=\"9.6\" dy=\"9.6\">3</tspan>");
+check("enhanced & @ ~", spans("a&{bb}c") === "<tspan>a</tspan><tspan fill=\"none\">bb</tspan><tspan>c</tspan>" &&
+  spans("a@_bc") === "<tspan>a</tspan><tspan font-size=\"9.6\" dy=\"3.6\">b</tspan>" +
+  "<tspan dx=\"-5.28\" dy=\"-3.6\">c</tspan>" &&
+  spans("~a{.8-}") === "<tspan>a</tspan><tspan dx=\"-6.6\" dy=\"-9.6\">-</tspan>");
+check("enhanced fonts", spans("{/=8 s}{/*1.5 L}") ===
+  "<tspan font-size=\"8\">s</tspan><tspan font-size=\"18\">L</tspan>" &&
+  spans("{/:Italic i}{/:Bold=16 b}") === "<tspan font-style=\"italic\">i</tspan>" +
+  "<tspan font-size=\"16\" font-weight=\"bold\">b</tspan>" &&
+  spans("{/Helvetica:Italic h}") === "<tspan font-style=\"italic\" font-family=\"Helvetica\">h</tspan>" &&
+  spans("{/Symbol abg}") === "\u03b1\u03b2\u03b3");
+check("enhanced escapes", spans("x\\^2") === "x^2" && spans("a\\_1") === "a_1" &&
+  !viewer.hasMarkup("x**2 + 1 (m/s)") && viewer.hasMarkup("t_1"));
+check("tics noenhanced", viewer.readTics("noenhanced", "").plain === true &&
+  viewer.readTics("noenhanced", "").mode === "auto" && !viewer.readTics("", "").plain &&
+  viewer.readTics("noenhanced * 0.4 * out", "").step === "0.4" &&
+  viewer.readTics("noenhanced labels 0:a_0", "").mode === "labels" &&
+  !viewer.readTics("noenhanced labels 0:a_0", "").add);
+
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });
 console.log("Are all tests passed? " + (failed.length === 0 ? "T" : "F"));

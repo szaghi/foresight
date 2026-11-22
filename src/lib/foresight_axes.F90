@@ -53,6 +53,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
                                   label_object, shape_object
 use foresight_axis, only : axis_object
+use foresight_enhanced, only : has_markup, markup_literal
 use foresight_format, only : int_str, real_str
 use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : hex_color, palette_object, palette_words
@@ -163,6 +164,9 @@ type :: axes_object
    character(len=6)                 :: key_v = 'top'   !< Key vertical position: top, center, bottom.
    logical                          :: key_box = .false. !< Draw a box around the key.
    logical                          :: key_reverse = .false. !< Samples left of the titles (gnuplot `reverse`).
+   logical                          :: key_plain = .false. !< The key's texts as they are, not enhanced (`noenhanced`).
+   logical                          :: title_plain = .false. !< The title as it is, not enhanced (`noenhanced`).
+   logical                          :: label_plain(4) = .false. !< The x, y, y2, x2 labels as they are (`noenhanced`).
    logical                          :: key_left = .false. !< Titles left-justified (gnuplot `Left`), else right.
    logical                          :: key_invert = .false. !< Entries in reverse order (gnuplot `invert`).
    logical                          :: key_opaque = .false. !< The key area painted over the plot (`opaque`).
@@ -1282,7 +1286,9 @@ contains
          ! a panel chart alone: no axes, the chart and its key fill the panel below the title
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
+            backend%literal = self%title_plain
             call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            backend%literal = .false.
             area(3) = area(3) + LINE_HEIGHT * font_size + GAP
          endif
          select case (self%series(1)%style%with)
@@ -1305,7 +1311,9 @@ contains
          ! readouts alone: no axes, the block fills the panel below the title
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
+            backend%literal = self%title_plain
             call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            backend%literal = .false.
             area(3) = area(3) + LINE_HEIGHT * font_size + GAP
          endif
          if (self%readout) call self%draw_readouts(backend, area, font_size, .true.)
@@ -1335,9 +1343,11 @@ contains
       area = [bx + 6.0_R8P * font_size, bx + bw - 2.0_R8P * font_size, &
               by + 2.0_R8P * font_size + above, by + bh - 4.0_R8P * font_size]
       call self%setup_axes(area, raw)
+      if (backend%enhanced) call plain_ticks(self)
       self%x2_rise = x2labels_rise(self, backend, font_size)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
       call self%setup_axes(area, raw)
+      if (backend%enhanced) call plain_ticks(self)
       self%x2_rise = x2labels_rise(self, backend, font_size)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
@@ -1376,6 +1386,15 @@ contains
       view%x2format = ''
       if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
    endif
+   ! tick labels with markup, drawn again by the viewer as enhanced text
+   view%markup = axis_markup(self%xaxis) .or. axis_markup(self%yaxis)
+   if (self%y2_active) view%markup = view%markup .or. axis_markup(self%y2axis)
+   if (self%x2_active) view%markup = view%markup .or. axis_markup(self%x2axis)
+   ! tick labels not read as enhanced text: `noenhanced` first
+   view%xtics = plain_word(self%xaxis%tics%plain, view%xtics)
+   view%ytics = plain_word(self%yaxis%tics%plain, view%ytics)
+   if (self%y2_active) view%y2tics = plain_word(self%y2axis%tics%plain, view%y2tics)
+   if (self%x2_active) view%x2tics = plain_word(self%x2axis%tics%plain, view%x2tics)
    view%gridlines = grid_words(self%grid_lines)
    view%gridstyle = ''
    if (allocated(self%grid_lc) .or. self%grid_lw /= 0.5_R8P .or. self%grid_dt > 0_I4P) then
@@ -1909,8 +1928,11 @@ contains
             if (any(self%x2axis%ticks%major)) label_y = top - out_shift(self%x2axis%tics) - GAP - &
                                                        0.25_R8P * font_size - backend%row_height()
          endif
+         backend%literal = self%label_plain(4)
          call backend%text(0.5_R8P * (left + right), label_y, self%x2axis%label, 'middle')
+         backend%literal = .false.
       endif
+      backend%literal = self%label_plain(1)
       if (self%xaxis%has_label()) then
          if (angle /= 0.0_R8P .or. self%xaxis%tics%out) then
             ! below the rotated or moved tick labels
@@ -1926,11 +1948,14 @@ contains
                               self%xaxis%label, 'middle')
          endif
       endif
+      backend%literal = self%label_plain(2)
       if (self%yaxis%has_label()) call backend%text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
                                                     self%yaxis%label, 'middle', rotate=-90.0_R8P)
+      backend%literal = self%label_plain(3)
       ! read upward as the y label, the glyphs on the left of the baseline
       if (self%y2axis%has_label()) call backend%text(x1 - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
                                                      self%y2axis%label, 'middle', rotate=-90.0_R8P)
+      backend%literal = .false.
       if (self%has_title()) then
          title_y = y0 + PAD + font_size
          ! on a text device, the row right above the x2 label or tick labels, with no empty row between them
@@ -1943,8 +1968,10 @@ contains
             endif
          endif
          ! gnuplot `set title offset X,Y`: characters, y up
+         backend%literal = self%title_plain
          call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
                            title_y - self%title_offset(2) * font_size, self%title, 'middle')
+         backend%literal = .false.
       endif
    endassociate
    endsubroutine draw_frame
@@ -2028,6 +2055,45 @@ contains
                                                                        zline%dasharray())
    endif
    endsubroutine draw_zero_axes
+
+   pure function axis_markup(axis) result(yes)
+   !< Whether a tick label of `axis` (drawn, from the data, of the explicit list, or its format) holds enhanced text
+   !< markup, unless the labels are as they are (`noenhanced`).
+   type(axis_object), intent(in) :: axis !< Axis.
+   logical                       :: yes  !< Markup.
+   integer(I4P)                  :: k    !< Counter.
+
+   yes = .false.
+   if (axis%tics%plain) return
+   if (allocated(axis%ticks)) then
+      do k = 1_I4P, size(axis%ticks, kind=I4P)
+         if (allocated(axis%ticks(k)%label)) yes = yes .or. has_markup(axis%ticks(k)%label)
+      enddo
+   endif
+   if (allocated(axis%labels)) then
+      do k = 1_I4P, size(axis%labels, kind=I4P)
+         if (allocated(axis%labels(k)%label)) yes = yes .or. has_markup(axis%labels(k)%label)
+      enddo
+   endif
+   if (allocated(axis%tics%list)) then
+      do k = 1_I4P, size(axis%tics%list, kind=I4P)
+         if (allocated(axis%tics%list(k)%label)) yes = yes .or. has_markup(axis%tics%list(k)%label)
+      enddo
+   endif
+   if (axis%tics%has_format()) yes = yes .or. has_markup(axis%tics%format)
+   endfunction axis_markup
+
+   pure function plain_word(plain, tics) result(words)
+   !< The viewer tick settings `tics`, after `noenhanced` if the labels are `plain` (not read as enhanced text).
+   logical,          intent(in)  :: plain !< Labels as they are.
+   character(len=*), intent(in)  :: tics  !< Tick settings.
+   character(len=:), allocatable :: words !< Settings.
+
+   words = tics
+   if (.not. plain) return
+   words = 'noenhanced'
+   if (len(tics) > 0) words = words//' '//tics
+   endfunction plain_word
 
    pure function grid_words(lines) result(words)
    !< The grid lines as the viewer reads them (`x y mx`), empty for the default x and y.
@@ -2245,7 +2311,9 @@ contains
                                           FRAME_COLOR, 'none', 1.0_R8P)
       if (allocated(self%key_title)) then
          if (len(self%key_title) > 0) then
+            backend%literal = self%key_plain
             call backend%text(left + 0.5_R8P * width, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, 'middle')
+            backend%literal = .false.
             top = top + LINE_HEIGHT * font_size
          endif
       endif
@@ -2285,7 +2353,9 @@ contains
                                                  pt=self%series(s)%style%pointtype, &
                                                  line_width=self%series(s)%style%linewidth)
       endif
+      backend%literal = self%key_plain .or. self%series(s)%title_plain
       call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
+      backend%literal = .false.
       call backend%end_group
    enddo
    ! the rows of column stacks, by their names, the last row first (as gnuplot): no series of their own
@@ -2305,7 +2375,9 @@ contains
                                  [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
                                   yc - 0.35_R8P * font_size], row%fill_color(), row%density, row%stroke_color(), &
                                  row%linewidth)
+            backend%literal = self%key_plain
             call backend%text(tx, yc + 0.35_R8P * font_size, trim(self%series(s)%texts(r)), trim(anchor))
+            backend%literal = .false.
             call backend%end_group
          enddo
       endblock
@@ -5233,6 +5305,29 @@ contains
       call move_alloc(labels, axis%labels)
       endsubroutine axis_labels
    endsubroutine setup_axes
+
+   subroutine plain_ticks(self)
+   !< On an enhanced text device, the tick labels of the `noenhanced` axes escaped, read as they are (their widths
+   !< measured as drawn).
+   type(axes_object), intent(inout) :: self !< Panel.
+
+   call escape(self%xaxis)
+   call escape(self%yaxis)
+   call escape(self%y2axis)
+   call escape(self%x2axis)
+   call escape(self%cbaxis)
+   contains
+      subroutine escape(axis)
+      !< The tick labels of `axis` escaped, if `noenhanced`.
+      type(axis_object), intent(inout) :: axis !< Axis.
+      integer(I4P)                     :: t    !< Tick counter.
+
+      if (.not. (axis%tics%plain .and. allocated(axis%ticks))) return
+      do t = 1_I4P, size(axis%ticks, kind=I4P)
+         if (allocated(axis%ticks(t)%label)) axis%ticks(t)%label = markup_literal(axis%ticks(t)%label)
+      enddo
+      endsubroutine escape
+   endsubroutine plain_ticks
 
    pure function time_attribute(axis) result(text)
    !< The input time format of a time axis (the viewer's mark of one), empty if numeric.

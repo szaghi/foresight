@@ -8,7 +8,8 @@
 // image.html, an image zoomed with the data, its color box not; polar_round.html, a polar grid zoomed
 // with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
 // second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
-// time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed. The
+// time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed;
+// enhanced.html, tick labels with enhanced text markup redrawn as <tspan> elements by a zoom. The
 // page is parsed
 // by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
@@ -285,6 +286,29 @@ check("a zoom hides the annotations at data coordinates", anchoredGroups.length 
 key("a");
 check("autoscale shows them again",
   Array.prototype.every.call(anchoredGroups, function (g) { return g.getAttribute("display") === "inline"; }));
+
+// enhanced text: x tick labels with markup drawn again by a zoom as <tspan> elements, as the page has them; the
+// y2 tick labels (noenhanced) as they are
+page = strip(path.join(__dirname, "..", "tests", "goldens", "enhanced.html"));
+p = load("");
+var exticks = panel(0).querySelector(".fs-xticks"), exHome = exticks.innerHTML;
+var ey2ticks = panel(0).querySelector(".fs-y2ticks");
+check("enhanced tick labels on the page", exticks.querySelectorAll("tspan").length > 0 &&
+  ey2ticks.querySelectorAll("tspan").length === 0);
+wheel(0);
+var etexts = Array.prototype.slice.call(exticks.querySelectorAll("text"));
+check("a zoom redraws them as enhanced text", exticks.innerHTML !== exHome && etexts.length > 0 &&
+  etexts.every(function (t) {
+    var spans = t.querySelectorAll("tspan");
+    return spans.length === 2 && spans[0].textContent === "x" && spans[1].getAttribute("font-size") === "9.6" &&
+      spans[1].getAttribute("dy") === "3.6" && t.getAttribute("xml:space") === "preserve";
+  }));
+check("noenhanced tick labels kept as they are", ey2ticks.querySelectorAll("tspan").length === 0 &&
+  Array.prototype.some.call(ey2ticks.querySelectorAll("text"), function (t) {
+    return /^a_\d$/.test(t.textContent);
+  }));
+key("a");
+check("autoscale restores them", exticks.innerHTML === exHome);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

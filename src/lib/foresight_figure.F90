@@ -44,6 +44,8 @@ type :: figure_object
    real(R8P)                      :: width        = 600.0_R8P !< Page width [px], gnuplot svg terminal default.
    real(R8P)                      :: height       = 480.0_R8P !< Page height [px], gnuplot svg terminal default.
    real(R8P)                      :: font_size    = 12.0_R8P  !< Font size [px].
+   logical                        :: enhanced     = .false.   !< Texts read as gnuplot's enhanced text (the scripts:
+                                                              !< on, as gnuplot; the library: off unless set).
    integer(I4P)                   :: refresh      = 0_I4P     !< HTML page reload period [s], 0 for none.
    logical                        :: clear_screen = .false.   !< Clear the terminal before text output (live view).
    character(len=9)               :: text_charset = 'dumb'    !< Text output: `dumb` characters, or the block
@@ -114,6 +116,7 @@ type :: figure_object
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
       procedure, pass(self) :: set_margin   !< Set a margin, `set lmargin`...
+      procedure, pass(self) :: set_enhanced !< Enhanced text on or off.
       procedure, pass(self) :: set_border_style !< Border line: lc, lw, dt.
       procedure, pass(self) :: set_zeroaxis !< Zero axes.
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
@@ -1620,6 +1623,16 @@ contains
    endassociate
    endsubroutine set_key_style
 
+   subroutine set_enhanced(self, on)
+   !< Read the titles, labels and key entries as gnuplot's enhanced text (`x^2`, `T_{n-1}`, `{/Symbol a}`; see
+   !< foresight_enhanced), as gnuplot `set termoption enhanced`, or as they are.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: on   !< Enhanced, true if absent.
+
+   self%enhanced = .true.
+   if (present(on)) self%enhanced = on
+   endsubroutine set_enhanced
+
    subroutine set_margin(self, side, value, screen)
    !< Set a margin of the current panel, as gnuplot `set lmargin|rmargin|tmargin|bmargin`: `side` is `l`, `r`, `t` or
    !< `b`; `value` characters (0.6 font sizes wide, 1 high), or with `screen` the border at that fraction of the page
@@ -2115,6 +2128,8 @@ contains
    real(R8P)                            :: cell(2) !< Grid cell width and height [px].
    integer(I4P)                         :: p       !< Panel counter.
 
+   backend%enhanced = self%enhanced
+   backend%text_size = self%font_size
    call backend%begin_page(file, self%width, self%height, self%font_size)
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
    top = 0.0_R8P

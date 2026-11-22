@@ -29,6 +29,8 @@ type :: series_object
    real(R8P), allocatable        :: xhigh(:) !< Horizontal error bar ends, allocated for x error bars.
    real(R8P), allocatable        :: ylow(:)  !< Vertical error bar starts, allocated for y error bars.
    real(R8P), allocatable        :: yhigh(:) !< Vertical error bar ends, allocated for y error bars.
+   logical                       :: title_plain = .false. !< The title as it is, not enhanced text (an automatic
+                                                          !< title, gnuplot's noenhanced).
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    character(len=LABEL_LEN), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.

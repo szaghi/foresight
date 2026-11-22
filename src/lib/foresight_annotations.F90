@@ -50,6 +50,7 @@ endtype place_object
 type :: label_object
    !< A label, gnuplot `set label`.
    integer(I4P)                  :: tag = 0_I4P          !< Tag (`set label N`).
+   logical                       :: plain = .false.      !< The text as it is, not enhanced text (`noenhanced`).
    character(len=:), allocatable :: text                 !< Text.
    type(place_object)            :: at                   !< Position.
    character(len=6)              :: justify = 'left'     !< `left`, `center` or `right` of the position.
@@ -220,12 +221,15 @@ contains
          ! the offset in characters (0.6 of the font size wide, 1 high), the baseline a third of the size down
          t = xy + [labels(k)%offset(1) * 0.6_R8P * font_size, -labels(k)%offset(2) * font_size + 0.35_R8P * font_size]
          if (labels(k)%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+            backend%literal = labels(k)%plain
             call backend%text(t(1), t(2), labels(k)%text, anchor_of(labels(k)%justify), rotate=-labels(k)%rotate, &
                               color=color_of(labels(k)%color))
          else
+            backend%literal = labels(k)%plain
             call backend%text(t(1), t(2), labels(k)%text, anchor_of(labels(k)%justify), color=color_of(labels(k)%color))
          endif
       enddo
+      backend%literal = .false.
       call backend%end_group
    enddo
    endsubroutine draw_labels

@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(103)                  !< Per-figure outcome.
+logical                     :: test_passed(106)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -128,7 +128,11 @@ test_passed(100) = check('annotation_styles.svg', figure_annotation_styles())
 test_passed(101) = check('annotation_styles.txt', figure_annotation_styles())
 test_passed(102) = check('tic_labels_fills.svg', figure_tic_labels_fills())
 test_passed(103) = check('tic_labels_fills.txt', figure_tic_labels_fills())
-write(output_unit, '(A,103L2)') 'foresight golden checks:', test_passed
+! enhanced text through the library API; the html page is also the one of the viewer DOM test of enhanced tick labels
+test_passed(104) = check('enhanced.svg', figure_enhanced())
+test_passed(105) = check('enhanced.html', figure_enhanced())
+test_passed(106) = check('enhanced.txt', figure_enhanced())
+write(output_unit, '(A,106L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -203,6 +207,28 @@ contains
    call fig%plot(t, 300.0_R8P + 2.0_R8P * t, title='T')
    call fig%plot(t, 10.0_R8P**(0.1_R8P * t + 0.5_R8P), title='p', with='points', axes='x1y2')
    endfunction figure_y2
+
+   function figure_enhanced() result(fig)
+   !< gnuplot's enhanced text (fig%set_enhanced): sub and superscripts, a Greek letter, in the title, the labels, the
+   !< key and the x tick labels; the y2 label and tick labels as they are (noenhanced).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.25_R8P * real(i, R8P), i = 0, 12)]
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_enhanced(.true.)
+   call fig%set_title('Enhanced text: T_{n-1}(x) = x^2')
+   call fig%set_xlabel('x_1 [m s^{-1}]')
+   call fig%set_ylabel('{/Symbol a}^2')
+   call fig%set_y2label('p_ref, as it is')
+   call fig%set_xtics(positions=[0.0_R8P, 1.0_R8P, 2.0_R8P, 3.0_R8P], labels=['x_0', 'x_1', 'x_2', 'x_3'])
+   call fig%set_y2tics(positions=[0.0_R8P, 3.0_R8P, 6.0_R8P], labels=['a_0', 'a_1', 'a_2'])
+   fig%panels(1)%label_plain(3) = .true.
+   fig%panels(1)%y2axis%tics%plain = .true.
+   call fig%plot(x, x**2, title='y = x^2')
+   call fig%plot(x, 2.0_R8P * x, title='y = 2 x_0', axes='x1y2')
+   endfunction figure_enhanced
 
    function figure_x2() result(fig)
    !< Second x axis through the library API: a series on x2y2, its axis on the top border with outward ticks, minor

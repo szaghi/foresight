@@ -28,6 +28,7 @@ module foresight_backend_dumb
 !< (undefined values) are left blank.
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : arrow_head, axes_view, backend_object
+use foresight_enhanced, only : has_markup, markup_plain
 use foresight_style, only : pattern_parts
 use foresight_theme, only : theme_object
 use foresight_sys, only : rename_file
@@ -382,6 +383,8 @@ contains
 
    if (self%hidden) return
    full = string
+   ! enhanced text: its characters, the markup dropped
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) full = markup_plain(string)
    if (present(sup)) then
       if (len(sup) > 0) full = full//'^'//sup
    endif
@@ -605,7 +608,11 @@ contains
    real(R8P),           intent(in) :: font_size !< Font size [px].
    real(R8P)                       :: width     !< Width [px].
 
-   width = CELL_WIDTH * font_size * real(len(string), R8P)
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
+      width = CELL_WIDTH * font_size * real(len(markup_plain(string)), R8P)
+   else
+      width = CELL_WIDTH * font_size * real(len(string), R8P)
+   endif
    if (len(sup) > 0) width = width + CELL_WIDTH * font_size * real(len(sup) + 1, R8P)
    endfunction text_width
 

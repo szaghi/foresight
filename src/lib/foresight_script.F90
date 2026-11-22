@@ -282,6 +282,8 @@ contains
    character(len=*),     intent(in), optional :: theme  !< Default output theme.
 
    call self%figure%init
+   ! gnuplot's enhanced text, on by default in the scripts (its svg and dumb terminals)
+   call self%figure%set_enhanced(.true.)
    if (present(theme)) then
       if (len_trim(theme) > 0) call self%figure%set_theme(name=trim(theme))
    endif
@@ -2294,6 +2296,8 @@ contains
    character(len=:), allocatable                :: missing   !< Header name found nowhere.
    character(len=:), allocatable                :: dummy     !< Dummy variable of the functions.
    type(expression_object)                      :: table_if  !< `with table if COND`: the condition.
+   logical                                      :: auto_title !< The item's title is the automatic one (literal).
+   logical                                      :: plain_item !< `noenhanced`: the item's title as it is.
    logical                                      :: has_table_if !< A `with table` condition given.
    integer(I4P)                                 :: nranges   !< Inline ranges read.
 
@@ -2459,6 +2463,8 @@ contains
       if (is_function) with = self%function_style
       has_table_if = .false.
       has_title = .false.
+      auto_title = .false.
+      plain_item = .false.
       title = ''
       title_column = -1_I4P
       axes = 'x1y1'
@@ -2765,6 +2771,9 @@ contains
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
             has_title = .true.
+         elseif (is_word(word, 'noenhanced enhanced')) then
+            ! the title as it is, or as enhanced text
+            plain_item = word == 'noenhanced'
          elseif (word == 'ls' .or. keyword(word, 'linestyle', 5_I4P)) then
             if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
             call apply_line_style(self%line_styles, number, line, self%figure%panels(self%figure%current)%linecolors)
@@ -2869,7 +2878,11 @@ contains
       endif
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
-         if (.not. has_title .and. self%autotitle /= 'none') title = written
+         if (.not. has_title .and. self%autotitle /= 'none') then
+            ! the expression as it is, not enhanced text
+            title = written
+            auto_title = .true.
+         endif
          palette_lc = ''
          if (allocated(line%lc)) then
             if (line%lc == LC_PALETTE_Z) then
@@ -3161,9 +3174,10 @@ contains
          case ('columnhead')
             title_column = 0_I4P
          case ('file')
-            ! gnuplot: the item as written, '' included
+            ! gnuplot: the item as written, '' included, as it is (not enhanced text)
             title = trim(quote)//written//trim(quote)
             if (len(spec) > 0) title = title//' '//using//' '//spec
+            auto_title = .true.
          endselect
       endif
       ! the first row of each dataset is a header as soon as one is used, as gnuplot
@@ -3754,6 +3768,7 @@ contains
          if (last < 1_I4P) return
          panel%series(last)%label_axis = label_axis
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
+         panel%series(last)%title_plain = auto_title .or. plain_item
       endassociate
       endsubroutine mark_last
 
@@ -5242,7 +5257,7 @@ contains
             ! the font is the page's: the name is read and ignored
             i = i + 1_I4P
          elseif (is_word(word, 'noenhanced enhanced')) then
-            continue
+            label%plain = word == 'noenhanced'
          else
             call fail('set label: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -5690,16 +5705,16 @@ contains
    if (keyword(option, 'title', 3_I4P)) then
       call title_option
    elseif (keyword(option, 'xlabel', 2_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. axis_label(1_I4P)) return
       call self%figure%set_xlabel(text)
    elseif (keyword(option, 'ylabel', 2_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. axis_label(2_I4P)) return
       call self%figure%set_ylabel(text)
    elseif (keyword(option, 'y2label', 3_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. axis_label(3_I4P)) return
       call self%figure%set_y2label(text)
    elseif (keyword(option, 'x2label', 3_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      if (.not. axis_label(4_I4P)) return
       call self%figure%set_x2label(text)
    elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
       then
@@ -5889,7 +5904,9 @@ contains
       call self%symbols%set_string('GPVAL_TERM', text)
       i = 3_I4P
       do while (i <= size(tokens, kind=I4P))
-         if ((text == 'dumb' .or. text == 'block') .and. is_word(tokens(i)%text, 'mono ansi ansi256 ansirgb')) then
+         if (is_word(tokens(i)%text, 'enhanced noenhanced')) then
+            call self%figure%set_enhanced(tokens(i)%text == 'enhanced')
+         elseif ((text == 'dumb' .or. text == 'block') .and. is_word(tokens(i)%text, 'mono ansi ansi256 ansirgb')) then
             call self%figure%set_text(colors=tokens(i)%text)
          elseif (text == 'block' .and. is_word(tokens(i)%text, 'half quadrants sextants braille')) then
             call self%figure%set_text(charset=tokens(i)%text)
@@ -6010,13 +6027,14 @@ contains
       i = 2_I4P
       do while (i <= size(tokens, kind=I4P))
          select case (tokens(i)%text)
-         case ('dash', 'dashed', 'noenhanced', 'noenh')
+         case ('dash', 'dashed')
             continue
+         case ('noenhanced', 'noenh')
+            call self%figure%set_enhanced(.false.)
+         case ('enhanced', 'enh')
+            call self%figure%set_enhanced(.true.)
          case ('font')
             i = i + 1_I4P
-         case ('enhanced', 'enh')
-            call fail('set termoption: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
-            return
          case default
             call fail('set termoption: unsupported option "'//tokens(i)%text//'" (dash, noenhanced, font)', iostat, &
                       iomsg)
@@ -6478,11 +6496,32 @@ contains
       enddo
       endsubroutine fit_option
 
+      function axis_label(axis) result(ok)
+      !< `set xlabel ["text"] [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, and
+      !< whether it is read as it is, not as enhanced text.
+      integer(I4P), intent(in) :: axis  !< Axis: 1 x, 2 y, 3 y2, 4 x2.
+      logical                  :: ok    !< Success.
+      integer(I4P)             :: n     !< Tokens before the trailing words.
+      logical                  :: plain !< `noenhanced`: the label as it is.
+
+      n = size(tokens, kind=I4P)
+      plain = .false.
+      if (n > 1_I4P) then
+         if (tokens(n)%kind == TOKEN_WORD .and. is_word(tokens(n)%text, 'noenhanced noenh enhanced enh')) then
+            plain = tokens(n)%text(1:2) == 'no'
+            n = n - 1_I4P
+         endif
+      endif
+      ok = self%string_argument(tokens(1:n), text, iostat, iomsg)
+      if (ok) self%figure%panels(self%figure%current)%label_plain(axis) = plain
+      endfunction axis_label
+
       subroutine title_option
       !< `set title ["text"] [offset X,Y] [font "f"] [noenhanced] [enhanced]`: the text, shifted by characters (x right,
-      !< y up); `font` is read and ignored (one font in foresight), `noenhanced` is foresight's text, `enhanced` refused.
+      !< y up); `font` is read and ignored (one font in foresight); `noenhanced` writes it as it is, not enhanced text.
       real(R8P) :: offset(2) !< Shift [characters].
       integer(I4P) :: j      !< First option token.
+      logical   :: plain     !< `noenhanced`: the title as it is.
 
       j = size(tokens, kind=I4P) + 1_I4P
       do i = 2_I4P, size(tokens, kind=I4P)
@@ -6494,6 +6533,7 @@ contains
       enddo
       if (.not. self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)) return
       offset = self%figure%panels(self%figure%current)%title_offset
+      plain = .false.
       i = j
       do while (i <= size(tokens, kind=I4P))
          select case (tokens(i)%text)
@@ -6516,10 +6556,9 @@ contains
                return
             endif
          case ('noenhanced', 'noenh')
-            continue
+            plain = .true.
          case ('enhanced', 'enh')
-            call fail('set title: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
-            return
+            plain = .false.
          case default
             call fail('set title: unexpected "'//tokens(i)%text//'" (offset, font, noenhanced)', iostat, iomsg)
             return
@@ -6527,6 +6566,7 @@ contains
          i = i + 1_I4P
       enddo
       call self%figure%set_title(text, offset=offset)
+      self%figure%panels(self%figure%current)%title_plain = plain
       endsubroutine title_option
 
       subroutine key_option
@@ -6638,11 +6678,9 @@ contains
          case ('font')
             ! read and ignored: one font in foresight
             i = i + 1_I4P
-         case ('noenhanced', 'noenh')
-            continue
-         case ('enhanced', 'enh')
-            call fail('set key: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
-            return
+         case ('noenhanced', 'noenh', 'enhanced', 'enh')
+            ! the key's texts as they are, or as enhanced text
+            self%figure%panels(self%figure%current)%key_plain = tokens(i)%text(1:2) == 'no'
          case ('default')
             words = ' top right inside vertical'
             box = .false.
@@ -7626,8 +7664,16 @@ contains
             elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'border') then
                ! the ticks on the border: foresight's only placement
                continue
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
+               ! the tick labels as they are, or as enhanced text
+               panel%xaxis%tics%plain = toks(i)%text == 'noenhanced'
+               panel%yaxis%tics%plain = toks(i)%text == 'noenhanced'
+               panel%x2axis%tics%plain = toks(i)%text == 'noenhanced'
+               panel%y2axis%tics%plain = toks(i)%text == 'noenhanced'
+               panel%cbaxis%tics%plain = toks(i)%text == 'noenhanced'
             else
-               call fail('set tics: supported options are mirror, nomirror, in, out, scale and border, not "'// &
+               call fail('set tics: supported options are mirror, nomirror, in, out, scale, border and noenhanced, '// &
+                         'not "'// &
                          toks(i)%text//'"', iostat, iomsg)
                return
             endif
@@ -7770,6 +7816,9 @@ contains
             mirror = .false.
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'add') then
             add = .true.
+         elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
+            ! the labels as they are, or as enhanced text
+            tics%plain = toks(i)%text == 'noenhanced'
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text(1:min(1, len(toks(i)%text))) == '(') then
             if (len(list) > 0) then
                call fail('set '//option//': one list of ticks is expected', iostat, iomsg)
@@ -9781,7 +9830,7 @@ contains
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
-        .or. word == 'bins' .or. index(word, 'bins=') == 1
+        .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced'
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

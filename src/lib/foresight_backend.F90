@@ -31,6 +31,7 @@ type :: axes_view
    logical   :: xlog      = .false.  !< Log x axis.
    logical   :: ylog      = .false.  !< Log y axis.
    logical   :: grid      = .false.  !< Grid shown.
+   logical   :: markup    = .false.  !< Tick labels with enhanced text markup, drawn again by the viewer as such.
    real(R8P) :: font_size = 12.0_R8P !< Font size [px].
    character(len=:), allocatable :: xtics   !< x tick positions for the viewer (`tics_object%attribute`), empty for auto.
    character(len=:), allocatable :: ytics   !< y tick positions for the viewer, empty for auto.
@@ -59,6 +60,9 @@ endtype axes_view
 type, abstract :: backend_object
    !< Abstract output device.
    type(theme_object) :: theme !< Output theme: colors the layout's ones are mapped to (foresight_theme).
+   logical            :: enhanced = .false. !< Texts read as gnuplot's enhanced text (foresight_enhanced).
+   logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
+   real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.

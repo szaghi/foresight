@@ -9,6 +9,7 @@ module foresight_backend_svg
 !< interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
 use foresight_backend, only : arrow_head, axes_view, backend_object
+use foresight_enhanced, only : has_markup, markup_svg, markup_width
 use foresight_format, only : fixed, int_str, real_str, xml_escape
 use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
@@ -96,6 +97,7 @@ contains
    real(R8P),          intent(in)    :: font_size !< Default font size [px].
 
    call self%open_file(file)
+   self%text_size = font_size
    call self%put('<?xml version="1.0" encoding="UTF-8" standalone="no"?>')
    call self%open_svg(width, height, font_size)
    endsubroutine begin_page
@@ -120,6 +122,8 @@ contains
    extra = attribute('data-xtics', view%xtics)//attribute('data-ytics', view%ytics)// &
            attribute('data-xformat', view%xformat)//attribute('data-yformat', view%yformat)// &
            attribute('data-xtime', view%xtime)//attribute('data-ytime', view%ytime)
+   ! the tick labels drawn again by the viewer: as enhanced text, if any has markup
+   if (self%enhanced .and. view%markup) extra = extra//' data-enhanced="1"'
    if (any(view%mirror .neqv. [.true., .true., .false.])) &
       extra = extra//' data-mirror="'//flag(view%mirror(1))//' '//flag(view%mirror(2))//' '//flag(view%mirror(3))//'"'
    y2 = ''
@@ -291,12 +295,20 @@ contains
    real(R8P),          intent(in), optional :: rotate !< Rotation about the anchor point [deg, clockwise].
    character(len=*),   intent(in), optional :: color  !< Text color, the frame's if absent.
    character(len=:), allocatable            :: line   !< Output line.
+   character(len=:), allocatable            :: runs   !< Enhanced text runs.
 
    line = '<text x="'//px(x)//'" y="'//px(y)//'"'
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
    if (present(color)) line = line//' fill="'//self%theme%map(color)//'"'
-   line = line//'>'//xml_escape(string)
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
+      ! gnuplot's enhanced text: styled runs, the blanks at their ends kept (a renderer may strip them per <tspan>)
+      runs = markup_svg(string, self%text_size)
+      if (index(runs, '<tspan') > 0) line = line//' xml:space="preserve"'
+      line = line//'>'//runs
+   else
+      line = line//'>'//xml_escape(string)
+   endif
    if (present(sup)) then
       if (len(sup) > 0) line = line//'<tspan dy="-0.45em" font-size="0.75em">'//xml_escape(sup)//'</tspan>'
    endif
@@ -646,7 +658,11 @@ contains
    real(R8P),          intent(in) :: font_size !< Font size [px].
    real(R8P)                      :: width     !< Width [px].
 
-   width = 0.55_R8P * font_size * (real(len(string), R8P) + 0.75_R8P * real(len(sup), R8P))
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
+      width = markup_width(string, font_size) + 0.55_R8P * font_size * 0.75_R8P * real(len(sup), R8P)
+   else
+      width = 0.55_R8P * font_size * (real(len(string), R8P) + 0.75_R8P * real(len(sup), R8P))
+   endif
    endfunction text_width
 
    subroutine readout(self, x, y, height, masks, label, prefix, suffix, color, font_size)

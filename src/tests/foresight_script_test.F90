@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(128)                           !< Per-check outcome.
+logical                       :: test_passed(129)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2631,8 +2631,10 @@ associate(panel => interpreter%figure%panels(1))
                       .not. panel%key_invert .and. panel%key_samplen < 0.0_R8P .and. len(panel%key_title) == 0 .and. &
                       panel%key_v == 'top' .and. panel%key_h == 'right'
 endassociate
+call interpreter%run_text('set key noenhanced', iostat, iomsg)
+test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%key_plain
 call interpreter%run_text('set key enhanced', iostat, iomsg)
-test_passed(124) = test_passed(124) .and. iostat /= 0_I4P .and. index(iomsg, 'enhanced text is not supported') > 0
+test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%key_plain
 
 ! set lmargin|rmargin|tmargin|bmargin [at screen] N, set margins L,R,B,T, unset: the border where they say (characters
 ! 0.6 font sizes wide and 1 high, screen fractions from the bottom left)
@@ -2720,10 +2722,41 @@ associate(panel => interpreter%figure%panels(1))
                       panel%border_lw == 2.0_R8P .and. panel%border_lc == '#ff0000'
 endassociate
 test_passed(128) = test_passed(128) .and. file_has('foresight_script_test_zero.svg', 'stroke="#ff0000" stroke-width="2"')
+test_passed(128) = test_passed(128) .and. .not. interpreter%figure%enhanced
 call interpreter%run_text('unset zeroaxis; set termoption enhanced', iostat, iomsg)
-test_passed(128) = test_passed(128) .and. iostat /= 0_I4P .and. index(iomsg, 'enhanced text is not supported') > 0 .and. &
+test_passed(128) = test_passed(128) .and. iostat == 0_I4P .and. interpreter%figure%enhanced .and. &
                    .not. any(interpreter%figure%panels(1)%zero_axes)
 open(newunit=unit, file='foresight_script_test_zero.svg')
+close(unit, status='delete')
+
+! enhanced text, on by default in the scripts (gnuplot's svg terminal): the title, labels, key entries and tick labels
+! as <tspan> elements; noenhanced texts, the automatic titles (file name, function) and set terminal noenhanced as
+! they are
+call interpreter%init(scratch)
+test_passed(129) = interpreter%figure%enhanced
+call interpreter%run_text('set term svg size 400,300; set output "foresight_script_test_enh.svg"'//new_line('a')// &
+                          'set title "T_{n-1}"; set xlabel "x_1" noenhanced; set ylabel "{/Symbol a}^2"'// &
+                          new_line('a')//'set label 1 "L_a" at 0,0; set label 2 "N_b" at 1,1 noenhanced'// &
+                          new_line('a')//'set xtics ("t_1" -2, "t^2" 2); set ytics ("u_1" 0) noenhanced'// &
+                          new_line('a')//'x_v = 1; plot [-5:5] x**2 t "e^{x}", x title "p_q" noenhanced, x_v*x', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(129) = test_passed(129) .and. iostat == 0_I4P .and. &
+                   file_has('foresight_script_test_enh.svg', '<tspan>T</tspan><tspan font-size="9.6" dy="3.6">n-1') .and. &
+                   file_has('foresight_script_test_enh.svg', '>x_1</text>') .and. &
+                   file_has('foresight_script_test_enh.svg', '<tspan>'//char(206)//char(177)//'</tspan>') .and. &
+                   file_has('foresight_script_test_enh.svg', '<tspan>L</tspan>') .and. &
+                   file_has('foresight_script_test_enh.svg', '>N_b</text>') .and. &
+                   file_has('foresight_script_test_enh.svg', '<tspan>t</tspan><tspan font-size="9.6" dy="-6">2') .and. &
+                   file_has('foresight_script_test_enh.svg', '>u_1</text>') .and. &
+                   file_has('foresight_script_test_enh.svg', '<tspan>e</tspan>') .and. &
+                   file_has('foresight_script_test_enh.svg', '>p_q</text>') .and. &
+                   file_has('foresight_script_test_enh.svg', '>x_v*x</text>')
+call interpreter%run_text('set terminal svg noenhanced; replot', iostat, iomsg)
+test_passed(129) = test_passed(129) .and. iostat == 0_I4P .and. .not. interpreter%figure%enhanced .and. &
+                   file_has('foresight_script_test_enh.svg', '>T_{n-1}</text>') .and. &
+                   .not. file_has('foresight_script_test_enh.svg', '<tspan')
+open(newunit=unit, file='foresight_script_test_enh.svg')
 close(unit, status='delete')
 
 if (all(test_passed)) then
@@ -2734,7 +2767,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,128L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,129L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
