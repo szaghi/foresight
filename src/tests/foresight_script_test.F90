@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(133)                           !< Per-check outcome.
+logical                       :: test_passed(134)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -140,8 +140,8 @@ call interpreter%run_text("set format z '%g'", iostat, iomsg)
 test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be among x, y, y2') > 0
 call interpreter%run_text("set format y '%d'", iostat, iomsg)
 test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
-call interpreter%run_text('set key spacing 2', iostat, iomsg)
-test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "spacing"') > 0
+call interpreter%run_text('set key sparkle 2', iostat, iomsg)
+test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "sparkle"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
 call interpreter%run_text('set style line 1 pn 2', iostat, iomsg)
@@ -2842,6 +2842,30 @@ call interpreter%run_text('set tics border norangelimit', iostat, iomsg)
 test_passed(133) = test_passed(133) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%xaxis%tics%on_axis &
                    .and. .not. interpreter%figure%panels(1)%yaxis%tics%rangelimited
 
+! key options: box line (lt, lw), maxrows (columns filled top down), spacing, height, textcolor variable, auto (autotitle)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 700,320; set output "foresight_script_test_keyopts.svg"'//new_line('a')// &
+                          'set key box lt 4 lw 2 maxrows 3 spacing 1.5 height 1 tc variable fixed'//new_line('a')// &
+                          'plot for [k=1:7] k*x t sprintf("curve %d", k)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(134) = iostat == 0_I4P
+if (test_passed(134)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(134) = panel%key_maxrows == 3_I4P .and. panel%key_spacing == 1.5_R8P .and. panel%key_height == 1.0_R8P &
+                         .and. trim(panel%key_tc) == 'variable' .and. trim(panel%key_box_lc) == '#e69f00' .and. &
+                         panel%key_box_lw == 2.0_R8P
+   endassociate
+endif
+test_passed(134) = test_passed(134) .and. file_has('foresight_script_test_keyopts.svg', 'fill="#9400d3">curve 1</text>') &
+                   .and. file_has('foresight_script_test_keyopts.svg', 'stroke="#e69f00" stroke-width="2"')
+open(newunit=unit, file='foresight_script_test_keyopts.svg')
+close(unit, status='delete')
+call interpreter%run_text('set key auto column; set key maxcols auto textcolor rgb "red" default', iostat, iomsg)
+test_passed(134) = test_passed(134) .and. iostat == 0_I4P .and. interpreter%autotitle == 'file' .and. &
+                   interpreter%figure%panels(1)%key_maxrows == 0_I4P .and. len_trim(interpreter%figure%panels(1)%key_tc) == 0
+call interpreter%run_text('set key auto column', iostat, iomsg)
+test_passed(134) = test_passed(134) .and. iostat == 0_I4P .and. interpreter%autotitle == 'columnhead'
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2850,7 +2874,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,133L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,134L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

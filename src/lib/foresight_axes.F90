@@ -174,6 +174,16 @@ type :: axes_object
                                                                !< foresight's (3 font sizes).
    real(R8P)                        :: key_extra = 0.0_R8P !< Width added to the titles [character widths], `width`.
    real(R8P)                        :: key_offset(2) = 0.0_R8P !< Key shift [characters], gnuplot `offset`.
+   real(R8P)                        :: key_spacing = 1.0_R8P !< Row spacing [rows], gnuplot `spacing`.
+   real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
+   integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
+                                                             !< column (gnuplot `maxrows`).
+   integer(I4P)                     :: key_maxcols = 0_I4P !< Most columns of a horizontal key, 0 for as many as fit
+                                                             !< (gnuplot `maxcols`).
+   character(len=24)                :: key_tc = '' !< Title color: blank the frame's, `variable` each series' (`textcolor`).
+   character(len=24)                :: key_box_lc = '' !< Box line color, the frame's if blank (`box lc`).
+   real(R8P)                        :: key_box_lw = 1.0_R8P !< Box line width [px] (`box lw`).
+   integer(I4P)                     :: key_box_dt = 1_I4P !< Box dash type (`box dt`), 1 solid.
    character(len=:), allocatable    :: key_title !< Key title, a row above the entries (gnuplot `set key title`).
    real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
@@ -2400,8 +2410,27 @@ contains
       top = top - self%key_offset(2) * font_size
       if (self%key_opaque) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
                                              'none', WINDOW_FILL, 1.0_R8P)
-      if (self%key_box) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
-                                          FRAME_COLOR, 'none', 1.0_R8P)
+      if (self%key_box) then
+         ! gnuplot `set key box lc lw dt`
+         block
+            type(style_object)            :: bline  !< Box line.
+            character(len=:), allocatable :: bcolor !< Box color.
+
+            bcolor = FRAME_COLOR
+            if (len_trim(self%key_box_lc) > 0) bcolor = trim(self%key_box_lc)
+            if (self%key_box_dt == 1_I4P) then
+               call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, bcolor, 'none', &
+                                 self%key_box_lw)
+            else
+               bline%dashtype = self%key_box_dt
+               bline%linewidth = self%key_box_lw
+               call backend%polyline([left - GAP, left + width + GAP, left + width + GAP, left - GAP, left - GAP], &
+                                     [top - 0.5_R8P * GAP, top - 0.5_R8P * GAP, top + height + 0.5_R8P * GAP, &
+                                      top + height + 0.5_R8P * GAP, top - 0.5_R8P * GAP], bcolor, self%key_box_lw, &
+                                     bline%dasharray())
+            endif
+         endblock
+      endif
       if (allocated(self%key_title)) then
          if (len(self%key_title) > 0) then
             backend%literal = self%key_plain
@@ -2447,7 +2476,15 @@ contains
                                                  line_width=self%series(s)%style%linewidth)
       endif
       backend%literal = self%key_plain .or. self%series(s)%title_plain
-      call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
+      ! gnuplot `textcolor`: the titles in a color, or each in its series' (`variable`)
+      if (trim(self%key_tc) == 'variable') then
+         call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor), &
+                           color=self%series(s)%style%color)
+      elseif (len_trim(self%key_tc) > 0) then
+         call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor), color=trim(self%key_tc))
+      else
+         call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
+      endif
       backend%literal = .false.
       call backend%end_group
    enddo
@@ -2486,9 +2523,15 @@ contains
       character(len=5), intent(out) :: anchor !< Title anchor.
       real(R8P)                     :: cell(2) !< Cell left and right [px].
 
-      cell(1) = left + real(modulo(n, grid(2)), R8P) * entry
+      ! row after row (horizontal), column after column (vertical: more than one with `maxrows`)
+      if (self%key_horizontal) then
+         cell(1) = left + real(modulo(n, grid(2)), R8P) * entry
+         yc = top + (real(n / grid(2), R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
+      else
+         cell(1) = left + real(n / grid(3), R8P) * entry
+         yc = top + (real(modulo(n, grid(3)), R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
+      endif
       cell(2) = cell(1) + entry - GAP
-      yc = top + (real(n / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
       if (self%key_reverse) then
          xs = [cell(1), cell(1) + self%key_sample(font_size)]
          tx = merge(xs(2) + GAP, cell(2), self%key_left)
@@ -2735,9 +2778,17 @@ contains
    endif
    ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
    entry = entry + font_size + GAP + self%key_sample(font_size) + GAP + self%key_extra * CHAR_WIDTH * font_size
-   if (self%key_horizontal .and. grid(1) > 0_I4P) grid(2) = max(1_I4P, min(grid(1), int((room + GAP) / entry, I4P)))
+   if (self%key_horizontal .and. grid(1) > 0_I4P) then
+      ! as many columns as fit, at most `maxcols`
+      grid(2) = max(1_I4P, min(grid(1), int((room + GAP) / entry, I4P)))
+      if (self%key_maxcols > 0_I4P) grid(2) = min(grid(2), self%key_maxcols)
+   elseif (self%key_maxrows > 0_I4P .and. grid(1) > self%key_maxrows) then
+      ! a vertical key of `maxrows` rows: as many columns as needed, filled top down
+      grid(2) = (grid(1) + self%key_maxrows - 1_I4P) / self%key_maxrows
+   endif
    grid(3) = (grid(1) + grid(2) - 1_I4P) / grid(2)
-   extent = [real(grid(2), R8P) * entry - GAP, real(grid(3), R8P) * LINE_HEIGHT * font_size]
+   extent = [real(grid(2), R8P) * entry - GAP, real(grid(3), R8P) * self%key_spacing * LINE_HEIGHT * font_size + &
+             self%key_height * font_size]
    ! a title: a row above the entries, the key at least as wide
    if (allocated(self%key_title)) then
       if (len(self%key_title) > 0) then

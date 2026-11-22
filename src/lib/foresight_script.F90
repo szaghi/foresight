@@ -6653,7 +6653,7 @@ contains
                return
             endif
             if (.not. key_coordinate(at(2), sys(2), sys(1))) return
-         case ('autotitle')
+         case ('autotitle', 'auto')
             self%autotitle = 'file'
             if (i < size(tokens, kind=I4P)) then
                if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 6_I4P)) self%autotitle = 'columnhead'
@@ -6665,7 +6665,7 @@ contains
                call fail('set key: columnhead goes after autotitle', iostat, iomsg)
                return
             endif
-            if (tokens(i - 1_I4P)%text /= 'autotitle') then
+            if (tokens(i - 1_I4P)%text /= 'autotitle' .and. tokens(i - 1_I4P)%text /= 'auto') then
                call fail('set key: columnhead goes after autotitle', iostat, iomsg)
                return
             endif
@@ -6740,11 +6740,105 @@ contains
             call self%figure%set_key_style(reverse=.false., left=.false., invert=.false., opaque=.false., samplen=-1.0_R8P, &
                                      width=0.0_R8P, title='', offset=[0.0_R8P, 0.0_R8P])
             self%autotitle = 'file'
+            associate(panel => self%figure%panels(self%figure%current))
+               panel%key_spacing = 1.0_R8P
+               panel%key_height = 0.0_R8P
+               panel%key_maxrows = 0_I4P
+               panel%key_maxcols = 0_I4P
+               panel%key_tc = ''
+               panel%key_box_lc = ''
+               panel%key_box_lw = 1.0_R8P
+               panel%key_box_dt = 1_I4P
+            endassociate
+         case ('spacing')
+            ! the row spacing, in rows
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            self%figure%panels(self%figure%current)%key_spacing = max(0.0_R8P, v)
+         case ('height')
+            ! characters added to the key height
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            self%figure%panels(self%figure%current)%key_height = v
+         case ('maxrows', 'maxcols', 'maxcolumns')
+            ! the most rows of a vertical key, the most columns of a horizontal one; `auto` as many as fit
+            block
+               integer(I4P)                  :: most  !< Rows or columns, 0 for auto.
+               character(len=:), allocatable :: which !< The option word.
+
+               which = tokens(i)%text
+               most = 0_I4P
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%text == 'auto') then
+                     i = i + 1_I4P
+                  else
+                     if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+                     most = max(0_I4P, nint(v, I4P))
+                  endif
+               endif
+               if (which == 'maxrows') then
+                  self%figure%panels(self%figure%current)%key_maxrows = most
+               else
+                  self%figure%panels(self%figure%current)%key_maxcols = most
+               endif
+            endblock
+         case ('tc', 'textcolor', 'textc', 'textco', 'textcol', 'textcolo')
+            ! the titles in a color, or each in its series' (`variable`)
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'variable') then
+                  i = i + 1_I4P
+                  self%figure%panels(self%figure%current)%key_tc = 'variable'
+                  cycle
+               endif
+            endif
+            block
+               type(token_object), allocatable :: copy(:) !< Tokens with `lc` for the color word.
+               type(line_style_object)         :: probe   !< Color read.
+
+               copy = tokens
+               copy(i)%text = 'lc'
+               if (.not. line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)% &
+                                     linecolors, self%symbols)) return
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') == 1) then
+                     call fail('set key textcolor: palette colors do not apply', iostat, iomsg)
+                     return
+                  endif
+                  self%figure%panels(self%figure%current)%key_tc = probe%lc
+               endif
+            endblock
+         case ('lt', 'linetype', 'lw', 'linewidth', 'lc', 'linecolor', 'dt', 'dashtype', 'ls', 'linestyle')
+            ! the line of the key box
+            block
+               type(line_style_object) :: probe !< Line read.
+
+               if (tokens(i)%text == 'ls' .or. tokens(i)%text == 'linestyle') then
+                  if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+                  call apply_line_style(self%line_styles, nint(v, I4P), probe, &
+                                        self%figure%panels(self%figure%current)%linecolors)
+               elseif (.not. line_option(tokens, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)% &
+                                         linecolors, self%symbols)) then
+                  return
+               endif
+               associate(panel => self%figure%panels(self%figure%current))
+                  if (allocated(probe%lc)) then
+                     if (index(probe%lc, '*') == 1 .or. len(probe%lc) > len(panel%key_box_lc)) then
+                        call fail('set key box: variable and palette colors do not apply', iostat, iomsg)
+                        return
+                     endif
+                     panel%key_box_lc = probe%lc
+                  endif
+                  if (allocated(probe%lw)) panel%key_box_lw = probe%lw
+                  if (allocated(probe%dt)) panel%key_box_dt = probe%dt
+               endassociate
+            endblock
+         case ('fixed')
+            ! the key of splot: a 2D key as it is
+            continue
          case default
             call fail('set key: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, center, '// &
                       'top, bottom, box, nobox, inside, outside, below, above, lmargin, rmargin, tmargin, bmargin, '// &
-                      'at, horizontal, vertical, reverse, Left, Right, invert, opaque, samplen, width, offset, title, '// &
-                      'font, noenhanced, default, autotitle [columnhead], noautotitle)', iostat, iomsg)
+                      'at, horizontal, vertical, reverse, Left, Right, invert, opaque, samplen, spacing, width, height, '// &
+                      'maxrows, maxcols, offset, title, font, textcolor, lt, lw, lc, dt, ls, noenhanced, default, '// &
+                      'autotitle [columnhead], noautotitle)', iostat, iomsg)
             return
          endselect
       enddo
