@@ -4,16 +4,18 @@ module foresight_sys
 !<
 !< Standard Fortran has neither a file rename nor a sub-second sleep. Both are needed by the live (watch) mode: the
 !< output page is rewritten into a temporary file and atomically renamed over the published one (the browser must
-!< never read a half-written page), and data files are polled at a fixed cadence.
+!< never read a half-written page), and data files are polled at a fixed cadence. Nor can it read the output of a
+!< shell command (gnuplot's `system("command")`): `command_output` reads it through a pipe.
 !<
 !< @note POSIX only for now: `rename` replaces an existing destination atomically on POSIX, whereas on Windows the C
-!< runtime `rename` fails if the destination exists; `nanosleep` is POSIX. The `timespec` layout assumes an LP64 ABI
+!< runtime `rename` fails if the destination exists; `nanosleep` and `popen` are POSIX. The `timespec` layout assumes an LP64 ABI
 !< (`time_t` and `long` both 64 bit), true on Linux and macOS x86_64/aarch64.
-use, intrinsic :: iso_c_binding, only : c_char, c_int, c_long, c_null_char
+use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_int, c_long, c_null_char, c_ptr, c_size_t
 use penf, only : I4P, I8P
 
 implicit none
 private
+public :: command_output
 public :: rename_file
 public :: sleep_ms
 
@@ -39,9 +41,74 @@ interface
    type(timespec), intent(out) :: rem  !< Remaining interval if interrupted.
    integer(c_int)              :: ierr !< 0 on success, -1 on error or interruption.
    endfunction c_nanosleep
+
+   function c_popen(command, mode) result(stream) bind(C, name='popen')
+   !< C `FILE *popen(const char *command, const char *mode)`.
+   import :: c_char, c_ptr
+   character(kind=c_char), intent(in) :: command(*) !< Shell command, null-terminated.
+   character(kind=c_char), intent(in) :: mode(*)    !< `r`, null-terminated.
+   type(c_ptr)                        :: stream     !< Pipe, null on error.
+   endfunction c_popen
+
+   function c_fread(buffer, size, count, stream) result(items) bind(C, name='fread')
+   !< C `size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)`.
+   import :: c_char, c_ptr, c_size_t
+   character(kind=c_char), intent(out)       :: buffer(*) !< Bytes read.
+   integer(c_size_t),      intent(in), value :: size      !< Item size.
+   integer(c_size_t),      intent(in), value :: count     !< Items wanted.
+   type(c_ptr),            intent(in), value :: stream    !< Stream.
+   integer(c_size_t)                         :: items     !< Items read.
+   endfunction c_fread
+
+   function c_pclose(stream) result(status) bind(C, name='pclose')
+   !< C `int pclose(FILE *stream)`.
+   import :: c_int, c_ptr
+   type(c_ptr), intent(in), value :: stream !< Pipe.
+   integer(c_int)                 :: status !< Wait status of the command, -1 on error.
+   endfunction c_pclose
 endinterface
 
 contains
+   subroutine command_output(command, output, status)
+   !< Run the shell `command` (`/bin/sh -c`) and read its standard output, as gnuplot's `system("command")`.
+   !<
+   !< `status` is the command's exit status (0 on success), -1 if it could not run.
+   character(len=*),              intent(in)  :: command !< Shell command.
+   character(len=:), allocatable, intent(out) :: output  !< Its standard output.
+   integer(I4P),                  intent(out) :: status  !< Exit status, -1 if it did not run.
+   integer(c_size_t), parameter               :: CHUNK = 4096_c_size_t !< Bytes read at once.
+   character(kind=c_char)                     :: buffer(CHUNK) !< Bytes read.
+   type(c_ptr)                                :: stream  !< Pipe.
+   integer(c_size_t)                          :: n       !< Bytes read.
+   integer(c_int)                             :: code    !< Wait status.
+   integer(I4P)                               :: k       !< Byte counter.
+
+   output = ''
+   status = -1_I4P
+   stream = c_popen(command//c_null_char, 'r'//c_null_char)
+   if (.not. c_associated(stream)) return
+   do
+      n = c_fread(buffer, 1_c_size_t, CHUNK, stream)
+      if (n <= 0_c_size_t) exit
+      block
+         character(len=int(n, I4P)) :: piece !< Bytes as text.
+
+         do k = 1_I4P, int(n, I4P)
+            piece(k:k) = buffer(k)
+         enddo
+         output = output//piece
+      endblock
+   enddo
+   code = c_pclose(stream)
+   if (code == -1_c_int) return
+   ! the exit status of a normal exit (WEXITSTATUS), else (a signal) the wait status
+   if (iand(code, 127_c_int) == 0_c_int) then
+      status = int(iand(ishft(code, -8), 255_c_int), I4P)
+   else
+      status = int(code, I4P)
+   endif
+   endsubroutine command_output
+
    subroutine rename_file(old, new, iostat)
    !< Rename (move) file `old` to `new`, replacing `new` if it exists.
    !<

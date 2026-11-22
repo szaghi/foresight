@@ -34,8 +34,10 @@ module foresight_expression
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
 !< IEEE invalid, division by zero or overflow exception.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
+use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, gnuplot_real, &
                              int_str, real_from_decimal
+use foresight_sys, only : command_output
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
 
@@ -225,6 +227,7 @@ type :: symbols_object
       procedure, pass(self) :: array_text !< An array as gnuplot's `print` shows it.
       procedure, pass(self) :: declare_array !< `array name[N] [= [...]]`, `array name = [...]`.
       procedure, pass(self) :: is_array !< Whether a name is an array.
+      procedure, pass(self) :: datablock_names !< Names of the datablocks.
       procedure, pass(self) :: array_size !< Size of an array.
       procedure, pass(self) :: set_array !< Set an array to strings (ARGV).
       procedure, pass(self) :: clear    !< Forget every symbol.
@@ -688,6 +691,7 @@ contains
       integer(I4P)                  :: at    !< Name position.
       integer(I4P)                  :: nargs !< Arguments given.
       integer(I4P)                  :: f     !< Function index.
+      integer(I4P)                  :: first !< First instruction of the arguments.
 
       if (iostat /= 0_I4P) return
       select case (kind)
@@ -738,6 +742,7 @@ contains
             return
          endif
          nargs = 0_I4P
+         first = size(self%code, kind=I4P) + 1_I4P
          if (.not. (kind == T_OPERATOR .and. token == ')')) then
             do
                call parse_ternary
@@ -782,6 +787,12 @@ contains
                   endif
                endif
                call emit(OP_TIMECOLUMN)
+            endif
+         elseif (name == 'system') then
+            if (nargs /= 1_I4P) then
+               call syntax('system needs 1 argument, a shell command', at)
+            else
+               call run_system(first, at)
             endif
          elseif (name == 'time') then
             ! time(0) the integer seconds now, time(0.0) with their fraction, time("format") the time now as text: a
@@ -938,6 +949,73 @@ contains
       call push(self%lists, list)
       call emit(OP_ELEMENT, arg=size(self%lists, kind=I4P))
       endsubroutine element
+
+      subroutine run_system(first, at)
+      !< `system(command)`, the instructions from `first` its argument: the command, known now (no column, no argument
+      !< of a user function), runs now and its standard output (one trailing newline dropped) replaces it, as gnuplot.
+      !< A function body checked alone does not run it.
+      integer(I4P), intent(in)      :: first   !< First instruction of the argument.
+      integer(I4P), intent(in)      :: at      !< Call position.
+      type(expression_object)       :: command !< The argument alone.
+      type(value_object)            :: v       !< Its value.
+      character(len=:), allocatable :: output  !< Command output.
+      logical                       :: defined !< Defined.
+      integer(I4P)                  :: error   !< Type error.
+      integer(I4P)                  :: status  !< Exit status.
+      integer(I4P)                  :: k       !< Instruction counter.
+
+      if (iostat /= 0_I4P) return
+      if (loose) then
+         call truncate_to(first)
+         call emit(OP_CONSTANT, v=string_value(''))
+         depth = depth - 1_I4P
+         return
+      endif
+      do k = first, size(self%code, kind=I4P)
+         select case (self%code(k)%op)
+         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN)
+            call syntax('system takes a command known now: no column, no function argument', at)
+            return
+         endselect
+      enddo
+      ! the argument's instructions alone, their jump targets moved with them
+      command%code = self%code(first:)
+      do k = 1_I4P, size(command%code, kind=I4P)
+         select case (command%code(k)%op)
+         case (OP_JUMP, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
+            command%code(k)%arg = command%code(k)%arg - first + 1_I4P
+         endselect
+      enddo
+      command%depth = self%depth
+      command%degrees = self%degrees
+      if (allocated(self%lists)) command%lists = self%lists
+      allocate(command%names(0))
+      call run(command, [real(R8P) ::], 0_I4P, v, defined, error)
+      if (.not. defined) then
+         call syntax('system: '//error_text(error), at)
+         return
+      elseif (.not. v%is_string) then
+         call syntax('system takes a string, the shell command', at)
+         return
+      endif
+      flush(output_unit)
+      call command_output(v%s, output, status)
+      if (len(output) > 0) then
+         if (output(len(output):len(output)) == new_line('a')) output = output(1:len(output) - 1)
+      endif
+      call truncate_to(first)
+      call emit(OP_CONSTANT, v=string_value(output))
+      depth = depth - 1_I4P
+      endsubroutine run_system
+
+      subroutine truncate_to(first)
+      !< Drop the instructions from `first` on.
+      integer(I4P), intent(in)              :: first !< First instruction dropped.
+      type(instruction_object), allocatable :: kept(:) !< Instructions kept.
+
+      kept = self%code(1:first - 1_I4P)
+      call move_alloc(kept, self%code)
+      endsubroutine truncate_to
 
       subroutine time_now
       !< `time(x)`, the last instruction its argument: the time now (UTC) replaces it, as an integer (`x` an integer), a
@@ -1710,6 +1788,34 @@ contains
    if (.not. allocated(self%arrays)) allocate(self%arrays(0))
    call push(self%arrays, saved%a)
    endsubroutine restore_array
+
+   pure subroutine datablock_names(self, names)
+   !< Names of the datablocks (the variables named `$NAME`).
+   class(symbols_object),         intent(in)  :: self     !< Symbols.
+   character(len=:), allocatable, intent(out) :: names(:) !< Names, blank padded.
+   integer(I4P)                               :: width    !< Longest name.
+   integer(I4P)                               :: n        !< Datablocks.
+   integer(I4P)                               :: k        !< Counter.
+
+   width = 1_I4P
+   n = 0_I4P
+   if (allocated(self%variables)) then
+      do k = 1_I4P, size(self%variables, kind=I4P)
+         if (self%variables(k)%name(1:1) /= '$') cycle
+         n = n + 1_I4P
+         width = max(width, len(self%variables(k)%name, kind=I4P))
+      enddo
+   endif
+   allocate(character(len=width) :: names(n))
+   n = 0_I4P
+   if (allocated(self%variables)) then
+      do k = 1_I4P, size(self%variables, kind=I4P)
+         if (self%variables(k)%name(1:1) /= '$') cycle
+         n = n + 1_I4P
+         names(n) = self%variables(k)%name
+      enddo
+   endif
+   endsubroutine datablock_names
 
    pure function is_array(self, name) result(yes)
    !< Whether `name` is an array.

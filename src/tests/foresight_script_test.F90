@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(110)                           !< Per-check outcome.
+logical                       :: test_passed(111)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2159,6 +2159,66 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_arrays.svg')
 close(unit, status='delete')
 
+! system, backquotes, reset, set table, as gnuplot 6.0
+call interpreter%init(scratch)
+open(newunit=unit, file='foresight_script_test_table.dat')
+write(unit, '(A)') '1 2 0.5 a', '2 4 0.3 b', '3 3 0.2 c'
+close(unit)
+call interpreter%run_text("set print 'foresight_script_test_system.txt'"//new_line('a')// &
+                          'print system("echo hello; echo world"); x = system("echo 3"); print x + 1, strlen(x)'// &
+                          new_line('a')//'print `echo 42`; y = `echo 5` * 2; print y; print "a `echo b` c"'// &
+                          new_line('a')//"print 'a `echo b` c'; print system('printf ""a\n\n""') . '|'"// &
+                          new_line('a')//'set samples 7; set style data points; set style function points; a = 1'// &
+                          new_line('a')//'set xrange [0:1]; set logscale y; reset; print exists("a")'//new_line('a')// &
+                          'reset session; print exists("a"), exists("ARGC"); set print', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(111) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_system.txt', [character(len=12) :: 'hello', 'world', '4 1', '42', '10', 'a b c', &
+           'a `echo b` c', 'a', '|', '1', '0 1'])
+test_passed(111) = test_passed(111) .and. interpreter%samples == 100_I4P .and. interpreter%data_style == 'points' &
+                   .and. interpreter%function_style == 'lines' .and. .not. interpreter%figure%panels(1)%yaxis%log .and. &
+                   .not. interpreter%figure%panels(1)%xaxis%min_fixed
+call interpreter%run_text("set table 'foresight_script_test_table.txt'; set samples 3"//new_line('a')// &
+                          'plot [0:2] x**2 title "sq"'//new_line('a')// &
+                          "plot 'foresight_script_test_table.dat' u 1:2:3 with yerrorbars title 'e'"//new_line('a')// &
+                          "plot '' u 1:2:4 with labels title 'l', '' u 1:2 w boxes title 'b'"//new_line('a')// &
+                          "set format y '%.3f'; set yrange [0:3.5]; plot '' u 1:2 w p t 'p'; unset table", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(111) = test_passed(111) .and. iostat == 0_I4P .and. .not. interpreter%table .and. &
+   file_is('foresight_script_test_table.txt', [character(len=32) :: '', '# Curve 0 of 1, 3 points', &
+           '# Curve title: "sq"', '# x y type', ' 0  0  i', ' 1  1  i', ' 2  4  i', '', '', '# Curve 0 of 1, 3 points', &
+           '# Curve title: "e"', '# x y ylow yhigh type', ' 1  2  1.5  2.5  i', ' 2  4  3.7  4.3  i', &
+           ' 3  3  2.8  3.2  i', '', '', '# Curve 0 of 2, 3 points', '# Curve title: "l"', '# x y label type', &
+           ' 1  2 "a"', ' 2  4 "b"', ' 3  3 "c"', '', '', '# Curve 1 of 2, 3 points', '# Curve title: "b"', &
+           '# x y xlow xhigh type', ' 1  2  1  1  i', ' 2  4  2  2  i', ' 3  3  3  3  i', '', '', &
+           '# Curve 0 of 1, 3 points', '# Curve title: "p"', '# x y type', ' 1 2.000  i', ' 2 4.000  o', ' 3 3.000  i', &
+           ''])
+call interpreter%run_text('set table $T; plot [0:1] x title "t"; unset table; n = |$T|', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat == 0_I4P
+if (test_passed(111)) then
+   block
+      real(R8P) :: v     !< Value.
+      logical   :: found !< Variable found.
+
+      call interpreter%symbols%value_of('n', v, found)
+      test_passed(111) = found .and. v == 8.0_R8P
+   endblock
+endif
+call interpreter%run_text('reset bogus', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'session, errors or bind') > 0
+call interpreter%run_text('print `echo 1', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'unmatched `') > 0
+call interpreter%run_text('plot "foresight_script_test_table.dat" u 1:(system($2))', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'system takes a command known now') > 0
+call interpreter%run_text('set table "x" separator comma', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'separator') > 0
+open(newunit=unit, file='foresight_script_test_system.txt')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_table.txt')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_table.dat')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2167,7 +2227,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,110L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,111L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

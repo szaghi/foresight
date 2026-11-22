@@ -89,6 +89,9 @@ module foresight_script
 !<   a value), `A[i] = E`, `A[i]` and `|A|` in expressions (an index of a data row resolved on each row), `index(A, V)`,
 !<   `print A`, `plot A` and `stats A` (the index and the value of each element, as a file), `ARGV` (the arguments of
 !<   `call` and `foresight -c`);
+!< - `system("command")` (its standard output, run when the expression is compiled), `system "command"`, `` `command` ``
+!<   substitution outside single quotes; `reset [session|errors|bind]` (see `reset_command`); `set table ["file"|$NAME]
+!<   [append]`, `unset table` (plots write their points as text, see `write_table`);
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -97,13 +100,15 @@ module foresight_script
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
+use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_array, saved_variable, symbols_object
 use foresight_annotations, only : arrow_object, label_object, place_object, shape_object
+use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
-use foresight_format, only : c_real, decimal_of, decimal_str, format_check, int_str, real_from_decimal
+use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, int_str, real_from_decimal
 use foresight_readout, only : readout_check
+use foresight_sys, only : command_output, sleep_ms
 use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
@@ -112,7 +117,8 @@ use foresight_palette, only : palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
-                            FILL_SOLID
+                            FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
+                            WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
@@ -191,6 +197,9 @@ type :: script_object
                                                                !< default), '-' the standard output, else a file.
    integer(I4P)                    :: loop_depth = 0_I4P       !< Loops (`do for`, `while`) being run.
    integer(I4P)                    :: loop_signal = 0_I4P      !< `break` (1) or `continue` (2) pending, else 0.
+   logical                         :: table = .false.          !< `set table`: plots write their points as text.
+   character(len=:), allocatable   :: table_file               !< Where: a file, a datablock (`$NAME`), '-' the
+                                                               !< standard output.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -198,6 +207,8 @@ type :: script_object
       procedure, pass(self) :: run_text               !< Run script text.
       procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
+      procedure, pass(self), private :: reset_command !< `reset`.
+      procedure, pass(self), private :: write_table   !< The points of a plot as text (`set table`).
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
       procedure, pass(self), private :: stats_command !< `stats`.
@@ -275,6 +286,8 @@ contains
    self%print_file = ''
    self%loop_depth = 0_I4P
    self%loop_signal = 0_I4P
+   self%table = .false.
+   self%table_file = ''
    endsubroutine init
 
    recursive subroutine run_file(self, file, iostat, iomsg, args)
@@ -480,6 +493,12 @@ contains
          call self%execute(expanded, iostat, iomsg)
          return
       endif
+      call expand_backquotes(statement, expanded, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      if (expanded /= statement) then
+         call self%execute(expanded, iostat, iomsg)
+         return
+      endif
    endif
    select case (command)
    case ('do')
@@ -542,6 +561,25 @@ contains
       call self%stats_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'load', 1_I4P) .or. keyword(command, 'call', 3_I4P)) then
       call self%call_command(tokens, keyword(command, 'call', 3_I4P), iostat, iomsg)
+   elseif (keyword(command, 'system', 2_I4P)) then
+      ! the command runs with the standard output shared
+      i = 2_I4P
+      if (size(tokens) < 2) then
+         call fail('system: a command string is expected', iostat, iomsg)
+         return
+      endif
+      if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+         iomsg = 'system: '//iomsg
+         return
+      endif
+      if (i < size(tokens, kind=I4P)) then
+         call fail('system: unexpected "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+         return
+      endif
+      flush(output_unit)
+      call execute_command_line(text, wait=.true.)
+   elseif (keyword(command, 'reset', 3_I4P)) then
+      call self%reset_command(tokens(2:), iostat, iomsg)
    elseif (command == 'array') then
       call array_command(self%symbols, after_command(statement), self%figure%panels(self%figure%current)%degrees, &
                          iostat, iomsg)
@@ -3023,6 +3061,11 @@ contains
       i = i + 1_I4P
    enddo
    if (size(functions) > 0) call sample_functions
+   if (self%table) then
+      ! `set table`: the points as text, nothing drawn
+      call self%write_table(iostat, iomsg)
+      return
+   endif
    if (self%multiplot) self%advance_pending = .true.
    ! a multiplot on the standard output is printed once, complete, at unset multiplot (as gnuplot); files are rewritten
    ! at each plot, so that a watched page shows the panels done so far
@@ -3967,6 +4010,248 @@ contains
    iostat = status
    iomsg = message
    endsubroutine call_command
+
+   subroutine reset_command(self, tokens, iostat, iomsg)
+   !< gnuplot `reset [session|errors|bind]`: the plot settings back to their defaults, as gnuplot 6.0 keeps the
+   !< terminal, the output, `set fit`, `set print`, `set table`, the multiplot, the linetypes (`set colorsequence`) and,
+   !< a quirk kept, `set style data`. `reset session` also forgets the user variables, functions and arrays (the
+   !< script arguments kept); `reset errors` and `reset bind` do nothing here.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens after `reset`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=*), parameter                  :: DIGITS = '0123456789' !< Argument numbers.
+   type(axes_object)                            :: fresh     !< Default panel.
+   type(axes_object)                            :: kept      !< The panel before.
+   type(saved_variable)                         :: saved(11) !< ARG0 to ARG9 and ARGC.
+   type(saved_array)                            :: argv      !< ARGV.
+   integer(I4P)                                 :: k         !< Counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (size(tokens) > 1) then
+      call fail('reset: unexpected "'//tokens(2)%text//'"', iostat, iomsg)
+      return
+   endif
+   if (size(tokens) == 1) then
+      if (is_word(tokens(1)%text, 'errors bind')) return
+      if (tokens(1)%text /= 'session') then
+         call fail('reset: session, errors or bind expected, found "'//tokens(1)%text//'"', iostat, iomsg)
+         return
+      endif
+      do k = 0_I4P, 9_I4P
+         call self%symbols%save_variable('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), saved(k + 1_I4P))
+      enddo
+      call self%symbols%save_variable('ARGC', saved(11))
+      call self%symbols%save_array('ARGV', argv)
+      ! the datablocks are variables too: kept, as gnuplot's
+      call clear_keeping_datablocks
+      do k = 1_I4P, 11_I4P
+         call self%symbols%restore(saved(k))
+      enddo
+      call self%symbols%restore_array(argv)
+   endif
+   ! the current panel: its plot, place and linetypes kept
+   kept = self%figure%panels(self%figure%current)
+   self%figure%panels(self%figure%current) = fresh
+   call self%figure%panels(self%figure%current)%set_defaults
+   if (allocated(kept%series)) self%figure%panels(self%figure%current)%series = kept%series
+   self%figure%panels(self%figure%current)%origin = kept%origin
+   self%figure%panels(self%figure%current)%size = kept%size
+   if (allocated(kept%linecolors)) self%figure%panels(self%figure%current)%linecolors = kept%linecolors
+   self%function_style = 'lines'
+   self%autotitle = 'file'
+   if (allocated(self%line_styles)) deallocate(self%line_styles)
+   allocate(self%line_styles(0))
+   self%separator = ''
+   self%missing = ''
+   self%comments = '#'
+   self%samples = 100_I4P
+   self%rgbmax = 255.0_R8P
+   self%timefmt = '%d/%m/%y,%H:%M'
+   self%symbols%timefmt = self%timefmt
+   self%time_data = .false.
+   contains
+      subroutine clear_keeping_datablocks
+      !< Forget every symbol but the datablocks.
+      type(symbols_object) :: blocks !< The datablocks.
+      character(len=:), allocatable :: names(:) !< Datablock names.
+      character(len=:), allocatable :: text     !< Datablock lines.
+      logical                       :: found    !< Found.
+      integer(I4P)                  :: j        !< Counter.
+
+      call self%symbols%datablock_names(names)
+      do j = 1_I4P, size(names, kind=I4P)
+         call self%symbols%string_of(trim(names(j)), text, found)
+         call blocks%set_string(trim(names(j)), text)
+      enddo
+      blocks%timefmt = self%symbols%timefmt
+      self%symbols = blocks
+      endsubroutine clear_keeping_datablocks
+   endsubroutine reset_command
+
+   subroutine write_table(self, iostat, iomsg)
+   !< `set table`: the points of the current panel's series as gnuplot 6.0 tabulates them, a block per series (`#
+   !< Curve K of N, M points`, its title, the column names) whose rows are the values in the axis formats (`set
+   !< format`, `% h` by default) and a flag, `i` in range, `o` outside a fixed range, `u` undefined; the columns: `x y
+   !< type`, with `ylow yhigh` (y error bars), `xlow xhigh` (x error bars, boxes), both (xy error bars), `y1 y2`
+   !< (filled curves between two curves) or `x y label` (labels).
+   class(script_object),          intent(inout) :: self   !< Interpreter.
+   integer(I4P),                  intent(out)   :: iostat !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg  !< Error message.
+   character(len=:), allocatable                :: text   !< Table.
+   character(len=:), allocatable                :: xfmt   !< x format.
+   character(len=:), allocatable                :: yfmt   !< y format.
+   character(len=:), allocatable                :: names  !< Column names.
+   character(len=:), allocatable                :: row    !< One row.
+   character(len=:), allocatable                :: old    !< Datablock lines before.
+   character(len=1)                             :: flag   !< Point flag.
+   logical                                      :: found  !< Datablock found.
+   integer(I4P)                                 :: n      !< Series.
+   integer(I4P)                                 :: k      !< Series counter.
+   integer(I4P)                                 :: p      !< Point counter.
+   integer(I4P)                                 :: unit   !< File unit.
+
+   iostat = 0_I4P
+   iomsg = ''
+   text = ''
+   associate(panel => self%figure%panels(self%figure%current))
+      n = 0_I4P
+      if (allocated(panel%series)) n = size(panel%series, kind=I4P)
+      do k = 1_I4P, n
+         associate(series => panel%series(k))
+            xfmt = axis_format(panel%xaxis%tics%format, panel%xaxis%time)
+            yfmt = axis_format(panel%yaxis%tics%format, panel%yaxis%time)
+            if (series%x2) xfmt = axis_format(panel%x2axis%tics%format, panel%x2axis%time)
+            if (series%y2) yfmt = axis_format(panel%y2axis%tics%format, panel%y2axis%time)
+            select case (series%style%with)
+            case (WITH_LABELS)
+               names = 'x y label type'
+            case (WITH_YERRORBARS, WITH_YERRORLINES)
+               names = 'x y ylow yhigh type'
+            case (WITH_XERRORBARS, WITH_XERRORLINES, WITH_BOXES)
+               names = 'x y xlow xhigh type'
+            case (WITH_XYERRORBARS, WITH_XYERRORLINES)
+               names = 'x y xlow xhigh ylow yhigh type'
+            case default
+               names = 'x y type'
+               if (series%style%with == WITH_FILLEDCURVES .and. allocated(series%ylow)) names = 'x y1 y2 type'
+            endselect
+            if (k > 1_I4P) text = text//new_line('a')//new_line('a')
+            text = text//'# Curve '//int_str(int(k - 1_I4P, I8P))//' of '//int_str(int(n, I8P))//', '// &
+                   int_str(int(size(series%x), I8P))//' points'//new_line('a')//'# Curve title: "'// &
+                   series%title//'"'//new_line('a')//'# '//names//new_line('a')
+            do p = 1_I4P, size(series%x, kind=I4P)
+               row = number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)
+               select case (names)
+               case ('x y label type')
+                  row = row//' "'//trim(series%texts(p))//'"'
+               case ('x y ylow yhigh type')
+                  row = row//' '//number(series%ylow(p), yfmt)//' '//number(series%yhigh(p), yfmt)
+               case ('x y xlow xhigh type')
+                  if (allocated(series%xlow) .and. series%style%with /= WITH_BOXES) then
+                     row = row//' '//number(series%xlow(p), xfmt)//' '//number(series%xhigh(p), xfmt)
+                  else
+                     ! boxes: the abscissa twice, as gnuplot 6.0 tabulates them
+                     row = row//' '//number(series%x(p), xfmt)//' '//number(series%x(p), xfmt)
+                  endif
+               case ('x y xlow xhigh ylow yhigh type')
+                  row = row//' '//number(series%xlow(p), xfmt)//' '//number(series%xhigh(p), xfmt)//' '// &
+                        number(series%ylow(p), yfmt)//' '//number(series%yhigh(p), yfmt)
+               case ('x y1 y2 type')
+                  row = row//' '//number(series%ylow(p), yfmt)
+               endselect
+               if (names /= 'x y label type') then
+                  flag = 'i'
+                  if (.not. (ieee_is_finite(series%x(p)) .and. ieee_is_finite(series%y(p)))) then
+                     flag = 'u'
+                  else
+                     ! no merge of the axes: gfortran 16 frees their components twice
+                     if (series%x2) then
+                        if (outside(series%x(p), panel%x2axis)) flag = 'o'
+                     elseif (outside(series%x(p), panel%xaxis)) then
+                        flag = 'o'
+                     endif
+                     if (series%y2) then
+                        if (outside(series%y(p), panel%y2axis)) flag = 'o'
+                     elseif (outside(series%y(p), panel%yaxis)) then
+                        flag = 'o'
+                     endif
+                  endif
+                  row = row//'  '//flag
+               endif
+               text = text//row//new_line('a')
+            enddo
+         endassociate
+      enddo
+   endassociate
+   ! a blank line before and after the plot, two between its curves
+   if (n > 0_I4P) text = new_line('a')//text//new_line('a')
+   if (is_datablock(self%table_file)) then
+      call self%symbols%string_of(self%table_file, old, found)
+      call self%symbols%set_string(self%table_file, old//text)
+   elseif (len(text) == 0) then
+      return
+   elseif (self%table_file == '-') then
+      ! the last newline ends the record
+      write(output_unit, '(A)') text(1:len(text) - 1)
+   else
+      open(newunit=unit, file=self%table_file, position='append', action='write', iostat=iostat)
+      if (iostat /= 0_I4P) then
+         call fail('set table: cannot write "'//self%table_file//'"', iostat, iomsg)
+         return
+      endif
+      write(unit, '(A)') text(1:len(text) - 1)
+      close(unit)
+   endif
+   contains
+      pure function axis_format(format, time) result(f)
+      !< The table format of an axis: its `set format`, `% h` if none or a time format.
+      character(len=:), allocatable, intent(in) :: format !< Axis label format.
+      logical,                       intent(in) :: time   !< A time axis.
+      character(len=:), allocatable             :: f      !< Format.
+
+      f = '% h'
+      if (allocated(format)) then
+         if (len(format) > 0 .and. .not. time) f = format
+      endif
+      endfunction axis_format
+
+      pure function number(v, format) result(t)
+      !< `v` in `format`, `NaN` if undefined (after a blank with the space flag, as a number would have).
+      real(R8P),        intent(in)  :: v      !< Value.
+      character(len=*), intent(in)  :: format !< Format.
+      character(len=:), allocatable :: t      !< Text.
+      character(len=:), allocatable :: sup    !< `%h` exponent.
+      integer(I8P)                  :: mantissa !< Decimal mantissa.
+      integer(I4P)                  :: e        !< Decimal exponent.
+
+      if (.not. ieee_is_finite(v)) then
+         t = 'NaN'
+         if (index(format, '% ') > 0) t = ' NaN'
+         return
+      endif
+      call decimal_of(v, mantissa, e)
+      call format_decimal(format, mantissa, e, t, sup)
+      if (len(sup) > 0) t = t//'e'//sup
+      endfunction number
+
+      pure function outside(v, axis) result(yes)
+      !< Whether `v` lies outside the fixed ends of `axis`.
+      real(R8P),         intent(in) :: v    !< Value.
+      type(axis_object), intent(in) :: axis !< Axis.
+      logical                       :: yes  !< Outside.
+
+      yes = .false.
+      if (axis%min_fixed .and. axis%max_fixed) then
+         yes = v < min(axis%min_user, axis%max_user) .or. v > max(axis%min_user, axis%max_user)
+      elseif (axis%min_fixed) then
+         yes = v < axis%min_user
+      elseif (axis%max_fixed) then
+         yes = v > axis%max_user
+      endif
+      endfunction outside
+   endsubroutine write_table
 
    subroutine expand_macros(self, statement, expanded, iostat, iomsg)
    !< gnuplot macros: each `@name` outside quotes replaced by the value of the string variable `name`.
@@ -4960,6 +5245,8 @@ contains
       call fit_option
    elseif (keyword(option, 'print', 2_I4P)) then
       call print_option
+   elseif (keyword(option, 'table', 3_I4P)) then
+      call table_option
    elseif (keyword(option, 'samples', 3_I4P)) then
       call samples_option
    elseif (keyword(option, 'format', 3_I4P)) then
@@ -5112,6 +5399,52 @@ contains
       endif
       self%print_file = name
       endsubroutine print_option
+
+      subroutine table_option
+      !< `set table ["file" | $NAME] [append]`: plots write their points to the file (emptied unless `append`), to the
+      !< datablock (likewise), or bare to the standard output; nothing is drawn until `unset table`.
+      character(len=:), allocatable :: name   !< File or datablock name.
+      integer(I4P)                  :: unit   !< File unit.
+      integer(I4P)                  :: k      !< Last token of the name.
+      logical                       :: append !< `append` given.
+      logical                       :: found  !< Datablock found.
+
+      name = '-'
+      k = 1_I4P
+      if (size(tokens) > 1) then
+         if (.not. keyword(tokens(2)%text, 'append', 3_I4P) .or. tokens(2)%kind == TOKEN_STRING) then
+            k = 2_I4P
+            if (.not. self%string_expression(tokens, k, name, iostat, iomsg)) then
+               iomsg = 'set table: '//iomsg
+               return
+            endif
+         endif
+      endif
+      append = .false.
+      if (k == size(tokens, kind=I4P) - 1_I4P) append = keyword(tokens(k + 1_I4P)%text, 'append', 3_I4P)
+      if ((k < size(tokens, kind=I4P) .and. .not. append) .or. k < size(tokens, kind=I4P) - 1_I4P) then
+         if (keyword(tokens(k + 1_I4P)%text, 'separator', 3_I4P)) then
+            call fail('set table: separator (of plot with table) is not supported', iostat, iomsg)
+         else
+            call fail('set table: "file" or $NAME [append] expected', iostat, iomsg)
+         endif
+         return
+      endif
+      if (len(name) == 0) name = '-'
+      if (is_datablock(name)) then
+         call self%symbols%string_of(name, text, found)
+         if (.not. append .or. .not. found) call self%symbols%set_string(name, '')
+      elseif (name /= '-' .and. .not. append) then
+         open(newunit=unit, file=name, status='replace', action='write', iostat=iostat)
+         if (iostat /= 0_I4P) then
+            call fail('set table: cannot write "'//name//'"', iostat, iomsg)
+            return
+         endif
+         close(unit)
+      endif
+      self%table = .true.
+      self%table_file = name
+      endsubroutine table_option
 
       subroutine fit_option
       !< `set fit [quiet|results|brief] [logfile "file"|nologfile] [limit E] [limit_abs E] [maxiter N|default]
@@ -6758,6 +7091,8 @@ contains
       call self%figure%set_format('')
    elseif (keyword(option, 'print', 2_I4P)) then
       self%print_file = ''
+   elseif (keyword(option, 'table', 3_I4P)) then
+      self%table = .false.
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif
@@ -7093,6 +7428,55 @@ contains
    enddo
    call symbols%declare_array(name, size_text, items, iostat, iomsg, degrees)
    endsubroutine array_command
+
+   subroutine expand_backquotes(statement, expanded, iostat, iomsg)
+   !< gnuplot's command substitution: each `` `command` `` outside single quotes replaced by the command's standard
+   !< output, its trailing newline dropped.
+   character(len=*),              intent(in)  :: statement !< Statement.
+   character(len=:), allocatable, intent(out) :: expanded  !< Statement substituted.
+   integer(I4P),                  intent(out) :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
+   character(len=:), allocatable              :: output    !< Command output.
+   character(len=1)                           :: quote     !< Open quote, blank if none.
+   integer(I4P)                               :: i         !< Character counter.
+   integer(I4P)                               :: close     !< Closing backquote.
+   integer(I4P)                               :: status    !< Exit status.
+
+   iostat = 0_I4P
+   iomsg = ''
+   expanded = ''
+   quote = ' '
+   i = 1_I4P
+   do while (i <= len(statement, kind=I4P))
+      if (quote == "'") then
+         if (statement(i:i) == "'") quote = ' '
+      elseif (statement(i:i) == "'" .and. quote == ' ') then
+         quote = "'"
+      elseif (statement(i:i) == '"') then
+         quote = merge(' ', '"', quote == '"')
+      elseif (statement(i:i) == '#' .and. quote == ' ') then
+         ! a comment: as it is
+         expanded = expanded//statement(i:)
+         return
+      elseif (statement(i:i) == '`') then
+         close = index(statement(i + 1_I4P:), '`', kind=I4P)
+         if (close == 0_I4P) then
+            call fail('unmatched ` (command substitution)', iostat, iomsg)
+            return
+         endif
+         flush(output_unit)
+         call command_output(statement(i + 1_I4P:i + close - 1_I4P), output, status)
+         if (len(output) > 0) then
+            if (output(len(output):len(output)) == new_line('a')) output = output(1:len(output) - 1)
+         endif
+         expanded = expanded//output
+         i = i + close + 1_I4P
+         cycle
+      endif
+      expanded = expanded//statement(i:i)
+      i = i + 1_I4P
+   enddo
+   endsubroutine expand_backquotes
 
    pure function closing_bracket(s, open) result(close)
    !< Position of the `]` closing the `[` at `open` in `s` (quotes and nested brackets skipped), 0 if none.
