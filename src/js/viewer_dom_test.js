@@ -310,5 +310,20 @@ check("noenhanced tick labels kept as they are", ey2ticks.querySelectorAll("tspa
 key("a");
 check("autoscale restores them", exticks.innerHTML === exHome);
 
+// ticks on the zero axes (set xtics axis; set ytics axis): a zoom draws them on the zero lines of the view, not on the
+// border; at autoscale the original ones come back
+page = strip(path.join(__dirname, "..", "tests", "goldens", "tics_axis.html"));
+p = load("");
+var axticks = panel(0).querySelector(".fs-xticks"), axHome = axticks.innerHTML;
+var axArea = panel(0).getAttribute("data-area").split(" ").map(Number);
+wheel(0);
+var axLines = Array.prototype.slice.call(axticks.querySelectorAll("line"));
+check("a zoom keeps the x ticks on the y = 0 line", axticks.innerHTML !== axHome && axLines.length > 0 &&
+  axLines.every(function (l) {
+    return Number(l.getAttribute("y1")) < axArea[3] - 1 && Number(l.getAttribute("y1")) > axArea[2];
+  }));
+key("a");
+check("autoscale restores the axis ticks", axticks.innerHTML === axHome);
+
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

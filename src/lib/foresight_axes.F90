@@ -1391,10 +1391,12 @@ contains
    if (self%y2_active) view%markup = view%markup .or. axis_markup(self%y2axis)
    if (self%x2_active) view%markup = view%markup .or. axis_markup(self%x2axis)
    ! tick labels not read as enhanced text: `noenhanced` first
-   view%xtics = style_words(self%xaxis%tics, plain_word(self%xaxis%tics%plain, view%xtics))
-   view%ytics = style_words(self%yaxis%tics, plain_word(self%yaxis%tics%plain, view%ytics))
-   if (self%y2_active) view%y2tics = style_words(self%y2axis%tics, plain_word(self%y2axis%tics%plain, view%y2tics))
-   if (self%x2_active) view%x2tics = style_words(self%x2axis%tics, plain_word(self%x2axis%tics%plain, view%x2tics))
+   view%xtics = place_words(self%xaxis, style_words(self%xaxis%tics, plain_word(self%xaxis%tics%plain, view%xtics)))
+   view%ytics = place_words(self%yaxis, style_words(self%yaxis%tics, plain_word(self%yaxis%tics%plain, view%ytics)))
+   if (self%y2_active) view%y2tics = place_words(self%y2axis, style_words(self%y2axis%tics, &
+                                                                         plain_word(self%y2axis%tics%plain, view%y2tics)))
+   if (self%x2_active) view%x2tics = place_words(self%x2axis, style_words(self%x2axis%tics, &
+                                                                         plain_word(self%x2axis%tics%plain, view%x2tics)))
    view%gridlines = grid_words(self%grid_lines)
    view%gridstyle = ''
    if (allocated(self%grid_lc) .or. self%grid_lw /= 0.5_R8P .or. self%grid_dt > 0_I4P) then
@@ -1798,6 +1800,9 @@ contains
    integer(I4P)                         :: t         !< Tick counter.
    character(len=:), allocatable        :: bcolor    !< Border color.
    type(style_object)                   :: bline     !< Border line.
+   real(R8P)                            :: base      !< Line of the ticks: the border, or the zero axis [px].
+   real(R8P)                            :: span(2)   !< Ends of a border side limited to the data range [px].
+   logical                              :: limited   !< A border side limited to the data range.
 
    angle = 0.0_R8P
    if (backend%rotates_text()) angle = self%xaxis%tics%rotate
@@ -1808,40 +1813,62 @@ contains
       if (allocated(self%border_lc)) bcolor = self%border_lc
       bline%dashtype = self%border_dt
       bline%linewidth = self%border_lw
-      if (iand(self%border, 15_I4P) == 15_I4P .and. self%border_dt == 1_I4P) then
+      ! a side of an axis whose ticks are range limited spans its data only (gnuplot `rangelimited`)
+      limited = limits(self%xaxis) .or. limits(self%yaxis)
+      if (self%x2_active) limited = limited .or. limits(self%x2axis)
+      if (self%y2_active) limited = limited .or. limits(self%y2axis)
+      if (iand(self%border, 15_I4P) == 15_I4P .and. self%border_dt == 1_I4P .and. .not. limited) then
          call backend%rect(left, top, right - left, bottom - top, bcolor, 'none', self%border_lw)
       else
-         if (btest(self%border, 0)) call backend%polyline([left, right], [bottom, bottom], bcolor, self%border_lw, &
+         span = [left, right]
+         if (limits(self%xaxis)) span = horizontal_span(self%xaxis)
+         if (btest(self%border, 0)) call backend%polyline(span, [bottom, bottom], bcolor, self%border_lw, &
                                                           bline%dasharray())
-         if (btest(self%border, 1)) call backend%polyline([left, left], [bottom, top], bcolor, self%border_lw, &
+         span = [bottom, top]
+         if (limits(self%yaxis)) span = vertical_span(self%yaxis)
+         if (btest(self%border, 1)) call backend%polyline([left, left], span, bcolor, self%border_lw, &
                                                           bline%dasharray())
-         if (btest(self%border, 2)) call backend%polyline([left, right], [top, top], bcolor, self%border_lw, &
+         span = [left, right]
+         if (self%x2_active) then
+            if (limits(self%x2axis)) span = horizontal_span(self%x2axis)
+         endif
+         if (btest(self%border, 2)) call backend%polyline(span, [top, top], bcolor, self%border_lw, &
                                                           bline%dasharray())
-         if (btest(self%border, 3)) call backend%polyline([right, right], [bottom, top], bcolor, self%border_lw, &
+         span = [bottom, top]
+         if (self%y2_active) then
+            if (limits(self%y2axis)) span = vertical_span(self%y2axis)
+         endif
+         if (btest(self%border, 3)) call backend%polyline([right, right], span, bcolor, self%border_lw, &
                                                           bline%dasharray())
       endif
       call backend%begin_group('fs-xticks')
+      ! on the x axis (y = 0) with `set xtics axis`, not mirrored
+      base = bottom
+      if (on_zero(self%xaxis%tics, self%yaxis)) base = bottom - self%yaxis%to_unit(0.0_R8P) * (bottom - top)
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
+         if (.not. within(self%xaxis, self%xaxis%ticks(t)%value)) cycle
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
          length = tick_length(self%xaxis%tics, self%xaxis%ticks(t)%major)
          if (self%xaxis%tics%out) then
-            call backend%polyline([p, p], [bottom, bottom + length], FRAME_COLOR, 1.0_R8P, '')
-            if (self%xaxis%tics%mirror) call backend%polyline([p, p], [top, top - length], FRAME_COLOR, 1.0_R8P, '')
+            call backend%polyline([p, p], [base, base + length], FRAME_COLOR, 1.0_R8P, '')
+            if (self%xaxis%tics%mirror .and. base == bottom) &
+               call backend%polyline([p, p], [top, top - length], FRAME_COLOR, 1.0_R8P, '')
          else
-            call backend%polyline([p, p], [bottom, bottom - length], FRAME_COLOR, 1.0_R8P, '')
-            if (self%xaxis%tics%mirror) call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
+            call backend%polyline([p, p], [base, base - length], FRAME_COLOR, 1.0_R8P, '')
+            if (self%xaxis%tics%mirror .and. base == bottom) &
+               call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
          endif
          if (.not. self%xaxis%ticks(t)%major) cycle
          if (angle /= 0.0_R8P) then
-            call rotated_anchor(p, bottom + shift, angle, font_size, ax, ay)
+            call rotated_anchor(p, base + shift, angle, font_size, ax, ay)
             call tick_label(backend, self%xaxis%tics, font_size, ax, ay, self%xaxis%ticks(t)%label, &
                             trim(self%xaxis%tics%anchor()), self%xaxis%ticks(t)%sup, -angle)
          elseif (self%xaxis%tics%out) then
-            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), bottom + shift + GAP + font_size + &
+            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
                             label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
                             LINE_HEIGHT * font_size, self%xaxis%tics%color)
          else
-            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), bottom + GAP + font_size + &
+            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
                             label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
                             LINE_HEIGHT * font_size, self%xaxis%tics%color)
          endif
@@ -1852,20 +1879,26 @@ contains
                                                                  font_size + LINE_HEIGHT * font_size * &
                                                                  real(label_rows(self%xaxis%ticks), R8P), font_size)
       call backend%begin_group('fs-yticks')
+      ! on the y axis (x = 0) with `set ytics axis`, not mirrored
+      base = left
+      if (on_zero(self%yaxis%tics, self%xaxis)) base = left + self%xaxis%to_unit(0.0_R8P) * (right - left)
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
+         if (.not. within(self%yaxis, self%yaxis%ticks(t)%value)) cycle
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
          length = tick_length(self%yaxis%tics, self%yaxis%ticks(t)%major)
          if (self%yaxis%tics%out) then
-            call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%yaxis%tics%mirror) call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+            call backend%polyline([base, base - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+            if (self%yaxis%tics%mirror .and. base == left) &
+               call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
             if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, &
-                                                           left - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
+                                                           base - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
                                                            self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, 0.0_R8P)
             cycle
          endif
-         call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         if (self%yaxis%tics%mirror) call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, left - GAP, &
+         call backend%polyline([base, base + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+         if (self%yaxis%tics%mirror .and. base == left) &
+            call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+         if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, base - GAP, &
                                                         p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', &
                                                         self%yaxis%ticks(t)%sup, 0.0_R8P)
       enddo
@@ -1873,6 +1906,7 @@ contains
       if (self%y2_active) then
          call backend%begin_group('fs-y2ticks')
          do t = 1_I4P, size(self%y2axis%ticks, kind=I4P)
+            if (.not. within(self%y2axis, self%y2axis%ticks(t)%value)) cycle
             p = bottom - self%y2axis%to_unit(self%y2axis%ticks(t)%value) * (bottom - top)
             length = tick_length(self%y2axis%tics, self%y2axis%ticks(t)%major)
             if (self%y2axis%tics%out) then
@@ -1897,6 +1931,7 @@ contains
          ! above the top border, labels on a line ending a quarter font size above it (descenders)
          call backend%begin_group('fs-x2ticks')
          do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
+            if (.not. within(self%x2axis, self%x2axis%ticks(t)%value)) cycle
             p = left + self%x2axis%to_unit(self%x2axis%ticks(t)%value) * (right - left)
             length = tick_length(self%x2axis%tics, self%x2axis%ticks(t)%major)
             if (self%x2axis%tics%out) then
@@ -1979,6 +2014,24 @@ contains
          backend%literal = .false.
       endif
    endassociate
+   contains
+      pure function horizontal_span(axis) result(ends)
+      !< Abscissae of the data range of `axis` on the plot area, clipped to it [px].
+      type(axis_object), intent(in) :: axis    !< Axis.
+      real(R8P)                     :: ends(2) !< Left and right [px].
+
+      ends = area(1) + axis%to_unit([axis%data_lo, axis%data_hi]) * (area(2) - area(1))
+      ends = [max(area(1), min(ends(1), ends(2))), min(area(2), max(ends(1), ends(2)))]
+      endfunction horizontal_span
+
+      pure function vertical_span(axis) result(ends)
+      !< Ordinates of the data range of `axis` on the plot area, clipped to it [px], bottom first.
+      type(axis_object), intent(in) :: axis    !< Axis.
+      real(R8P)                     :: ends(2) !< Bottom and top [px].
+
+      ends = area(4) - axis%to_unit([axis%data_lo, axis%data_hi]) * (area(4) - area(3))
+      ends = [min(area(4), max(ends(1), ends(2))), max(area(3), min(ends(1), ends(2)))]
+      endfunction vertical_span
    endsubroutine draw_frame
 
    subroutine draw_grid(self, backend, area)
@@ -2087,6 +2140,24 @@ contains
    endif
    if (axis%tics%has_format()) yes = yes .or. has_markup(axis%tics%format)
    endfunction axis_markup
+
+   pure function place_words(axis, text) result(words)
+   !< The viewer tick settings `text`, after the placement of the ticks of `axis`: `axis` (on the zero axis of the other
+   !< coordinate) and `rangelimited LO HI` (within the data range), if so.
+   type(axis_object), intent(in) :: axis  !< Axis.
+   character(len=*),  intent(in) :: text  !< Tick settings.
+   character(len=:), allocatable :: words !< Settings.
+
+   words = text
+   if (limits(axis)) then
+      if (len(words) > 0) words = ' '//words
+      words = 'rangelimited '//real_str(axis%data_lo)//' '//real_str(axis%data_hi)//words
+   endif
+   if (axis%tics%on_axis) then
+      if (len(words) > 0) words = ' '//words
+      words = 'axis'//words
+   endif
+   endfunction place_words
 
    pure function style_words(tics, text) result(words)
    !< The viewer tick settings `text`, after the label style of `tics`: `offset X Y` (characters) and `color C`, if set.
@@ -4917,8 +4988,13 @@ contains
    rotated = self%xaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()
    extent = 0.0_R8P
    if (rotated) extent = self%xlabels_extent(backend, font_size)
-   margins(1) = PAD + labels_width(self%yaxis) + GAP
-   if (self%yaxis%tics%out) margins(1) = margins(1) + tick_length(self%yaxis%tics, .true.)
+   ! y tick labels on the y axis (x = 0) take no margin
+   if (on_zero(self%yaxis%tics, self%xaxis)) then
+      margins(1) = PAD
+   else
+      margins(1) = PAD + labels_width(self%yaxis) + GAP
+      if (self%yaxis%tics%out) margins(1) = margins(1) + tick_length(self%yaxis%tics, .true.)
+   endif
    if (self%yaxis%has_label()) margins(1) = margins(1) + LINE_HEIGHT * font_size + GAP
    ! rotated x labels of the leftmost tick may reach beyond the left border
    if (rotated) margins(1) = max(margins(1), PAD + extent(2))
@@ -4962,7 +5038,10 @@ contains
    endif
    ! the row of the x tick labels only if there are labels (gnuplot: 36 px with them, 16.8 without, at 400x300)
    margins(4) = PAD + 0.5_R8P * font_size
-   if (any(self%xaxis%ticks%major)) then
+   ! x tick labels on the x axis (y = 0) take no margin
+   if (on_zero(self%xaxis%tics, self%yaxis)) then
+      continue
+   elseif (any(self%xaxis%ticks%major)) then
       if (rotated) then
          margins(4) = PAD + out_shift(self%xaxis%tics) + extent(1)
       elseif (self%xaxis%tics%out) then
@@ -5460,6 +5539,41 @@ contains
       call backend%text(px, py, label, anchor, sup=sup)
    endif
    endsubroutine tick_label
+
+   pure function on_zero(tics, other) result(yes)
+   !< Whether ticks set `axis` (`tics`) lie on the zero of the `other` axis: linear, with 0 in its range.
+   type(tics_object), intent(in) :: tics  !< Tick settings.
+   type(axis_object), intent(in) :: other !< The other coordinate's axis.
+   logical                       :: yes   !< On the zero axis.
+   real(R8P)                     :: u     !< Unit coordinate of 0.
+
+   yes = .false.
+   if (.not. tics%on_axis) return
+   if (other%log) return
+   u = other%to_unit(0.0_R8P)
+   yes = u >= 0.0_R8P .and. u <= 1.0_R8P
+   endfunction on_zero
+
+   pure function limits(axis) result(yes)
+   !< Whether the ticks and border side of `axis` are limited to its data range (`rangelimited`, with data).
+   type(axis_object), intent(in) :: axis !< Axis.
+   logical                       :: yes  !< Range limited.
+
+   yes = axis%tics%rangelimited .and. axis%has_data
+   endfunction limits
+
+   pure function within(axis, v) result(yes)
+   !< Whether a tick at `v` is drawn: always, or within the data range of a `rangelimited` axis (a hair of tolerance).
+   type(axis_object), intent(in) :: axis !< Axis.
+   real(R8P),         intent(in) :: v    !< Tick value.
+   logical                       :: yes  !< Drawn.
+   real(R8P)                     :: tol  !< Tolerance.
+
+   yes = .true.
+   if (.not. limits(axis)) return
+   tol = 1.0e-9_R8P * max(abs(axis%data_hi - axis%data_lo), abs(axis%data_hi), abs(axis%data_lo), tiny(1.0_R8P))
+   yes = v >= axis%data_lo - tol .and. v <= axis%data_hi + tol
+   endfunction within
 
    pure function label_dx(tics, font_size) result(dx)
    !< Horizontal shift of the tick labels of `tics` [px]: their `offset` in characters.

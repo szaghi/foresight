@@ -18,6 +18,9 @@ public :: axis_object
 
 type :: axis_object
    !< Plot axis.
+   logical                        :: has_data  = .false.    !< Data placed on the axis, set by `setup`.
+   real(R8P)                      :: data_lo   = 0.0_R8P    !< Smallest data value placed, set by `setup`.
+   real(R8P)                      :: data_hi   = 0.0_R8P    !< Largest data value placed, set by `setup`.
    character(len=:), allocatable  :: label                  !< Axis label, empty for none.
    logical                        :: log       = .false.    !< Base-10 logarithmic scale.
    logical                        :: min_fixed = .false.    !< Axis start set by the user, else autoscaled.
@@ -147,6 +150,9 @@ contains
    real(R8P)                         :: hi       !< Value at the axis end.
 
    call self%range_of(dmin, dmax, has_data, lo, hi)
+   self%has_data = has_data
+   self%data_lo = min(dmin, dmax)
+   self%data_hi = max(dmin, dmax)
    if (self%log .and. (lo <= 0.0_R8P .or. hi <= 0.0_R8P)) error stop 'foresight: log scale needs a positive range'
    if (lo == hi) error stop 'foresight: empty axis range'
    if (self%labelled()) then

@@ -7718,9 +7718,16 @@ contains
                panel%yaxis%tics%out = toks(i)%text == 'out'
                panel%x2axis%tics%out = toks(i)%text == 'out'
                panel%y2axis%tics%out = toks(i)%text == 'out'
-            elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'border') then
-               ! the ticks on the border: foresight's only placement
-               continue
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'axis border')) then
+               ! on the zero axes, or on the border
+               panel%xaxis%tics%on_axis = toks(i)%text == 'axis'
+               panel%yaxis%tics%on_axis = toks(i)%text == 'axis'
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'rangelimited norangelimit')) then
+               ! the ticks (and the border sides) within the data ranges
+               panel%xaxis%tics%rangelimited = toks(i)%text == 'rangelimited'
+               panel%yaxis%tics%rangelimited = toks(i)%text == 'rangelimited'
+               panel%x2axis%tics%rangelimited = toks(i)%text == 'rangelimited'
+               panel%y2axis%tics%rangelimited = toks(i)%text == 'rangelimited'
             elseif (label_option(toks, i, labels, fmt)) then
                if (iostat /= 0_I4P) return
                styled = .true.
@@ -7732,9 +7739,9 @@ contains
                panel%y2axis%tics%plain = toks(i)%text == 'noenhanced'
                panel%cbaxis%tics%plain = toks(i)%text == 'noenhanced'
             else
-               call fail('set tics: supported options are mirror, nomirror, in, out, scale, border and noenhanced, '// &
-                         'not "'// &
-                         toks(i)%text//'"', iostat, iomsg)
+               call fail('set tics: supported options are mirror, nomirror, in, out, scale, axis, border, '// &
+                         'rangelimited, format, font, offset, textcolor and noenhanced, not "'//toks(i)%text//'"', &
+                         iostat, iomsg)
                return
             endif
             i = i + 1_I4P
@@ -7993,6 +8000,12 @@ contains
             tics%plain = toks(i)%text == 'noenhanced'
          elseif (label_option(toks, i, tics, fmt)) then
             if (iostat /= 0_I4P) return
+         elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'axis border')) then
+            ! on the zero axis of the other coordinate, or on the border
+            tics%on_axis = toks(i)%text == 'axis'
+         elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'rangelimited norangelimit')) then
+            ! the ticks (and the border side) within the data range
+            tics%rangelimited = toks(i)%text == 'rangelimited'
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text(1:min(1, len(toks(i)%text))) == '(') then
             if (len(list) > 0) then
                call fail('set '//option//': one list of ticks is expected', iostat, iomsg)

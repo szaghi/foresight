@@ -218,6 +218,11 @@ check("tics label style", (function () {
     t.step === "0.5";
 }()));
 
+check("tics placement", (function () {
+  var t = viewer.readTics("axis rangelimited -1e0 3e0 * 1 *", "");
+  return t.axis === true && t.range[0] === -1 && t.range[1] === 3 && t.mode === "fixed" && t.step === "1";
+}()));
+
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });
 console.log("Are all tests passed? " + (failed.length === 0 ? "T" : "F"));

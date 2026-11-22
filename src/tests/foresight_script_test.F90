@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(132)                           !< Per-check outcome.
+logical                       :: test_passed(133)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2816,6 +2816,32 @@ close(unit, status='delete')
 call interpreter%run_text('set xtics format "%q"', iostat, iomsg)
 test_passed(132) = test_passed(132) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion') > 0
 
+! tick placement: axis (on the zero axis of the other coordinate, no margin for the labels), border, rangelimited (the
+! ticks and the border side within the data range)
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'-1 0.2'//new_line('a')//'1 1.2'//new_line('a')//'3 0.5'// &
+                          new_line('a')//'EOD'//new_line('a')// &
+                          'set term svg size 400,300; set output "foresight_script_test_axis.svg"'//new_line('a')// &
+                          'set xtics axis; set ytics nomirror rangelimited; set border 3'//new_line('a')// &
+                          'plot [-3:5][-1:2] $D w lp', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(133) = iostat == 0_I4P
+if (test_passed(133)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(133) = panel%xaxis%tics%on_axis .and. panel%yaxis%tics%rangelimited .and. panel%yaxis%has_data .and. &
+                         panel%yaxis%data_lo == 0.2_R8P .and. panel%yaxis%data_hi == 1.2_R8P
+   endassociate
+endif
+test_passed(133) = test_passed(133) .and. file_has('foresight_script_test_axis.svg', 'data-xtics="axis"') .and. &
+                   file_has('foresight_script_test_axis.svg', 'data-ytics="rangelimited 2e-1 1.2e0"') .and. &
+                   .not. file_has('foresight_script_test_axis.svg', '>1.5</text>') .and. &
+                   file_has('foresight_script_test_axis.svg', '>0.5</text>')
+open(newunit=unit, file='foresight_script_test_axis.svg')
+close(unit, status='delete')
+call interpreter%run_text('set tics border norangelimit', iostat, iomsg)
+test_passed(133) = test_passed(133) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%xaxis%tics%on_axis &
+                   .and. .not. interpreter%figure%panels(1)%yaxis%tics%rangelimited
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2824,7 +2850,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,132L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,133L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

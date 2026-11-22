@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(106)                  !< Per-figure outcome.
+logical                     :: test_passed(108)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -132,7 +132,10 @@ test_passed(103) = check('tic_labels_fills.txt', figure_tic_labels_fills())
 test_passed(104) = check('enhanced.svg', figure_enhanced())
 test_passed(105) = check('enhanced.html', figure_enhanced())
 test_passed(106) = check('enhanced.txt', figure_enhanced())
-write(output_unit, '(A,106L2)') 'foresight golden checks:', test_passed
+! ticks on the zero axes; the html page is also the one of the viewer DOM test of tick placement
+test_passed(107) = check('tics_axis.svg', figure_tics_axis())
+test_passed(108) = check('tics_axis.html', figure_tics_axis())
+write(output_unit, '(A,108L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -207,6 +210,21 @@ contains
    call fig%plot(t, 300.0_R8P + 2.0_R8P * t, title='T')
    call fig%plot(t, 10.0_R8P**(0.1_R8P * t + 0.5_R8P), title='p', with='points', axes='x1y2')
    endfunction figure_y2
+
+   function figure_tics_axis() result(fig)
+   !< Ticks on the zero axes, gnuplot `set xtics axis; set ytics axis`: no margin for their labels.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(-3.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 32)]
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_xrange(min=-3.0_R8P, max=5.0_R8P)
+   call fig%set_yrange(min=-1.0_R8P, max=2.0_R8P)
+   call fig%plot(x, sin(x), title='sin(x)')
+   fig%panels(1)%xaxis%tics%on_axis = .true.
+   fig%panels(1)%yaxis%tics%on_axis = .true.
+   endfunction figure_tics_axis
 
    function figure_enhanced() result(fig)
    !< gnuplot's enhanced text (fig%set_enhanced): sub and superscripts, a Greek letter, in the title, the labels, the
