@@ -113,6 +113,15 @@ names. From the shell, `foresight -c panel.gp 2 continuity` does the same.
 An array is filled in a loop, `|T|` its size; `plot T` and `stats T` read the index and the value of each element as
 a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot-subset#arrays).
 
+### Array slices
+
+<<< @/examples/snippets/cb_slices.gp{gnuplot}
+
+<Plot name="cb_slices" svg :width="560" :height="320" />
+
+`M[3*q - 2:3*q]` is the array of a quarter's months, a copy assigned to `S`; `M[1:3]` and `M[10:]` print as arrays and
+`|S|` is a slice's size. See [Slices](/guide/gnuplot-subset#slices).
+
 ### Shell commands and reset
 
 <<< @/examples/snippets/cb_runtime.gp{gnuplot}
@@ -142,6 +151,27 @@ does the same without a loop, see [Monitoring](/guide/monitoring)).
 `set table $SMOOTH` makes the plot write its points into the datablock, in gnuplot's table layout, instead of drawing
 them; plotted afterwards they are the spline itself, a marker every 10 points (`pi 10`). See
 [Tables](/guide/gnuplot-subset#tables).
+
+### Rows as text
+
+<<< @/examples/snippets/cb_with_table.gp{gnuplot}
+
+<<< @/examples/output/cb_with_table.txt{text}
+
+<Plot name="cb_with_table" svg :width="560" :height="320" />
+
+`with table if $2 > 1.6` writes the rows of the slow steps, as text, into the datablock: the `using` fields, each after
+a blank, tab separated. Plotted over the whole run, they mark the steps that wrote a file. See
+[With table](/guide/gnuplot-subset#with-table).
+
+### Values printed into a datablock
+
+<<< @/examples/snippets/cb_print_datablock.gp{gnuplot}
+
+<Plot name="cb_print_datablock" svg :width="560" :height="320" />
+
+`set print $ERR` sends the lines printed in the loop to a datablock, which then plots as data: a table computed by the
+script itself. See [Print](/guide/gnuplot-subset#print).
 
 ## Axes, ticks and key
 
@@ -287,6 +317,34 @@ instead. See [Key](/guide/gnuplot-subset#key).
 
 `name = value` and `name(t) = expression` as in gnuplot: the functions read the variables when the plot is drawn,
 and the range ends take expressions. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+
+### Recursive functions
+
+<<< @/examples/snippets/cb_recursion.gp{gnuplot}
+
+<Plot name="cb_recursion" svg :width="560" :height="320" />
+
+The Chebyshev polynomials by their three-term recurrence: `T(n, x)` calls itself, as gnuplot 6.0 allows, 251 calls
+deep at most. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+
+### Function blocks
+
+<<< @/examples/snippets/cb_function_blocks.gp{gnuplot}
+
+<Plot name="cb_function_blocks" svg :width="560" :height="320" />
+
+A function block runs script lines when called: Newton's iterations in a loop, a `local` start, a `return` from inside
+the loop; `$cbrt(x)` is then plotted like any function. See [Function blocks](/guide/gnuplot-subset#function-blocks).
+
+### Bit flags
+
+<<< @/examples/snippets/cb_bitwise.gp{gnuplot}
+
+<Plot name="cb_bitwise" svg :width="560" :height="320" />
+
+A status column packs flags as bits: `int($3) & 2` keeps the restarts, `int($3) & 4` the steps that wrote a file (a
+column is real, `int` makes it an integer for the bitwise operators). See
+[Expressions in using](/guide/gnuplot-subset#expressions-in-using).
 
 ### Line styles and point types
 

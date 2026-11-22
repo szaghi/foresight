@@ -171,9 +171,12 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_datablock" svg :width="560" :height="320" caption="data inside the script (datablock)" />
   <Plot name="cb_call" svg :width="760" :height="300" caption="a script called with arguments" />
   <Plot name="cb_arrays" svg :width="560" :height="320" caption="arrays" />
+  <Plot name="cb_slices" svg :width="560" :height="320" caption="array slices" />
   <Plot name="cb_runtime" svg :width="760" :height="300" caption="shell commands and reset" />
   <Plot name="cb_live_loop" svg :width="560" :height="320" caption="a plot that follows a run (pause)" />
   <Plot name="cb_table" svg :width="560" :height="320" caption="a table of a plot (set table)" />
+  <Plot name="cb_with_table" svg :width="560" :height="320" caption="rows as text (with table)" />
+  <Plot name="cb_print_datablock" svg :width="560" :height="320" caption="values printed into a datablock" />
 </div>
 
 ### Axes, ticks and key
@@ -201,6 +204,9 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
+  <Plot name="cb_recursion" svg :width="560" :height="320" caption="recursive functions" />
+  <Plot name="cb_function_blocks" svg :width="560" :height="320" caption="function blocks" />
+  <Plot name="cb_bitwise" svg :width="560" :height="320" caption="bit flags" />
   <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
   <Plot name="cb_point_types" svg :width="640" :height="300" caption="point and dash types" />
   <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />

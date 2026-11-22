@@ -48,7 +48,9 @@ flowchart TD
 ## Design decisions
 
 **Expressions compiled once.** A `using` expression is parsed by recursive descent into stack code, once per plot
-item; each row then runs that code, without parsing again. Values carry gnuplot's integer or real type. Every
+item; each row then runs that code, without parsing again. A user function is compiled inline where it is called; a
+recursive one is compiled once after the main code and run on a call stack; a function block calls back into the
+interpreter, which runs its lines. Values carry gnuplot's integer, real, string or undefined type. Every
 floating point operation is checked before it runs (zero divisor, domain, overflow), because Fortran's `.and.`
 does not short-circuit. So evaluation never raises an IEEE exception, and the debug build, trapping them, proves it.
 

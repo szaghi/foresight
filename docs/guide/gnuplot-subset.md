@@ -39,11 +39,12 @@ that did what it says.
 | **pr**int *expression*`,` ... | [print](#print) values |
 | `do for [`*i*`=`*a*`:`*b*`] {` ... `}`, `while (`*c*`) {` ... `}`, `if (`*c*`) {` ... `} else {` ... `}` | [blocks](#blocks-and-loops): loops and conditions, `break`, `continue` |
 | `$NAME << WORD` ... `WORD` | a [datablock](#datablocks-and-scripts): data inside the script, `plot $NAME` |
+| `function $NAME << WORD` ... `WORD` | a [function block](#function-blocks), called as `$NAME(args)`; inside it `local` *name* `=` ..., `return` [*expression*] |
 | **l**oad `'file'` | run a [script file](#datablocks-and-scripts) |
 | **cal**l `'file'` [*arg* ...] | run a script file with arguments: `ARG1` ... `ARG9`, `ARGC` |
 | **eva**l *string* | run a string as script lines |
 | **undef**ine *name* ... | forget variables (`name*`: those starting with `name`), arrays and datablocks (`$NAME`) |
-| `array` *A*`[`*N*`]` [`= [`*e1*`, ...]`], `array` *A* `= [`*e1*`, ...]`, *A*`[`*i*`] =` *expression* | an [array](#arrays) |
+| `array` *A*`[`*N*`]` [`= [`*e1*`, ...]`], `array` *A* `= [`*e1*`, ...]`, `array` *A* `=` *B*`[`*i*`:`*j*`]`, *A*`[`*i*`] =` *expression* | an [array](#arrays) |
 | **sy**stem `"command"` | run a [shell command](#shell-commands-reset-and-pause), its output on the standard output |
 | **res**et [`session`\|`errors`\|`bind`] | the plot settings back to their [defaults](#shell-commands-reset-and-pause) |
 | **pa**use *seconds*\|`-1`\|`mouse` [`"message"`] | [wait](#shell-commands-reset-and-pause): `while (1) { plot ...; pause 5 }` is the live loop |
@@ -55,8 +56,8 @@ that did what it says.
 |---|---|---|
 | **tit**le `"text"` | panel title | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
-| **pr**int [`"file"` [`append`] \| `"-"`] | where [print](#print) writes: a file (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
-| **tab**le [`"file"`\|`$NAME`] [`append`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing | plots drawn again |
+| **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
+| **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
 | **errorb**ars [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
@@ -145,7 +146,7 @@ They are not supported in polar mode (where gnuplot's first range is the t range
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, see [below](#smoothing); `bins` see [Bins](#bins) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x` |
@@ -220,10 +221,11 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 | | |
 |---|---|
 | Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")`; `column(-1)` the block, `column(-2)` the dataset; the text of a column: [`strcol(N)`](#string-columns) |
-| Operators, loosest first | `?:` · `\|\|` · `&&` · `==` `!=` · `<` `<=` `>` `>=` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` · `**` |
+| Operators, loosest first | `?:` · `\|\|` · `&&` · `\|` · `^` · `&` · `==` `!=` · `<` `<=` `>` `>=` · `<<` `>>` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` `~` · `**` |
 | Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 real sgn sin sinh sqrt tan tanh`; the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays) |
-| Arrays | `A[i]` an element, `\|A\|` the size, `$NAME[i]` a datablock line, see [Arrays](#arrays) |
-| Constants | numbers (`2`, `1.5`, `.5`, `1e-3`), `pi` |
+| Arrays | `A[i]` an element, `A[i:j]` a slice, `\|A\|` the size, `$NAME[i]` a datablock line, see [Arrays](#arrays) |
+| Function blocks | `$f(args)`, see [Function blocks](#function-blocks) |
+| Constants | numbers (`2`, `1.5`, `.5`, `1e-3`, hexadecimal `0xff`, octal `017`), `pi` |
 
 The rules are gnuplot's, checked against gnuplot 6.0:
 
@@ -232,7 +234,11 @@ The rules are gnuplot's, checked against gnuplot 6.0:
   Columns are reals, so `$2/2` is a real division. `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators
   give integers.
 - `&&`, `||` and `?:` evaluate only the operand they need: `$2 > 0 && log($2) > 1` never takes the log of a
-  negative.
+  negative, `1 ? 5 : A[9]` is 5.
+- The bitwise operators `&` `|` `^` `~` `<<` `>>` take 64-bit integers, with C's precedence: `5 & 3 == 1` is
+  `5 & (3 == 1)`, 0. A real or a string is an error, `non-integer passed to boolean operator`; columns are reals, so
+  write `int($3) & 2`. The shifts are gnuplot's on x86: the count modulo 64, `>>` logical (`-8 >> 1` is
+  9223372036854775804). `0xff` and `017` (octal; `08` is an error) are integers, a real past the largest one.
 - A missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the point undefined:
   a gap in the line, as gnuplot's `1/0`.
 
@@ -241,7 +247,8 @@ errors. Syntax errors point at the character: `using: unexpected ")" at characte
 
 Beyond gnuplot, foresight accepts `%` and the logical operators on reals, and an overflow gives a gap where gnuplot
 stops the plot. Expressions take [user variables and functions](#user-variables-and-functions) and
-[strings](#strings), the text of columns included ([`strcol`](#string-columns)). Not supported: bitwise operators.
+[strings](#strings), the text of columns included ([`strcol`](#string-columns)), and
+[function blocks](#function-blocks).
 
 ## User variables and functions
 
@@ -262,8 +269,24 @@ uses it). Expressions everywhere take them: plotted functions, `using` fields (`
 xrange [0:2*tau]`, also `[-pi:pi]`). The plot's dummy variable wins over a user variable of its name, and is not seen
 inside a function body (there `x` is the user variable `x`). Names are case sensitive (`a_1`, `A`), `pi` may be
 assigned, the builtin functions may not be redefined. Errors as gnuplot: `undefined variable: c`, `function f requires
-1 variable`. Not supported: recursive functions (gnuplot evaluates `fact(n) = n <= 1 ? 1 : n*fact(n-1)`; foresight
-reports `recursive function fact is not supported`), `undefine`. Variables also hold [strings](#strings).
+1 variable`. Variables also hold [strings](#strings); `undefine NAME` forgets one (see
+[Datablocks and scripts](#datablocks-and-scripts)).
+
+Functions may recurse, directly or through others, as in gnuplot 6.0:
+
+```gnuplot
+fact(n) = n <= 1 ? 1 : n*fact(n - 1)
+T(n, x) = n == 0 ? 1 : n == 1 ? x : 2*x*T(n - 1, x) - T(n - 2, x)    # Chebyshev polynomials
+even(n) = n == 0 ? 1 : odd(n - 1); odd(n) = n == 0 ? 0 : even(n - 1)
+```
+
+<Plot name="cb_recursion" svg :width="560" :height="320" />
+
+As gnuplot, at most 251 nested calls: `t(n) = n == 0 ? 0 : t(n - 1)` runs `t(250)`, `t(251)` is `recursion depth
+limit exceeded` (in a plot, the point is undefined). gnuplot's own evaluation stack overflows earlier on a recursion
+that adds a term per call (`d(n) = n == 0 ? 0 : 1 + d(n - 1)` stops at `d(249)` there); foresight sizes its stack to
+the depth limit. A function that does not call itself is compiled inline, as before; one that does is compiled once
+and run on a call stack.
 
 ## Strings
 
@@ -357,8 +380,9 @@ does the same: [`foresight -c script.gp arg1 ...`](cli#options), as `gnuplot -c`
 `--watch` as the data files are. `eval STRING` runs the string as script lines. `@name` substitutes the value of the
 string variable `name` in the statement before it runs (gnuplot's macros; outside quotes; a number variable is an
 error, where gnuplot warns and drops it). `undefine a b*` forgets the variable `a` and those whose name starts with
-`b`. The array `ARGV` holds the arguments as strings, as gnuplot 6.0 (`|ARGV|` is `ARGC`), restored after the
-script too.
+`b`, as gnuplot: nothing after `undefine` does nothing, a word that does not start as a name (`3`, `*`) is `not a
+variable name`, a name with more after it (`a*b`) is ignored; functions stay defined. The array `ARGV` holds the
+arguments as strings, as gnuplot 6.0 (`|ARGV|` is `ARGC`), restored after the script too.
 
 ## Arrays
 
@@ -384,8 +408,29 @@ without a value empty), `plot A` and `stats A` read the index and the value of e
 without a value is undefined), `undefine A` forgets it, `exists("A")` tells it exists. A redeclaration replaces the
 array. Errors as gnuplot: `array index out of range`, an element without a value is an error where its value is
 needed. `ARGV` is the array of the script arguments, `$NAME[i]` a datablock line and `|$NAME|` their number. Not
-supported: slices (`A[2:3]`), arrays as function arguments, `print` of an element without a value (`<undefined>` in
-gnuplot, an error here).
+supported: arrays as function arguments.
+
+An element without a value is gnuplot's undefined value, as is the value of a [function block](#function-blocks)
+without `return`: `print` shows it as `<undefined>`, an assignment stores nothing (`x = A[1]` leaves `x` as it was),
+any operation on it is `uninitialized user variable` (`A[1] + 1`). An index out of range or without a value is found
+when the element is evaluated, as gnuplot: `1 ? 5 : A[9]` is 5.
+
+### Slices
+
+```gnuplot
+array M = [3.1, 3.4, 4.0, 5.2, 6.8, 8.1, 8.9, 8.6, 7.2, 5.6, 4.1, 3.3]
+print M[1:3], M[10:], |M[4:6]|               # [3.1,3.4,4.0] [5.6,4.1,3.3] 3
+S = M[7:9]; array W = M[:3]                  # copies, arrays themselves
+print M[7:9][2], M[0:2], M[5:4]              # 8.6 [3.1,3.4] []
+```
+
+<Plot name="cb_slices" svg :width="560" :height="320" />
+
+`A[i:j]` is the array of the elements `i` to `j`, as gnuplot 6.0: an empty or `*` end is the first or the last
+element, the ends are clamped to the array (`A[0:9]`), `i > j` is the empty `[]`. A slice prints, sizes (`|A[i:j]|`),
+indexes (`A[i:j][k]`) and makes a copy (`B = A[i:j]`, `array B = A[i:j]`; `B = A` copies too). Its ends are known when
+the expression is compiled (no column, no function argument), and a slice is no number: `A[1:2] + 1` is an error
+(gnuplot's is an internal one).
 
 ## Shell commands, reset and pause
 
@@ -439,8 +484,27 @@ the axis formats (`set format`, `% h` by default) and a flag, `i` inside the ran
 undefined. The columns are `x y type`, with `ylow yhigh` for y error bars, `xlow xhigh` for x error bars and boxes,
 both for xy error bars, `y1 y2` for a band of filled curves, `x y label` for labels. A plot of the functions writes
 their samples, of smoothed data the smoothed points. The table goes to a file (emptied unless `append`), a datablock
-(plotted, fitted, stated afterwards) or the standard output; `unset table` draws again. Not supported: `plot with
-table`, `separator`.
+(plotted, fitted, stated afterwards) or the standard output; `unset table` draws again.
+
+### With table
+
+```gnuplot
+set table $SLOW                              # set table [where] [append] [separator whitespace|tab|comma|"c"]
+plot 'steptimes.dat' u 1:2 w table if $2 > 1.6
+unset table
+plot 'steptimes.dat' u 1:2 w l, $SLOW u 1:2 w p
+```
+
+<Plot name="cb_with_table" svg :width="560" :height="320" />
+
+`plot ... with table` writes the rows of a data item as text, where `set table` sends them, as gnuplot 6.0: each
+`using` field after a blank, a number as `%g` (`set format` does not apply), `nan` if undefined, a string as it is
+(`strcol(4)`, `sprintf(...)`), the fields joined by the separator, tab by default (`set table separator comma`, kept
+until changed). Without `using`, the leading numeric cells of each row. Into a datablock a string field has no blank
+and the separator one before it, gnuplot's layout (`a , 1 , 2`). `with table if CONDITION` writes the rows where the
+condition holds; `index`, `every` and the column header names apply; blank lines and comments are not written and no
+row is left out for a bad cell. A function with table writes nothing (gnuplot's warning), and without `set table` it
+is gnuplot's error, `'with table' requires a previous 'set table'`.
 
 ## Time data
 
@@ -506,6 +570,47 @@ gnuplot shows them (`%.15g`, `.0` appended when integral: `100.0`, `0.3333333333
 the standard error, as gnuplot's; `set print "file"` empties the file and sends the lines there, `set print "file"
 append` keeps its content, `set print "-"` sends them to the standard output, `set print` and `unset print` back to the
 standard error.
+
+```gnuplot
+set print $ERR                               # the printed lines make a datablock
+do for [n = 1:6] { h = 0.4 / 2**n; print h, h**2 * (1 + h) }
+set print
+plot $ERR u 1:2 w lp                         # plotted, stated, printed as any datablock
+```
+
+<Plot name="cb_print_datablock" svg :width="560" :height="320" />
+
+`set print $NAME` sends the lines to the datablock, emptied first unless `append` (which also creates it), as gnuplot
+6.0.
+
+## Function blocks
+
+```gnuplot
+function $cbrt << EOF
+  local r = ARGV[1] > 1 ? 1.0 * ARGV[1] : 1.0
+  do for [k = 1:50] {
+    d = (r**3 - ARGV[1]) / (3*r**2)
+    r = r - d
+    if (abs(d) < 1e-12) { return r }
+  }
+  return r
+EOF
+print $cbrt(27)                              # 3.0
+plot $cbrt(x)                                # in plotted functions and using fields too
+```
+
+<Plot name="cb_function_blocks" svg :width="560" :height="320" />
+
+A function block is gnuplot 6.0's: `function $NAME << WORD`, then lines of script up to one starting with WORD. A call
+`$NAME(args)` in any expression (printed, assigned, plotted, a `using` field) runs those lines with `ARGC` the number of
+arguments and the array `ARGV` their values (both restored after); `return EXPR` ends the block with its value, from
+inside loops and `if` blocks too, and a block without one gives the [undefined value](#arrays). `local NAME = ...` (or
+`local array A[N]`) makes a variable that the end of the block restores; the other variables a block sets stay set,
+as gnuplot. Blocks may call themselves and each other (250 deep at most). `print $NAME` shows `function $NAME( )` and
+its lines, `undefine $NAME` forgets it, `$nosuch(1)` is gnuplot's `Not a function block`. Outside a block, `local` is a
+plain assignment and `return` ends the script file being read (a `load` returns to its caller), as gnuplot. As in
+gnuplot, the arguments come as `ARGV[i]`, not `ARG1` (which keep the caller's values). gnuplot 6.0.0 fails on a block
+called inside `set title sprintf(...)`; foresight runs it, and through a variable both do.
 
 ## Blocks and loops
 
@@ -1513,7 +1618,7 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `splot`,
+Inline ranges in polar mode, `set link x2|y2`, `splot`,
 `fit` beyond [its subset](#fit), log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
@@ -1521,7 +1626,7 @@ Recursive user functions, inline ranges in polar mode, `set link x2|y2`, `splot`
 `%L` conversion and gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing` and
 `commentschars`; `filledcurves r=`; `lc variable` and `lc palette z` with other styles than
 lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
-`newhistogram` groups; `pointnumber` (`pn`), the line gap of a negative `pointinterval`; array slices, `reread`
-(deprecated in gnuplot 6.0), `plot with table`, `set print $NAME`, function blocks; the `smooth` filters
+`newhistogram` groups; `pointnumber` (`pn`), the line gap of a negative `pointinterval`; `reread`
+(deprecated in gnuplot 6.0), arrays as function arguments; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options.
