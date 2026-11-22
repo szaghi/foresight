@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.12.0] — 2026-11-22
+### Added
+- **expression**: String columns, strcol and columnhead, as gnuplot 6.0
+
+- **script**: Datablocks, load, call, eval and macros, as gnuplot 6.0
+
+- **time**: Time axes, timefmt and the time functions, as gnuplot 6.0
+
+- **histograms**: Newhistogram, errorbars and columnstacked, as gnuplot 6.0
+
+- **annotations**: Set label, set arrow and set object, as gnuplot 6.0
+
+- **script**: Arrays, ARGV and datablock lines, as gnuplot 6.0
+
+- **script**: System, command substitution, reset and set table, as gnuplot 6.0
+
+- **script**: Pause, and reread rejected as gnuplot 6.0
+
+- **annotations**: Arrow styles, rectangle style, dashed objects, character coordinates
+
+- **plot**: Ytic, x2tic, y2tic, pointinterval, filledcurves to vertical lines, set errorbars, set mxtics time
+
+
+### Documentation
+- Strings columns, datablocks, time axes, histograms, annotations, animations
+
+- Arrays, shell commands, reset, pause, tables, annotation styles, tick labels on any axis
+
+
+### Fixed
+- **tokens**: No merge of achar in the string escapes, an ifx internal error
+
+- **script**: Reset in a multiplot resets the next panel, not the one drawn
+
+- **expression**: No read of an unread token after a syntax error
+
+- **script**: Color names and numbers as gnuplot 6.0 reads them
+
+
 ## [0.11.0] — 2026-11-21
 ### Added
 - **expression**: String values, as gnuplot 6.0
