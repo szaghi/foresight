@@ -49,20 +49,21 @@ that did what it says.
 | **res**et [`session`\|`errors`\|`bind`] | the plot settings back to their [defaults](#shell-commands-reset-and-pause) |
 | **pa**use *seconds*\|`-1`\|`mouse` [`"message"`] | [wait](#shell-commands-reset-and-pause): `while (1) { plot ...; pause 5 }` is the live loop |
 | `reread` | an error, as gnuplot 6.0 (deprecated): use `while (1) { ...; pause N }` |
+| `exit` [`message "text"`\|`error "text"`\|`status N`\|`gnuplot`], `quit` | end the script file being read (a `load` returns to its caller; `message` writes the text first), or with `error` fail with the text; `quit`, `exit gnuplot` and `exit status N` end the run (the command line returning `N`), see [below](#gpval-variables-and-exit) |
 
 ## `set` / `unset` options
 
 | Option | `set` | `unset` |
 |---|---|---|
-| **tit**le `"text"` | panel title | no title |
+| **tit**le `"text"` [`offset X,Y`] [`font F`] [`noenhanced`] | panel title, shifted by `offset` characters (y up); `font` read and ignored | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
-| **errorb**ars [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
+| **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
-| **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` | axis range; `*` or empty autoscales an end; `min > max` reverses | autoscale |
+| **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` [`noextend`\|`extend`] [`noreverse`] [`nowriteback`] | axis range; `*` or empty autoscales an end, `[]` keeps both; `min > max` reverses; `noextend` keeps autoscaled ends at the data | autoscale |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
-| **gr**id [**po**lar [`STEP`]\|**spider**plot] | grid at major ticks; `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
+| **gr**id [[`no`][`m`]`x`\|`y`\|`x2`\|`y2`[`tics`]]... [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
 | `theta` [`right`\|`top`\|`left`\|`bottom`] [`clockwise`\|`cw`\|`counterclockwise`\|`ccw`] | where theta = 0 lies and its direction (right, counterclockwise by default) | right, counterclockwise |
@@ -70,9 +71,18 @@ that did what it says.
 | **rti**cs [`auto` \| `STEP` \| `START,STEP[,END]`] | ticks of the r axis (automatic by default) | no r ticks |
 | **tti**cs [[`START,`]`STEP`] [`format "fmt"`] | theta labels around the polar plot, in degrees; every 45 degrees without `STEP` (gnuplot: none) | no theta labels (the default) |
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
-| **bor**der [`MASK`] [**po**lar] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default); `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
-| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box`\|`nobox`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **bor**der [`MASK`] [**po**lar] [`front`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default), in their line; `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
+| **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box`\|`nobox`] [`opaque`] [`reverse`] [`Left`\|`Right`] [`invert`] [`samplen L`] [`width W`] [`offset X,Y`] [`title "text"`] [`font F`] [`noenhanced`] [`default`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, in its layout, see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
+| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **tic**s [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`border`] | the options of every axis' ticks (the scale of the color box's too); bare, the x and y ticks on, see [below](#ticks-and-label-formats) | no ticks on any axis |
+| **ticsc**ale `MAJOR` [`MINOR`] | gnuplot's old form of `set tics scale` | — |
+| **lmar**gin / **rmar**gin / **tmar**gin / **bmar**gin [[`at screen`] `N`] | a margin set: `N` characters from the panel's edge, or the border at the page fraction `N` (from the bottom left); bare or negative, computed, see [below](#margins) | computed |
+| **marg**ins `L, R, B, T` | the four margins, each [`at screen`] `N` | all computed |
+| **zero**axis / **xzero**axis / **yzero**axis / **x2zero**axis / **y2zero**axis [`lt N`] [`lc C`] [`lw W`] [`dt N`] | lines at the zero of the axes (`xzeroaxis`: y = 0), gnuplot's black dots by default | no line |
+| **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | — |
+| **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
+| **enc**oding [`default`\|`utf8`\|`locale`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8, other encodings are refused | `default` |
+| **termopt**ion [`dash`\|`dashed`] [`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), text as it is (`enhanced` is refused), `font` read and ignored | — |
 | **for**mat [*axes*] [`"format"`] [`timedate`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `numeric` numeric ones | default labels |
 | **xda**ta / **yda**ta / **x2da**ta / **y2da**ta [`time`] | the data of the axis are [times](#time-data), read with the `timefmt`; the axis ticked and labelled in time units | numbers |
 | **timef**mt `"format"` | the input [time format](#time-data), `%d/%m/%y,%H:%M` by default | the default |
@@ -222,7 +232,7 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 |---|---|
 | Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")`; `column(-1)` the block, `column(-2)` the dataset; the text of a column: [`strcol(N)`](#string-columns) |
 | Operators, loosest first | `?:` · `\|\|` · `&&` · `\|` · `^` · `&` · `==` `!=` · `<` `<=` `>` `>=` · `<<` `>>` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` `~` · `**` |
-| Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 real sgn sin sinh sqrt tan tanh`; the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays) |
+| Functions | `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 real sgn sin sinh sqrt tan tanh`; the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays), `rand(x)` (gnuplot's generator: `rand(0)` the next number, `rand(-1)` reset, `rand(N)` seeded; the same numbers as gnuplot), `exists("name")` (old name `exist`) |
 | Arrays | `A[i]` an element, `A[i:j]` a slice, `\|A\|` the size, `$NAME[i]` a datablock line, see [Arrays](#arrays) |
 | Function blocks | `$f(args)`, see [Function blocks](#function-blocks) |
 | Constants | numbers (`2`, `1.5`, `.5`, `1e-3`, hexadecimal `0xff`, octal `017`), `pi` |
@@ -467,6 +477,25 @@ refresh 5` (each output is written whole, atomically). `reread`, the old idiom, 
 deprecated. [`foresight --watch`](cli#options) does the same without a loop, re-running the script when its data
 change.
 
+### GPVAL variables and exit
+
+```gnuplot
+save_encoding = GPVAL_ENCODING; set encoding utf8
+if (!strstrt(GPVAL_COMPILE_OPTIONS, "+LIBCERF")) { print "no libcerf here"; exit }
+set encoding save_encoding
+```
+
+foresight sets gnuplot's variables that scripts read: `GPVAL_VERSION` (6.0, the gnuplot it follows) and
+`GPVAL_PATCHLEVEL`, `GPVAL_COMPILE_OPTIONS` naming only the options of gnuplot that foresight has (`+OBJECTS +STATS
++POLARGRID +FUNCTIONBLOCKS`; `-LIBCERF` and the others it lacks), so a script testing them skips what is missing,
+`GPVAL_ENCODING`, `GPVAL_TERM` (following `set terminal`), `GPVAL_TERMINALS`, `GPVAL_SYSNAME`, `GPVAL_MACHINE`,
+`GPVAL_DEGREE_SIGN`; `reset session` and `undefine` keep them. `set encoding` takes `default`, `utf8` and `locale` (the
+output is UTF-8; other encodings are refused).
+
+`exit` ends the script file being read, as gnuplot: a file run by `load` or `call` returns to its caller, the script
+given to the command line ends (its output written). `exit message "text"` writes the text first, `exit error "text"`
+fails with it; `quit`, `exit gnuplot` and `exit status N` end the run, the command line returning `N`.
+
 ## Tables
 
 ```gnuplot
@@ -631,8 +660,11 @@ fastest. The loop variable is local to the loop: its value before is restored af
 `while (c) { ... }` runs while `c` is not 0, `if (c) { ... } else if (c) { ... } else { ... }` the first block whose
 condition holds; `else` follows `}` on the same line. `break` leaves the loop (the whole `do`, all its clauses),
 `continue` goes on with the next value. A block may span lines, with statements on new lines or separated by `;` and
-comments inside it. A string as a condition, an unbounded range (`[i = 1:*]`) and gnuplot's old one-line form
-`if (c) command` are errors.
+comments inside it. A string as a condition and an unbounded range (`[i = 1:*]`) are errors.
+
+gnuplot's old one-line form `if (c) command; ...; [else command; ...]` runs too, as gnuplot 6.0 still does: the rest
+of its line is its own, the commands up to an `else` when the condition holds, those after it otherwise (`else if`
+chains); inside a block it is gnuplot's error, `Old-style if/else statement encountered inside brackets`.
 
 ## Functions
 
@@ -650,6 +682,7 @@ ticks: the `xrange` ends where set, else the extent of the data of the whole plo
 samples are evenly spaced in log x. Undefined values (`1/0`, `log(-1)`) are gaps. Functions are drawn `with lines`
 by default whatever `set style data` says; `set style function points` (or `linespoints`) changes it, error bars are
 not usable. The expression runs up to the first item option, so blanks may separate its terms: `plot x * 2 + 1 t 'line'`.
+`set dummy t` renames the variable (`plot t**2`), as gnuplot; `unset dummy` and `reset` bring back `x`.
 
 In the HTML page a zoom does not resample: the samples are those of the original range.
 
@@ -855,7 +888,15 @@ set format x "%g s"      # 0.5 s
 set format y "%h"        # like %g, the exponent as a superscript: 1x10⁻⁵
 set xtics ("Jan" 1, "Feb" 2, "Mar" 3)   # an explicit list replaces the ticks
 set ytics add ("limit" 7.5)             # ... or is added to them
+set tics out nomirror scale 1.5, 0.75   # every axis: outward, not mirrored, longer ticks
+unset tics                              # no ticks on any axis
 ```
+
+`set tics` sets the options of every axis at once, as gnuplot: `mirror`/`nomirror`, `in`/`out`, `scale MAJOR[,MINOR]`
+(`scale default`: 1, 0.5); bare, it turns the x and y ticks on; `unset tics` turns them all off; `set ticscale` is the
+old form of the scale. The scale multiplies the tick lengths (6 px major, foresight's; gnuplot's svg draws 9), `MINOR`
+half `MAJOR` when absent, `scale 0` draws no ticks and keeps the labels; each axis takes it too (`set xtics scale 2`).
+Not supported in `set tics`: `front`, `back`, `rotate`, `offset`, `format`, `font`, `textcolor`, `rangelimited`.
 
 Automatic ticks step as gnuplot's: by the axis range only, whatever the size of the plot (0.5 on [-2:2], 0.2 on
 [0:1], 2 on [0:13], 20 on [0:100]); log axes label every 1, 2, 5, ... decades by the same rule (every 2 decades on
@@ -965,7 +1006,48 @@ right by default). POSITION is `[SYSTEM] X, [SYSTEM] Y`, SYSTEM one of `first` (
 `second` (x2 and y2), `graph` (0 to 1 across the plot area, from the bottom left), `screen` (0 to 1 across the page);
 y takes the system of x unless given. The plot does not shrink for it. Position words keep `at`; `inside`,
 `outside`, a margin, `below` and `above` cancel it, as gnuplot. Not supported: `character` and `polar` coordinates,
-`offset`, `fixed`.
+`fixed`, `spacing`, `maxcols`, `maxrows`.
+
+```gnuplot
+set key box opaque reverse Left invert samplen 2 width 1 title "runs" offset 0,-1
+```
+
+<Plot name="cb_key_layout" svg :width="560" :height="320" />
+
+As gnuplot: `reverse` puts the samples left of the titles, `Left` and `Right` justify the titles, `invert` lists the
+entries last to first, `opaque` paints the key area with the page color over the plot (its box then hides what passes
+under it), `samplen L` makes the samples `L` characters long, `width W` adds `W` characters to the titles,
+`offset X,Y` shifts the key by characters (y up) and `title "text"` puts a row over the entries; `default` restores
+them all. A character is foresight's cell, 0.6 font sizes wide and 1 high. `font` is read and ignored (foresight has one
+font) and `noenhanced` accepted (foresight writes text as it is); `enhanced` is refused.
+
+## Grid, zero axes and border
+
+```gnuplot
+set mxtics 5; set mytics 5
+set grid x y mx my lc "gray" lw 0.5 dt 3     # major and minor lines, solid gray dots
+set grid front                               # over the data
+set xzeroaxis lw 1.5; set yzeroaxis          # lines at y = 0 and x = 0, gnuplot's black dots by default
+set border 3 lw 1.5                          # the left and bottom sides, thicker
+set autoscale xfix                           # x ends at the data, not extended to the ticks
+```
+
+<Plot name="cb_grid_zero" svg :width="560" :height="320" />
+
+`set grid` takes the lines to draw as gnuplot: `x`, `y`, `x2`, `y2` at the major ticks and `mx`, `my` at the minor
+ones (also written `xtics`, `mxtics`, ...), each turned off with `no` (`noy`); the named lines change, the others are
+kept, and with none the x and y lines are drawn. `front` draws the grid over the data, `back` and `layerdefault`
+behind it; `lt 0` is foresight's dots (the default), `lt -1` the border's solid black, `lt N` the color of linetype
+N, and `lc`, `lw`, `dt` set the line. The HTML viewer redraws the same lines in the same style when zoomed.
+
+`set zeroaxis` (`xzeroaxis`: the line y = 0, `yzeroaxis`: x = 0, `x2zeroaxis`, `y2zeroaxis`) draws lines at the zero
+of the axes, behind the data and zoomed with it, gnuplot's black dots by default, with the same line options.
+`set border` takes them too, and `front` (foresight draws the border over the data, gnuplot's default).
+
+`set autoscale` autoscales the named axes again (`x`, `y`, `x2`, `y2`, `cb`, `xy`; `xmin`, `ymax`: one end; all
+without one); `fix` and `noextend` (and `xfix`, ...) keep the autoscaled ends at the data instead of extending them to
+the ticks, as `set xrange [...] noextend`. `set xrange []` keeps the range; `noreverse` and `nowriteback` are accepted.
+Not supported: `unset autoscale`, `keepfix` with effect, `writeback`, `restore`, autoscale limits (`[*<-5:5<*]`).
 
 ## Styles
 
@@ -1183,6 +1265,25 @@ The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3
 they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` a point is foresight's round dot,
 6 px at `ps 1`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
 with the symbol of its color.
+
+## Margins
+
+```gnuplot
+set multiplot layout 2,1
+set lmargin at screen 0.14; set rmargin at screen 0.95   # the same borders in both panels
+plot 'run.dat' u 1:2 w l
+plot 'run.dat' u 1:($3*1e6) w l                          # wider y labels: the plot does not move
+unset multiplot
+```
+
+<Plot name="cb_margins" svg :width="560" :height="360" />
+
+`set lmargin N` (`rmargin`, `tmargin`, `bmargin`) puts the border `N` characters from the panel's edge, `set lmargin at
+screen F` at the fraction `F` of the page (from the bottom left), as gnuplot; bare, negative or unset, the margin is
+computed from the labels again. `set margins L, R, B, T` sets the four, in gnuplot's order, each `[at screen] N`. A
+character is foresight's cell, 0.6 font sizes wide and 1 high (gnuplot's svg cell is about 0.7 by 1.5, so margins in
+characters are narrower than gnuplot's; at screen fractions they match). Panels of a multiplot with the same margins
+at screen line up whatever their tick labels.
 
 ## Multiplot
 
@@ -1621,8 +1722,8 @@ text). Zooming magnifies the cells with the data.
 Inline ranges in polar mode, `set link x2|y2`, `splot`,
 `fit` beyond [its subset](#fit), log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
-(`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`,
-`scale`; `set grid mxtics`; in `set format`, the
+(`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`;
+enhanced text (`set termoption enhanced`); `set offsets`, `set parametric`, `set timestamp`; in `set format`, the
 `%L` conversion and gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing` and
 `commentschars`; `filledcurves r=`; `lc variable` and `lc palette z` with other styles than
 lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of

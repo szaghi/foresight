@@ -173,6 +173,16 @@ a blank, tab separated. Plotted over the whole run, they mark the steps that wro
 `set print $ERR` sends the lines printed in the loop to a datablock, which then plots as data: a table computed by the
 script itself. See [Print](/guide/gnuplot-subset#print).
 
+### Random numbers
+
+<<< @/examples/snippets/cb_random.gp{gnuplot}
+
+<Plot name="cb_random" svg :width="560" :height="320" />
+
+`rand(7)` seeds gnuplot's generator, `rand(0)` draws the next number: the walks are the ones gnuplot draws from the
+same seed. `exists("steps")` lets a caller set the length first. See
+[Expressions in using](/guide/gnuplot-subset#expressions-in-using).
+
 ## Axes, ticks and key
 
 ### A log axis with exponent labels
@@ -301,11 +311,39 @@ instead. See [Key](/guide/gnuplot-subset#key).
 
 `notitle` keeps one item out of the key; `set key noautotitle` all the untitled ones.
 
+### A key in its own layout
+
+<<< @/examples/snippets/cb_key_layout.gp{gnuplot}
+
+<Plot name="cb_key_layout" svg :width="560" :height="320" />
+
+`reverse` puts the samples first and `Left` justifies the titles, `invert` lists the last run first, `opaque` paints the
+key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot-subset#key).
+
+### Grid lines, zero axes and border
+
+<<< @/examples/snippets/cb_grid_zero.gp{gnuplot}
+
+<Plot name="cb_grid_zero" svg :width="560" :height="320" />
+
+Grid lines at the major and minor ticks in their own style, the lines at x = 0 and y = 0, the left and bottom sides of
+the border only, outward ticks longer than the default, x ends at the data (`set autoscale xfix`). See
+[Grid, zero axes and border](/guide/gnuplot-subset#grid-zero-axes-and-border).
+
 ### A grid of panels
 
 <<< @/examples/snippets/cb_multiplot.gp{gnuplot}
 
 <Plot name="cb_multiplot" svg :width="560" :height="420" />
+
+### Panels lined up
+
+<<< @/examples/snippets/cb_margins.gp{gnuplot}
+
+<Plot name="cb_margins" svg :width="560" :height="360" />
+
+The same left and right borders at screen fractions line up the two panels, although the log labels of the first are
+wider. See [Margins](/guide/gnuplot-subset#margins).
 
 ## Lines, points and error bars
 

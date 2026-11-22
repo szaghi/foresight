@@ -177,6 +177,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_table" svg :width="560" :height="320" caption="a table of a plot (set table)" />
   <Plot name="cb_with_table" svg :width="560" :height="320" caption="rows as text (with table)" />
   <Plot name="cb_print_datablock" svg :width="560" :height="320" caption="values printed into a datablock" />
+  <Plot name="cb_random" svg :width="560" :height="320" caption="random numbers" />
 </div>
 
 ### Axes, ticks and key
@@ -197,7 +198,10 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_key" svg :width="560" :height="320" caption="the key below the plot" />
   <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
   <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />
+  <Plot name="cb_key_layout" svg :width="560" :height="320" caption="a key in its own layout" />
+  <Plot name="cb_grid_zero" svg :width="560" :height="320" caption="grid lines, zero axes and border" />
   <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
+  <Plot name="cb_margins" svg :width="560" :height="360" caption="panels lined up (margins)" />
 </div>
 
 ### Lines, points and error bars
