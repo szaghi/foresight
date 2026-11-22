@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(127)                           !< Per-check outcome.
+logical                       :: test_passed(128)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2708,6 +2708,24 @@ test_passed(127) = test_passed(127) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 open(newunit=unit, file='foresight_script_test_grid.svg')
 close(unit, status='delete')
 
+! set zeroaxis (gnuplot's black dots), set border line options, set termoption dash and noenhanced
+call interpreter%init(scratch)
+call interpreter%run_text('set zeroaxis; set y2zeroaxis lw 2 lt 1; set border 3 lw 2 lc "red" front'//new_line('a')// &
+                          'set termoption dash noenhanced font ",10"; set output "foresight_script_test_zero.svg"'// &
+                          new_line('a')//'plot [-5:5] x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+associate(panel => interpreter%figure%panels(1))
+   test_passed(128) = iostat == 0_I4P .and. all(panel%zero_axes .eqv. [.true., .true., .true., .false.]) .and. &
+                      panel%zero_lw == 2.0_R8P .and. panel%zero_dt == 1_I4P .and. panel%border == 3_I4P .and. &
+                      panel%border_lw == 2.0_R8P .and. panel%border_lc == '#ff0000'
+endassociate
+test_passed(128) = test_passed(128) .and. file_has('foresight_script_test_zero.svg', 'stroke="#ff0000" stroke-width="2"')
+call interpreter%run_text('unset zeroaxis; set termoption enhanced', iostat, iomsg)
+test_passed(128) = test_passed(128) .and. iostat /= 0_I4P .and. index(iomsg, 'enhanced text is not supported') > 0 .and. &
+                   .not. any(interpreter%figure%panels(1)%zero_axes)
+open(newunit=unit, file='foresight_script_test_zero.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2716,7 +2734,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,127L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,128L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

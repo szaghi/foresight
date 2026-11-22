@@ -114,6 +114,8 @@ type :: figure_object
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
       procedure, pass(self) :: set_margin   !< Set a margin, `set lmargin`...
+      procedure, pass(self) :: set_border_style !< Border line: lc, lw, dt.
+      procedure, pass(self) :: set_zeroaxis !< Zero axes.
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_trange      !< gnuplot `set trange`.
@@ -609,6 +611,58 @@ contains
       if (present(polar)) panel%border_polar = polar
    endassociate
    endsubroutine set_border
+
+   subroutine set_border_style(self, lc, lw, dt)
+   !< The border's line, as gnuplot `set border ... lc C lw W dt N`: `lc` empty for the frame color.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   character(len=*),     intent(in), optional :: lc   !< Line color.
+   real(R8P),            intent(in), optional :: lw   !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt   !< Dash type, 1 solid.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(lc)) then
+         if (len_trim(lc) > 0) then
+            panel%border_lc = trim(lc)
+         elseif (allocated(panel%border_lc)) then
+            deallocate(panel%border_lc)
+         endif
+      endif
+      if (present(lw)) panel%border_lw = lw
+      if (present(dt)) panel%border_dt = dt
+   endassociate
+   endsubroutine set_border_style
+
+   subroutine set_zeroaxis(self, axes, on, lc, lw, dt)
+   !< Lines at the zero of the `axes` (`x`: y = 0, `y`: x = 0, `x2`, `y2`; blank-separated), as gnuplot `set xzeroaxis`
+   !< (`on` absent or true) or `unset`, with their line: `lc` empty for the frame color, `dt` 3 gnuplot's dots.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   character(len=*),     intent(in)           :: axes !< Axes.
+   logical,              intent(in), optional :: on   !< Drawn.
+   character(len=*),     intent(in), optional :: lc   !< Line color.
+   real(R8P),            intent(in), optional :: lw   !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt   !< Dash type.
+   logical                                    :: draw !< Drawn.
+
+   call self%ensure_panels
+   draw = .true.
+   if (present(on)) draw = on
+   associate(panel => self%panels(self%current))
+      if (index(' '//axes//' ', ' x ') > 0) panel%zero_axes(1) = draw
+      if (index(' '//axes//' ', ' y ') > 0) panel%zero_axes(2) = draw
+      if (index(' '//axes//' ', ' y2 ') > 0) panel%zero_axes(3) = draw
+      if (index(' '//axes//' ', ' x2 ') > 0) panel%zero_axes(4) = draw
+      if (present(lc)) then
+         if (len_trim(lc) > 0) then
+            panel%zero_lc = trim(lc)
+         elseif (allocated(panel%zero_lc)) then
+            deallocate(panel%zero_lc)
+         endif
+      endif
+      if (present(lw)) panel%zero_lw = lw
+      if (present(dt)) panel%zero_dt = dt
+   endassociate
+   endsubroutine set_zeroaxis
 
    subroutine set_boxwidth(self, width, relative)
    !< Box width, as gnuplot `set boxwidth W [absolute|relative]`: `width` absent or 0 for the default, the boxes

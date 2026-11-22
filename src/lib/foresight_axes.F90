@@ -254,6 +254,14 @@ type :: axes_object
                                                                !< minor ticks (gnuplot `set grid x y x2 y2 mx my`);
                                                                !< none: x and y.
    logical                          :: grid_front = .false. !< Grid over the data (gnuplot `set grid front`).
+   character(len=:), allocatable    :: border_lc !< Border line color, unallocated for the theme's frame color.
+   real(R8P)                        :: border_lw = 1.0_R8P !< Border line width [px].
+   integer(I4P)                     :: border_dt = 1_I4P   !< Border dash type, 1 solid.
+   logical                          :: zero_axes(4) = .false. !< Lines at y = 0, x = 0, y2 = 0, x2 = 0 (gnuplot
+                                                              !< `set xzeroaxis`, `yzeroaxis`, `x2zeroaxis`, `y2zeroaxis`).
+   character(len=:), allocatable    :: zero_lc !< Zero axes line color, unallocated for the frame color.
+   real(R8P)                        :: zero_lw = 1.0_R8P !< Zero axes line width [px].
+   integer(I4P)                     :: zero_dt = 3_I4P   !< Zero axes dash type, gnuplot's dots (lt 0) by default.
    character(len=:), allocatable    :: grid_lc  !< Grid line color, unallocated for the theme's.
    real(R8P)                        :: grid_lw = 0.5_R8P !< Grid line width [px].
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
@@ -280,6 +288,7 @@ type :: axes_object
       procedure, pass(self), private :: key_layout         !< Key size and entry grid.
       procedure, pass(self), private :: key_sample         !< Key sample length.
       procedure, pass(self), private :: grid_dash_array        !< Grid dash array.
+      procedure, pass(self), private :: draw_zero_axes     !< Draw the zero axes.
       procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
@@ -1392,6 +1401,8 @@ contains
    ! the objects in data space, clipped and zoomed with the data, behind it
    call annotate('behind', .true.)
    call annotate('back', .true.)
+   ! the zero axes, data geometry behind the series (gnuplot `set zeroaxis`)
+   if (any(self%zero_axes)) call self%draw_zero_axes(backend)
    ! the polar grid and border are data geometry, zoomed with the series
    if (self%polar .and. self%grid_polar > 0.0_R8P) then
       call backend%begin_group('fs-pgrid', visible=self%grid)
@@ -1766,18 +1777,29 @@ contains
    real(R8P)                            :: ay        !< Label anchor ordinate [px].
    real(R8P)                            :: extent(3) !< Rotated x labels extent [px].
    integer(I4P)                         :: t         !< Tick counter.
+   character(len=:), allocatable        :: bcolor    !< Border color.
+   type(style_object)                   :: bline     !< Border line.
 
    angle = 0.0_R8P
    if (backend%rotates_text()) angle = self%xaxis%tics%rotate
    shift = out_shift(self%xaxis%tics)
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
-      if (iand(self%border, 15_I4P) == 15_I4P) then
-         call backend%rect(left, top, right - left, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
+      ! the border's line (gnuplot `set border ... lc lw dt`), the frame color by default
+      bcolor = FRAME_COLOR
+      if (allocated(self%border_lc)) bcolor = self%border_lc
+      bline%dashtype = self%border_dt
+      bline%linewidth = self%border_lw
+      if (iand(self%border, 15_I4P) == 15_I4P .and. self%border_dt == 1_I4P) then
+         call backend%rect(left, top, right - left, bottom - top, bcolor, 'none', self%border_lw)
       else
-         if (btest(self%border, 0)) call backend%polyline([left, right], [bottom, bottom], FRAME_COLOR, 1.0_R8P, '')
-         if (btest(self%border, 1)) call backend%polyline([left, left], [bottom, top], FRAME_COLOR, 1.0_R8P, '')
-         if (btest(self%border, 2)) call backend%polyline([left, right], [top, top], FRAME_COLOR, 1.0_R8P, '')
-         if (btest(self%border, 3)) call backend%polyline([right, right], [bottom, top], FRAME_COLOR, 1.0_R8P, '')
+         if (btest(self%border, 0)) call backend%polyline([left, right], [bottom, bottom], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 1)) call backend%polyline([left, left], [bottom, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 2)) call backend%polyline([left, right], [top, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 3)) call backend%polyline([right, right], [bottom, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
       endif
       call backend%begin_group('fs-xticks')
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
@@ -1972,6 +1994,40 @@ contains
       endif
    endassociate
    endsubroutine draw_grid
+
+   subroutine draw_zero_axes(self, backend)
+   !< The zero axes in the plot area's unit square: y = 0 (xzeroaxis), x = 0 (yzeroaxis), y2 = 0, x2 = 0, where in range.
+   class(axes_object),    intent(in)    :: self    !< Panel.
+   class(backend_object), intent(inout) :: backend !< Output device.
+   type(style_object)                   :: zline   !< Zero axes line.
+   character(len=:), allocatable        :: color   !< Line color.
+   real(R8P)                            :: u       !< Unit coordinate of the zero.
+
+   color = FRAME_COLOR
+   if (allocated(self%zero_lc)) color = self%zero_lc
+   zline%dashtype = self%zero_dt
+   zline%linewidth = self%zero_lw
+   if (self%zero_axes(1) .and. .not. self%yaxis%log) then
+      u = self%yaxis%to_unit(0.0_R8P)
+      if (u >= 0.0_R8P .and. u <= 1.0_R8P) call backend%data_polyline([0.0_R8P, 1.0_R8P], [u, u], color, self%zero_lw, &
+                                                                       zline%dasharray())
+   endif
+   if (self%zero_axes(2) .and. .not. self%xaxis%log) then
+      u = self%xaxis%to_unit(0.0_R8P)
+      if (u >= 0.0_R8P .and. u <= 1.0_R8P) call backend%data_polyline([u, u], [0.0_R8P, 1.0_R8P], color, self%zero_lw, &
+                                                                       zline%dasharray())
+   endif
+   if (self%zero_axes(3) .and. self%y2_active .and. .not. self%y2axis%log) then
+      u = self%y2axis%to_unit(0.0_R8P)
+      if (u >= 0.0_R8P .and. u <= 1.0_R8P) call backend%data_polyline([0.0_R8P, 1.0_R8P], [u, u], color, self%zero_lw, &
+                                                                       zline%dasharray())
+   endif
+   if (self%zero_axes(4) .and. self%x2_active .and. .not. self%x2axis%log) then
+      u = self%x2axis%to_unit(0.0_R8P)
+      if (u >= 0.0_R8P .and. u <= 1.0_R8P) call backend%data_polyline([u, u], [0.0_R8P, 1.0_R8P], color, self%zero_lw, &
+                                                                       zline%dasharray())
+   endif
+   endsubroutine draw_zero_axes
 
    pure function grid_words(lines) result(words)
    !< The grid lines as the viewer reads them (`x y mx`), empty for the default x and y.

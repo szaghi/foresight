@@ -5994,6 +5994,36 @@ contains
       endif
    elseif (keyword(option, 'autoscale', 4_I4P)) then
       call autoscale_option
+   elseif (keyword(option, 'zeroaxis', 4_I4P)) then
+      call zeroaxis_option('x y')
+   elseif (keyword(option, 'xzeroaxis', 5_I4P)) then
+      call zeroaxis_option('x')
+   elseif (keyword(option, 'yzeroaxis', 5_I4P)) then
+      call zeroaxis_option('y')
+   elseif (keyword(option, 'x2zeroaxis', 6_I4P)) then
+      call zeroaxis_option('x2')
+   elseif (keyword(option, 'y2zeroaxis', 6_I4P)) then
+      call zeroaxis_option('y2')
+   elseif (keyword(option, 'termoption', 5_I4P)) then
+      ! gnuplot's terminal options foresight honours: dashed lines are always there (dash, dashed), its text is never
+      ! enhanced (noenhanced); font is read and ignored
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         select case (tokens(i)%text)
+         case ('dash', 'dashed', 'noenhanced', 'noenh')
+            continue
+         case ('font')
+            i = i + 1_I4P
+         case ('enhanced', 'enh')
+            call fail('set termoption: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
+            return
+         case default
+            call fail('set termoption: unsupported option "'//tokens(i)%text//'" (dash, noenhanced, font)', iostat, &
+                      iomsg)
+            return
+         endselect
+         i = i + 1_I4P
+      enddo
    elseif (keyword(option, 'ticscale', 5_I4P)) then
       ! gnuplot's old form of set tics scale
       call all_tics_option(scale_only=.true.)
@@ -7331,9 +7361,16 @@ contains
 
       mask = -1_I4P
       polar = .false.
-      do i = 2_I4P, size(tokens, kind=I4P)
+      i = 1_I4P
+      do while (i < size(tokens, kind=I4P))
+         i = i + 1_I4P
          if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'polar', 2_I4P)) then
             polar = .true.
+         elseif (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'front') then
+            ! foresight draws the border over the data, gnuplot's default
+            continue
+         elseif (tokens(i)%kind == TOKEN_WORD .and. is_line_option(tokens(i)%text)) then
+            if (.not. line_props(tokens, i, 'border')) return
          elseif (to_number(tokens(i)%text, v)) then
             if (v < 0.0_R8P .or. v > 4095.0_R8P .or. v /= aint(v)) then
                call fail('set border: the mask is an integer 0 to 4095', iostat, iomsg)
@@ -7341,7 +7378,8 @@ contains
             endif
             mask = int(v, I4P)
          else
-            call fail('set border: only a MASK and "polar" are supported', iostat, iomsg)
+            call fail('set border: unsupported option "'//tokens(i)%text//'" (MASK, polar, front, lt, lc, lw, dt)', &
+                      iostat, iomsg)
             return
          endif
       enddo
@@ -7353,6 +7391,79 @@ contains
          call self%figure%set_border()
       endif
       endsubroutine border_option
+
+      function line_props(toks, k, what, axes) result(ok)
+      !< A line property at token `k` (left on its last token) for the border or the zero axes: lt N (0 gnuplot's
+      !< dots, -1 the frame's black solid, N the color of linetype N), lc, lw, dt.
+      type(token_object), intent(in)           :: toks(:) !< Tokens.
+      integer(I4P),       intent(inout)        :: k       !< Token counter.
+      character(len=*),   intent(in)           :: what    !< `border` or `zeroaxis`.
+      character(len=*),   intent(in), optional :: axes    !< Zero axes.
+      logical                                  :: ok      !< Well formed.
+      type(line_style_object)                  :: style   !< Line properties.
+      real(R8P)                                :: v       !< A number.
+      character(len=:), allocatable            :: w       !< Property.
+
+      ok = .true.
+      w = toks(k)%text
+      if (keyword(w, 'linetype', 5_I4P) .or. w == 'lt') then
+         ok = next_real(toks, k, v, iostat, iomsg, self%symbols)
+         if (.not. ok) return
+         select case (nint(v))
+         case (0)
+            call apply_line(what, axes, lc='', dt=3_I4P)
+         case (-1)
+            call apply_line(what, axes, lc='', dt=1_I4P)
+         case default
+            call apply_line(what, axes, lc=default_color(int(v, I4P), self%figure%panels(self%figure%current)%linecolors), dt=1_I4P)
+         endselect
+         return
+      endif
+      ok = line_option(toks, k, style, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, self%symbols)
+      if (.not. ok) return
+      if (keyword(w, 'linewidth', 5_I4P) .or. w == 'lw') then
+         call apply_line(what, axes, lw=style%lw)
+      elseif (keyword(w, 'dashtype', 5_I4P) .or. w == 'dt') then
+         call apply_line(what, axes, dt=style%dt)
+      elseif (allocated(style%lc)) then
+         call apply_line(what, axes, lc=style%lc)
+      else
+         call fail('set '//what//': '//w//' does not apply', iostat, iomsg)
+         ok = .false.
+      endif
+      endfunction line_props
+
+      subroutine apply_line(what, axes, lc, lw, dt)
+      !< Set a line property on the border (`what` border) or the zero axes `axes`.
+      character(len=*), intent(in)           :: what !< `border` or `zeroaxis`.
+      character(len=*), intent(in), optional :: axes !< Zero axes.
+      character(len=*), intent(in), optional :: lc   !< Color.
+      real(R8P),        intent(in), optional :: lw   !< Width.
+      integer(I4P),     intent(in), optional :: dt   !< Dash type.
+
+      if (what == 'border') then
+         call self%figure%set_border_style(lc=lc, lw=lw, dt=dt)
+      else
+         call self%figure%set_zeroaxis(axes, lc=lc, lw=lw, dt=dt)
+      endif
+      endsubroutine apply_line
+
+      subroutine zeroaxis_option(axes)
+      !< gnuplot `set zeroaxis|xzeroaxis|yzeroaxis|x2zeroaxis|y2zeroaxis [lt N] [lc C] [lw W] [dt N]`: the lines at
+      !< zero of `axes`, gnuplot's black dots by default.
+      character(len=*), intent(in) :: axes !< Axes.
+
+      call self%figure%set_zeroaxis(axes)
+      i = 1_I4P
+      do while (i < size(tokens, kind=I4P))
+         i = i + 1_I4P
+         if (tokens(i)%kind /= TOKEN_WORD .or. .not. is_line_option(tokens(i)%text)) then
+            call fail('set '//option//': unsupported option "'//tokens(i)%text//'" (lt, lc, lw, dt)', iostat, iomsg)
+            return
+         endif
+         if (.not. line_props(tokens, i, 'zeroaxis', axes)) return
+      enddo
+      endsubroutine zeroaxis_option
 
       subroutine autoscale_option
       !< gnuplot `set autoscale [AXES|AXESmin|AXESmax|AXESfix|fix|noextend|keepfix]...` (AXES x, y, x2, y2, cb, xy):
@@ -8466,6 +8577,16 @@ contains
       call self%figure%set_margin('r')
       call self%figure%set_margin('t')
       call self%figure%set_margin('b')
+   elseif (keyword(option, 'zeroaxis', 4_I4P)) then
+      call self%figure%set_zeroaxis('x y x2 y2', on=.false.)
+   elseif (keyword(option, 'xzeroaxis', 5_I4P)) then
+      call self%figure%set_zeroaxis('x', on=.false.)
+   elseif (keyword(option, 'yzeroaxis', 5_I4P)) then
+      call self%figure%set_zeroaxis('y', on=.false.)
+   elseif (keyword(option, 'x2zeroaxis', 6_I4P)) then
+      call self%figure%set_zeroaxis('x2', on=.false.)
+   elseif (keyword(option, 'y2zeroaxis', 6_I4P)) then
+      call self%figure%set_zeroaxis('y2', on=.false.)
    elseif (keyword(option, 'tics', 3_I4P)) then
       ! every axis, as gnuplot
       call self%figure%unset_xtics
