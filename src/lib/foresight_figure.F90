@@ -1183,7 +1183,7 @@ contains
    if (len(bad) > 0) error stop 'foresight: set_style_spiderplot: '//bad
    endsubroutine set_style_spiderplot
 
-   subroutine set_grid(self, on, polar, spider)
+   subroutine set_grid(self, on, polar, spider, lines, front, lc, lw, dt)
    !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not. On a polar panel,
    !< `polar` > 0 draws the polar grid instead (gnuplot `set grid polar STEP`): rings at the major r ticks and spokes
    !< every `polar` degrees of theta; 0 restores the rectangular grid. `spider` draws the web of the spider plots
@@ -1192,8 +1192,25 @@ contains
    logical,              intent(in), optional :: on     !< Grid on.
    real(R8P),            intent(in), optional :: polar  !< Spoke step [deg], 0 for the rectangular grid.
    logical,              intent(in), optional :: spider !< Spider plot web.
+   logical,              intent(in), optional :: lines(6) !< Lines at the x, y, x2, y2 major and x, y minor ticks
+                                                         !< (gnuplot `set grid x y x2 y2 mx my`); none: x and y.
+   logical,              intent(in), optional :: front  !< Over the data (gnuplot `front`), else behind.
+   character(len=*),     intent(in), optional :: lc     !< Line color, empty for the theme's.
+   real(R8P),            intent(in), optional :: lw     !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt     !< Dash type, 0 for foresight's dots, 1 solid.
 
    call self%ensure_panels
+   if (present(lines)) self%panels(self%current)%grid_lines = lines
+   if (present(front)) self%panels(self%current)%grid_front = front
+   if (present(lc)) then
+      if (len_trim(lc) > 0) then
+         self%panels(self%current)%grid_lc = trim(lc)
+      elseif (allocated(self%panels(self%current)%grid_lc)) then
+         deallocate(self%panels(self%current)%grid_lc)
+      endif
+   endif
+   if (present(lw)) self%panels(self%current)%grid_lw = lw
+   if (present(dt)) self%panels(self%current)%grid_dt = dt
    if (present(spider)) self%panels(self%current)%grid_spider = spider
    self%panels(self%current)%grid = .true.
    if (present(on)) self%panels(self%current)%grid = on

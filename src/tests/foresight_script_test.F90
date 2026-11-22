@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(126)                           !< Per-check outcome.
+logical                       :: test_passed(127)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2688,6 +2688,26 @@ test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 open(newunit=unit, file='foresight_script_test_batch.txt')
 close(unit, status='delete')
 
+! set grid: the lines named (no to remove, the others kept, x and y when none), front, the line style (lt 0 the dots,
+! lt -1 black), as gnuplot 6.0; the viewer gets them
+call interpreter%init(scratch)
+call interpreter%run_text('set grid y; set grid mx noy x2tics front lw 2 dt 3 lc "gray"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+associate(panel => interpreter%figure%panels(1))
+   test_passed(127) = iostat == 0_I4P .and. panel%grid .and. &
+                      all(panel%grid_lines .eqv. [.false., .false., .true., .false., .true., .false.]) .and. &
+                      panel%grid_front .and. panel%grid_lw == 2.0_R8P .and. panel%grid_dt == 3_I4P .and. &
+                      panel%grid_lc == '#bebebe'
+endassociate
+call interpreter%run_text('unset grid; set grid lt -1 back; set output "foresight_script_test_grid.svg"; plot [0:1] x', &
+                          iostat, iomsg)
+test_passed(127) = test_passed(127) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%grid_front .and. &
+                   file_has('foresight_script_test_grid.svg', 'data-grid-style="black 2e0 "')
+call interpreter%run_text('set grid ztics', iostat, iomsg)
+test_passed(127) = test_passed(127) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "ztics"') > 0
+open(newunit=unit, file='foresight_script_test_grid.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2696,7 +2716,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,126L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,127L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

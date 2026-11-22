@@ -141,7 +141,8 @@ contains
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
                  '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'"'//y2//' data-log="'//logs// &
-                 '" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)//'"'//extra//'>')
+                 '" data-grid="'//flag(view%grid)//'" data-font-size="'//px(view%font_size)//'"'//extra// &
+                 attribute('data-grid-lines', view%gridlines)//attribute('data-grid-style', view%gridstyle)//'>')
    contains
       pure function attribute(name, value) result(text)
       !< ` name="value"` (XML escaped), or nothing if `value` is unallocated or empty.

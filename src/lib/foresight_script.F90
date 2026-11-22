@@ -7131,37 +7131,124 @@ contains
       endsubroutine size_option
 
       subroutine grid_option
-      !< `set grid [polar [STEP]]`: the rectangular grid, or the polar one with spokes every STEP (30 by default) in
-      !< the angle unit.
-      real(R8P) :: step !< Spoke step.
+      !< `set grid [[no]{m}{x|y|x2|y2}tics|x|y|x2|y2|mx|my]... [front|back|layerdefault] [lt N] [lc C] [lw W] [dt N]
+      !< [polar [STEP]] [spiderplot]`, as gnuplot: the named lines turned on (off with no), the others kept, x and y when
+      !< none is; the line style of the grid; the polar grid with spokes every STEP (30 by default) in the angle unit.
+      real(R8P)                     :: step   !< Spoke step.
+      real(R8P)                     :: v      !< A number.
+      logical                       :: lines(6) !< x, y, x2, y2, mx, my.
+      logical                       :: polar  !< polar given.
+      character(len=:), allocatable :: w      !< Word.
+      character(len=:), allocatable :: base   !< Word without no.
+      type(line_style_object)       :: style  !< Line properties.
+      integer(I4P)                  :: k      !< Line index.
 
-      if (size(tokens) == 1) then
-         call self%figure%set_grid(.true., polar=0.0_R8P)
-         return
-      endif
-      if (keyword(tokens(2)%text, 'spiderplot', 6_I4P) .and. size(tokens) == 2) then
-         call self%figure%set_grid(spider=.true.)
-         return
-      endif
-      if (.not. keyword(tokens(2)%text, 'polar', 2_I4P) .or. tokens(2)%kind /= TOKEN_WORD .or. size(tokens) > 3) then
-         call fail('set grid: only "polar [STEP]" and "spiderplot" are supported', iostat, iomsg)
-         return
-      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         lines = panel%grid_lines
+      endassociate
+      polar = .false.
       step = 30.0_R8P
-      if (size(tokens) == 3) then
-         if (.not. to_number(tokens(3)%text, step)) then
-            call fail('set grid polar: "'//tokens(3)%text//'" is not a number', iostat, iomsg)
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         w = tokens(i)%text
+         base = w
+         if (len(w) > 2) then
+            if (w(1:2) == 'no') base = w(3:)
+         endif
+         k = grid_line_index(base)
+         if (k > 0_I4P) then
+            lines(k) = base == w
+         elseif (is_word(w, 'front back layerdefault')) then
+            call self%figure%set_grid(front=w == 'front')
+         elseif (keyword(w, 'spiderplot', 6_I4P)) then
+            call self%figure%set_grid(spider=.true.)
+         elseif (keyword(w, 'polar', 2_I4P)) then
+            polar = .true.
+            if (i < size(tokens, kind=I4P)) then
+               if (to_number(tokens(i + 1_I4P)%text, v)) then
+                  step = v
+                  ! in the angle unit
+                  if (.not. self%figure%panels(self%figure%current)%degrees) step = step * (180.0_R8P / acos(-1.0_R8P))
+                  i = i + 1_I4P
+               endif
+            endif
+            if (.not. (step > 0.0_R8P .and. step < 360.0_R8P)) then
+               call fail('set grid polar: the step must be positive and below a full turn', iostat, iomsg)
+               return
+            endif
+         elseif (is_line_option(w)) then
+            if (keyword(w, 'linetype', 5_I4P) .or. w == 'lt') then
+               ! lt 0: gnuplot's grid dots, lt -1: the border's solid black
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+               if (nint(v) == 0) then
+                  call self%figure%set_grid(lc='', dt=0_I4P)
+               elseif (nint(v) == -1) then
+                  call self%figure%set_grid(lc='black', dt=1_I4P)
+               else
+                  call self%figure%set_grid(lc=default_color(int(v, I4P), &
+                                            self%figure%panels(self%figure%current)%linecolors), dt=1_I4P)
+               endif
+            else
+               if (.not. line_option(tokens, i, style, iostat, iomsg, &
+                                     self%figure%panels(self%figure%current)%linecolors, self%symbols)) return
+               if (allocated(style%lc)) call self%figure%set_grid(lc=style%lc)
+               if (keyword(w, 'linewidth', 5_I4P) .or. w == 'lw') call self%figure%set_grid(lw=style%lw)
+               if (keyword(w, 'dashtype', 5_I4P) .or. w == 'dt') call self%figure%set_grid(dt=style%dt)
+            endif
+         elseif (tokens(i)%kind == TOKEN_COMMA) then
+            ! the minor grid's style follows: the same here
+            continue
+         else
+            call fail('set grid: unsupported option "'//w//'" (x, y, x2, y2, mx, my and their {no}{m}tics forms, '// &
+                      'front, back, layerdefault, lt, lc, lw, dt, polar [STEP], spiderplot)', iostat, iomsg)
             return
          endif
-         ! in the angle unit
-         if (.not. self%figure%panels(self%figure%current)%degrees) step = step * (180.0_R8P / acos(-1.0_R8P))
+         i = i + 1_I4P
+      enddo
+      if (.not. any(lines)) lines(1:2) = .true.
+      if (polar) then
+         call self%figure%set_grid(.true., polar=step, lines=lines)
+      else
+         call self%figure%set_grid(.true., lines=lines)
+         if (size(tokens) == 1 .or. any(is_word_list(tokens(2:)))) then
+            call self%figure%set_grid(polar=0.0_R8P)
+         endif
       endif
-      if (.not. (step > 0.0_R8P .and. step < 360.0_R8P)) then
-         call fail('set grid polar: the step must be positive and below a full turn', iostat, iomsg)
-         return
-      endif
-      call self%figure%set_grid(.true., polar=step)
       endsubroutine grid_option
+
+      pure function grid_line_index(w) result(k)
+      !< Index of a grid line word: x, y, x2, y2, mx, my or their tics forms (xtics, mxtics, ...); 0 if none.
+      character(len=*), intent(in) :: w !< Word.
+      integer(I4P)                 :: k !< x, y, x2, y2, mx, my: 1 to 6.
+
+      select case (w)
+      case ('x', 'xtics', 'xtic')
+         k = 1_I4P
+      case ('y', 'ytics', 'ytic')
+         k = 2_I4P
+      case ('x2', 'x2tics', 'x2tic')
+         k = 3_I4P
+      case ('y2', 'y2tics', 'y2tic')
+         k = 4_I4P
+      case ('mx', 'mxtics', 'mxtic')
+         k = 5_I4P
+      case ('my', 'mytics', 'mytic')
+         k = 6_I4P
+      case default
+         k = 0_I4P
+      endselect
+      endfunction grid_line_index
+
+      pure function is_word_list(toks) result(yes)
+      !< Per token: whether it names a grid line (a rectangular grid asked).
+      type(token_object), intent(in) :: toks(:) !< Tokens.
+      logical                        :: yes(size(toks)) !< Grid line words.
+      integer(I4P)                   :: k       !< Counter.
+
+      do k = 1_I4P, size(toks, kind=I4P)
+         yes(k) = grid_line_index(toks(k)%text) > 0_I4P
+      enddo
+      endfunction is_word_list
 
       subroutine theta_option
       !< `set theta [right|top|left|bottom] [clockwise|cw|counterclockwise|ccw]`; no words restore right ccw.

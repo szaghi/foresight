@@ -53,7 +53,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
                                   label_object, shape_object
 use foresight_axis, only : axis_object
-use foresight_format, only : int_str
+use foresight_format, only : int_str, real_str
 use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : hex_color, palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
@@ -250,6 +250,13 @@ type :: axes_object
    logical                          :: spiderplot = .false. !< Spider plot coordinates (`set spiderplot`).
    type(style_object)               :: spider_style      !< Polygons of the spider plots (`set style spiderplot`).
    logical                          :: grid_spider = .false. !< Web of the spider plot (`set grid spiderplot`).
+   logical                          :: grid_lines(6) = .false. !< Grid lines at the x, y, x2, y2 major ticks and the x, y
+                                                               !< minor ticks (gnuplot `set grid x y x2 y2 mx my`);
+                                                               !< none: x and y.
+   logical                          :: grid_front = .false. !< Grid over the data (gnuplot `set grid front`).
+   character(len=:), allocatable    :: grid_lc  !< Grid line color, unallocated for the theme's.
+   real(R8P)                        :: grid_lw = 0.5_R8P !< Grid line width [px].
+   integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
@@ -272,6 +279,7 @@ type :: axes_object
       procedure, pass(self), private :: draw_readouts      !< Draw the readouts.
       procedure, pass(self), private :: key_layout         !< Key size and entry grid.
       procedure, pass(self), private :: key_sample         !< Key sample length.
+      procedure, pass(self), private :: grid_dash_array        !< Grid dash array.
       procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
@@ -1359,6 +1367,13 @@ contains
       view%x2format = ''
       if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
    endif
+   view%gridlines = grid_words(self%grid_lines)
+   view%gridstyle = ''
+   if (allocated(self%grid_lc) .or. self%grid_lw /= 0.5_R8P .or. self%grid_dt > 0_I4P) then
+      view%gridstyle = GRID_COLOR
+      if (allocated(self%grid_lc)) view%gridstyle = self%grid_lc
+      view%gridstyle = view%gridstyle//' '//real_str(self%grid_lw)//' '//self%grid_dash_array()
+   endif
    view%xtime = time_attribute(self%xaxis)
    view%ytime = time_attribute(self%yaxis)
    view%y2time = time_attribute(self%y2axis)
@@ -1366,10 +1381,12 @@ contains
    call backend%begin_axes(view)
    ! annotations: objects behind the grid, then the back layer (labels, arrows, objects on the page)
    call annotate('behind', .false.)
-   ! grid lines always emitted, hidden when off: an interactive viewer can toggle them
-   call backend%begin_group('fs-grid', visible=self%grid)
-   call self%draw_grid(backend, area)
-   call backend%end_group
+   ! grid lines always emitted, hidden when off: an interactive viewer can toggle them (over the data with front)
+   if (.not. self%grid_front) then
+      call backend%begin_group('fs-grid', visible=self%grid)
+      call self%draw_grid(backend, area)
+      call backend%end_group
+   endif
    call annotate('back', .false.)
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    ! the objects in data space, clipped and zoomed with the data, behind it
@@ -1405,6 +1422,11 @@ contains
    endif
    call annotate('front', .true.)
    call backend%end_plot_area
+   if (self%grid_front) then
+      call backend%begin_group('fs-grid', visible=self%grid)
+      call self%draw_grid(backend, area)
+      call backend%end_group
+   endif
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
    call annotate('front', .false.)
    if (self%polar) then
@@ -1906,28 +1928,79 @@ contains
    endsubroutine draw_frame
 
    subroutine draw_grid(self, backend, area)
-   !< Draw grid lines at the major ticks.
+   !< Draw grid lines at the ticks of `grid_lines` (the x and y major ones by default), in the grid style.
    class(axes_object),    intent(in)    :: self    !< Panel.
    class(backend_object), intent(inout) :: backend !< Output device.
    real(R8P),             intent(in)    :: area(4) !< Plot area: left, right, top, bottom [px].
    real(R8P)                            :: p       !< Tick position [px].
    integer(I4P)                         :: t       !< Tick counter.
+   logical                              :: on(6)   !< x, y, x2, y2, mx, my lines.
+   character(len=:), allocatable        :: color   !< Line color.
+   character(len=:), allocatable        :: dashes  !< Dash array.
 
    ! a polar grid replaces the rectangular one, as gnuplot
    if (self%polar .and. self%grid_polar > 0.0_R8P) return
+   on = self%grid_lines
+   if (.not. any(on)) on(1:2) = .true.
+   color = GRID_COLOR
+   if (allocated(self%grid_lc)) color = self%grid_lc
+   dashes = self%grid_dash_array()
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
-         if (.not. self%xaxis%ticks(t)%major) cycle
+         if (.not. merge(on(1), on(5), self%xaxis%ticks(t)%major)) cycle
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
-         call backend%polyline([p, p], [bottom, top], GRID_COLOR, 0.5_R8P, GRID_DASHES)
+         call backend%polyline([p, p], [bottom, top], color, self%grid_lw, dashes)
       enddo
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
-         if (.not. self%yaxis%ticks(t)%major) cycle
+         if (.not. merge(on(2), on(6), self%yaxis%ticks(t)%major)) cycle
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
-         call backend%polyline([left, right], [p, p], GRID_COLOR, 0.5_R8P, GRID_DASHES)
+         call backend%polyline([left, right], [p, p], color, self%grid_lw, dashes)
       enddo
+      if (on(3) .and. self%x2_active) then
+         do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
+            if (.not. self%x2axis%ticks(t)%major) cycle
+            p = left + self%x2axis%to_unit(self%x2axis%ticks(t)%value) * (right - left)
+            call backend%polyline([p, p], [bottom, top], color, self%grid_lw, dashes)
+         enddo
+      endif
+      if (on(4) .and. self%y2_active) then
+         do t = 1_I4P, size(self%y2axis%ticks, kind=I4P)
+            if (.not. self%y2axis%ticks(t)%major) cycle
+            p = bottom - self%y2axis%to_unit(self%y2axis%ticks(t)%value) * (bottom - top)
+            call backend%polyline([left, right], [p, p], color, self%grid_lw, dashes)
+         enddo
+      endif
    endassociate
    endsubroutine draw_grid
+
+   pure function grid_words(lines) result(words)
+   !< The grid lines as the viewer reads them (`x y mx`), empty for the default x and y.
+   logical, intent(in)           :: lines(6) !< x, y, x2, y2, mx, my.
+   character(len=:), allocatable :: words    !< Words.
+   character(len=*), parameter   :: NAMES(6) = [character(len=2) :: 'x', 'y', 'x2', 'y2', 'mx', 'my'] !< Names.
+   integer(I4P)                  :: k        !< Counter.
+
+   words = ''
+   if (.not. any(lines)) return
+   if (all(lines .eqv. [.true., .true., .false., .false., .false., .false.])) return
+   do k = 1_I4P, 6_I4P
+      if (lines(k)) words = words//' '//trim(NAMES(k))
+   enddo
+   words = words(2:)
+   endfunction grid_words
+
+   pure function grid_dash_array(self) result(dashes)
+   !< Dash array of the grid lines: foresight's dots, or the dash type's (`set grid dt N`; 1 solid).
+   class(axes_object), intent(in) :: self   !< Panel.
+   character(len=:), allocatable  :: dashes !< Dash array.
+   type(style_object)             :: line   !< A line of the dash type.
+
+   dashes = GRID_DASHES
+   if (self%grid_dt <= 0_I4P) return
+   line%dashtype = self%grid_dt
+   line%linewidth = self%grid_lw
+   dashes = line%dasharray()
+   endfunction grid_dash_array
 
    subroutine draw_polar_grid(self, backend)
    !< Draw the polar grid in the plot area: rings at the major r ticks, spokes every `grid_polar` degrees of theta.

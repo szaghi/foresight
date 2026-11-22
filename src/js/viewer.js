@@ -903,6 +903,13 @@
     this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
     this.fontSize = Number(group.getAttribute("data-font-size"));
     this.grid = group.getAttribute("data-grid") === "1";
+    // grid lines (x, y, x2, y2 major, mx, my minor; x and y by default) and their style (mirror of
+    // draw_grid): "color width dashes"
+    var lines = (group.getAttribute("data-grid-lines") || "x y").split(" ");
+    var drawn = this.gridLines = {};
+    lines.forEach(function (w) { drawn[w] = true; });
+    var gstyle = group.getAttribute("data-grid-style");
+    this.gridStyle = gstyle ? gstyle.split(" ") : null;
     this.plot = group.querySelector(".fs-plot");
     this.gridGroup = group.querySelector(".fs-grid");
     // polar panel: its grid is data geometry (zoomed with the series), its r tick labels and
@@ -1202,7 +1209,10 @@
       if (p < self.left - 0.5 || p > self.right + 0.5) return;
       line(self.xticks, p, self.bottom, p, self.bottom - xs * length, FRAME_COLOR, 1);
       if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + xs * length, FRAME_COLOR, 1);
-      if (!t.major) return;
+      if (!t.major) {
+        if (!self.polarGrid) gridLine(self, p, self.bottom, p, self.top, "mx");
+        return;
+      }
       // rotated: the glyph band centred on the tick (mirror of rotated_anchor)
       if (angle) {
         label(self.xticks, p + 0.35 * fs * Math.sin(rad),
@@ -1211,7 +1221,7 @@
         label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true);
       }
       if (self.polarGrid) return;
-      line(self.gridGroup, p, self.bottom, p, self.top, GRID_COLOR, 0.5, GRID_DASHES);
+      gridLine(self, p, self.bottom, p, self.top, t.major ? "x" : "mx");
     });
     this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
@@ -1222,11 +1232,14 @@
       if (self.mirror[1]) {
         line(self.yticks, self.right, p, self.right - ys * length, p, FRAME_COLOR, 1);
       }
-      if (!t.major) return;
+      if (!t.major) {
+        if (!self.polarGrid) gridLine(self, self.left, p, self.right, p, "my");
+        return;
+      }
       label(self.yticks, self.left - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
         "end");
       if (self.polarGrid) return;
-      line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
+      gridLine(self, self.left, p, self.right, p, t.major ? "y" : "my");
     });
     this.drawX2Ticks();
     if (!this.y2ticks) return;
@@ -1244,9 +1257,18 @@
         label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
           t,
           "start");
+        gridLine(self, self.left, p, self.right, p, "y2");
       }
     });
   };
+
+  // a grid line of the panel if its kind (x, y, x2, y2, mx, my) is drawn, in the grid style
+  function gridLine(panel, x1, y1, x2, y2, kind) {
+    if (!panel.gridLines[kind]) return;
+    var st = panel.gridStyle;
+    line(panel.gridGroup, x1, y1, x2, y2, st ? st[0] : GRID_COLOR, st ? Number(st[1]) : 0.5,
+      st ? (st[2] || "") : GRID_DASHES);
+  }
 
   // tick length of an axis' settings (mirror of tick_length): the major length times its scale
   function tickLength(tics, major) {
@@ -1271,6 +1293,7 @@
       if (t.major) {
         label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
           t, "middle");
+        gridLine(self, p, self.bottom, p, self.top, "x2");
       }
     });
   };
