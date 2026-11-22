@@ -105,6 +105,12 @@ integer(I4P), parameter :: OP_RECURSE      = 37_I4P !< Call the body at `arg` on
 integer(I4P), parameter :: OP_RETURN       = 38_I4P !< End of a called body: its value replaces its arguments.
 integer(I4P), parameter :: OP_STOP         = 39_I4P !< End of the main code, before the called bodies.
 integer(I4P), parameter :: OP_DEPTH        = 40_I4P !< A call inlined in a called body: check the nested calls.
+integer(I4P), parameter :: OP_BAND         = 41_I4P !< `&`; the bitwise operators of integers run from here to OP_SHR.
+integer(I4P), parameter :: OP_BOR          = 42_I4P !< `|`.
+integer(I4P), parameter :: OP_BXOR         = 43_I4P !< `^`.
+integer(I4P), parameter :: OP_SHL          = 44_I4P !< `<<`.
+integer(I4P), parameter :: OP_SHR          = 45_I4P !< `>>`, logical (gnuplot's on x86).
+integer(I4P), parameter :: OP_BNOT         = 46_I4P !< `~`, unary.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -137,10 +143,11 @@ integer(I4P), parameter :: E_NUMBER_ARG = 6_I4P !< A number printed with `%s`.
 integer(I4P), parameter :: E_INDEX      = 7_I4P !< An array index out of range.
 integer(I4P), parameter :: E_UNSET      = 8_I4P !< An array element never set.
 integer(I4P), parameter :: E_DEPTH      = 9_I4P !< Too many nested calls of recursive user functions.
+integer(I4P), parameter :: E_BITWISE    = 10_I4P !< A real or a string given to a bitwise operator.
 
 ! binary operator levels of the grammar, loosest first
-character(len=*), parameter :: LEVELS(6) = [character(len=11) :: '||', '&&', '== != eq ne', '< <= > >=', '+ - .', &
-                                                '* / %']
+character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
+                                                 '< <= > >=', '<< >>', '+ - .', '* / %'] !< C's, as gnuplot.
 
 integer(I4P), parameter :: MAX_NESTING = 256_I4P                     !< Deepest parentheses and unary chains.
 integer(I4P), parameter :: MAX_CALLS   = 251_I4P                     !< Most nested user function calls (gnuplot's).
@@ -368,10 +375,6 @@ contains
    endif
    call next
    call parse_ternary
-   ! nested: `.and.` does not short-circuit, and a first token in error is never read (ifx checks it)
-   if (iostat == 0_I4P .and. kind == T_OPERATOR) then
-      if (token == '|') call syntax('bitwise operator "|" not supported')
-   endif
    if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
    if (iostat == 0_I4P .and. size(procs) > 0) call compile_procedures
    contains
@@ -492,7 +495,14 @@ contains
          token = 'end'
          return
       endif
-      if (scan(src(pos:pos), DIGITS) > 0 .or. (src(pos:pos) == '.' .and. next_is(DIGITS, 1_I4P))) then
+      if (src(pos:pos) == '0' .and. next_is('xX', 1_I4P) .and. next_is('0123456789abcdefABCDEF', 2_I4P)) then
+         ! a hexadecimal integer, gnuplot's 0xff (a real past the largest integer)
+         kind = T_NUMBER
+         pos = pos + 2_I4P
+         call skip('0123456789abcdefABCDEF')
+         token = src(start:pos - 1_I4P)
+         call radix_number(token(3:), 16_I4P)
+      elseif (scan(src(pos:pos), DIGITS) > 0 .or. (src(pos:pos) == '.' .and. next_is(DIGITS, 1_I4P))) then
          kind = T_NUMBER
          is_real = .false.
          call skip(DIGITS)
@@ -514,6 +524,15 @@ contains
          token = src(start:pos - 1_I4P)
          number = value_object()
          ios = 1_I4P
+         if (.not. is_real .and. len(token) > 1 .and. token(1:1) == '0') then
+            ! an octal integer, gnuplot's 017 (08 is 0 then an unexpected 8)
+            if (verify(token, '01234567') > 0) then
+               call syntax('unexpected "'//token(verify(token, '01234567'):)//'"', start + verify(token, '01234567') - 1)
+               return
+            endif
+            call radix_number(token(2:), 8_I4P)
+            return
+         endif
          if (.not. is_real) then
             ! integers too large for I8P are reals, as in gnuplot
             read(token, *, iostat=ios) number%i
@@ -578,22 +597,48 @@ contains
          kind = T_OPERATOR
          token = src(pos:min(pos + 1_I4P, n))
          select case (token)
-         case ('**', '<=', '>=', '==', '!=', '&&', '||')
+         case ('**', '<=', '>=', '==', '!=', '&&', '||', '<<', '>>')
             pos = pos + 2_I4P
          case default
             token = src(pos:pos)
             pos = pos + 1_I4P
             select case (token)
-            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']', '|')
-               ! `|` only around an array or a datablock, `|A|`
-            case ('&', '^', '~')
-               call syntax('bitwise operator "'//token//'" not supported')
+            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']', '|', '&', '^', '~')
+               ! `|` a bitwise or, and around an array or a datablock, `|A|`
             case default
                call syntax('unexpected "'//token//'"')
             endselect
          endselect
       endif
       endsubroutine next
+
+      subroutine radix_number(digits, radix)
+      !< `number` from the `digits` of an integer in base `radix`, a real past the largest integer (gnuplot).
+      character(len=*), intent(in) :: digits !< Digits.
+      integer(I4P),     intent(in) :: radix  !< Base.
+      integer(I4P)                 :: j      !< Digit counter.
+      integer(I4P)                 :: d      !< Digit value.
+      real(R8P)                    :: r      !< Value as a real.
+
+      number = value_object(is_int=.true.)
+      r = 0.0_R8P
+      do j = 1_I4P, len(digits, kind=I4P)
+         d = index('0123456789abcdef', digits(j:j), kind=I4P) - 1_I4P
+         if (d < 0_I4P) d = index('0123456789ABCDEF', digits(j:j), kind=I4P) - 1_I4P
+         r = r * radix + d
+         if (number%is_int) then
+            if (number%i > (MOST - d) / radix) then
+               number%is_int = .false.
+            else
+               number%i = number%i * radix + d
+            endif
+         endif
+      enddo
+      if (.not. number%is_int) then
+         number%i = 0_I8P
+         number%r = r
+      endif
+      endsubroutine radix_number
 
       function next_is(set, offset) result(yes)
       !< Whether the character `offset` places after `pos` is in `set`.
@@ -631,7 +676,7 @@ contains
       select case (op)
       case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD)
          depth = depth + 1_I4P
-      case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
+      case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
          ! the conditional jumps pop on the path that falls through
          depth = depth - 1_I4P
       case (OP_SUBSTRING)
@@ -734,6 +779,9 @@ contains
       elseif (accept('!')) then
          call parse_unary
          call emit(OP_NOT)
+      elseif (accept('~')) then
+         call parse_unary
+         call emit(OP_BNOT)
       else
          call parse_power
       endif
@@ -2247,6 +2295,17 @@ contains
             if (self%degrees .and. instruction%op == OP_ATAN2 .and. ok) result%r = result%r * (180.0_R8P / PI)
             sp = sp - 1_I4P
             stack(sp) = result
+         case (OP_BAND:OP_SHR)
+            call bitwise(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok, err)
+            sp = sp - 1_I4P
+            stack(sp) = result
+         case (OP_BNOT)
+            if (stack(sp)%is_int .and. .not. stack(sp)%is_string) then
+               stack(sp)%i = not(stack(sp)%i)
+            else
+               ok = .false.
+               err = E_BITWISE
+            endif
          case (OP_CONCAT:OP_STRNE)
             call string_binary(instruction%op, stack(sp - 1_I4P), stack(sp), result, ok, err)
             sp = sp - 1_I4P
@@ -2658,6 +2717,16 @@ contains
       op = OP_STREQ
    case ('ne')
       op = OP_STRNE
+   case ('&')
+      op = OP_BAND
+   case ('|')
+      op = OP_BOR
+   case ('^')
+      op = OP_BXOR
+   case ('<<')
+      op = OP_SHL
+   case ('>>')
+      op = OP_SHR
    case default
       op = OP_NE
    endselect
@@ -3031,6 +3100,38 @@ contains
    endif
    endfunction number_text
 
+   pure subroutine bitwise(op, a, b, c, ok, error)
+   !< `c = a op b` for the bitwise operators, of integers only (gnuplot: "non-integer passed to boolean operator"); the
+   !< shifts as gnuplot's on x86: the count modulo 64, `>>` logical.
+   integer(I4P),       intent(in)    :: op    !< Operation code.
+   type(value_object), intent(in)    :: a     !< Left operand.
+   type(value_object), intent(in)    :: b     !< Right operand.
+   type(value_object), intent(out)   :: c     !< Result.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+   integer(I4P)                      :: count !< Shift count.
+
+   c = value_object()
+   if (.not. (a%is_int .and. b%is_int) .or. a%is_string .or. b%is_string) then
+      ok = .false.
+      error = E_BITWISE
+      return
+   endif
+   count = int(modulo(b%i, 64_I8P), I4P)
+   select case (op)
+   case (OP_BAND)
+      c = int_value(iand(a%i, b%i))
+   case (OP_BOR)
+      c = int_value(ior(a%i, b%i))
+   case (OP_BXOR)
+      c = int_value(ieor(a%i, b%i))
+   case (OP_SHL)
+      c = int_value(shiftl(a%i, count))
+   case default
+      c = int_value(shiftr(a%i, count))
+   endselect
+   endsubroutine bitwise
+
    pure function error_text(error) result(text)
    !< Message of a type error.
    integer(I4P), intent(in)      :: error !< Error code.
@@ -3055,6 +3156,8 @@ contains
       text = 'array element without a value'
    case (E_DEPTH)
       text = 'recursion depth limit exceeded'
+   case (E_BITWISE)
+      text = 'non-integer passed to boolean operator'
    case default
       text = 'undefined value'
    endselect

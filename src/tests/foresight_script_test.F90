@@ -2159,8 +2159,8 @@ call interpreter%run_text('print E[1:2]', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'slices') > 0
 call interpreter%run_text('print |x|', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'takes an array or a datablock') > 0
-call interpreter%run_text('print 1 | 2', iostat, iomsg)
-test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'bitwise operator "|"') > 0
+call interpreter%run_text('print 6 | 2.5', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'non-integer passed to boolean operator') > 0
 call interpreter%run_text("set print 'foresight_script_test_arrays.txt'; print E; set print", iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat == 0_I4P
 call interpreter%run_text('x = E + 1', iostat, iomsg)
