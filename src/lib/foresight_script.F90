@@ -5793,6 +5793,29 @@ contains
          text = 'time'
       endif
       call self%set_time_data(option, len(text) > 0)
+   elseif (keyword(option, 'pointsize', 3_I4P)) then
+      ! gnuplot `set pointsize S`: the default point size, 1 when bare
+      block
+         real(R8P) :: v !< Size.
+
+         v = 1.0_R8P
+         if (size(tokens) > 1) then
+            i = 1_I4P
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+               iomsg = 'set pointsize: '//iomsg
+               return
+            endif
+            if (i < size(tokens, kind=I4P)) then
+               call fail('set pointsize: unexpected "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+               return
+            endif
+         endif
+         if (.not. v > 0.0_R8P) then
+            call fail('set pointsize: the size must be positive', iostat, iomsg)
+            return
+         endif
+         self%figure%panels(self%figure%current)%point_scale = v
+      endblock
    elseif (keyword(option, 'timefmt', 5_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) text = '%d/%m/%y,%H:%M'
@@ -8769,6 +8792,9 @@ contains
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
       call self%figure%unset_logscale(axes)
+      return
+   elseif (keyword(option, 'pointsize', 3_I4P)) then
+      self%figure%panels(self%figure%current)%point_scale = 1.0_R8P
       return
    elseif (keyword(option, 'style', 2_I4P)) then
       ok = .false.

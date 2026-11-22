@@ -175,6 +175,8 @@ type :: axes_object
    real(R8P)                        :: key_extra = 0.0_R8P !< Width added to the titles [character widths], `width`.
    real(R8P)                        :: key_offset(2) = 0.0_R8P !< Key shift [characters], gnuplot `offset`.
    real(R8P)                        :: key_spacing = 1.0_R8P !< Row spacing [rows], gnuplot `spacing`.
+   real(R8P)                        :: point_scale = 1.0_R8P !< Point size of the series without their own, gnuplot
+                                                             !< `set pointsize`.
    real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
    integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
                                                              !< column (gnuplot `maxrows`).
@@ -449,6 +451,8 @@ contains
    if (present(title)) series%title = title
    if (present(with)) series%style%with = style_with(with)
    series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P + self%color_shift, self%linecolors)
+   ! gnuplot `set pointsize`: the default point size (an item's own replaces it)
+   series%style%pointsize = self%point_scale
    if (present(lc)) series%style%color = lc
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt

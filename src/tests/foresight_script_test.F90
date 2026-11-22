@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(136)                           !< Per-check outcome.
+logical                       :: test_passed(137)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2905,6 +2905,21 @@ test_passed(136) = test_passed(136) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 call interpreter%run_text('besj0(x) = x', iostat, iomsg)
 test_passed(136) = test_passed(136) .and. iostat /= 0_I4P .and. index(iomsg, 'builtin function') > 0
 
+! set pointsize: the default point size of the items without their own (gnuplot: ps replaces it); unset, reset: 1
+call interpreter%init(scratch)
+call interpreter%run_text('$P << EOD'//new_line('a')//'1 1'//new_line('a')//'2 2'//new_line('a')//'EOD'//new_line('a')// &
+                          'set pointsize 2; plot $P w p pt 7, $P w p pt 7 ps 1.5', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(137) = iostat == 0_I4P
+if (test_passed(137)) test_passed(137) = interpreter%figure%panels(1)%series(1)%style%pointsize == 2.0_R8P .and. &
+                                         interpreter%figure%panels(1)%series(2)%style%pointsize == 1.5_R8P
+call interpreter%run_text('unset pointsize', iostat, iomsg)
+test_passed(137) = test_passed(137) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%point_scale == 1.0_R8P
+call interpreter%run_text('set pointsize 3; reset', iostat, iomsg)
+test_passed(137) = test_passed(137) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%point_scale == 1.0_R8P
+call interpreter%run_text('set pointsize -1', iostat, iomsg)
+test_passed(137) = test_passed(137) .and. iostat /= 0_I4P .and. index(iomsg, 'must be positive') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2913,7 +2928,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,136L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,137L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
