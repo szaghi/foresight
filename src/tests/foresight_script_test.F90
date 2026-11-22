@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(137)                           !< Per-check outcome.
+logical                       :: test_passed(138)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2920,6 +2920,25 @@ test_passed(137) = test_passed(137) .and. iostat == 0_I4P .and. interpreter%figu
 call interpreter%run_text('set pointsize -1', iostat, iomsg)
 test_passed(137) = test_passed(137) .and. iostat /= 0_I4P .and. index(iomsg, 'must be positive') > 0
 
+! set linetype: the color, width, dash, point of the series of a linetype; persistent across reset; set linetype cycle
+call interpreter%init(scratch)
+call interpreter%run_text('set linetype 1 lc "dark-red" lw 3 pt 7 ps 1.5; set for [i=1:2] linetype 8+i lc "black"'// &
+                          new_line('a')//'reset'//new_line('a')//'plot for [k=1:10] k*x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(138) = iostat == 0_I4P
+if (test_passed(138)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(138) = panel%series(1)%style%color == '#8b0000' .and. panel%series(1)%style%linewidth == 3.0_R8P &
+                         .and. panel%series(1)%style%pointtype == 7_I4P .and. panel%series(1)%style%pointsize == 1.5_R8P &
+                         .and. panel%series(9)%style%color == '#000000' .and. panel%series(10)%style%color == '#000000' &
+                         .and. panel%series(2)%style%linewidth == 1.0_R8P .and. size(panel%linecolors) == 16
+   endassociate
+endif
+call interpreter%run_text('set linetype cycle 3', iostat, iomsg)
+test_passed(138) = test_passed(138) .and. iostat == 0_I4P .and. size(interpreter%figure%panels(1)%linecolors) == 3
+call interpreter%run_text('set linetype 1 lc palette', iostat, iomsg)
+test_passed(138) = test_passed(138) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2928,7 +2947,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,137L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,138L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -104,7 +104,8 @@ module foresight_script
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
-use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
+use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
+                           spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : block_hook, expression_object, list_text, push, saved_array, saved_variable, &
                                  symbols_object, value_list, value_object
@@ -118,7 +119,7 @@ use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
-use foresight_palette, only : gnuplot_color, palette_gradient, palette_object, palette_words
+use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
@@ -4723,6 +4724,11 @@ contains
    self%figure%panels(self%figure%current)%origin = kept%origin
    self%figure%panels(self%figure%current)%size = kept%size
    if (allocated(kept%linecolors)) self%figure%panels(self%figure%current)%linecolors = kept%linecolors
+   ! gnuplot's linetypes are persistent
+   self%figure%panels(self%figure%current)%lt_lw = kept%lt_lw
+   self%figure%panels(self%figure%current)%lt_dt = kept%lt_dt
+   self%figure%panels(self%figure%current)%lt_pt = kept%lt_pt
+   self%figure%panels(self%figure%current)%lt_ps = kept%lt_ps
    self%function_style = 'lines'
    self%autotitle = 'file'
    if (allocated(self%line_styles)) deallocate(self%line_styles)
@@ -5793,6 +5799,8 @@ contains
          text = 'time'
       endif
       call self%set_time_data(option, len(text) > 0)
+   elseif (keyword(option, 'linetype', 5_I4P)) then
+      call linetype_option
    elseif (keyword(option, 'pointsize', 3_I4P)) then
       ! gnuplot `set pointsize S`: the default point size, 1 when bare
       block
@@ -6577,6 +6585,106 @@ contains
          i = i + 1_I4P
       enddo
       endsubroutine fit_option
+
+      subroutine linetype_option
+      !< gnuplot `set linetype N [lc C] [lw W] [dt D] [pt P] [ps S] [pi I]`: linetype N redefined, persistent (`reset`
+      !< keeps it); its color among the linetype colors (padded to whole cycles of the current ones, so that the higher
+      !< linetypes still cycle as gnuplot's), the rest the defaults of its series; `set linetype cycle N` reuses the
+      !< first N colors for the higher linetypes.
+      type(line_style_object)       :: lt     !< Properties read.
+      character(len=7), allocatable :: list(:) !< Linetype colors.
+      integer(I4P)                  :: n      !< Linetype.
+      integer(I4P)                  :: base   !< Colors of a cycle now.
+      integer(I4P)                  :: m      !< Colors after.
+      integer(I4P)                  :: k      !< Counter.
+
+      i = 2_I4P
+      if (size(tokens) >= 2) then
+         if (tokens(2)%text == 'cycle') then
+            if (.not. next_integer(tokens, i, n, iostat, iomsg)) then
+               iomsg = 'set linetype cycle: '//iomsg
+               return
+            endif
+            if (n < 1_I4P) then
+               call fail('set linetype cycle: the cycle must be positive', iostat, iomsg)
+               return
+            endif
+            associate(panel => self%figure%panels(self%figure%current))
+               allocate(list(n))
+               do k = 1_I4P, n
+                  list(k) = default_color(k, self%figure%panels(self%figure%current)%linecolors)
+               enddo
+               panel%linecolors = list
+            endassociate
+            return
+         endif
+      endif
+      i = 1_I4P
+      ! a constant expression (`set for [i=1:3] linetype 10+i ...`)
+      block
+         real(R8P) :: v !< Linetype, as read.
+
+         if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+            iomsg = 'set linetype: '//iomsg
+            return
+         endif
+         if (v /= aint(v) .or. abs(v) > 1.0e6_R8P) then
+            call fail('set linetype: the linetype must be an integer', iostat, iomsg)
+            return
+         endif
+         n = nint(v, I4P)
+      endblock
+      if (n < 1_I4P .or. n > MAX_LINETYPES) then
+         call fail('set linetype: the linetype must be between 1 and '//int_str(int(MAX_LINETYPES, I8P)), iostat, iomsg)
+         return
+      endif
+      i = i + 1_I4P
+      do while (i <= size(tokens, kind=I4P))
+         if (.not. is_line_option(tokens(i)%text)) then
+            call fail('set linetype: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
+            return
+         endif
+         if (.not. line_option(tokens, i, lt, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
+                               self%symbols)) then
+            iomsg = 'set linetype: '//iomsg
+            return
+         endif
+         i = i + 1_I4P
+      enddo
+      associate(panel => self%figure%panels(self%figure%current))
+         if (allocated(lt%lc)) then
+            ! the names kept for the themes (black, white) as their #rrggbb
+            if (len(lt%lc) /= 7 .or. lt%lc(1:1) /= '#') then
+               block
+                  integer(I4P) :: c(3) !< Channels.
+                  logical      :: ok   !< A named color.
+
+                  call named_color(lt%lc, c, ok)
+                  if (.not. ok) then
+                     call fail('set linetype: a fixed opaque color is expected, not "'//lt%lc//'"', iostat, iomsg)
+                     return
+                  endif
+                  lt%lc = hex_color(c)
+               endblock
+            endif
+            base = 8_I4P
+            if (allocated(panel%linecolors)) then
+               if (size(panel%linecolors) > 0) base = size(panel%linecolors, kind=I4P)
+            endif
+            m = max(base, ((n + base - 1_I4P) / base) * base)
+            allocate(list(m))
+            do k = 1_I4P, m
+               list(k) = default_color(k, self%figure%panels(self%figure%current)%linecolors)
+            enddo
+            list(n) = lt%lc
+            panel%linecolors = list
+         endif
+         if (allocated(lt%lw)) panel%lt_lw(n) = lt%lw
+         if (allocated(lt%dt)) panel%lt_dt(n) = lt%dt
+         if (allocated(lt%pt)) panel%lt_pt(n) = lt%pt
+         if (allocated(lt%ps)) panel%lt_ps(n) = lt%ps
+      endassociate
+      endsubroutine linetype_option
 
       function axis_label(axis) result(ok)
       !< `set xlabel ["text"] [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, and

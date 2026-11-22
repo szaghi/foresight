@@ -73,6 +73,7 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: axes_object
+public :: MAX_LINETYPES
 public :: colorbox_object
 public :: axes_names
 public :: boxplot_style
@@ -104,6 +105,7 @@ integer(I4P),     parameter :: HIST_ROWSTACKED    = 1_I4P !< Histograms stacked 
 integer(I4P),     parameter :: HIST_COLUMNSTACKED = 2_I4P !< One stack per histogram, its rows stacked.
 integer(I4P),     parameter :: HIST_ERRORBARS     = 3_I4P !< Clustered, with error bars.
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
+integer(I4P),     parameter :: MAX_LINETYPES = 128_I4P !< Linetypes of `set linetype` (lw, dt, pt, ps).
 real(R8P),        parameter :: CHAR_WIDTH    = 0.6_R8P   !< Character width [font size], gnuplot's character units.
 real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
@@ -177,6 +179,11 @@ type :: axes_object
    real(R8P)                        :: key_spacing = 1.0_R8P !< Row spacing [rows], gnuplot `spacing`.
    real(R8P)                        :: point_scale = 1.0_R8P !< Point size of the series without their own, gnuplot
                                                              !< `set pointsize`.
+   ! gnuplot `set linetype N lw dt pt ps`: the defaults of the series of linetype N (their colors are `linecolors`)
+   real(R8P)                        :: lt_lw(MAX_LINETYPES) = -1.0_R8P !< Line widths, negative if not set.
+   integer(I4P)                     :: lt_dt(MAX_LINETYPES) = 0_I4P    !< Dash types, 0 if not set.
+   integer(I4P)                     :: lt_pt(MAX_LINETYPES) = -2_I4P   !< Point types, below -1 if not set.
+   real(R8P)                        :: lt_ps(MAX_LINETYPES) = -1.0_R8P !< Point sizes, negative if not set.
    real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
    integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
                                                              !< column (gnuplot `maxrows`).
@@ -453,6 +460,14 @@ contains
    series%style%color = default_color(size(self%series, kind=I4P) + 1_I4P + self%color_shift, self%linecolors)
    ! gnuplot `set pointsize`: the default point size (an item's own replaces it)
    series%style%pointsize = self%point_scale
+   ! gnuplot `set linetype`: the defaults of the series' linetype
+   k = size(self%series, kind=I4P) + 1_I4P + self%color_shift
+   if (k >= 1_I4P .and. k <= MAX_LINETYPES) then
+      if (self%lt_lw(k) >= 0.0_R8P) series%style%linewidth = self%lt_lw(k)
+      if (self%lt_dt(k) > 0_I4P) series%style%dashtype = self%lt_dt(k)
+      if (self%lt_pt(k) >= -1_I4P) series%style%pointtype = self%lt_pt(k)
+      if (self%lt_ps(k) >= 0.0_R8P) series%style%pointsize = self%lt_ps(k)
+   endif
    if (present(lc)) series%style%color = lc
    if (present(lw)) series%style%linewidth = lw
    if (present(dt)) series%style%dashtype = dt
