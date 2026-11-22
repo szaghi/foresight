@@ -19,7 +19,8 @@
 # The program solver runs first: it writes the logs (run.dat, run.csv) the other examples read. Then the other programs
 # and the scripts run, in the order of the files and of the lines. foresight writes byte-identical files from the same
 # input (its golden tests check it), so the outputs depend on the sources only. A run happens in a scratch directory with
-# a minimal environment. The CI fails when the committed snippets, outputs or plots differ from the regenerated ones.
+# a minimal environment, SOURCE_DATE_EPOCH fixed (2026-01-01: `set timestamp` writes that date). The CI fails when the
+# committed snippets, outputs or plots differ from the regenerated ones.
 #
 # Usage: bash scripts/docs_examples.sh            (FC=gfortran-14 bash scripts/docs_examples.sh: another compiler)
 set -euo pipefail
@@ -75,7 +76,7 @@ run() { # run ID COMMAND, in $dir with the theme $theme, the shown output into $
   local id=$1; shift
   {
     printf '$ %s\n' "$*"
-    (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+    (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C SOURCE_DATE_EPOCH=1767225600 FORESIGHT_THEME="$theme" \
                  GFORTRAN_UNBUFFERED_PRECONNECTED=y bash -c "$*" 2>&1) || printf '[exit status %d]\n' "$?"
   } | sed -e "s|$dir|$home|g" > "$out/$id.txt"
 }
@@ -95,7 +96,7 @@ pass() { # pass DIR THEME OUT: every run and script
     if grep -qE '^ *#run ' "$src"; then
       runs "$src" '#run'
     else
-      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C SOURCE_DATE_EPOCH=1767225600 FORESIGHT_THEME="$theme" \
                    foresight "$(basename "$src")" > /dev/null) || { echo "docs_examples: $src failed" >&2; exit 1; }
     fi
   done
@@ -117,7 +118,7 @@ for src in "$ex"/anim/*.gp; do
     cp "$src" "$dir/"
     mkdir -p "$dir/frames"
     for k in $(seq 1 "$nframes"); do
-      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C FORESIGHT_THEME="$theme" \
+      (cd "$dir" && env -i HOME="$dir" PATH="$build/bin:/usr/bin:/bin" LC_ALL=C SOURCE_DATE_EPOCH=1767225600 FORESIGHT_THEME="$theme" \
                    foresight -c "$name.gp" "$k" > /dev/null) || { echo "docs_examples: $name frame $k failed" >&2; exit 1; }
     done
     target="$public/$name.svg"

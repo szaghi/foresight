@@ -62,6 +62,13 @@ that did what it says.
 | **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`noenhanced`] | axis label (`y2` on the right, `x2` on the top); `noenhanced`: as it is, not as [enhanced text](#enhanced-text) | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` [`noextend`\|`extend`] [`noreverse`] [`nowriteback`] | axis range; `*` or empty autoscales an end, `[]` keeps both; `min > max` reverses; `noextend` keeps autoscaled ends at the data | autoscale |
+| **offset**s [`graph`] `L`, [`graph`] `R`, [`graph`] `T`, [`graph`] `B` | autoscaled x and y ends moved out, see [Offsets](#offsets) | no offsets |
+| **par**ametric | [parametric](#parametric-plots) functions: items in pairs x(t), y(t) over `trange` | functions of x |
+| **clip** [`points`\|`one`\|`two`\|`radial`] | [clipping](#clipping) of segments and markers at the border (bare: `points`) | bare: `points`, `one`, `two` off |
+| **timestamp** [`"format"`] [`top`\|`bottom`] [`rotate`\|`norotate`] [`offset X,Y`] [`font F`] [`textcolor C`] | the date and time in a corner, see [Margins](#margins) | no timestamp |
+| **poi**ntsize `S` | the point size of the items without their own (`ps`), see [Point types](#point-types) | 1 |
+| **linet**ype `N` [`lc`] [`lw`] [`dt`] [`pt`] [`ps`]\|`cycle N` | redefine linetype N, see [Styles](#styles) | — |
+| **jit**ter [`overlap` [`first`] `N`] [`spread S`] [`wrap W`] [`swarm`\|`square`\|`vertical`] | overlapping points spread out, see [Point types](#point-types) | no jitter |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
 | **gr**id [[`no`][`m`]`x`\|`y`\|`x2`\|`y2`[`tics`]]... [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
@@ -695,6 +702,29 @@ In the HTML page a zoom does not resample: the samples are those of the original
 On a [polar](#polar-plots) panel a function is r of `t`, sampled over `trange` (a full turn by default) as gnuplot:
 `plot 1 + cos(t)`.
 
+## Parametric plots
+
+```gnuplot
+set parametric; set trange [0:2*pi]
+plot sin(3*t), cos(2*t) t 'Lissajous', [0:1] t, t**2
+plot [0:pi] [-2:2] [-2:2] 2*cos(t), sin(t)     # [t] [x] [y]
+unset parametric
+```
+
+`set parametric` makes a function item a pair `x(t), y(t)`, its options after the second expression, sampled at
+`set samples` values of `t` over `trange` ([-5:5] by default, as gnuplot); the first inline range is the one of `t`,
+then x and y. The automatic title is the pair as written; data items are as they are. `unset parametric` and `reset`
+go back to functions of x.
+
+## Clipping
+
+As gnuplot, a line segment with one end outside the plot area is drawn up to the border (`set clip one`, the default)
+and one with both ends outside is not drawn at all (`unset clip two`, the default: no line down the asymptotes of
+`tan(x)`); `set clip two` draws its visible part, `unset clip one` leaves out the first kind too. `set clip points`
+hides the markers that cross the border (bare `set clip` is `set clip points`, bare `unset clip` turns all three off).
+Departure: without `clip points` a marker crossing the border is cut at it, where gnuplot draws it whole. `set clip
+radial` (polar) is accepted.
+
 ## Special functions
 
 gnuplot 6.0's real special functions, with its own algorithms (ports of its C code), so their values are gnuplot's
@@ -973,6 +1003,18 @@ the ticks back on after `unset xtics`; `set xtics auto` returns to automatic tic
 As in gnuplot, an autoscaled end extends outward to a multiple of the step, unless it lies below `START` or beyond
 `END`; after `unset xtics` it does not extend at all. Log axes always extend to whole decades.
 
+### Offsets
+
+```gnuplot
+set offsets 0.5, 0.5, 1, 1                    # left, right, top, bottom: x and y units
+set offsets graph 0.05, graph 0.05, 0, 0      # fractions of the range
+set autoscale noextend; set offsets 0, 0, 2, 2; plot sin(x)    # y [-3:3]
+```
+
+`set offsets L, R, T, B` moves the autoscaled ends of x and y out, as gnuplot: in axis units, or after `graph` by
+fractions of the range; fixed ends stay, the extension to the ticks comes after, and functions are sampled on the
+range before the offsets. On a log axis only `graph` offsets apply, in decades. `unset offsets` removes them.
+
 The formats are gnuplot's: text with conversions `%[flags][width][.precision]type`, all applied to the same value,
 and `%%` for `%`; flags `-`, `+`, space, `0`, `#`.
 
@@ -1162,6 +1204,17 @@ yellow, blue, red, black), `podo` (black, orange, sky blue, green, yellow, blue,
 the first 6 colors of a categorical order of the Scientific colour maps (`actonS` ... `turkuS`, 22 orders of 100
 colors of the [named palettes](#named-palettes), the most distinct first; 8 by default; any case). The sequence
 applies to the series added after it and carries over to the next multiplot panels.
+
+```gnuplot
+set linetype 1 lc "dark-violet" lw 2 pt 7
+set for [i = 1:3] linetype 10 + i lc "black"
+set linetype cycle 4
+```
+
+`set linetype N` redefines linetype N, as gnuplot: its color among the linetype colors, its width, dash, point type and
+size the defaults of the series of that linetype (`lc`, `lw`, `dt`, `pt`, `ps`; up to linetype 128). The
+redefinitions are persistent: `reset` keeps them (`reset session` too, as the color sequence). `set linetype cycle N`
+reuses the first N colors for the higher linetypes. An item's `lt N` takes the color of linetype N.
 
 ### Color names
 
@@ -1405,7 +1458,21 @@ The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3
 8 triangle, 10 inverted triangle, 12 diamond, 14 pentagon, each odd type from 5 the filled shape before it; beyond 15
 they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` a point is foresight's round dot,
 6 px at `ps 1`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
-with the symbol of its color.
+with the symbol of its color. `set pointsize S` sets the size of the points without their own `ps` (an item's `ps`
+replaces it, as gnuplot's); `unset pointsize` and `reset` restore 1.
+
+```gnuplot
+set jitter overlap 1 spread 0.5            # a swarm: overlapping points moved aside
+set jitter square; set jitter vertical     # also onto one row; along y instead
+```
+
+`set jitter` spreads out the overlapping points of `with points`, by gnuplot's algorithm: the points sorted by x
+then y, each one closer than `overlap` (characters, 1 by default, or y units after `first`) to the first point of its
+group moves aside by (j+1)/2 `spread` point sizes of 0.7 characters, alternately left and right, back within `wrap`
+characters if given; `square` also puts it on the row of the first point, `vertical` moves it along y instead. `unset
+jitter` turns it off. Departures: foresight's characters are narrower than gnuplot's svg ones (0.6 by 1 font sizes,
+gnuplot's 0.7 by 1.5), so its swarms are a little narrower; `with impulses` is not jittered; the HTML page zooms the
+moved markers with the data.
 
 ## Margins
 
@@ -1425,6 +1492,18 @@ computed from the labels again. `set margins L, R, B, T` sets the four, in gnupl
 character is foresight's cell, 0.6 font sizes wide and 1 high (gnuplot's svg cell is about 0.7 by 1.5, so margins in
 characters are narrower than gnuplot's; at screen fractions they match). Panels of a multiplot with the same margins
 at screen line up whatever their tick labels.
+
+```gnuplot
+set timestamp                               # the date and time at the bottom left
+set timestamp "%Y-%m-%d %H:%M" top          # in a format, at the top left
+set timestamp rotate offset 1,0 tc "gray40" # reading upward on the left
+```
+
+`set timestamp` writes the date and time in the bottom left margin, as gnuplot (`top`: the top left one; `rotate`:
+reading upward along the left side), in its format (gnuplot's asctime, `"%a %b %d %H:%M:%S %Y"`, by default; the
+conversions of [time data](#time-data)), the plot area a row (or a column) smaller; `offset` moves it in characters,
+`font` is read and ignored. The time is the local wall clock, or `SOURCE_DATE_EPOCH` (seconds since 1970) when that
+variable is set, for reproducible pages: beyond gnuplot, which ignores it. `unset timestamp` removes it.
 
 ## Multiplot
 
@@ -1866,7 +1945,7 @@ Inline ranges in polar mode, `set link x2|y2`, `splot`,
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `axis` of the
 x2 and y2 ticks, `log`/`nolog`; the complex functions (`imag`, `arg`, `Ai`, `BesselJ`, ...) and those of libcerf
 (`VP`, `erfi`, `FresnelC`, ...);
-in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `set offsets`, `set parametric`, `set timestamp`; in `set format`,
+in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); string dash patterns (`dt '-.'`); in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing` and
 `commentschars`; `filledcurves r=`; `lc variable` and `lc palette z` with other styles than
 lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of

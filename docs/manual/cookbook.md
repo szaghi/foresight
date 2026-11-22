@@ -224,6 +224,16 @@ gnuplot's `%T` is the power of ten of a value, as a superscript with enhanced te
 keeps the ticks and the border side within the data. See
 [Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
 
+### Room around the data, the date of the plot
+
+<<< @/examples/snippets/cb_offsets.gp{gnuplot}
+
+<Plot name="cb_offsets" svg :width="560" :height="320" />
+
+`set offsets` moves the autoscaled ends out before the extension to the ticks; `set timestamp` writes the date (here
+the documentation's fixed SOURCE_DATE_EPOCH). See [Offsets](/guide/gnuplot-subset#offsets) and
+[Margins](/guide/gnuplot-subset#margins).
+
 ### Named ticks and extra ticks
 
 <<< @/examples/snippets/cb_tics_list.gp{gnuplot}
@@ -448,6 +458,15 @@ column is real, `int` makes it an integer for the bitwise operators). See
 
 `set style line N` defines a style once; `ls N` applies it, the options after it override it.
 
+### Linetypes of your own
+
+<<< @/examples/snippets/cb_linetype.gp{gnuplot}
+
+<Plot name="cb_linetype" svg :width="560" :height="320" />
+
+`set linetype N` redefines a linetype for every plot after it (`reset` keeps it); `set pointsize` sets the size of the
+points without their own. See [Styles](/guide/gnuplot-subset#styles).
+
 ### Point and dash types
 
 <<< @/examples/snippets/cb_point_types.gp{gnuplot}
@@ -545,6 +564,24 @@ drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 <Plot name="cb_function" svg :width="560" :height="320" />
 
 Without data, functions are sampled over [-10:10], or the `xrange`; `set samples` sets the number of points.
+
+### Parametric curves
+
+<<< @/examples/snippets/cb_parametric.gp{gnuplot}
+
+<Plot name="cb_parametric" svg :width="560" :height="360" />
+
+`set parametric` reads each function item as a pair x(t), y(t), sampled over `trange`. See
+[Parametric plots](/guide/gnuplot-subset#parametric-plots).
+
+### Asymptotes and clipping
+
+<<< @/examples/snippets/cb_clip.gp{gnuplot}
+
+<Plot name="cb_clip" svg :width="560" :height="320" />
+
+As gnuplot, a segment with both ends out of the plot is not drawn: no line down the asymptotes; `set clip two` draws
+it. See [Clipping](/guide/gnuplot-subset#clipping).
 
 ### A range for one plot
 
@@ -746,6 +783,15 @@ patterns of its svg terminal (0 empty, 1 and 2 crosshatches, 3 solid, 4 to 7 hat
 iterations): a box between open and close, whiskers to low and high, `whiskerbars 0.5` crossbars. With an empty fill a
 falling candle (close below open) is filled, as gnuplot: a converging run fills them all. `financebars` draw the same
 as a line with an open tick on the left and a close tick on the right.
+
+### A swarm of points
+
+<<< @/examples/snippets/cb_jitter.gp{gnuplot}
+
+<Plot name="cb_jitter" svg :width="560" :height="320" />
+
+`set jitter` moves the points that would overlap aside, alternately left and right: a bee swarm. The values are
+drawn with gnuplot's `invnorm(rand(0))`. See [Point types](/guide/gnuplot-subset#point-types).
 
 ### Box plots by category
 

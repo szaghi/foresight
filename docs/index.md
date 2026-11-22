@@ -186,6 +186,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_logscale" svg :width="560" :height="320" caption="a log axis with exponent labels" />
   <Plot name="cb_reversed" svg :width="560" :height="320" caption="a reversed axis" />
   <Plot name="cb_ticks" svg :width="560" :height="320" caption="tick steps and label formats" />
+  <Plot name="cb_offsets" svg :width="560" :height="320" caption="room around the data, the date of the plot" />
   <Plot name="cb_format_powers" svg :width="560" :height="320" caption="powers of ten and unit prefixes" />
   <Plot name="cb_tics_axis" svg :width="640" :height="300" caption="ticks on the axes, a range frame" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
@@ -218,6 +219,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_function_blocks" svg :width="560" :height="320" caption="function blocks" />
   <Plot name="cb_bitwise" svg :width="560" :height="320" caption="bit flags" />
   <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
+  <Plot name="cb_linetype" svg :width="560" :height="320" caption="linetypes of your own" />
   <Plot name="cb_point_types" svg :width="640" :height="300" caption="point and dash types" />
   <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />
   <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
@@ -229,6 +231,8 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
+  <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />
+  <Plot name="cb_clip" svg :width="560" :height="320" caption="asymptotes and clipping" />
   <Plot name="cb_inline_range" svg :width="560" :height="320" caption="inline ranges" />
   <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
   <Plot name="cb_plot_for" svg :width="560" :height="320" caption="one line per column" />
@@ -254,6 +258,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_hist_errorbars" svg :width="560" :height="320" caption="clustered bars with error bars" />
   <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />
   <Plot name="cb_candlesticks" svg :width="560" :height="320" caption="candlesticks and finance bars" />
+  <Plot name="cb_jitter" svg :width="560" :height="320" caption="a swarm of points (set jitter)" />
   <Plot name="cb_boxplot" svg :width="560" :height="320" caption="box plots by category" />
 </div>
 
