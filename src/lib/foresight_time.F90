@@ -17,6 +17,7 @@ public :: MON_SEC
 public :: WEEK_SEC
 public :: YEAR_SEC
 public :: civil_time
+public :: now_seconds
 public :: time_format_check
 public :: time_justify
 public :: strftime
@@ -96,6 +97,29 @@ contains
 
    t = real(days_from_civil(year, month, day), R8P) * DAY_SEC + real(hour * 3600_I8P + minute * 60_I8P, R8P) + second
    endfunction civil_time
+
+   function now_seconds() result(t)
+   !< The time now as seconds since the epoch of the local wall clock (gnuplot `set timestamp`), or the environment's
+   !< SOURCE_DATE_EPOCH when set (reproducible output, beyond gnuplot).
+   real(R8P)          :: t       !< Time [s].
+   character(len=32)  :: env     !< SOURCE_DATE_EPOCH.
+   integer            :: n       !< Its length.
+   integer            :: status  !< Its status.
+   integer            :: ios     !< Read status.
+   integer            :: v(8)    !< Date and time fields.
+   integer(I8P)       :: seconds !< Epoch seconds read.
+
+   call get_environment_variable('SOURCE_DATE_EPOCH', env, length=n, status=status)
+   if (status == 0 .and. n > 0 .and. n <= len(env)) then
+      read(env(1:n), *, iostat=ios) seconds
+      if (ios == 0) then
+         t = real(seconds, R8P)
+         return
+      endif
+   endif
+   call date_and_time(values=v)
+   t = civil_time(int(v(1), I8P), int(v(2), I8P), int(v(3), I8P), int(v(5), I8P), int(v(6), I8P), real(v(7), R8P))
+   endfunction now_seconds
 
    pure subroutine time_parts(t, year, month, day, hour, minute, second, fraction, yday, wday)
    !< The broken-down time of `t` [s since the epoch]: `yday` the day of the year from 1, `wday` the weekday from 0

@@ -5801,6 +5801,8 @@ contains
       call self%set_time_data(option, len(text) > 0)
    elseif (option == 'offset' .or. option == 'offsets') then
       call offsets_option
+   elseif (keyword(option, 'timestamp', 5_I4P)) then
+      call timestamp_option
    elseif (keyword(option, 'linetype', 5_I4P)) then
       call linetype_option
    elseif (keyword(option, 'pointsize', 3_I4P)) then
@@ -6587,6 +6589,69 @@ contains
          i = i + 1_I4P
       enddo
       endsubroutine fit_option
+
+      subroutine timestamp_option
+      !< gnuplot `set timestamp ["format"] [top|bottom] [rotate|norotate] [offset X[,Y]] [font F] [textcolor C]`: the
+      !< date and time in the bottom (top) left margin, in the format (gnuplot's asctime by default).
+      type(token_object), allocatable :: copy(:)  !< Tokens with `lc` for the color word.
+      type(line_style_object)         :: probe    !< Color read.
+      character(len=:), allocatable   :: text     !< Format.
+      real(R8P)                       :: v(2)     !< Offset.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%stamp = .true.
+         i = 2_I4P
+         do while (i <= size(tokens, kind=I4P))
+            if (tokens(i)%kind == TOKEN_STRING .or. (tokens(i)%kind == TOKEN_WORD .and. &
+                .not. is_word(tokens(i)%text, 'top bottom rotate norotate offset font textcolor tc'))) then
+               if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+                  iomsg = 'set timestamp: '//iomsg
+                  return
+               endif
+               if (len(text) > len(panel%stamp_format)) then
+                  call fail('set timestamp: the format is too long', iostat, iomsg)
+                  return
+               endif
+               panel%stamp_format = text
+            elseif (is_word(tokens(i)%text, 'top bottom')) then
+               panel%stamp_top = tokens(i)%text == 'top'
+            elseif (is_word(tokens(i)%text, 'rotate norotate')) then
+               panel%stamp_rotate = tokens(i)%text == 'rotate'
+            elseif (tokens(i)%text == 'offset') then
+               if (.not. next_real(tokens, i, v(1), iostat, iomsg, self%symbols)) then
+                  iomsg = 'set timestamp: offset: '//iomsg
+                  return
+               endif
+               v(2) = 0.0_R8P
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+                     i = i + 1_I4P
+                     if (.not. next_real(tokens, i, v(2), iostat, iomsg, self%symbols)) then
+                        iomsg = 'set timestamp: offset: '//iomsg
+                        return
+                     endif
+                  endif
+               endif
+               panel%stamp_offset = v
+            elseif (tokens(i)%text == 'font') then
+               ! one font in foresight: the name is read and ignored
+               if (i < size(tokens, kind=I4P)) i = i + 1_I4P
+            else
+               copy = tokens
+               copy(i)%text = 'lc'
+               if (.not. line_option(copy, i, probe, iostat, iomsg, panel%linecolors, self%symbols)) return
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') == 1 .or. len(probe%lc) > len(panel%stamp_color)) then
+                     call fail('set timestamp: textcolor: variable and palette colors do not apply', iostat, iomsg)
+                     return
+                  endif
+                  panel%stamp_color = probe%lc
+               endif
+            endif
+            i = i + 1_I4P
+         enddo
+      endassociate
+      endsubroutine timestamp_option
 
       subroutine offsets_option
       !< gnuplot `set offsets [graph] L, [graph] R, [graph] T, [graph] B`: the autoscaled ends of x and y moved out, in
@@ -8945,6 +9010,9 @@ contains
       return
    elseif (keyword(option, 'pointsize', 3_I4P)) then
       self%figure%panels(self%figure%current)%point_scale = 1.0_R8P
+      return
+   elseif (keyword(option, 'timestamp', 5_I4P)) then
+      self%figure%panels(self%figure%current)%stamp = .false.
       return
    elseif (option == 'offset' .or. option == 'offsets') then
       self%figure%panels(self%figure%current)%xaxis%offset = 0.0_R8P

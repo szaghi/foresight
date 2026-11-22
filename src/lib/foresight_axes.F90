@@ -53,6 +53,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
                                   label_object, shape_object
 use foresight_axis, only : axis_object
+use foresight_time, only : now_seconds, strftime
 use foresight_enhanced, only : has_markup, markup_literal
 use foresight_format, only : int_str, real_str
 use foresight_backend, only : axes_view, backend_object
@@ -184,6 +185,13 @@ type :: axes_object
    integer(I4P)                     :: lt_dt(MAX_LINETYPES) = 0_I4P    !< Dash types, 0 if not set.
    integer(I4P)                     :: lt_pt(MAX_LINETYPES) = -2_I4P   !< Point types, below -1 if not set.
    real(R8P)                        :: lt_ps(MAX_LINETYPES) = -1.0_R8P !< Point sizes, negative if not set.
+   ! gnuplot `set timestamp`: the date and time in the bottom (top) left margin, upright or reading upward
+   logical                          :: stamp = .false.        !< Timestamp drawn.
+   logical                          :: stamp_top = .false.    !< In the top margin, else the bottom one.
+   logical                          :: stamp_rotate = .false. !< Reading upward, in the left margin.
+   real(R8P)                        :: stamp_offset(2) = 0.0_R8P !< Shift [characters, y up].
+   character(len=24)                :: stamp_color = ''       !< Text color, the frame's if blank.
+   character(len=128)               :: stamp_format = '%a %b %d %H:%M:%S %Y' !< Time format (gnuplot's asctime).
    real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
    integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
                                                              !< column (gnuplot `maxrows`).
@@ -1489,6 +1497,7 @@ contains
       call backend%end_group
    endif
    call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   if (self%stamp) call draw_stamp(self, backend, x0, y0, height, font_size)
    call annotate('front', .false.)
    if (self%polar) then
       call backend%begin_group('fs-polar')
@@ -5091,6 +5100,8 @@ contains
       margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
    if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
+   ! the row of a timestamp at the top (gnuplot `set timestamp top`)
+   if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) margins(3) = margins(3) + LINE_HEIGHT * font_size
    margins(3) = margins(3) + above + self%x2_room(font_size)
    ! the rightmost x2 tick label sticks out as the x one; rotated, by its reach right of the tick
    if (self%x2_active) then
@@ -5133,6 +5144,14 @@ contains
    ! a horizontal color box at its default place: below the x labels
    if (self%colorbox .and. self%has_image(palette=.true.) .and. self%cbox%horizontal .and. .not. self%cbox%user) &
       margins(4) = margins(4) + self%colorbox_height(font_size)
+   ! a timestamp: its row at the bottom, or its column reading upward on the left (gnuplot `set timestamp`)
+   if (self%stamp) then
+      if (self%stamp_rotate) then
+         margins(1) = margins(1) + 1.75_R8P * font_size
+      elseif (.not. self%stamp_top) then
+         margins(4) = margins(4) + LINE_HEIGHT * font_size
+      endif
+   endif
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
    ! margins set: characters from the panel box, or the border at a fraction of the page (gnuplot `at screen`, from the
    ! bottom left)
@@ -5610,6 +5629,51 @@ contains
       call backend%text(px, py, label, anchor, sup=sup)
    endif
    endsubroutine tick_label
+
+   subroutine draw_stamp(self, backend, x0, y0, height, font_size)
+   !< gnuplot `set timestamp`: the date and time now (or SOURCE_DATE_EPOCH's) in the format, at the bottom left of the
+   !< panel box (`top`: its top left), or reading upward along its left side (`rotate`), moved by the offset.
+   type(axes_object),     intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: x0        !< Box left [px].
+   real(R8P),             intent(in)    :: y0        !< Box top [px].
+   real(R8P),             intent(in)    :: height    !< Box height [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   character(len=:), allocatable        :: text      !< The date and time.
+   character(len=:), allocatable        :: anchor    !< Text anchor.
+   real(R8P)                            :: x         !< Anchor abscissa [px].
+   real(R8P)                            :: y         !< Anchor ordinate [px].
+
+   text = strftime(trim(self%stamp_format), now_seconds())
+   anchor = 'start'
+   if (self%stamp_rotate) then
+      x = x0 + 1.4_R8P * font_size
+      if (self%stamp_top) then
+         y = y0 + PAD
+         anchor = 'end'
+      else
+         y = y0 + height - 1.5_R8P * font_size
+      endif
+   else
+      x = x0 + CHAR_WIDTH * font_size
+      if (self%stamp_top) then
+         y = y0 + 1.8_R8P * font_size
+      else
+         y = y0 + height - 0.4_R8P * font_size
+      endif
+   endif
+   x = x + self%stamp_offset(1) * CHAR_WIDTH * font_size
+   y = y - self%stamp_offset(2) * font_size
+   if (self%stamp_rotate .and. len_trim(self%stamp_color) > 0) then
+      call backend%text(x, y, text, anchor, rotate=-90.0_R8P, color=trim(self%stamp_color))
+   elseif (self%stamp_rotate) then
+      call backend%text(x, y, text, anchor, rotate=-90.0_R8P)
+   elseif (len_trim(self%stamp_color) > 0) then
+      call backend%text(x, y, text, anchor, color=trim(self%stamp_color))
+   else
+      call backend%text(x, y, text, anchor)
+   endif
+   endsubroutine draw_stamp
 
    pure function on_zero(tics, other) result(yes)
    !< Whether ticks set `axis` (`tics`) lie on the zero of the `other` axis: linear, with 0 in its range.

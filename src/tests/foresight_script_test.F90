@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(139)                           !< Per-check outcome.
+logical                       :: test_passed(140)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2962,6 +2962,23 @@ test_passed(139) = test_passed(139) .and. iostat == 0_I4P .and. all(interpreter%
 open(newunit=unit, file='foresight_script_test_offsets.svg')
 close(unit, status='delete')
 
+! set timestamp: the date and time now (SOURCE_DATE_EPOCH if set) in the bottom left margin, the plot area a row
+! shorter; top, rotate, offset, textcolor; unset
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 500,300; set output "foresight_script_test_stamp.svg"'//new_line('a')// &
+                          'set timestamp "stamp %Y" offset 1,0 tc "red"; plot x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(140) = iostat == 0_I4P .and. file_has('foresight_script_test_stamp.svg', 'fill="#ff0000">stamp 20') .and. &
+                   file_has('foresight_script_test_stamp.svg', 'data-area="35.8 490 16 254"')
+call interpreter%run_text('set timestamp top rotate; replot', iostat, iomsg)
+test_passed(140) = test_passed(140) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%stamp_top .and. &
+                   interpreter%figure%panels(1)%stamp_rotate .and. &
+                   file_has('foresight_script_test_stamp.svg', 'transform="rotate(-90')
+call interpreter%run_text('unset timestamp', iostat, iomsg)
+test_passed(140) = test_passed(140) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%stamp
+open(newunit=unit, file='foresight_script_test_stamp.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2970,7 +2987,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,139L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,140L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
