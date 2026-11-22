@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(117)                           !< Per-check outcome.
+logical                       :: test_passed(118)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2155,8 +2155,8 @@ call interpreter%run_text('E[0] = 1', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range') > 0
 call interpreter%run_text('array E[1] = [1, 2]', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'more elements than its size') > 0
-call interpreter%run_text('print E[1:2]', iostat, iomsg)
-test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'slices') > 0
+call interpreter%run_text('print E[1:2] + 1', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'is an array: print it') > 0
 call interpreter%run_text('print |x|', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'takes an array or a datablock') > 0
 call interpreter%run_text('print 6 | 2.5', iostat, iomsg)
@@ -2420,6 +2420,24 @@ if (test_passed(117)) then
    endblock
 endif
 
+! array slices, as gnuplot 6.0: printed, sized, indexed, assigned (a copy), clamped, empty
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_slices.txt'"//new_line('a')// &
+                          'array A = [1, 2, 3, 4, 5]; print A[2:4], |A[2:4]|, A[:2], A[4:], A[3:3], A[4:2]'// &
+                          new_line('a')//'print A[0:2], A[2:9], A[2:*], A[*:2]; i = 2; print A[i:i+1][2] + 10'// &
+                          new_line('a')//'B = A[2:3]; B[1] = 9; array C = A[4:]; print A, B, C, |C|'// &
+                          new_line('a')//'array G[3]; G[1] = "g"; print G[1:2]; set print', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(118) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_slices.txt', [character(len=40) :: '[2,3,4] 3 [1,2] [4,5] [3] []', &
+           '[1,2] [2,3,4,5] [2,3,4,5] [1,2]', '13', '[1,2,3,4,5] [9,3] [4,5] 2', '["g",]'])
+call interpreter%run_text('print A[2:3][5]', iostat, iomsg)
+test_passed(118) = test_passed(118) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range') > 0
+call interpreter%run_text('print A["a":2]', iostat, iomsg)
+test_passed(118) = test_passed(118) .and. iostat /= 0_I4P
+open(newunit=unit, file='foresight_script_test_slices.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2428,7 +2446,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,117L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,118L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

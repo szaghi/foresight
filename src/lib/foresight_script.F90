@@ -106,7 +106,8 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object, push, saved_array, saved_variable, symbols_object
+use foresight_expression, only : expression_object, list_text, push, saved_array, saved_variable, symbols_object, &
+                                 value_list
 use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
@@ -1456,6 +1457,8 @@ contains
    integer(I4P)                                 :: k         !< Counter.
    integer(I4P)                                 :: unit      !< Output unit.
    logical                                      :: is_string !< A string value.
+   type(value_list)                             :: elements  !< An array's elements.
+   logical                                      :: listed    !< An array or a slice.
 
    iostat = 0_I4P
    iomsg = ''
@@ -1486,9 +1489,12 @@ contains
          call fail('print: an expression is expected', iostat, iomsg)
          return
       endif
-      if (self%symbols%is_array(parts(k)%text)) then
-         value = self%symbols%array_text(parts(k)%text)
-      else
+      ! an array or a slice of one prints as gnuplot's [1,2,"x"]
+      call self%symbols%array_value(parts(k)%text, elements, listed, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat == 0_I4P .and. listed) then
+         value = list_text(elements)
+      elseif (iostat == 0_I4P) then
          call self%symbols%text_of(parts(k)%text, value, is_string, iostat, iomsg, &
                                    degrees=self%figure%panels(self%figure%current)%degrees)
       endif
@@ -1783,6 +1789,8 @@ contains
    integer(I4P)                  :: close   !< Closing parenthesis.
    integer(I4P)                  :: comma   !< Parameter separator.
    logical                       :: is_function !< A function definition.
+   type(value_list)              :: elements    !< An array's elements.
+   logical                       :: listed      !< An array or a slice.
 
    iostat = 0_I4P
    iomsg = ''
@@ -1844,6 +1852,14 @@ contains
       enddo
       call self%symbols%define(name, params, trim(adjustl(rhs)), iostat, iomsg)
    else
+      ! an array or a slice of one makes an array, gnuplot's B = A[2:3]
+      call self%symbols%array_value(rhs, elements, listed, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat /= 0_I4P) return
+      if (listed) then
+         call self%symbols%store_array(name, elements, iostat, iomsg)
+         return
+      endif
       call self%symbols%assign(name, trim(adjustl(rhs)), iostat, iomsg, &
                                degrees=self%figure%panels(self%figure%current)%degrees)
    endif
@@ -7811,6 +7827,18 @@ contains
       if (s(1:1) == '[') close = closing_bracket(s, 1_I4P)
    endif
    if (close /= len(s, kind=I4P)) then
+      ! another array or a slice of one, array C = A[2:3]
+      block
+         type(value_list) :: elements !< Its elements.
+         logical          :: found    !< An array or a slice.
+
+         call symbols%array_value(s, elements, found, iostat, iomsg, degrees)
+         if (iostat /= 0_I4P) return
+         if (found .and. len(size_text) == 0) then
+            call symbols%store_array(name, elements, iostat, iomsg)
+            return
+         endif
+      endblock
       call fail('array '//name//': the elements in brackets are expected, = [E1, E2, ...]', iostat, iomsg)
       return
    endif

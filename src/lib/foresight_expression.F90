@@ -46,10 +46,12 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: expression_object
+public :: list_text
 public :: name_object
 public :: saved_array
 public :: saved_variable
 public :: symbols_object
+public :: value_list
 public :: push
 
 interface push
@@ -241,6 +243,8 @@ type :: symbols_object
       procedure, pass(self) :: evaluate_constant !< Typed value of a constant expression.
       procedure, pass(self) :: array_data !< An array as the lines of a data file (index and value).
       procedure, pass(self) :: array_text !< An array as gnuplot's `print` shows it.
+      procedure, pass(self) :: array_value !< An array or a slice `A[i:j]` given as text.
+      procedure, pass(self) :: store_array !< Set an array to elements.
       procedure, pass(self) :: declare_array !< `array name[N] [= [...]]`, `array name = [...]`.
       procedure, pass(self) :: is_array !< Whether a name is an array.
       procedure, pass(self) :: datablock_names !< Names of the datablocks.
@@ -988,8 +992,12 @@ contains
       integer(I4P) :: j  !< Character counter.
       character(len=:), allocatable :: text  !< Datablock lines.
       logical                       :: found !< A datablock.
+      character(len=:), allocatable :: name  !< Array name.
+      integer(I4P)                  :: k     !< Array index.
+      logical                       :: sliced !< A slice read.
 
       at = start
+      name = token
       n = -1_I4P
       if (kind == T_NAME .and. present(symbols)) then
          if (symbols%is_array(token)) then
@@ -1013,6 +1021,17 @@ contains
          endif
       endif
       call next
+      if (present(symbols) .and. kind == T_OPERATOR .and. token == '[') then
+         k = symbols%array_index(name)
+         if (k > 0_I4P) then
+            ! the size of a slice, |A[i:j]|
+            call next
+            call element(symbols%arrays(k)%list, name, at, sizing=.true., sliced=sliced)
+            if (iostat == 0_I4P .and. .not. sliced) call syntax('|...| takes an array or a datablock', at)
+            call expect('|')
+            return
+         endif
+      endif
       call expect('|')
       if (iostat /= 0_I4P) return
       call emit(OP_CONSTANT, v=int_value(int(n, I8P)))
@@ -1054,21 +1073,49 @@ contains
       self%code(last)%v = int_value(found)
       endsubroutine array_find
 
-      recursive subroutine element(list, name, at)
+      recursive subroutine element(list, name, at, sizing, sliced)
       !< `name[i]`, an element of `list` (an array, or the lines of a datablock): the current token follows `[`. A
-      !< constant index is resolved now, another at run time.
-      type(value_list), intent(in) :: list !< Elements.
-      character(len=*), intent(in) :: name !< Array or datablock name.
-      integer(I4P),     intent(in) :: at   !< Name position.
-      integer(I4P)                 :: last !< Last instruction.
-      integer(I8P)                 :: i    !< Index.
+      !< constant index is resolved now, another at run time. `name[i:j][k]` is an element of a slice; with `sizing`
+      !< (inside `|...|`) a slice `name[i:j]` alone leaves its size as a constant.
+      type(value_list), intent(in)           :: list   !< Elements.
+      character(len=*), intent(in)           :: name   !< Array or datablock name.
+      integer(I4P),     intent(in)           :: at     !< Name position.
+      logical,          intent(in), optional :: sizing !< Inside `|...|`.
+      logical,          intent(out), optional :: sliced !< A slice was read.
+      integer(I4P)                 :: last  !< Last instruction.
+      integer(I8P)                 :: i     !< Index.
       logical                      :: found !< A numeric index.
+      integer(I4P)                 :: first !< First instruction of the index.
+      type(value_list)             :: piece !< A slice.
+      logical                      :: size_only !< Inside `|...|`.
 
-      call parse_ternary
+      size_only = .false.
+      if (present(sizing)) size_only = sizing
+      if (present(sliced)) sliced = .false.
+
+      first = size(self%code, kind=I4P) + 1_I4P
+      if (kind == T_OPERATOR .and. (token == ':' .or. token == '*')) then
+         ! a slice from the first element, A[:j] or A[*:j]
+         if (token == '*') call next
+         call emit(OP_CONSTANT, v=int_value(1_I8P))
+      else
+         call parse_ternary
+      endif
       if (iostat /= 0_I4P) return
       if (kind == T_OPERATOR) then
          if (token == ':') then
-            call syntax('array slices '//name//'[i:j] are not supported', at)
+            call slice(list, first, piece)
+            if (iostat /= 0_I4P) return
+            if (present(sliced)) sliced = .true.
+            if (accept('[')) then
+               ! an element of the slice, A[i:j][k]
+               call element(piece, name//'[i:j]', at)
+            elseif (size_only) then
+               call emit(OP_CONSTANT, v=int_value(int(size(piece%items), I8P)))
+            elseif (.not. size_only) then
+               call syntax('the slice '//name//'[i:j] is an array: print it, size it |'//name//'[i:j]| or assign it', &
+                           at)
+            endif
             return
          endif
       endif
@@ -1091,6 +1138,78 @@ contains
       call push(self%lists, list)
       call emit(OP_ELEMENT, arg=size(self%lists, kind=I4P))
       endsubroutine element
+
+      recursive subroutine slice(list, first, piece)
+      !< `[i:j]` of `list`: the instructions from `first` its first end, the current token `:`; both ends known now
+      !< (an empty or `*` end is the first or the last element), clamped to the list, as gnuplot.
+      type(value_list), intent(in)  :: list  !< Elements.
+      integer(I4P),     intent(in)  :: first !< First instruction of the first end.
+      type(value_list), intent(out) :: piece !< The slice.
+      type(value_object)            :: v     !< An end.
+      integer(I8P)                  :: ends(2) !< First and last index.
+      logical                       :: found !< A numeric end.
+      integer(I4P)                  :: second !< First instruction of the second end.
+
+      call fold(first, v)
+      if (iostat /= 0_I4P) return
+      call index_of(v, ends(1), found)
+      if (.not. found) call syntax('a slice needs numeric ends')
+      call next
+      if (kind == T_OPERATOR .and. (token == ']' .or. token == '*')) then
+         if (token == '*') call next
+         ends(2) = size(list%items, kind=I8P)
+      else
+         second = size(self%code, kind=I4P) + 1_I4P
+         call parse_ternary
+         call fold(second, v)
+         if (iostat /= 0_I4P) return
+         call index_of(v, ends(2), found)
+         if (.not. found) call syntax('a slice needs numeric ends')
+      endif
+      call expect(']')
+      if (iostat /= 0_I4P) return
+      piece = slice_list(list, ends(1), ends(2))
+      endsubroutine slice
+
+      subroutine fold(first, v)
+      !< The value of the instructions from `first` on, known now (no column, no function argument), then dropped.
+      integer(I4P),       intent(in)  :: first   !< First instruction.
+      type(value_object), intent(out) :: v       !< Value.
+      type(expression_object)         :: part    !< The instructions alone.
+      logical                         :: defined !< Defined.
+      integer(I4P)                    :: error   !< Type error.
+      integer(I4P)                    :: k       !< Instruction counter.
+
+      v = int_value(1_I8P)
+      if (iostat /= 0_I4P) return
+      if (loose) then
+         call truncate_to(first)
+         depth = depth - 1_I4P
+         return
+      endif
+      do k = first, size(self%code, kind=I4P)
+         select case (self%code(k)%op)
+         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE)
+            call syntax('the ends of a slice are known now: no column, no function argument')
+            return
+         endselect
+      enddo
+      part%code = self%code(first:)
+      do k = 1_I4P, size(part%code, kind=I4P)
+         select case (part%code(k)%op)
+         case (OP_JUMP, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
+            part%code(k)%arg = part%code(k)%arg - first + 1_I4P
+         endselect
+      enddo
+      part%depth = self%depth
+      part%degrees = self%degrees
+      if (allocated(self%lists)) part%lists = self%lists
+      allocate(part%names(0))
+      call run(part, [real(R8P) ::], 0_I4P, v, defined, error)
+      if (.not. defined) call syntax(error_text(error))
+      depth = depth - 1_I4P
+      call truncate_to(first)
+      endsubroutine fold
 
       subroutine run_system(first, at)
       !< `system(command)`, the instructions from `first` its argument: the command, known now (no column, no argument
@@ -1998,25 +2117,112 @@ contains
    character(len=*),      intent(in) :: name !< Array name.
    character(len=:), allocatable     :: text !< Text.
    integer(I4P)                      :: k    !< Array index.
-   integer(I4P)                      :: j    !< Element counter.
 
    text = ''
    k = self%array_index(name)
-   if (k == 0_I4P) return
-   text = '['
-   associate(list => self%arrays(k)%list)
-      do j = 1_I4P, size(list%items, kind=I4P)
-         if (j > 1_I4P) text = text//','
-         if (.not. list%set(j)) cycle
-         if (list%items(j)%is_string) then
-            text = text//'"'//list%items(j)%s//'"'
-         else
-            text = text//number_text(list%items(j))
-         endif
-      enddo
-   endassociate
-   text = text//']'
+   if (k > 0_I4P) text = list_text(self%arrays(k)%list)
    endfunction array_text
+
+   subroutine array_value(self, text, list, found, iostat, iomsg, degrees)
+   !< The elements of `text` if it is an array, `A`, or a slice, `A[i:j]` (gnuplot 6.0: ends known now, an empty or `*`
+   !< end the first or the last element, clamped, `[]` when empty); `found` false for anything else (`A[i]`, `A + 1`).
+   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   character(len=*),              intent(in)           :: text    !< Expression.
+   type(value_list),              intent(out)          :: list    !< Elements.
+   logical,                       intent(out)          :: found   !< An array or a slice.
+   integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
+   logical,                       intent(in), optional :: degrees !< Angles in degrees.
+   character(len=*), parameter   :: NAME_CHARS = &
+                                    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789' !< Name characters.
+   character(len=:), allocatable :: t      !< Text, trimmed.
+   character(len=:), allocatable :: inner  !< Between the brackets.
+   character(len=:), allocatable :: part   !< An end.
+   integer(I4P)                  :: e      !< End of the name.
+   integer(I4P)                  :: k      !< Array index.
+   integer(I4P)                  :: j      !< Character counter.
+   integer(I4P)                  :: nest   !< Bracket nesting.
+   integer(I4P)                  :: colon  !< The top-level colon.
+   integer(I8P)                  :: ends(2) !< First and last index.
+   real(R8P)                     :: r      !< An end.
+   character(len=1)              :: quote  !< Open quote, blank if none.
+
+   found = .false.
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(list%items(0), list%set(0))
+   t = trim(adjustl(text))
+   if (len(t) == 0) return
+   e = verify(t, NAME_CHARS, kind=I4P)
+   if (e == 0_I4P) then
+      k = self%array_index(t)
+      if (k == 0_I4P) return
+      list = self%arrays(k)%list
+      found = .true.
+      return
+   endif
+   if (t(e:e) /= '[' .or. t(len(t):len(t)) /= ']') return
+   k = self%array_index(t(1:e - 1_I4P))
+   if (k == 0_I4P) return
+   inner = t(e + 1_I4P:len(t) - 1)
+   ! the colon at the top level of the brackets, outside quotes; a bracket closing early means A[i] + B[j]
+   nest = 0_I4P
+   colon = 0_I4P
+   quote = ' '
+   do j = 1_I4P, len(inner, kind=I4P)
+      if (quote /= ' ') then
+         if (inner(j:j) == quote) quote = ' '
+         cycle
+      endif
+      select case (inner(j:j))
+      case ('"', "'")
+         quote = inner(j:j)
+      case ('(', '[')
+         nest = nest + 1_I4P
+      case (')', ']')
+         nest = nest - 1_I4P
+         if (nest < 0_I4P) return
+      case (':')
+         if (nest == 0_I4P .and. colon == 0_I4P) colon = j
+      endselect
+   enddo
+   if (colon == 0_I4P) return
+   associate(items => self%arrays(k)%list%items)
+      ends = [1_I8P, size(items, kind=I8P)]
+   endassociate
+   do j = 1_I4P, 2_I4P
+      if (j == 1_I4P) then
+         part = trim(adjustl(inner(1:colon - 1_I4P)))
+      else
+         part = trim(adjustl(inner(colon + 1_I4P:)))
+      endif
+      if (len(part) == 0 .or. part == '*') cycle
+      call self%constant(part, r, iostat, iomsg, degrees=degrees)
+      if (iostat /= 0_I4P) return
+      if (abs(r) > real(huge(1_I4P), R8P)) r = sign(real(huge(1_I4P), R8P), r)
+      ends(j) = int(r, I8P)
+   enddo
+   list = slice_list(self%arrays(k)%list, ends(1), ends(2))
+   found = .true.
+   endsubroutine array_value
+
+   pure subroutine store_array(self, name, list, iostat, iomsg)
+   !< Set the array `name` to the elements `list` (gnuplot's `B = A[2:3]`), replacing a variable or an array of the name.
+   class(symbols_object),         intent(inout) :: self   !< Symbols.
+   character(len=*),              intent(in)    :: name   !< Array name.
+   type(value_list),              intent(in)    :: list   !< Elements.
+   integer(I4P),                  intent(out)   :: iostat !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg  !< Error message.
+   type(user_array)                             :: a      !< New array.
+
+   call check_name(name, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   a%list = list
+   a%name = name
+   call self%remove(name)
+   if (.not. allocated(self%arrays)) allocate(self%arrays(0))
+   call push(self%arrays, a)
+   endsubroutine store_array
 
    pure function array_data(self, name) result(text)
    !< The array `name` as data lines (gnuplot's `plot A`): the index, then the value (a string quoted, `NaN` for an
@@ -3714,6 +3920,44 @@ contains
       i = int(n%r, I8P)
    endif
    endsubroutine index_of
+
+   pure function list_text(list) result(text)
+   !< Elements as gnuplot's `print` shows an array: `[1,2.5,"x",]` (strings quoted, an element without a value empty).
+   type(value_list), intent(in)  :: list !< Elements.
+   character(len=:), allocatable :: text !< Text.
+   integer(I4P)                  :: j    !< Element counter.
+
+   text = '['
+   do j = 1_I4P, size(list%items, kind=I4P)
+      if (j > 1_I4P) text = text//','
+      if (.not. list%set(j)) cycle
+      if (list%items(j)%is_string) then
+         text = text//'"'//list%items(j)%s//'"'
+      else
+         text = text//number_text(list%items(j))
+      endif
+   enddo
+   text = text//']'
+   endfunction list_text
+
+   pure function slice_list(list, first, last) result(piece)
+   !< Elements `first` to `last` of `list`, clamped to it (gnuplot's A[0:9]), none if `first` > `last`.
+   type(value_list), intent(in) :: list  !< Elements.
+   integer(I8P),     intent(in) :: first !< First index.
+   integer(I8P),     intent(in) :: last  !< Last index.
+   type(value_list)             :: piece !< The slice.
+   integer(I8P)                 :: a     !< First index kept.
+   integer(I8P)                 :: b     !< Last index kept.
+
+   a = max(1_I8P, first)
+   b = min(size(list%items, kind=I8P), last)
+   if (a > b) then
+      allocate(piece%items(0), piece%set(0))
+   else
+      piece%items = list%items(a:b)
+      piece%set = list%set(a:b)
+   endif
+   endfunction slice_list
 
    pure function lines_list(text) result(list)
    !< The lines of a datablock `text` (each ended by a newline) as string elements.
