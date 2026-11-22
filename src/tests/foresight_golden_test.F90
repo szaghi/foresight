@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(99)                  !< Per-figure outcome.
+logical                     :: test_passed(101)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -124,7 +124,9 @@ test_passed(96) = check('histogram_layouts.txt', figure_histogram_layouts())
 test_passed(97) = check('annotations.svg', figure_annotations())
 test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
-write(output_unit, '(A,99L2)') 'foresight golden checks:', test_passed
+test_passed(100) = check('annotation_styles.svg', figure_annotation_styles())
+test_passed(101) = check('annotation_styles.txt', figure_annotation_styles())
+write(output_unit, '(A,101L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -500,6 +502,27 @@ contains
    call fig%set_arrow(0.05_R8P, 0.1_R8P, 0.25_R8P, 0.1_R8P, system='graph', head='nohead', dt=2_I4P, front=.true.)
    call fig%plot(x, sin(x), title='sin(x)')
    endfunction figure_annotations
+
+   function figure_annotation_styles() result(fig)
+   !< Dashed object borders (`set object ... dt N`), a label and an arrow in character coordinates (cells from the
+   !< page's bottom left), a label mixing character and graph coordinates.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.1_R8P * real(i, R8P), i = 0, 100)]
+   call fig%init(width=640_I4P, height=400_I4P)
+   call fig%set_title('dashed objects, character coordinates')
+   call fig%set_object('rectangle', [1.0_R8P, 3.0_R8P], [0.2_R8P, 0.8_R8P], fc='#e0e0ff', lw=2.0_R8P, dt=2_I4P)
+   call fig%set_object('circle', [7.0_R8P], [-0.4_R8P], radius=0.8_R8P, dt=3_I4P, lw=1.5_R8P)
+   call fig%set_object('ellipse', [5.0_R8P], [0.5_R8P], width=2.0_R8P, height=0.6_R8P, angle=-20.0_R8P, fc='#e69f00', &
+                       fs='solid 0.4 border', dt=4_I4P)
+   call fig%set_label('at character 12, 6', 12.0_R8P, 6.0_R8P, system='character')
+   call fig%set_label('character 12, graph 0.55', 12.0_R8P, 0.55_R8P, system='character graph')
+   call fig%set_arrow(30.0_R8P, 6.0_R8P, 0.5_R8P, 0.1_R8P, system='character', to_system='graph', filled='filled', &
+                      lc='#9400d3')
+   call fig%plot(x, sin(x), title='sin(x)')
+   endfunction figure_annotation_styles
 
    function figure_histogram_layouts() result(fig)
    !< The histogram layouts of gnuplot 6.0: groups (`newhistogram`, the second from linetype 4, titled below the x

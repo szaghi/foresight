@@ -1005,13 +1005,14 @@ contains
    call self%add_arrow(arrow)
    endsubroutine set_arrow
 
-   subroutine set_object(self, kind, x, y, tag, system, width, height, radius, angle, arc, fc, fs, lw, layer, clip)
+   subroutine set_object(self, kind, x, y, tag, system, width, height, radius, angle, arc, fc, fs, lw, dt, layer, clip)
    !< An object, as gnuplot `set object [tag] rectangle|circle|ellipse|polygon`: a `rectangle` from the corner (`x(1)`,
    !< `y(1)`) to (`x(2)`, `y(2)`), or centred on (`x(1)`, `y(1)`) with `width` and `height`; a `circle` centred on
    !< (`x(1)`, `y(1)`) of `radius` (x axis values), its `arc` [deg] a wedge if partial; an `ellipse` centred there,
    !< `width` and `height` (axis values), `angle` [deg]; a `polygon` of the vertices (`x`, `y`). `system` the
    !< coordinate systems (as `set_label`), `fc` the fill color, `fs` the fill style words (`'solid 0.3 border'`),
-   !< `lw` the border width, `layer` `behind`, `back` (default) or `front`, `clip` false to draw beyond the plot area.
+   !< `lw` the border width, `dt` its dash type (1 solid to 5), `layer` `behind`, `back` (default) or `front`, `clip`
+   !< false to draw beyond the plot area.
    !< By default, as gnuplot, a rectangle is filled with the page color and bordered black, the others empty, black.
    class(figure_object), intent(inout)        :: self   !< Figure.
    character(len=*),     intent(in)           :: kind   !< `rectangle`, `circle`, `ellipse`, `polygon`.
@@ -1027,6 +1028,7 @@ contains
    character(len=*),     intent(in), optional :: fc     !< Fill color.
    character(len=*),     intent(in), optional :: fs     !< Fill style words.
    real(R8P),            intent(in), optional :: lw     !< Border width [px].
+   integer(I4P),         intent(in), optional :: dt     !< Border dash type, 1 (solid) to 5.
    character(len=*),     intent(in), optional :: layer  !< `behind`, `back`, `front`.
    logical,              intent(in), optional :: clip   !< Clipped by the plot area.
    type(shape_object)                         :: object !< Object.
@@ -1078,6 +1080,10 @@ contains
       if (len(bad) > 0) error stop 'foresight: set_object: unsupported fill style "'//bad//'"'
    endif
    if (present(lw)) object%style%linewidth = lw
+   if (present(dt)) then
+      if (dt < 1_I4P .or. dt > 5_I4P) error stop 'foresight: set_object: dash types 1 to 5'
+      object%style%dashtype = dt
+   endif
    if (present(layer)) then
       if (all(layer /= ['behind', 'back  ', 'front '])) &
          error stop 'foresight: set_object: layer must be behind, back or front, not "'//layer//'"'
@@ -1987,8 +1993,10 @@ contains
       p%sx = words(1:k - 1_I4P)
       p%sy = trim(adjustl(words(k + 1_I4P:)))
    endif
-   if (all(p%sx /= ['first ', 'second', 'graph ', 'screen']) .or. all(p%sy /= ['first ', 'second', 'graph ', 'screen'])) &
-      error stop 'foresight: '//caller//': coordinate systems are first, second, graph or screen, not "'//system//'"'
+   if (all(p%sx /= ['first    ', 'second   ', 'graph    ', 'screen   ', 'character']) .or. &
+       all(p%sy /= ['first    ', 'second   ', 'graph    ', 'screen   ', 'character'])) &
+      error stop 'foresight: '//caller//': coordinate systems are first, second, graph, screen or character, not "'// &
+                 system//'"'
    endfunction place
 
    function which_axes(axes, caller) result(named)

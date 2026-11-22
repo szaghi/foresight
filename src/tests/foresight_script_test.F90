@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(112)                           !< Per-check outcome.
+logical                       :: test_passed(113)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2101,8 +2101,8 @@ if (test_passed(109)) then
                          panel%objects(1)%layer == 'behind'
    endassociate
 endif
-call interpreter%run_text('set label "x" at character 1,1', iostat, iomsg)
-test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, 'character coordinates') > 0
+call interpreter%run_text('set label "x" at lunar 1,1', iostat, iomsg)
+test_passed(109) = test_passed(109) .and. iostat /= 0_I4P
 call interpreter%run_text('set arrow 2 nohead', iostat, iomsg)
 test_passed(109) = test_passed(109) .and. iostat /= 0_I4P .and. index(iomsg, 'from POS to|rto POS') > 0
 call interpreter%run_text('set object 7 polygon from 0,0 to 1,1', iostat, iomsg)
@@ -2243,6 +2243,50 @@ test_passed(112) = test_passed(112) .and. iostat /= 0_I4P .and. index(iomsg, 'pa
 open(newunit=unit, file='foresight_script_test_pause.svg')
 close(unit, status='delete')
 
+! arrow styles, the rectangle style, object dash types, character coordinates, as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_styles.svg"'//new_line('a')// &
+                          'set style arrow 1 head filled size screen 0.03,15 lc rgb "red" lw 2 dt 2'//new_line('a')// &
+                          'set style arrow 2 nohead lc rgb "blue"'//new_line('a')// &
+                          'set arrow 1 from 1,1 to 4,4 as 1 lc rgb "green"'//new_line('a')// &
+                          'set arrow 2 from 1,4 to 4,1 lw 3 arrowstyle 2'//new_line('a')// &
+                          'set style rectangle fc rgb "yellow" fs solid 0.5 border lc rgb "green" lw 2 front'// &
+                          new_line('a')//'set object 1 rect from 5,1 to 7,3'//new_line('a')// &
+                          'set object 2 circle at 8,8 size 1 dt 3'//new_line('a')// &
+                          'set label 1 "c" at character 3, graph 0.5'//new_line('a')// &
+                          'set arrow 3 from character 1,1 to character 8,4 size character 2,20'//new_line('a')// &
+                          'plot [0:10] x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(113) = iostat == 0_I4P
+if (test_passed(113)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(113) = panel%arrows(1)%color == 'green' .and. panel%arrows(1)%fill == 'filled' .and. &
+                         panel%arrows(1)%lw == 2.0_R8P .and. len(panel%arrows(1)%dashes) > 0 .and. &
+                         panel%arrows(1)%length_system == 'screen' .and. panel%arrows(2)%head == 0_I4P .and. &
+                         panel%arrows(2)%color == 'blue' .and. panel%arrows(2)%lw == 1.0_R8P .and. &
+                         panel%objects(1)%style%color == 'yellow' .and. panel%objects(1)%style%density == 0.5_R8P .and. &
+                         panel%objects(1)%style%border_color == 'green' .and. panel%objects(1)%style%linewidth == 2.0_R8P &
+                         .and. panel%objects(1)%layer == 'back' .and. panel%objects(2)%style%dashtype == 3_I4P .and. &
+                         panel%notes(1)%at%sx == 'character' .and. panel%notes(1)%at%sy == 'graph' .and. &
+                         panel%arrows(3)%from%sx == 'character' .and. panel%arrows(3)%length_system == 'character'
+   endassociate
+endif
+call interpreter%run_text('set arrow 4 from 0,0 to 1,1 as 9', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat /= 0_I4P .and. index(iomsg, 'arrow style 9 is not defined') > 0
+call interpreter%run_text('unset style arrow; set arrow 4 from 0,0 to 1,1 as 1', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat /= 0_I4P .and. index(iomsg, 'arrow style 1 is not defined') > 0
+call interpreter%run_text('set style arrow from 0,0 to 1,1', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat /= 0_I4P .and. index(iomsg, 'a style number') > 0
+call interpreter%run_text('set style rectangle from 0,0 to 1,1', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat /= 0_I4P .and. index(iomsg, 'style options only') > 0
+call interpreter%run_text('set object 5 rect from 0,0 to 1,1 dt 9', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat /= 0_I4P .and. index(iomsg, 'dash types 1 to 5') > 0
+call interpreter%run_text('reset; set object 6 rect from 0,0 to 1,1', iostat, iomsg)
+test_passed(113) = test_passed(113) .and. iostat == 0_I4P
+if (test_passed(113)) test_passed(113) = interpreter%figure%panels(1)%objects(1)%style%color == 'white'
+open(newunit=unit, file='foresight_script_test_styles.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2251,7 +2295,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,112L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,113L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

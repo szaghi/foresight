@@ -1382,12 +1382,12 @@ contains
       logical,          intent(in) :: data_space !< The data space objects, else the page annotations.
 
       if (allocated(self%objects)) call draw_shapes(self%objects, layer, data_space, backend, area, self%canvas, &
-                                                    self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+                                                    font_size, self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       if (data_space .or. layer == 'behind') return
       if (allocated(self%notes)) call draw_notes(self%notes, layer == 'front', backend, area, self%canvas, font_size, &
                                                   self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       if (allocated(self%arrows)) call draw_note_arrows(self%arrows, layer == 'front', backend, area, self%canvas, &
-                                                   self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+                                                   font_size, self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       endsubroutine annotate
       pure function circle_u(rho) result(u)
       !< Unit abscissae of the circle of radius `rho` [r units] about the pole.

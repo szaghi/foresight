@@ -3,7 +3,9 @@ module foresight_annotations
 !< foresight_annotations, labels, arrows and objects placed on a panel (gnuplot `set label`, `set arrow`, `set object`).
 !<
 !< A position is two coordinates, each in its system: `first` (the x or y axis values), `second` (the x2 or y2
-!< ones), `graph` (fractions of the plot area from its bottom left) or `screen` (fractions of the page), as gnuplot.
+!< ones), `graph` (fractions of the plot area from its bottom left), `screen` (fractions of the page) or `character`
+!< (character cells from the page's bottom left: 0.6 of the font size wide, the font size high, as the label offsets),
+!< as gnuplot.
 !<
 !< Labels and arrows are not clipped, as gnuplot's; objects are clipped by the plot area when both coordinates of
 !< every point are axis values (gnuplot's default `clip`), drawn in data space then (the interactive viewer zooms
@@ -41,8 +43,8 @@ type :: place_object
    !< A position: its coordinates and the system of each.
    real(R8P)        :: x  = 0.0_R8P   !< Abscissa.
    real(R8P)        :: y  = 0.0_R8P   !< Ordinate.
-   character(len=6) :: sx = 'first'   !< System of the abscissa: `first`, `second`, `graph`, `screen`.
-   character(len=6) :: sy = 'first'   !< System of the ordinate.
+   character(len=9) :: sx = 'first'   !< System of the abscissa: `first`, `second`, `graph`, `screen`, `character`.
+   character(len=9) :: sy = 'first'   !< System of the ordinate.
 endtype place_object
 
 type :: label_object
@@ -68,7 +70,7 @@ type :: arrow_object
    logical                       :: relative = .false.   !< `rto`: `to` is relative to `from`.
    integer(I4P)                  :: head = 1_I4P         !< Heads: 0 none, 1 at the tip, 2 at the tail, 3 both.
    real(R8P)                     :: length = 0.0_R8P     !< Head length (0: the default head).
-   character(len=6)              :: length_system = 'first' !< System of the head length (x direction).
+   character(len=9)              :: length_system = 'first' !< System of the head length (x direction).
    real(R8P)                     :: angle = 15.0_R8P     !< Head barb angle [deg].
    character(len=8)              :: fill = 'nofilled'    !< Heads `nofilled` (two barbs), `filled`, `empty`,
                                                          !< `noborder`.
@@ -98,6 +100,7 @@ type :: frame_object
    !< What a position needs: the plot area, the page, the axes.
    real(R8P)         :: area(4)   = 0.0_R8P !< Plot area: left, right, top, bottom [px].
    real(R8P)         :: canvas(2) = 0.0_R8P !< Page width and height [px].
+   real(R8P)         :: cell(2)   = 0.0_R8P !< Character cell width and height [px].
 endtype frame_object
 
 contains
@@ -168,11 +171,15 @@ contains
    endif
    if (p%sx == 'screen') then
       xy(1) = u(1) * frame%canvas(1)
+   elseif (p%sx == 'character') then
+      xy(1) = u(1) * frame%cell(1)
    else
       xy(1) = frame%area(1) + u(1) * (frame%area(2) - frame%area(1))
    endif
    if (p%sy == 'screen') then
       xy(2) = (1.0_R8P - u(2)) * frame%canvas(2)
+   elseif (p%sy == 'character') then
+      xy(2) = frame%canvas(2) - u(2) * frame%cell(2)
    else
       xy(2) = frame%area(4) - u(2) * (frame%area(4) - frame%area(3))
    endif
@@ -198,7 +205,7 @@ contains
    integer(I4P)                         :: k         !< Label counter.
    integer(I4P)                         :: pass      !< 1 page labels, 2 anchored ones.
 
-   frame = frame_object(area=area, canvas=canvas)
+   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
    do pass = 1_I4P, 2_I4P
       if (.not. any([(labels(k)%front .eqv. front .and. (anchored(labels(k)%at) .eqv. pass == 2_I4P), &
                       k = 1_I4P, size(labels, kind=I4P))])) cycle
@@ -223,7 +230,7 @@ contains
    enddo
    endsubroutine draw_labels
 
-   subroutine draw_arrows(arrows, front, backend, area, canvas, xaxis, yaxis, x2axis, y2axis)
+   subroutine draw_arrows(arrows, front, backend, area, canvas, font_size, xaxis, yaxis, x2axis, y2axis)
    !< The arrows of the layer (`front` or not): a shaft from the tail to the tip, heads as set (`nofilled` two barbs,
    !< `filled`, `empty`, `noborder` a triangle). Those tied to the data in the `fs-anchored` group.
    type(arrow_object),    intent(in)    :: arrows(:) !< Arrows.
@@ -231,6 +238,7 @@ contains
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: canvas(2) !< Page width and height [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
    type(axis_object),     intent(in)    :: xaxis     !< x axis.
    type(axis_object),     intent(in)    :: yaxis     !< y axis.
    type(axis_object),     intent(in)    :: x2axis    !< x2 axis.
@@ -243,7 +251,7 @@ contains
    integer(I4P)                         :: pass      !< 1 page arrows, 2 anchored ones.
    logical                              :: tied      !< Tied to the data.
 
-   frame = frame_object(area=area, canvas=canvas)
+   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
    do pass = 1_I4P, 2_I4P
       if (.not. any([(arrows(k)%front .eqv. front .and. ((anchored(arrows(k)%from) .or. anchored(arrows(k)%to)) &
                       .eqv. pass == 2_I4P), k = 1_I4P, size(arrows, kind=I4P))])) cycle
@@ -288,6 +296,8 @@ contains
             length = arrow%length * (area(2) - area(1))
          case ('screen')
             length = arrow%length * canvas(1)
+         case ('character')
+            length = arrow%length * frame%cell(1)
          case default
             ! x axis values: the length of that span on the x axis
             length = abs(arrow%length / (xaxis%hi - xaxis%lo)) * (area(2) - area(1))
@@ -318,7 +328,7 @@ contains
       endsubroutine head
    endsubroutine draw_arrows
 
-   subroutine draw_shapes(shapes, layer, data_space, backend, area, canvas, xaxis, yaxis, x2axis, y2axis)
+   subroutine draw_shapes(shapes, layer, data_space, backend, area, canvas, font_size, xaxis, yaxis, x2axis, y2axis)
    !< The objects of `layer` (`behind`, `back`, `front`), those in data space (`data_space`: clipped, both coordinates
    !< axis values, drawn in the unit square) or the others (on the page): rectangles, circles (an arc and its centre
    !< for a partial one), ellipses, polygons, in their fill and border.
@@ -328,6 +338,7 @@ contains
    class(backend_object), intent(inout) :: backend    !< Output device.
    real(R8P),             intent(in)    :: area(4)    !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: canvas(2)  !< Page width and height [px].
+   real(R8P),             intent(in)    :: font_size  !< Font size [px].
    type(axis_object),     intent(in)    :: xaxis      !< x axis.
    type(axis_object),     intent(in)    :: yaxis      !< y axis.
    type(axis_object),     intent(in)    :: x2axis     !< x2 axis.
@@ -337,8 +348,9 @@ contains
    real(R8P), allocatable               :: py(:)      !< Outline [px].
    integer(I4P)                         :: k          !< Object counter.
    logical                              :: drawn      !< A group opened.
+   character(len=:), allocatable        :: dashes     !< Border dash array, empty for solid.
 
-   frame = frame_object(area=area, canvas=canvas)
+   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
    drawn = .false.
    do k = 1_I4P, size(shapes, kind=I4P)
       if (trim(shapes(k)%layer) /= layer) cycle
@@ -350,10 +362,23 @@ contains
          drawn = .true.
       endif
       associate(style => shapes(k)%style)
+         ! a dashed border: the fill, then the outline closed as a dashed line
+         dashes = ''
+         if (style%dashtype /= 1_I4P .and. style%stroke_color() /= 'none') dashes = style%dasharray()
          if (data_space) then
             ! back to the unit square of the plot area
-            call backend%data_polygon((px - area(1)) / (area(2) - area(1)), (area(4) - py) / (area(4) - area(3)), &
-                                      style%fill_color(), style%density, style%stroke_color(), style%linewidth)
+            px = (px - area(1)) / (area(2) - area(1))
+            py = (area(4) - py) / (area(4) - area(3))
+            if (len(dashes) > 0) then
+               call backend%data_polygon(px, py, style%fill_color(), style%density, 'none', style%linewidth)
+               call backend%data_polyline([px, px(1)], [py, py(1)], style%stroke_color(), style%linewidth, dashes)
+            else
+               call backend%data_polygon(px, py, style%fill_color(), style%density, style%stroke_color(), &
+                                         style%linewidth)
+            endif
+         elseif (len(dashes) > 0) then
+            call backend%polygon(px, py, style%fill_color(), style%density, 'none', style%linewidth)
+            call backend%polyline([px, px(1)], [py, py(1)], style%stroke_color(), style%linewidth, dashes)
          else
             call backend%polygon(px, py, style%fill_color(), style%density, style%stroke_color(), style%linewidth)
          endif

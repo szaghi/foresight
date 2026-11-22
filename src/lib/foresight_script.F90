@@ -77,7 +77,8 @@ module foresight_script
 !<   `lc` its only style option; `set readout [on|off] [left|right|center] [top|bottom|center] [horizontal|vertical]
 !<   [opaque|noopaque] [size H]`, `unset readout`;
 !< - `set label [N] "text" at POS ...`, `set arrow [N] from POS to|rto POS ...`, `set object [N] rectangle|circle|ellipse|
-!<   polygon ...`, `unset label|arrow|object [N]` (see `annotation_option`, foresight_annotations);
+!<   polygon ...`, `unset label|arrow|object [N]`, `set style arrow N ...`, `unset style arrow`, `set style rectangle
+!<   ...` (see `annotation_option`, foresight_annotations);
 !< - time data: `set xdata|ydata|x2data|y2data [time]` (the x or y field read with `set timefmt "fmt"`, the axis
 !<   ticked and labelled in time units), `set format x "%H:%M" [timedate|numeric]`, time strings as range ends and
 !<   tick positions, `timecolumn(N[, "fmt"])`, `strftime(fmt, t)`, `strptime(fmt, s)`, `time(0)` (see foresight_time);
@@ -104,7 +105,7 @@ use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_array, saved_variable, symbols_object
-use foresight_annotations, only : arrow_object, label_object, place_object, shape_object
+use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, int_str, real_from_decimal
@@ -199,6 +200,8 @@ type :: script_object
    integer(I4P)                    :: loop_depth = 0_I4P       !< Loops (`do for`, `while`) being run.
    integer(I4P)                    :: loop_signal = 0_I4P      !< `break` (1) or `continue` (2) pending, else 0.
    logical                         :: table = .false.          !< `set table`: plots write their points as text.
+   type(arrow_object), allocatable :: arrow_styles(:)          !< `set style arrow N` definitions (their tags).
+   type(shape_object)              :: rectangle_style          !< `set style rectangle`: new rectangles' style.
    character(len=:), allocatable   :: table_file               !< Where: a file, a datablock (`$NAME`), '-' the
                                                                !< standard output.
    contains
@@ -290,6 +293,7 @@ contains
    self%loop_signal = 0_I4P
    self%table = .false.
    self%table_file = ''
+   call default_styles(self)
    endsubroutine init
 
    recursive subroutine run_file(self, file, iostat, iomsg, args)
@@ -4149,6 +4153,7 @@ contains
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
+   call default_styles(self)
    contains
       subroutine clear_keeping_datablocks
       !< Forget every symbol but the datablocks.
@@ -4397,13 +4402,16 @@ contains
    subroutine annotation_option(self, tokens, iostat, iomsg)
    !< `set label [N] ["text"] [at POS] [left|center|right] [norotate|rotate [by A]] [front|back] [tc COLOR] [point
    !< [pt N] [ps S] [lc C]|nopoint] [offset X,Y] [font F] [noenhanced]`,
-   !< `set arrow [N] [from POS to|rto POS] [nohead|head|backhead|heads] [size [SYS] L,A[,B]] [filled|empty|nofilled|
-   !< noborder] [front|back] [lc C] [lt N] [lw W] [dt N]`,
+   !< `set arrow [N] [from POS to|rto POS] [as|arrowstyle S] [nohead|head|backhead|heads] [size [SYS] L,A[,B]]
+   !< [filled|empty|nofilled|noborder] [front|back] [lc C] [lt N] [lw W] [dt N]` (`as S` the look of `set style arrow
+   !< S`, the options after it applied on it), `set style arrow S [default|ARROW OPTIONS]`,
    !< `set object [N] rectangle [from POS to|rto POS|center|at POS size W,H] | circle [at|center POS] size R [arc
    !< [A:B]] | ellipse [at|center POS] size W,H [angle A] | polygon from POS to POS ... [front|back|behind] [clip|noclip]
-   !< [fc|fillcolor COLOR] [fs FILL] [lw W] [dt N] [default]`; `set label|arrow|object N ...` without a position changes
-   !< tag N (gnuplot's). A position is `[SYS] x, [SYS] y`, SYS among first (default), second, graph, screen, the
-   !< system of x also y's unless given; each coordinate an expression, or a time string on a time axis.
+   !< [fc|fillcolor COLOR] [fs FILL] [lw W] [dt N] [default]` (a new rectangle in the style of `set style rectangle
+   !< [fc C] [fs FILL] [lw W] [dt N]`, its layer not taken, as gnuplot 6.0); `set label|arrow|object N ...` without a
+   !< position changes tag N (gnuplot's). A position is `[SYS] x, [SYS] y`, SYS among first (default), second, graph,
+   !< screen, character, the system of x also y's unless given; each coordinate an expression, or a time string on a
+   !< time axis.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Option tokens (the option first).
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
@@ -4430,6 +4438,10 @@ contains
       option = 'label'
    elseif (keyword(tokens(1)%text, 'arrow', 3_I4P)) then
       option = 'arrow'
+   elseif (tokens(1)%text == 'arrowstyle') then
+      option = 'style arrow'
+   elseif (tokens(1)%text == 'rectanglestyle') then
+      option = 'style rectangle'
    else
       option = 'object'
    endif
@@ -4472,6 +4484,12 @@ contains
                endif
             enddo
          endif
+      case ('style arrow')
+         ! a style is redefined from gnuplot's default arrow
+         continue
+      case ('style rectangle')
+         object = self%rectangle_style
+         found = .true.
       case default
          if (allocated(panel%objects) .and. tag > 0_I4P) then
             do k = 1_I4P, size(panel%objects, kind=I4P)
@@ -4491,6 +4509,10 @@ contains
       object%kind = 'rectangle'
       call default_object(object)
    endif
+   if (option == 'style arrow' .and. tag == 0_I4P) then
+      call fail('set style arrow: a style number is expected', iostat, iomsg)
+      return
+   endif
    label%tag = tag
    arrow%tag = tag
    object%tag = tag
@@ -4499,13 +4521,24 @@ contains
    select case (option)
    case ('label')
       call label_words
-   case ('arrow')
+   case ('arrow', 'style arrow')
       call arrow_words
    case default
       call object_words
    endselect
    if (iostat /= 0_I4P) return
    select case (option)
+   case ('style arrow')
+      call store_arrow_style
+   case ('style rectangle')
+      ! the style words only: no position, the layer not taken (as gnuplot 6.0)
+      if (allocated(object%points) .or. trim(object%kind) /= 'rectangle') then
+         call fail('set style rectangle: style options only (fc, fs, lw, dt, default)', iostat, iomsg)
+         return
+      endif
+      object%layer = 'back'
+      object%tag = 0_I4P
+      self%rectangle_style = object
    case ('label')
       call self%figure%add_label(label)
    case ('arrow')
@@ -4522,6 +4555,50 @@ contains
       call self%figure%add_object(object)
    endselect
    contains
+      subroutine store_arrow_style
+      !< Keep `arrow` as the arrow style of its tag (replacing it): its look only.
+      integer(I4P) :: j !< Style counter.
+
+      if (option == 'style arrow' .and. placed) then
+         call fail('set style arrow: style options only, no position', iostat, iomsg)
+         return
+      endif
+      if (.not. allocated(self%arrow_styles)) allocate(self%arrow_styles(0))
+      do j = 1_I4P, size(self%arrow_styles, kind=I4P)
+         if (self%arrow_styles(j)%tag == arrow%tag) then
+            self%arrow_styles(j) = arrow
+            return
+         endif
+      enddo
+      call push(self%arrow_styles, arrow)
+      endsubroutine store_arrow_style
+
+      subroutine apply_arrow_style
+      !< `as N` or `arrowstyle N` (token `i`): the look of style N, the options after it applied on it.
+      integer(I4P)       :: n     !< Style number.
+      integer(I4P)       :: j     !< Style counter.
+      type(arrow_object) :: style !< The style.
+
+      if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+      do j = 1_I4P, size(self%arrow_styles, kind=I4P)
+         if (self%arrow_styles(j)%tag == n) then
+            style = self%arrow_styles(j)
+            arrow%head = style%head
+            arrow%length = style%length
+            arrow%length_system = style%length_system
+            arrow%angle = style%angle
+            arrow%fill = style%fill
+            arrow%front = style%front
+            arrow%color = style%color
+            arrow%lw = style%lw
+            arrow%dashes = style%dashes
+            return
+         endif
+      enddo
+      call fail('set arrow: arrow style '//int_str(int(n, I8P))//' is not defined (set style arrow N ...)', iostat, &
+                iomsg)
+      endsubroutine apply_arrow_style
+
       pure function is_annotation_word(w) result(yes)
       !< Whether `w` is an option word of the annotations (not a tag).
       character(len=*), intent(in) :: w   !< Word.
@@ -4530,7 +4607,7 @@ contains
       yes = is_word(w, 'at from to rto left center centre right rotate norotate front back behind tc textcolor '// &
                     'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
                     'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
-                    'backhead heads filled empty nofilled noborder clip noclip default units boxed')
+                    'backhead heads filled empty nofilled noborder clip noclip default units boxed as arrowstyle')
       endfunction is_annotation_word
 
       subroutine position(q)
@@ -4556,7 +4633,7 @@ contains
       subroutine coordinate(value, system)
       !< One coordinate `[SYS] value` after token `i`, `i` left on its value.
       real(R8P),        intent(out)   :: value  !< Value.
-      character(len=6), intent(inout) :: system !< Its system (kept if not given).
+      character(len=9), intent(inout) :: system !< Its system (kept if not given).
       character(len=:), allocatable   :: written !< Value as written.
 
       value = 0.0_R8P
@@ -4566,11 +4643,6 @@ contains
          return
       endif
       if (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'first second graph screen character')) then
-         if (tokens(i)%text == 'character') then
-            call fail('set '//option//': character coordinates are not supported (first, second, graph, screen)', &
-                      iostat, iomsg)
-            return
-         endif
          system = tokens(i)%text
          i = i + 1_I4P
          if (i > size(tokens, kind=I4P)) then
@@ -4587,8 +4659,8 @@ contains
       subroutine pair(values, system)
       !< Two numbers `[SYS] a, b` after token `i` (an object size, an arrow head size), `i` left on the last.
       real(R8P),        intent(out)   :: values(2) !< Numbers.
-      character(len=6), intent(inout) :: system    !< System of the first.
-      character(len=6)                :: second    !< System of the second (ignored).
+      character(len=9), intent(inout) :: system    !< System of the first.
+      character(len=9)                :: second    !< System of the second (ignored).
 
       call coordinate(values(1), system)
       if (iostat /= 0_I4P) return
@@ -4646,7 +4718,7 @@ contains
             label%point = .false.
          elseif (word == 'offset') then
             block
-               character(len=6) :: system !< Offset system (characters only).
+               character(len=9) :: system !< Offset system (characters only).
 
                system = 'first'
                call pair(label%offset, system)
@@ -4709,8 +4781,20 @@ contains
             endif
          elseif (word == 'fixed') then
             continue
+         elseif ((word == 'as' .or. word == 'arrowstyle') .and. option == 'arrow') then
+            call apply_arrow_style
+         elseif (word == 'default' .and. option == 'style arrow') then
+            ! by components: nvfortran 26.9 stops on constructors of types holding deferred-length characters
+            block
+               type(arrow_object) :: fresh !< gnuplot's default arrow.
+
+               fresh%tag = arrow%tag
+               fresh%color = ''
+               fresh%dashes = ''
+               arrow = fresh
+            endblock
          else
-            call fail('set arrow: unsupported option "'//word//'"', iostat, iomsg)
+            call fail('set '//option//': unsupported option "'//word//'"', iostat, iomsg)
             return
          endif
          if (iostat /= 0_I4P) return
@@ -4721,7 +4805,7 @@ contains
       subroutine object_words
       !< The words of `set object`.
       real(R8P)                     :: size2(2) !< Width and height.
-      character(len=6)              :: system   !< System of a size.
+      character(len=9)              :: system   !< System of a size.
       character(len=:), allocatable :: bad      !< Unknown fill word.
       character(len=:), allocatable :: fill     !< Fill words.
       type(place_object)            :: corner   !< A corner.
@@ -4825,10 +4909,30 @@ contains
          elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
             fill = ''
             do while (i < size(tokens, kind=I4P))
+               ! the fill words, `border lc COLOR` included
                if (is_annotation_word(tokens(i + 1_I4P)%text) .and. .not. is_word(tokens(i + 1_I4P)%text, &
-                   'empty noborder')) exit
+                   'empty noborder') .and. .not. (is_word(tokens(i + 1_I4P)%text, 'lc linecolor rgb rgbcolor') .and. &
+                   (tokens(i)%text == 'border' .or. is_word(tokens(i)%text, 'lc linecolor')))) exit
                i = i + 1_I4P
-               fill = fill//' '//tokens(i)%text
+               if (tokens(i)%kind == TOKEN_STRING) then
+                  fill = fill//' "'//tokens(i)%text//'"'
+               else
+                  fill = fill//' '//tokens(i)%text
+               endif
+               ! the color after lc [rgb]
+               if (is_word(tokens(i)%text, 'lc linecolor rgb rgbcolor') .and. i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_STRING .or. .not. is_annotation_word(tokens(i + 1_I4P)%text)) &
+                     then
+                     if (.not. is_word(tokens(i + 1_I4P)%text, 'rgb rgbcolor')) then
+                        i = i + 1_I4P
+                        if (tokens(i)%kind == TOKEN_STRING) then
+                           fill = fill//' "'//tokens(i)%text//'"'
+                        else
+                           fill = fill//' '//tokens(i)%text
+                        endif
+                     endif
+                  endif
+               endif
             enddo
             call fill_style(fill, object%style, bad)
             if (len(bad) > 0) then
@@ -4838,12 +4942,16 @@ contains
          elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
             if (.not. next_real(tokens, i, object%style%linewidth, iostat, iomsg, self%symbols)) return
          elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
-            ! the border of an object is solid: the dash type is read and ignored
             if (.not. next_integer(tokens, i, k, iostat, iomsg, self%symbols)) return
+            if (k < 1_I4P .or. k > 5_I4P) then
+               call fail('set '//option//': dash types 1 to 5', iostat, iomsg)
+               return
+            endif
+            object%style%dashtype = k
          elseif (word == 'default') then
             call default_object_style(object)
          else
-            call fail('set object: unsupported option "'//word//'"', iostat, iomsg)
+            call fail('set '//option//': unsupported option "'//word//'"', iostat, iomsg)
             return
          endif
          if (iostat /= 0_I4P) return
@@ -4911,7 +5019,10 @@ contains
 
       shape%style = style_object()
       shape%style%border = .true.
-      if (trim(shape%kind) == 'rectangle') then
+      if (trim(shape%kind) == 'rectangle' .and. option /= 'style rectangle') then
+         ! `set style rectangle`
+         shape%style = self%rectangle_style%style
+      elseif (trim(shape%kind) == 'rectangle') then
          shape%style%fill = FILL_SOLID
          shape%style%density = 1.0_R8P
          shape%style%color = 'white'
@@ -6793,7 +6904,18 @@ contains
       integer(I4P) :: s !< Counter.
 
       if (size(tokens) >= 2) then
-         if (keyword(tokens(2)%text, 'data', 1_I4P)) then
+         if (keyword(tokens(2)%text, 'arrow', 3_I4P) .or. keyword(tokens(2)%text, 'rectangle', 4_I4P)) then
+            ! the words of set arrow or set object: the style kept, not drawn
+            block
+               type(token_object), allocatable :: words(:) !< `arrowstyle|rectanglestyle` and the words.
+
+               words = tokens(2:)
+               words(1)%text = merge('arrowstyle    ', 'rectanglestyle', keyword(tokens(2)%text, 'arrow', 3_I4P))
+               words(1)%text = trim(words(1)%text)
+               call self%annotation_option(words, iostat, iomsg)
+            endblock
+            return
+         elseif (keyword(tokens(2)%text, 'data', 1_I4P)) then
             if (size(tokens) /= 3) then
                call fail('set style data: one style is expected', iostat, iomsg)
                return
@@ -7015,12 +7137,17 @@ contains
       return
    elseif (keyword(option, 'style', 2_I4P)) then
       ok = .false.
-      if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P)
+      if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P) .or. keyword(tokens(2)%text, 'arrow', 3_I4P)
       if (.not. ok) then
-         call fail('unset style: only "function" is supported', iostat, iomsg)
+         call fail('unset style: only "function" and "arrow" are supported', iostat, iomsg)
          return
       endif
-      self%function_style = 'lines'
+      if (keyword(tokens(2)%text, 'arrow', 3_I4P)) then
+         if (allocated(self%arrow_styles)) deallocate(self%arrow_styles)
+         allocate(self%arrow_styles(0))
+      else
+         self%function_style = 'lines'
+      endif
       return
    elseif (keyword(option, 'datafile', 5_I4P)) then
       ! all the datafile settings, or one of them
@@ -7506,6 +7633,21 @@ contains
    enddo
    call symbols%declare_array(name, size_text, items, iostat, iomsg, degrees)
    endsubroutine array_command
+
+   subroutine default_styles(self)
+   !< gnuplot's default arrow styles (none) and rectangle style (filled with the page color, bordered black).
+   type(script_object), intent(inout) :: self  !< Interpreter.
+   type(shape_object)                 :: fresh !< Default object (not a constructor: see `apply_arrow_style`).
+
+   if (allocated(self%arrow_styles)) deallocate(self%arrow_styles)
+   allocate(self%arrow_styles(0))
+   self%rectangle_style = fresh
+   self%rectangle_style%style%border = .true.
+   self%rectangle_style%style%fill = FILL_SOLID
+   self%rectangle_style%style%density = 1.0_R8P
+   self%rectangle_style%style%color = 'white'
+   self%rectangle_style%style%border_color = 'black'
+   endsubroutine default_styles
 
    subroutine expand_backquotes(statement, expanded, iostat, iomsg)
    !< gnuplot's command substitution: each `` `command` `` outside single quotes replaced by the command's standard
