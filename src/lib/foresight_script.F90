@@ -5803,6 +5803,9 @@ contains
       call offsets_option
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       call timestamp_option
+   elseif (keyword(option, 'clip', 2_I4P)) then
+      ! gnuplot `set clip [points|one|two|radial]`: bare, the points
+      if (.not. clip_words(self%figure%panels(self%figure%current), tokens, .true., iostat, iomsg)) return
    elseif (keyword(option, 'linetype', 5_I4P)) then
       call linetype_option
    elseif (keyword(option, 'pointsize', 3_I4P)) then
@@ -9014,6 +9017,10 @@ contains
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       self%figure%panels(self%figure%current)%stamp = .false.
       return
+   elseif (keyword(option, 'clip', 2_I4P)) then
+      ! gnuplot `unset clip [points|one|two|radial]`: bare, points, one and two
+      if (.not. clip_words(self%figure%panels(self%figure%current), tokens, .false., iostat, iomsg)) return
+      return
    elseif (option == 'offset' .or. option == 'offsets') then
       self%figure%panels(self%figure%current)%xaxis%offset = 0.0_R8P
       self%figure%panels(self%figure%current)%yaxis%offset = 0.0_R8P
@@ -10122,6 +10129,46 @@ contains
    endif
    if (.not. ok) call fail('an integer was expected, found "'//word//'"', iostat, iomsg)
    endfunction next_integer
+
+   function clip_words(panel, tokens, on, iostat, iomsg) result(ok)
+   !< gnuplot `set clip` (`on`) and `unset clip` words after the option: `points`, `one`, `two`, `radial` (polar:
+   !< accepted, foresight clips at the plot area); bare `set clip` is `points`, bare `unset clip` all of them.
+   type(axes_object),             intent(inout) :: panel     !< Panel.
+   type(token_object),            intent(in)    :: tokens(:) !< Option tokens.
+   logical,                       intent(in)    :: on        !< `set`, else `unset`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Success.
+   integer(I4P)                                 :: k         !< Token counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   ok = .true.
+   if (size(tokens) == 1) then
+      panel%clip_points = on
+      if (.not. on) then
+         panel%clip_one = .false.
+         panel%clip_two = .false.
+      endif
+      return
+   endif
+   do k = 2_I4P, size(tokens, kind=I4P)
+      select case (tokens(k)%text)
+      case ('points')
+         panel%clip_points = on
+      case ('one')
+         panel%clip_one = on
+      case ('two')
+         panel%clip_two = on
+      case ('radial')
+         continue
+      case default
+         call fail('clip: points, one, two or radial expected, not "'//tokens(k)%text//'"', iostat, iomsg)
+         ok = .false.
+         return
+      endselect
+   enddo
+   endfunction clip_words
 
    function next_real(tokens, i, value, iostat, iomsg, symbols) result(ok)
    !< Advance `i` to the next token, which must be a number.

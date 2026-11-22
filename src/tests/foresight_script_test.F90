@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(140)                           !< Per-check outcome.
+logical                       :: test_passed(141)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2979,6 +2979,32 @@ test_passed(140) = test_passed(140) .and. iostat == 0_I4P .and. .not. interprete
 open(newunit=unit, file='foresight_script_test_stamp.svg')
 close(unit, status='delete')
 
+! set clip: gnuplot's defaults (clip one, no clip two: a segment with both ends out of the plot area is not drawn, as
+! the asymptotes of tan(x)); set clip two draws it; set clip points hides the markers crossing the border; unset clip
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 400,300; set output "foresight_script_test_clip.svg"'//new_line('a')// &
+                          'set yrange [-3:3]; set samples 50; plot [-4:4] tan(x) notitle', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+block
+   integer(I4P) :: lines(2) !< Series polylines without and with clip two.
+
+   lines(1) = series_polylines('foresight_script_test_clip.svg')
+   call interpreter%run_text('set clip two; replot', iostat, iomsg)
+   lines(2) = series_polylines('foresight_script_test_clip.svg')
+   test_passed(141) = iostat == 0_I4P .and. lines(1) == 3_I4P .and. lines(2) == 1_I4P .and. &
+                      interpreter%figure%panels(1)%clip_two
+endblock
+call interpreter%run_text('set clip; unset clip one', iostat, iomsg)
+test_passed(141) = test_passed(141) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%clip_points .and. &
+                   .not. interpreter%figure%panels(1)%clip_one
+call interpreter%run_text('unset clip', iostat, iomsg)
+test_passed(141) = test_passed(141) .and. iostat == 0_I4P .and. .not. (interpreter%figure%panels(1)%clip_points .or. &
+                   interpreter%figure%panels(1)%clip_two)
+call interpreter%run_text('set clip sometimes', iostat, iomsg)
+test_passed(141) = test_passed(141) .and. iostat /= 0_I4P
+open(newunit=unit, file='foresight_script_test_clip.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2987,7 +3013,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,140L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,141L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -2995,6 +3021,29 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function series_polylines(file) result(count)
+   !< The polylines of the first series of the SVG `file` (inside its `fs-series` group).
+   character(len=*), intent(in)  :: file  !< SVG file.
+   integer(I4P)                  :: count !< Polylines.
+   character(len=4096)           :: line  !< A line.
+   logical                       :: in    !< Inside the series group.
+   integer                       :: unit  !< Unit.
+   integer                       :: ios   !< Read status.
+
+   count = 0_I4P
+   in = .false.
+   open(newunit=unit, file=file, action='read', status='old', iostat=ios)
+   if (ios /= 0) return
+   do
+      read(unit, '(A)', iostat=ios) line
+      if (ios /= 0) exit
+      if (index(line, 'class="fs-series"') > 0) in = .true.
+      if (in .and. index(line, '<polyline') > 0) count = count + 1_I4P
+      if (in .and. index(line, '</g>') > 0) exit
+   enddo
+   close(unit)
+   endfunction series_polylines
+
    pure function same(values, expected) result(equal)
    !< Whether `values` equal the integers `expected` to rounding, -1 standing for NaN.
    real(R8P),    intent(in) :: values(:)   !< Values.

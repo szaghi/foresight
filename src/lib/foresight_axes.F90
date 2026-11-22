@@ -192,6 +192,12 @@ type :: axes_object
    real(R8P)                        :: stamp_offset(2) = 0.0_R8P !< Shift [characters, y up].
    character(len=24)                :: stamp_color = ''       !< Text color, the frame's if blank.
    character(len=128)               :: stamp_format = '%a %b %d %H:%M:%S %Y' !< Time format (gnuplot's asctime).
+   ! gnuplot `set clip`: the line segments with one or both ends out of the plot area drawn (their visible part), the
+   ! points whose marker crosses the border hidden; gnuplot's defaults (`clip one`, no `clip two`), except that a
+   ! marker crossing the border is cut there (gnuplot draws it whole)
+   logical                          :: clip_one = .true.    !< Segments with one end out drawn (`clip one`).
+   logical                          :: clip_two = .false.   !< Segments with both ends out drawn (`clip two`).
+   logical                          :: clip_points = .false. !< Points whose marker crosses the border hidden.
    real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
    integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
                                                              !< column (gnuplot `maxrows`).
@@ -2945,6 +2951,13 @@ contains
          marked = valid
          if (series%pointinterval > 1_I4P) marked = valid .and. [(mod(i1 - 1_I4P, series%pointinterval) == 0_I4P, &
                                                                   i1 = 1_I4P, n)]
+         ! gnuplot `set clip points`: no marker crossing the border
+         if (self%clip_points) then
+            do i1 = 1_I4P, n
+               if (.not. marked(i1)) cycle
+               marked(i1) = inside_marker(u(i1), v(i1), 0.5_R8P * series%style%point_diameter())
+            enddo
+         endif
          if (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
             i1 = 1_I4P
@@ -3011,9 +3024,62 @@ contains
             pu = u(i1:i2)
             pv = v(i1:i2)
          endselect
-         call backend%data_polyline(pu, pv, series%style%color, series%style%linewidth, series%style%dasharray())
+         if (self%clip_one .and. self%clip_two) then
+            call backend%data_polyline(pu, pv, series%style%color, series%style%linewidth, series%style%dasharray())
+         else
+            call clipped(pu, pv)
+         endif
       endassociate
       endsubroutine draw_run
+
+      pure function inside_marker(pu, pv, radius) result(yes)
+      !< Whether a marker of `radius` [px] at (`pu`, `pv`) [unit] lies within the plot area.
+      real(R8P), intent(in) :: pu     !< Abscissa [unit].
+      real(R8P), intent(in) :: pv     !< Ordinate [unit].
+      real(R8P), intent(in) :: radius !< Marker radius [px].
+      logical               :: yes    !< Within.
+      real(R8P)             :: ru     !< Radius [unit of the width].
+      real(R8P)             :: rv     !< Radius [unit of the height].
+
+      ru = radius / max(area(2) - area(1), 1.0_R8P)
+      rv = radius / max(area(4) - area(3), 1.0_R8P)
+      yes = pu >= ru .and. pu <= 1.0_R8P - ru .and. pv >= rv .and. pv <= 1.0_R8P - rv
+      endfunction inside_marker
+
+      subroutine clipped(pu, pv)
+      !< The polyline (`pu`, `pv`) [unit] without its segments that gnuplot's `set clip` leaves out: one end out of
+      !< the plot area (`unset clip one`), both out (`unset clip two`); the rest drawn piece by piece.
+      real(R8P), intent(in) :: pu(:) !< Vertex abscissae [unit].
+      real(R8P), intent(in) :: pv(:) !< Vertex ordinates [unit].
+      logical, allocatable  :: in(:) !< Vertex in the plot area.
+      logical               :: keep  !< Segment drawn.
+      integer(I4P)          :: k     !< Segment counter.
+      integer(I4P)          :: first !< First vertex of the piece.
+
+      allocate(in(size(pu)))
+      do k = 1_I4P, size(pu, kind=I4P)
+         in(k) = pu(k) >= -1.0e-9_R8P .and. pu(k) <= 1.0_R8P + 1.0e-9_R8P .and. pv(k) >= -1.0e-9_R8P .and. &
+                 pv(k) <= 1.0_R8P + 1.0e-9_R8P
+      enddo
+      first = 1_I4P
+      do k = 1_I4P, size(pu, kind=I4P) - 1_I4P
+         if (in(k) .and. in(k + 1_I4P)) then
+            keep = .true.
+         elseif (in(k) .or. in(k + 1_I4P)) then
+            keep = self%clip_one
+         else
+            keep = self%clip_two
+         endif
+         if (.not. keep) then
+            if (k > first) call backend%data_polyline(pu(first:k), pv(first:k), self%series(s)%style%color, &
+                                                      self%series(s)%style%linewidth, self%series(s)%style%dasharray())
+            first = k + 1_I4P
+         endif
+      enddo
+      if (size(pu, kind=I4P) > first) &
+         call backend%data_polyline(pu(first:), pv(first:), self%series(s)%style%color, &
+                                    self%series(s)%style%linewidth, self%series(s)%style%dasharray())
+      endsubroutine clipped
 
       subroutine draw_arrows
       !< `vectors` from each placeable point to its tip; `arrows` of a length (> 0: x units, kept whatever the angle;
