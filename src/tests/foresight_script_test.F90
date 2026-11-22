@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(134)                           !< Per-check outcome.
+logical                       :: test_passed(135)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2866,6 +2866,15 @@ test_passed(134) = test_passed(134) .and. iostat == 0_I4P .and. interpreter%auto
 call interpreter%run_text('set key auto column', iostat, iomsg)
 test_passed(134) = test_passed(134) .and. iostat == 0_I4P .and. interpreter%autotitle == 'columnhead'
 
+! a coordinate of set label, arrow and object written with blanks, as gnuplot: `at 1, 3 + 2`
+call interpreter%init(scratch)
+call interpreter%run_text("set label 1 'a' at 1 + 1, 3 + 2 center; set arrow 1 from 0, 0 to 1, 2 * 3 nohead", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(135) = iostat == 0_I4P
+if (test_passed(135)) test_passed(135) = interpreter%figure%panels(1)%notes(1)%at%x == 2.0_R8P .and. &
+                                         interpreter%figure%panels(1)%notes(1)%at%y == 5.0_R8P .and. &
+                                         interpreter%figure%panels(1)%notes(1)%justify == 'center'
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2874,7 +2883,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,134L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,135L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

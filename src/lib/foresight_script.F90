@@ -5234,7 +5234,13 @@ contains
          endif
       endif
       written = tokens(i)%text
-      if (tokens(i)%kind == TOKEN_STRING) written = '"'//written//'"'
+      if (tokens(i)%kind == TOKEN_STRING) then
+         written = '"'//written//'"'
+      elseif (expression_end(tokens, i) > i) then
+         ! an expression written with blanks, `1, 3 + 2`: its tokens
+         written = expression_source(tokens(i:expression_end(tokens, i)))
+         i = expression_end(tokens, i)
+      endif
       call self%range_value(written, value, iostat, iomsg)
       if (iostat /= 0_I4P) iomsg = 'set '//option//': '//iomsg
       endsubroutine coordinate
