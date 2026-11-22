@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(120)                           !< Per-check outcome.
+logical                       :: test_passed(121)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2156,8 +2156,8 @@ if (test_passed(110)) then
 endif
 call interpreter%run_text('array E[2]; print E[3]', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range: E[3]') > 0
-call interpreter%run_text('print E[1]', iostat, iomsg)
-test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'E[1] has no value') > 0
+call interpreter%run_text('print E[1] + 1', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'uninitialized user variable: E[1] + 1') > 0
 call interpreter%run_text('E[0] = 1', iostat, iomsg)
 test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range') > 0
 call interpreter%run_text('array E[1] = [1, 2]', iostat, iomsg)
@@ -2507,6 +2507,53 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_wtable.txt')
 close(unit, status='delete')
 
+! function blocks, as gnuplot 6.0: ARGC and ARGV, local, return (from a loop too), no return the undefined value,
+! global side effects, recursion, a block in a plotted function, print of a block, return at the top level
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_blocks2.txt'"//new_line('a')// &
+                          'function $sum << EOF'//new_line('a')//'  s = 0'//new_line('a')// &
+                          '  do for [i = 1:ARGC] { s = s + ARGV[i] }'//new_line('a')//'  return s'//new_line('a')// &
+                          'EOF'//new_line('a')//'print $sum(1, 2, 3), $sum(), s'//new_line('a')// &
+                          'function $max << EOF'//new_line('a')//'  local m = ARGV[1]'//new_line('a')// &
+                          '  if (ARGV[2] > m) { m = ARGV[2] }'//new_line('a')//'  return m'//new_line('a')//'EOF'// &
+                          new_line('a')//'m = 9; print $max(3, 7), $max(9, 2), m'//new_line('a')// &
+                          'function $fact << EOF'//new_line('a')//'  if (ARGV[1] <= 1) { return 1 }'//new_line('a')// &
+                          '  return ARGV[1] * $fact(ARGV[1] - 1)'//new_line('a')//'EOF'//new_line('a')// &
+                          'function $first << EOF'//new_line('a')// &
+                          '  do for [i = 1:5] { if (i == 3) { return sprintf("<%d>", i) } }'//new_line('a')// &
+                          'EOF'//new_line('a')//'function $none << EOF'//new_line('a')//'  y = 5'//new_line('a')// &
+                          'EOF'//new_line('a')//'print $fact(5), $first(), $none(1), y, ARGC'//new_line('a')// &
+                          'function $r << EOF'//new_line('a')//'  return ARGC > 0 ? ARGV[1] + $r() : 100'// &
+                          new_line('a')//'EOF'//new_line('a')//'print $r(5)'//new_line('a')//'print $max'//new_line('a')// &
+                          'f(x) = $max(x, 0); set xrange [-2:2]; set samples 5; set table $T; plot f(x); unset table'// &
+                          new_line('a')//'set print'//new_line('a')//'return'//new_line('a')//'z = 1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(121) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_blocks2.txt', [character(len=40) :: '6 0 0', '7 9 9', &
+           '120 <3> <undefined> 5 0', '105', 'function $max( )', '  local m = ARGV[1]', &
+           '  if (ARGV[2] > m) { m = ARGV[2] }', '  return m', ''])
+if (test_passed(121)) then
+   block
+      character(len=:), allocatable :: text  !< $T.
+      logical                       :: found !< Defined.
+      real(R8P)                     :: z     !< Set after the return, if run.
+
+      call interpreter%symbols%value_of('z', z, found)
+      test_passed(121) = .not. found
+
+      call interpreter%symbols%string_of('$T', text, found)
+      test_passed(121) = test_passed(121) .and. found
+      if (found) test_passed(121) = test_passed(121) .and. index(text, ' 2  2  i') > 0 .and. index(text, '-1  0  i') > 0
+   endblock
+endif
+call interpreter%run_text('print $nosuch(1)', iostat, iomsg)
+test_passed(121) = test_passed(121) .and. iostat /= 0_I4P .and. index(iomsg, 'Not a function block: $nosuch') > 0
+call interpreter%run_text('function $bad << EOF'//new_line('a')//'  nosuchcommand'//new_line('a')//'EOF'// &
+                          new_line('a')//'print $bad()', iostat, iomsg)
+test_passed(121) = test_passed(121) .and. iostat /= 0_I4P .and. index(iomsg, '$bad:1: unsupported command') > 0
+open(newunit=unit, file='foresight_script_test_blocks2.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2515,7 +2562,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,120L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,121L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

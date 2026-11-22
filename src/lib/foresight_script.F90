@@ -106,8 +106,8 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object, list_text, push, saved_array, saved_variable, symbols_object, &
-                                 value_list
+use foresight_expression, only : block_hook, expression_object, list_text, push, saved_array, saved_variable, &
+                                 symbols_object, value_list, value_object
 use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
@@ -169,6 +169,12 @@ type :: loop_level
    type(saved_variable)            :: saved          !< The variable before the loop.
 endtype loop_level
 
+type :: local_state
+   !< A variable made `local` in a function block: its state before, restored when the block ends.
+   type(saved_variable) :: v !< The variable of the name.
+   type(saved_array)    :: a !< The array of the name.
+endtype local_state
+
 type :: script_object
    !< Script interpreter state.
    type(figure_object)             :: figure                   !< Figure being built.
@@ -209,6 +215,10 @@ type :: script_object
    character(len=:), allocatable   :: table_file               !< Where: a file, a datablock (`$NAME`), '-' the
                                                                !< standard output.
    character(len=1)                :: table_sep = achar(9)     !< `set table separator`, of `plot with table`.
+   integer(I4P)                    :: block_depth = 0_I4P      !< Function blocks running.
+   logical                         :: returned = .false.       !< `return EXPR` gave the running block a value.
+   type(value_object)              :: return_value             !< That value.
+   type(local_state), allocatable  :: locals(:)                !< Variables made `local` by the running blocks.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -252,6 +262,8 @@ type, extends(fit_model) :: script_model
    contains
       procedure, pass(self) :: values => script_model_values !< Values at the abscissae.
 endtype script_model
+
+class(script_object), pointer :: active => null() !< The interpreter running (function blocks run in it).
 
 contains
    subroutine init(self, output, theme)
@@ -299,8 +311,86 @@ contains
    self%table = .false.
    self%table_file = ''
    self%table_sep = achar(9)
+   self%block_depth = 0_I4P
+   self%returned = .false.
+   if (allocated(self%locals)) deallocate(self%locals)
+   allocate(self%locals(0))
+   block_hook => run_block
    call default_styles(self)
    endsubroutine init
+
+   recursive subroutine run_block(name, args, result, ok, message)
+   !< gnuplot 6.0 function block `name` called on `args` (foresight_expression's `block_hook`): its body run by the
+   !< active interpreter with ARGC and ARGV the arguments (restored after), the variables made `local` restored when it
+   !< ends; the value of its `return`, `ok` false if none (undefined) or if it failed (`message`).
+   character(len=*),              intent(in)  :: name       !< Block name.
+   type(value_object),            intent(in)  :: args(:)    !< Arguments.
+   type(value_object),            intent(out) :: result     !< Returned value.
+   logical,                       intent(out) :: ok         !< A value returned.
+   character(len=:), allocatable, intent(out) :: message    !< Error, empty if none.
+   type(saved_variable)                       :: saved_argc !< ARGC before.
+   type(saved_array)                          :: saved_argv !< ARGV before.
+   type(value_list)                           :: argv       !< The arguments, as ARGV.
+   type(local_state), allocatable             :: kept(:)    !< Locals of the callers.
+   character(len=:), allocatable              :: body       !< Block body.
+   character(len=:), allocatable              :: msg        !< Error of the body.
+   integer(I4P)                               :: first      !< Locals before the call.
+   integer(I4P)                               :: k          !< Counter.
+   integer(I4P)                               :: iostat     !< Status.
+   logical                                    :: found      !< Block found.
+   logical                                    :: returned   !< A value returned.
+
+   ok = .false.
+   message = ''
+   if (.not. associated(active)) then
+      message = 'function blocks run in a script'
+      return
+   endif
+   if (active%block_depth >= 250_I4P) then
+      message = 'recursion depth limit exceeded'
+      return
+   endif
+   call active%symbols%string_of(name, body, found)
+   if (.not. found .or. .not. active%symbols%is_block(name)) then
+      message = 'Not a function block: '//name
+      return
+   endif
+   call active%symbols%save_variable('ARGC', saved_argc)
+   call active%symbols%save_array('ARGV', saved_argv)
+   call active%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
+   allocate(argv%items(size(args)), argv%set(size(args)))
+   do k = 1_I4P, size(args, kind=I4P)
+      argv%items(k) = args(k)
+   enddo
+   argv%set = .true.
+   call active%symbols%store_array('ARGV', argv, iostat, msg)
+   first = size(active%locals, kind=I4P)
+   active%block_depth = active%block_depth + 1_I4P
+   active%returned = .false.
+   call active%run_text(body, iostat, msg, source=name)
+   if (active%loop_signal == 3_I4P) active%loop_signal = 0_I4P
+   returned = active%returned
+   if (returned) result = active%return_value
+   active%returned = .false.
+   do k = size(active%locals, kind=I4P), first + 1_I4P, -1_I4P
+      call active%symbols%restore_array(active%locals(k)%a)
+      call active%symbols%restore(active%locals(k)%v)
+   enddo
+   if (size(active%locals, kind=I4P) > first) then
+      ! through a temporary (nvfortran 26.9: see foresight_tokens push)
+      allocate(kept(first))
+      if (first > 0_I4P) kept(:) = active%locals(1:first)
+      call move_alloc(kept, active%locals)
+   endif
+   call active%symbols%restore(saved_argc)
+   call active%symbols%restore_array(saved_argv)
+   active%block_depth = active%block_depth - 1_I4P
+   if (iostat /= 0_I4P) then
+      message = msg
+      return
+   endif
+   ok = returned
+   endsubroutine run_block
 
    recursive subroutine run_file(self, file, iostat, iomsg, args)
    !< Run the script `file`. With `args` (as gnuplot's `gnuplot -c FILE ARG1 ...`), ARG0 is the file name, ARG1 to
@@ -349,12 +439,15 @@ contains
       return
    endif
    call self%run_text(text, iostat, iomsg, source=file)
+   ! a return ends this file only
+   if (self%loop_signal == 3_I4P .and. self%block_depth == 0_I4P) self%loop_signal = 0_I4P
    endsubroutine run_file
 
    recursive subroutine run_text(self, text, iostat, iomsg, source)
    !< Run script `text`: lines ending in `\` continue on the next one; the first error stops the run. A line
-   !< `$NAME << WORD` starts a datablock: the lines after it, as they are, up to a line starting with WORD.
-   class(script_object),          intent(inout)        :: self       !< Interpreter.
+   !< `$NAME << WORD` starts a datablock: the lines after it, as they are, up to a line starting with WORD; a line
+   !< `function $NAME << WORD` a function block (gnuplot 6.0). A `return` ends the run.
+   class(script_object),          intent(inout), target :: self      !< Interpreter.
    character(len=*),              intent(in)           :: text       !< Script text.
    integer(I4P),                  intent(out)          :: iostat     !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg      !< Error message, `source:line: ...`.
@@ -373,7 +466,10 @@ contains
    character(len=:), allocatable                       :: here_end   !< Its terminator.
    character(len=:), allocatable                       :: here_text  !< Its lines.
    integer(I4P)                                        :: here_line  !< Its first line.
+   logical                                             :: here_function !< A function block, not a datablock.
 
+   active => self
+   here_function = .false.
    iostat = 0_I4P
    iomsg = ''
    here_name = ''
@@ -405,7 +501,11 @@ contains
             if (line(len(line):len(line)) == achar(13)) line = line(1:len(line) - 1)
          endif
          if (index(line, here_end) == 1) then
-            call self%symbols%set_string(here_name, here_text)
+            if (here_function) then
+               call self%symbols%define_block(here_name, here_text)
+            else
+               call self%symbols%set_string(here_name, here_text)
+            endif
             here_name = ''
          else
             here_text = here_text//line//new_line('a')
@@ -425,6 +525,20 @@ contains
             cycle
          endif
       endif
+      here_function = .false.
+      if (len(block) == 0 .and. leading_word(line) == 'function') then
+         ! function $NAME << WORD
+         here_function = heredoc(trim(adjustl(line(index(line, 'function') + 8:))), here_name, here_end)
+         if (.not. here_function) then
+            call fail('function: function $NAME << WORD expected', iostat, iomsg)
+            iomsg = name//':'//int_str(int(first_line, I8P))//': '//iomsg
+            return
+         endif
+         here_text = ''
+         here_line = first_line
+         line = ''
+         cycle
+      endif
       if (len(block) == 0 .and. heredoc(line, here_name, here_end)) then
          here_text = ''
          here_line = first_line
@@ -434,7 +548,13 @@ contains
       call take(line)
       if (iostat /= 0_I4P) return
       line = ''
+      if (self%loop_signal == 3_I4P) exit
    enddo
+   if (self%loop_signal == 3_I4P) then
+      ! return: the rest is not run; outside a function block, script text run directly ends here
+      if (self%block_depth == 0_I4P .and. .not. present(source)) self%loop_signal = 0_I4P
+      return
+   endif
    ! a continuation on the last line
    if (len(line) > 0) call take(line)
    if (iostat /= 0_I4P) return
@@ -480,13 +600,14 @@ contains
             iomsg = name//':'//int_str(int(at, I8P))//': '//iomsg
             return
          endif
+         if (self%loop_signal == 3_I4P) return
       enddo
       endsubroutine process
    endsubroutine run_text
 
    recursive subroutine execute(self, statement, iostat, iomsg)
    !< Execute one statement.
-   class(script_object),          intent(inout) :: self      !< Interpreter.
+   class(script_object),          intent(inout), target :: self !< Interpreter.
    character(len=*),              intent(in)    :: statement !< Statement.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
@@ -496,6 +617,8 @@ contains
    character(len=:), allocatable                :: text      !< String argument.
    integer(I4P)                                 :: i         !< Token counter.
 
+   ! function blocks called by the expressions run in this interpreter
+   active => self
    ! blocks, flow control (their bodies are expanded statement by statement, when they run)
    command = leading_word(statement)
    if (.not. is_word(command, 'do while if else')) then
@@ -524,6 +647,55 @@ contains
       return
    case ('else')
       call fail('else without if (else follows "}" on the same line)', iostat, iomsg)
+      return
+   case ('return')
+      ! gnuplot 6.0: the value of the running function block; outside one, the end of the script file being read
+      iostat = 0_I4P
+      iomsg = ''
+      text = trim(adjustl(statement))
+      text = trim(adjustl(text(7:)))
+      self%returned = .false.
+      if (len(text) > 0) then
+         block
+            type(value_object) :: v !< Returned value.
+
+            call self%symbols%evaluate_constant(text, v, iostat, iomsg, &
+                                                degrees=self%figure%panels(self%figure%current)%degrees, undefined=.true.)
+            if (iostat /= 0_I4P) then
+               iomsg = 'return: '//iomsg
+               return
+            endif
+            self%return_value = v
+            self%returned = .true.
+         endblock
+      endif
+      self%loop_signal = 3_I4P
+      return
+   case ('local')
+      ! gnuplot 6.0: in a function block the variable (or array) is restored when the block ends; outside one, a plain
+      ! assignment
+      text = trim(adjustl(statement))
+      text = trim(adjustl(text(6:)))
+      if (self%block_depth > 0_I4P) then
+         block
+            character(len=:), allocatable :: local_name !< Variable name.
+            type(local_state)             :: state      !< Its state before.
+            integer(I4P)                  :: e          !< End of the name.
+
+            local_name = text
+            if (leading_word(local_name) == 'array') local_name = trim(adjustl(local_name(6:)))
+            e = verify(local_name, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789', kind=I4P)
+            if (e > 0_I4P) local_name = local_name(1:e - 1_I4P)
+            if (len(local_name) == 0) then
+               call fail('local: a variable name is expected', iostat, iomsg)
+               return
+            endif
+            call self%symbols%save_variable(local_name, state%v)
+            call self%symbols%save_array(local_name, state%a)
+            call push_local(self%locals, state)
+         endblock
+      endif
+      call self%execute(text, iostat, iomsg)
       return
    case ('break', 'continue')
       iostat = 0_I4P
@@ -774,7 +946,7 @@ contains
    self%loop_depth = self%loop_depth + 1_I4P
    call self%run_loops(specs, 1_I4P, body, iostat, iomsg)
    self%loop_depth = self%loop_depth - 1_I4P
-   self%loop_signal = 0_I4P
+   if (self%loop_signal /= 3_I4P) self%loop_signal = 0_I4P
    endsubroutine do_block
 
    recursive subroutine run_loops(self, specs, level, body, iostat, iomsg)
@@ -800,7 +972,7 @@ contains
    do k = 1_I8P, size(list, kind=I8P)
       call set_loop_variable(self, name, list(k)%text, is_words)
       call step
-      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal == 3_I4P) exit
    enddo
    call self%symbols%restore(saved)
    contains
@@ -950,11 +1122,11 @@ contains
       endif
       if (.not. holds) exit
       call self%run_body(body, iostat, iomsg)
-      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P) exit
+      if (iostat /= 0_I4P .or. self%loop_signal == 1_I4P .or. self%loop_signal == 3_I4P) exit
       self%loop_signal = 0_I4P
    enddo
    self%loop_depth = self%loop_depth - 1_I4P
-   self%loop_signal = 0_I4P
+   if (self%loop_signal /= 3_I4P) self%loop_signal = 0_I4P
    endsubroutine while_block
 
    recursive subroutine if_block(self, statement, iostat, iomsg)
@@ -1477,6 +1649,8 @@ contains
             call fail('print: no datablock '//trim(adjustl(text)), iostat, iomsg)
             return
          endif
+         ! a function block: its head, then its lines, as gnuplot
+         if (self%symbols%is_block(trim(adjustl(text)))) line = 'function '//trim(adjustl(text))//'( )'//new_line('a')//line
       endblock
       if (len(line) > 0) then
          if (line(len(line):len(line)) == new_line('a')) line = line(1:len(line) - 1)
@@ -7698,6 +7872,21 @@ contains
    if (yes) yes = word(1:1) == '$' .and. scan(word(2:2), LETTERS) > 0
    if (yes) yes = verify(word(2:), LETTERS//'0123456789') == 0
    endfunction is_datablock
+
+   pure subroutine push_local(list, item)
+   !< Append `item` to `list`, through a temporary (nvfortran 26.9: see foresight_tokens push).
+   type(local_state), allocatable, intent(inout) :: list(:)  !< List.
+   type(local_state),              intent(in)    :: item     !< New item.
+   type(local_state), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                  :: n        !< Items before the push.
+
+   if (.not. allocated(list)) allocate(list(0))
+   n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_local
 
    function heredoc(line, name, terminator) result(yes)
    !< Whether `line` starts a datablock, `$NAME << WORD` (blanks optional around `<<`, a comment after WORD), giving

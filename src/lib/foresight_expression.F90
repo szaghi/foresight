@@ -52,6 +52,9 @@ public :: saved_array
 public :: saved_variable
 public :: symbols_object
 public :: value_list
+public :: value_object
+public :: block_hook
+public :: block_call_interface
 public :: push
 
 interface push
@@ -113,6 +116,7 @@ integer(I4P), parameter :: OP_BXOR         = 43_I4P !< `^`.
 integer(I4P), parameter :: OP_SHL          = 44_I4P !< `<<`.
 integer(I4P), parameter :: OP_SHR          = 45_I4P !< `>>`, logical (gnuplot's on x86).
 integer(I4P), parameter :: OP_BNOT         = 46_I4P !< `~`, unary.
+integer(I4P), parameter :: OP_BLOCK        = 47_I4P !< Call the function block `blocks(arg)` on its `v%i` arguments.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -146,6 +150,9 @@ integer(I4P), parameter :: E_INDEX      = 7_I4P !< An array index out of range.
 integer(I4P), parameter :: E_UNSET      = 8_I4P !< An array element never set.
 integer(I4P), parameter :: E_DEPTH      = 9_I4P !< Too many nested calls of recursive user functions.
 integer(I4P), parameter :: E_BITWISE    = 10_I4P !< A real or a string given to a bitwise operator.
+integer(I4P), parameter :: E_BLOCK      = 11_I4P !< A function block failed: its message in `block_message`.
+integer(I4P), parameter :: E_UNDEF      = 12_I4P !< The value is gnuplot's undefined one (`print` shows `<undefined>`).
+integer(I4P), parameter :: E_UNINIT     = 13_I4P !< An operation on gnuplot's undefined value.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
@@ -167,6 +174,9 @@ type :: value_object
    integer(I8P)                  :: i         = 0_I8P   !< Integer value.
    logical                       :: is_int    = .false. !< Integer.
    logical                       :: is_string = .false. !< String, in `s`.
+   ! before `s`: nvfortran 26.9 fort1 crashes on a component after the deferred-length one here
+   logical                       :: is_undef = .false.  !< gnuplot's undefined value: an array element without one, a
+                                                        !< function block's missing return.
    character(len=:), allocatable :: s                   !< String value.
 endtype value_object
 
@@ -194,6 +204,7 @@ type :: user_variable
    !< User variable, gnuplot `a = 2`.
    character(len=:), allocatable :: name !< Name.
    type(value_object)            :: v    !< Value, integer or real.
+   logical                       :: block = .false. !< A function block, `function $f << EOF` (its body the value).
 endtype user_variable
 
 type :: user_function
@@ -256,6 +267,8 @@ type :: symbols_object
       procedure, pass(self) :: value_of !< Value of a variable.
       procedure, pass(self) :: set_value !< Set a variable to a number.
       procedure, pass(self) :: set_string !< Set a variable to a string.
+      procedure, pass(self) :: define_block !< Define a function block.
+      procedure, pass(self) :: is_block   !< Whether a name is a function block.
       procedure, pass(self) :: save_variable !< Keep a variable's state.
       procedure, pass(self) :: save_array !< Keep an array's state.
       procedure, pass(self) :: restore_array !< Restore a kept array's state.
@@ -282,6 +295,7 @@ type :: expression_object
    character(len=:),         allocatable :: timefmt       !< Time format of a time field (`set xdata time`): a plain
                                                           !< column then reads a time with it.
    type(value_list),         allocatable :: lists(:)      !< Arrays and datablocks indexed at run time (`A[$1]`).
+   type(name_object),        allocatable :: blocks(:)     !< Function blocks called (OP_BLOCK).
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
       procedure, pass(self) :: set_time     !< Read a plain column as a time.
@@ -299,6 +313,22 @@ type :: expression_object
       procedure, pass(self) :: set_name     !< Plain column of a header name.
       procedure, pass(self) :: value_at     !< Value of a function at its variable value.
 endtype expression_object
+
+abstract interface
+   recursive subroutine block_call_interface(name, args, result, ok, message)
+   !< Run the function block `name` on `args` (gnuplot's ARGC, ARGV): its returned value; `ok` false if it failed
+   !< (`message`, empty when it returned no value).
+   import :: value_object
+   character(len=*),              intent(in)  :: name    !< Block name.
+   type(value_object),            intent(in)  :: args(:) !< Arguments.
+   type(value_object),            intent(out) :: result  !< Returned value.
+   logical,                       intent(out) :: ok      !< A value returned.
+   character(len=:), allocatable, intent(out) :: message !< Error, empty if none.
+   endsubroutine block_call_interface
+endinterface
+
+procedure(block_call_interface), pointer :: block_hook => null() !< The interpreter's runner of function blocks.
+character(len=:), allocatable :: block_message                   !< Message of the last function block failure.
 
 contains
    subroutine compile(self, text, iostat, iomsg, variable, degrees, symbols)
@@ -322,6 +352,9 @@ contains
    subroutine compile_expression(self, text, iostat, iomsg, variable, degrees, symbols, frame_name, parameters, lenient)
    !< `compile`, and the syntax check of a user function body: `parameters` of the function `frame_name` read the stack
    !< slots from 1, and with `lenient` unknown names and functions are accepted (resolved when called).
+   !<
+   !< Not recursive (nvfortran 26.9 -O2 then loops on a syntax error): the code it runs while compiling (`system`, the
+   !< ends of a slice) calls no function block, so it is never entered again.
    class(expression_object),      intent(inout)        :: self       !< Expression.
    character(len=*),              intent(in)           :: text       !< Source text.
    integer(I4P),                  intent(out)          :: iostat     !< 0 on success.
@@ -358,6 +391,8 @@ contains
    if (allocated(self%names)) deallocate(self%names)
    allocate(self%names(0))
    if (allocated(self%lists)) deallocate(self%lists)
+   if (allocated(self%blocks)) deallocate(self%blocks)
+   allocate(self%blocks(0))
    self%depth = 0_I4P
    self%recursive = .false.
    self%degrees = .false.
@@ -423,6 +458,26 @@ contains
       self%depth = main + MAX_CALLS * self%depth
       self%recursive = .true.
       endsubroutine compile_procedures
+
+      subroutine block_call(name, nargs, at)
+      !< `$f(args)`, a call of the function block `name` on the `nargs` arguments on the stack, run when evaluated.
+      character(len=*), intent(in) :: name  !< Block name.
+      integer(I4P),     intent(in) :: nargs !< Arguments.
+      integer(I4P),     intent(in) :: at    !< Position.
+      type(name_object)            :: item  !< Block name.
+      logical                      :: known !< A function block.
+
+      known = .false.
+      if (present(symbols)) known = symbols%is_block(name)
+      if (.not. known .and. .not. loose) then
+         call syntax('Not a function block: '//name, at)
+         return
+      endif
+      ! by components: nvfortran 26.9 miscompiles constructors of types with allocatable components
+      item%text = name
+      call push_name(self%blocks, item)
+      call emit(OP_BLOCK, arg=size(self%blocks, kind=I4P), v=int_value(int(nargs, I8P)))
+      endsubroutine block_call
 
       subroutine recurse_call(name, nargs, at)
       !< A call of the user function `name` being compiled (a recursion): OP_RECURSE to its body, compiled after the
@@ -686,7 +741,7 @@ contains
          depth = depth - 1_I4P
       case (OP_SUBSTRING)
          depth = depth - 2_I4P
-      case (OP_CALL, OP_RECURSE)
+      case (OP_CALL, OP_RECURSE, OP_BLOCK)
          depth = depth - (int(instruction%v%i, I4P) - 1_I4P)
       endselect
       self%depth = max(self%depth, depth)
@@ -897,6 +952,10 @@ contains
          endif
          call expect(')')
          if (iostat /= 0_I4P) return
+         if (name(1:1) == '$') then
+            call block_call(name, nargs, at)
+            return
+         endif
          f = findloc(FUNCTIONS, name, dim=1)
          if (any(STRING_FUNCTIONS == name)) then
             f = findloc(STRING_FUNCTIONS, name, dim=1)
@@ -1127,14 +1186,14 @@ contains
          call index_of(self%code(last)%v, i, found)
          if (.not. found) then
             call syntax('array index of '//name//' is not a number', at)
-         elseif (i < 1_I8P .or. i > size(list%items, kind=I8P)) then
-            call syntax('array index out of range: '//name//'['//trim(adjustl(int_text(int(i, I4P))))//']', at)
-         elseif (.not. list%set(i)) then
-            call syntax('array element '//name//'['//trim(adjustl(int_text(int(i, I4P))))//'] has no value', at)
-         else
-            self%code(last)%v = list%items(i)
+            return
+         elseif (i >= 1_I8P .and. i <= size(list%items, kind=I8P)) then
+            if (list%set(i)) then
+               self%code(last)%v = list%items(i)
+               return
+            endif
          endif
-         return
+         ! out of range or without a value: known when (if) it is evaluated, as gnuplot (1 ? 5 : A[9] is 5)
       endif
       call push(self%lists, list)
       call emit(OP_ELEMENT, arg=size(self%lists, kind=I4P))
@@ -1190,8 +1249,9 @@ contains
       endif
       do k = first, size(self%code, kind=I4P)
          select case (self%code(k)%op)
-         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE)
-            call syntax('the ends of a slice are known now: no column, no function argument')
+         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE, &
+               OP_BLOCK)
+            call syntax('the ends of a slice are known now: no column, no function argument, no function block')
             return
          endselect
       enddo
@@ -1235,8 +1295,10 @@ contains
       endif
       do k = first, size(self%code, kind=I4P)
          select case (self%code(k)%op)
-         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE)
-            call syntax('system takes a command known now: no column, no function argument, no recursion', at)
+         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE, &
+               OP_BLOCK)
+            call syntax('system takes a command known now: no column, no function argument, no recursion, no '// &
+                        'function block', at)
             return
          endselect
       enddo
@@ -1535,10 +1597,10 @@ contains
       endfunction int_text
    endsubroutine compile_expression
 
-   subroutine assign(self, name, text, iostat, iomsg, degrees)
+   recursive subroutine assign(self, name, text, iostat, iomsg, degrees)
    !< gnuplot `name = text`: the value of the expression now, integer, real or string, kept as a constant (a
    !< redefinition replaces it). Columns, undefined values (`1/0`), type errors and bad names are errors.
-   class(symbols_object),         intent(inout)        :: self    !< Symbols.
+   class(symbols_object),         intent(inout), target :: self    !< Symbols.
    character(len=*),              intent(in)           :: name    !< Variable name.
    character(len=*),              intent(in)           :: text    !< Expression.
    integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
@@ -1560,6 +1622,8 @@ contains
       return
    endif
    call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
+   ! gnuplot's undefined value assigns nothing
+   if (.not. defined .and. error == E_UNDEF) return
    if (.not. defined) then
       iostat = 1_I4P
       if (error /= E_NONE) then
@@ -1626,10 +1690,10 @@ contains
    endif
    endsubroutine define
 
-   subroutine constant(self, text, v, iostat, iomsg, degrees)
+   recursive subroutine constant(self, text, v, iostat, iomsg, degrees)
    !< Value of the constant expression `text` (numbers, user variables and functions, `pi`), as a range end
    !< `[0:2*pi]`; columns and undefined values are errors.
-   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   class(symbols_object),         intent(in), target   :: self    !< Symbols.
    character(len=*),              intent(in)           :: text    !< Expression.
    real(R8P),                     intent(out)          :: v       !< Value.
    integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
@@ -1662,10 +1726,10 @@ contains
    v = real_of(value)
    endsubroutine constant
 
-   subroutine text_of(self, text, value, is_string, iostat, iomsg, degrees)
+   recursive subroutine text_of(self, text, value, is_string, iostat, iomsg, degrees)
    !< Value of the constant expression `text` as text: a string as it is (`is_string`), a number as gnuplot's `print`
    !< shows it (`3`, `2.5`, `100.0`, `1e+20`). Columns, undefined values and type errors are errors.
-   class(symbols_object),         intent(in)           :: self      !< Symbols.
+   class(symbols_object),         intent(in), target   :: self      !< Symbols.
    character(len=*),              intent(in)           :: text      !< Expression.
    character(len=:), allocatable, intent(out)          :: value     !< Value as text.
    logical,                       intent(out)          :: is_string !< A string.
@@ -1687,6 +1751,11 @@ contains
       return
    endif
    call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
+   if (.not. defined .and. error == E_UNDEF) then
+      ! gnuplot's print of the undefined value
+      value = '<undefined>'
+      return
+   endif
    if (.not. defined) then
       iostat = 1_I4P
       if (error /= E_NONE) then
@@ -1848,12 +1917,35 @@ contains
    k = self%variable_index(name)
    if (k > 0_I4P) then
       self%variables(k)%v = v
+      self%variables(k)%block = .false.
    else
       item%name = name
       item%v = v
       call push(self%variables, item)
    endif
    endsubroutine store
+
+   pure subroutine define_block(self, name, body)
+   !< gnuplot 6.0 `function $name << EOF ... EOF`: the function block `name`, its body the lines `body`.
+   class(symbols_object), intent(inout) :: self !< Symbols.
+   character(len=*),      intent(in)    :: name !< Block name, `$f`.
+   character(len=*),      intent(in)    :: body !< Its lines, each ended by a new line.
+
+   call self%store(name, string_value(body))
+   self%variables(self%variable_index(name))%block = .true.
+   endsubroutine define_block
+
+   pure function is_block(self, name) result(yes)
+   !< Whether `name` is a function block.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   logical                           :: yes  !< A function block.
+   integer(I4P)                      :: k    !< Variable index.
+
+   yes = .false.
+   k = self%variable_index(name)
+   if (k > 0_I4P) yes = self%variables(k)%block
+   endfunction is_block
 
    pure subroutine value_of(self, name, v, found, is_int)
    !< Value of the variable `name` (real), `found` false (and NaN) if none; `is_int` whether an integer.
@@ -1888,11 +1980,11 @@ contains
    if (present(is_int)) is_int = self%variables(k)%v%is_int
    endsubroutine value_of
 
-   subroutine declare_array(self, name, size_text, items, iostat, iomsg, degrees)
+   recursive subroutine declare_array(self, name, size_text, items, iostat, iomsg, degrees)
    !< gnuplot `array name[size_text]`, its elements without a value, or with the values of the constant expressions
    !< `items` (`array A[3] = [1, 2, 3]`, `array A = [...]`, `size_text` empty: the items' number). A redeclaration
    !< replaces the array; a variable of the name is removed.
-   class(symbols_object),         intent(inout)        :: self     !< Symbols.
+   class(symbols_object),         intent(inout), target :: self     !< Symbols.
    character(len=*),              intent(in)           :: name     !< Array name.
    character(len=*),              intent(in)           :: size_text !< Size expression, empty for the items' number.
    character(len=*),              intent(in), optional :: items(:) !< Element expressions.
@@ -1949,9 +2041,9 @@ contains
    call push(self%arrays, a)
    endsubroutine declare_array
 
-   subroutine assign_element(self, name, index_text, text, iostat, iomsg, degrees)
+   recursive subroutine assign_element(self, name, index_text, text, iostat, iomsg, degrees)
    !< gnuplot `name[index_text] = text`: the element of the array set to the value of the expression now.
-   class(symbols_object),         intent(inout)        :: self       !< Symbols.
+   class(symbols_object),         intent(inout), target :: self       !< Symbols.
    character(len=*),              intent(in)           :: name       !< Array name.
    character(len=*),              intent(in)           :: index_text !< Index expression.
    character(len=*),              intent(in)           :: text       !< Value expression.
@@ -1989,14 +2081,16 @@ contains
    self%arrays(k)%list%set(i) = .true.
    endsubroutine assign_element
 
-   subroutine evaluate_constant(self, text, v, iostat, iomsg, degrees)
-   !< Typed value of the constant expression `text`: columns, undefined values and type errors are errors.
-   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   recursive subroutine evaluate_constant(self, text, v, iostat, iomsg, degrees, undefined)
+   !< Typed value of the constant expression `text`: columns, undefined values and type errors are errors; with
+   !< `undefined` gnuplot's undefined value is not (`v%is_undef`, a function block's `return A[9]`).
+   class(symbols_object),         intent(in), target   :: self    !< Symbols.
    character(len=*),              intent(in)           :: text    !< Expression.
    type(value_object),            intent(out)          :: v       !< Value.
    integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
    logical,                       intent(in), optional :: degrees !< Angles in degrees.
+   logical,                       intent(in), optional :: undefined !< gnuplot's undefined value accepted.
    type(expression_object)                             :: e       !< Compiled expression.
    logical                                             :: defined !< Defined.
    integer(I4P)                                        :: error   !< Type error.
@@ -2009,6 +2103,12 @@ contains
       return
    endif
    call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
+   if (.not. defined .and. error == E_UNDEF .and. present(undefined)) then
+      if (undefined) then
+         v%is_undef = .true.
+         return
+      endif
+   endif
    if (.not. defined) then
       iostat = 1_I4P
       if (error /= E_NONE) then
@@ -2124,10 +2224,10 @@ contains
    if (k > 0_I4P) text = list_text(self%arrays(k)%list)
    endfunction array_text
 
-   subroutine array_value(self, text, list, found, iostat, iomsg, degrees)
+   recursive subroutine array_value(self, text, list, found, iostat, iomsg, degrees)
    !< The elements of `text` if it is an array, `A`, or a slice, `A[i:j]` (gnuplot 6.0: ends known now, an empty or `*`
    !< end the first or the last element, clamped, `[]` when empty); `found` false for anything else (`A[i]`, `A + 1`).
-   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   class(symbols_object),         intent(in), target   :: self    !< Symbols.
    character(len=*),              intent(in)           :: text    !< Expression.
    type(value_list),              intent(out)          :: list    !< Elements.
    logical,                       intent(out)          :: found   !< An array or a slice.
@@ -2296,7 +2396,7 @@ contains
    k = 0_I4P
    endfunction function_index
 
-   pure function evaluate(self, row, point, cells, heads, place) result(v)
+   recursive function evaluate(self, row, point, cells, heads, place) result(v)
    !< Value on a data row: `row` holds its cells (NaN if missing), `point` is its point number (column 0).
    !<
    !< `cells` are the texts of the row cells (`strcol`), `heads` those of the first row of its dataset (`columnhead`),
@@ -2366,7 +2466,7 @@ contains
    endif
    endsubroutine set_time
 
-   pure function evaluate_text(self, row, point, cells, heads, place) result(text)
+   recursive function evaluate_text(self, row, point, cells, heads, place) result(text)
    !< Text on a data row (arguments as `evaluate`), as gnuplot's label and tick label fields: a string value as it is;
    !< a number, the text of the first column the expression reads (gnuplot's `using 1:2:($2*2) with labels` writes
    !< the text of column 2), or the number as `%g` if it reads none; empty if undefined.
@@ -2404,7 +2504,7 @@ contains
    endif
    endfunction evaluate_text
 
-   pure subroutine table_cell(self, row, point, text, is_string, cells, heads, place)
+   recursive subroutine table_cell(self, row, point, text, is_string, cells, heads, place)
    !< A field of gnuplot's `plot ... with table` on a data row (arguments as `evaluate`): a string as it is, a number
    !< as `%g`, `nan` if undefined.
    class(expression_object),      intent(in)           :: self      !< Expression.
@@ -2441,7 +2541,7 @@ contains
    if (allocated(self%code)) uses = uses .or. any(self%code%op == OP_STRCOL) .or. any(self%code%op == OP_TIMECOLUMN)
    endfunction uses_text
 
-   pure subroutine run(self, row, point, top, defined, error, cells, heads, place)
+   recursive subroutine run(self, row, point, top, defined, error, cells, heads, place)
    !< Run the stack code on a data row: `top` is the typed value, `defined` false if undefined; `error` the type error
    !< that made it undefined (E_NONE if none: a missing cell, a domain error); `cells`, `heads`, `place` as `evaluate`.
    class(expression_object), intent(in)            :: self                 !< Expression.
@@ -2465,6 +2565,7 @@ contains
    integer(I4P)                   :: level                          !< Nested user function calls (gnuplot's depth).
    integer(I4P)                   :: calls                          !< Active recursive calls.
    integer(I4P)                   :: back(3, merge(MAX_CALLS, 0_I4P, self%recursive)) !< Their return: pc, fp, level.
+   character(len=:), allocatable  :: message                        !< A function block's error.
 
    top = value_object()
    defined = .false.
@@ -2479,6 +2580,14 @@ contains
    do while (pc <= size(self%code, kind=I4P))
       associate(instruction => self%code(pc))
          pc = pc + 1_I4P
+         ! gnuplot's undefined value only passes along: an operation on it is an error
+         n = operands(instruction%op, int(instruction%v%i, I4P))
+         if (n > 0_I4P) then
+            if (any(stack(sp - n + 1_I4P:sp)%is_undef)) then
+               if (present(error)) error = E_UNINIT
+               return
+            endif
+         endif
          select case (instruction%op)
          case (OP_CONSTANT)
             sp = sp + 1_I4P
@@ -2603,8 +2712,8 @@ contains
                   ok = .false.
                   err = E_INDEX
                elseif (.not. list%set(c)) then
-                  ok = .false.
-                  err = E_UNSET
+                  ! an element without a value: gnuplot's undefined value
+                  stack(sp) = undefined_value()
                else
                   stack(sp) = list%items(c)
                endif
@@ -2637,6 +2746,25 @@ contains
             calls = calls - 1_I4P
          case (OP_STOP)
             exit
+         case (OP_BLOCK)
+            n = int(instruction%v%i, I4P)
+            if (.not. associated(block_hook)) then
+               ok = .false.
+               err = E_BLOCK
+               block_message = 'function blocks run in a script'
+            else
+               call block_hook(self%blocks(instruction%arg)%text, stack(sp - n + 1_I4P:sp), result, ok, message)
+               if (.not. ok .and. len(message) > 0) then
+                  err = E_BLOCK
+                  block_message = message
+               elseif (.not. ok) then
+                  ! no return: gnuplot's undefined value
+                  ok = .true.
+                  result = undefined_value()
+               endif
+               sp = sp - n + 1_I4P
+               stack(sp) = result
+            endif
          case (OP_COLLAPSE)
             stack(sp - instruction%arg) = stack(sp)
             sp = sp - instruction%arg
@@ -2649,7 +2777,8 @@ contains
    enddo
    if (sp == 1_I4P) then
       top = stack(1)
-      defined = .true.
+      defined = .not. top%is_undef
+      if (top%is_undef .and. present(error)) error = E_UNDEF
    endif
    contains
       pure subroutine column(c, value, ok)
@@ -2884,7 +3013,7 @@ contains
    self%code(1) = instruction
    endsubroutine single_instruction
 
-   pure function value_at(self, x) result(v)
+   recursive function value_at(self, x) result(v)
    !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.
    class(expression_object), intent(in) :: self !< Expression.
    real(R8P),                intent(in) :: x    !< Variable value.
@@ -3335,6 +3464,35 @@ contains
    endif
    endfunction number_text
 
+   pure function undefined_value() result(a)
+   !< gnuplot's undefined value (by components: nvfortran 26.9 crashes on its constructor here).
+   type(value_object) :: a !< Value.
+
+   a%is_undef = .true.
+   endfunction undefined_value
+
+   pure function operands(op, nargs) result(n)
+   !< Stack values the operation `op` reads (`nargs`, its `v%i`, for a string function call), 0 for those that only
+   !< move them (a load, a call's arguments, a return).
+   integer(I4P), intent(in) :: op    !< Operation code.
+   integer(I4P), intent(in) :: nargs !< Arguments of OP_CALL.
+   integer(I4P)             :: n     !< Values read.
+
+   select case (op)
+   case (OP_COLUMN_OF, OP_STRCOL, OP_COLUMNHEAD, OP_NEGATE, OP_NOT, OP_TRUTH, OP_FUNCTION, OP_JUMP_UNLESS, &
+         OP_AND_JUMP, OP_OR_JUMP, OP_ELEMENT, OP_BNOT)
+      n = 1_I4P
+   case (OP_TIMECOLUMN, OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR)
+      n = 2_I4P
+   case (OP_SUBSTRING)
+      n = 3_I4P
+   case (OP_CALL)
+      n = nargs
+   case default
+      n = 0_I4P
+   endselect
+   endfunction operands
+
    pure subroutine bitwise(op, a, b, c, ok, error)
    !< `c = a op b` for the bitwise operators, of integers only (gnuplot: "non-integer passed to boolean operator"); the
    !< shifts as gnuplot's on x86: the count modulo 64, `>>` logical.
@@ -3393,6 +3551,13 @@ contains
       text = 'recursion depth limit exceeded'
    case (E_BITWISE)
       text = 'non-integer passed to boolean operator'
+   case (E_BLOCK)
+      text = 'function block'
+      if (allocated(block_message)) text = block_message
+   case (E_UNDEF)
+      text = 'undefined value'
+   case (E_UNINIT)
+      text = 'uninitialized user variable'
    case default
       text = 'undefined value'
    endselect
