@@ -353,7 +353,10 @@ contains
    endif
    call next
    call parse_ternary
-   if (iostat == 0_I4P .and. kind == T_OPERATOR .and. token == '|') call syntax('bitwise operator "|" not supported')
+   ! nested: `.and.` does not short-circuit, and a first token in error is never read (ifx checks it)
+   if (iostat == 0_I4P .and. kind == T_OPERATOR) then
+      if (token == '|') call syntax('bitwise operator "|" not supported')
+   endif
    if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
    contains
       subroutine syntax(message, at)
@@ -926,9 +929,11 @@ contains
 
       call parse_ternary
       if (iostat /= 0_I4P) return
-      if (kind == T_OPERATOR .and. token == ':') then
-         call syntax('array slices '//name//'[i:j] are not supported', at)
-         return
+      if (kind == T_OPERATOR) then
+         if (token == ':') then
+            call syntax('array slices '//name//'[i:j] are not supported', at)
+            return
+         endif
       endif
       call expect(']')
       if (iostat /= 0_I4P) return
