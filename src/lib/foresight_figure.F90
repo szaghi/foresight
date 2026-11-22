@@ -113,6 +113,7 @@ type :: figure_object
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
+      procedure, pass(self) :: set_margin   !< Set a margin, `set lmargin`...
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_trange      !< gnuplot `set trange`.
@@ -1547,6 +1548,28 @@ contains
       if (present(offset)) panel%key_offset = offset
    endassociate
    endsubroutine set_key_style
+
+   subroutine set_margin(self, side, value, screen)
+   !< Set a margin of the current panel, as gnuplot `set lmargin|rmargin|tmargin|bmargin`: `side` is `l`, `r`, `t` or
+   !< `b`; `value` characters (0.6 font sizes wide, 1 high), or with `screen` the border at that fraction of the page
+   !< (from the bottom left); a negative value (or none) lets it be computed.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   character(len=1),     intent(in)           :: side   !< `l`, `r`, `t` or `b`.
+   real(R8P),            intent(in), optional :: value  !< Margin.
+   logical,              intent(in), optional :: screen !< At a page fraction.
+   integer(I4P)                               :: k      !< Side index: left, right, top, bottom.
+
+   call self%ensure_panels
+   k = index('lrtb', side, kind=I4P)
+   if (k == 0_I4P) error stop 'foresight: set_margin: side is l, r, t or b'
+   associate(panel => self%panels(self%current))
+      panel%margin_user(k) = -1.0_R8P
+      panel%margin_screen(k) = .false.
+      if (present(value)) panel%margin_user(k) = value
+      if (present(screen)) panel%margin_screen(k) = screen
+      if (panel%margin_user(k) < 0.0_R8P) panel%margin_screen(k) = .false.
+   endassociate
+   endsubroutine set_margin
 
    subroutine set_title(self, title, offset)
    !< Set the title of the current panel, empty for none, shifted by `offset` characters (x right, y up; gnuplot

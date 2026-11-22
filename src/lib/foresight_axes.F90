@@ -172,6 +172,10 @@ type :: axes_object
    real(R8P)                        :: key_offset(2) = 0.0_R8P !< Key shift [characters], gnuplot `offset`.
    character(len=:), allocatable    :: key_title !< Key title, a row above the entries (gnuplot `set key title`).
    real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
+   real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
+                                                                  !< `set lmargin`...): characters, or a page fraction
+                                                                  !< with `margin_screen`; negative: computed.
+   logical                          :: margin_screen(4) = .false. !< The margin is `at screen F`: the border there.
    logical                          :: key_outside = .false. !< Key outside the plot area (gnuplot `outside`).
    character(len=6)                 :: key_margin = ''  !< `top` or `bottom` margin (gnuplot `above`, `below`), else
                                                         !< empty.
@@ -4758,6 +4762,19 @@ contains
    if (self%colorbox .and. self%has_image(palette=.true.) .and. self%cbox%horizontal .and. .not. self%cbox%user) &
       margins(4) = margins(4) + self%colorbox_height(font_size)
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
+   ! margins set: characters from the panel box, or the border at a fraction of the page (gnuplot `at screen`, from the
+   ! bottom left)
+   if (self%margin_user(1) >= 0.0_R8P) area(1) = merge(self%margin_user(1) * self%canvas(1), &
+                                                       x0 + self%margin_user(1) * CHAR_WIDTH * font_size, &
+                                                       self%margin_screen(1))
+   if (self%margin_user(2) >= 0.0_R8P) area(2) = merge(self%margin_user(2) * self%canvas(1), &
+                                                       x0 + width - self%margin_user(2) * CHAR_WIDTH * font_size, &
+                                                       self%margin_screen(2))
+   if (self%margin_user(3) >= 0.0_R8P) area(3) = merge((1.0_R8P - self%margin_user(3)) * self%canvas(2), &
+                                                       y0 + self%margin_user(3) * font_size, self%margin_screen(3))
+   if (self%margin_user(4) >= 0.0_R8P) area(4) = merge((1.0_R8P - self%margin_user(4)) * self%canvas(2), &
+                                                       y0 + height - self%margin_user(4) * font_size, &
+                                                       self%margin_screen(4))
    if (self%ratio > 0.0_R8P) call fit_ratio(area)
    contains
       pure subroutine fit_ratio(area)

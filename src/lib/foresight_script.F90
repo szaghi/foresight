@@ -5583,6 +5583,7 @@ contains
    character(len=:), allocatable                :: option    !< Option word.
    character(len=:), allocatable                :: text      !< String argument.
    integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: k         !< Margin counter.
    integer(I4P)                                 :: width     !< Terminal width.
    integer(I4P)                                 :: height    !< Terminal height.
    integer(I4P)                                 :: seconds   !< Refresh period.
@@ -5860,6 +5861,35 @@ contains
       endif
    elseif (keyword(option, 'style', 2_I4P)) then
       call style_option
+   elseif (is_word(option, 'lmargin rmargin tmargin bmargin lmar rmar tmar bmar lmarg rmarg tmarg bmarg')) then
+      ! set lmargin [[at screen] N]: characters, or the border at a page fraction; bare or negative, computed
+      i = 1_I4P
+      if (.not. margin_value(option(1:1))) return
+      if (i < size(tokens, kind=I4P)) then
+         call fail('set '//option//': [at screen] N expected', iostat, iomsg)
+         return
+      endif
+   elseif (keyword(option, 'margins', 4_I4P)) then
+      ! set margins L, R, B, T (gnuplot's order), each [at screen] N
+      i = 1_I4P
+      do k = 1_I4P, 4_I4P
+         if (.not. margin_value('lrbt'(k:k))) return
+         if (k < 4_I4P) then
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set margins: L, R, B, T expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i)%kind /= TOKEN_COMMA) then
+               call fail('set margins: L, R, B, T expected', iostat, iomsg)
+               return
+            endif
+         endif
+      enddo
+      if (i < size(tokens, kind=I4P)) then
+         call fail('set margins: L, R, B, T expected', iostat, iomsg)
+         return
+      endif
    elseif (keyword(option, 'ticscale', 5_I4P)) then
       ! gnuplot's old form of set tics scale
       call all_tics_option(scale_only=.true.)
@@ -7113,6 +7143,45 @@ contains
       endif
       endsubroutine border_option
 
+      function margin_value(side) result(ok)
+      !< A margin after token `i` (left on its last token): `[at screen] N`, or nothing (computed).
+      character(len=1), intent(in) :: side   !< `l`, `r`, `t` or `b`.
+      logical                      :: ok     !< Well formed.
+      logical                      :: screen !< `at screen`.
+      real(R8P)                    :: v      !< Value.
+
+      ok = .true.
+      if (i >= size(tokens, kind=I4P)) then
+         call self%figure%set_margin(side)
+         return
+      endif
+      if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+         call self%figure%set_margin(side)
+         return
+      endif
+      screen = .false.
+      if (tokens(i + 1_I4P)%text == 'at') then
+         if (i + 2_I4P > size(tokens, kind=I4P)) then
+            call fail('set '//option//': at screen F expected', iostat, iomsg)
+            ok = .false.
+            return
+         endif
+         if (.not. keyword(tokens(i + 2_I4P)%text, 'screen', 2_I4P)) then
+            call fail('set '//option//': at screen F expected (only screen)', iostat, iomsg)
+            ok = .false.
+            return
+         endif
+         screen = .true.
+         i = i + 2_I4P
+      endif
+      ok = next_real(tokens, i, v, iostat, iomsg, self%symbols)
+      if (.not. ok) then
+         iomsg = 'set '//option//': '//iomsg
+         return
+      endif
+      call self%figure%set_margin(side, value=v, screen=screen)
+      endfunction margin_value
+
       subroutine all_tics_option(scale_only)
       !< gnuplot `set tics [mirror|nomirror] [in|out] [scale MAJOR[,MINOR]|default] [border]`: the options of every axis
       !< (scale also the color box's); bare, the x and y ticks on. `set ticscale MAJOR [MINOR]` (`scale_only`) its scale.
@@ -8096,6 +8165,13 @@ contains
       call self%figure%set_y2range()
    elseif (keyword(option, 'x2range', 3_I4P)) then
       call self%figure%set_x2range()
+   elseif (is_word(option, 'lmargin rmargin tmargin bmargin lmar rmar tmar bmar lmarg rmarg tmarg bmarg')) then
+      call self%figure%set_margin(option(1:1))
+   elseif (keyword(option, 'margins', 4_I4P)) then
+      call self%figure%set_margin('l')
+      call self%figure%set_margin('r')
+      call self%figure%set_margin('t')
+      call self%figure%set_margin('b')
    elseif (keyword(option, 'tics', 3_I4P)) then
       ! every axis, as gnuplot
       call self%figure%unset_xtics

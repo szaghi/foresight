@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(124)                           !< Per-check outcome.
+logical                       :: test_passed(125)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2634,6 +2634,28 @@ endassociate
 call interpreter%run_text('set key enhanced', iostat, iomsg)
 test_passed(124) = test_passed(124) .and. iostat /= 0_I4P .and. index(iomsg, 'enhanced text is not supported') > 0
 
+! set lmargin|rmargin|tmargin|bmargin [at screen] N, set margins L,R,B,T, unset: the border where they say (characters
+! 0.6 font sizes wide and 1 high, screen fractions from the bottom left)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 400,300; set output "foresight_script_test_margins.svg"'//new_line('a')// &
+                          'set lmargin 10; set rmargin at screen 0.9; set tmargin 3; set bmargin at screen 0.2'// &
+                          new_line('a')//'plot [0:10] x notitle', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(125) = iostat == 0_I4P .and. file_has('foresight_script_test_margins.svg', &
+                   '<rect x="72" y="36" width="288" height="204" fill="none" stroke="black"')
+call interpreter%run_text('set margins 1, 2, at screen 0.1, 4', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(125) = test_passed(125) .and. iostat == 0_I4P .and. &
+                      all(panel%margin_user == [1.0_R8P, 2.0_R8P, 4.0_R8P, 0.1_R8P]) .and. &
+                      all(panel%margin_screen .eqv. [.false., .false., .false., .true.])
+endassociate
+call interpreter%run_text('unset margins; set lmargin 3; unset lmargin', iostat, iomsg)
+test_passed(125) = test_passed(125) .and. iostat == 0_I4P .and. all(interpreter%figure%panels(1)%margin_user < 0.0_R8P)
+call interpreter%run_text('set lmargin at graph 0.1', iostat, iomsg)
+test_passed(125) = test_passed(125) .and. iostat /= 0_I4P .and. index(iomsg, 'only screen') > 0
+open(newunit=unit, file='foresight_script_test_margins.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2642,7 +2664,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,124L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,125L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
