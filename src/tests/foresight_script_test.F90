@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(123)                           !< Per-check outcome.
+logical                       :: test_passed(124)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -140,8 +140,8 @@ call interpreter%run_text("set format z '%g'", iostat, iomsg)
 test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be among x, y, y2') > 0
 call interpreter%run_text("set format y '%d'", iostat, iomsg)
 test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
-call interpreter%run_text('set key offset 1,1', iostat, iomsg)
-test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "offset"') > 0
+call interpreter%run_text('set key spacing 2', iostat, iomsg)
+test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "spacing"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
 call interpreter%run_text('set style line 1 pn 2', iostat, iomsg)
@@ -2610,6 +2610,30 @@ test_passed(123) = test_passed(123) .and. iostat /= 0_I4P .and. index(iomsg, 'su
 open(newunit=unit, file='foresight_script_test_tics.svg')
 close(unit, status='delete')
 
+! set key reverse, Left, invert, opaque, samplen, width, offset, title, default, abbreviations; set title offset, font
+call interpreter%init(scratch)
+call interpreter%run_text('set key reverse Left invert opaque samplen 2 width 1.5 offset 1,-2 title "T" bot cent '// &
+                          'font ",8" noenhanced; set title "top" offset 0,-1 font ",14" noenh; set key autotitle column', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(124) = iostat == 0_I4P
+associate(panel => interpreter%figure%panels(1))
+   test_passed(124) = test_passed(124) .and. panel%key_reverse .and. panel%key_left .and. panel%key_invert .and. &
+                      panel%key_opaque .and. panel%key_samplen == 2.0_R8P .and. panel%key_extra == 1.5_R8P .and. &
+                      all(panel%key_offset == [1.0_R8P, -2.0_R8P]) .and. panel%key_title == 'T' .and. &
+                      panel%key_v == 'bottom' .and. panel%key_h == 'center' .and. &
+                      all(panel%title_offset == [0.0_R8P, -1.0_R8P]) .and. panel%title == 'top' .and. &
+                      interpreter%autotitle == 'columnhead'
+endassociate
+call interpreter%run_text('set key default', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. .not. panel%key_reverse .and. &
+                      .not. panel%key_invert .and. panel%key_samplen < 0.0_R8P .and. len(panel%key_title) == 0 .and. &
+                      panel%key_v == 'top' .and. panel%key_h == 'right'
+endassociate
+call interpreter%run_text('set key enhanced', iostat, iomsg)
+test_passed(124) = test_passed(124) .and. iostat /= 0_I4P .and. index(iomsg, 'enhanced text is not supported') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2618,7 +2642,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,123L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,124L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

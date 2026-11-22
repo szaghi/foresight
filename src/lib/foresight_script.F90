@@ -5597,8 +5597,7 @@ contains
    endif
    option = tokens(1)%text
    if (keyword(option, 'title', 3_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
-      call self%figure%set_title(text)
+      call title_option
    elseif (keyword(option, 'xlabel', 2_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_xlabel(text)
@@ -6295,6 +6294,57 @@ contains
       enddo
       endsubroutine fit_option
 
+      subroutine title_option
+      !< `set title ["text"] [offset X,Y] [font "f"] [noenhanced] [enhanced]`: the text, shifted by characters (x right,
+      !< y up); `font` is read and ignored (one font in foresight), `noenhanced` is foresight's text, `enhanced` refused.
+      real(R8P) :: offset(2) !< Shift [characters].
+      integer(I4P) :: j      !< First option token.
+
+      j = size(tokens, kind=I4P) + 1_I4P
+      do i = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(i)%kind /= TOKEN_WORD) cycle
+         if (is_word(tokens(i)%text, 'offset font noenhanced noenh enhanced enh')) then
+            j = i
+            exit
+         endif
+      enddo
+      if (.not. self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)) return
+      offset = self%figure%panels(self%figure%current)%title_offset
+      i = j
+      do while (i <= size(tokens, kind=I4P))
+         select case (tokens(i)%text)
+         case ('offset')
+            if (.not. next_real(tokens, i, offset(1), iostat, iomsg, self%symbols)) return
+            if (i >= size(tokens, kind=I4P)) then
+               call fail('set title: offset X,Y expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+               call fail('set title: offset X,Y expected', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            if (.not. next_real(tokens, i, offset(2), iostat, iomsg, self%symbols)) return
+         case ('font')
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set title: font needs a name', iostat, iomsg)
+               return
+            endif
+         case ('noenhanced', 'noenh')
+            continue
+         case ('enhanced', 'enh')
+            call fail('set title: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
+            return
+         case default
+            call fail('set title: unexpected "'//tokens(i)%text//'" (offset, font, noenhanced)', iostat, iomsg)
+            return
+         endselect
+         i = i + 1_I4P
+      enddo
+      call self%figure%set_title(text, offset=offset)
+      endsubroutine title_option
+
       subroutine key_option
       !< `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [inside|outside|below|above|lmargin|
       !< rmargin|tmargin|bmargin|at POSITION] [horizontal|vertical] [autotitle [columnhead]|noautotitle]`; POSITION is
@@ -6304,6 +6354,8 @@ contains
       logical, allocatable          :: box    !< Box, unallocated if not given.
       real(R8P), allocatable        :: at(:)  !< Key position, unallocated if not given.
       character(len=6)              :: sys(2) !< Coordinate systems of the position.
+      real(R8P)                     :: v      !< A number.
+      real(R8P)                     :: xy(2)  !< An offset.
 
       on = .true.
       words = ''
@@ -6327,11 +6379,11 @@ contains
          case ('autotitle')
             self%autotitle = 'file'
             if (i < size(tokens, kind=I4P)) then
-               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 7_I4P)) self%autotitle = 'columnhead'
+               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 6_I4P)) self%autotitle = 'columnhead'
             endif
          case ('noautotitle')
             self%autotitle = 'none'
-         case ('columnhead', 'columnheader')
+         case ('columnhead', 'columnheader', 'column')
             if (i == 2_I4P) then
                call fail('set key: columnhead goes after autotitle', iostat, iomsg)
                return
@@ -6352,10 +6404,72 @@ contains
                'over', 'horizontal', 'horiz', 'vertical', 'vert', 'lmargin', 'lm', 'rmargin', 'rm', 'tmargin', 'tm', &
                'bmargin', 'bm')
             words = words//' '//tokens(i)%text
+         case ('cent')
+            words = words//' center'
+         case ('bot')
+            words = words//' bottom'
+         case ('reverse', 'noreverse')
+            call self%figure%set_key_style(reverse=tokens(i)%text == 'reverse')
+         case ('Left', 'Right')
+            call self%figure%set_key_style(left=tokens(i)%text == 'Left')
+         case ('invert', 'noinvert')
+            call self%figure%set_key_style(invert=tokens(i)%text == 'invert')
+         case ('opaque', 'noopaque')
+            call self%figure%set_key_style(opaque=tokens(i)%text == 'opaque')
+         case ('samplen')
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            call self%figure%set_key_style(samplen=max(0.0_R8P, v))
+         case ('width')
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            call self%figure%set_key_style(width=v)
+         case ('offset')
+            if (.not. next_real(tokens, i, xy(1), iostat, iomsg, self%symbols)) return
+            if (i >= size(tokens, kind=I4P)) then
+               call fail('set key: offset X,Y expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+               call fail('set key: offset X,Y expected', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            if (.not. next_real(tokens, i, xy(2), iostat, iomsg, self%symbols)) return
+            call self%figure%set_key_style(offset=xy)
+         case ('title')
+            ! a string expression, or nothing (no title)
+            if (i < size(tokens, kind=I4P)) then
+               if (.not. is_word(tokens(i + 1_I4P)%text, 'font noenhanced enhanced box nobox')) then
+                  i = i + 1_I4P
+                  if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+                     iomsg = 'set key title: '//iomsg
+                     return
+                  endif
+                  call self%figure%set_key_style(title=text)
+                  cycle
+               endif
+            endif
+            call self%figure%set_key_style(title='')
+         case ('notitle')
+            call self%figure%set_key_style(title='')
+         case ('font')
+            ! read and ignored: one font in foresight
+            i = i + 1_I4P
+         case ('noenhanced', 'noenh')
+            continue
+         case ('enhanced', 'enh')
+            call fail('set key: enhanced text is not supported (foresight writes text as it is)', iostat, iomsg)
+            return
+         case ('default')
+            words = ' top right inside vertical'
+            box = .false.
+            call self%figure%set_key_style(reverse=.false., left=.false., invert=.false., opaque=.false., samplen=-1.0_R8P, &
+                                     width=0.0_R8P, title='', offset=[0.0_R8P, 0.0_R8P])
+            self%autotitle = 'file'
          case default
             call fail('set key: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, center, '// &
                       'top, bottom, box, nobox, inside, outside, below, above, lmargin, rmargin, tmargin, bmargin, '// &
-                      'at, horizontal, vertical, autotitle [columnhead], noautotitle)', iostat, iomsg)
+                      'at, horizontal, vertical, reverse, Left, Right, invert, opaque, samplen, width, offset, title, '// &
+                      'font, noenhanced, default, autotitle [columnhead], noautotitle)', iostat, iomsg)
             return
          endselect
       enddo

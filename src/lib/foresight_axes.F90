@@ -103,6 +103,7 @@ integer(I4P),     parameter :: HIST_ROWSTACKED    = 1_I4P !< Histograms stacked 
 integer(I4P),     parameter :: HIST_COLUMNSTACKED = 2_I4P !< One stack per histogram, its rows stacked.
 integer(I4P),     parameter :: HIST_ERRORBARS     = 3_I4P !< Clustered, with error bars.
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
+real(R8P),        parameter :: CHAR_WIDTH    = 0.6_R8P   !< Character width [font size], gnuplot's character units.
 real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
 character(len=*), parameter :: GRID_COLOR    = '#a0a0a0' !< Grid line color.
@@ -161,6 +162,16 @@ type :: axes_object
    character(len=6)                 :: key_h = 'right' !< Key horizontal position: left, center, right.
    character(len=6)                 :: key_v = 'top'   !< Key vertical position: top, center, bottom.
    logical                          :: key_box = .false. !< Draw a box around the key.
+   logical                          :: key_reverse = .false. !< Samples left of the titles (gnuplot `reverse`).
+   logical                          :: key_left = .false. !< Titles left-justified (gnuplot `Left`), else right.
+   logical                          :: key_invert = .false. !< Entries in reverse order (gnuplot `invert`).
+   logical                          :: key_opaque = .false. !< The key area painted over the plot (`opaque`).
+   real(R8P)                        :: key_samplen = -1.0_R8P !< Sample length [character widths], negative for
+                                                               !< foresight's (3 font sizes).
+   real(R8P)                        :: key_extra = 0.0_R8P !< Width added to the titles [character widths], `width`.
+   real(R8P)                        :: key_offset(2) = 0.0_R8P !< Key shift [characters], gnuplot `offset`.
+   character(len=:), allocatable    :: key_title !< Key title, a row above the entries (gnuplot `set key title`).
+   real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
    logical                          :: key_outside = .false. !< Key outside the plot area (gnuplot `outside`).
    character(len=6)                 :: key_margin = ''  !< `top` or `bottom` margin (gnuplot `above`, `below`), else
                                                         !< empty.
@@ -256,6 +267,7 @@ type :: axes_object
       procedure, pass(self), private :: draw_key           !< Draw the key.
       procedure, pass(self), private :: draw_readouts      !< Draw the readouts.
       procedure, pass(self), private :: key_layout         !< Key size and entry grid.
+      procedure, pass(self), private :: key_sample         !< Key sample length.
       procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
@@ -1882,7 +1894,9 @@ contains
                          backend%row_height()
             endif
          endif
-         call backend%text(0.5_R8P * (left + right), title_y, self%title, 'middle')
+         ! gnuplot `set title offset X,Y`: characters, y up
+         call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                           title_y - self%title_offset(2) * font_size, self%title, 'middle')
       endif
    endassociate
    endsubroutine draw_frame
@@ -2030,6 +2044,8 @@ contains
    character(len=:), allocatable        :: sample    !< Color of the point sample.
    integer(I4P)                         :: k         !< Entry counter.
    integer(I4P)                         :: s         !< Series counter.
+   real(R8P)                            :: tx        !< Title abscissa [px].
+   character(len=5)                     :: anchor    !< Title anchor.
 
    associate(width => extent(1), height => extent(2))
       entry = (width + GAP) / real(grid(2), R8P)
@@ -2087,16 +2103,25 @@ contains
          endselect
       endselect
       endif
+      ! gnuplot `offset`: characters, y up
+      left = left + self%key_offset(1) * CHAR_WIDTH * font_size
+      top = top - self%key_offset(2) * font_size
+      if (self%key_opaque) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
+                                             'none', WINDOW_FILL, 1.0_R8P)
       if (self%key_box) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
                                           FRAME_COLOR, 'none', 1.0_R8P)
+      if (allocated(self%key_title)) then
+         if (len(self%key_title) > 0) then
+            call backend%text(left + 0.5_R8P * width, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, 'middle')
+            top = top + LINE_HEIGHT * font_size
+         endif
+      endif
    endassociate
    k = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
       if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
-      ! entry k (from 0) in column mod(k, columns), row k / columns
-      xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
-      xs(1) = xs(2) - SAMPLE_LENGTH * font_size
-      yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
+      ! entry k (from 0; the last first with invert) in column mod(k, columns), row k / columns
+      call entry_place(merge(grid(1) - 1_I4P - k, k, self%key_invert), xs, yc, tx, anchor)
       k = k + 1_I4P
       call backend%begin_group('fs-key-entry', series=s)
       if (self%series(s)%style%fills()) &
@@ -2127,7 +2152,7 @@ contains
                                                  pt=self%series(s)%style%pointtype, &
                                                  line_width=self%series(s)%style%linewidth)
       endif
-      call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, self%series(s)%title, 'end')
+      call backend%text(tx, yc + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
       call backend%end_group
    enddo
    ! the rows of column stacks, by their names, the last row first (as gnuplot): no series of their own
@@ -2138,9 +2163,7 @@ contains
          integer(I4P)       :: r   !< Row counter.
 
          do r = size(self%series(s)%texts, kind=I4P), 1_I4P, -1_I4P
-            xs(2) = left + real(modulo(k, grid(2)) + 1_I4P, R8P) * entry - GAP
-            xs(1) = xs(2) - SAMPLE_LENGTH * font_size
-            yc = top + (real(k / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
+            call entry_place(merge(grid(1) - 1_I4P - k, k, self%key_invert), xs, yc, tx, anchor)
             k = k + 1_I4P
             row = self%series(s)%style
             row%color = default_color(r, self%linecolors)
@@ -2149,12 +2172,35 @@ contains
                                  [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
                                   yc - 0.35_R8P * font_size], row%fill_color(), row%density, row%stroke_color(), &
                                  row%linewidth)
-            call backend%text(xs(1) - GAP, yc + 0.35_R8P * font_size, trim(self%series(s)%texts(r)), 'end')
+            call backend%text(tx, yc + 0.35_R8P * font_size, trim(self%series(s)%texts(r)), trim(anchor))
             call backend%end_group
          enddo
       endblock
    endif
    contains
+      subroutine entry_place(n, xs, yc, tx, anchor)
+      !< Sample abscissae, row centre and title position of entry `n` (from 0): the sample at the right of its cell, or at
+      !< its left (`reverse`); the title beside it, right-justified, or left-justified (`Left`), as gnuplot.
+      integer(I4P),     intent(in)  :: n      !< Entry.
+      real(R8P),        intent(out) :: xs(2)  !< Sample abscissae [px].
+      real(R8P),        intent(out) :: yc     !< Row centre [px].
+      real(R8P),        intent(out) :: tx     !< Title abscissa [px].
+      character(len=5), intent(out) :: anchor !< Title anchor.
+      real(R8P)                     :: cell(2) !< Cell left and right [px].
+
+      cell(1) = left + real(modulo(n, grid(2)), R8P) * entry
+      cell(2) = cell(1) + entry - GAP
+      yc = top + (real(n / grid(2), R8P) + 0.5_R8P) * LINE_HEIGHT * font_size
+      if (self%key_reverse) then
+         xs = [cell(1), cell(1) + self%key_sample(font_size)]
+         tx = merge(xs(2) + GAP, cell(2), self%key_left)
+      else
+         xs = [cell(2) - self%key_sample(font_size), cell(2)]
+         tx = merge(cell(1), xs(1) - GAP, self%key_left)
+      endif
+      anchor = merge('start', 'end  ', self%key_left)
+      endsubroutine entry_place
+
       subroutine key_anchor(left, top)
       !< Left and top [px] of the key placed at `key_xy`: its box edge (`left`, `right`) or centre on the abscissa, its
       !< top, bottom or centre on the ordinate; `first` and `second` are the values of the x/y and x2/y2 axes, `graph`
@@ -2390,11 +2436,28 @@ contains
       endif
    endif
    ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
-   entry = entry + font_size + GAP + SAMPLE_LENGTH * font_size + GAP
+   entry = entry + font_size + GAP + self%key_sample(font_size) + GAP + self%key_extra * CHAR_WIDTH * font_size
    if (self%key_horizontal .and. grid(1) > 0_I4P) grid(2) = max(1_I4P, min(grid(1), int((room + GAP) / entry, I4P)))
    grid(3) = (grid(1) + grid(2) - 1_I4P) / grid(2)
    extent = [real(grid(2), R8P) * entry - GAP, real(grid(3), R8P) * LINE_HEIGHT * font_size]
+   ! a title: a row above the entries, the key at least as wide
+   if (allocated(self%key_title)) then
+      if (len(self%key_title) > 0) then
+         extent(1) = max(extent(1), backend%text_width(self%key_title, '', font_size) + font_size)
+         extent(2) = extent(2) + LINE_HEIGHT * font_size
+      endif
+   endif
    endsubroutine key_layout
+
+   pure function key_sample(self, font_size) result(length)
+   !< Length of a key sample [px]: `samplen` character widths, else 3 font sizes.
+   class(axes_object), intent(in) :: self      !< Panel.
+   real(R8P),          intent(in) :: font_size !< Font size [px].
+   real(R8P)                      :: length    !< Length.
+
+   length = SAMPLE_LENGTH * font_size
+   if (self%key_samplen >= 0.0_R8P) length = self%key_samplen * CHAR_WIDTH * font_size
+   endfunction key_sample
 
    pure function key_place(self) result(place)
    !< Where the key lies: `inside` the plot area, in the `left` or `right` margin, `top` (above the plot) or `bottom`

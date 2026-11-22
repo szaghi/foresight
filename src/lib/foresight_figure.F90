@@ -113,6 +113,7 @@ type :: figure_object
       procedure, pass(self) :: set_text        !< Text output: gnuplot `dumb` or `block` terminal, colors.
       procedure, pass(self) :: set_theme       !< Output theme: classic, vfd, lcd; glow.
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
+      procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
       procedure, pass(self) :: set_title       !< gnuplot `set title`.
       procedure, pass(self) :: set_trange      !< gnuplot `set trange`.
       procedure, pass(self) :: set_ttics       !< gnuplot `set ttics` / `unset ttics`.
@@ -1518,13 +1519,45 @@ contains
    endassociate
    endsubroutine set_theta
 
-   subroutine set_title(self, title)
-   !< Set the title of the current panel, empty for none.
-   class(figure_object), intent(inout) :: self  !< Figure.
-   character(len=*),     intent(in)    :: title !< Title.
+   subroutine set_key_style(self, reverse, left, invert, opaque, samplen, width, title, offset)
+   !< Key layout of the current panel, as gnuplot `set key`: `reverse` the samples left of the titles, `left` the titles
+   !< left-justified (`Left`), `invert` the entries in reverse order, `opaque` the key area painted over the plot,
+   !< `samplen` the sample length [character widths; negative: foresight's], `width` character widths added to the
+   !< titles, `title` a row above the entries (empty: none), `offset` a shift [characters, y up]. Apart from `set_key`:
+   !< nvfortran 26.9 -O2 loses `present(at)` there with these optional arguments after it.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   logical,              intent(in), optional :: reverse   !< Samples left of the titles.
+   logical,              intent(in), optional :: left      !< Titles left-justified.
+   logical,              intent(in), optional :: invert    !< Entries in reverse order.
+   logical,              intent(in), optional :: opaque    !< The key area painted over the plot.
+   real(R8P),            intent(in), optional :: samplen   !< Sample length [character widths].
+   real(R8P),            intent(in), optional :: width     !< Width added to the titles [character widths].
+   character(len=*),     intent(in), optional :: title     !< Key title.
+   real(R8P),            intent(in), optional :: offset(2) !< Key shift [characters].
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(reverse)) panel%key_reverse = reverse
+      if (present(left)) panel%key_left = left
+      if (present(invert)) panel%key_invert = invert
+      if (present(opaque)) panel%key_opaque = opaque
+      if (present(samplen)) panel%key_samplen = samplen
+      if (present(width)) panel%key_extra = width
+      if (present(title)) panel%key_title = title
+      if (present(offset)) panel%key_offset = offset
+   endassociate
+   endsubroutine set_key_style
+
+   subroutine set_title(self, title, offset)
+   !< Set the title of the current panel, empty for none, shifted by `offset` characters (x right, y up; gnuplot
+   !< `set title offset`).
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   character(len=*),     intent(in)           :: title     !< Title.
+   real(R8P),            intent(in), optional :: offset(2) !< Shift [characters].
 
    call self%ensure_panels
    self%panels(self%current)%title = title
+   if (present(offset)) self%panels(self%current)%title_offset = offset
    endsubroutine set_title
 
    subroutine set_trange(self, min, max)
