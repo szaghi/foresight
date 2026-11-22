@@ -91,7 +91,8 @@ module foresight_script
 !<   `call` and `foresight -c`);
 !< - `system("command")` (its standard output, run when the expression is compiled), `system "command"`, `` `command` ``
 !<   substitution outside single quotes; `reset [session|errors|bind]` (see `reset_command`); `set table ["file"|$NAME]
-!<   [append]`, `unset table` (plots write their points as text, see `write_table`);
+!<   [append]`, `unset table` (plots write their points as text, see `write_table`); `pause SECONDS|-1|mouse
+!<   ["message"]` (see `pause_command`); `reread` is an error, deprecated in gnuplot 6.0;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -99,7 +100,7 @@ module foresight_script
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
-use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
+use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : expression_object, push, saved_array, saved_variable, symbols_object
@@ -208,6 +209,7 @@ type :: script_object
       procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: reset_command !< `reset`.
+      procedure, pass(self), private :: pause_command !< `pause`.
       procedure, pass(self), private :: write_table   !< The points of a plot as text (`set table`).
       procedure, pass(self), private :: fit_command   !< `fit`.
       procedure, pass(self), private :: print_command !< `print`.
@@ -580,6 +582,11 @@ contains
       call execute_command_line(text, wait=.true.)
    elseif (keyword(command, 'reset', 3_I4P)) then
       call self%reset_command(tokens(2:), iostat, iomsg)
+   elseif (keyword(command, 'pause', 2_I4P)) then
+      call self%pause_command(tokens(2:), iostat, iomsg)
+   elseif (command == 'reread') then
+      call fail('reread is deprecated in gnuplot 6.0, not supported: loop with while (1) { plot ...; pause N }', &
+                iostat, iomsg)
    elseif (command == 'array') then
       call array_command(self%symbols, after_command(statement), self%figure%panels(self%figure%current)%degrees, &
                          iostat, iomsg)
@@ -4010,6 +4017,77 @@ contains
    iostat = status
    iomsg = message
    endsubroutine call_command
+
+   subroutine pause_command(self, tokens, iostat, iomsg)
+   !< gnuplot `pause SECONDS ["message"]`: the message on the standard error, then a wait of SECONDS (0: none); -1 waits
+   !< for a line on the standard input (its end does not wait). `pause mouse [EVENTS] ["message"]`: no mouse here, the
+   !< message only, as gnuplot on a terminal without one. With a plot in a loop, `while (1) { plot ...; pause 5 }`, the
+   !< output is rewritten every 5 s: gnuplot 6.0's live idiom.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens after `pause`.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                :: message   !< Message, unallocated if none.
+   character(len=256)                           :: line      !< Line read.
+   real(R8P)                                    :: seconds   !< Time to wait.
+   integer(I4P)                                 :: i         !< Token counter.
+   integer(I4P)                                 :: last      !< Last token of the time.
+   integer(I4P)                                 :: ios       !< Read status.
+   logical                                      :: mouse     !< `pause mouse`.
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (size(tokens) == 0) then
+      call fail('pause: a time in seconds, -1 or mouse is expected', iostat, iomsg)
+      return
+   endif
+   mouse = keyword(tokens(1)%text, 'mouse', 2_I4P) .and. tokens(1)%kind == TOKEN_WORD
+   i = 1_I4P
+   seconds = 0.0_R8P
+   if (mouse) then
+      ! the events (keypress, button1, button2, button3, close, any, comma separated) wait for nothing here
+      i = 2_I4P
+      do while (i <= size(tokens, kind=I4P))
+         if (tokens(i)%kind == TOKEN_STRING) exit
+         if (tokens(i)%kind == TOKEN_WORD) then
+            if (.not. is_word(tokens(i)%text, 'keypress button1 button2 button3 close any')) then
+               call fail('pause mouse: unknown event "'//tokens(i)%text//'"', iostat, iomsg)
+               return
+            endif
+         endif
+         i = i + 1_I4P
+      enddo
+   else
+      last = expression_end(tokens, 1_I4P)
+      call self%symbols%constant(expression_source(tokens(1:last)), seconds, iostat, iomsg, &
+                                 degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat /= 0_I4P) then
+         iomsg = 'pause: '//iomsg
+         return
+      endif
+      i = last + 1_I4P
+   endif
+   if (i <= size(tokens, kind=I4P)) then
+      if (.not. self%string_expression(tokens, i, message, iostat, iomsg)) then
+         iomsg = 'pause: '//iomsg
+         return
+      endif
+      if (i < size(tokens, kind=I4P)) then
+         call fail('pause: unexpected "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+         return
+      endif
+   endif
+   flush(output_unit)
+   if (seconds < 0.0_R8P) then
+      if (allocated(message)) write(error_unit, '(A)', advance='no') message
+      flush(error_unit)
+      read(input_unit, '(A)', iostat=ios) line
+   else
+      if (allocated(message)) write(error_unit, '(A)') message
+      flush(error_unit)
+      if (seconds > 0.0_R8P) call sleep_ms(nint(1000.0_R8P * min(seconds, 1.0e9_R8P), I8P))
+   endif
+   endsubroutine pause_command
 
    subroutine reset_command(self, tokens, iostat, iomsg)
    !< gnuplot `reset [session|errors|bind]`: the plot settings back to their defaults, as gnuplot 6.0 keeps the

@@ -7,7 +7,7 @@ program foresight_script_test
 !< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference file.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : fit, fit_result, I4P, R8P, script_object, stats, stats_result
+use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_ticks, only : MINOR_AUTO, TICS_NONE
 use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
@@ -35,8 +35,11 @@ character(len=:), allocatable :: script                                    !< Sc
 character(len=8)              :: update_flag                               !< FORESIGHT_UPDATE_GOLDEN value.
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
+integer(I8P)                  :: start_count                               !< Clock at the start of a timed check.
+integer(I8P)                  :: end_count                                 !< Clock at its end.
+integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(111)                           !< Per-check outcome.
+logical                       :: test_passed(112)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2219,6 +2222,27 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_table.dat')
 close(unit, status='delete')
 
+! pause and the live loop of gnuplot 6.0 (a plot rewritten after each pause); reread deprecated
+call interpreter%init(scratch)
+call system_clock(count=start_count, count_rate=count_rate)
+call interpreter%run_text('set output "foresight_script_test_pause.svg"; i = 0'//new_line('a')// &
+                          'while (i < 3) { i = i + 1; plot [0:1] x*i; pa 0.05 }'//new_line('a')// &
+                          'pause 0; pause mouse close; pause (i > 2 ? 0 : 1)', iostat, iomsg)
+call system_clock(count=end_count)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(112) = iostat == 0_I4P .and. real(end_count - start_count, R8P) / real(count_rate, R8P) >= 0.14_R8P
+if (test_passed(112)) test_passed(112) = abs(interpreter%figure%panels(1)%series(1)%y(100) - 3.0_R8P) < 1e-12_R8P
+call interpreter%run_text('reread', iostat, iomsg)
+test_passed(112) = test_passed(112) .and. iostat /= 0_I4P .and. index(iomsg, 'deprecated in gnuplot 6.0') > 0
+call interpreter%run_text('pause', iostat, iomsg)
+test_passed(112) = test_passed(112) .and. iostat /= 0_I4P .and. index(iomsg, '-1 or mouse') > 0
+call interpreter%run_text('pause mouse wheel', iostat, iomsg)
+test_passed(112) = test_passed(112) .and. iostat /= 0_I4P .and. index(iomsg, 'unknown event "wheel"') > 0
+call interpreter%run_text('pause 1/0', iostat, iomsg)
+test_passed(112) = test_passed(112) .and. iostat /= 0_I4P .and. index(iomsg, 'pause: undefined value') > 0
+open(newunit=unit, file='foresight_script_test_pause.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2227,7 +2251,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,111L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,112L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
