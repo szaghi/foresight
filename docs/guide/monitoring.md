@@ -71,6 +71,24 @@ The glass is fixed by the format, so the digits never jump between two reloads; 
 In the terminal the digits are drawn with characters, so the cockpit works over ssh too. See
 [Readouts](gnuplot-subset#readouts) and the [cookbook](/manual/cookbook#seven-segment-readouts).
 
+## A loop in the script
+
+A gnuplot 6.0 script can follow a run by itself, without `--watch`: a loop that plots and pauses.
+
+```gnuplot
+set terminal html refresh 5; set output 'run.html'
+while (1) {
+  plot 'run.dat' u 1:2 w l t 'residual'
+  pause 5
+}
+```
+
+Each plot rewrites the page whole (written to a temporary file, then renamed), the browser reloads it every 5 seconds.
+Stop the loop with Ctrl-C. `reread`, the older idiom, is an error: gnuplot 6.0 rejects it as deprecated. `--watch`
+does more for the same job: it re-runs the script only when a data file or the script changes, survives a failing
+cycle, and needs no loop in the script. See [Shell commands, reset and
+pause](gnuplot-subset#shell-commands-reset-and-pause) and the [cookbook](/manual/cookbook#a-plot-that-follows-a-run).
+
 ## Robustness
 
 - An error in one cycle — a data file briefly missing, a script saved with a typo — is reported and watching goes on.

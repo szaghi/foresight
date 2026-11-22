@@ -58,7 +58,8 @@ regenerated:
 
 - **ticks, tick labels and grid** (y2 and x2 ticks included), with a line-by-line port of the Fortran tick rules
   (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals; on time axes the time
-  steps and the labels (two-line ones included) by the same rules as the Fortran side;
+  steps and the labels (two-line ones included) by the same rules as the Fortran side; text labels from the data
+  (`xtic`, `x2tic`, `ytic`, `y2tic`) kept at their values; the minor ticks of `set mxtics time` are not redrawn;
 - **error bar caps**, **point type markers** (`pt`), **arrowheads** of `vectors` and `arrows`, and the texts of `with
   labels`, kept at their pixel size in separate overlays;
 - what does not follow the data is hidden while zoomed and shown again by `a`: the r and theta labels of a polar

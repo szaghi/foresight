@@ -42,8 +42,8 @@ flowchart TD
   (`readout`, `readout_extent`), not polygons: each device draws digits its own way, hexagons in SVG, `_` and `|` in
   text. `foresight_png` encodes the pixels of an image as a base64 PNG for the SVG.
 - **System** (`foresight_sys`, `foresight_fingerprint`): the libc calls standard Fortran lacks (`rename` for atomic
-  rewrites, `nanosleep` between the cycles of the watch mode), and the cheap file fingerprints that tell the watch mode
-  a file changed.
+  rewrites, `nanosleep` between the cycles of the watch mode and for `pause`, `popen` for `system()` and backquotes),
+  and the cheap file fingerprints that tell the watch mode a file changed.
 
 ## Design decisions
 

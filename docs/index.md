@@ -170,6 +170,10 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_strcol" svg :width="560" :height="320" caption="names and labels from text columns (strcol)" />
   <Plot name="cb_datablock" svg :width="560" :height="320" caption="data inside the script (datablock)" />
   <Plot name="cb_call" svg :width="760" :height="300" caption="a script called with arguments" />
+  <Plot name="cb_arrays" svg :width="560" :height="320" caption="arrays" />
+  <Plot name="cb_runtime" svg :width="760" :height="300" caption="shell commands and reset" />
+  <Plot name="cb_live_loop" svg :width="560" :height="320" caption="a plot that follows a run (pause)" />
+  <Plot name="cb_table" svg :width="560" :height="320" caption="a table of a plot (set table)" />
 </div>
 
 ### Axes, ticks and key
@@ -179,9 +183,11 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_reversed" svg :width="560" :height="320" caption="a reversed axis" />
   <Plot name="cb_ticks" svg :width="560" :height="320" caption="tick steps and label formats" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
+  <Plot name="cb_ytic" svg :width="560" :height="320" caption="names on the y axis (ytic)" />
   <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
   <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />
   <Plot name="cb_time" svg :width="640" :height="480" caption="a time axis (set xdata time)" />
+  <Plot name="cb_time_minor" svg :width="640" :height="260" caption="minor ticks in time units" />
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
   <Plot name="cb_x2_rotate" svg :width="560" :height="340" caption="rotated labels on top" />
@@ -201,6 +207,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
   <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
   <Plot name="cb_errorbars" svg :width="560" :height="320" caption="error bars" />
+  <Plot name="cb_errorbar_caps" svg :width="760" :height="280" caption="error bar caps (set errorbars)" />
   <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
   <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
@@ -226,6 +233,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_rowstacked" svg :width="560" :height="320" caption="stacked bars" />
   <Plot name="cb_boxerrorbars" svg :width="560" :height="320" caption="bars with error bars" />
   <Plot name="cb_hist_groups" svg :width="560" :height="320" caption="groups of bars (newhistogram)" />
+  <Plot name="cb_hist_titles" svg :width="560" :height="320" caption="group titles" />
   <Plot name="cb_hist_columns" svg :width="560" :height="320" caption="one stack per column (columnstacked)" />
   <Plot name="cb_hist_errorbars" svg :width="560" :height="320" caption="clustered bars with error bars" />
   <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />
@@ -245,7 +253,9 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_ellipses" svg :width="560" :height="320" caption="uncertainty ellipses" />
   <Plot name="cb_polygons" svg :width="560" :height="320" caption="polygons" />
   <Plot name="cb_area" svg :width="560" :height="320" caption="the area under a curve (filledcurves x1, closed)" />
+  <Plot name="cb_fill_borders" svg :width="560" :height="320" caption="fills to the borders (y1, y2, x=V)" />
   <Plot name="cb_annotations" svg :width="640" :height="400" caption="labels, arrows and objects" />
+  <Plot name="cb_arrow_styles" svg :width="560" :height="360" caption="arrow styles, dashed objects" />
 </div>
 
 ### Heatmaps and images

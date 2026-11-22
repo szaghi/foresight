@@ -104,6 +104,45 @@ A datablock keeps the data in the script itself: `plot`, `fit` and `stats` read 
 `call` runs `panel.gp` with `ARG1` the column and `ARG2` the title; `column(ARG1 + 0)` reads the column the string
 names. From the shell, `foresight -c panel.gp 2 continuity` does the same.
 
+### Arrays
+
+<<< @/examples/snippets/cb_arrays.gp{gnuplot}
+
+<Plot name="cb_arrays" svg :width="560" :height="320" />
+
+An array is filled in a loop, `|T|` its size; `plot T` and `stats T` read the index and the value of each element as
+a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot-subset#arrays).
+
+### Shell commands and reset
+
+<<< @/examples/snippets/cb_runtime.gp{gnuplot}
+
+<Plot name="cb_runtime" svg :width="760" :height="300" />
+
+`system('...')` and a command between backquotes give the output of a shell command (the run's host, the lines of the
+log); `reset` puts the settings back to their defaults for the next panel. See
+[Shell commands, reset and pause](/guide/gnuplot-subset#shell-commands-reset-and-pause).
+
+### A plot that follows a run
+
+<<< @/examples/snippets/cb_live_loop.gp{gnuplot}
+
+<Plot name="cb_live_loop" svg :width="560" :height="320" />
+
+gnuplot 6.0's live loop: each pass plots and pauses, the output rewritten at each plot. A real one is `while (1) {
+plot ...; pause 5 }` with `set terminal html refresh 5`: the page in the browser follows the run (`foresight --watch`
+does the same without a loop, see [Monitoring](/guide/monitoring)).
+
+### A table of a plot
+
+<<< @/examples/snippets/cb_table.gp{gnuplot}
+
+<Plot name="cb_table" svg :width="560" :height="320" />
+
+`set table $SMOOTH` makes the plot write its points into the datablock, in gnuplot's table layout, instead of drawing
+them; plotted afterwards they are the spline itself, a marker every 10 points (`pi 10`). See
+[Tables](/guide/gnuplot-subset#tables).
+
 ## Axes, ticks and key
 
 ### A log axis with exponent labels
@@ -135,6 +174,16 @@ On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 An explicit list replaces the ticks: names at chosen positions, `""` with level `1` for an unlabelled minor tick. With
 `add` the list joins the automatic ticks; a label holding a conversion is the format of its position (`"%.0f mm"`).
 
+### Names on the y axis
+
+<<< @/examples/snippets/cb_ytic.gp{gnuplot}
+
+<Plot name="cb_ytic" svg :width="560" :height="320" />
+
+`ytic(5)` names the y ticks with column 5 at the ordinates (the point numbers here), as `xtic` does the x ones;
+`x2tic` and `y2tic` need `set x2tics` and `set y2tics`. See
+[Text labels on any axis](/guide/gnuplot-subset#text-labels-on-any-axis).
+
 ### Minor ticks
 
 <<< @/examples/snippets/cb_mtics.gp{gnuplot}
@@ -161,6 +210,15 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 `set xdata time` reads the x field with the `timefmt`: the time spans two columns, so the residual is column 4. The
 ticks fall on whole time units, the labels invented from the range as gnuplot's (`%H:%M:%S` within a day at minute
 steps), or written by `set format x`; range ends are times. See [Time data](/guide/gnuplot-subset#time-data).
+
+### Minor ticks in time units
+
+<<< @/examples/snippets/cb_time_minor.gp{gnuplot}
+
+<Plot name="cb_time_minor" svg :width="640" :height="260" />
+
+`set mxtics time 10 minutes` (gnuplot 6.0) puts a minor tick at every 10 minutes of the clock, whatever the major
+step; `time 1 months` marks the first of every month.
 
 ### Two y axes
 
@@ -284,6 +342,15 @@ takes the first colors of a categorical order of the Scientific colour maps, the
 <Plot name="cb_errorbars" svg :width="560" :height="320" />
 
 `x:y:dy`, or `x:y:low:high`; the caps keep their size under zoom.
+
+### Error bar caps
+
+<<< @/examples/snippets/cb_errorbar_caps.gp{gnuplot}
+
+<Plot name="cb_errorbar_caps" svg :width="760" :height="280" />
+
+`set errorbars 3` makes the caps three times the default, `lc` and `lw` draw the bars in their own line, `small`
+drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 
 ### Error bars on both axes
 
@@ -483,6 +550,14 @@ names the bars. See [Box, finance and boxplot styles](/guide/gnuplot-subset#box-
 
 `newhistogram` starts a group 2 rows after the previous one, its title below the axis, its colors from `lt 3`.
 
+### Group titles
+
+<<< @/examples/snippets/cb_hist_titles.gp{gnuplot}
+
+<Plot name="cb_hist_titles" svg :width="560" :height="320" />
+
+`set style histogram ... title tc C offset X,Y` colors the group titles and moves them (in characters).
+
 ### One stack per column
 
 <<< @/examples/snippets/cb_hist_columns.gp{gnuplot}
@@ -611,6 +686,15 @@ regions, outlines.
 
 `filledcurves x1` fills down to the bottom of the plot, `closed` fills the polygon of the points.
 
+### Fills to the borders
+
+<<< @/examples/snippets/cb_fill_borders.gp{gnuplot}
+
+<Plot name="cb_fill_borders" svg :width="560" :height="320" />
+
+`y1` fills across to the left border, `y2` to the right one, `x=5` to the vertical line x = 5, as gnuplot 6.0. See
+[Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+
 ### Labels, arrows and objects
 
 <<< @/examples/snippets/cb_annotations.gp{gnuplot}
@@ -620,6 +704,16 @@ regions, outlines.
 Positions mix data (`first`), plot area (`graph`) and page (`screen`) coordinates; the band in `graph` y covers the
 whole height behind the grid, the polygon is in front of the curve. In the HTML page the objects zoom with the data.
 See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+
+### Arrow styles and dashed objects
+
+<<< @/examples/snippets/cb_arrow_styles.gp{gnuplot}
+
+<Plot name="cb_arrow_styles" svg :width="560" :height="360" />
+
+`set style arrow N` names a look, `as N` applies it (an option after it changes that one only); `set style rectangle`
+gives the rectangles set next their fill and border; `dt N` dashes an object's border; a label `at character X, Y`
+stands X cells from the left and Y up from the bottom of the page.
 
 ## Heatmaps and images
 

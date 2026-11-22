@@ -8,7 +8,7 @@ title: Installation
 
 - A Fortran 2018 compiler. The CI runs the tests with gfortran 16.2, ifx 2026.2 and nvfortran 26.9. nvfortran 26.9
   miscompiles some valid Fortran: foresight works around what it meets ([#3](https://github.com/szaghi/foresight/issues/3)).
-- A POSIX system (Linux, macOS): `rename` and `nanosleep` are called through `bind(C)`.
+- A POSIX system (Linux, macOS): `rename`, `nanosleep` and `popen` are called through `bind(C)`.
 - [FoBiS](https://github.com/szaghi/FoBiS) 3.8+ to build.
 - Optionally [Node.js](https://nodejs.org), only to run the viewer tests and to build this documentation.
 
