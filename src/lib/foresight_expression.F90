@@ -25,7 +25,9 @@ module foresight_expression
 !< user variables and functions; `a . b` joins (`b` a string or an integer), `eq` and `ne` compare, `s[i:j]` is a
 !< substring (1-based, ends clamped, `*` or nothing for an open end); `sprintf` (C conversions, from the exact binary
 !< value), `gprintf`, `strlen`, `substr`, `strstrt`, `words`, `word`, `trim`; `value("name")`, `exists("name")`
-!< (quoted names only). Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
+!< (quoted names only). Arrays (`symbols_object%declare_array`): `A[i]` an element (an index known now resolved now,
+!< else on each row), `|A|` the size, `index(A, value)`; datablocks (string variables named `$NAME`): `$NAME[i]` a
+!< line, `|$NAME|` their number. Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
 !< or where a number cannot be read, is an error of a constant expression and a gap on a data row.
 !<
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
@@ -41,6 +43,7 @@ implicit none
 private
 public :: expression_object
 public :: name_object
+public :: saved_array
 public :: saved_variable
 public :: symbols_object
 public :: push
@@ -53,6 +56,8 @@ interface push
    module procedure push_function
    module procedure push_expression
    module procedure push_instruction
+   module procedure push_array
+   module procedure push_list
 endinterface push
 
 ! operation codes
@@ -91,6 +96,7 @@ integer(I4P), parameter :: OP_CALL         = 32_I4P !< String function `arg` of 
 integer(I4P), parameter :: OP_STRCOL       = 33_I4P !< Replace the top with the text of the column it numbers or names.
 integer(I4P), parameter :: OP_COLUMNHEAD   = 34_I4P !< Replace the top with the header text of the column it numbers.
 integer(I4P), parameter :: OP_TIMECOLUMN   = 35_I4P !< Column (under the top) read as a time with the format (top).
+integer(I4P), parameter :: OP_ELEMENT      = 36_I4P !< Replace the top (an index) with that element of `lists(arg)`.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -120,6 +126,8 @@ integer(I4P), parameter :: E_BOOLEAN    = 3_I4P !< A string as a condition.
 integer(I4P), parameter :: E_FORMAT     = 4_I4P !< A bad sprintf/gprintf format.
 integer(I4P), parameter :: E_STRING_ARG = 5_I4P !< A string printed with a numeric conversion.
 integer(I4P), parameter :: E_NUMBER_ARG = 6_I4P !< A number printed with `%s`.
+integer(I4P), parameter :: E_INDEX      = 7_I4P !< An array index out of range.
+integer(I4P), parameter :: E_UNSET      = 8_I4P !< An array element never set.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(6) = [character(len=11) :: '||', '&&', '== != eq ne', '< <= > >=', '+ - .', &
@@ -182,16 +190,43 @@ type :: saved_variable
    type(value_object),            private :: v              !< Its value.
 endtype saved_variable
 
+type :: value_list
+   !< The elements of an array (gnuplot `array A[N]`) or the lines of a datablock, indexed at run time.
+   type(value_object), allocatable :: items(:) !< Elements.
+   logical,            allocatable :: set(:)   !< The element has a value (an array element may have none).
+endtype value_list
+
+type :: user_array
+   !< User array, gnuplot `array A[N]`: elements of any type, some possibly without a value.
+   character(len=:), allocatable :: name !< Name.
+   type(value_list)              :: list !< Elements.
+endtype user_array
+
+type :: saved_array
+   !< An array's state, kept to be restored: `call` sets ARGV and restores it after the script.
+   type(user_array), private :: a              !< The array.
+   logical,          private :: found = .false. !< It existed.
+endtype saved_array
+
 type :: symbols_object
    !< User variables and functions of a script, gnuplot's: `a = 2` stores the value now (integer or real), `f(x) = a*x`
    !< stores the text, compiled inline where it is called, so its variables take their values at that moment (plot
    !< time); recursion is not supported.
    type(user_variable), allocatable, private :: variables(:) !< Variables.
    type(user_function), allocatable, private :: functions(:) !< Functions.
+   type(user_array),    allocatable, private :: arrays(:)    !< Arrays, gnuplot `array A[N]`.
    character(len=:),    allocatable          :: timefmt      !< Time format of `timecolumn(N)` (gnuplot `set timefmt`),
                                                              !< `%d/%m/%y,%H:%M` if unallocated.
    contains
       procedure, pass(self) :: assign   !< `name = expression`.
+      procedure, pass(self) :: assign_element !< `name[index] = expression`.
+      procedure, pass(self) :: evaluate_constant !< Typed value of a constant expression.
+      procedure, pass(self) :: array_data !< An array as the lines of a data file (index and value).
+      procedure, pass(self) :: array_text !< An array as gnuplot's `print` shows it.
+      procedure, pass(self) :: declare_array !< `array name[N] [= [...]]`, `array name = [...]`.
+      procedure, pass(self) :: is_array !< Whether a name is an array.
+      procedure, pass(self) :: array_size !< Size of an array.
+      procedure, pass(self) :: set_array !< Set an array to strings (ARGV).
       procedure, pass(self) :: clear    !< Forget every symbol.
       procedure, pass(self) :: constant !< Value of a constant expression.
       procedure, pass(self) :: define   !< `name(params) = body`.
@@ -199,11 +234,14 @@ type :: symbols_object
       procedure, pass(self) :: set_value !< Set a variable to a number.
       procedure, pass(self) :: set_string !< Set a variable to a string.
       procedure, pass(self) :: save_variable !< Keep a variable's state.
+      procedure, pass(self) :: save_array !< Keep an array's state.
+      procedure, pass(self) :: restore_array !< Restore a kept array's state.
       procedure, pass(self) :: restore  !< Restore a kept variable's state.
       procedure, pass(self) :: remove   !< Forget a variable.
       procedure, pass(self) :: remove_prefix !< Forget the variables whose name starts with a prefix.
       procedure, pass(self) :: string_of !< Value of a string variable.
       procedure, pass(self) :: text_of  !< Value of a constant expression as text.
+      procedure, pass(self), private :: array_index    !< Index of an array, 0 if none.
       procedure, pass(self), private :: function_index !< Index of a function, 0 if none.
       procedure, pass(self), private :: store          !< Set a variable to a typed value.
       procedure, pass(self), private :: variable_index !< Index of a variable, 0 if none.
@@ -219,6 +257,7 @@ type :: expression_object
                                                               !< (gnuplot `set angles degrees`), else radians.
    character(len=:),         allocatable :: timefmt       !< Time format of a time field (`set xdata time`): a plain
                                                           !< column then reads a time with it.
+   type(value_list),         allocatable :: lists(:)      !< Arrays and datablocks indexed at run time (`A[$1]`).
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
       procedure, pass(self) :: set_time     !< Read a plain column as a time.
@@ -290,6 +329,7 @@ contains
    allocate(self%code(0))
    if (allocated(self%names)) deallocate(self%names)
    allocate(self%names(0))
+   if (allocated(self%lists)) deallocate(self%lists)
    self%depth = 0_I4P
    self%degrees = .false.
    if (present(degrees)) self%degrees = degrees
@@ -310,6 +350,7 @@ contains
    endif
    call next
    call parse_ternary
+   if (iostat == 0_I4P .and. kind == T_OPERATOR .and. token == '|') call syntax('bitwise operator "|" not supported')
    if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
    contains
       subroutine syntax(message, at)
@@ -388,6 +429,12 @@ contains
             call real_from_decimal(token, number%r, ok)
             if (.not. ok) call syntax('number out of range')
          endif
+      elseif (src(pos:pos) == '$' .and. next_is(LETTERS, 1_I4P)) then
+         ! a datablock name, `$DATA`
+         kind = T_NAME
+         pos = pos + 1_I4P
+         call skip(LETTERS//DIGITS)
+         token = src(start:pos - 1_I4P)
       elseif (src(pos:pos) == '$') then
          kind = T_COLUMN
          pos = pos + 1_I4P
@@ -442,8 +489,9 @@ contains
             token = src(pos:pos)
             pos = pos + 1_I4P
             select case (token)
-            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']')
-            case ('&', '|', '^', '~')
+            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']', '|')
+               ! `|` only around an array or a datablock, `|A|`
+            case ('&', '^', '~')
                call syntax('bitwise operator "'//token//'" not supported')
             case default
                call syntax('unexpected "'//token//'"')
@@ -670,6 +718,14 @@ contains
             call syntax(name//' takes a quoted variable name', at)
             return
          endif
+         if (name == 'index' .and. kind == T_NAME) then
+            if (present(symbols)) then
+               if (symbols%array_index(token) > 0_I4P) then
+                  call array_find(symbols%arrays(symbols%array_index(token))%list, at)
+                  return
+               endif
+            endif
+         endif
          if (name == 'column' .and. kind == T_STRING) then
             if (present(variable)) then
                call syntax('columns are only valid in using, not in a function', at)
@@ -764,6 +820,8 @@ contains
          if (accept('(')) then
             call parse_ternary
             call expect(')')
+         elseif (accept('|')) then
+            call cardinality
          else
             call syntax('unexpected "'//token//'"')
          endif
@@ -771,6 +829,115 @@ contains
          call syntax('unexpected end')
       endselect
       endsubroutine parse_primary
+
+      subroutine cardinality
+      !< `|A|`, the size of an array, or `|$D|`, the lines of a datablock: the current token the name.
+      integer(I4P) :: n  !< Size.
+      integer(I4P) :: at !< Name position.
+      integer(I4P) :: j  !< Character counter.
+      character(len=:), allocatable :: text  !< Datablock lines.
+      logical                       :: found !< A datablock.
+
+      at = start
+      n = -1_I4P
+      if (kind == T_NAME .and. present(symbols)) then
+         if (symbols%is_array(token)) then
+            n = symbols%array_size(token)
+         elseif (token(1:1) == '$') then
+            call symbols%string_of(token, text, found)
+            if (found) then
+               n = 0_I4P
+               do j = 1_I4P, len(text, kind=I4P)
+                  if (text(j:j) == new_line('a')) n = n + 1_I4P
+               enddo
+            endif
+         endif
+      endif
+      if (n < 0_I4P) then
+         if (loose .and. kind == T_NAME) then
+            n = 0_I4P
+         else
+            call syntax('|...| takes an array or a datablock', at)
+            return
+         endif
+      endif
+      call next
+      call expect('|')
+      if (iostat /= 0_I4P) return
+      call emit(OP_CONSTANT, v=int_value(int(n, I8P)))
+      endsubroutine cardinality
+
+      recursive subroutine array_find(list, at)
+      !< `index(A, value)`: the first element of `list` equal to the value (numbers by value, strings by text), 0 if
+      !< none; the current token is the array name, the value a constant.
+      type(value_list), intent(in) :: list  !< Array elements.
+      integer(I4P),     intent(in) :: at    !< Call position.
+      integer(I4P)                 :: last  !< Last instruction.
+      integer(I4P)                 :: k     !< Element counter.
+      integer(I8P)                 :: found !< Index found.
+
+      call next
+      call expect(',')
+      call parse_ternary
+      call expect(')')
+      if (iostat /= 0_I4P) return
+      last = size(self%code, kind=I4P)
+      if (self%code(last)%op /= OP_CONSTANT) then
+         call syntax('index(A, value) takes a constant value', at)
+         return
+      endif
+      found = 0_I8P
+      associate(v => self%code(last)%v)
+         do k = 1_I4P, size(list%items, kind=I4P)
+            if (.not. list%set(k)) cycle
+            if (v%is_string .neqv. list%items(k)%is_string) cycle
+            if (v%is_string) then
+               if (v%s /= list%items(k)%s) cycle
+            elseif (real_of(v) /= real_of(list%items(k))) then
+               cycle
+            endif
+            found = int(k, I8P)
+            exit
+         enddo
+      endassociate
+      self%code(last)%v = int_value(found)
+      endsubroutine array_find
+
+      recursive subroutine element(list, name, at)
+      !< `name[i]`, an element of `list` (an array, or the lines of a datablock): the current token follows `[`. A
+      !< constant index is resolved now, another at run time.
+      type(value_list), intent(in) :: list !< Elements.
+      character(len=*), intent(in) :: name !< Array or datablock name.
+      integer(I4P),     intent(in) :: at   !< Name position.
+      integer(I4P)                 :: last !< Last instruction.
+      integer(I8P)                 :: i    !< Index.
+      logical                      :: found !< A numeric index.
+
+      call parse_ternary
+      if (iostat /= 0_I4P) return
+      if (kind == T_OPERATOR .and. token == ':') then
+         call syntax('array slices '//name//'[i:j] are not supported', at)
+         return
+      endif
+      call expect(']')
+      if (iostat /= 0_I4P) return
+      last = size(self%code, kind=I4P)
+      if (self%code(last)%op == OP_CONSTANT) then
+         call index_of(self%code(last)%v, i, found)
+         if (.not. found) then
+            call syntax('array index of '//name//' is not a number', at)
+         elseif (i < 1_I8P .or. i > size(list%items, kind=I8P)) then
+            call syntax('array index out of range: '//name//'['//trim(adjustl(int_text(int(i, I4P))))//']', at)
+         elseif (.not. list%set(i)) then
+            call syntax('array element '//name//'['//trim(adjustl(int_text(int(i, I4P))))//'] has no value', at)
+         else
+            self%code(last)%v = list%items(i)
+         endif
+         return
+      endif
+      call push(self%lists, list)
+      call emit(OP_ELEMENT, arg=size(self%lists, kind=I4P))
+      endsubroutine element
 
       subroutine time_now
       !< `time(x)`, the last instruction its argument: the time now (UTC) replaces it, as an integer (`x` an integer), a
@@ -821,13 +988,19 @@ contains
       character(len=*), intent(in) :: name !< `value` or `exists`.
       integer(I4P)                 :: k    !< Variable index.
 
+      logical                      :: is_array !< An array.
+
       k = 0_I4P
-      if (present(symbols)) k = symbols%variable_index(token)
+      is_array = .false.
+      if (present(symbols)) then
+         k = symbols%variable_index(token)
+         is_array = symbols%array_index(token) > 0_I4P
+      endif
       call next
       call expect(')')
       if (iostat /= 0_I4P) return
       if (name == 'exists') then
-         call emit(OP_CONSTANT, v=logical_value(k > 0_I4P))
+         call emit(OP_CONSTANT, v=logical_value(k > 0_I4P .or. is_array))
       elseif (k > 0_I4P) then
          call emit(OP_CONSTANT, v=symbols%variables(k)%v)
       else
@@ -844,7 +1017,7 @@ contains
       if (present(variable) .and. size(frames) == 0) yes = name == variable
       endfunction is_variable
 
-      subroutine name_value(name, at)
+      recursive subroutine name_value(name, at)
       !< A name alone: a parameter of the function being compiled inline, the dummy variable, a user variable, `pi`.
       character(len=*), intent(in) :: name !< Name.
       integer(I4P),     intent(in) :: at   !< Position.
@@ -865,7 +1038,37 @@ contains
          return
       endif
       k = 0_I4P
+      if (present(symbols)) k = symbols%array_index(name)
+      if (k > 0_I4P) then
+         if (.not. (kind == T_OPERATOR .and. token == '[')) then
+            call syntax('array '//name//' needs an index, '//name//'[i], or |'//name//'|', at)
+            return
+         endif
+         call next
+         call element(symbols%arrays(k)%list, name, at)
+         return
+      endif
       if (present(symbols)) k = symbols%variable_index(name)
+      if (k > 0_I4P .and. name(1:1) == '$' .and. kind == T_OPERATOR .and. token == '[') then
+         ! a datablock line, `$D[i]`
+         if (symbols%variables(k)%v%is_string) then
+            call next
+            block
+               type(value_list) :: lines !< Datablock lines.
+
+               lines = lines_list(symbols%variables(k)%v%s)
+               call element(lines, name, at)
+            endblock
+            return
+         endif
+      endif
+      if (k == 0_I4P .and. loose .and. kind == T_OPERATOR .and. token == '[') then
+         ! an array not yet declared, in a function body checked alone: its element stands for it
+         call next
+         call parse_ternary
+         call expect(']')
+         return
+      endif
       if (k > 0_I4P) then
          call emit(OP_CONSTANT, v=symbols%variables(k)%v)
       elseif (name == 'pi') then
@@ -1152,6 +1355,7 @@ contains
 
    if (allocated(self%variables)) deallocate(self%variables)
    if (allocated(self%functions)) deallocate(self%functions)
+   if (allocated(self%arrays)) deallocate(self%arrays)
    endsubroutine clear
 
    pure subroutine set_value(self, name, v, is_int)
@@ -1223,9 +1427,20 @@ contains
    character(len=*),      intent(in)    :: name  !< Variable name.
    type(saved_variable)                 :: none  !< A variable that did not exist.
 
+   type(user_array), allocatable        :: kept(:) !< Arrays but the removed one.
+   integer(I4P)                         :: k     !< Index.
+   integer(I4P)                         :: j     !< Counter.
+
    none%name = name
    none%found = .false.
    call self%restore(none)
+   k = self%array_index(name)
+   if (k == 0_I4P) return
+   allocate(kept(0))
+   do j = 1_I4P, size(self%arrays, kind=I4P)
+      if (j /= k) call push(kept, self%arrays(j))
+   enddo
+   call move_alloc(kept, self%arrays)
    endsubroutine remove
 
    pure subroutine remove_prefix(self, prefix)
@@ -1233,8 +1448,17 @@ contains
    class(symbols_object), intent(inout) :: self    !< Symbols.
    character(len=*),      intent(in)    :: prefix  !< Name prefix.
    type(user_variable), allocatable     :: kept(:) !< Variables kept.
+   type(user_array), allocatable        :: arrays(:) !< Arrays kept.
    integer(I4P)                         :: k       !< Counter.
 
+   if (allocated(self%arrays)) then
+      allocate(arrays(0))
+      do k = 1_I4P, size(self%arrays, kind=I4P)
+         if (index(self%arrays(k)%name, prefix) == 1) cycle
+         call push(arrays, self%arrays(k))
+      enddo
+      call move_alloc(arrays, self%arrays)
+   endif
    if (.not. allocated(self%variables)) return
    allocate(kept(0))
    do k = 1_I4P, size(self%variables, kind=I4P)
@@ -1312,6 +1536,271 @@ contains
    v = real_of(self%variables(k)%v)
    if (present(is_int)) is_int = self%variables(k)%v%is_int
    endsubroutine value_of
+
+   subroutine declare_array(self, name, size_text, items, iostat, iomsg, degrees)
+   !< gnuplot `array name[size_text]`, its elements without a value, or with the values of the constant expressions
+   !< `items` (`array A[3] = [1, 2, 3]`, `array A = [...]`, `size_text` empty: the items' number). A redeclaration
+   !< replaces the array; a variable of the name is removed.
+   class(symbols_object),         intent(inout)        :: self     !< Symbols.
+   character(len=*),              intent(in)           :: name     !< Array name.
+   character(len=*),              intent(in)           :: size_text !< Size expression, empty for the items' number.
+   character(len=*),              intent(in), optional :: items(:) !< Element expressions.
+   integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg    !< Error message.
+   logical,                       intent(in), optional :: degrees  !< Angles in degrees.
+   type(user_array)                                    :: a        !< New array.
+   type(value_object)                                  :: v        !< Value.
+   real(R8P)                                           :: r        !< Size.
+   integer(I4P)                                        :: n        !< Size.
+   integer(I4P)                                        :: k        !< Counter.
+
+   call check_name(name, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   if (len_trim(size_text) > 0) then
+      call self%constant(size_text, r, iostat, iomsg, degrees=degrees)
+      if (iostat /= 0_I4P) return
+      if (r < 0.0_R8P .or. r > real(huge(1_I4P), R8P)) then
+         iostat = 1_I4P
+         iomsg = 'array '//name//': a size of 0 or more is expected'
+         return
+      endif
+      n = int(r, I4P)
+   elseif (present(items)) then
+      n = size(items, kind=I4P)
+   else
+      iostat = 1_I4P
+      iomsg = 'array '//name//': a size [N] or the elements = [...] are expected'
+      return
+   endif
+   if (present(items)) then
+      if (size(items) > n) then
+         iostat = 1_I4P
+         iomsg = 'array '//name//': more elements than its size'
+         return
+      endif
+   endif
+   allocate(a%list%items(n), a%list%set(n))
+   a%list%set = .false.
+   if (present(items)) then
+      do k = 1_I4P, size(items, kind=I4P)
+         call self%evaluate_constant(items(k), v, iostat, iomsg, degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'array '//name//': '//iomsg
+            return
+         endif
+         a%list%items(k) = v
+         a%list%set(k) = .true.
+      enddo
+   endif
+   a%name = name
+   call self%remove(name)
+   if (.not. allocated(self%arrays)) allocate(self%arrays(0))
+   call push(self%arrays, a)
+   endsubroutine declare_array
+
+   subroutine assign_element(self, name, index_text, text, iostat, iomsg, degrees)
+   !< gnuplot `name[index_text] = text`: the element of the array set to the value of the expression now.
+   class(symbols_object),         intent(inout)        :: self       !< Symbols.
+   character(len=*),              intent(in)           :: name       !< Array name.
+   character(len=*),              intent(in)           :: index_text !< Index expression.
+   character(len=*),              intent(in)           :: text       !< Value expression.
+   integer(I4P),                  intent(out)          :: iostat     !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg      !< Error message.
+   logical,                       intent(in), optional :: degrees    !< Angles in degrees.
+   type(value_object)                                  :: v          !< Value.
+   type(value_object)                                  :: at         !< Index value.
+   integer(I8P)                                        :: i          !< Index.
+   integer(I4P)                                        :: k          !< Array index.
+   logical                                             :: found      !< A numeric index.
+
+   k = self%array_index(name)
+   if (k == 0_I4P) then
+      iostat = 1_I4P
+      iomsg = name//' is not an array (array '//name//'[N] declares one)'
+      return
+   endif
+   call self%evaluate_constant(index_text, at, iostat, iomsg, degrees)
+   if (iostat /= 0_I4P) return
+   call index_of(at, i, found)
+   if (.not. found) then
+      iostat = 1_I4P
+      iomsg = 'array index of '//name//' is not a number: '//index_text
+      return
+   endif
+   if (i < 1_I8P .or. i > size(self%arrays(k)%list%items, kind=I8P)) then
+      iostat = 1_I4P
+      iomsg = 'array index out of range: '//name//'['//index_text//']'
+      return
+   endif
+   call self%evaluate_constant(text, v, iostat, iomsg, degrees)
+   if (iostat /= 0_I4P) return
+   self%arrays(k)%list%items(i) = v
+   self%arrays(k)%list%set(i) = .true.
+   endsubroutine assign_element
+
+   subroutine evaluate_constant(self, text, v, iostat, iomsg, degrees)
+   !< Typed value of the constant expression `text`: columns, undefined values and type errors are errors.
+   class(symbols_object),         intent(in)           :: self    !< Symbols.
+   character(len=*),              intent(in)           :: text    !< Expression.
+   type(value_object),            intent(out)          :: v       !< Value.
+   integer(I4P),                  intent(out)          :: iostat  !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
+   logical,                       intent(in), optional :: degrees !< Angles in degrees.
+   type(expression_object)                             :: e       !< Compiled expression.
+   logical                                             :: defined !< Defined.
+   integer(I4P)                                        :: error   !< Type error.
+
+   call e%compile(text, iostat, iomsg, degrees=degrees, symbols=self)
+   if (iostat /= 0_I4P) return
+   if (any(e%code%op == OP_COLUMN) .or. any(e%code%op == OP_COLUMN_OF) .or. size(e%names) > 0) then
+      iostat = 1_I4P
+      iomsg = 'columns are only valid in using, not in "'//text//'"'
+      return
+   endif
+   call run(e, [real(R8P) ::], 0_I4P, v, defined, error)
+   if (.not. defined) then
+      iostat = 1_I4P
+      if (error /= E_NONE) then
+         iomsg = error_text(error)//': '//text
+      else
+         iomsg = 'undefined value: '//text
+      endif
+   endif
+   endsubroutine evaluate_constant
+
+   pure subroutine set_array(self, name, texts)
+   !< Set the array `name` to the strings `texts` (gnuplot's `ARGV`), replacing it. The name is not checked.
+   class(symbols_object), intent(inout) :: self     !< Symbols.
+   character(len=*),      intent(in)    :: name     !< Array name.
+   character(len=*),      intent(in)    :: texts(:) !< Elements, trailing blanks dropped.
+   type(user_array)                     :: a        !< New array.
+   integer(I4P)                         :: k        !< Counter.
+
+   allocate(a%list%items(size(texts)), a%list%set(size(texts)))
+   do k = 1_I4P, size(texts, kind=I4P)
+      a%list%items(k) = string_value(trim(texts(k)))
+   enddo
+   a%list%set = .true.
+   a%name = name
+   call self%remove(name)
+   if (.not. allocated(self%arrays)) allocate(self%arrays(0))
+   call push(self%arrays, a)
+   endsubroutine set_array
+
+   pure subroutine save_array(self, name, saved)
+   !< The state of the array `name` (its elements, or that it does not exist), for `restore_array`.
+   class(symbols_object), intent(in)  :: self  !< Symbols.
+   character(len=*),      intent(in)  :: name  !< Array name.
+   type(saved_array),     intent(out) :: saved !< State.
+   integer(I4P)                       :: k     !< Index.
+
+   saved%a%name = name
+   k = self%array_index(name)
+   saved%found = k > 0_I4P
+   if (saved%found) saved%a%list = self%arrays(k)%list
+   endsubroutine save_array
+
+   pure subroutine restore_array(self, saved)
+   !< Restore an array kept by `save_array`: its elements, or remove it if it did not exist.
+   class(symbols_object), intent(inout) :: self  !< Symbols.
+   type(saved_array),     intent(in)    :: saved !< State.
+
+   call self%remove(saved%a%name)
+   if (.not. saved%found) return
+   if (.not. allocated(self%arrays)) allocate(self%arrays(0))
+   call push(self%arrays, saved%a)
+   endsubroutine restore_array
+
+   pure function is_array(self, name) result(yes)
+   !< Whether `name` is an array.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   logical                           :: yes  !< An array.
+
+   yes = self%array_index(name) > 0_I4P
+   endfunction is_array
+
+   pure function array_size(self, name) result(n)
+   !< Size of the array `name`, 0 if there is none.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   integer(I4P)                      :: n    !< Size.
+   integer(I4P)                      :: k    !< Array index.
+
+   n = 0_I4P
+   k = self%array_index(name)
+   if (k > 0_I4P) n = size(self%arrays(k)%list%items, kind=I4P)
+   endfunction array_size
+
+   pure function array_text(self, name) result(text)
+   !< The array `name` as gnuplot's `print` shows it: `[1,2.5,"x",]` (strings quoted, an element without a value
+   !< empty); empty if there is no such array.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Array name.
+   character(len=:), allocatable     :: text !< Text.
+   integer(I4P)                      :: k    !< Array index.
+   integer(I4P)                      :: j    !< Element counter.
+
+   text = ''
+   k = self%array_index(name)
+   if (k == 0_I4P) return
+   text = '['
+   associate(list => self%arrays(k)%list)
+      do j = 1_I4P, size(list%items, kind=I4P)
+         if (j > 1_I4P) text = text//','
+         if (.not. list%set(j)) cycle
+         if (list%items(j)%is_string) then
+            text = text//'"'//list%items(j)%s//'"'
+         else
+            text = text//number_text(list%items(j))
+         endif
+      enddo
+   endassociate
+   text = text//']'
+   endfunction array_text
+
+   pure function array_data(self, name) result(text)
+   !< The array `name` as data lines (gnuplot's `plot A`): the index, then the value (a string quoted, `NaN` for an
+   !< element without a value); empty if there is no such array.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Array name.
+   character(len=:), allocatable     :: text !< Data lines.
+   integer(I4P)                      :: k    !< Array index.
+   integer(I4P)                      :: j    !< Element counter.
+
+   text = ''
+   k = self%array_index(name)
+   if (k == 0_I4P) return
+   associate(list => self%arrays(k)%list)
+      do j = 1_I4P, size(list%items, kind=I4P)
+         text = text//int_str(int(j, I8P))//' '
+         if (.not. list%set(j)) then
+            text = text//'NaN'
+         elseif (list%items(j)%is_string) then
+            text = text//'"'//list%items(j)%s//'"'
+         elseif (list%items(j)%is_int) then
+            text = text//int_str(list%items(j)%i)
+         else
+            text = text//gnuplot_real(list%items(j)%r)
+         endif
+         text = text//new_line('a')
+      enddo
+   endassociate
+   endfunction array_data
+
+   pure function array_index(self, name) result(k)
+   !< Index of the array `name`, 0 if none.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   integer(I4P)                      :: k    !< Index.
+
+   if (allocated(self%arrays)) then
+      do k = 1_I4P, size(self%arrays, kind=I4P)
+         if (self%arrays(k)%name == name) return
+      enddo
+   endif
+   k = 0_I4P
+   endfunction array_index
 
    pure function variable_index(self, name) result(k)
    !< Index of the variable `name`, 0 if none.
@@ -1593,6 +2082,21 @@ contains
             else
                sp = sp - 1_I4P
             endif
+         case (OP_ELEMENT)
+            associate(list => self%lists(instruction%arg))
+               call index_of(stack(sp), c, ok)
+               if (.not. ok) then
+                  err = E_NONNUMERIC
+               elseif (c < 1_I8P .or. c > size(list%items, kind=I8P)) then
+                  ok = .false.
+                  err = E_INDEX
+               elseif (.not. list%set(c)) then
+                  ok = .false.
+                  err = E_UNSET
+               else
+                  stack(sp) = list%items(c)
+               endif
+            endassociate
          case (OP_LOAD)
             sp = sp + 1_I4P
             stack(sp) = stack(instruction%arg)
@@ -2302,6 +2806,10 @@ contains
       text = 'sprintf: a string printed with a numeric format'
    case (E_NUMBER_ARG)
       text = 'sprintf: a number printed with a string format'
+   case (E_INDEX)
+      text = 'array index out of range'
+   case (E_UNSET)
+      text = 'array element without a value'
    case default
       text = 'undefined value'
    endselect
@@ -2836,6 +3344,82 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_instruction
+
+   pure subroutine index_of(v, i, ok)
+   !< `v` as an array index (a real truncated, a string's leading number): false if it is not a number.
+   type(value_object), intent(in)  :: v  !< Value.
+   integer(I8P),       intent(out) :: i  !< Index.
+   logical,            intent(out) :: ok !< A number.
+   type(value_object)              :: n  !< Its number.
+   integer(I4P)                    :: err !< Type error.
+
+   i = 0_I8P
+   n = v
+   ok = .true.
+   if (n%is_string) call numeric(n, ok, err)
+   if (.not. ok) return
+   if (n%is_int) then
+      i = n%i
+   elseif (ieee_is_nan(n%r) .or. abs(n%r) >= INT_LIMIT) then
+      ok = .false.
+   else
+      i = int(n%r, I8P)
+   endif
+   endsubroutine index_of
+
+   pure function lines_list(text) result(list)
+   !< The lines of a datablock `text` (each ended by a newline) as string elements.
+   character(len=*), intent(in) :: text !< Datablock text.
+   type(value_list)             :: list !< Lines.
+   integer(I4P)                 :: n    !< Lines.
+   integer(I4P)                 :: k    !< Character counter.
+   integer(I4P)                 :: first !< Current line start.
+
+   n = 0_I4P
+   do k = 1_I4P, len(text, kind=I4P)
+      if (text(k:k) == new_line('a')) n = n + 1_I4P
+   enddo
+   allocate(list%items(n), list%set(n))
+   list%set = .true.
+   n = 0_I4P
+   first = 1_I4P
+   do k = 1_I4P, len(text, kind=I4P)
+      if (text(k:k) /= new_line('a')) cycle
+      n = n + 1_I4P
+      list%items(n) = string_value(text(first:k - 1_I4P))
+      first = k + 1_I4P
+   enddo
+   endfunction lines_list
+
+   pure subroutine push_array(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(user_array), allocatable, intent(inout) :: list(:)  !< List.
+   type(user_array),              intent(in)    :: item     !< New item.
+   type(user_array), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                 :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_array
+
+   pure subroutine push_list(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(value_list), allocatable, intent(inout) :: list(:)  !< List.
+   type(value_list),              intent(in)    :: item     !< New item.
+   type(value_list), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                 :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_list
 
    pure subroutine push_name(list, item)
    !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.

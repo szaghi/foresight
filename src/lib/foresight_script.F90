@@ -83,7 +83,12 @@ module foresight_script
 !<   tick positions, `timecolumn(N[, "fmt"])`, `strftime(fmt, t)`, `strptime(fmt, s)`, `time(0)` (see foresight_time);
 !< - datablocks `$NAME << WORD` (the lines up to one starting with WORD) plotted, fitted, stated as a file (`plot $D`),
 !<   `print $NAME`, `load FILE`, `call FILE ARG1 ...` (ARG0..ARG9, ARGC, restored after it), `eval STRING`, macros
-!<   `@name` (a string variable's value), `undefine NAME|NAME*|$NAME`;
+!<   `@name` (a string variable's value), `undefine NAME|NAME*|$NAME`; `$NAME[i]` a line of a datablock, `|$NAME|`
+!<   their number;
+!< - arrays: `array A[N]`, `array A[N] = [E1, ...]`, `array A = [E1, ...]` (elements of any type, some possibly without
+!<   a value), `A[i] = E`, `A[i]` and `|A|` in expressions (an index of a data row resolved on each row), `index(A, V)`,
+!<   `print A`, `plot A` and `stats A` (the index and the value of each element, as a file), `ARGV` (the arguments of
+!<   `call` and `foresight -c`);
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
@@ -94,7 +99,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_v
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight_axes, only : axes_names, boxplot_style, boxplot_words, polar_series, spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : expression_object, push, saved_variable, symbols_object
+use foresight_expression, only : expression_object, push, saved_array, saved_variable, symbols_object
 use foresight_annotations, only : arrow_object, label_object, place_object, shape_object
 use foresight_figure, only : figure_object
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, int_str, real_from_decimal
@@ -259,6 +264,7 @@ contains
    self%rgbmax = 255.0_R8P
    call self%symbols%clear
    call self%symbols%set_value('ARGC', 0.0_R8P, is_int=.true.)
+   call self%symbols%set_array('ARGV', [character(len=1) ::])
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
@@ -301,6 +307,7 @@ contains
          endif
       enddo
       call self%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
+      call self%symbols%set_array('ARGV', args)
    endif
    open(newunit=unit, file=file, access='stream', form='unformatted', action='read', status='old', &
         iostat=iostat, iomsg=message)
@@ -535,6 +542,9 @@ contains
       call self%stats_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'load', 1_I4P) .or. keyword(command, 'call', 3_I4P)) then
       call self%call_command(tokens, keyword(command, 'call', 3_I4P), iostat, iomsg)
+   elseif (command == 'array') then
+      call array_command(self%symbols, after_command(statement), self%figure%panels(self%figure%current)%degrees, &
+                         iostat, iomsg)
    elseif (keyword(command, 'eval', 3_I4P)) then
       ! the string, run as script lines
       i = 2_I4P
@@ -609,7 +619,7 @@ contains
    endif
    ! a datablock name stands for its data, as a file name
    if (last == i .and. tokens(i)%kind == TOKEN_WORD) then
-      if (is_datablock(tokens(i)%text)) then
+      if (is_datablock(tokens(i)%text) .or. self%symbols%is_array(tokens(i)%text)) then
          text = tokens(i)%text
          ok = .true.
          return
@@ -1105,7 +1115,7 @@ contains
       i = i + 1_I4P
    enddo
    ! a missing file is not an error, as gnuplot's (a script may test for it): the variables are left as they are
-   found = is_datablock(file)
+   found = is_datablock(file) .or. self%symbols%is_array(file)
    if (.not. found) inquire(file=file, exist=found)
    if (.not. found) then
       if (output) write(error_unit, '(A)') 'Cannot find or open file "'//file//'"'
@@ -1119,6 +1129,11 @@ contains
       return
    endif
    self%previous_file = file
+   if (.not. allocated(fields) .and. self%symbols%is_array(file)) then
+      ! an array: its values, as gnuplot's
+      call parse_using('2', fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+      if (iostat /= 0_I4P) return
+   endif
    if (.not. allocated(fields)) then
       ! gnuplot: the first two columns if the first data line has both, else the first
       if (data%nrows > 0_I4P) then
@@ -1398,8 +1413,12 @@ contains
          call fail('print: an expression is expected', iostat, iomsg)
          return
       endif
-      call self%symbols%text_of(parts(k)%text, value, is_string, iostat, iomsg, &
-                                degrees=self%figure%panels(self%figure%current)%degrees)
+      if (self%symbols%is_array(parts(k)%text)) then
+         value = self%symbols%array_text(parts(k)%text)
+      else
+         call self%symbols%text_of(parts(k)%text, value, is_string, iostat, iomsg, &
+                                   degrees=self%figure%panels(self%figure%current)%degrees)
+      endif
       if (iostat /= 0_I4P) then
          iomsg = 'print: '//iomsg
          return
@@ -1703,6 +1722,27 @@ contains
    name = s(1:e - 1_I4P)
    k = e
    is_function = .false.
+   if (s(k:k) == '[' .and. self%symbols%is_array(name)) then
+      ! an array element, `A[i] = expression`
+      close = closing_bracket(s, k)
+      if (close == 0_I4P) return
+      list = s(k + 1_I4P:close - 1_I4P)
+      k = close + 1_I4P
+      do while (k <= len(s, kind=I4P))
+         if (s(k:k) /= ' ' .and. s(k:k) /= achar(9)) exit
+         k = k + 1_I4P
+      enddo
+      if (k > len(s, kind=I4P)) return
+      if (s(k:k) /= '=') return
+      if (k < len(s, kind=I4P)) then
+         if (s(k + 1_I4P:k + 1_I4P) == '=') return
+      endif
+      done = .true.
+      rhs = s(k + 1_I4P:)
+      call self%symbols%assign_element(name, list, trim(adjustl(rhs)), iostat, iomsg, &
+                                       degrees=self%figure%panels(self%figure%current)%degrees)
+      return
+   endif
    if (s(k:k) == '(') then
       close = index(s(k:), ')', kind=I4P)
       if (close == 0_I4P) return
@@ -1916,7 +1956,8 @@ contains
       elseif (tokens(i)%kind == TOKEN_COMMA) then
          call fail('plot: missing item before ","', iostat, iomsg)
          return
-      elseif (is_datablock(tokens(i)%text) .and. tokens(i)%kind == TOKEN_WORD) then
+      elseif ((is_datablock(tokens(i)%text) .or. self%symbols%is_array(tokens(i)%text)) .and. &
+              tokens(i)%kind == TOKEN_WORD) then
          is_function = .false.
          file = tokens(i)%text
          written = file
@@ -3823,6 +3864,7 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    character(len=*), parameter                  :: DIGITS = '0123456789' !< Argument numbers.
    type(saved_variable)                         :: saved(11) !< ARG0 to ARG9 and ARGC before the call.
+   type(saved_array)                            :: saved_argv !< ARGV before the call.
    type(token_object), allocatable              :: args(:)   !< Argument texts.
    type(token_object)                           :: arg       !< One argument.
    character(len=:), allocatable                :: file      !< Script.
@@ -3889,6 +3931,7 @@ contains
       call self%symbols%save_variable('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), saved(k + 1_I4P))
    enddo
    call self%symbols%save_variable('ARGC', saved(11))
+   call self%symbols%save_array('ARGV', saved_argv)
    call self%symbols%set_string('ARG0', file)
    if (is_call) then
       do k = 1_I4P, 9_I4P
@@ -3899,6 +3942,20 @@ contains
          endif
       enddo
       call self%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
+      block
+         character(len=:), allocatable :: texts(:) !< Argument texts.
+         integer(I4P)                  :: width    !< Longest.
+
+         width = 1_I4P
+         do k = 1_I4P, size(args, kind=I4P)
+            width = max(width, len(args(k)%text, kind=I4P))
+         enddo
+         allocate(character(len=width) :: texts(size(args)))
+         do k = 1_I4P, size(args, kind=I4P)
+            texts(k) = args(k)%text
+         enddo
+         call self%symbols%set_array('ARGV', texts)
+      endblock
    endif
    call self%register_file(file)
    call self%run_file(file, status, message)
@@ -3906,6 +3963,7 @@ contains
    do k = 1_I4P, 11_I4P
       call self%symbols%restore(saved(k))
    enddo
+   call self%symbols%restore_array(saved_argv)
    iostat = status
    iomsg = message
    endsubroutine call_command
@@ -4560,7 +4618,11 @@ contains
    character(len=:), allocatable                       :: lines     !< Datablock lines.
    logical                                             :: found     !< Datablock found.
 
-   if (is_datablock(file)) then
+   if (self%symbols%is_array(file)) then
+      ! an array: the index and the value of each element, as gnuplot's `plot A`
+      call data%load(file, iostat, iomsg, separator='', missing=self%missing, comments=self%comments, &
+                     keep_text=keep_text, content=self%symbols%array_data(file))
+   elseif (is_datablock(file)) then
       call self%symbols%string_of(file, lines, found)
       if (.not. found) then
          call fail('no datablock '//file, iostat, iomsg)
@@ -4581,7 +4643,7 @@ contains
    type(token_object)                  :: entry !< New entry.
    integer(I4P)                        :: f     !< Counter.
 
-   if (is_datablock(file)) return
+   if (is_datablock(file) .or. self%symbols%is_array(file)) return
    do f = 1_I4P, size(self%data_files, kind=I4P)
       if (self%data_files(f)%text == file) return
    enddo
@@ -6944,6 +7006,121 @@ contains
       endif
    enddo
    endsubroutine split_range
+
+   subroutine array_command(symbols, text, degrees, iostat, iomsg)
+   !< gnuplot `array NAME[N]`, `array NAME[N] = [E1, E2, ...]`, `array NAME = [E1, ...]`: `text` follows `array`.
+   type(symbols_object),          intent(inout) :: symbols  !< Symbols.
+   character(len=*),              intent(in)    :: text     !< Text after `array`.
+   logical,                       intent(in)    :: degrees  !< Angles in degrees.
+   integer(I4P),                  intent(out)   :: iostat   !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg    !< Error message.
+   character(len=*), parameter   :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=:), allocatable :: s        !< Text, blanks around removed.
+   character(len=:), allocatable :: name     !< Array name.
+   character(len=:), allocatable :: size_text !< Size expression.
+   character(len=:), allocatable :: list     !< Element list.
+   type(token_object), allocatable :: parts(:) !< Element expressions.
+   character(len=:), allocatable :: items(:) !< Element expressions, one array.
+   integer(I4P)                  :: e        !< Name end.
+   integer(I4P)                  :: close    !< Closing bracket.
+   integer(I4P)                  :: width    !< Longest element expression.
+   integer(I4P)                  :: k        !< Counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   s = trim(adjustl(text))
+   e = 0_I4P
+   if (len(s) > 0) then
+      if (scan(s(1:1), LETTERS) > 0) e = verify(s, LETTERS//'0123456789', kind=I4P)
+   endif
+   if (len(s) == 0 .or. e == 1_I4P .or. (e == 0_I4P .and. scan(s(1:1), LETTERS) == 0)) then
+      call fail('array: a name is expected, array NAME[N] or array NAME = [...]', iostat, iomsg)
+      return
+   endif
+   if (e == 0_I4P) e = len(s, kind=I4P) + 1_I4P
+   name = s(1:e - 1_I4P)
+   s = trim(adjustl(s(e:)))
+   size_text = ''
+   if (len(s) > 0) then
+      if (s(1:1) == '[') then
+         close = closing_bracket(s, 1_I4P)
+         if (close == 0_I4P) then
+            call fail('array '//name//': "]" expected', iostat, iomsg)
+            return
+         endif
+         size_text = s(2:close - 1_I4P)
+         if (len_trim(size_text) == 0) then
+            call fail('array '//name//': a size is expected in [N]', iostat, iomsg)
+            return
+         endif
+         s = trim(adjustl(s(close + 1_I4P:)))
+      endif
+   endif
+   if (len(s) == 0) then
+      if (len(size_text) == 0) then
+         call fail('array '//name//': a size [N] or the elements = [...] are expected', iostat, iomsg)
+         return
+      endif
+      call symbols%declare_array(name, size_text, iostat=iostat, iomsg=iomsg, degrees=degrees)
+      return
+   endif
+   if (s(1:1) /= '=') then
+      call fail('array '//name//': "=" expected, found "'//s//'"', iostat, iomsg)
+      return
+   endif
+   s = trim(adjustl(s(2:)))
+   close = 0_I4P
+   if (len(s) > 0) then
+      if (s(1:1) == '[') close = closing_bracket(s, 1_I4P)
+   endif
+   if (close /= len(s, kind=I4P)) then
+      call fail('array '//name//': the elements in brackets are expected, = [E1, E2, ...]', iostat, iomsg)
+      return
+   endif
+   list = s(2:close - 1_I4P)
+   call split_arguments(list, parts)
+   width = 1_I4P
+   do k = 1_I4P, size(parts, kind=I4P)
+      if (len_trim(parts(k)%text) == 0) then
+         call fail('array '//name//': an empty element in "['//list//']"', iostat, iomsg)
+         return
+      endif
+      width = max(width, len(parts(k)%text, kind=I4P))
+   enddo
+   allocate(character(len=width) :: items(size(parts)))
+   do k = 1_I4P, size(parts, kind=I4P)
+      items(k) = parts(k)%text
+   enddo
+   call symbols%declare_array(name, size_text, items, iostat, iomsg, degrees)
+   endsubroutine array_command
+
+   pure function closing_bracket(s, open) result(close)
+   !< Position of the `]` closing the `[` at `open` in `s` (quotes and nested brackets skipped), 0 if none.
+   character(len=*), intent(in) :: s     !< Text.
+   integer(I4P),     intent(in) :: open  !< Opening bracket.
+   integer(I4P)                 :: close !< Closing bracket.
+   character(len=1)             :: quote !< Open quote, blank if none.
+   integer(I4P)                 :: depth !< Bracket depth.
+
+   quote = ' '
+   depth = 0_I4P
+   do close = open, len(s, kind=I4P)
+      if (quote /= ' ') then
+         if (s(close:close) == quote) quote = ' '
+         cycle
+      endif
+      select case (s(close:close))
+      case ('"', "'")
+         quote = s(close:close)
+      case ('[')
+         depth = depth + 1_I4P
+      case (']')
+         depth = depth - 1_I4P
+         if (depth == 0_I4P) return
+      endselect
+   enddo
+   close = 0_I4P
+   endfunction closing_bracket
 
    pure subroutine split_arguments(text, parts)
    !< `text` cut at the commas outside quotes, parentheses and brackets (`print a, sprintf("%d,%d", 1, 2)`); no text

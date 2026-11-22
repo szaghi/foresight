@@ -36,7 +36,7 @@ character(len=8)              :: update_flag                               !< FO
 integer(I4P)                  :: iostat                                    !< Status.
 integer(I4P)                  :: unit                                      !< File unit.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(109)                           !< Per-check outcome.
+logical                       :: test_passed(110)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2111,6 +2111,54 @@ test_passed(109) = test_passed(109) .and. iostat == 0_I4P
 open(newunit=unit, file='foresight_script_test_notes.svg')
 close(unit, status='delete')
 
+! arrays, as gnuplot 6.0: declared, set by element, printed, sized, indexed at run time, plotted, stated; ARGV;
+! datablock lines
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_arrays.txt'"//new_line('a')// &
+                          'array A[3]; print A, |A|; A[1] = 5; A[2] = "two"; print A; print A[1] + 1, A[2]'//new_line('a')// &
+                          'array B = [1, 2.5, "x", 4]; print B, |B|, B[3], B[1.7]'//new_line('a')// &
+                          'array C[3] = [7, 8]; print C; do for [i = 1:|C| - 1] { print C[i] }'//new_line('a')// &
+                          'f(i) = B[i] * 2; print f(4), exists("B"), index(B, 4), index(B, "x"), index(B, 9)'// &
+                          new_line('a')//'$D << EOD'//new_line('a')//'1 2'//new_line('a')//'3 4'//new_line('a')// &
+                          'EOD'//new_line('a')//'print |$D|, $D[2], $D[2][3:3]; print ARGC, |ARGV|'//new_line('a')// &
+                          'array Q = [3, 1, 4, 1, 5]; stats Q nooutput; print STATS_mean, STATS_records'//new_line('a')// &
+                          'undefine B; print exists("B"); set print', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(110) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_arrays.txt', [character(len=24) :: '[,,] 3', '[5,"two",]', '6 two', &
+           '[1,2.5,"x",4] 4 x 1', '[7,8,]', '7', '8', '8 1 4 3 0', '2 3 4 4', '0 0', '2.8 5', '0'])
+call interpreter%run_text('set output "foresight_script_test_arrays.svg"; plot Q using 1:(Q[$1] * 2), Q', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat == 0_I4P
+if (test_passed(110)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(110) = size(panel%series) == 2 .and. same(panel%series(1)%y, [6, 2, 8, 2, 10]) .and. &
+                         same(panel%series(2)%x, [1, 2, 3, 4, 5]) .and. &
+                         panel%series(2)%title == 'Q'
+   endassociate
+endif
+call interpreter%run_text('array E[2]; print E[3]', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range: E[3]') > 0
+call interpreter%run_text('print E[1]', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'E[1] has no value') > 0
+call interpreter%run_text('E[0] = 1', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'array index out of range') > 0
+call interpreter%run_text('array E[1] = [1, 2]', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'more elements than its size') > 0
+call interpreter%run_text('print E[1:2]', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'slices') > 0
+call interpreter%run_text('print |x|', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'takes an array or a datablock') > 0
+call interpreter%run_text('print 1 | 2', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'bitwise operator "|"') > 0
+call interpreter%run_text("set print 'foresight_script_test_arrays.txt'; print E; set print", iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat == 0_I4P
+call interpreter%run_text('x = E + 1', iostat, iomsg)
+test_passed(110) = test_passed(110) .and. iostat /= 0_I4P .and. index(iomsg, 'needs an index') > 0
+open(newunit=unit, file='foresight_script_test_arrays.txt')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_arrays.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2119,7 +2167,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,109L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,110L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
