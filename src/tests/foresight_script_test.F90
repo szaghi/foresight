@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(130)                           !< Per-check outcome.
+logical                       :: test_passed(131)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2006,7 +2006,7 @@ if (test_passed(107)) then
 endif
 call interpreter%run_text('set xrange ["2024-03-01":*]', iostat, iomsg)
 test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'does not match the timefmt') > 0
-call interpreter%run_text("set xdata; set format y '%H'", iostat, iomsg)
+call interpreter%run_text("set xdata; set format y '%Y'", iostat, iomsg)
 test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion') > 0
 call interpreter%run_text("set format x '%d/%m' timedate", iostat, iomsg)
 test_passed(107) = test_passed(107) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%time
@@ -2779,6 +2779,18 @@ endblock
 call interpreter%run_text('set for [i=1:2]', iostat, iomsg)
 test_passed(130) = test_passed(130) .and. iostat /= 0_I4P .and. index(iomsg, 'an option is expected') > 0
 
+! set format power conversions (gnuplot 6.0's labels): 10^{%T} on a log axis, %.0s %c on a linear one
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_powers.svg"; set logscale y'//new_line('a')// &
+                          'set format y "10^{%T}"; set format x "%.0s %cHz"; plot [0:5e6] [1:1e5] x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(131) = iostat == 0_I4P
+test_passed(131) = test_passed(131) .and. file_has('foresight_script_test_powers.svg', 'dy="-6">3</tspan>') .and. &
+                   file_has('foresight_script_test_powers.svg', '>2 MHz</text>') .and. &
+                   file_has('foresight_script_test_powers.svg', '>0 Hz</text>')
+open(newunit=unit, file='foresight_script_test_powers.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2787,7 +2799,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,130L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,131L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

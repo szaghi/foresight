@@ -7,7 +7,7 @@ use foresight_format, only : decimal_of, decimal_str, fixed, format_check, forma
 use penf, only : I4P, I8P, R8P
 
 implicit none
-logical                       :: test_passed(27) !< Per-check outcome.
+logical                       :: test_passed(28) !< Per-check outcome.
 character(len=:), allocatable :: label           !< Formatted label.
 character(len=:), allocatable :: sup             !< Formatted superscript.
 integer(I8P)                  :: n               !< Decimal mantissa.
@@ -49,13 +49,63 @@ call format_decimal('%h', 15_I8P, 5_I4P, label, sup)
 test_passed(24) = label == '1.5x10' .and. sup == '6'
 test_passed(25) = label_of('%-6.1f|', 5_I8P, -1_I4P) == '0.5   |'
 test_passed(26) = len(format_check('%.3g')) == 0 .and. index(format_check('%d'), 'unsupported conversion') > 0
-test_passed(27) = index(format_check('%f %f'), 'more than one') > 0 .and. index(format_check('abc'), 'no conversion') > 0
+! several conversions of the same value, as gnuplot; a conversion it does not know
+test_passed(27) = label_of('%.0f %.1e', 25_I8P, -1_I4P) == '2 2.5e+00' .and. index(format_check('abc'), 'no conversion') > 0 &
+                  .and. index(format_check('%y'), 'unsupported conversion') > 0
+! gnuplot 6.0's mantissas, powers and prefixes (its gprintf output, base 10 as for the tick labels); on a decimal tie
+! (12.5, 255, 3.45 to one decimal) the mantissa is libm's pow: glibc (gfortran, gnuplot) rounds it one way, nvfortran's
+! own library the other, so either label is right there
+test_passed(28) = same('%t', 996_I8P, -2_I4P, '0.996000') .and. &
+                  same('%T', 95_I8P, -1_I4P, '0') .and. &
+                  either('%.1t*10^{%T}', 125_I8P, -1_I4P, '1.3*10^{1}', '1.2*10^{1}') .and. &
+                  either('%.1t*10^{%T}', 255_I8P, 0_I4P, '2.5*10^{2}', '2.6*10^{2}') .and. &
+                  same('%S', -345_I8P, -5_I4P, '-3') .and. &
+                  same('%.1s%c', 12345_I8P, -1_I4P, '1.2k') .and. &
+                  same('%.1s%c', 602_I8P, 21_I4P, '602.0Z') .and. &
+                  same('%c', 3_I8P, -30_I4P, 'e-30') .and. &
+                  same('%3.0s %cm', 1_I8P, -3_I4P, '  1 mm') .and. &
+                  same('%B', 1536_I8P, 0_I4P, 'ki') .and. &
+                  same('%.2b%B', 1048576_I8P, 0_I4P, '1.00Mi') .and. &
+                  same('%.3P', 314159265358979_I8P, -14_I4P, '1.000') .and. &
+                  same('%x', -1_I8P, 0_I4P, 'ffffffffffffffff') .and. &
+                  same('%X', 255_I8P, 0_I4P, 'FF') .and. &
+                  same('%o', 255_I8P, 0_I4P, '377') .and. &
+                  either('%05.1t', -345_I8P, -5_I4P, '-03.4', '-03.5')
 
-write(output_unit, '(A,27L2)') 'foresight_format checks:', test_passed
+write(output_unit, '(A,28L2)') 'foresight_format checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function same(format, n, e, expected) result(equal)
+   !< Whether `format` labels `n * 10**e` as `expected`, reporting a difference.
+   character(len=*), intent(in) :: format   !< Format.
+   integer(I8P),     intent(in) :: n        !< Mantissa.
+   integer(I4P),     intent(in) :: e        !< Exponent.
+   character(len=*), intent(in) :: expected !< Label.
+   logical                      :: equal    !< Same label.
+   character(len=:), allocatable :: got     !< Label made.
+
+   got = label_of(format, n, e)
+   equal = got == expected
+   if (.not. equal) write(output_unit, '(A)') format//': "'//got//'", expected "'//expected//'"'
+   endfunction same
+
+   function either(format, n, e, expected, other) result(equal)
+   !< Whether `format` labels `n * 10**e` as `expected` or as `other` (a tie of libm's rounding), reporting a difference.
+   character(len=*), intent(in)  :: format   !< Format.
+   integer(I8P),     intent(in)  :: n        !< Mantissa.
+   integer(I4P),     intent(in)  :: e        !< Exponent.
+   character(len=*), intent(in)  :: expected !< Label (glibc).
+   character(len=*), intent(in)  :: other    !< Label (another libm).
+   logical                       :: equal    !< One of them.
+   character(len=:), allocatable :: got      !< Label made.
+
+   got = label_of(format, n, e)
+   equal = got == expected .or. got == other
+   if (.not. equal) write(output_unit, '(A)') format//': "'//got//'", expected "'//expected//'"'
+   endfunction either
+
    function label_of(format, n, e) result(label)
    !< Label of `n * 10**e` by `format`.
    character(len=*), intent(in)  :: format !< Format.

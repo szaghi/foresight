@@ -98,29 +98,30 @@
     return {n: v < 0 ? -n : n, e: e};
   }
 
-  // split a format around its one conversion; null if unsupported
-  function splitFormat(format) {
-    var f = {prefix: "", suffix: "", flags: "", width: 0, prec: -1, type: ""}, found = false;
-    var i = 0, m, re = /^%([-+ 0]*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGh])/;
-    while (i < format.length) {
-      if (format[i] !== "%") {
-        if (found) f.suffix += format[i]; else f.prefix += format[i];
-        i += 1;
-      } else if (format[i + 1] === "%") {
-        if (found) f.suffix += "%"; else f.prefix += "%";
-        i += 2;
+  // the next conversion of a format from position at.i: {text (literal, %% resolved), flags,
+  // width, prec, type ("" at the end)}; null if unsupported (mirror of next_conversion)
+  function nextConversion(format, at) {
+    var c = {text: "", flags: "", width: 0, prec: -1, type: ""}, m;
+    var re = /^%([-+ 0#']*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGhHtlsTLScbBPxXo])/;
+    while (at.i < format.length) {
+      if (format[at.i] !== "%") {
+        c.text += format[at.i];
+        at.i += 1;
+      } else if (format[at.i + 1] === "%") {
+        c.text += "%";
+        at.i += 2;
       } else {
-        m = re.exec(format.slice(i));
-        if (found || !m) return null;
-        found = true;
-        f.flags = m[1];
-        f.width = Number(m[2] || 0);
-        f.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
-        f.type = m[4];
-        i += m[0].length;
+        m = re.exec(format.slice(at.i));
+        if (!m) return null;
+        c.flags = m[1];
+        c.width = Number(m[2] || 0);
+        c.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
+        c.type = m[4];
+        at.i += m[0].length;
+        return c;
       }
     }
-    return found ? f : null;
+    return c;
   }
 
   // integer digits with the last drop ones removed, rounded half to even (mirror of round_digits)
@@ -171,37 +172,132 @@
     return text.indexOf(".") < 0 ? text : text.replace(/0+$/, "").replace(/\.$/, "");
   }
 
-  // printf-like format applied to the exact value n * 10**e (mirror of format_decimal)
-  function formatDecimal(format, n, e) {
-    var f = splitFormat(format), digits, body, sup = "", sign = "", r, p, pad;
-    if (!f) return {label: format, sup: ""};
-    digits = String(Math.abs(n));
-    if (f.type === "f") {
-      body = fixedDigits(digits, e, f.prec < 0 ? 6 : f.prec);
-    } else if (f.type === "e" || f.type === "E") {
-      r = expDigits(digits, e, f.prec < 0 ? 6 : f.prec);
-      body = r.mantissa + expText(f.type, r.x);
+  // one C conversion f e E g G (or gnuplot's h H) of the exact value n * 10**e (mirror of classic)
+  function classic(c, n, e) {
+    var digits = String(Math.abs(n)), body, sup = "", sign = "", r, p, pad, q;
+    if (c.type === "f") {
+      body = fixedDigits(digits, e, c.prec < 0 ? 6 : c.prec);
+    } else if (c.type === "e" || c.type === "E") {
+      r = expDigits(digits, e, c.prec < 0 ? 6 : c.prec);
+      body = r.mantissa + expText(c.type, r.x);
     } else {
-      p = f.prec < 0 ? 6 : Math.max(1, f.prec);
+      p = c.prec < 0 ? 6 : Math.max(1, c.prec);
       r = expDigits(digits, e, p - 1);
       if (r.x < p && r.x >= -4) {
         body = stripZeros(fixedDigits(digits, e, p - 1 - r.x));
       } else {
         body = stripZeros(r.mantissa);
-        if (f.type === "h") { body += "x10"; sup = String(r.x); }
-        else body += expText(f.type === "G" ? "E" : "e", r.x);
+        q = {h: "x10", H: "*10"}[c.type];
+        if (q) { body += q; sup = String(r.x); }
+        else body += expText(c.type === "G" ? "E" : "e", r.x);
       }
     }
     if (n < 0) sign = "-";
-    else if (f.flags.indexOf("+") >= 0) sign = "+";
-    else if (f.flags.indexOf(" ") >= 0) sign = " ";
-    pad = f.width - sign.length - body.length;
+    else if (c.flags.indexOf("+") >= 0) sign = "+";
+    else if (c.flags.indexOf(" ") >= 0) sign = " ";
+    pad = c.width - sign.length - body.length;
     if (pad > 0) {
-      if (f.flags.indexOf("-") >= 0) body += " ".repeat(pad);
-      else if (f.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
+      if (c.flags.indexOf("-") >= 0) body += " ".repeat(pad);
+      else if (c.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
       else sign = " ".repeat(pad) + sign;
     }
-    return {label: f.prefix + sign + body + f.suffix, sup: sup};
+    return {text: sign + body, sup: sup};
+  }
+
+  // C's %f, %d or %c of a value with the flags and width of the conversion c (JavaScript's
+  // toFixed rounds a binary tie up where C rounds it to even: rare in mantissas)
+  function cField(c, text, negative, numeric) {
+    var sign = negative ? "-" : (numeric && c.flags.indexOf("+") >= 0 ? "+" :
+      (numeric && c.flags.indexOf(" ") >= 0 ? " " : "")), pad = c.width - sign.length - text.length;
+    if (pad > 0) {
+      if (c.flags.indexOf("-") >= 0) text += " ".repeat(pad);
+      else if (numeric && c.flags.indexOf("0") >= 0) text = "0".repeat(pad) + text;
+      else sign = " ".repeat(pad) + sign;
+    }
+    return sign + text;
+  }
+
+  // gnuplot's mant_exp: x = m * base**p (log10Base = log10(base)), in doubles; scientific: base
+  // 10, p a multiple of 3; a mantissa within half a unit of the prec-th decimal of the base moves
+  // to the next power (mirror of mant_exp)
+  function mantExp(log10Base, x, scientific, prec) {
+    var l10, p, m, base, r;
+    if (x === 0) return {m: 0, p: 0};
+    l10 = Math.log10(Math.abs(x)) / log10Base;
+    p = Math.floor(l10);
+    m = Math.pow(10, log10Base * (l10 - p));
+    if (scientific) {
+      r = ((p % 3) + 3) % 3;
+      if (r === 1) m *= 10;
+      if (r === 2) m *= 100;
+      p -= r;
+      base = 1000;
+    } else {
+      base = Math.pow(10, log10Base);
+    }
+    if (m + 0.5 * Math.pow(10, -Math.min(prec, 300)) >= base) {
+      m /= base;
+      p += scientific ? 3 : 1;
+    }
+    return {m: x < 0 ? -m : m, p: p};
+  }
+
+  // the integer part of v as C's %llx, %llX or %llo of a 64-bit unsigned integer (mirror of
+  // unsigned_digits)
+  function unsignedDigits(v, type) {
+    var i = Math.abs(v) < 9223372036854775808 ? BigInt(Math.trunc(v)) : -(2n ** 63n);
+    var text = BigInt.asUintN(64, i).toString(type === "o" ? 8 : 16);
+    return type === "X" ? text.toUpperCase() : text;
+  }
+
+  // gnuplot's gprintf of a tick format to the value n * 10**e: the C conversions exact, the
+  // mantissas and powers in doubles as its mant_exp, base 10 (mirror of format_decimal)
+  function formatDecimal(format, n, e) {
+    var at = {i: 0}, c, label = "", sup = "", r, v = scale10(n, e), stored = 0, power = 0;
+    var p, b, piece, t;
+    var log1024 = Math.log10(1024), count = 0;
+    for (;;) {
+      c = nextConversion(format, at);
+      if (!c) return {label: format, sup: ""};
+      label += c.text;
+      if (!c.type) break;
+      count += 1;
+      piece = "";
+      if ("feEgGhH".indexOf(c.type) >= 0) {
+        r = classic(c, n, e);
+        piece = r.text;
+        if (r.sup) sup = r.sup;
+      } else if ("tlsb".indexOf(c.type) >= 0) {
+        stored = c.type === "b" ? log1024 : 1;
+        r = mantExp(stored, v, c.type === "s", Math.max(c.prec, 0));
+        power = r.p;
+        piece = cField(c, Math.abs(r.m).toFixed(c.prec < 0 ? 6 : c.prec), r.m < 0, true);
+      } else if ("TLSc".indexOf(c.type) >= 0) {
+        b = 1;
+        p = stored === b ? power : mantExp(b, v, c.type === "S" || c.type === "c", 0).p;
+        if (c.type !== "c") piece = cField(c, String(Math.abs(p)), p < 0, true);
+        else if (Math.abs(p) > 24) piece = "e" + (p < 0 ? "-" : "+") + String(Math.abs(p));
+        else if (p !== 0) piece = cField(c, "yzafpnum kMGTPEZY"[(p + 24) / 3], false, false);
+      } else if (c.type === "B") {
+        p = stored === log1024 ? power : mantExp(log1024, v, false, 0).p;
+        if (p > 0 && p <= 8) piece = cField(c, "kMGTPEZY"[p - 1], false, false) + "i";
+        else if (p > 8) piece = "x2^{" + (p - 8) + "}Yi";
+        else if (p < 0) piece = "x2^{" + 10 * p + "}";
+        else piece = "  ";
+      } else if (c.type === "P") {
+        t = v / Math.PI;
+        piece = cField(c, Math.abs(t).toFixed(c.prec < 0 ? 6 : c.prec), t < 0, true);
+      } else {
+        piece = unsignedDigits(v, c.type);
+        if (piece.length < c.width) {
+          if (c.flags.indexOf("-") >= 0) piece += " ".repeat(c.width - piece.length);
+          else if (c.flags.indexOf("0") >= 0) piece = "0".repeat(c.width - piece.length) + piece;
+          else piece = " ".repeat(c.width - piece.length) + piece;
+        }
+      }
+      label += piece;
+    }
+    return count ? {label: label, sup: sup} : {label: format, sup: ""};
   }
 
   function formatLabel(n, e, sci) {

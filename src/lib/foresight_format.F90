@@ -32,6 +32,7 @@ public :: exact_decimal
 public :: fixed
 public :: format_check
 public :: format_decimal
+public :: format_value
 public :: gnuplot_real
 public :: int_str
 public :: parse_decimal
@@ -41,6 +42,7 @@ public :: split_format
 public :: xml_escape
 
 integer(I8P), parameter :: LIMB = 1000000000_I8P !< Base of the exact decimal digits.
+real(R8P), parameter :: PI = 3.141592653589793_R8P !< C's M_PI (gnuplot's `%P`).
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
 
 contains
@@ -284,58 +286,195 @@ contains
    endsubroutine parse_decimal
 
    pure function format_check(format) result(message)
-   !< Empty if `format` is a supported tick format: text with one conversion `%[flags][width][.precision]type`, flags
-   !< among `-+ 0`, type `f`, `e`, `E`, `g`, `G` or `h` (gnuplot: `g` with a `x10` superscript exponent), and `%%` for `%`.
+   !< Empty if `format` is a supported tick format, gnuplot's: text with conversions `%[flags][width][.precision]type`,
+   !< flags among `-+ 0#'`, all applied to the same value: `f e E g G` (C's), `h H` (`g` with a `x10` or `*10`
+   !< superscript exponent), `t l` (the mantissa to base 10; foresight's log axes are base 10), `s` (the mantissa to
+   !< a power of 1000), `T L` (the power of 10), `S` (the power of 1000), `c` (its SI prefix letter), `b` `B` (the
+   !< mantissa to a power of 1024 and its binary prefix), `P` (multiple of pi), `x X o` (the integer part in hex or
+   !< octal); `%%` writes `%`.
    character(len=*), intent(in)  :: format  !< Format.
    character(len=:), allocatable :: message !< Problem, empty if none.
-   character(len=:), allocatable :: prefix  !< Text before the conversion.
-   character(len=:), allocatable :: suffix  !< Text after the conversion.
+   character(len=:), allocatable :: text    !< Literal text.
    character(len=:), allocatable :: flags   !< Conversion flags.
    character(len=1)              :: type    !< Conversion type.
    integer(I4P)                  :: width   !< Field width.
    integer(I4P)                  :: prec    !< Precision, -1 if absent.
+   integer(I4P)                  :: i       !< Position.
+   integer(I4P)                  :: count   !< Conversions.
 
-   call split_format(format, prefix, flags, width, prec, type, suffix, message)
+   i = 1_I4P
+   count = 0_I4P
+   do
+      call next_conversion(format, i, text, flags, width, prec, type, message)
+      if (len(message) > 0) return
+      if (type == ' ') exit
+      count = count + 1_I4P
+   enddo
+   if (count == 0_I4P) message = 'no conversion in "'//format//'"'
    endfunction format_check
 
    pure subroutine format_decimal(format, n, e, label, sup)
    !< Apply the tick `format` (see `format_check`; the format itself is returned if invalid) to the exact value
-   !< `n * 10**e`, as C printf would to that decimal, rounding half to even. `sup` is the exponent of the `%h` form.
+   !< `n * 10**e`: `format_value` with gnuplot's base 10 of the tick labels (`%l` as `%t`).
    character(len=*),              intent(in)  :: format  !< Format.
    integer(I8P),                  intent(in)  :: n       !< Mantissa.
    integer(I4P),                  intent(in)  :: e       !< Exponent.
    character(len=:), allocatable, intent(out) :: label   !< Label.
    character(len=:), allocatable, intent(out) :: sup     !< Superscript, empty if none.
-   character(len=:), allocatable              :: prefix  !< Text before the conversion.
-   character(len=:), allocatable              :: suffix  !< Text after the conversion.
-   character(len=:), allocatable              :: flags   !< Conversion flags.
+
+   call format_value(format, n, e, 1.0_R8P, label, sup)
+   endsubroutine format_decimal
+
+   pure subroutine format_value(format, n, e, log10_base, label, sup)
+   !< Apply `format` (see `format_check`; the format itself is returned if invalid) to the value `n * 10**e`, as
+   !< gnuplot's gprintf: the C conversions as printf would to that exact decimal, rounding half to even; the mantissas
+   !< and powers as its mant_exp, in doubles (`log10_base` the logarithm of the base of `%l` and `%L`: 1 for the tick
+   !< labels, 10 in gnuplot's gprintf function). `sup` is the exponent of the `%h` form.
+   character(len=*),              intent(in)  :: format     !< Format.
+   integer(I8P),                  intent(in)  :: n          !< Mantissa.
+   integer(I4P),                  intent(in)  :: e          !< Exponent.
+   real(R8P),                     intent(in)  :: log10_base !< log10 of the base of `%l` and `%L`.
+   character(len=:), allocatable, intent(out) :: label      !< Label.
+   character(len=:), allocatable, intent(out) :: sup        !< Superscript, empty if none.
+   character(len=*), parameter                :: SI = 'yzafpnum kMGTPEZY' !< SI prefixes, 10**-24 to 10**24.
+   character(len=*), parameter                :: BINARY = 'kMGTPEZY'       !< Binary prefixes, 1024 to 1024**8.
    character(len=:), allocatable              :: message !< Format problem.
-   character(len=:), allocatable              :: digits  !< Digits of |n|.
-   character(len=:), allocatable              :: body    !< Converted number without sign.
-   character(len=:), allocatable              :: sign    !< Sign text.
+   character(len=:), allocatable              :: text    !< Literal text.
+   character(len=:), allocatable              :: flags   !< Conversion flags.
+   character(len=:), allocatable              :: piece   !< Converted text.
+   character(len=:), allocatable              :: s       !< Superscript of a piece.
    character(len=1)                           :: type    !< Conversion type.
+   real(R8P)                                  :: stored  !< log10 of the base of the last mantissa, 0 if none.
    integer(I4P)                               :: width   !< Field width.
    integer(I4P)                               :: prec    !< Precision, -1 if absent.
-   integer(I4P)                               :: x       !< Decimal exponent of the leading digit, after rounding.
-   integer(I4P)                               :: p       !< Significant digits of %g.
+   integer(I4P)                               :: i       !< Position.
+   integer(I4P)                               :: power   !< Power of the last mantissa.
+   integer(I4P)                               :: p       !< A power.
+   real(R8P)                                  :: v       !< The value, real.
+   real(R8P)                                  :: m       !< A real mantissa.
+   real(R8P)                                  :: b       !< log10 of a base.
+   real(R8P)                                  :: log10_1024 !< log10(1024), at run time as gnuplot's.
 
    sup = ''
-   call split_format(format, prefix, flags, width, prec, type, suffix, message)
+   label = ''
+   message = format_check(format)
    if (len(message) > 0) then
       label = format
       return
    endif
+   v = scale10(real(n, R8P), e)
+   log10_1024 = log10(1024.0_R8P)
+   stored = 0.0_R8P
+   power = 0_I4P
+   i = 1_I4P
+   do
+      call next_conversion(format, i, text, flags, width, prec, type, message)
+      label = label//text
+      if (type == ' ') exit
+      piece = ''
+      select case (type)
+      case ('f', 'e', 'E', 'g', 'G', 'h', 'H')
+         call classic(flags, width, prec, type, n, e, piece, s)
+         if (len(s) > 0) sup = s
+      case ('t', 'l', 's', 'b')
+         ! a mantissa, printed as %f: to base 10, to the base of %l, to a power of 1000, to a power of 1024
+         select case (type)
+         case ('l')
+            stored = log10_base
+         case ('b')
+            stored = log10_1024
+         case default
+            stored = 1.0_R8P
+         endselect
+         call mant_exp(stored, v, type == 's', max(prec, 0_I4P), m, power)
+         piece = c_real(flags, width, prec, 'f', m)
+      case ('T', 'L', 'S', 'c')
+         ! a power: of the last mantissa to that base, else its own
+         if (type == 'L') then
+            b = log10_base
+         else
+            b = 1.0_R8P
+         endif
+         if (stored == b) then
+            p = power
+         else
+            call mant_exp(b, v, type == 'S' .or. type == 'c', 0_I4P, m, p)
+         endif
+         if (type /= 'c') then
+            piece = c_integer(flags, width, -1_I4P, 'd', int(p, I8P))
+         elseif (abs(p) > 24_I4P) then
+            ! beyond the prefixes, gnuplot's exponent
+            piece = 'e'//c_integer('+', 2_I4P, -1_I4P, 'd', int(p, I8P))
+         elseif (p /= 0_I4P) then
+            piece = c_integer(flags, width, -1_I4P, 'c', int(iachar(SI((p + 24_I4P) / 3_I4P + 1_I4P: &
+                                                                       (p + 24_I4P) / 3_I4P + 1_I4P)), I8P))
+         endif
+      case ('B')
+         if (stored == log10_1024) then
+            p = power
+         else
+            call mant_exp(log10_1024, v, .false., 0_I4P, m, p)
+         endif
+         if (p > 0_I4P .and. p <= 8_I4P) then
+            piece = c_integer(flags, width, -1_I4P, 'c', int(iachar(BINARY(p:p)), I8P))//'i'
+         elseif (p > 8_I4P) then
+            piece = 'x2^{'//int_str(int(p - 8_I4P, I8P))//'}Yi'
+         elseif (p < 0_I4P) then
+            piece = 'x2^{'//int_str(int(10_I4P * p, I8P))//'}'
+         else
+            piece = '  '
+         endif
+      case ('P')
+         piece = c_real(flags, width, prec, 'f', v / PI)
+      case default
+         ! x, X, o: the integer part as a 64-bit unsigned integer (gnuplot's %llx); beyond 64 bits, x86's
+         ! 0x8000000000000000
+         piece = unsigned_digits(v, type)
+         if (len(piece) < width) then
+            if (index(flags, '-') > 0) then
+               piece = piece//repeat(' ', width - len(piece))
+            elseif (index(flags, '0') > 0) then
+               piece = repeat('0', width - len(piece))//piece
+            else
+               piece = repeat(' ', width - len(piece))//piece
+            endif
+         endif
+      endselect
+      label = label//piece
+   enddo
+   endsubroutine format_value
+
+   pure subroutine classic(flags, width, prec, type, n, e, piece, sup)
+   !< One C conversion `f e E g G` (or gnuplot's `h H`) of the exact value `n * 10**e`, rounding half to even.
+   character(len=*),              intent(in)  :: flags  !< Flags.
+   integer(I4P),                  intent(in)  :: width  !< Field width, 0 if none.
+   integer(I4P),                  intent(in)  :: prec   !< Precision, -1 if absent.
+   character(len=1),              intent(in)  :: type   !< Conversion.
+   integer(I8P),                  intent(in)  :: n      !< Mantissa.
+   integer(I4P),                  intent(in)  :: e      !< Exponent.
+   character(len=:), allocatable, intent(out) :: piece  !< Converted text.
+   character(len=:), allocatable, intent(out) :: sup    !< Superscript of `h` and `H`, empty if none.
+   character(len=:), allocatable              :: digits !< Digits of |n|.
+   character(len=:), allocatable              :: body   !< Converted number without sign.
+   character(len=:), allocatable              :: sign   !< Sign text.
+   integer(I4P)                               :: x      !< Decimal exponent of the leading digit, after rounding.
+   integer(I4P)                               :: p      !< Significant digits of %g.
+   integer(I4P)                               :: q      !< Precision used.
+
+   sup = ''
    digits = int_str(abs(n))
    select case (type)
    case ('f')
-      if (prec < 0_I4P) prec = 6_I4P
-      body = fixed_digits(digits, e, prec)
+      q = prec
+      if (q < 0_I4P) q = 6_I4P
+      body = fixed_digits(digits, e, q)
    case ('e', 'E')
-      if (prec < 0_I4P) prec = 6_I4P
-      call exp_digits(digits, e, prec, body, x)
+      q = prec
+      if (q < 0_I4P) q = 6_I4P
+      call exp_digits(digits, e, q, body, x)
       body = body//exp_text(type, x)
    case default
-      ! g, G, h: precision in significant digits, then the shorter of fixed and exponent forms, trailing zeros cut
+      ! g, G, h, H: precision in significant digits, then the shorter of fixed and exponent forms, trailing zeros cut
       p = prec
       if (p < 0_I4P) p = 6_I4P
       if (p == 0_I4P) p = 1_I4P
@@ -346,6 +485,9 @@ contains
          body = strip_zeros(body)
          if (type == 'h') then
             body = body//'x10'
+            sup = int_str(int(x, I8P))
+         elseif (type == 'H') then
+            body = body//'*10'
             sup = int_str(int(x, I8P))
          elseif (type == 'G') then
             body = body//exp_text('E', x)
@@ -371,8 +513,178 @@ contains
          sign = repeat(' ', width - len(sign) - len(body))//sign
       endif
    endif
-   label = prefix//sign//body//suffix
-   endsubroutine format_decimal
+   piece = sign//body
+   endsubroutine classic
+
+   pure function unsigned_digits(v, type) result(digits)
+   !< The integer part of `v` as C prints a 64-bit unsigned integer with `%llx`, `%llX` or `%llo`; beyond the 64-bit
+   !< range, x86's conversion result 0x8000000000000000.
+   real(R8P),        intent(in)  :: v      !< Value.
+   character(len=1), intent(in)  :: type   !< `x`, `X` or `o`.
+   character(len=:), allocatable :: digits !< Digits.
+   character(len=*), parameter   :: HEX = '0123456789abcdef' !< Digits, lower case.
+   integer(I8P)                  :: i      !< Bits.
+   integer(I4P)                  :: bits   !< Bits per digit.
+   integer(I4P)                  :: shift  !< Bit position.
+   integer(I4P)                  :: d      !< Digit.
+
+   if (abs(v) < 9.2233720368547758e18_R8P) then
+      i = int(v, I8P)
+   else
+      i = -huge(1_I8P) - 1_I8P
+   endif
+   bits = merge(3_I4P, 4_I4P, type == 'o')
+   digits = ''
+   shift = 0_I4P
+   do while (shift < 64_I4P)
+      d = int(ibits(i, shift, min(bits, 64_I4P - shift)), I4P)
+      digits = HEX(d + 1:d + 1)//digits
+      shift = shift + bits
+   enddo
+   ! no leading zeros (one digit at least)
+   do while (len(digits) > 1)
+      if (digits(1:1) /= '0') exit
+      digits = digits(2:)
+   enddo
+   if (type == 'X') digits = upper(digits)
+   contains
+      pure function upper(text) result(up)
+      !< `text` with its letters a-f in upper case.
+      character(len=*), intent(in)  :: text !< Hex digits.
+      character(len=len(text))      :: up   !< Upper case.
+      integer(I4P)                  :: k    !< Counter.
+
+      up = text
+      do k = 1_I4P, len(text, kind=I4P)
+         if (scan(text(k:k), 'abcdef') > 0) up(k:k) = 'ABCDEF'(index('abcdef', text(k:k)):index('abcdef', text(k:k)))
+      enddo
+      endfunction upper
+   endfunction unsigned_digits
+
+   pure subroutine mant_exp(log10_base, x, scientific, prec, m, p)
+   !< gnuplot's mant_exp: `x = m * base**p` (`log10_base` = log10(base)), in doubles as gnuplot; `scientific`: base 10
+   !< with `p` a multiple of 3; a mantissa within half a unit of the `prec`-th decimal of the base moves to the next
+   !< power. 0 is 0 to the power 0.
+   real(R8P),    intent(in)  :: log10_base !< log10 of the base.
+   real(R8P),    intent(in)  :: x          !< Value.
+   logical,      intent(in)  :: scientific !< Power of 1000.
+   integer(I4P), intent(in)  :: prec       !< Decimals of the mantissa.
+   real(R8P),    intent(out) :: m          !< Mantissa, signed.
+   integer(I4P), intent(out) :: p          !< Power.
+   real(R8P)                 :: l10        !< Logarithm to the base.
+   real(R8P)                 :: base       !< Base of the mantissa.
+
+   m = 0.0_R8P
+   p = 0_I4P
+   if (x == 0.0_R8P) return
+   l10 = log10(abs(x)) / log10_base
+   p = floor(l10, I4P)
+   m = 10.0_R8P**(log10_base * (l10 - real(p, R8P)))
+   if (scientific) then
+      ! the power down to a multiple of 3, the mantissa up by 10 or 100 (C's % of a negative power is negative)
+      select case (modulo(p, 3_I4P))
+      case (1_I4P)
+         m = m * 10.0_R8P
+      case (2_I4P)
+         m = m * 100.0_R8P
+      endselect
+      p = p - modulo(p, 3_I4P)
+      base = 1000.0_R8P
+   else
+      base = 10.0_R8P**log10_base
+   endif
+   if (m + 0.5_R8P * 10.0_R8P**(-min(prec, 300_I4P)) >= base) then
+      m = m / base
+      p = p + merge(3_I4P, 1_I4P, scientific)
+   endif
+   m = sign(m, x)
+   endsubroutine mant_exp
+
+   pure subroutine next_conversion(format, i, text, flags, width, prec, type, message)
+   !< From position `i` of `format`: the literal `text` (`%%` resolved) up to the next conversion and its fields,
+   !< `type` blank at the end of the format; `i` left after the conversion.
+   character(len=*),              intent(in)    :: format  !< Format.
+   integer(I4P),                  intent(inout) :: i       !< Position.
+   character(len=:), allocatable, intent(out)   :: text    !< Literal text.
+   character(len=:), allocatable, intent(out)   :: flags   !< Flags.
+   integer(I4P),                  intent(out)   :: width   !< Field width, 0 if absent.
+   integer(I4P),                  intent(out)   :: prec    !< Precision, -1 if absent.
+   character(len=1),              intent(out)   :: type    !< Conversion type, blank at the end.
+   character(len=:), allocatable, intent(out)   :: message !< Problem, empty if none.
+   integer(I4P)                                 :: j       !< Field start.
+
+   text = ''
+   flags = ''
+   width = 0_I4P
+   prec = -1_I4P
+   type = ' '
+   message = ''
+   do while (i <= len(format, kind=I4P))
+      if (format(i:i) /= '%') then
+         text = text//format(i:i)
+         i = i + 1_I4P
+         cycle
+      endif
+      if (i == len(format, kind=I4P)) then
+         message = 'format ends with "%"'
+         return
+      endif
+      if (format(i + 1_I4P:i + 1_I4P) == '%') then
+         text = text//'%'
+         i = i + 2_I4P
+         cycle
+      endif
+      i = i + 1_I4P
+      j = i
+      do while (i <= len(format, kind=I4P))
+         if (scan(format(i:i), "-+ 0#'") == 0) exit
+         i = i + 1_I4P
+      enddo
+      ! the thousands grouping flag ' of the C locale groups nothing
+      flags = format(j:i - 1_I4P)
+      j = i
+      do while (i <= len(format, kind=I4P))
+         if (scan(format(i:i), '0123456789') == 0) exit
+         i = i + 1_I4P
+      enddo
+      if (i > j) then
+         if (i - j > 3_I4P) then
+            message = 'width too large in "'//format//'"'
+            return
+         endif
+         read(format(j:i - 1_I4P), *) width
+      endif
+      if (i <= len(format, kind=I4P)) then
+         if (format(i:i) == '.') then
+            i = i + 1_I4P
+            j = i
+            do while (i <= len(format, kind=I4P))
+               if (scan(format(i:i), '0123456789') == 0) exit
+               i = i + 1_I4P
+            enddo
+            if (i - j > 2_I4P) then
+               message = 'precision too large in "'//format//'"'
+               return
+            endif
+            prec = 0_I4P
+            if (i > j) read(format(j:i - 1_I4P), *) prec
+         endif
+      endif
+      if (i > len(format, kind=I4P)) then
+         message = 'incomplete conversion in "'//format//'"'
+         return
+      endif
+      type = format(i:i)
+      if (scan(type, 'feEgGhHtlsTLScbBPxXo') == 0) then
+         message = 'unsupported conversion "%'//type//'" in "'//format//'" (supported: f, e, E, g, G, h, H, t, l, '// &
+                   's, T, L, S, c, b, B, P, x, X, o)'
+         type = ' '
+         return
+      endif
+      i = i + 1_I4P
+      return
+   enddo
+   endsubroutine next_conversion
 
    pure subroutine split_format(format, prefix, flags, width, prec, type, suffix, message)
    !< Split a tick format into its text around the one conversion and the conversion fields.

@@ -188,6 +188,30 @@ check("tics noenhanced", viewer.readTics("noenhanced", "").plain === true &&
   viewer.readTics("noenhanced labels 0:a_0", "").mode === "labels" &&
   !viewer.readTics("noenhanced labels 0:a_0", "").add);
 
+// gnuplot 6.0 gprintf power conversions (expected: gnuplot 6.0 output, base 10 as tick labels)
+check("format powers", [
+  ["%t", 996, -2, "0.996000"],
+  ["%T", 95, -1, "0"],
+  ["%.1t*10^{%T}", 125, -1, "1.3*10^{1}"],
+  ["%.1t*10^{%T}", 255, 0, "2.5*10^{2}"],
+  ["%S", -345, -5, "-3"],
+  ["%.1s%c", 12345, -1, "1.2k"],
+  ["%.1s%c", 602, 21, "602.0Z"],
+  ["%c", 3, -30, "e-30"],
+  ["%3.0s %cm", 1, -3, "  1 mm"],
+  ["%B", 1536, 0, "ki"],
+  ["%.2b%B", 1048576, 0, "1.00Mi"],
+  ["%.3P", 314159265358979, -14, "1.000"],
+  ["%x", -1, 0, "ffffffffffffffff"],
+  ["%X", 255, 0, "FF"],
+  ["%o", 255, 0, "377"],
+  ["%05.1t", -345, -5, "-03.4"]
+].every(function (c) {
+  var got = label(c[0], c[1], c[2]);
+  if (got !== c[3]) console.log("    " + c[0] + " " + c[1] + "e" + c[2] + ": " + got + " (gnuplot " + c[3] + ")");
+  return got === c[3];
+}));
+
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });
 console.log("Are all tests passed? " + (failed.length === 0 ? "T" : "F"));

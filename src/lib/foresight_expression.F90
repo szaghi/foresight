@@ -37,8 +37,8 @@ module foresight_expression
 !< IEEE invalid, division by zero or overflow exception.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : output_unit
-use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, gnuplot_real, &
-                             int_str, real_from_decimal
+use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, format_value, &
+                             gnuplot_real, int_str, real_from_decimal
 use foresight_sys, only : command_output
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
@@ -3886,8 +3886,10 @@ contains
       if (x%is_string) call numeric(x, ok, error)
       if (.not. ok) return
       call decimal_of(real_of(x), mant, e)
-      call format_decimal(args(1)%s, mant, e, label, sup)
-      if (len(sup) > 0) label = label//'^'//sup
+      ! gnuplot's gprintf function passes 10 as the log10 of the base of %l and %L
+      call format_value(args(1)%s, mant, e, 10.0_R8P, label, sup)
+      ! the exponent of %h as gnuplot's enhanced text
+      if (len(sup) > 0) label = label//'^{'//sup//'}'
       c = string_value(label)
    case ('strlen')
       c = int_value(int(len(args(1)%s), I8P))
