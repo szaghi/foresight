@@ -527,29 +527,30 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     return {n: v < 0 ? -n : n, e: e};
   }
 
-  // split a format around its one conversion; null if unsupported
-  function splitFormat(format) {
-    var f = {prefix: "", suffix: "", flags: "", width: 0, prec: -1, type: ""}, found = false;
-    var i = 0, m, re = /^%([-+ 0]*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGh])/;
-    while (i < format.length) {
-      if (format[i] !== "%") {
-        if (found) f.suffix += format[i]; else f.prefix += format[i];
-        i += 1;
-      } else if (format[i + 1] === "%") {
-        if (found) f.suffix += "%"; else f.prefix += "%";
-        i += 2;
+  // the next conversion of a format from position at.i: {text (literal, %% resolved), flags,
+  // width, prec, type ("" at the end)}; null if unsupported (mirror of next_conversion)
+  function nextConversion(format, at) {
+    var c = {text: "", flags: "", width: 0, prec: -1, type: ""}, m;
+    var re = /^%([-+ 0#']*)(\d{0,3})(?:\.(\d{0,2}))?([feEgGhHtlsTLScbBPxXo])/;
+    while (at.i < format.length) {
+      if (format[at.i] !== "%") {
+        c.text += format[at.i];
+        at.i += 1;
+      } else if (format[at.i + 1] === "%") {
+        c.text += "%";
+        at.i += 2;
       } else {
-        m = re.exec(format.slice(i));
-        if (found || !m) return null;
-        found = true;
-        f.flags = m[1];
-        f.width = Number(m[2] || 0);
-        f.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
-        f.type = m[4];
-        i += m[0].length;
+        m = re.exec(format.slice(at.i));
+        if (!m) return null;
+        c.flags = m[1];
+        c.width = Number(m[2] || 0);
+        c.prec = m[3] === undefined ? -1 : Number(m[3] || 0);
+        c.type = m[4];
+        at.i += m[0].length;
+        return c;
       }
     }
-    return found ? f : null;
+    return c;
   }
 
   // integer digits with the last drop ones removed, rounded half to even (mirror of round_digits)
@@ -600,37 +601,132 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     return text.indexOf(".") < 0 ? text : text.replace(/0+$/, "").replace(/\.$/, "");
   }
 
-  // printf-like format applied to the exact value n * 10**e (mirror of format_decimal)
-  function formatDecimal(format, n, e) {
-    var f = splitFormat(format), digits, body, sup = "", sign = "", r, p, pad;
-    if (!f) return {label: format, sup: ""};
-    digits = String(Math.abs(n));
-    if (f.type === "f") {
-      body = fixedDigits(digits, e, f.prec < 0 ? 6 : f.prec);
-    } else if (f.type === "e" || f.type === "E") {
-      r = expDigits(digits, e, f.prec < 0 ? 6 : f.prec);
-      body = r.mantissa + expText(f.type, r.x);
+  // one C conversion f e E g G (or gnuplot's h H) of the exact value n * 10**e (mirror of classic)
+  function classic(c, n, e) {
+    var digits = String(Math.abs(n)), body, sup = "", sign = "", r, p, pad, q;
+    if (c.type === "f") {
+      body = fixedDigits(digits, e, c.prec < 0 ? 6 : c.prec);
+    } else if (c.type === "e" || c.type === "E") {
+      r = expDigits(digits, e, c.prec < 0 ? 6 : c.prec);
+      body = r.mantissa + expText(c.type, r.x);
     } else {
-      p = f.prec < 0 ? 6 : Math.max(1, f.prec);
+      p = c.prec < 0 ? 6 : Math.max(1, c.prec);
       r = expDigits(digits, e, p - 1);
       if (r.x < p && r.x >= -4) {
         body = stripZeros(fixedDigits(digits, e, p - 1 - r.x));
       } else {
         body = stripZeros(r.mantissa);
-        if (f.type === "h") { body += "x10"; sup = String(r.x); }
-        else body += expText(f.type === "G" ? "E" : "e", r.x);
+        q = {h: "x10", H: "*10"}[c.type];
+        if (q) { body += q; sup = String(r.x); }
+        else body += expText(c.type === "G" ? "E" : "e", r.x);
       }
     }
     if (n < 0) sign = "-";
-    else if (f.flags.indexOf("+") >= 0) sign = "+";
-    else if (f.flags.indexOf(" ") >= 0) sign = " ";
-    pad = f.width - sign.length - body.length;
+    else if (c.flags.indexOf("+") >= 0) sign = "+";
+    else if (c.flags.indexOf(" ") >= 0) sign = " ";
+    pad = c.width - sign.length - body.length;
     if (pad > 0) {
-      if (f.flags.indexOf("-") >= 0) body += " ".repeat(pad);
-      else if (f.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
+      if (c.flags.indexOf("-") >= 0) body += " ".repeat(pad);
+      else if (c.flags.indexOf("0") >= 0 && !sup) body = "0".repeat(pad) + body;
       else sign = " ".repeat(pad) + sign;
     }
-    return {label: f.prefix + sign + body + f.suffix, sup: sup};
+    return {text: sign + body, sup: sup};
+  }
+
+  // C's %f, %d or %c of a value with the flags and width of the conversion c (JavaScript's
+  // toFixed rounds a binary tie up where C rounds it to even: rare in mantissas)
+  function cField(c, text, negative, numeric) {
+    var sign = negative ? "-" : (numeric && c.flags.indexOf("+") >= 0 ? "+" :
+      (numeric && c.flags.indexOf(" ") >= 0 ? " " : "")), pad = c.width - sign.length - text.length;
+    if (pad > 0) {
+      if (c.flags.indexOf("-") >= 0) text += " ".repeat(pad);
+      else if (numeric && c.flags.indexOf("0") >= 0) text = "0".repeat(pad) + text;
+      else sign = " ".repeat(pad) + sign;
+    }
+    return sign + text;
+  }
+
+  // gnuplot's mant_exp: x = m * base**p (log10Base = log10(base)), in doubles; scientific: base
+  // 10, p a multiple of 3; a mantissa within half a unit of the prec-th decimal of the base moves
+  // to the next power (mirror of mant_exp)
+  function mantExp(log10Base, x, scientific, prec) {
+    var l10, p, m, base, r;
+    if (x === 0) return {m: 0, p: 0};
+    l10 = Math.log10(Math.abs(x)) / log10Base;
+    p = Math.floor(l10);
+    m = Math.pow(10, log10Base * (l10 - p));
+    if (scientific) {
+      r = ((p % 3) + 3) % 3;
+      if (r === 1) m *= 10;
+      if (r === 2) m *= 100;
+      p -= r;
+      base = 1000;
+    } else {
+      base = Math.pow(10, log10Base);
+    }
+    if (m + 0.5 * Math.pow(10, -Math.min(prec, 300)) >= base) {
+      m /= base;
+      p += scientific ? 3 : 1;
+    }
+    return {m: x < 0 ? -m : m, p: p};
+  }
+
+  // the integer part of v as C's %llx, %llX or %llo of a 64-bit unsigned integer (mirror of
+  // unsigned_digits)
+  function unsignedDigits(v, type) {
+    var i = Math.abs(v) < 9223372036854775808 ? BigInt(Math.trunc(v)) : -(2n ** 63n);
+    var text = BigInt.asUintN(64, i).toString(type === "o" ? 8 : 16);
+    return type === "X" ? text.toUpperCase() : text;
+  }
+
+  // gnuplot's gprintf of a tick format to the value n * 10**e: the C conversions exact, the
+  // mantissas and powers in doubles as its mant_exp, base 10 (mirror of format_decimal)
+  function formatDecimal(format, n, e) {
+    var at = {i: 0}, c, label = "", sup = "", r, v = scale10(n, e), stored = 0, power = 0;
+    var p, b, piece, t;
+    var log1024 = Math.log10(1024), count = 0;
+    for (;;) {
+      c = nextConversion(format, at);
+      if (!c) return {label: format, sup: ""};
+      label += c.text;
+      if (!c.type) break;
+      count += 1;
+      piece = "";
+      if ("feEgGhH".indexOf(c.type) >= 0) {
+        r = classic(c, n, e);
+        piece = r.text;
+        if (r.sup) sup = r.sup;
+      } else if ("tlsb".indexOf(c.type) >= 0) {
+        stored = c.type === "b" ? log1024 : 1;
+        r = mantExp(stored, v, c.type === "s", Math.max(c.prec, 0));
+        power = r.p;
+        piece = cField(c, Math.abs(r.m).toFixed(c.prec < 0 ? 6 : c.prec), r.m < 0, true);
+      } else if ("TLSc".indexOf(c.type) >= 0) {
+        b = 1;
+        p = stored === b ? power : mantExp(b, v, c.type === "S" || c.type === "c", 0).p;
+        if (c.type !== "c") piece = cField(c, String(Math.abs(p)), p < 0, true);
+        else if (Math.abs(p) > 24) piece = "e" + (p < 0 ? "-" : "+") + String(Math.abs(p));
+        else if (p !== 0) piece = cField(c, "yzafpnum kMGTPEZY"[(p + 24) / 3], false, false);
+      } else if (c.type === "B") {
+        p = stored === log1024 ? power : mantExp(log1024, v, false, 0).p;
+        if (p > 0 && p <= 8) piece = cField(c, "kMGTPEZY"[p - 1], false, false) + "i";
+        else if (p > 8) piece = "x2^{" + (p - 8) + "}Yi";
+        else if (p < 0) piece = "x2^{" + 10 * p + "}";
+        else piece = "  ";
+      } else if (c.type === "P") {
+        t = v / Math.PI;
+        piece = cField(c, Math.abs(t).toFixed(c.prec < 0 ? 6 : c.prec), t < 0, true);
+      } else {
+        piece = unsignedDigits(v, c.type);
+        if (piece.length < c.width) {
+          if (c.flags.indexOf("-") >= 0) piece += " ".repeat(c.width - piece.length);
+          else if (c.flags.indexOf("0") >= 0) piece = "0".repeat(c.width - piece.length) + piece;
+          else piece = " ".repeat(c.width - piece.length) + piece;
+        }
+      }
+      label += piece;
+    }
+    return count ? {label: label, sup: sup} : {label: format, sup: ""};
   }
 
   function formatLabel(n, e, sci) {
@@ -655,6 +751,28 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     var words = positions ? positions.split(" ") : [], k;
     tics.plain = words.indexOf("noenhanced") >= 0;
     words = words.filter(function (w) { return w !== "noenhanced"; });
+    // the label style, anywhere: "offset X Y" (characters, y up), "color C"
+    k = words.indexOf("offset");
+    if (k >= 0) {
+      tics.offset = [Number(words[k + 1]), Number(words[k + 2])];
+      words.splice(k, 3);
+    }
+    k = words.indexOf("color");
+    if (k >= 0) {
+      tics.color = words[k + 1];
+      words.splice(k, 2);
+    }
+    // the placement: "axis" (on the zero axis of the other coordinate), "rangelimited LO HI"
+    k = words.indexOf("axis");
+    if (k >= 0) {
+      tics.axis = true;
+      words.splice(k, 1);
+    }
+    k = words.indexOf("rangelimited");
+    if (k >= 0) {
+      tics.range = [Number(words[k + 1]), Number(words[k + 2])];
+      words.splice(k, 3);
+    }
     k = words.indexOf("labels");
     var series = k < 0 ? words : words.slice(0, k), j, w, cut = series.length;
     for (j = 0; j < series.length; j++) {
@@ -1493,9 +1611,15 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
   }
 
   // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks;
-  // enhanced text at `markup` [px] font size, as it is with 0
-  function label(parent, x, y, tick, anchor, rotate, lines, markup) {
+  // enhanced text at `markup` [px] font size, as it is with 0; moved by the offset of the axis
+  // `tics` (characters 0.6 by 1 `fs` [px], y up) and in their color (mirror of tick_label)
+  function label(parent, x, y, tick, anchor, rotate, lines, markup, tics, fs) {
+    if (tics && tics.offset) {
+      x += tics.offset[0] * 0.6 * fs;
+      y -= tics.offset[1] * fs;
+    }
     var attributes = {x: x, y: y, "text-anchor": anchor};
+    if (tics && tics.color) attributes.fill = tics.color;
     if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
     var node = element(parent, "text", attributes), parts = String(tick.label).split("\n");
     if (!lines || rotate) parts = [parts.join(" ")];
@@ -1852,12 +1976,19 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     var xt = this.x.tics || {}, yt = this.y.tics || {}, angle = xt.rotate || 0;
     var rad = angle * Math.PI / 180;
     var xs = xt.out ? -1 : 1, shift = xt.out ? tickLength(xt, true) : 0;
+    // the line of the ticks: the border, or the zero axis of the other coordinate (on_zero)
+    var xbase = zeroLine(xt, this.y, v.v0, v.v1, this.bottom, -h);
+    var ybase = zeroLine(yt, this.x, v.u0, v.u1, this.left, w);
+    if (xbase === null) xbase = this.bottom;
+    if (ybase === null) ybase = this.left;
     this.x.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
       var length = tickLength(xt, t.major);
-      if (p < self.left - 0.5 || p > self.right + 0.5) return;
-      line(self.xticks, p, self.bottom, p, self.bottom - xs * length, FRAME_COLOR, 1);
-      if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + xs * length, FRAME_COLOR, 1);
+      if (p < self.left - 0.5 || p > self.right + 0.5 || !inRange(xt, t.value)) return;
+      line(self.xticks, p, xbase, p, xbase - xs * length, FRAME_COLOR, 1);
+      if (self.mirror[0] && xbase === self.bottom) {
+        line(self.xticks, p, self.top, p, self.top + xs * length, FRAME_COLOR, 1);
+      }
       if (!t.major) {
         if (!self.polarGrid) gridLine(self, p, self.bottom, p, self.top, "mx");
         return;
@@ -1865,11 +1996,11 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       // rotated: the glyph band centred on the tick (mirror of rotated_anchor)
       if (angle) {
         label(self.xticks, p + 0.35 * fs * Math.sin(rad),
-          self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle, false,
-          self.markup(xt));
+          xbase + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle, false,
+          self.markup(xt), xt, fs);
       } else {
-        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true,
-          self.markup(xt));
+        label(self.xticks, p, xbase + shift + GAP + fs, t, "middle", 0, true,
+          self.markup(xt), xt, fs);
       }
       if (self.polarGrid) return;
       gridLine(self, p, self.bottom, p, self.top, t.major ? "x" : "mx");
@@ -1877,18 +2008,18 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
       var length = tickLength(yt, t.major);
-      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
+      if (p < self.top - 0.5 || p > self.bottom + 0.5 || !inRange(yt, t.value)) return;
       var ys = yt.out ? -1 : 1;
-      line(self.yticks, self.left, p, self.left + ys * length, p, FRAME_COLOR, 1);
-      if (self.mirror[1]) {
+      line(self.yticks, ybase, p, ybase + ys * length, p, FRAME_COLOR, 1);
+      if (self.mirror[1] && ybase === self.left) {
         line(self.yticks, self.right, p, self.right - ys * length, p, FRAME_COLOR, 1);
       }
       if (!t.major) {
         if (!self.polarGrid) gridLine(self, self.left, p, self.right, p, "my");
         return;
       }
-      label(self.yticks, self.left - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
-        "end", 0, false, self.markup(yt));
+      label(self.yticks, ybase - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
+        "end", 0, false, self.markup(yt), yt, fs);
       if (self.polarGrid) return;
       gridLine(self, self.left, p, self.right, p, t.major ? "y" : "my");
     });
@@ -1899,14 +2030,14 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
       var y2t = self.y2.tics || {}, s2 = y2t.out ? -1 : 1;
       var length = tickLength(y2t, t.major);
-      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
+      if (p < self.top - 0.5 || p > self.bottom + 0.5 || !inRange(y2t, t.value)) return;
       line(self.y2ticks, self.right, p, self.right - s2 * length, p, FRAME_COLOR, 1);
       if (self.mirror[2]) {
         line(self.y2ticks, self.left, p, self.left + s2 * length, p, FRAME_COLOR, 1);
       }
       if (t.major) {
         label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
-          t, "start", 0, false, self.markup(y2t));
+          t, "start", 0, false, self.markup(y2t), y2t, fs);
         gridLine(self, self.left, p, self.right, p, "y2");
       }
     });
@@ -1921,6 +2052,26 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
   }
 
   // tick length of an axis' settings (mirror of tick_length): the major length times its scale
+  // the page coordinate of the zero of `axis` in the view [lo, hi] (unit), from `start` by `span`
+  // [px], if the ticks set `tics` lie on it (gnuplot `axis`: a linear axis with 0 in view); else
+  // null (mirror of on_zero)
+  function zeroLine(tics, axis, lo, hi, start, span) {
+    var u;
+    if (!tics.axis || axis.log) return null;
+    u = (axis.toUnit(0) - lo) / (hi - lo);
+    return u >= 0 && u <= 1 ? start + u * span : null;
+  }
+
+  // whether a tick at value `v` is drawn: within the data range of rangelimited ticks (mirror of
+  // within)
+  function inRange(tics, v) {
+    var tol;
+    if (!tics.range) return true;
+    tol = 1e-9 * Math.max(Math.abs(tics.range[1] - tics.range[0]), Math.abs(tics.range[0]),
+      Math.abs(tics.range[1]), Number.MIN_VALUE);
+    return v >= tics.range[0] - tol && v <= tics.range[1] + tol;
+  }
+
   function tickLength(tics, major) {
     var scale = tics.scale || [1, 0.5];
     return TICK_MAJOR * (major ? scale[0] : scale[1]);
@@ -1935,14 +2086,14 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     this.x2.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x2.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
       var length = tickLength(x2t, t.major);
-      if (p < self.left - 0.5 || p > self.right + 0.5) return;
+      if (p < self.left - 0.5 || p > self.right + 0.5 || !inRange(x2t, t.value)) return;
       line(self.x2ticks, p, self.top, p, self.top + s2 * length, FRAME_COLOR, 1);
       if (self.x2mirror) {
         line(self.x2ticks, p, self.bottom, p, self.bottom - s2 * length, FRAME_COLOR, 1);
       }
       if (t.major) {
         label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
-          t, "middle", 0, false, self.markup(x2t));
+          t, "middle", 0, false, self.markup(x2t), x2t, fs);
         gridLine(self, p, self.bottom, p, self.top, "x2");
       }
     });

@@ -205,6 +205,25 @@ same seed. `exists("steps")` lets a caller set the length first. See
 
 On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 
+### Powers of ten and unit prefixes
+
+<<< @/examples/snippets/cb_format_powers.gp{gnuplot}
+
+<Plot name="cb_format_powers" svg :width="560" :height="320" />
+
+gnuplot's `%T` is the power of ten of a value, as a superscript with enhanced text; `%s` its mantissa to a power of
+1000 and `%c` the SI prefix of that power. See [Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+
+### Ticks on the axes, a range frame
+
+<<< @/examples/snippets/cb_tics_axis.gp{gnuplot}
+
+<Plot name="cb_tics_axis" svg :width="640" :height="300" />
+
+`set xtics axis` draws the ticks on y = 0, `set ytics axis` on x = 0, their labels taking no margin; `rangelimited`
+keeps the ticks and the border side within the data. See
+[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+
 ### Named ticks and extra ticks
 
 <<< @/examples/snippets/cb_tics_list.gp{gnuplot}
@@ -320,6 +339,15 @@ instead. See [Key](/guide/gnuplot-subset#key).
 `reverse` puts the samples first and `Left` justifies the titles, `invert` lists the last run first, `opaque` paints the
 key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot-subset#key).
 
+### A key in columns
+
+<<< @/examples/snippets/cb_key_columns.gp{gnuplot}
+
+<Plot name="cb_key_columns" svg :width="560" :height="320" />
+
+`maxrows 3` starts a column every 3 entries, `tc variable` writes each title in its series' color, `lt 4 lw 1.5` styles
+the box. See [Key](/guide/gnuplot-subset#key).
+
 ### Enhanced text: sub and superscripts, Greek letters
 
 <<< @/examples/snippets/cb_enhanced.gp{gnuplot}
@@ -356,6 +384,24 @@ The same left and right borders at screen fractions line up the two panels, alth
 wider. See [Margins](/guide/gnuplot-subset#margins).
 
 ## Lines, points and error bars
+
+### Special functions
+
+<<< @/examples/snippets/cb_special_functions.gp{gnuplot}
+
+<Plot name="cb_special_functions" svg :width="720" :height="480" />
+
+gnuplot's Bessel, gamma, error, normal, Lambert W and Airy functions, by its own algorithms: the values are gnuplot's.
+Γ is undefined at the poles, a gap. See [Special functions](/guide/gnuplot-subset#special-functions).
+
+### Labels and arrows in a loop
+
+<<< @/examples/snippets/cb_set_for.gp{gnuplot}
+
+<Plot name="cb_set_for" svg :width="560" :height="320" />
+
+`set for [i=1:5]` runs the `set` command once per value, `unset for` removes in a loop. See
+[Iteration](/guide/gnuplot-subset#iteration).
 
 ### User variables and functions
 

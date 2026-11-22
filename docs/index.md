@@ -186,6 +186,8 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_logscale" svg :width="560" :height="320" caption="a log axis with exponent labels" />
   <Plot name="cb_reversed" svg :width="560" :height="320" caption="a reversed axis" />
   <Plot name="cb_ticks" svg :width="560" :height="320" caption="tick steps and label formats" />
+  <Plot name="cb_format_powers" svg :width="560" :height="320" caption="powers of ten and unit prefixes" />
+  <Plot name="cb_tics_axis" svg :width="640" :height="300" caption="ticks on the axes, a range frame" />
   <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
   <Plot name="cb_ytic" svg :width="560" :height="320" caption="names on the y axis (ytic)" />
   <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
@@ -199,6 +201,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
   <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />
   <Plot name="cb_key_layout" svg :width="560" :height="320" caption="a key in its own layout" />
+  <Plot name="cb_key_columns" svg :width="560" :height="320" caption="a key in columns" />
   <Plot name="cb_enhanced" svg :width="560" :height="340" caption="enhanced text: sub and superscripts, Greek letters" />
   <Plot name="cb_grid_zero" svg :width="560" :height="320" caption="grid lines, zero axes and border" />
   <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
@@ -208,6 +211,8 @@ foresight --watch residuals.gp                # re-render while the solver write
 ### Lines, points and error bars
 
 <div class="fs-gallery">
+  <Plot name="cb_special_functions" svg :width="720" :height="480" caption="special functions" />
+  <Plot name="cb_set_for" svg :width="560" :height="320" caption="labels and arrows in a loop (set for)" />
   <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_recursion" svg :width="560" :height="320" caption="recursive functions" />
   <Plot name="cb_function_blocks" svg :width="560" :height="320" caption="function blocks" />
