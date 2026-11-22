@@ -287,6 +287,7 @@ type :: expression_object
       procedure, pass(self) :: set_time     !< Read a plain column as a time.
       procedure, pass(self) :: evaluate     !< Value on a data row.
       procedure, pass(self) :: evaluate_text !< Text on a data row (a label).
+      procedure, pass(self) :: table_cell   !< Text of a `plot with table` field on a data row.
       procedure, pass(self) :: uses_text    !< Whether the row cell texts are read.
       procedure, pass(self) :: first_column !< First data column read.
       procedure, pass(self) :: name_count   !< Number of column header names.
@@ -2402,6 +2403,34 @@ contains
       text = c_real('', 0_I4P, -1_I4P, 'g', top%r)
    endif
    endfunction evaluate_text
+
+   pure subroutine table_cell(self, row, point, text, is_string, cells, heads, place)
+   !< A field of gnuplot's `plot ... with table` on a data row (arguments as `evaluate`): a string as it is, a number
+   !< as `%g`, `nan` if undefined.
+   class(expression_object),      intent(in)           :: self      !< Expression.
+   real(R8P),                     intent(in)           :: row(:)    !< Row cells.
+   integer(I4P),                  intent(in)           :: point     !< Point number.
+   character(len=:), allocatable, intent(out)          :: text      !< Text.
+   logical,                       intent(out)          :: is_string !< A string value.
+   type(name_object),             intent(in), optional :: cells(:)  !< Row cell texts.
+   type(name_object),             intent(in), optional :: heads(:)  !< Header cell texts of the row's dataset.
+   integer(I4P),                  intent(in), optional :: place(2)  !< Block within the dataset and dataset, from 0.
+   type(value_object)                                  :: top       !< Typed value.
+   logical                                             :: defined   !< Defined.
+
+   is_string = .false.
+   text = 'nan'
+   call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
+   if (.not. defined) return
+   if (top%is_string) then
+      text = top%s
+      is_string = .true.
+   elseif (ieee_is_nan(real_of(top))) then
+      text = 'nan'
+   else
+      text = c_real('', 0_I4P, -1_I4P, 'g', real_of(top))
+   endif
+   endsubroutine table_cell
 
    elemental function uses_text(self) result(uses)
    !< Whether the expression reads the texts of the row cells (`strcol`), which the data must then keep.

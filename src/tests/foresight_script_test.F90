@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(119)                           !< Per-check outcome.
+logical                       :: test_passed(120)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2228,8 +2228,8 @@ call interpreter%run_text('print `echo 1', iostat, iomsg)
 test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'unmatched `') > 0
 call interpreter%run_text('plot "foresight_script_test_table.dat" u 1:(system($2))', iostat, iomsg)
 test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'system takes a command known now') > 0
-call interpreter%run_text('set table "x" separator comma', iostat, iomsg)
-test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'separator') > 0
+call interpreter%run_text('set table "x" separator semicolon', iostat, iomsg)
+test_passed(111) = test_passed(111) .and. iostat /= 0_I4P .and. index(iomsg, 'separator whitespace|tab|comma') > 0
 open(newunit=unit, file='foresight_script_test_system.txt')
 close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_table.txt')
@@ -2468,6 +2468,45 @@ endif
 open(newunit=unit, file='foresight_script_test_printdb.txt')
 close(unit, status='delete')
 
+! plot with table, as gnuplot 6.0: the using fields as text (a blank before each, tab separated; %g, nan, strings as
+! they are), the leading numeric columns without using, if COND, every; into a datablock a string without its blank
+! and the separator after one; set table separator; a function writes nothing
+call interpreter%init(scratch)
+open(newunit=unit, file='foresight_script_test_wtable.dat')
+write(unit, '(A)') '1 2 3 a', '2 4 5 b', '# c', '', '3 6 7 c'
+close(unit)
+call interpreter%run_text("set table 'foresight_script_test_wtable.txt'"//new_line('a')// &
+                          'plot "foresight_script_test_wtable.dat" with table'//new_line('a')// &
+                          'plot "foresight_script_test_wtable.dat" u 1:($2*1.5):(strcol(4)):4 w table if $1 > 1'// &
+                          new_line('a')//'plot "foresight_script_test_wtable.dat" u 0:(1e-20) every 2 w table, x w table'// &
+                          new_line('a')//'set table $T separator comma'//new_line('a')// &
+                          'plot "foresight_script_test_wtable.dat" u (strcol(4)):1:2 w table; unset table'// &
+                          new_line('a')//"set table 'foresight_script_test_wtable.txt' append"//new_line('a')// &
+                          'plot "foresight_script_test_wtable.dat" u 1:2 w table; unset table', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(120) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_wtable.txt', [character(len=24) :: ' 1'//achar(9)//' 2'//achar(9)//' 3', &
+           ' 2'//achar(9)//' 4'//achar(9)//' 5', ' 3'//achar(9)//' 6'//achar(9)//' 7', &
+           ' 2'//achar(9)//' 6'//achar(9)//' b'//achar(9)//' nan', ' 3'//achar(9)//' 9'//achar(9)//' c'//achar(9)//' nan', &
+           ' 0'//achar(9)//' 1e-20', ' 1'//achar(9)//' 1e-20', ' 1, 2', ' 2, 4', ' 3, 6'])
+if (test_passed(120)) then
+   block
+      character(len=:), allocatable :: text  !< $T.
+      logical                       :: found !< Defined.
+
+      call interpreter%symbols%string_of('$T', text, found)
+      test_passed(120) = found
+      if (found) test_passed(120) = text == 'a , 1 , 2'//new_line('a')//'b , 2 , 4'//new_line('a')//'c , 3 , 6'// &
+                                             new_line('a')
+   endblock
+endif
+call interpreter%run_text('plot "foresight_script_test_wtable.dat" w table', iostat, iomsg)
+test_passed(120) = test_passed(120) .and. iostat /= 0_I4P .and. index(iomsg, "requires a previous 'set table'") > 0
+open(newunit=unit, file='foresight_script_test_wtable.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_wtable.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2476,7 +2515,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,119L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,120L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -24,7 +24,7 @@ module foresight_datafile
 !<
 !< Values are stored flattened, rows by offsets, with capacities doubled on growth: a large monitoring log costs one
 !< real per value plus three integers per row.
-use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : iostat_end, iostat_eor
 use foresight_expression, only : expression_object, text_object => name_object
 use foresight_format, only : real_from_decimal
@@ -75,6 +75,7 @@ type :: datafile_object
       procedure, pass(self) :: matrix        !< Values as a matrix (gnuplot `matrix`).
       procedure, pass(self) :: missing_name  !< A header name of the fields found nowhere.
       procedure, pass(self) :: table         !< Evaluate `using` fields.
+      procedure, pass(self) :: table_lines   !< The rows as gnuplot's `plot with table` writes them.
 endtype datafile_object
 
 contains
@@ -642,6 +643,140 @@ contains
       if (yes .and. last >= 0_I4P) yes = k <= last
       endfunction in_loop
    endsubroutine table
+
+   subroutine table_lines(self, fields, index, every, header, separator, block, text, condition)
+   !< gnuplot's `plot ... with table`: a line per row of dataset `index` (all if negative) selected by `every`, headers
+   !< skipped (`header`), with `condition` true if given (`if COND`), the `using` `fields` each a string as it is, a
+   !< number as `%g`, `nan` if undefined; no `fields`, the leading numeric cells of the row. As gnuplot, each field is
+   !< written after a blank and joined by `separator`, for a datablock (`block`) a string field without the blank and the
+   !< separator after one. Blank lines and comments are not written, no row is left out for a bad cell.
+   class(datafile_object),  intent(in)           :: self      !< Data.
+   type(expression_object), intent(in)           :: fields(:) !< `using` fields, none for the leading numeric cells.
+   integer(I4P),            intent(in)           :: index     !< Dataset, 0-based; negative for all.
+   integer(I4P),            intent(in)           :: every(6)  !< gnuplot `every` fields.
+   logical,                 intent(in)           :: header    !< The first row of each dataset is a header.
+   character(len=1),        intent(in)           :: separator !< Field separator.
+   logical,                 intent(in)           :: block     !< Written to a datablock.
+   character(len=:), allocatable, intent(out)    :: text      !< Lines, each ended by a new line.
+   type(expression_object), intent(in), optional :: condition !< `if` condition.
+   type(expression_object)       :: resolved(size(fields))    !< Fields on the header of the current dataset.
+   type(expression_object)       :: test                      !< Condition on that header.
+   type(expression_object)       :: plain                     !< A plain column, the default fields.
+   character(len=:), allocatable :: names(:)                  !< Header names of the current dataset.
+   character(len=:), allocatable :: cell                      !< A field's text.
+   character(len=:), allocatable :: line                      !< A row's line.
+   type(text_object), allocatable :: none(:)                  !< No cell texts.
+   integer(I4P)                  :: r                         !< Row counter.
+   integer(I4P)                  :: f                         !< Field counter.
+   integer(I4P)                  :: in_block                  !< Point number within the block.
+   integer(I4P)                  :: in_set_block              !< Block number within the dataset.
+   integer(I4P)                  :: picked                    !< Selected point within the dataset: column 0.
+   integer(I4P)                  :: set                       !< Dataset of the last selected point.
+   integer(I4P)                  :: place(2)                  !< Block within the dataset and dataset of the row.
+   integer(I4P)                  :: n                         !< Fields of the row.
+   logical                       :: is_string                 !< A string field.
+   real(R8P)                     :: v                         !< Condition value.
+
+   text = ''
+   resolved = fields
+   if (present(condition)) test = condition
+   allocate(none(0))
+   in_block = -1_I4P
+   in_set_block = -1_I4P
+   picked = -1_I4P
+   set = -1_I4P
+   do r = 1_I4P, self%nrows
+      if (r == 1_I4P) then
+         in_set_block = 0_I4P
+      elseif (self%dataset(r) /= self%dataset(r - 1_I4P)) then
+         in_block = -1_I4P
+         in_set_block = 0_I4P
+      elseif (self%block(r) /= self%block(r - 1_I4P)) then
+         in_block = -1_I4P
+         in_set_block = in_set_block + 1_I4P
+      endif
+      in_block = in_block + 1_I4P
+      if (header .and. (r == 1_I4P .or. self%dataset(r) /= self%dataset(max(1_I4P, r - 1_I4P)))) then
+         in_block = -1_I4P
+         call self%header_names(self%dataset(r), names)
+         do f = 1_I4P, size(fields, kind=I4P)
+            resolved(f) = fields(f)%resolve(names)
+         enddo
+         if (present(condition)) test = condition%resolve(names)
+         cycle
+      endif
+      if (.not. (in_loop(in_block, every(3), every(1), every(5)) .and. &
+                 in_loop(in_set_block, every(4), every(2), every(6)))) cycle
+      if (index >= 0_I4P .and. self%dataset(r) /= index) cycle
+      if (self%dataset(r) /= set) picked = -1_I4P
+      set = self%dataset(r)
+      picked = picked + 1_I4P
+      place = [in_set_block, self%dataset(r)]
+      associate(row => self%values(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                heads => self%headers(self%dataset(r) + 1_I4P)%cells)
+         if (present(condition)) then
+            if (self%has_text) then
+               v = test%evaluate(row, picked, cells=self%texts(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                                 heads=heads, place=place)
+            else
+               v = test%evaluate(row, picked, heads=heads, place=place)
+            endif
+            if (ieee_is_nan(v)) cycle
+            if (v == 0.0_R8P) cycle
+         endif
+         n = size(fields, kind=I4P)
+         if (n == 0_I4P) then
+            ! the leading numeric cells
+            do while (n < size(row, kind=I4P))
+               if (ieee_is_nan(row(n + 1_I4P))) exit
+               n = n + 1_I4P
+            enddo
+         endif
+         line = ''
+         do f = 1_I4P, n
+            if (size(fields) == 0) then
+               call plain%set_column(f)
+               if (self%has_text) then
+                  call plain%table_cell(row, picked, cell, is_string, &
+                                        cells=self%texts(self%first(r):self%first(r + 1_I4P) - 1_I4P), heads=heads, &
+                                        place=place)
+               else
+                  call plain%table_cell(row, picked, cell, is_string, heads=heads, place=place)
+               endif
+            elseif (self%has_text) then
+               call resolved(f)%table_cell(row, picked, cell, is_string, &
+                                           cells=self%texts(self%first(r):self%first(r + 1_I4P) - 1_I4P), &
+                                           heads=heads, place=place)
+            else
+               call resolved(f)%table_cell(row, picked, cell, is_string, heads=heads, place=place)
+            endif
+            if (f > 1_I4P) then
+               if (block) line = line//' '
+               line = line//separator
+            endif
+            if (block .and. is_string) then
+               line = line//cell
+            else
+               line = line//' '//cell
+            endif
+         enddo
+      endassociate
+      text = text//line//new_line('a')
+   enddo
+   contains
+      pure function in_loop(k, first, increment, last) result(yes)
+      !< Whether `k` is visited by the loop `first, last, increment` (no end if `last` is negative).
+      integer(I4P), intent(in) :: k         !< Number.
+      integer(I4P), intent(in) :: first     !< Loop start.
+      integer(I4P), intent(in) :: increment !< Loop increment.
+      integer(I4P), intent(in) :: last      !< Loop end, negative for none.
+      logical                  :: yes       !< Visited.
+
+      yes = k >= first
+      if (yes) yes = modulo(k - first, max(1_I4P, increment)) == 0_I4P
+      if (yes .and. last >= 0_I4P) yes = k <= last
+      endfunction in_loop
+   endsubroutine table_lines
 
    pure subroutine matrix(self, index, z, message)
    !< Values of dataset `index` (all if negative) as gnuplot `matrix` data: `z(column, row)`, the column the x index

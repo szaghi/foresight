@@ -208,6 +208,7 @@ type :: script_object
    type(shape_object)              :: rectangle_style          !< `set style rectangle`: new rectangles' style.
    character(len=:), allocatable   :: table_file               !< Where: a file, a datablock (`$NAME`), '-' the
                                                                !< standard output.
+   character(len=1)                :: table_sep = achar(9)     !< `set table separator`, of `plot with table`.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -297,6 +298,7 @@ contains
    self%loop_signal = 0_I4P
    self%table = .false.
    self%table_file = ''
+   self%table_sep = achar(9)
    call default_styles(self)
    endsubroutine init
 
@@ -1980,6 +1982,8 @@ contains
                                                                 !< negative for none (gnuplot `title columnhead(N)`).
    character(len=:), allocatable                :: missing   !< Header name found nowhere.
    character(len=:), allocatable                :: dummy     !< Dummy variable of the functions.
+   type(expression_object)                      :: table_if  !< `with table if COND`: the condition.
+   logical                                      :: has_table_if !< A `with table` condition given.
    integer(I4P)                                 :: nranges   !< Inline ranges read.
 
    iostat = 0_I4P
@@ -2141,6 +2145,7 @@ contains
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       with = self%data_style
       if (is_function) with = self%function_style
+      has_table_if = .false.
       has_title = .false.
       title = ''
       title_column = -1_I4P
@@ -2206,7 +2211,36 @@ contains
                call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
                return
             endif
-            if (is_function .and. .not. function_drawable(with)) then
+            if (with == 'table') then
+               if (.not. self%table) then
+                  call fail("plot: 'with table' requires a previous 'set table'", iostat, iomsg)
+                  return
+               endif
+               ! if CONDITION, up to the end of the item: the rows written
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'if') then
+                     i = i + 2_I4P
+                     if (i > size(tokens, kind=I4P)) then
+                        call fail('plot: with table if needs a condition', iostat, iomsg)
+                        return
+                     endif
+                     head = i
+                     do while (i < size(tokens, kind=I4P))
+                        if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) exit
+                        i = i + 1_I4P
+                     enddo
+                     call table_if%compile(text(tokens(head)%first:tokens(i)%last), iostat, iomsg, &
+                                           degrees=self%figure%panels(self%figure%current)%degrees, &
+                                           symbols=self%symbols)
+                     if (iostat /= 0_I4P) then
+                        iomsg = 'plot: with table if: '//iomsg
+                        return
+                     endif
+                     has_table_if = .true.
+                  endif
+               endif
+            endif
+            if (is_function .and. .not. function_drawable(with) .and. with /= 'table') then
                call fail('plot: a function is drawn with '//FUNCTION_STYLES//', not '//with, iostat, iomsg)
                return
             endif
@@ -2507,6 +2541,20 @@ contains
             endif
          endif
       endassociate
+      if (is_function .and. with == 'table') then
+         ! gnuplot writes nothing for a function, with a warning
+         write(error_unit, '(A)') "foresight: warning: 'with table' requires a data source not a pure function"
+         if (size(levels) > 0) then
+            if (next_values()) then
+               i = item_start
+               cycle
+            endif
+            call iteration_end
+         endif
+         if (i > size(tokens, kind=I4P)) exit
+         i = i + 1_I4P
+         cycle
+      endif
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') title = written
@@ -2598,13 +2646,27 @@ contains
       ! reloaded to keep the cell texts, for the labels and strcol
       time_axis(1) = merge(self%time_data(4), self%time_data(1), axes(2:2) == '2')
       time_axis(2) = merge(self%time_data(3), self%time_data(2), axes(4:4) == '2')
-      needs_text = label_col > 0_I4P .or. any(time_axis)
+      needs_text = label_col > 0_I4P .or. any(time_axis) .or. with == 'table'
       if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
       if (file /= loaded .or. (needs_text .and. .not. data%has_text)) then
          call self%load_data(data, file, iostat, iomsg, keep_text=needs_text)
          if (iostat /= 0_I4P) return
          loaded = file
          call self%register_file(file)
+      endif
+      if (with == 'table') then
+         call table_item
+         if (iostat /= 0_I4P) return
+         if (size(levels) > 0) then
+            if (next_values()) then
+               i = item_start
+               cycle
+            endif
+            call iteration_end
+         endif
+         if (i > size(tokens, kind=I4P)) exit
+         i = i + 1_I4P
+         cycle
       endif
       if (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha') then
          call image_item
@@ -3157,6 +3219,45 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine table_item
+      !< A data item `with table`: its rows written now as text where `set table` sends them (gnuplot's layout).
+      type(expression_object), allocatable :: used(:)  !< `using` fields, none for the leading numeric cells.
+      character(len=:), allocatable        :: lines    !< Rows written.
+      character(len=:), allocatable        :: old      !< Datablock before.
+      logical                              :: found    !< Datablock found.
+      integer(I4P)                         :: unit     !< File unit.
+
+      if (allocated(fields)) then
+         used = fields
+      else
+         allocate(used(0))
+      endif
+      if (has_table_if) then
+         call data%table_lines(used, set_index, every, any(used%name_count() > 0_I4P), self%table_sep, &
+                               is_datablock(self%table_file), lines, condition=table_if)
+      else
+         call data%table_lines(used, set_index, every, any(used%name_count() > 0_I4P), self%table_sep, &
+                               is_datablock(self%table_file), lines)
+      endif
+      if (is_datablock(self%table_file)) then
+         call self%symbols%string_of(self%table_file, old, found)
+         if (.not. found) old = ''
+         call self%symbols%set_string(self%table_file, old//lines)
+      elseif (len(lines) == 0) then
+         return
+      elseif (self%table_file == '-') then
+         write(output_unit, '(A)') lines(1:len(lines) - 1)
+      else
+         open(newunit=unit, file=self%table_file, position='append', action='write', iostat=iostat)
+         if (iostat /= 0_I4P) then
+            call fail('set table: cannot write "'//self%table_file//'"', iostat, iomsg)
+            return
+         endif
+         write(unit, '(A)') lines(1:len(lines) - 1)
+         close(unit)
+      endif
+      endsubroutine table_item
+
       subroutine iteration_start
       !< The `for [...]` clauses before the item at `i`: their values, the loop variables set to the first ones, `i` the
       !< first token of the item. No value in a clause: `skip_item`.
@@ -5791,17 +5892,39 @@ contains
       endsubroutine errorbars_option
 
       subroutine table_option
-      !< `set table ["file" | $NAME] [append]`: plots write their points to the file (emptied unless `append`), to the
-      !< datablock (likewise), or bare to the standard output; nothing is drawn until `unset table`.
+      !< `set table ["file" | $NAME] [append] [separator whitespace|tab|comma|"c"]`: plots write their points to the
+      !< file (emptied unless `append`), to the datablock (likewise), or bare to the standard output; nothing is drawn
+      !< until `unset table`. The separator, of `plot with table` only, stays until changed (gnuplot: tab).
       character(len=:), allocatable :: name   !< File or datablock name.
       integer(I4P)                  :: unit   !< File unit.
       integer(I4P)                  :: k      !< Last token of the name.
       logical                       :: append !< `append` given.
       logical                       :: found  !< Datablock found.
+      integer(I4P)                  :: n      !< Tokens before the separator.
 
+      n = size(tokens, kind=I4P)
+      do k = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%kind /= TOKEN_WORD .or. .not. keyword(tokens(k)%text, 'separator', 3_I4P)) cycle
+         if (k /= size(tokens, kind=I4P) - 1_I4P) then
+            call fail('set table: separator whitespace|tab|comma|"c" expected, last', iostat, iomsg)
+            return
+         endif
+         if (tokens(k + 1_I4P)%kind == TOKEN_STRING .and. len(tokens(k + 1_I4P)%text) > 0) then
+            self%table_sep = tokens(k + 1_I4P)%text(1:1)
+         elseif (is_word(tokens(k + 1_I4P)%text, 'whitespace tab')) then
+            self%table_sep = achar(9)
+         elseif (tokens(k + 1_I4P)%text == 'comma') then
+            self%table_sep = ','
+         else
+            call fail('set table: separator whitespace|tab|comma|"c" expected', iostat, iomsg)
+            return
+         endif
+         n = k - 1_I4P
+         exit
+      enddo
       name = '-'
       k = 1_I4P
-      if (size(tokens) > 1) then
+      if (n > 1_I4P) then
          if (.not. keyword(tokens(2)%text, 'append', 3_I4P) .or. tokens(2)%kind == TOKEN_STRING) then
             k = 2_I4P
             if (.not. self%string_expression(tokens, k, name, iostat, iomsg)) then
@@ -5811,13 +5934,9 @@ contains
          endif
       endif
       append = .false.
-      if (k == size(tokens, kind=I4P) - 1_I4P) append = keyword(tokens(k + 1_I4P)%text, 'append', 3_I4P)
-      if ((k < size(tokens, kind=I4P) .and. .not. append) .or. k < size(tokens, kind=I4P) - 1_I4P) then
-         if (keyword(tokens(k + 1_I4P)%text, 'separator', 3_I4P)) then
-            call fail('set table: separator (of plot with table) is not supported', iostat, iomsg)
-         else
-            call fail('set table: "file" or $NAME [append] expected', iostat, iomsg)
-         endif
+      if (k == n - 1_I4P) append = keyword(tokens(k + 1_I4P)%text, 'append', 3_I4P)
+      if ((k < n .and. .not. append) .or. k < n - 1_I4P) then
+         call fail('set table: "file" or $NAME [append] [separator S] expected', iostat, iomsg)
          return
       endif
       if (len(name) == 0) name = '-'
@@ -8165,6 +8284,8 @@ contains
    character(len=:), allocatable :: style !< Full style name.
 
    style = style_name(word)
+   ! gnuplot's `with table`, the rows written as text (`set table`)
+   if (word == 'table') style = 'table'
    endfunction canonical_style
 
    pure function change_extension(file, ext) result(renamed)
@@ -8439,7 +8560,8 @@ contains
       call push(fields, field)
       start = finish + 1_I4P
    enddo
-   if (size(fields) > 6) call fail('using: "'//spec//'" has more than 6 fields', iostat, iomsg)
+   ! the styles check their own fields; `with table` writes any number of them, as gnuplot
+   if (size(fields) > 100) call fail('using: "'//spec//'" has more than 100 fields', iostat, iomsg)
    contains
       pure function is_quoted(text) result(yes)
       !< Whether `text` is one quoted string, single or double quotes.
@@ -8745,7 +8867,7 @@ contains
       type(token_object), intent(in) :: a   !< Left token.
       type(token_object), intent(in) :: b   !< Right token.
       logical                        :: yes !< Joined.
-      character(len=*), parameter    :: OPERATORS = '.+-*/%?:<>=!&|' !< Operator characters.
+      character(len=*), parameter    :: OPERATORS = '.+-*/%?:<>=!&|^~' !< Operator characters.
 
       yes = .false.
       if (a%kind == TOKEN_COMMA .or. b%kind == TOKEN_COMMA) return
