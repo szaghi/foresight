@@ -12,8 +12,10 @@ module foresight_expression
 !<   of that header, see `resolve`), `pi`, and the functions
 !<   `abs acos asin atan atan2 ceil cos cosh exp floor int log log10 sgn sin sinh sqrt tan tanh`;
 !< - with a `symbols_object`, user variables (`a = 2`: their value when the expression is compiled, integer or real)
-!<   and user functions (`f(x, y) = ...`: compiled inline where called, the arguments read from their stack slots;
-!<   recursion is not supported), as gnuplot's `a = 2` and `f(x) = a*sin(x)`;
+!<   and user functions (`f(x, y) = ...`: compiled inline where called, the arguments read from their stack slots; a
+!<   call of a function already being compiled, a recursion, jumps to a copy of its body compiled once after the main
+!<   code, run on a call stack: past 251 nested calls, gnuplot's `recursion depth limit exceeded`), as gnuplot's
+!<   `a = 2` and `f(x) = a*sin(x)`;
 !< - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
 !<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
 !< - a missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the whole value
@@ -99,6 +101,10 @@ integer(I4P), parameter :: OP_STRCOL       = 33_I4P !< Replace the top with the 
 integer(I4P), parameter :: OP_COLUMNHEAD   = 34_I4P !< Replace the top with the header text of the column it numbers.
 integer(I4P), parameter :: OP_TIMECOLUMN   = 35_I4P !< Column (under the top) read as a time with the format (top).
 integer(I4P), parameter :: OP_ELEMENT      = 36_I4P !< Replace the top (an index) with that element of `lists(arg)`.
+integer(I4P), parameter :: OP_RECURSE      = 37_I4P !< Call the body at `arg` on its `v%i` arguments (a recursion).
+integer(I4P), parameter :: OP_RETURN       = 38_I4P !< End of a called body: its value replaces its arguments.
+integer(I4P), parameter :: OP_STOP         = 39_I4P !< End of the main code, before the called bodies.
+integer(I4P), parameter :: OP_DEPTH        = 40_I4P !< A call inlined in a called body: check the nested calls.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -130,12 +136,14 @@ integer(I4P), parameter :: E_STRING_ARG = 5_I4P !< A string printed with a numer
 integer(I4P), parameter :: E_NUMBER_ARG = 6_I4P !< A number printed with `%s`.
 integer(I4P), parameter :: E_INDEX      = 7_I4P !< An array index out of range.
 integer(I4P), parameter :: E_UNSET      = 8_I4P !< An array element never set.
+integer(I4P), parameter :: E_DEPTH      = 9_I4P !< Too many nested calls of recursive user functions.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(6) = [character(len=11) :: '||', '&&', '== != eq ne', '< <= > >=', '+ - .', &
                                                 '* / %']
 
 integer(I4P), parameter :: MAX_NESTING = 256_I4P                     !< Deepest parentheses and unary chains.
+integer(I4P), parameter :: MAX_CALLS   = 251_I4P                     !< Most nested user function calls (gnuplot's).
 integer(I8P), parameter :: MOST        = huge(1_I8P)                 !< Largest integer.
 integer(I8P), parameter :: LEAST       = -MOST - 1_I8P               !< Smallest integer.
 real(R8P),    parameter :: HUGE_REAL   = huge(1.0_R8P)               !< Largest real.
@@ -158,6 +166,7 @@ type :: instruction_object
    integer(I4P)       :: op  = OP_CONSTANT !< Operation code.
    integer(I4P)       :: arg = 0_I4P       !< Column, function or jump target.
    type(value_object) :: v                 !< Constant.
+   integer(I4P)       :: calls = 0_I4P     !< OP_RECURSE: the nested calls it adds (the inline ones it is inside).
 endtype instruction_object
 
 type :: name_object
@@ -213,7 +222,7 @@ endtype saved_array
 type :: symbols_object
    !< User variables and functions of a script, gnuplot's: `a = 2` stores the value now (integer or real), `f(x) = a*x`
    !< stores the text, compiled inline where it is called, so its variables take their values at that moment (plot
-   !< time); recursion is not supported.
+   !< time); recursive functions run on a call stack.
    type(user_variable), allocatable, private :: variables(:) !< Variables.
    type(user_function), allocatable, private :: functions(:) !< Functions.
    type(user_array),    allocatable, private :: arrays(:)    !< Arrays, gnuplot `array A[N]`.
@@ -256,6 +265,7 @@ type :: expression_object
    type(instruction_object), allocatable :: code(:)       !< Stack code.
    type(name_object),        allocatable :: names(:)      !< Column header names, `column("name")`.
    integer(I4P)                          :: depth = 0_I4P !< Stack size needed.
+   logical                               :: recursive = .false. !< Calls of recursive functions (OP_RECURSE).
    logical                               :: degrees = .false. !< Angles of the trigonometric functions in degrees
                                                               !< (gnuplot `set angles degrees`), else radians.
    character(len=:),         allocatable :: timefmt       !< Time format of a time field (`set xdata time`): a plain
@@ -326,6 +336,9 @@ contains
    integer(I4P)                                 :: pos     !< Next character.
    integer(I4P)                                 :: depth   !< Current stack depth.
    integer(I4P)                                 :: nesting !< Current recursion depth.
+   type(name_object), allocatable               :: procs(:) !< Recursive functions called, compiled after the main code.
+   integer(I4P), allocatable                    :: entries(:) !< Their first instructions.
+   logical                                      :: in_procedure !< Compiling one of them.
 
    self%text = text
    if (allocated(self%code)) deallocate(self%code)
@@ -334,6 +347,7 @@ contains
    allocate(self%names(0))
    if (allocated(self%lists)) deallocate(self%lists)
    self%depth = 0_I4P
+   self%recursive = .false.
    self%degrees = .false.
    if (present(degrees)) self%degrees = degrees
    iostat = 0_I4P
@@ -344,7 +358,8 @@ contains
    nesting = 0_I4P
    loose = .false.
    if (present(lenient)) loose = lenient
-   allocate(frames(0))
+   allocate(frames(0), procs(0), entries(0))
+   in_procedure = .false.
    if (present(parameters)) then
       ! a body checked alone: the parameters on the stack
       call push_frame(frame_name, parameters, 1_I4P)
@@ -358,7 +373,81 @@ contains
       if (token == '|') call syntax('bitwise operator "|" not supported')
    endif
    if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
+   if (iostat == 0_I4P .and. size(procs) > 0) call compile_procedures
    contains
+      subroutine compile_procedures
+      !< The bodies of the recursive functions the code calls, after the main code (and its OP_STOP), each once: its
+      !< parameters read the slots from its frame, it ends by OP_RETURN; the stack then holds the main code's slots
+      !< and MAX_CALLS frames of the deepest body.
+      integer(I4P) :: p        !< Procedure counter.
+      integer(I4P) :: k        !< Instruction or function index.
+      integer(I4P) :: main     !< Stack slots of the main code.
+
+      call emit(OP_STOP)
+      main = self%depth
+      self%depth = 0_I4P
+      in_procedure = .true.
+      p = 0_I4P
+      do while (p < size(procs, kind=I4P) .and. iostat == 0_I4P)
+         ! a body may call other recursive functions: procs grows while compiled
+         p = p + 1_I4P
+         k = symbols%function_index(procs(p)%text)
+         entries = [entries, size(self%code, kind=I4P) + 1_I4P]
+         associate(f => symbols%functions(k))
+            deallocate(frames)
+            allocate(frames(0))
+            call push_frame(name=procs(p)%text, params=f%params, base=1_I4P)
+            depth = size(f%params, kind=I4P)
+            self%depth = max(self%depth, depth)
+            src = f%body
+            pos = 1_I4P
+            call next
+            call parse_ternary
+            if (iostat == 0_I4P .and. kind /= T_END) call syntax('unexpected "'//token//'"')
+            if (iostat /= 0_I4P) iomsg = 'in function '//procs(p)%text//': '//iomsg
+            call pop_frame
+         endassociate
+         call emit(OP_RETURN)
+      enddo
+      do k = 1_I4P, size(self%code, kind=I4P)
+         if (self%code(k)%op == OP_RECURSE) self%code(k)%arg = entries(self%code(k)%arg)
+      enddo
+      self%depth = main + MAX_CALLS * self%depth
+      self%recursive = .true.
+      endsubroutine compile_procedures
+
+      subroutine recurse_call(name, nargs, at)
+      !< A call of the user function `name` being compiled (a recursion): OP_RECURSE to its body, compiled after the
+      !< main code; it adds the inline calls it is inside, and itself, to the nested calls (gnuplot's depth).
+      character(len=*), intent(in) :: name  !< Function name.
+      integer(I4P),     intent(in) :: nargs !< Arguments given.
+      integer(I4P),     intent(in) :: at    !< Position.
+      integer(I4P)                 :: p     !< Procedure index.
+      integer(I4P)                 :: n     !< Parameters.
+      integer(I4P)                 :: k     !< Instruction index.
+      type(name_object)            :: item  !< New procedure.
+
+      n = size(symbols%functions(symbols%function_index(name))%params, kind=I4P)
+      if (nargs /= n) then
+         call syntax('function '//name//' requires '//trim(adjustl(int_text(n)))//' variable'// &
+                     trim(merge('s', ' ', n /= 1_I4P)), at)
+         return
+      endif
+      p = 0_I4P
+      do k = 1_I4P, size(procs, kind=I4P)
+         if (procs(k)%text == name) p = k
+      enddo
+      if (p == 0_I4P) then
+         ! by components: nvfortran 26.9 miscompiles constructors of types with allocatable components
+         item%text = name
+         call push_name(procs, item)
+         p = size(procs, kind=I4P)
+      endif
+      call emit(OP_RECURSE, arg=p, v=int_value(int(nargs, I8P)), k=k)
+      ! the callee's depth: the inline calls around, in main code one more (no frame of its own there)
+      self%code(k)%calls = size(frames, kind=I4P) + merge(0_I4P, 1_I4P, in_procedure)
+      endsubroutine recurse_call
+
       subroutine syntax(message, at)
       !< Record the first syntax error, at the current token or at `at`.
       character(len=*), intent(in)           :: message !< Error.
@@ -547,7 +636,7 @@ contains
          depth = depth - 1_I4P
       case (OP_SUBSTRING)
          depth = depth - 2_I4P
-      case (OP_CALL)
+      case (OP_CALL, OP_RECURSE)
          depth = depth - (int(instruction%v%i, I4P) - 1_I4P)
       endselect
       self%depth = max(self%depth, depth)
@@ -978,8 +1067,8 @@ contains
       endif
       do k = first, size(self%code, kind=I4P)
          select case (self%code(k)%op)
-         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN)
-            call syntax('system takes a command known now: no column, no function argument', at)
+         case (OP_COLUMN, OP_COLUMN_NAMED, OP_COLUMN_OF, OP_LOAD, OP_STRCOL, OP_COLUMNHEAD, OP_TIMECOLUMN, OP_RECURSE)
+            call syntax('system takes a command known now: no column, no function argument, no recursion', at)
             return
          endselect
       enddo
@@ -1176,16 +1265,21 @@ contains
       integer(I4P)                  :: k           !< Function index.
       integer(I4P)                  :: n           !< Parameters.
 
-      if (size(frames) > 0) then
-         do k = 1_I4P, size(frames, kind=I4P)
-            if (frames(k)%name == name) then
-               call syntax('recursive function '//name//' is not supported', at)
-               return
-            endif
-         enddo
-      endif
       k = 0_I4P
       if (present(symbols)) k = symbols%function_index(name)
+      if (size(frames) > 0 .and. k > 0_I4P) then
+         do n = 1_I4P, size(frames, kind=I4P)
+            if (frames(n)%name /= name) cycle
+            if (loose) then
+               ! a body checked alone calling itself (or an older definition): as an unknown function
+               k = 0_I4P
+            else
+               call recurse_call(name, nargs, at)
+               return
+            endif
+            exit
+         enddo
+      endif
       if (k == 0_I4P) then
          if (loose) then
             ! unknown here, resolved where the body is used: its value stands for the call
@@ -1208,6 +1302,12 @@ contains
             return
          endif
          call push_frame(name=name, params=f%params, base=depth - nargs + 1_I4P)
+         if (in_procedure) then
+            ! inside a called body the nesting is known at run time: its frame is the first, this call the last
+            call emit(OP_DEPTH, k=n)
+            self%code(n)%calls = size(frames, kind=I4P) - 1_I4P
+            n = size(f%params, kind=I4P)
+         endif
          saved_src = src
          saved_token = token
          saved_number = number
@@ -2078,9 +2178,16 @@ contains
    integer(I4P)                   :: n                              !< Arguments of a call.
    integer(I4P)                   :: err                            !< Type error.
    logical                        :: ok                             !< Defined.
+   integer(I4P)                   :: fp                             !< Frame: slot before the arguments of a call.
+   integer(I4P)                   :: level                          !< Nested user function calls (gnuplot's depth).
+   integer(I4P)                   :: calls                          !< Active recursive calls.
+   integer(I4P)                   :: back(3, merge(MAX_CALLS, 0_I4P, self%recursive)) !< Their return: pc, fp, level.
 
    top = value_object()
    defined = .false.
+   fp = 0_I4P
+   level = 0_I4P
+   calls = 0_I4P
    if (present(error)) error = E_NONE
    err = E_NONE
    sp = 0_I4P
@@ -2210,7 +2317,32 @@ contains
             endassociate
          case (OP_LOAD)
             sp = sp + 1_I4P
-            stack(sp) = stack(instruction%arg)
+            stack(sp) = stack(fp + instruction%arg)
+         case (OP_RECURSE)
+            if (level + instruction%calls > MAX_CALLS) then
+               ok = .false.
+               err = E_DEPTH
+            else
+               calls = calls + 1_I4P
+               back(:, calls) = [pc, fp, level]
+               fp = sp - int(instruction%v%i, I4P)
+               level = level + instruction%calls
+               pc = instruction%arg
+            endif
+         case (OP_DEPTH)
+            if (level + instruction%calls > MAX_CALLS) then
+               ok = .false.
+               err = E_DEPTH
+            endif
+         case (OP_RETURN)
+            stack(fp + 1_I4P) = stack(sp)
+            sp = fp + 1_I4P
+            pc = back(1, calls)
+            fp = back(2, calls)
+            level = back(3, calls)
+            calls = calls - 1_I4P
+         case (OP_STOP)
+            exit
          case (OP_COLLAPSE)
             stack(sp - instruction%arg) = stack(sp)
             sp = sp - instruction%arg
@@ -2921,6 +3053,8 @@ contains
       text = 'array index out of range'
    case (E_UNSET)
       text = 'array element without a value'
+   case (E_DEPTH)
+      text = 'recursion depth limit exceeded'
    case default
       text = 'undefined value'
    endselect

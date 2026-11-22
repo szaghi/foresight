@@ -1120,8 +1120,15 @@ call interpreter%run_text("h2( u , v ) = u*v; set xrange [0:h2(2, 3)]", iostat, 
 test_passed(81) = test_passed(81) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%max_user == 6.0_R8P
 call interpreter%run_text("plot c*x", iostat, iomsg)
 test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: c') > 0
-call interpreter%run_text("fact(n) = n <= 1 ? 1 : n*fact(n-1)", iostat, iomsg)
-test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'recursive function fact') > 0
+call interpreter%run_text("fact(n) = n <= 1 ? 1 : n*fact(n-1); r = fact(6)", iostat, iomsg)
+test_passed(81) = test_passed(81) .and. iostat == 0_I4P
+block
+   real(R8P) :: r     !< fact(6).
+   logical   :: found !< Defined.
+
+   call interpreter%symbols%value_of('r', r, found)
+   test_passed(81) = test_passed(81) .and. found .and. r == 720.0_R8P
+endblock
 call interpreter%run_text("a = $1", iostat, iomsg)
 test_passed(81) = test_passed(81) .and. iostat /= 0_I4P .and. index(iomsg, 'columns are only valid in using') > 0
 call interpreter%run_text("sin(x) = 2", iostat, iomsg)
