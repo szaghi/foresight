@@ -71,6 +71,7 @@ type :: figure_object
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
       procedure, pass(self) :: set_angles      !< gnuplot `set angles`.
       procedure, pass(self) :: set_border      !< gnuplot `set border` / `unset border`.
+      procedure, pass(self) :: set_errorbars   !< gnuplot `set errorbars`.
       procedure, pass(self) :: set_boxwidth    !< gnuplot `set boxwidth`.
       procedure, pass(self) :: set_cblabel     !< gnuplot `set cblabel`.
       procedure, pass(self) :: set_cbrange     !< gnuplot `set cbrange`.
@@ -291,7 +292,8 @@ contains
 
    subroutine plot(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, base, fs, &
                    xlabels, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, length, angle, major, &
-                   minor, labels, label, head, origins, curve, at, colors, palette_z, palette_cb, palette_frac)
+                   minor, labels, label, head, origins, curve, at, colors, palette_z, palette_cb, palette_frac, pi, &
+                   labels_axis)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
    !< ... axes`. `colors` gives each point its color (gnuplot `lc variable`) with lines, points, linespoints and
    !< impulses: a line segment takes the color of its end point; in the key, the line sample that of the first point, the
@@ -383,8 +385,19 @@ contains
    real(R8P),            intent(in), optional :: palette_z(:) !< Palette value of each point (`lc palette z`).
    real(R8P),            intent(in), optional :: palette_cb   !< A color axis value (`lc palette cb`).
    real(R8P),            intent(in), optional :: palette_frac !< A fraction of the palette (`lc palette frac`).
+   integer(I4P),         intent(in), optional :: pi           !< A point marker every `pi` points (`pointinterval`).
+   character(len=*),     intent(in), optional :: labels_axis  !< Axis the `xlabels` mark: `x` (default, `xtic`), `x2`
+                                                              !< at the abscissae, `y` (`ytic`), `y2` at the ordinates.
+   integer(I4P)                               :: last         !< Series added.
 
    call self%ensure_panels
+   if (present(labels_axis)) then
+      if (all(labels_axis /= ['x ', 'x2', 'y ', 'y2'])) &
+         error stop 'foresight: plot: labels_axis must be x, x2, y or y2, not "'//labels_axis//'"'
+   endif
+   if (present(pi)) then
+      if (pi < 1_I4P) error stop 'foresight: plot: pi must be positive'
+   endif
    call self%panels(self%current)%add_series(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, &
                                              xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=pt, &
                                              format=format, width=width, base=base, fs=fs, xlabels=xlabels, &
@@ -394,6 +407,9 @@ contains
                                              label=label, head=head, origins=origins, curve=curve, at=at, &
                                              colors=colors, palette_z=palette_z, palette_cb=palette_cb, &
                                              palette_frac=palette_frac)
+   last = size(self%panels(self%current)%series, kind=I4P)
+   if (present(pi)) self%panels(self%current)%series(last)%pointinterval = pi
+   if (present(labels_axis)) self%panels(self%current)%series(last)%label_axis = labels_axis
    endsubroutine plot
 
    subroutine save(self, file)
@@ -1628,19 +1644,51 @@ contains
                  add, rotate, justify, out)
    endsubroutine set_xtics
 
-   subroutine set_mxtics(self, intervals)
+   subroutine set_mxtics(self, intervals, unit)
    !< Minor x ticks, as gnuplot `set mxtics [N]`: `intervals` between consecutive major ticks of the automatic or
    !< fixed ticks (linearly in value on a log axis), gnuplot's count without it (2 or 5 by the step, 9 on log axes); 0 or
-   !< 1 for none, as `unset mxtics`.
+   !< 1 for none, as `unset mxtics`. With a time `unit` (`seconds`, `minutes`, `hours`, `days`, `weeks`, `months`,
+   !< `years`), a minor tick every `intervals` units of a time axis, as gnuplot 6.0's `set mxtics time N UNITS`.
    class(figure_object), intent(inout)        :: self      !< Figure.
-   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks.
+   integer(I4P),         intent(in), optional :: intervals !< Intervals between major ticks, or time units.
+   character(len=*),     intent(in), optional :: unit      !< Time unit.
 
    call self%ensure_panels
    associate(tics => self%panels(self%current)%xaxis%tics)
       tics%minor = MINOR_AUTO
+      tics%minor_count = 0_I4P
+      tics%minor_unit = ''
       if (present(intervals)) tics%minor = max(0_I4P, intervals)
+      if (present(unit)) then
+         if (all(unit /= ['seconds', 'minutes', 'hours  ', 'days   ', 'weeks  ', 'months ', 'years  '])) &
+            error stop 'foresight: set_mxtics: unit must be seconds, minutes, hours, days, weeks, months or years'
+         if (.not. present(intervals)) error stop 'foresight: set_mxtics: a time unit needs the intervals'
+         if (intervals < 1_I4P) error stop 'foresight: set_mxtics: the time intervals must be positive'
+         tics%minor = 0_I4P
+         tics%minor_count = intervals
+         tics%minor_unit = unit
+      endif
    endassociate
    endsubroutine set_mxtics
+
+   subroutine set_errorbars(self, size, lc, lw)
+   !< The error bars and boxplot whiskers, as gnuplot `set errorbars [SIZE] [lc C] [lw W]`: the cap length `size`
+   !< (1 the default, 0 none, as `small`), the line color and width of the error bars (their series' if absent).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: size !< Cap length, in units of the default.
+   character(len=*),     intent(in), optional :: lc   !< Error bar color.
+   real(R8P),            intent(in), optional :: lw   !< Error bar width [px].
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      panel%errorbar_size = 1.0_R8P
+      if (present(size)) panel%errorbar_size = max(0.0_R8P, size)
+      if (allocated(panel%errorbar_color)) deallocate(panel%errorbar_color)
+      if (present(lc)) panel%errorbar_color = lc
+      panel%errorbar_lw = 0.0_R8P
+      if (present(lw)) panel%errorbar_lw = max(0.0_R8P, lw)
+   endassociate
+   endsubroutine set_errorbars
 
    subroutine set_mytics(self, intervals)
    !< Minor y ticks, as gnuplot `set mytics [N]`: `intervals` between consecutive major ticks of the automatic or

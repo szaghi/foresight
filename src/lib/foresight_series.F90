@@ -32,6 +32,10 @@ type :: series_object
    character(len=:), allocatable :: title !< Key title, empty for none; the label of a readout.
    character(len=:), allocatable :: format !< Readout format (foresight_readout), readouts only.
    character(len=LABEL_LEN), allocatable :: xlabels(:) !< Text labels of the abscissae (`xtic(N)`), blank for none.
+   character(len=2)              :: label_axis = 'x' !< Axis the text labels mark: `x` (`xtic`), `x2` (`x2tic`) at the
+                                                     !< abscissae, `y` (`ytic`), `y2` (`y2tic`) at the ordinates.
+   integer(I4P)                  :: pointinterval = 1_I4P !< A point marker every N points, the first one included
+                                                          !< (gnuplot `pointinterval`).
    character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none;
                                                !< of `lc palette z`, set at each rendering.
    integer(I4P)                  :: palette_mode = 0_I4P !< Color from the palette (gnuplot `lc palette`): 0 none, 1 a

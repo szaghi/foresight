@@ -30,7 +30,8 @@ module foresight_ticks
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
 use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
-use foresight_time, only : DAY_SEC, MON_SEC, WEEK_SEC, YEAR_SEC, strftime, time_format_check, time_justify, time_parts
+use foresight_time, only : civil_time, DAY_SEC, MON_SEC, WEEK_SEC, YEAR_SEC, strftime, time_format_check, time_justify, &
+                           time_parts
 
 implicit none
 private
@@ -89,6 +90,10 @@ type :: tics_object
    logical                       :: mirror = .true.  !< Ticks also on the opposite border, gnuplot `mirror`.
    logical                       :: series = .true.  !< The automatic or fixed ticks, else the explicit list alone.
    integer(I4P)                  :: minor = MINOR_DEFAULT !< Minor ticks: MINOR_DEFAULT, MINOR_AUTO, MINOR_NONE or N.
+   integer(I4P)                  :: minor_count = 0_I4P !< Minor ticks of a time axis every `minor_count`
+                                                        !< `minor_unit` (gnuplot `set mxtics time N UNITS`), 0 none.
+   character(len=7)              :: minor_unit = ''   !< `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`,
+                                                      !< `years`.
    real(R8P)                     :: rotate = 0.0_R8P  !< Label angle [deg, counterclockwise], gnuplot `rotate by`.
    character(len=6)              :: justify = ''      !< Label justification of rotated labels: `left`, `right`,
                                                       !< `center`, or blank for gnuplot's (`right` for `rotate`).
@@ -424,7 +429,9 @@ contains
    !< fixed step of `tics`, in seconds), autoscaled ends extended outward to it and justified to whole time units,
    !< the ticks justified so too, labelled with the time format of `tics` or one invented from the range
    !< (`time_tick_format`, `timefmt` giving the day and month order). Minor ticks: `set mxtics N` divides each
-   !< step in N, `set mxtics` gnuplot's automatic time step, none by default.
+   !< step in N, `set mxtics` gnuplot's automatic time step, none by default; `set mxtics time N UNITS` one at every
+   !< N units of time (seconds to weeks: multiples of N units since the epoch; months and years: the first day of
+   !< every N-th month or year, counted from 1970), as gnuplot 6.0.
    real(R8P),                      intent(inout) :: lo        !< Value at the axis start (`lo > hi`: reversed).
    real(R8P),                      intent(inout) :: hi        !< Value at the axis end.
    logical,                        intent(in)    :: extend_lo !< Extend `lo` outward to the tick grid.
@@ -509,7 +516,9 @@ contains
    ! minor steps
    ministep = 0.0_R8P
    miniend = step
-   if (tics%minor > 1_I4P) then
+   if (tics%minor_count > 0_I4P) then
+      continue
+   elseif (tics%minor > 1_I4P) then
       ministep = step / real(tics%minor, R8P)
    elseif (tics%minor == MINOR_AUTO) then
       ministep = auto_time_minitics(level, step)
@@ -542,8 +551,84 @@ contains
          enddo
       endif
    enddo
+   if (tics%minor_count > 0_I4P) call unit_minors(ticks)
    call sort_ticks(ticks)
    contains
+      pure subroutine unit_minors(ticks)
+      !< `set mxtics time N UNITS`: a minor tick at every N units within the axis, but on a major tick.
+      type(tick_object), allocatable, intent(inout) :: ticks(:) !< Ticks.
+      real(R8P)    :: unit  !< Unit [s] (seconds to weeks).
+      real(R8P)    :: t     !< Minor tick.
+      integer(I8P) :: n     !< Units.
+      integer(I8P) :: j     !< Unit counter.
+      integer(I8P) :: parts(6) !< Year, month, day, hour, minute, second of the start.
+      real(R8P)    :: fraction !< Second fraction.
+      integer(I8P) :: yday  !< Day of the year.
+      integer(I8P) :: wday  !< Weekday.
+      integer(I4P) :: count !< Ticks made.
+
+      n = int(tics%minor_count, I8P)
+      count = 0_I4P
+      select case (trim(tics%minor_unit))
+      case ('months', 'years')
+         call time_parts(lmin, parts(1), parts(2), parts(3), parts(4), parts(5), parts(6), fraction, yday, wday)
+         ! months since January 1970, from the start's month
+         j = (parts(1) - 1970_I8P) * 12_I8P + parts(2) - 1_I8P
+         if (trim(tics%minor_unit) == 'years') j = 12_I8P * (parts(1) - 1970_I8P)
+         do
+            if (trim(tics%minor_unit) == 'years') then
+               if (modulo(j / 12_I8P, n) /= 0_I8P) then
+                  j = j + 12_I8P
+                  cycle
+               endif
+            elseif (modulo(j, n) /= 0_I8P) then
+               j = j + 1_I8P
+               cycle
+            endif
+            t = civil_time(1970_I8P + j / 12_I8P, modulo(j, 12_I8P) + 1_I8P, 1_I8P, 0_I8P, 0_I8P, 0.0_R8P)
+            if (t > lmax) exit
+            if (t >= lmin) call minor_at(ticks, t)
+            j = j + merge(12_I8P, 1_I8P, trim(tics%minor_unit) == 'years')
+            count = count + 1_I4P
+            if (count > 10_I4P * MAX_TICKS) exit
+         enddo
+      case default
+         select case (trim(tics%minor_unit))
+         case ('seconds')
+            unit = 1.0_R8P
+         case ('minutes')
+            unit = 60.0_R8P
+         case ('hours')
+            unit = 3600.0_R8P
+         case ('days')
+            unit = DAY_SEC
+         case default
+            unit = WEEK_SEC
+         endselect
+         unit = unit * real(n, R8P)
+         if ((lmax - lmin) / unit > real(10_I4P * MAX_TICKS, R8P)) return
+         do j = ceiling(lmin / unit, I8P), floor(lmax / unit, I8P)
+            call minor_at(ticks, real(j, R8P) * unit)
+         enddo
+      endselect
+      endsubroutine unit_minors
+
+      pure subroutine minor_at(ticks, t)
+      !< A minor tick at `t`, unless a major tick lies there.
+      type(tick_object), allocatable, intent(inout) :: ticks(:) !< Ticks.
+      real(R8P), intent(in) :: t    !< Value.
+      type(tick_object)     :: mtick !< Minor tick.
+
+      if (size(ticks) > 0) then
+         if (any(ticks%major .and. abs(ticks%value - t) <= SIGNIF * step)) return
+      endif
+      mtick%value = t
+      mtick%major = .false.
+      mtick%label = ''
+      mtick%sup = ''
+      call push(ticks, mtick)
+      endsubroutine minor_at
+
       pure function outward(input, upwards) result(edge)
       !< gnuplot's `round_outward` of a time axis end: to the step grid, then to the whole time unit beyond it.
       real(R8P), intent(in) :: input   !< Axis end.

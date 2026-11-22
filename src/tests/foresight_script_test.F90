@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(113)                           !< Per-check outcome.
+logical                       :: test_passed(114)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -144,8 +144,8 @@ call interpreter%run_text('set key offset 1,1', iostat, iomsg)
 test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "offset"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
-call interpreter%run_text('set style line 1 pi 2', iostat, iomsg)
-test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pi"') > 0
+call interpreter%run_text('set style line 1 pn 2', iostat, iomsg)
+test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pn"') > 0
 
 ! functions: 100 samples over [-10:10] without data, the expression as written is the title
 call interpreter%init(scratch)
@@ -517,8 +517,8 @@ call interpreter%run_text("set style histogram stacked", iostat, iomsg)
 test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "stacked"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 2:xtic(a) w hist", iostat, iomsg)
 test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'xtic: undefined variable: a') > 0
-call interpreter%run_text("plot '"//data_file//"' u 2:ytic(1) w hist", iostat, iomsg)
-test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'only xtic(N) labels are supported') > 0
+call interpreter%run_text("plot '"//data_file//"' u 2:ztic(1) w hist", iostat, iomsg)
+test_passed(53) = test_passed(53) .and. iostat /= 0_I4P .and. index(iomsg, 'field "ztic(1)" is neither') > 0
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
@@ -892,7 +892,8 @@ test_passed(74) = iostat /= 0_I4P .and. index(iomsg, 'rgbimage needs using x:y:r
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves x1 above", iostat, iomsg)
 test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'not with y=V nor a band') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves r=1", iostat, iomsg)
-test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves r=1 is not supported') > 0
+test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves r=1 (polar) is not supported') &
+                   > 0
 call interpreter%run_text("set rgbmax 0", iostat, iomsg)
 test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'set rgbmax: a positive number') > 0
 open(newunit=unit, file=scratch)
@@ -2287,6 +2288,61 @@ if (test_passed(113)) test_passed(113) = interpreter%figure%panels(1)%objects(1)
 open(newunit=unit, file='foresight_script_test_styles.svg')
 close(unit, status='delete')
 
+! ytic/x2tic/y2tic labels, pointinterval, filledcurves to vertical lines, set errorbars, histogram titles, minor time
+! ticks, as gnuplot 6.0
+call interpreter%init(scratch)
+open(newunit=unit, file='foresight_script_test_gaps.dat')
+write(unit, '(A)') 'Jan 3 0.5', 'Feb 5 0.3', 'Mar 4 0.2'
+close(unit)
+call interpreter%run_text('set output "foresight_script_test_gaps.svg"'//new_line('a')// &
+                          'set errorbars 2 lc rgb "red" lw 2'//new_line('a')// &
+                          'plot "foresight_script_test_gaps.dat" u 0:2:ytic(1) w lp pi 2 pt 7, '// &
+                          '"" u 0:2:3 w yerrorbars pointinterval -2, "" u 0:2:x2tic(1) w p'//new_line('a')// &
+                          'set style histogram clustered title tc rgb "blue" offset 1,-0.5 nokeyseparators', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(114) = iostat == 0_I4P
+if (test_passed(114)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(114) = panel%series(1)%label_axis == 'y' .and. panel%series(1)%pointinterval == 2_I4P .and. &
+                         panel%series(2)%pointinterval == 2_I4P .and. panel%series(3)%label_axis == 'x2' .and. &
+                         panel%errorbar_size == 2.0_R8P .and. panel%errorbar_color == 'red' .and. &
+                         panel%errorbar_lw == 2.0_R8P .and. panel%hist_title_color == 'blue' .and. &
+                         all(panel%hist_title_offset == [1.0_R8P, -0.5_R8P])
+      ! the y labels replace the y ticks; the x2 ones need set x2tics (as gnuplot 6.0)
+      if (test_passed(114)) test_passed(114) = panel%yaxis%labelled() .and. .not. panel%x2axis%labelled()
+      if (test_passed(114)) test_passed(114) = panel%yaxis%labels(1)%label == 'Jan' .and. &
+                                               panel%yaxis%labels(3)%label == 'Feb'
+   endassociate
+endif
+call interpreter%run_text('unset errorbars; set xrange [0:5]'//new_line('a')// &
+                          'plot "foresight_script_test_gaps.dat" u 0:2 w filledcurves y1, "" u 0:2 w filledcurves y2, '// &
+                          '"" u 0:2 w filledcurves x=1.5, "" u 0:2 w filledcurves y2=4'//new_line('a')// &
+                          'set xdata time; set mxtics time 6 hours', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(114) = test_passed(114) .and. iostat == 0_I4P
+if (test_passed(114)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(114) = panel%errorbar_size == 0.0_R8P .and. panel%series(1)%curve_to == 4_I4P .and. &
+                         panel%series(2)%curve_to == 5_I4P .and. panel%series(3)%curve_to == 6_I4P .and. &
+                         panel%series(3)%curve_point(1) == 1.5_R8P .and. allocated(panel%series(4)%ylow) .and. &
+                         panel%xaxis%tics%minor_count == 6_I4P .and. panel%xaxis%tics%minor_unit == 'hours'
+   endassociate
+endif
+call interpreter%run_text('plot "foresight_script_test_gaps.dat" u 0:2 w filledcurves x=1 above', iostat, iomsg)
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'above and below apply to') > 0
+call interpreter%run_text('plot "foresight_script_test_gaps.dat" u 0:2 w lp pi 0', iostat, iomsg)
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'N not 0') > 0
+call interpreter%run_text('set mxtics time 2 fortnights', iostat, iomsg)
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'time N seconds') > 0
+call interpreter%run_text('set errorbars wide', iostat, iomsg)
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "wide"') > 0
+call interpreter%run_text('plot "foresight_script_test_gaps.dat" u 0:2 w filledcurves r=1', iostat, iomsg)
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, '(polar) is not supported') > 0
+open(newunit=unit, file='foresight_script_test_gaps.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_gaps.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2295,7 +2351,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,113L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,114L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

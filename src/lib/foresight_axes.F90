@@ -180,6 +180,15 @@ type :: axes_object
    integer(I4P)                     :: histogram_mode = HIST_CLUSTERED !< Layout of the histograms: HIST_CLUSTERED,
                                                         !< HIST_ROWSTACKED, HIST_COLUMNSTACKED, HIST_ERRORBARS.
    real(R8P)                        :: histogram_lw = 0.0_R8P !< Error bar width of `errorbars` [px], 0: the series'.
+   real(R8P)                        :: errorbar_size = 1.0_R8P !< Error bar and whisker cap length, in CAP_LENGTH
+                                                               !< units (gnuplot `set errorbars SIZE`, 0 `small`).
+   character(len=:), allocatable    :: hist_title_color  !< Color of the histogram group titles (`set style histogram
+                                                         !< title tc`), the frame's if unallocated.
+   real(R8P)                        :: hist_title_offset(2) = 0.0_R8P !< Their offset [characters, y upward].
+   character(len=:), allocatable    :: errorbar_color    !< Error bar color (`set errorbars lc`), the series' if
+                                                         !< unallocated.
+   real(R8P)                        :: errorbar_lw = 0.0_R8P !< Error bar width [px] (`set errorbars lw`), 0: the
+                                                             !< series'.
    integer(I4P)                     :: hist_group = 0_I4P   !< Group of the histograms plotted next (`newhistogram`).
    logical                          :: hist_at_set = .false. !< The next group starts at `hist_at`.
    real(R8P)                        :: hist_at = 0.0_R8P    !< Start of the next group.
@@ -1291,6 +1300,8 @@ contains
    view%xtics = self%xaxis%tics%attribute(self%xaxis%lo, self%xaxis%hi)
    if (self%xaxis%labelled()) view%xtics = labels_attribute(self%xaxis%labels)
    view%ytics = self%yaxis%tics%attribute(self%yaxis%lo, self%yaxis%hi)
+   ! text labels from the data (`ytic`, `x2tic`, `y2tic` as `xtic`): the viewer keeps them through a zoom
+   if (self%yaxis%labelled()) view%ytics = labels_attribute(self%yaxis%labels)
    view%xformat = ''
    view%yformat = ''
    if (self%xaxis%tics%has_format()) view%xformat = self%xaxis%tics%format
@@ -1301,6 +1312,7 @@ contains
       view%y2 = [self%y2axis%lo, self%y2axis%hi]
       view%y2log = self%y2axis%log
       view%y2tics = self%y2axis%tics%attribute(self%y2axis%lo, self%y2axis%hi)
+      if (self%y2axis%labelled()) view%y2tics = labels_attribute(self%y2axis%labels)
       view%y2format = ''
       if (self%y2axis%tics%has_format()) view%y2format = self%y2axis%tics%format
    endif
@@ -1310,6 +1322,7 @@ contains
       view%x2log = self%x2axis%log
       view%x2mirror = self%x2axis%tics%mirror
       view%x2tics = self%x2axis%tics%attribute(self%x2axis%lo, self%x2axis%hi)
+      if (self%x2axis%labelled()) view%x2tics = labels_attribute(self%x2axis%labels)
       view%x2format = ''
       if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
    endif
@@ -1612,13 +1625,16 @@ contains
    enddo
    endfunction group_rows
 
-   subroutine draw_group_titles(self, backend, left, right, baseline)
-   !< The title of each histogram group centred under its bars (the middle of its rows, or stacks), on `baseline`.
+   subroutine draw_group_titles(self, backend, left, right, baseline, font_size)
+   !< The title of each histogram group centred under its bars (the middle of its rows, or stacks), on `baseline`,
+   !< moved by `hist_title_offset` (0.6 of the font size wide and the font size high characters), in
+   !< `hist_title_color`.
    class(axes_object),    intent(in)    :: self     !< Panel.
    class(backend_object), intent(inout) :: backend  !< Output device.
    real(R8P),             intent(in)    :: left     !< Plot area left [px].
    real(R8P),             intent(in)    :: right    !< Plot area right [px].
    real(R8P),             intent(in)    :: baseline !< Text baseline [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
    real(R8P)                            :: lo       !< First row of the group.
    real(R8P)                            :: hi       !< Last row of the group.
    real(R8P)                            :: u        !< Unit abscissa of the group centre.
@@ -1643,7 +1659,14 @@ contains
       if (.not. (lo <= hi)) cycle
       u = self%xaxis%to_unit(0.5_R8P * (lo + hi))
       if (u < 0.0_R8P .or. u > 1.0_R8P) cycle
-      call backend%text(left + u * (right - left), baseline, self%series(s)%hist_title, 'middle')
+      if (allocated(self%hist_title_color)) then
+         call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
+                           baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle', &
+                           color=self%hist_title_color)
+      else
+         call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
+                           baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle')
+      endif
    enddo
    call backend%end_group
    endsubroutine draw_group_titles
@@ -1729,7 +1752,7 @@ contains
       ! the titles of the histogram groups (gnuplot `newhistogram "title"`), a line below the x tick labels
       if (self%group_rows() > 0_I4P) call self%draw_group_titles(backend, left, right, bottom + shift + GAP + &
                                                                  font_size + LINE_HEIGHT * font_size * &
-                                                                 real(label_rows(self%xaxis%ticks), R8P))
+                                                                 real(label_rows(self%xaxis%ticks), R8P), font_size)
       call backend%begin_group('fs-yticks')
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
@@ -2384,6 +2407,7 @@ contains
    real(R8P),             intent(in)    :: area(4)  !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px], for the label offsets.
    logical, allocatable                 :: valid(:) !< Placeable points.
+   logical, allocatable                 :: marked(:) !< Points marked (`pointinterval`).
    real(R8P), allocatable               :: u(:)     !< Unit abscissae.
    real(R8P), allocatable               :: v(:)     !< Unit ordinates.
    integer(I4P)                         :: n        !< Number of points.
@@ -2459,6 +2483,10 @@ contains
       if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
       if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, xaxis, .false.)
       if (series%style%draws_points() .and. any(valid)) then
+         ! `pointinterval N`: a marker on the first point and every N-th after it
+         marked = valid
+         if (series%pointinterval > 1_I4P) marked = valid .and. [(mod(i1 - 1_I4P, series%pointinterval) == 0_I4P, &
+                                                                  i1 = 1_I4P, n)]
          if (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
             i1 = 1_I4P
@@ -2468,14 +2496,14 @@ contains
                   if (series%colors(i2 + 1_I4P) /= series%colors(i1)) exit
                   i2 = i2 + 1_I4P
                enddo
-               if (any(valid(i1:i2)) .and. series%colors(i1) /= 'none') &
-                  call backend%data_dots(pack(u(i1:i2), valid(i1:i2)), pack(v(i1:i2), valid(i1:i2)), &
+               if (any(marked(i1:i2)) .and. series%colors(i1) /= 'none') &
+                  call backend%data_dots(pack(u(i1:i2), marked(i1:i2)), pack(v(i1:i2), marked(i1:i2)), &
                                          trim(series%colors(i1)), series%style%point_diameter(), &
                                          pt=series%style%pointtype, line_width=series%style%linewidth)
                i1 = i2 + 1_I4P
             enddo
          else
-            call backend%data_dots(pack(u, valid), pack(v, valid), series%style%color, series%style%point_diameter(), &
+            call backend%data_dots(pack(u, marked), pack(v, marked), series%style%color, series%style%point_diameter(), &
                                    pt=series%style%pointtype, line_width=series%style%linewidth)
          endif
       endif
@@ -2708,7 +2736,7 @@ contains
       logical                       :: finance !< Drawn as a finance bar.
       integer(I4P)                  :: i       !< Point counter.
 
-      tick = 0.5_R8P * CAP_LENGTH / (area(2) - area(1))
+      tick = 0.5_R8P * self%errorbar_size * CAP_LENGTH / (area(2) - area(1))
       associate(series => self%series(s))
          finance = series%style%with == WITH_FINANCEBARS .or. &
                    (series%style%with == WITH_BOXPLOT .and. self%boxplot%financebars)
@@ -2753,7 +2781,7 @@ contains
             if (series%style%with == WITH_BOXPLOT) then
                ! capped whiskers, as gnuplot's boxplots
                call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, series%style%color, &
-                                      series%style%linewidth, CAP_LENGTH, .true.)
+                                      series%style%linewidth, self%errorbar_size * CAP_LENGTH, .true.)
                mw = self%boxplot%median_width
                if (mw < 0.0_R8P) mw = series%style%linewidth
                if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], series%style%color, mw, '')
@@ -2873,12 +2901,16 @@ contains
          centre = xaxis%to_unit(0.5_R8P * (pack(series%xlow, ok) + pack(series%xhigh, ok)))
          width = series%style%linewidth
          if (self%histogram_lw > 0.0_R8P) width = self%histogram_lw
-         if (series%style%stroke_color() == 'none') then
+         if (self%errorbar_lw > 0.0_R8P) width = self%errorbar_lw
+         if (allocated(self%errorbar_color)) then
             call backend%data_bars(centre, yaxis%to_unit(pack(low, ok)), centre, yaxis%to_unit(pack(high, ok)), &
-                                   series%style%color, width, CAP_LENGTH, .true.)
+                                   self%errorbar_color, width, self%errorbar_size * CAP_LENGTH, .true.)
+         elseif (series%style%stroke_color() == 'none') then
+            call backend%data_bars(centre, yaxis%to_unit(pack(low, ok)), centre, yaxis%to_unit(pack(high, ok)), &
+                                   series%style%color, width, self%errorbar_size * CAP_LENGTH, .true.)
          else
             call backend%data_bars(centre, yaxis%to_unit(pack(low, ok)), centre, yaxis%to_unit(pack(high, ok)), &
-                                   series%style%stroke_color(), width, CAP_LENGTH, .true.)
+                                   series%style%stroke_color(), width, self%errorbar_size * CAP_LENGTH, .true.)
          endif
       endassociate
       endsubroutine draw_histogram_bars
@@ -3026,6 +3058,18 @@ contains
          allocate(w(n))
          w = 0.0_R8P
          based = allocated(series%ylow) .or. series%curve_to == 1_I4P .or. series%curve_to == 2_I4P
+         ! to a vertical line: the left (y1) or right (y2) border, or x = V
+         if (series%curve_to >= 4_I4P) then
+            select case (series%curve_to)
+            case (4_I4P)
+               p(1) = 0.0_R8P
+            case (5_I4P)
+               p(1) = 1.0_R8P
+            case default
+               if (.not. xaxis%accepts(series%curve_point(1))) return
+               p(1) = xaxis%to_unit(series%curve_point(1))
+            endselect
+         endif
          if (allocated(series%ylow)) then
             ok = ok .and. yaxis%accepts(series%ylow)
             where (ok) w = yaxis%to_unit(series%ylow)
@@ -3071,6 +3115,9 @@ contains
                elseif (series%curve_to == 3_I4P) then
                   call backend%data_polygon([u(a:b), p(1)], [v(a:b), p(2)], series%style%fill_color(), &
                                             series%style%density, 'none', 0.0_R8P)
+               elseif (series%curve_to >= 4_I4P) then
+                  call backend%data_polygon([u(a:b), p(1), p(1)], [v(a:b), v(b), v(a)], series%style%fill_color(), &
+                                            series%style%density, 'none', 0.0_R8P)
                else
                   call backend%data_polygon(u(a:b), v(a:b), series%style%fill_color(), series%style%density, 'none', &
                                             0.0_R8P)
@@ -3090,18 +3137,23 @@ contains
       logical, allocatable          :: ok(:)    !< Drawn bars.
       real(R8P), allocatable        :: a(:)     !< Unit bar starts.
       real(R8P), allocatable        :: b(:)     !< Unit bar ends.
+      character(len=:), allocatable :: color    !< Bar color.
+      real(R8P)                     :: width    !< Bar width [px].
 
       ok = valid .and. axis%accepts(low) .and. axis%accepts(high)
       if (.not. any(ok)) return
       a = axis%to_unit(pack(low, ok))
       b = axis%to_unit(pack(high, ok))
       associate(series => self%series(s))
+         ! `set errorbars`: the cap length, the line
+         color = series%style%color
+         if (allocated(self%errorbar_color)) color = self%errorbar_color
+         width = series%style%linewidth
+         if (self%errorbar_lw > 0.0_R8P) width = self%errorbar_lw
          if (vertical) then
-            call backend%data_bars(pack(u, ok), a, pack(u, ok), b, series%style%color, series%style%linewidth, &
-                                   CAP_LENGTH, .true.)
+            call backend%data_bars(pack(u, ok), a, pack(u, ok), b, color, width, self%errorbar_size * CAP_LENGTH, .true.)
          else
-            call backend%data_bars(a, pack(v, ok), b, pack(v, ok), series%style%color, series%style%linewidth, &
-                                   CAP_LENGTH, .false.)
+            call backend%data_bars(a, pack(v, ok), b, pack(v, ok), color, width, self%errorbar_size * CAP_LENGTH, .false.)
          endif
       endassociate
       endsubroutine draw_bars
@@ -3906,8 +3958,9 @@ contains
 
    pure subroutine curve_words(words, series, bad)
    !< Filled curve options of `series` from gnuplot words: `closed`, `x1` (to the bottom), `x2` (to the top), `xy=X,Y`
-   !< (to a point), `above`, `below` (where the curve is above or below its line or second curve). `bad` names the
-   !< first problem.
+   !< (to a point), `y1` or `y` (to the left border), `y2` (to the right one), `x1=V`, `x2=V`, `x=V` (to the vertical
+   !< line x = V, as gnuplot 6.0 draws them), `above`, `below` (where the curve is above or below its line or second
+   !< curve). `bad` names the first problem.
    character(len=*),              intent(in)    :: words  !< Words.
    type(series_object),           intent(inout) :: series !< Filled curve series.
    character(len=:), allocatable, intent(out)   :: bad    !< Problem, empty if none.
@@ -3928,13 +3981,26 @@ contains
          series%curve_to = 1_I4P
       case ('x2')
          series%curve_to = 2_I4P
+      case ('y1', 'y')
+         series%curve_to = 4_I4P
+      case ('y2')
+         series%curve_to = 5_I4P
       case ('above')
          series%curve_side = 1_I4P
       case ('below')
          series%curve_side = -1_I4P
       case default
+         if (index(w, 'x1=') == 1 .or. index(w, 'x2=') == 1 .or. index(w, 'x=') == 1) then
+            read(w(index(w, '=') + 1:), *, iostat=ios) series%curve_point(1)
+            if (ios /= 0) then
+               bad = 'x=V expected, found "'//w//'"'
+               return
+            endif
+            series%curve_to = 6_I4P
+            cycle
+         endif
          if (index(w, 'xy=') /= 1) then
-            bad = 'option "'//w//'" is not supported (closed, x1, x2, xy=X,Y, above, below)'
+            bad = 'option "'//w//'" is not supported (closed, x1, x2, y1, y2, x=V, xy=X,Y, above, below)'
             return
          endif
          comma = index(w, ',', kind=I4P)
@@ -4886,9 +4952,21 @@ contains
       endsubroutine setup_colors
 
       subroutine collect_labels
-      !< Text labels of the abscissae of every series, by value (the first label of a value wins), ascending.
+      !< Text labels of every series on their axis (x, x2 at the abscissae; y, y2 at the ordinates), by value (the first
+      !< label of a value wins), ascending; shown where the axis has ticks (x2, y2: once set, as gnuplot 6.0).
+      call axis_labels('x ', self%xaxis)
+      call axis_labels('x2', self%x2axis)
+      call axis_labels('y ', self%yaxis)
+      call axis_labels('y2', self%y2axis)
+      endsubroutine collect_labels
+
+      subroutine axis_labels(name, axis)
+      !< The text labels of the series marking axis `name`, set on `axis` (left as they are if none).
+      character(len=2),  intent(in)    :: name !< Axis name.
+      type(axis_object), intent(inout) :: axis !< The axis.
       type(tick_object), allocatable :: labels(:) !< Labels.
       type(tick_object)              :: t         !< Swap buffer.
+      real(R8P)                      :: value     !< Labelled value.
       integer(I4P)                   :: i         !< Point counter.
       integer(I4P)                   :: j         !< Sort counter.
       integer(I4P)                   :: n         !< Labels.
@@ -4896,13 +4974,16 @@ contains
       allocate(labels(0))
       do s = 1_I4P, size(self%series, kind=I4P)
          if (.not. allocated(self%series(s)%xlabels)) cycle
+         if (self%series(s)%label_axis /= name) cycle
          associate(series => self%series(s))
             do i = 1_I4P, size(series%x, kind=I4P)
-               if (len_trim(series%xlabels(i)) == 0 .or. .not. ieee_is_finite(series%x(i))) cycle
+               value = series%x(i)
+               if (name(1:1) == 'y') value = series%y(i)
+               if (len_trim(series%xlabels(i)) == 0 .or. .not. ieee_is_finite(value)) cycle
                if (size(labels) > 0) then
-                  if (any(labels%value == series%x(i))) cycle
+                  if (any(labels%value == value)) cycle
                endif
-               call push(labels, tick_object(value=series%x(i), major=.true., label=trim(series%xlabels(i)), sup=''))
+               call push(labels, tick_object(value=value, major=.true., label=trim(series%xlabels(i)), sup=''))
             enddo
          endassociate
       enddo
@@ -4917,8 +4998,8 @@ contains
          enddo
          labels(j + 1_I4P) = t
       enddo
-      call move_alloc(labels, self%xaxis%labels)
-      endsubroutine collect_labels
+      call move_alloc(labels, axis%labels)
+      endsubroutine axis_labels
    endsubroutine setup_axes
 
    pure function time_attribute(axis) result(text)

@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(101)                  !< Per-figure outcome.
+logical                     :: test_passed(103)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -126,7 +126,9 @@ test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
 test_passed(100) = check('annotation_styles.svg', figure_annotation_styles())
 test_passed(101) = check('annotation_styles.txt', figure_annotation_styles())
-write(output_unit, '(A,101L2)') 'foresight golden checks:', test_passed
+test_passed(102) = check('tic_labels_fills.svg', figure_tic_labels_fills())
+test_passed(103) = check('tic_labels_fills.txt', figure_tic_labels_fills())
+write(output_unit, '(A,103L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -523,6 +525,35 @@ contains
                       lc='#9400d3')
    call fig%plot(x, sin(x), title='sin(x)')
    endfunction figure_annotation_styles
+
+   function figure_tic_labels_fills() result(fig)
+   !< Two panels: text labels on the y axis (gnuplot `ytic`) of a line with a marker every 3 points (`pointinterval`)
+   !< and red error bars with long caps (`set errorbars 2 lc rgb "red"`); curves filled to the left border (`y1`), to
+   !< the right one (`y2`) and to the line x = 5 (`x=5`).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(real(i, R8P), i = 0, 9)]
+   call fig%init(width=640_I4P, height=320_I4P)
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_title('ytic labels, pointinterval, errorbars')
+   call fig%set_errorbars(size=2.0_R8P, lc='red')
+   call fig%plot(x, [1.0_R8P, 3.0_R8P, 2.0_R8P, 5.0_R8P, 4.0_R8P, 6.0_R8P, 5.0_R8P, 7.0_R8P, 6.0_R8P, 8.0_R8P], &
+                 title='pi 3', with='linespoints', pt=7_I4P, pi=3_I4P, &
+                 xlabels=[character(len=4) :: 'one', 'low', '', 'mid', '', '', '', 'top', '', 'high'], labels_axis='y')
+   call fig%plot([1.5_R8P, 4.5_R8P, 7.5_R8P], [2.0_R8P, 4.5_R8P, 6.5_R8P], title='errors', with='yerrorbars', &
+                 ylow=[1.5_R8P, 3.5_R8P, 6.0_R8P], yhigh=[2.5_R8P, 5.5_R8P, 7.0_R8P])
+   call fig%next_panel
+   call fig%set_title('filledcurves y1, y2, x=5')
+   call fig%set_errorbars
+   call fig%set_xrange(0.0_R8P, 10.0_R8P)
+   call fig%plot(x(3:6), [6.0_R8P, 7.0_R8P, 6.5_R8P, 7.5_R8P], title='y1', with='filledcurves', curve='y1')
+   call fig%plot(x(5:8), [3.0_R8P, 4.0_R8P, 3.5_R8P, 4.5_R8P], title='y2', with='filledcurves', curve='y2', &
+                 fs='transparent solid 0.5')
+   call fig%plot(x(2:9), [0.5_R8P, 1.5_R8P, 1.0_R8P, 2.0_R8P, 1.0_R8P, 2.5_R8P, 1.5_R8P, 2.0_R8P], title='x=5', &
+                 with='filledcurves', curve='x=5', fs='pattern 4')
+   endfunction figure_tic_labels_fills
 
    function figure_histogram_layouts() result(fig)
    !< The histogram layouts of gnuplot 6.0: groups (`newhistogram`, the second from linetype 4, titled below the x

@@ -49,7 +49,9 @@ module foresight_script
 !<   clustered [gap G]|errorbars [gap G] [lw W]|rowstacked|columnstacked` (errorbars: `using Y:ERR` or `Y:LOW:HIGH`;
 !<   columnstacked: `key(N)` the row names), `plot newhistogram ["title"] [lt N] [fs FILL] [at X], ...` groups;
 !<   `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae, the labels replacing the x
-!<   ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`);
+!<   ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`); `x2tic`, `ytic`, `y2tic` likewise on their axis (the
+!<   ordinates for y and y2; x2 and y2 once their ticks are set); `pi|pointinterval N` a marker every N points;
+!<   `set errorbars [small|large|fullwidth|SIZE] [lc C] [lw W]`, `unset errorbars`;
 !< - string columns in `using` expressions: `strcol(N)`, `stringcolumn(N)` (N a number or a header name),
 !<   `columnhead(N)`, the pseudo-columns `column(-1)` (block) and `column(-2)` (dataset); the text of labels a column
 !<   or an expression;
@@ -121,7 +123,7 @@ use foresight_style, only : default_color, fill_style, sequence_colors, style_na
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
                             FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
-use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, push, tic_item, tics_object
+use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -153,6 +155,7 @@ type :: line_style_object
    integer(I4P),     allocatable :: dt         !< Dash type.
    real(R8P),        allocatable :: ps         !< Point size.
    integer(I4P),     allocatable :: pt         !< Point type.
+   integer(I4P),     allocatable :: pi         !< A point every N (`pointinterval`).
    real(R8P)                     :: palette = 0.0_R8P !< Value of `lc palette cb V` or `frac F`.
 endtype line_style_object
 
@@ -1885,6 +1888,7 @@ contains
    logical                                      :: columns   !< Column stacked histograms.
    real(R8P),        allocatable                :: arcs(:,:) !< Wedge angles of circles.
    integer(I4P)                                 :: label_col !< Column of `xtic(N)`, 1 for an expression, 0 for none.
+   character(len=2)                             :: label_axis !< Axis of the text labels: `x`, `x2`, `y`, `y2`.
    type(expression_object)                      :: label_field !< Field of the text labels (`xtic(...)`, labels).
    logical                                      :: needs_text !< The cell texts are read (`strcol`, labels).
    logical                                      :: time_axis(2) !< Time data on the x and y axes of the item.
@@ -2080,6 +2084,7 @@ contains
       if (allocated(fields)) deallocate(fields)
       spec = ''
       label_col = 0_I4P
+      label_axis = 'x'
       is_matrix = .false.
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
@@ -2127,7 +2132,7 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
-            call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field)
+            call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field, label_axis)
             if (iostat /= 0_I4P) return
             call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
             if (iostat /= 0_I4P) return
@@ -2218,10 +2223,23 @@ contains
                do while (i < size(tokens, kind=I4P))
                   if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
                   word = tokens(i + 1_I4P)%text
-                  if (is_word(word, 'closed x1 x2 above below')) then
+                  if (is_word(word, 'closed x1 x2 above below y1 y2 y')) then
                      i = i + 1_I4P
                      curve = curve//' '//word
-                  elseif (index(word, 'y=') == 1 .or. index(word, 'y1=') == 1) then
+                  elseif (index(word, 'x=') == 1 .or. index(word, 'x1=') == 1 .or. index(word, 'x2=') == 1) then
+                     ! to the vertical line x = V
+                     i = i + 1_I4P
+                     block
+                        real(R8P) :: v !< The line.
+
+                        if (.not. to_number(word(index(word, '=') + 1:), v)) then
+                           call fail('plot: filledcurves '//word(1:index(word, '='))//'V needs a number, found "'// &
+                                     word//'"', iostat, iomsg)
+                           return
+                        endif
+                     endblock
+                     curve = curve//' '//word
+                  elseif (index(word, 'y=') == 1 .or. index(word, 'y1=') == 1 .or. index(word, 'y2=') == 1) then
                      i = i + 1_I4P
                      allocate(base)
                      if (.not. to_number(word(index(word, '=') + 1:), base)) then
@@ -2240,10 +2258,8 @@ contains
                      endif
                      curve = curve//' '//word//','//tokens(i + 3_I4P)%text
                      i = i + 3_I4P
-                  elseif (is_word(word, 'y1 y2 r') .or. index(word, 'x=') == 1 .or. index(word, 'x1=') == 1 .or. &
-                          index(word, 'x2=') == 1 .or. index(word, 'y2=') == 1 .or. index(word, 'r=') == 1) then
-                     call fail('plot: filledcurves '//word//' is not supported (closed, x1, x2, y=V, xy=X,Y, above, '// &
-                               'below and a band x:y1:y2 are)', iostat, iomsg)
+                  elseif (word == 'r' .or. index(word, 'r=') == 1) then
+                     call fail('plot: filledcurves '//word//' (polar) is not supported', iostat, iomsg)
                      return
                   else
                      exit
@@ -2456,6 +2472,7 @@ contains
          call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
                                dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
          if (len(palette_lc) > 0) call paint_last
+         call mark_last
          call push(functions, func)
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
@@ -2998,10 +3015,15 @@ contains
             if (.not. fill_ok(fs)) return
          endif
          ! the library stops on these: a script fails gracefully
-         if ((index(curve, 'x1') > 0 .or. index(curve, 'x2') > 0 .or. index(curve, 'xy=') > 0) .and. &
-             (allocated(base) .or. allocated(ylow))) then
-            call fail('plot: filledcurves x1, x2, xy= fill to the plot or a point: not with y=V nor a band', iostat, &
-                      iomsg)
+         if ((index(curve, 'x') > 0 .or. index(curve, ' y') > 0) .and. (allocated(base) .or. allocated(ylow))) then
+            call fail('plot: filledcurves x1, x2, y1, y2, x=V, xy= fill to the plot, a line or a point: not with y=V '// &
+                      'nor a band', iostat, iomsg)
+            return
+         endif
+         if ((index(curve, 'above') > 0 .or. index(curve, 'below') > 0) .and. &
+             (index(curve, ' y') > 0 .or. index(curve, 'x=') > 0 .or. index(curve, 'x1=') > 0 .or. &
+              index(curve, 'x2=') > 0)) then
+            call fail('plot: filledcurves above and below apply to y=V and bands', iostat, iomsg)
             return
          endif
          if ((index(curve, 'above') > 0 .or. index(curve, 'below') > 0) .and. &
@@ -3054,6 +3076,7 @@ contains
                                xlow=xlow, xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, pt=line%pt, xlabels=xlabels)
       endif
       if (len(palette_lc) > 0) call paint_last
+      call mark_last
       if (binned) then
          ! the autoscale spans the outer bin edges and y = 0, as gnuplot
          associate(panel => self%figure%panels(self%figure%current))
@@ -3257,6 +3280,18 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine mark_last
+      !< The series just added: the axis of its text labels (`ytic(N)`, ...) and its point interval.
+      integer(I4P) :: last !< Series just added.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         last = size(panel%series, kind=I4P)
+         if (last < 1_I4P) return
+         panel%series(last)%label_axis = label_axis
+         if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
+      endassociate
+      endsubroutine mark_last
 
       subroutine paint_last
       !< Color the series just added from the palette (`lc palette`, marker `palette_lc`): its `z` values (a point of
@@ -3668,17 +3703,20 @@ contains
       call self%figure%rgbimage(c(1, :, :), c(2, :, :), c(3, :, :), xs, ys, title=title, alpha=c(4, :, :))
       endsubroutine rgb_item
 
-      subroutine split_xtic(spec, column, iostat, iomsg, keyed, field)
+      subroutine split_xtic(spec, column, iostat, iomsg, keyed, field, axis)
       !< Remove a last `using` field `xtic(...)` or `xticlabels(...)` from `spec`, returning its `field`: a column N
       !< (`column` N), or a string expression (`xtic(strcol(1) . ' K')`, `xtic("a")` the same text on every row;
       !< `column` 1), `column` 0 if none; `key(N)` (the row names of a spider plot) likewise, with `keyed` true.
+      !< `x2tic(...)`, `ytic(...)`, `y2tic(...)` (and their `ticlabels` forms) likewise, the labels on that `axis`.
       character(len=:), allocatable, intent(inout) :: spec   !< `using` specification.
       integer(I4P),                  intent(out)   :: column !< Label column, 0 for none.
       integer(I4P),                  intent(inout) :: iostat !< Status.
       character(len=:), allocatable, intent(inout) :: iomsg  !< Error message.
       logical,                       intent(out)   :: keyed  !< The field is `key(N)`.
       type(expression_object),       intent(inout) :: field  !< Label field.
+      character(len=2),              intent(out)   :: axis   !< Axis of the labels.
       character(len=:), allocatable                :: last   !< Last field.
+      character(len=:), allocatable                :: head   !< Its function name.
       character(len=:), allocatable                :: inner  !< Argument of the label field.
       integer(I4P)                                 :: k      !< Character counter.
       integer(I4P)                                 :: depth  !< Parenthesis depth.
@@ -3687,6 +3725,7 @@ contains
 
       column = 0_I4P
       keyed = .false.
+      axis = 'x'
       depth = 0_I4P
       cut = 0_I4P
       do k = 1_I4P, len(spec, kind=I4P)
@@ -3701,11 +3740,20 @@ contains
       enddo
       last = spec(cut + 1_I4P:)
       keyed = index(last, 'key(') == 1
-      if (index(last, 'xtic(') /= 1 .and. index(last, 'xticlabels(') /= 1 .and. .not. keyed) then
-         if (index(last, 'ytic(') == 1 .or. index(last, 'x2tic(') == 1 .or. index(last, 'ticlabels(') > 0) &
-            call fail('plot: only xtic(N) labels are supported, found "'//last//'"', iostat, iomsg)
-         return
-      endif
+      head = ''
+      if (index(last, '(') > 1) head = last(1:index(last, '(') - 1)
+      select case (head)
+      case ('xtic', 'xticlabels')
+         axis = 'x'
+      case ('x2tic', 'x2ticlabels')
+         axis = 'x2'
+      case ('ytic', 'yticlabels')
+         axis = 'y'
+      case ('y2tic', 'y2ticlabels')
+         axis = 'y2'
+      case default
+         if (.not. keyed) return
+      endselect
       inner = last(index(last, '(') + 1:len(last) - 1)
       if (last(len(last):len(last)) /= ')') then
          call fail('plot: xtic needs a column number or an expression, xtic(1), found "'//last//'"', iostat, iomsg)
@@ -5436,6 +5484,8 @@ contains
       call print_option
    elseif (keyword(option, 'table', 3_I4P)) then
       call table_option
+   elseif (keyword(option, 'errorbars', 6_I4P)) then
+      call errorbars_option
    elseif (keyword(option, 'samples', 3_I4P)) then
       call samples_option
    elseif (keyword(option, 'format', 3_I4P)) then
@@ -5588,6 +5638,95 @@ contains
       endif
       self%print_file = name
       endsubroutine print_option
+
+      subroutine histogram_title(s)
+      !< `title [tc|textcolor COLOR] [offset X,Y] [font F] [[no]enhanced]` of `set style histogram`, from token `s`
+      !< (left on its last token): the color and offset of the group titles.
+      integer(I4P), intent(inout)   :: s      !< Token counter.
+      type(token_object), allocatable :: copy(:) !< Tokens with `lc` for the color word.
+      type(line_style_object)       :: probe  !< Color read.
+      real(R8P)                     :: v(2)   !< Offset.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         do while (s < size(tokens, kind=I4P))
+            if (tokens(s + 1_I4P)%text == 'tc' .or. keyword(tokens(s + 1_I4P)%text, 'textcolor', 5_I4P)) then
+               s = s + 1_I4P
+               copy = tokens
+               copy(s)%text = 'lc'
+               if (.not. line_option(copy, s, probe, iostat, iomsg, panel%linecolors, self%symbols)) return
+               if (.not. allocated(probe%lc)) cycle
+               if (index(probe%lc, '*') == 1) then
+                  call fail('set style histogram title: variable and palette colors do not apply', iostat, iomsg)
+                  return
+               endif
+               panel%hist_title_color = probe%lc
+            elseif (tokens(s + 1_I4P)%text == 'offset') then
+               s = s + 1_I4P
+               if (.not. next_real(tokens, s, v(1), iostat, iomsg, self%symbols)) return
+               v(2) = 0.0_R8P
+               if (s < size(tokens, kind=I4P)) then
+                  if (tokens(s + 1_I4P)%kind == TOKEN_COMMA) then
+                     s = s + 1_I4P
+                     if (.not. next_real(tokens, s, v(2), iostat, iomsg, self%symbols)) return
+                  endif
+               endif
+               panel%hist_title_offset = v
+            elseif (tokens(s + 1_I4P)%text == 'font') then
+               ! the font is the page's: the name is read and ignored
+               s = s + 2_I4P
+            elseif (is_word(tokens(s + 1_I4P)%text, 'enhanced noenhanced')) then
+               s = s + 1_I4P
+            else
+               exit
+            endif
+         enddo
+      endassociate
+      endsubroutine histogram_title
+
+      subroutine errorbars_option
+      !< `set errorbars [small|large|fullwidth|SIZE] [front|back] [LINE PROPERTIES]`: the cap length of the error bars
+      !< and boxplot whiskers (0 small, 1 large, the default; fullwidth taken as large), their line (`lc`, `lw`).
+      type(line_style_object) :: probe !< Line read.
+      real(R8P)               :: v     !< Size.
+      integer(I4P)            :: s     !< Token counter.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%errorbar_size = 1.0_R8P
+         if (allocated(panel%errorbar_color)) deallocate(panel%errorbar_color)
+         panel%errorbar_lw = 0.0_R8P
+         s = 2_I4P
+         do while (s <= size(tokens, kind=I4P))
+            if (keyword(tokens(s)%text, 'small', 2_I4P)) then
+               panel%errorbar_size = 0.0_R8P
+            elseif (keyword(tokens(s)%text, 'large', 2_I4P) .or. keyword(tokens(s)%text, 'fullwidth', 4_I4P)) then
+               panel%errorbar_size = 1.0_R8P
+            elseif (is_word(tokens(s)%text, 'front back')) then
+               continue
+            elseif (is_line_option(tokens(s)%text)) then
+               if (.not. line_option(tokens, s, probe, iostat, iomsg, panel%linecolors, self%symbols)) return
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') == 1) then
+                     call fail('set errorbars: variable and palette colors do not apply', iostat, iomsg)
+                     return
+                  endif
+                  panel%errorbar_color = probe%lc
+               endif
+               if (allocated(probe%lw)) panel%errorbar_lw = probe%lw
+            elseif (to_number(tokens(s)%text, v) .and. s == 2_I4P) then
+               if (v < 0.0_R8P) then
+                  call fail('set errorbars: the size must not be negative', iostat, iomsg)
+                  return
+               endif
+               panel%errorbar_size = v
+            else
+               call fail('set errorbars: unsupported option "'//tokens(s)%text//'" (small, large, fullwidth, SIZE, '// &
+                         'front, back, lc, lw)', iostat, iomsg)
+               return
+            endif
+            s = s + 1_I4P
+         enddo
+      endassociate
+      endsubroutine errorbars_option
 
       subroutine table_option
       !< `set table ["file" | $NAME] [append]`: plots write their points to the file (emptied unless `append`), to the
@@ -6592,15 +6731,42 @@ contains
       endsubroutine tics_option
 
       subroutine minor_option(tics)
-      !< `set mxtics|mytics|my2tics|mcbtics [N|default]`: N intervals between consecutive major ticks, gnuplot's
-      !< automatic count without N; `default` restores the minor ticks by default (none, 2..9 on log axes).
+      !< `set mxtics|mytics|my2tics|mcbtics [N|default|time N UNITS]`: N intervals between consecutive major ticks,
+      !< gnuplot's automatic count without N; `default` restores the minor ticks by default (none, 2..9 on log axes);
+      !< `time N UNITS` a minor tick every N time units (time axes).
       type(tics_object), intent(inout) :: tics !< Axis tick settings.
       integer(I4P)                     :: n    !< Intervals.
       integer(I4P)                     :: ios  !< Read status.
 
+      tics%minor_count = 0_I4P
+      tics%minor_unit = ''
       if (size(tokens) == 1) then
          tics%minor = MINOR_AUTO
          return
+      endif
+      if (tokens(2)%text == 'time') then
+         ! `time N UNITS`: a minor tick every N units of a time axis (gnuplot 6.0)
+         block
+            character(len=:), allocatable :: unit !< Unit, plural.
+
+            if (size(tokens) == 4) then
+               if (verify(tokens(3)%text, '0123456789') == 0 .and. len(tokens(3)%text) <= 6) then
+                  read(tokens(3)%text, *, iostat=ios) n
+                  unit = tokens(4)%text
+                  if (unit(len(unit):len(unit)) /= 's') unit = unit//'s'
+                  if (ios == 0_I4P .and. n >= 1_I4P .and. is_word(unit, 'seconds minutes hours days weeks months years')) &
+                     then
+                     tics%minor = MINOR_NONE
+                     tics%minor_count = n
+                     tics%minor_unit = unit
+                     return
+                  endif
+               endif
+            endif
+            call fail('set '//option//': time N seconds|minutes|hours|days|weeks|months|years is expected', iostat, &
+                      iomsg)
+            return
+         endblock
       endif
       if (size(tokens) == 2 .and. tokens(2)%kind == TOKEN_WORD) then
          if (keyword(tokens(2)%text, 'default', 3_I4P)) then
@@ -6991,6 +7157,12 @@ contains
                      mode = 'columnstacked'
                   elseif (keyword(tokens(s)%text, 'errorbars', 5_I4P)) then
                      mode = 'errorbars'
+                  elseif (is_word(tokens(s)%text, 'keyseparators nokeyseparators')) then
+                     ! foresight draws no blank key row between the groups: nokeyseparators is its look
+                     continue
+                  elseif (tokens(s)%text == 'title') then
+                     call histogram_title(s)
+                     if (iostat /= 0_I4P) return
                   elseif (tokens(s)%text == 'gap' .or. is_word(tokens(s)%text, 'lw linewidth')) then
                      s = s + 1_I4P
                      if (s > size(tokens, kind=I4P)) then
@@ -7016,7 +7188,8 @@ contains
                      endif
                   else
                      call fail('set style histogram: unsupported option "'//tokens(s)%text//'" (clustered [gap G], '// &
-                               'errorbars [gap G] [lw W], rowstacked and columnstacked are supported)', iostat, iomsg)
+                               'errorbars [gap G] [lw W], rowstacked, columnstacked, title [tc C] [offset X,Y] '// &
+                               '[font F], [no]keyseparators are supported)', iostat, iomsg)
                      return
                   endif
                   s = s + 1_I4P
@@ -7298,6 +7471,9 @@ contains
       self%print_file = ''
    elseif (keyword(option, 'table', 3_I4P)) then
       self%table = .false.
+   elseif (keyword(option, 'errorbars', 6_I4P)) then
+      ! no crossbars, as gnuplot's unset errorbars
+      self%figure%panels(self%figure%current)%errorbar_size = 0.0_R8P
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif
@@ -8291,7 +8467,8 @@ contains
 
    is = word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. keyword(word, 'linetype', 5_I4P) &
         .or. word == 'lw' .or. keyword(word, 'linewidth', 5_I4P) .or. word == 'dt' .or. keyword(word, 'dashtype', 5_I4P) &
-        .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)
+        .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P) &
+        .or. word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)
    endfunction is_line_option
 
    function line_option(tokens, i, line, iostat, iomsg, colors, symbols) result(ok)
@@ -8377,6 +8554,14 @@ contains
    elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok) line%dt = number
+   elseif (word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)) then
+      ! a point every N (gnuplot's negative N, the line broken around the points, draws the points every |N|)
+      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
+      if (ok .and. number == 0_I4P) then
+         call fail('pointinterval: N not 0 is expected', iostat, iomsg)
+         ok = .false.
+      endif
+      if (ok) line%pi = abs(number)
    elseif (word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) then
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok .and. number < 0_I4P) then
