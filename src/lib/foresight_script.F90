@@ -1514,6 +1514,18 @@ contains
    case ('-')
       write(output_unit, '(A)') line
    case default
+      if (is_datablock(self%print_file)) then
+         ! a line of the datablock (undefined since set print: a new one)
+         block
+            character(len=:), allocatable :: text  !< Datablock lines.
+            logical                       :: found !< Datablock defined.
+
+            call self%symbols%string_of(self%print_file, text, found)
+            if (.not. found) text = ''
+            call self%symbols%set_string(self%print_file, text//line//new_line('a'))
+         endblock
+         return
+      endif
       open(newunit=unit, file=self%print_file, position='append', action='write', iostat=iostat)
       if (iostat /= 0_I4P) then
          call fail('print: cannot write "'//self%print_file//'"', iostat, iomsg)
@@ -5632,19 +5644,24 @@ contains
       value = v
       endsubroutine range_end
       subroutine print_option
-      !< `set print ["file" [append] | "-"]`: where `print` writes; a file is emptied unless `append`; bare, the
-      !< standard error.
+      !< `set print ["file" [append] | "-" | $NAME [append]]`: where `print` writes; a file or a datablock is emptied
+      !< unless `append`; bare, the standard error.
       character(len=:), allocatable :: name   !< File name.
       integer(I4P)                  :: unit   !< File unit.
       integer(I4P)                  :: k      !< Last token of the name.
       logical                       :: append !< `append` given.
+      character(len=:), allocatable :: text   !< Datablock lines.
+      logical                       :: found  !< Datablock defined.
 
       if (size(tokens) == 1) then
          self%print_file = ''
          return
       endif
       k = 2_I4P
-      if (tokens(2)%kind == TOKEN_STRING .or. tokens(2)%kind == TOKEN_WORD) then
+      if (tokens(2)%kind == TOKEN_WORD .and. is_datablock(tokens(2)%text)) then
+         ! a datablock, its lines the printed ones
+         name = tokens(2)%text
+      elseif (tokens(2)%kind == TOKEN_STRING .or. tokens(2)%kind == TOKEN_WORD) then
          if (.not. keyword(tokens(2)%text, 'append', 3_I4P) .or. tokens(2)%kind == TOKEN_STRING) then
             if (.not. self%string_expression(tokens, k, name, iostat, iomsg)) then
                iomsg = 'set print: '//iomsg
@@ -5665,6 +5682,12 @@ contains
       endif
       if (len(name) == 0) then
          self%print_file = ''
+         return
+      endif
+      if (is_datablock(name)) then
+         call self%symbols%string_of(name, text, found)
+         if (.not. append .or. .not. found) call self%symbols%set_string(name, '')
+         self%print_file = name
          return
       endif
       if (.not. append) then

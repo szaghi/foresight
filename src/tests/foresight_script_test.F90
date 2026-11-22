@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(118)                           !< Per-check outcome.
+logical                       :: test_passed(119)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2445,6 +2445,29 @@ test_passed(118) = test_passed(118) .and. iostat /= 0_I4P
 open(newunit=unit, file='foresight_script_test_slices.txt')
 close(unit, status='delete')
 
+! set print $NAME, as gnuplot 6.0: the printed lines make the datablock (emptied unless append), read back as data
+call interpreter%init(scratch)
+call interpreter%run_text('set print $P; print "a", 1; print 2.5; set print $P append; print "c"; set print'// &
+                          new_line('a')//'set print $Q; do for [i=1:3] { print i, i**2 }; unset print'// &
+                          new_line('a')//'stats $Q u 2 nooutput; s = STATS_sum; n = |$P|'// &
+                          new_line('a')//"set print 'foresight_script_test_printdb.txt'; print $P; set print", &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(119) = iostat == 0_I4P
+if (test_passed(119)) then
+   block
+      real(R8P) :: v(2)     !< s, n.
+      logical   :: known(2) !< Defined.
+
+      call interpreter%symbols%value_of('s', v(1), known(1))
+      call interpreter%symbols%value_of('n', v(2), known(2))
+      test_passed(119) = all(known) .and. same(v, [14, 3]) .and. &
+                         file_is('foresight_script_test_printdb.txt', [character(len=8) :: 'a 1', '2.5', 'c', ''])
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_printdb.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2453,7 +2476,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,118L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,119L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
