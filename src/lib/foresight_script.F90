@@ -186,6 +186,8 @@ type :: script_object
    type(token_object), allocatable :: data_files(:)            !< Data files read, for watching.
    integer(I4P)                    :: live_refresh = 0_I4P     !< HTML reload period applied when none is set [s].
    logical                         :: multiplot = .false.      !< Inside `set multiplot`.
+   logical                         :: parametric = .false.     !< gnuplot `set parametric`: function items in pairs,
+                                                                !< x(t), y(t) over trange.
    logical                         :: advance_pending = .false. !< A multiplot panel was plotted: the next command
                                                                 !< opens the next panel.
    character(len=:), allocatable   :: data_style               !< Default plot style, `set style data`.
@@ -329,6 +331,7 @@ contains
    allocate(self%locals(0))
    self%exit_status = 0_I4P
    self%dummy = ''
+   self%parametric = .false.
    self%encoding = 'default'
    self%term_name = 'html'
    if (len(output) > 4) then
@@ -2262,6 +2265,8 @@ contains
    type(datafile_object)                        :: data      !< Current data file.
    type(expression_object)                      :: func      !< Current function.
    type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
+   type(expression_object), allocatable         :: yfunctions(:) !< y(t) of the parametric functions, in their order.
+   type(expression_object)                      :: yfunc     !< Current y(t) of a parametric pair.
    integer(I4P),            allocatable         :: slots(:)  !< Series index of each function.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
@@ -2358,14 +2363,14 @@ contains
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
-   allocate(functions(0), slots(0))
+   allocate(functions(0), slots(0), yfunctions(0))
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
       return
    endif
-   ! gnuplot's dummy variable is t in polar mode
-   dummy = merge('t', 'x', self%figure%panels(self%figure%current)%polar)
+   ! gnuplot's dummy variable is t in polar and parametric modes
+   dummy = merge('t', 'x', self%figure%panels(self%figure%current)%polar .or. self%parametric)
    if (len(self%dummy) > 0) dummy = self%dummy
    ! inline ranges, [x] then [y], for this plot only: plot [0:2*pi] [-1:1] sin(x), plot [t=0:1] t**2
    i = 1_I4P
@@ -2373,15 +2378,24 @@ contains
    do while (i <= size(tokens, kind=I4P))
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
-      if (nranges > 2_I4P) then
-         call fail('plot: at most two inline ranges, [x] and [y], are supported', iostat, iomsg)
+      if (nranges > merge(3_I4P, 2_I4P, self%parametric)) then
+         if (self%parametric) then
+            call fail('plot: at most three inline ranges, [t], [x] and [y], in parametric mode', iostat, iomsg)
+         else
+            call fail('plot: at most two inline ranges, [x] and [y], are supported', iostat, iomsg)
+         endif
          return
       endif
       if (self%figure%panels(self%figure%current)%polar) then
          call fail('plot: inline ranges are not supported in polar mode (use set trange and set rrange)', iostat, iomsg)
          return
       endif
-      call inline_range(tokens(i)%text, nranges == 1_I4P)
+      ! parametric: [t] [x] [y]
+      if (self%parametric) then
+         call inline_range(tokens(i)%text, merge(3_I4P, nranges - 1_I4P, nranges == 1_I4P))
+      else
+         call inline_range(tokens(i)%text, nranges)
+      endif
       if (iostat /= 0_I4P) return
       i = i + 1_I4P
    enddo
@@ -2471,6 +2485,39 @@ contains
             if (iostat /= 0_I4P) then
                iomsg = 'plot: '//iomsg
                return
+            endif
+            if (self%parametric) then
+               ! gnuplot `set parametric`: the item is a pair x(t), y(t), its options after the second
+               block
+                  integer(I4P)                  :: head2    !< First token of y(t).
+                  character(len=:), allocatable :: written2 !< y(t) as written.
+
+                  if (i + 2_I4P > size(tokens, kind=I4P)) then
+                     call fail('plot: parametric function not fully specified: x(t), y(t) expected', iostat, iomsg)
+                     return
+                  endif
+                  if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+                     call fail('plot: parametric function not fully specified: x(t), y(t) expected', iostat, iomsg)
+                     return
+                  endif
+                  i = i + 2_I4P
+                  head2 = i
+                  do while (i < size(tokens, kind=I4P))
+                     if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+                     if (is_item_option(tokens(i + 1_I4P)%text)) exit
+                     i = i + 1_I4P
+                  enddo
+                  written2 = text(tokens(head2)%first:tokens(i)%last)
+                  associate(panel => self%figure%panels(self%figure%current))
+                     call yfunc%compile(written2, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
+                                        symbols=self%symbols)
+                  endassociate
+                  if (iostat /= 0_I4P) then
+                     iomsg = 'plot: '//iomsg
+                     return
+                  endif
+                  written = written//', '//written2
+               endblock
             endif
          else
             if (len(file) == 0) file = self%previous_file
@@ -2952,6 +2999,7 @@ contains
          if (len(palette_lc) > 0) call paint_last
          call mark_last
          call push(functions, func)
+         if (self%parametric) call push(yfunctions, yfunc)
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
@@ -4092,15 +4140,18 @@ contains
       endif
       endsubroutine new_histogram
 
-      subroutine inline_range(text, first)
-      !< An inline range `[min:max]` of the plot command (`text` without brackets): of x if `first` (where
-      !< `[name=min:max]` also names the dummy variable), else of y; an empty or `*` end keeps the set one, as gnuplot.
+      subroutine inline_range(text, axis)
+      !< An inline range `[min:max]` of the plot command (`text` without brackets): of x (`axis` 1), y (2) or t (3,
+      !< the first range in parametric mode); `[name=min:max]` of x or t also names the dummy variable; an empty or `*`
+      !< end keeps the set one, as gnuplot.
       character(len=*), intent(in)  :: text  !< Range text.
-      logical,          intent(in)  :: first !< The first range: x.
+      integer(I4P),     intent(in)  :: axis  !< 1 x, 2 y, 3 t.
+      logical                       :: first !< A range of the dummy variable (x or t).
       character(len=:), allocatable :: body  !< Range without the dummy variable.
       integer(I4P)                  :: colon !< Separator.
       integer(I4P)                  :: equal !< Dummy variable separator.
 
+      first = axis /= 2_I4P
       body = text
       equal = index(text, '=', kind=I4P)
       colon = top_colon(text)
@@ -4126,7 +4177,10 @@ contains
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
-         if (first) then
+         if (axis == 3_I4P) then
+            call inline_end(body(1:colon - 1_I4P), panel%taxis%plot_min_fixed, panel%taxis%plot_min)
+            if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%taxis%plot_max_fixed, panel%taxis%plot_max)
+         elseif (axis == 1_I4P) then
             call inline_end(body(1:colon - 1_I4P), panel%xaxis%plot_min_fixed, panel%xaxis%plot_min)
             if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%xaxis%plot_max_fixed, panel%xaxis%plot_max)
          else
@@ -4402,6 +4456,29 @@ contains
 
       n = self%samples
       associate(panel => self%figure%panels(self%figure%current))
+         if (self%parametric .and. .not. panel%polar) then
+            ! gnuplot `set parametric`: x(t), y(t) over trange, [-5:5] by default
+            lo = -5.0_R8P
+            hi = 5.0_R8P
+            if (panel%taxis%min_fixed) lo = panel%taxis%min_user
+            if (panel%taxis%max_fixed) hi = panel%taxis%max_user
+            if (panel%taxis%plot_min_fixed) lo = panel%taxis%plot_min
+            if (panel%taxis%plot_max_fixed) hi = panel%taxis%plot_max
+            allocate(xs(n), ys(n))
+            do f = 1_I4P, size(functions, kind=I4P)
+               do j = 1_I4P, n
+                  xs(j) = lo + real(j - 1_I4P, R8P) * ((hi - lo) / real(n - 1_I4P, R8P))
+               enddo
+               xs(n) = hi
+               do j = 1_I4P, n
+                  ys(j) = yfunctions(f)%value_at(xs(j))
+                  xs(j) = functions(f)%value_at(xs(j))
+               enddo
+               panel%series(slots(f))%x = xs
+               panel%series(slots(f))%y = ys
+            enddo
+            return
+         endif
          if (panel%polar) then
             ! over trange, a full turn by default, as gnuplot
             lo = 0.0_R8P
@@ -4742,6 +4819,7 @@ contains
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
    self%dummy = ''
+   self%parametric = .false.
    call default_styles(self)
    contains
       subroutine clear_keeping_datablocks
@@ -5803,6 +5881,10 @@ contains
       call offsets_option
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       call timestamp_option
+   elseif (keyword(option, 'parametric', 3_I4P)) then
+      ! gnuplot `set parametric`: function items in pairs, x(t), y(t) over trange
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      self%parametric = .true.
    elseif (keyword(option, 'clip', 2_I4P)) then
       ! gnuplot `set clip [points|one|two|radial]`: bare, the points
       if (.not. clip_words(self%figure%panels(self%figure%current), tokens, .true., iostat, iomsg)) return
@@ -9016,6 +9098,9 @@ contains
       return
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       self%figure%panels(self%figure%current)%stamp = .false.
+      return
+   elseif (keyword(option, 'parametric', 3_I4P)) then
+      self%parametric = .false.
       return
    elseif (keyword(option, 'clip', 2_I4P)) then
       ! gnuplot `unset clip [points|one|two|radial]`: bare, points, one and two

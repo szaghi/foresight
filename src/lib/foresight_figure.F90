@@ -172,6 +172,8 @@ contains
       panel%xaxis%plot_max_fixed = .false.
       panel%yaxis%plot_min_fixed = .false.
       panel%yaxis%plot_max_fixed = .false.
+      panel%taxis%plot_min_fixed = .false.
+      panel%taxis%plot_max_fixed = .false.
    endassociate
    endsubroutine clear
 

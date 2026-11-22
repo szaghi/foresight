@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(141)                           !< Per-check outcome.
+logical                       :: test_passed(142)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3005,6 +3005,25 @@ test_passed(141) = test_passed(141) .and. iostat /= 0_I4P
 open(newunit=unit, file='foresight_script_test_clip.svg')
 close(unit, status='delete')
 
+! set parametric: function items in pairs x(t), y(t) over trange ([-5:5] by default, the first inline range), the
+! title the pair as written; data items as they are; unset parametric
+call interpreter%init(scratch)
+call interpreter%run_text('set parametric; set samples 5; plot [0:1] t, t**2; ', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(142) = iostat == 0_I4P
+if (test_passed(142)) test_passed(142) = all(interpreter%figure%panels(1)%series(1)%x == &
+                                             [0.0_R8P, 0.25_R8P, 0.5_R8P, 0.75_R8P, 1.0_R8P]) .and. &
+                                         all(interpreter%figure%panels(1)%series(1)%y == &
+                                             [0.0_R8P, 0.0625_R8P, 0.25_R8P, 0.5625_R8P, 1.0_R8P]) .and. &
+                                         interpreter%figure%panels(1)%series(1)%title == 't, t**2'
+call interpreter%run_text('set samples 3; plot t, 2*t', iostat, iomsg)
+test_passed(142) = test_passed(142) .and. iostat == 0_I4P
+if (test_passed(142)) test_passed(142) = all(interpreter%figure%panels(1)%series(1)%x == [-5.0_R8P, 0.0_R8P, 5.0_R8P])
+call interpreter%run_text('plot sin(t)', iostat, iomsg)
+test_passed(142) = test_passed(142) .and. iostat /= 0_I4P .and. index(iomsg, 'not fully specified') > 0
+call interpreter%run_text('unset parametric; plot [0:1] x', iostat, iomsg)
+test_passed(142) = test_passed(142) .and. iostat == 0_I4P .and. .not. interpreter%parametric
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3013,7 +3032,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,141L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,142L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
