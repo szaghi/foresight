@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(114)                           !< Per-check outcome.
+logical                       :: test_passed(115)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2343,6 +2343,29 @@ close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_gaps.svg')
 close(unit, status='delete')
 
+! reset in a multiplot resets the next panel, not the one drawn (gnuplot draws a panel at its plot); ytic labels kept
+! by the HTML page through a zoom
+call interpreter%init(scratch)
+open(newunit=unit, file='foresight_script_test_reset.dat')
+write(unit, '(A)') 'Jan 3', 'Feb 5', 'Mar 4'
+close(unit)
+call interpreter%run_text('set output "foresight_script_test_reset.html"; set multiplot layout 1,2'//new_line('a')// &
+                          'set title "first"; set logscale y'//new_line('a')// &
+                          'plot "foresight_script_test_reset.dat" u 0:2:ytic(1) w lp'//new_line('a')// &
+                          'reset; plot "foresight_script_test_reset.dat" u 0:2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(115) = iostat == 0_I4P
+if (test_passed(115)) test_passed(115) = interpreter%figure%panels(1)%title == 'first' .and. &
+                                         interpreter%figure%panels(1)%yaxis%log .and. &
+                                         .not. interpreter%figure%panels(2)%yaxis%log .and. &
+                                         .not. allocated(interpreter%figure%panels(2)%title)
+if (test_passed(115)) test_passed(115) = file_has('foresight_script_test_reset.html', 'ytics="labels 3e0:Jan 4e0:Mar 5e0:Feb"')
+call interpreter%run_text('unset multiplot', iostat, iomsg)
+open(newunit=unit, file='foresight_script_test_reset.dat')
+close(unit, status='delete')
+open(newunit=unit, file='foresight_script_test_reset.html')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2351,7 +2374,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,114L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,115L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -2431,6 +2454,29 @@ contains
    close(u)
    close(v)
    endfunction same_file
+
+   function file_has(file, text) result(ok)
+   !< Whether `file` holds `text` (on one line).
+   character(len=*), intent(in) :: file !< Text file.
+   character(len=*), intent(in) :: text !< Text looked for.
+   logical                      :: ok   !< Found.
+   character(len=4000)          :: line !< Line read.
+   integer(I4P)                 :: u    !< Unit.
+   integer(I4P)                 :: ios  !< I/O status.
+
+   ok = .false.
+   open(newunit=u, file=file, action='read', iostat=ios)
+   if (ios /= 0_I4P) return
+   do
+      read(u, '(A)', iostat=ios) line
+      if (ios /= 0_I4P) exit
+      if (index(line, text) > 0) then
+         ok = .true.
+         exit
+      endif
+   enddo
+   close(u)
+   endfunction file_has
 
    function file_is(file, lines) result(ok)
    !< Whether `file` holds exactly `lines` (trailing blanks of each ignored).

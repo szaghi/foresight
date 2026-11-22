@@ -545,7 +545,7 @@ contains
    command = tokens(1)%text
    ! in a multiplot, the first command after a plot opens the next panel (the multiplot options excepted)
    if (self%advance_pending .and. (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P) .or. &
-                                   keyword(command, 'plot', 1_I4P))) then
+                                   keyword(command, 'plot', 1_I4P) .or. keyword(command, 'reset', 3_I4P))) then
       if (.not. is_multiplot_option(tokens)) then
          if (self%figure%layout .and. self%figure%current >= size(self%figure%panels, kind=I4P)) then
             call fail('multiplot: the layout is full', iostat, iomsg)
