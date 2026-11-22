@@ -322,6 +322,17 @@
     var words = positions ? positions.split(" ") : [], k;
     tics.plain = words.indexOf("noenhanced") >= 0;
     words = words.filter(function (w) { return w !== "noenhanced"; });
+    // the label style, anywhere: "offset X Y" (characters, y up), "color C"
+    k = words.indexOf("offset");
+    if (k >= 0) {
+      tics.offset = [Number(words[k + 1]), Number(words[k + 2])];
+      words.splice(k, 3);
+    }
+    k = words.indexOf("color");
+    if (k >= 0) {
+      tics.color = words[k + 1];
+      words.splice(k, 2);
+    }
     k = words.indexOf("labels");
     var series = k < 0 ? words : words.slice(0, k), j, w, cut = series.length;
     for (j = 0; j < series.length; j++) {
@@ -1160,9 +1171,15 @@
   }
 
   // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks;
-  // enhanced text at `markup` [px] font size, as it is with 0
-  function label(parent, x, y, tick, anchor, rotate, lines, markup) {
+  // enhanced text at `markup` [px] font size, as it is with 0; moved by the offset of the axis
+  // `tics` (characters 0.6 by 1 `fs` [px], y up) and in their color (mirror of tick_label)
+  function label(parent, x, y, tick, anchor, rotate, lines, markup, tics, fs) {
+    if (tics && tics.offset) {
+      x += tics.offset[0] * 0.6 * fs;
+      y -= tics.offset[1] * fs;
+    }
     var attributes = {x: x, y: y, "text-anchor": anchor};
+    if (tics && tics.color) attributes.fill = tics.color;
     if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
     var node = element(parent, "text", attributes), parts = String(tick.label).split("\n");
     if (!lines || rotate) parts = [parts.join(" ")];
@@ -1533,10 +1550,10 @@
       if (angle) {
         label(self.xticks, p + 0.35 * fs * Math.sin(rad),
           self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle, false,
-          self.markup(xt));
+          self.markup(xt), xt, fs);
       } else {
         label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true,
-          self.markup(xt));
+          self.markup(xt), xt, fs);
       }
       if (self.polarGrid) return;
       gridLine(self, p, self.bottom, p, self.top, t.major ? "x" : "mx");
@@ -1555,7 +1572,7 @@
         return;
       }
       label(self.yticks, self.left - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
-        "end", 0, false, self.markup(yt));
+        "end", 0, false, self.markup(yt), yt, fs);
       if (self.polarGrid) return;
       gridLine(self, self.left, p, self.right, p, t.major ? "y" : "my");
     });
@@ -1573,7 +1590,7 @@
       }
       if (t.major) {
         label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
-          t, "start", 0, false, self.markup(y2t));
+          t, "start", 0, false, self.markup(y2t), y2t, fs);
         gridLine(self, self.left, p, self.right, p, "y2");
       }
     });
@@ -1609,7 +1626,7 @@
       }
       if (t.major) {
         label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
-          t, "middle", 0, false, self.markup(x2t));
+          t, "middle", 0, false, self.markup(x2t), x2t, fs);
         gridLine(self, p, self.bottom, p, self.top, "x2");
       }
     });

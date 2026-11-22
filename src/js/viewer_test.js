@@ -212,6 +212,12 @@ check("format powers", [
   return got === c[3];
 }));
 
+check("tics label style", (function () {
+  var t = viewer.readTics("offset 0 -1 color #ff0000 * 0.5 *", "");
+  return t.offset[0] === 0 && t.offset[1] === -1 && t.color === "#ff0000" && t.mode === "fixed" &&
+    t.step === "0.5";
+}()));
+
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });
 console.log("Are all tests passed? " + (failed.length === 0 ? "T" : "F"));

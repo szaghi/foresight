@@ -1391,10 +1391,10 @@ contains
    if (self%y2_active) view%markup = view%markup .or. axis_markup(self%y2axis)
    if (self%x2_active) view%markup = view%markup .or. axis_markup(self%x2axis)
    ! tick labels not read as enhanced text: `noenhanced` first
-   view%xtics = plain_word(self%xaxis%tics%plain, view%xtics)
-   view%ytics = plain_word(self%yaxis%tics%plain, view%ytics)
-   if (self%y2_active) view%y2tics = plain_word(self%y2axis%tics%plain, view%y2tics)
-   if (self%x2_active) view%x2tics = plain_word(self%x2axis%tics%plain, view%x2tics)
+   view%xtics = style_words(self%xaxis%tics, plain_word(self%xaxis%tics%plain, view%xtics))
+   view%ytics = style_words(self%yaxis%tics, plain_word(self%yaxis%tics%plain, view%ytics))
+   if (self%y2_active) view%y2tics = style_words(self%y2axis%tics, plain_word(self%y2axis%tics%plain, view%y2tics))
+   if (self%x2_active) view%x2tics = style_words(self%x2axis%tics, plain_word(self%x2axis%tics%plain, view%x2tics))
    view%gridlines = grid_words(self%grid_lines)
    view%gridstyle = ''
    if (allocated(self%grid_lc) .or. self%grid_lw /= 0.5_R8P .or. self%grid_dt > 0_I4P) then
@@ -1834,14 +1834,16 @@ contains
          if (.not. self%xaxis%ticks(t)%major) cycle
          if (angle /= 0.0_R8P) then
             call rotated_anchor(p, bottom + shift, angle, font_size, ax, ay)
-            call backend%text(ax, ay, self%xaxis%ticks(t)%label, trim(self%xaxis%tics%anchor()), &
-                              sup=self%xaxis%ticks(t)%sup, rotate=-angle)
+            call tick_label(backend, self%xaxis%tics, font_size, ax, ay, self%xaxis%ticks(t)%label, &
+                            trim(self%xaxis%tics%anchor()), self%xaxis%ticks(t)%sup, -angle)
          elseif (self%xaxis%tics%out) then
-            call lines_text(backend, p, bottom + shift + GAP + font_size, self%xaxis%ticks(t)%label, &
-                            self%xaxis%ticks(t)%sup, LINE_HEIGHT * font_size)
+            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), bottom + shift + GAP + font_size + &
+                            label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
+                            LINE_HEIGHT * font_size, self%xaxis%tics%color)
          else
-            call lines_text(backend, p, bottom + GAP + font_size, self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
-                            LINE_HEIGHT * font_size)
+            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), bottom + GAP + font_size + &
+                            label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
+                            LINE_HEIGHT * font_size, self%xaxis%tics%color)
          endif
       enddo
       call backend%end_group
@@ -1856,14 +1858,16 @@ contains
          if (self%yaxis%tics%out) then
             call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
             if (self%yaxis%tics%mirror) call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%yaxis%ticks(t)%major) call backend%text(left - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
-                                                             self%yaxis%ticks(t)%label, 'end', sup=self%yaxis%ticks(t)%sup)
+            if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, &
+                                                           left - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
+                                                           self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, 0.0_R8P)
             cycle
          endif
          call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
          if (self%yaxis%tics%mirror) call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         if (self%yaxis%ticks(t)%major) call backend%text(left - GAP, p + 0.35_R8P * font_size, &
-                                                          self%yaxis%ticks(t)%label, 'end', sup=self%yaxis%ticks(t)%sup)
+         if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, left - GAP, &
+                                                        p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', &
+                                                        self%yaxis%ticks(t)%sup, 0.0_R8P)
       enddo
       call backend%end_group
       if (self%y2_active) then
@@ -1875,17 +1879,17 @@ contains
                call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
                if (self%y2axis%tics%mirror) &
                   call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-               if (self%y2axis%ticks(t)%major) call backend%text(right + GAP + out_shift(self%y2axis%tics), &
-                                                                 p + 0.35_R8P * font_size, &
-                                                                 self%y2axis%ticks(t)%label, 'start', &
-                                                                 sup=self%y2axis%ticks(t)%sup)
+               if (self%y2axis%ticks(t)%major) call tick_label(backend, self%y2axis%tics, font_size, &
+                                                               right + GAP + out_shift(self%y2axis%tics), &
+                                                               p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, &
+                                                               'start', self%y2axis%ticks(t)%sup, 0.0_R8P)
                cycle
             endif
             call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
             if (self%y2axis%tics%mirror) call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%y2axis%ticks(t)%major) call backend%text(right + GAP, p + 0.35_R8P * font_size, &
-                                                              self%y2axis%ticks(t)%label, 'start', &
-                                                              sup=self%y2axis%ticks(t)%sup)
+            if (self%y2axis%ticks(t)%major) call tick_label(backend, self%y2axis%tics, font_size, right + GAP, &
+                                                            p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, &
+                                                            'start', self%y2axis%ticks(t)%sup, 0.0_R8P)
          enddo
          call backend%end_group
       endif
@@ -1909,13 +1913,14 @@ contains
                ! rotated: centred on the tick, the lowest glyph GAP above the border (or the outward ticks)
                rise = rotated_rise(backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size), &
                                    self%x2axis%tics%rotate, self%x2axis%tics%anchor(), font_size)
-               call backend%text(p + 0.35_R8P * font_size * sin(self%x2axis%tics%rotate * PI_R8 / 180.0_R8P), &
-                                 top - out_shift(self%x2axis%tics) - GAP - rise(1), &
-                                 self%x2axis%ticks(t)%label, trim(self%x2axis%tics%anchor()), &
-                                 sup=self%x2axis%ticks(t)%sup, rotate=-self%x2axis%tics%rotate)
+               call tick_label(backend, self%x2axis%tics, font_size, &
+                               p + 0.35_R8P * font_size * sin(self%x2axis%tics%rotate * PI_R8 / 180.0_R8P), &
+                               top - out_shift(self%x2axis%tics) - GAP - rise(1), self%x2axis%ticks(t)%label, &
+                               trim(self%x2axis%tics%anchor()), self%x2axis%ticks(t)%sup, -self%x2axis%tics%rotate)
             else
-               call backend%text(p, top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size, &
-                                 self%x2axis%ticks(t)%label, 'middle', sup=self%x2axis%ticks(t)%sup)
+               call tick_label(backend, self%x2axis%tics, font_size, p, &
+                               top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size, &
+                               self%x2axis%ticks(t)%label, 'middle', self%x2axis%ticks(t)%sup, 0.0_R8P)
             endif
          enddo
          call backend%end_group
@@ -2082,6 +2087,23 @@ contains
    endif
    if (axis%tics%has_format()) yes = yes .or. has_markup(axis%tics%format)
    endfunction axis_markup
+
+   pure function style_words(tics, text) result(words)
+   !< The viewer tick settings `text`, after the label style of `tics`: `offset X Y` (characters) and `color C`, if set.
+   type(tics_object), intent(in) :: tics  !< Axis tick settings.
+   character(len=*),  intent(in) :: text  !< Tick settings.
+   character(len=:), allocatable :: words !< Settings.
+
+   words = text
+   if (len_trim(tics%color) > 0) then
+      if (len(words) > 0) words = ' '//words
+      words = 'color '//trim(tics%color)//words
+   endif
+   if (any(tics%offset /= 0.0_R8P)) then
+      if (len(words) > 0) words = ' '//words
+      words = 'offset '//real_str(tics%offset(1))//' '//real_str(tics%offset(2))//words
+   endif
+   endfunction style_words
 
    pure function plain_word(plain, tics) result(words)
    !< The viewer tick settings `tics`, after `noenhanced` if the labels are `plain` (not read as enhanced text).
@@ -5375,15 +5397,16 @@ contains
    enddo
    endfunction label_rows
 
-   subroutine lines_text(backend, x, y, label, sup, step)
+   subroutine lines_text(backend, x, y, label, sup, step, color)
    !< A centred text on several lines (new lines in `label`), the first baseline at `y`, the next `step` lower; the
-   !< superscript `sup` ends the last line.
+   !< superscript `sup` ends the last line; in `color` unless blank.
    class(backend_object), intent(inout) :: backend !< Output device.
    real(R8P),             intent(in)    :: x       !< Centre abscissa [px].
    real(R8P),             intent(in)    :: y       !< First baseline [px].
    character(len=*),      intent(in)    :: label   !< Text.
    character(len=*),      intent(in)    :: sup     !< Superscript.
    real(R8P),             intent(in)    :: step    !< Line spacing [px].
+   character(len=*),      intent(in)    :: color   !< Text color, the frame's if blank.
    integer(I4P)                         :: first   !< Line start.
    integer(I4P)                         :: k       !< New line position.
    integer(I4P)                         :: row     !< Line counter.
@@ -5393,12 +5416,68 @@ contains
    do
       k = index(label(first:), new_line('a'), kind=I4P)
       if (k == 0_I4P) exit
-      call backend%text(x, y + real(row, R8P) * step, label(first:first + k - 2_I4P), 'middle')
+      if (len_trim(color) > 0) then
+         call backend%text(x, y + real(row, R8P) * step, label(first:first + k - 2_I4P), 'middle', color=trim(color))
+      else
+         call backend%text(x, y + real(row, R8P) * step, label(first:first + k - 2_I4P), 'middle')
+      endif
       first = first + k
       row = row + 1_I4P
    enddo
-   call backend%text(x, y + real(row, R8P) * step, label(first:), 'middle', sup=sup)
+   if (len_trim(color) > 0) then
+      call backend%text(x, y + real(row, R8P) * step, label(first:), 'middle', sup=sup, color=trim(color))
+   else
+      call backend%text(x, y + real(row, R8P) * step, label(first:), 'middle', sup=sup)
+   endif
    endsubroutine lines_text
+
+   subroutine tick_label(backend, tics, font_size, x, y, label, anchor, sup, rotate)
+   !< A tick label at (`x`, `y`) [px], moved by the `offset` of its axis `tics` and in their `color` (the frame's if
+   !< blank), turned by `rotate` [deg, clockwise] unless 0.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   type(tics_object),     intent(in)    :: tics      !< Axis tick settings.
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P),             intent(in)    :: x         !< Anchor abscissa [px].
+   real(R8P),             intent(in)    :: y         !< Anchor ordinate (baseline) [px].
+   character(len=*),      intent(in)    :: label     !< Text.
+   character(len=*),      intent(in)    :: anchor    !< Horizontal anchor.
+   character(len=*),      intent(in)    :: sup       !< Superscript.
+   real(R8P),             intent(in)    :: rotate    !< Rotation [deg, clockwise], 0 for none.
+   real(R8P)                            :: px        !< Abscissa moved.
+   real(R8P)                            :: py        !< Ordinate moved.
+
+   px = x + label_dx(tics, font_size)
+   py = y + label_dy(tics, font_size)
+   if (rotate /= 0.0_R8P) then
+      if (len_trim(tics%color) > 0) then
+         call backend%text(px, py, label, anchor, sup=sup, rotate=rotate, color=trim(tics%color))
+      else
+         call backend%text(px, py, label, anchor, sup=sup, rotate=rotate)
+      endif
+   elseif (len_trim(tics%color) > 0) then
+      call backend%text(px, py, label, anchor, sup=sup, color=trim(tics%color))
+   else
+      call backend%text(px, py, label, anchor, sup=sup)
+   endif
+   endsubroutine tick_label
+
+   pure function label_dx(tics, font_size) result(dx)
+   !< Horizontal shift of the tick labels of `tics` [px]: their `offset` in characters.
+   type(tics_object), intent(in) :: tics      !< Axis tick settings.
+   real(R8P),         intent(in) :: font_size !< Font size [px].
+   real(R8P)                     :: dx        !< Shift, right.
+
+   dx = tics%offset(1) * CHAR_WIDTH * font_size
+   endfunction label_dx
+
+   pure function label_dy(tics, font_size) result(dy)
+   !< Vertical shift of the tick labels of `tics` [px]: their `offset` in characters (y up).
+   type(tics_object), intent(in) :: tics      !< Axis tick settings.
+   real(R8P),         intent(in) :: font_size !< Font size [px].
+   real(R8P)                     :: dy        !< Shift, down.
+
+   dy = -tics%offset(2) * font_size
+   endfunction label_dy
 
    pure subroutine axes_names(names, x, y, y2, bad, cb, x2)
    !< Axes named by gnuplot's concatenated axis names, e.g. `x`, `y2`, `xy`, `xyy2`, `cb`, `x2`: each found one sets its

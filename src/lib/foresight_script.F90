@@ -7685,9 +7685,13 @@ contains
       real(R8P)            :: scale(2)   !< Tick scale.
       type(token_object), allocatable :: toks(:) !< Tokens, `scale` put first for ticscale.
       logical              :: scaled     !< A scale given.
+      type(tics_object)    :: labels     !< The label options read (offset, color).
+      character(len=:), allocatable :: fmt !< `format "..."`, unallocated if not given.
+      logical              :: styled     !< Label options given.
 
       toks = tokens
       scaled = .false.
+      styled = .false.
       associate(panel => self%figure%panels(self%figure%current))
          if (size(toks) == 1) then
             if (scale_only) then
@@ -7717,6 +7721,9 @@ contains
             elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'border') then
                ! the ticks on the border: foresight's only placement
                continue
+            elseif (label_option(toks, i, labels, fmt)) then
+               if (iostat /= 0_I4P) return
+               styled = .true.
             elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
                ! the tick labels as they are, or as enhanced text
                panel%xaxis%tics%plain = toks(i)%text == 'noenhanced'
@@ -7738,6 +7745,31 @@ contains
             panel%x2axis%tics%scale = scale
             panel%y2axis%tics%scale = scale
             panel%cbaxis%tics%scale = scale
+         endif
+         ! the label options of every axis
+         if (styled) then
+            if (allocated(fmt)) then
+               panel%xaxis%tics%format = fmt
+               panel%yaxis%tics%format = fmt
+               panel%x2axis%tics%format = fmt
+               panel%y2axis%tics%format = fmt
+               panel%cbaxis%tics%format = fmt
+            endif
+            ! the options given only
+            if (offset_given()) then
+               panel%xaxis%tics%offset = labels%offset
+               panel%yaxis%tics%offset = labels%offset
+               panel%x2axis%tics%offset = labels%offset
+               panel%y2axis%tics%offset = labels%offset
+               panel%cbaxis%tics%offset = labels%offset
+            endif
+            if (len_trim(labels%color) > 0) then
+               panel%xaxis%tics%color = labels%color
+               panel%yaxis%tics%color = labels%color
+               panel%x2axis%tics%color = labels%color
+               panel%y2axis%tics%color = labels%color
+               panel%cbaxis%tics%color = labels%color
+            endif
          endif
       endassociate
       endsubroutine all_tics_option
@@ -7782,6 +7814,92 @@ contains
       ok = .true.
       endfunction scale_values
 
+      function offset_given() result(yes)
+      !< Whether the command tokens hold `offset` or `nooffset`.
+      logical      :: yes !< Found.
+      integer(I4P) :: k   !< Counter.
+
+      yes = .false.
+      do k = 1_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%text == 'offset' .or. tokens(k)%text == 'nooffset') yes = .true.
+      enddo
+      endfunction offset_given
+
+      function label_option(toks, i, tics, fmt) result(handled)
+      !< The tick label options of `set xtics` and `set tics` at `toks(i)`, `i` left on their last token: `format "f"`
+      !< (`fmt`, checked: a number or a time format), `font "f"` (read and ignored: one font), `offset X[,Y]`
+      !< (characters, y up) and `nooffset`, `textcolor|tc COLOR`. False if `toks(i)` is none of them; an error sets
+      !< `iostat`.
+      type(token_object),            intent(in)    :: toks(:) !< Option tokens.
+      integer(I4P),                  intent(inout) :: i       !< Token counter.
+      type(tics_object),             intent(inout) :: tics    !< Axis tick settings.
+      character(len=:), allocatable, intent(inout) :: fmt     !< Label format read.
+      logical                                      :: handled !< An option of the labels.
+      type(token_object), allocatable              :: copy(:) !< Tokens with `lc` for the color word.
+      type(line_style_object)                      :: probe   !< Color read.
+      character(len=:), allocatable                :: text    !< A string.
+      real(R8P)                                    :: v(2)    !< Offset.
+
+      handled = .false.
+      if (toks(i)%kind /= TOKEN_WORD) return
+      handled = .true.
+      if (toks(i)%text == 'format') then
+         if (i == size(toks, kind=I4P)) then
+            call fail('set '//option//': format needs a string', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+         if (.not. self%string_expression(toks, i, text, iostat, iomsg)) then
+            iomsg = 'set '//option//': format: '//iomsg
+            return
+         endif
+         if (len(text) > 0) then
+            if (len(format_check(text)) > 0 .and. len(time_format_check(text)) > 0) then
+               call fail('set '//option//': format: '//format_check(text), iostat, iomsg)
+               return
+            endif
+         endif
+         fmt = text
+      elseif (toks(i)%text == 'font') then
+         ! the font is the page's: the name is read and ignored
+         if (i < size(toks, kind=I4P)) then
+            if (toks(i + 1_I4P)%kind == TOKEN_STRING) i = i + 1_I4P
+         endif
+      elseif (toks(i)%text == 'offset') then
+         if (.not. next_real(toks, i, v(1), iostat, iomsg, self%symbols)) then
+            iomsg = 'set '//option//': offset: '//iomsg
+            return
+         endif
+         v(2) = 0.0_R8P
+         if (i < size(toks, kind=I4P)) then
+            if (toks(i + 1_I4P)%kind == TOKEN_COMMA) then
+               i = i + 1_I4P
+               if (.not. next_real(toks, i, v(2), iostat, iomsg, self%symbols)) then
+                  iomsg = 'set '//option//': offset: '//iomsg
+                  return
+               endif
+            endif
+         endif
+         tics%offset = v
+      elseif (toks(i)%text == 'nooffset') then
+         tics%offset = 0.0_R8P
+      elseif (toks(i)%text == 'tc' .or. keyword(toks(i)%text, 'textcolor', 5_I4P)) then
+         copy = toks
+         copy(i)%text = 'lc'
+         if (.not. line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
+                               self%symbols)) return
+         if (allocated(probe%lc)) then
+            if (index(probe%lc, '*') == 1 .or. len(probe%lc) > len(tics%color)) then
+               call fail('set '//option//': textcolor: variable and palette colors do not apply', iostat, iomsg)
+               return
+            endif
+            tics%color = probe%lc
+         endif
+      else
+         handled = .false.
+      endif
+      endfunction label_option
+
       subroutine tics_option(tics, words)
       !< `set xtics|ytics|y2tics|cbtics [add] [auto|autofreq|STEP|START,STEP|START,STEP,END|("label" pos level, ...)]
       !< [mirror|nomirror] [in|out] [rotate [by ANGLE]|norotate] [left|right|center]`: without positions the last ones
@@ -7801,6 +7919,7 @@ contains
       character(len=6)                 :: justify !< Justification given, blank if none.
       real(R8P)                        :: angle   !< Rotation angle [deg].
       logical, allocatable             :: mirror  !< Mirror setting, unallocated if not given.
+      character(len=:), allocatable    :: fmt     !< `format "..."`, unallocated if not given.
       integer(I4P)                     :: n       !< Position tokens.
       integer(I4P)                     :: k       !< Position counter.
       real(R8P)                        :: v       !< Position value.
@@ -7872,6 +7991,8 @@ contains
          elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
             ! the labels as they are, or as enhanced text
             tics%plain = toks(i)%text == 'noenhanced'
+         elseif (label_option(toks, i, tics, fmt)) then
+            if (iostat /= 0_I4P) return
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text(1:min(1, len(toks(i)%text))) == '(') then
             if (len(list) > 0) then
                call fail('set '//option//': one list of ticks is expected', iostat, iomsg)
@@ -7883,6 +8004,7 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      if (allocated(fmt)) tics%format = fmt
       if (len_trim(justify) > 0) then
          if (tics%rotate == 0.0_R8P) then
             call fail('set '//option//': '//trim(justify)//' justifies rotated labels (with rotate)', iostat, iomsg)

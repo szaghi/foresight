@@ -84,6 +84,8 @@ type :: tics_object
    !< User tick settings of an axis, gnuplot `set xtics` and `set format`.
    integer(I4P)                  :: mode = TICS_AUTO !< TICS_AUTO, TICS_FIXED or TICS_NONE.
    logical                       :: plain = .false.  !< The labels as they are, not enhanced text (`noenhanced`).
+   real(R8P)                     :: offset(2) = 0.0_R8P !< Label shift [characters, x right, y up], gnuplot `offset`.
+   character(len=24)             :: color = ''       !< Label color, the frame's if blank (gnuplot `textcolor`).
    character(len=:), allocatable :: start            !< Fixed ticks start (decimal text), empty for none.
    character(len=:), allocatable :: step             !< Fixed ticks step, a factor on log axes (decimal text).
    character(len=:), allocatable :: end              !< Fixed ticks end (decimal text), empty for none.

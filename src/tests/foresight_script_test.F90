@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(131)                           !< Per-check outcome.
+logical                       :: test_passed(132)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2791,6 +2791,31 @@ test_passed(131) = test_passed(131) .and. file_has('foresight_script_test_powers
 open(newunit=unit, file='foresight_script_test_powers.svg')
 close(unit, status='delete')
 
+! tick label options: format, font (ignored), offset (characters 0.6 by 1 font size, y up), textcolor, of an axis and of
+! every axis (set tics)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_ticlabels.svg"'//new_line('a')// &
+                          'set tics format "%.2f" tc rgb "blue" font ",8"'//new_line('a')// &
+                          'set xtics 1 offset 0,-1 textcolor rgb "red" format "%.1f" nomirror'//new_line('a')// &
+                          'plot [0:5] [0:1] x/5', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(132) = iostat == 0_I4P
+if (test_passed(132)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(132) = panel%xaxis%tics%format == '%.1f' .and. panel%yaxis%tics%format == '%.2f' .and. &
+                         trim(panel%xaxis%tics%color) == '#ff0000' .and. trim(panel%yaxis%tics%color) == '#0000ff' &
+                         .and. all(panel%xaxis%tics%offset == [0.0_R8P, -1.0_R8P]) .and. &
+                         all(panel%yaxis%tics%offset == 0.0_R8P) .and. .not. panel%xaxis%tics%mirror
+   endassociate
+endif
+test_passed(132) = test_passed(132) .and. file_has('foresight_script_test_ticlabels.svg', 'fill="#ff0000">2.0</text>') &
+                   .and. file_has('foresight_script_test_ticlabels.svg', 'fill="#0000ff">0.40</text>') .and. &
+                   file_has('foresight_script_test_ticlabels.svg', 'data-xtics="offset 0 -1e0 color #ff0000 * 1 *"')
+open(newunit=unit, file='foresight_script_test_ticlabels.svg')
+close(unit, status='delete')
+call interpreter%run_text('set xtics format "%q"', iostat, iomsg)
+test_passed(132) = test_passed(132) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2799,7 +2824,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,131L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,132L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
