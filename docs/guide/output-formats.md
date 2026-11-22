@@ -46,6 +46,7 @@ The layout engine draws on a grid of character cells, 79 x 24 by default (`set t
 
 - series with gnuplot's symbols `*`, `#`, `$`, `%`, `@`, `&`, `=`, `+`, one per color in order of use;
 - the frame with `+`, `-`, `|`, the grid with `.`, superscripts as `^` (`10^-5`);
+- [enhanced text](gnuplot-subset#enhanced-text) without its markup (`T_{n-1}` as `Tn-1`, `{/Symbol a}` as `a`);
 - error bars as `|` or `-` runs, without caps.
 
 With `ansi`, `ansi256` or `ansirgb` (`set terminal dumb ansi`, as gnuplot) each series is drawn in its color through ANSI

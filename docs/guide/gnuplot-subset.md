@@ -55,12 +55,12 @@ that did what it says.
 
 | Option | `set` | `unset` |
 |---|---|---|
-| **tit**le `"text"` [`offset X,Y`] [`font F`] [`noenhanced`] | panel title, shifted by `offset` characters (y up); `font` read and ignored | no title |
+| **tit**le `"text"` [`offset X,Y`] [`font F`] [`noenhanced`] | panel title, shifted by `offset` characters (y up); `font` read and ignored; `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text) | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
 | **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
-| **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` | axis label (`y2` on the right, `x2` on the top) | no label |
+| **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`noenhanced`] | axis label (`y2` on the right, `x2` on the top); `noenhanced`: as it is, not as [enhanced text](#enhanced-text) | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange `[min:max]` [`noextend`\|`extend`] [`noreverse`] [`nowriteback`] | axis range; `*` or empty autoscales an end, `[]` keeps both; `min > max` reverses; `noextend` keeps autoscaled ends at the data | autoscale |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
 | **gr**id [[`no`][`m`]`x`\|`y`\|`x2`\|`y2`[`tics`]]... [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit) instead | no grid |
@@ -73,7 +73,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] [`front`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default), in their line; `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box`\|`nobox`] [`opaque`] [`reverse`] [`Left`\|`Right`] [`invert`] [`samplen L`] [`width W`] [`offset X,Y`] [`title "text"`] [`font F`] [`noenhanced`] [`default`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, in its layout, see [below](#key); untitled items: as written, by [column header](#column-headers), or none | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] | tick positions, see [below](#ticks-and-label-formats); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] [`noenhanced`] | tick positions, see [below](#ticks-and-label-formats); `noenhanced`: the labels as they are, not as [enhanced text](#enhanced-text); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **tic**s [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`border`] | the options of every axis' ticks (the scale of the color box's too); bare, the x and y ticks on, see [below](#ticks-and-label-formats) | no ticks on any axis |
 | **ticsc**ale `MAJOR` [`MINOR`] | gnuplot's old form of `set tics scale` | — |
 | **lmar**gin / **rmar**gin / **tmar**gin / **bmar**gin [[`at screen`] `N`] | a margin set: `N` characters from the panel's edge, or the border at the page fraction `N` (from the bottom left); bare or negative, computed, see [below](#margins) | computed |
@@ -82,7 +82,7 @@ that did what it says.
 | **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | — |
 | **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
 | **enc**oding [`default`\|`utf8`\|`locale`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8, other encodings are refused | `default` |
-| **termopt**ion [`dash`\|`dashed`] [`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), text as it is (`enhanced` is refused), `font` read and ignored | — |
+| **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font` read and ignored | — |
 | **for**mat [*axes*] [`"format"`] [`timedate`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `numeric` numeric ones | default labels |
 | **xda**ta / **yda**ta / **x2da**ta / **y2da**ta [`time`] | the data of the axis are [times](#time-data), read with the `timefmt`; the axis ticked and labelled in time units | numbers |
 | **timef**mt `"format"` | the input [time format](#time-data), `%d/%m/%y,%H:%M` by default | the default |
@@ -114,7 +114,7 @@ that did what it says.
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`errorbars` [`gap G`] [`lw W`]\|`rowstacked`\|`columnstacked` [`title` [`tc C`] [`offset X,Y`]] [`nokeyseparators`] | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default; the look of the group titles | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
-| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
+| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`enhanced`\|`noenhanced`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period, [enhanced text](#enhanced-text) on (the default) or off; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**t**itle `"text"`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
@@ -126,9 +126,10 @@ that did what it says.
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
 plot 'file' [using SPEC] [index N] [every N] [smooth FILTER | bins[=N] ...] [with STYLE] [title "text" | notitle]
-            [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable | lc palette ...] [lw W] [dt N]
+            [noenhanced] [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable | lc palette ...]
+            [lw W] [dt N] [ps S], ...
+plot FUNCTION [with STYLE] [title "text" | notitle] [noenhanced] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N]
             [ps S], ...
-plot FUNCTION [with STYLE] [title "text" | notitle] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N] [ps S], ...
 ```
 
 Inline ranges `[min:max]` before the first item set the x range, then the y range, of that plot only, over `set
@@ -1019,7 +1020,7 @@ entries last to first, `opaque` paints the key area with the page color over the
 under it), `samplen L` makes the samples `L` characters long, `width W` adds `W` characters to the titles,
 `offset X,Y` shifts the key by characters (y up) and `title "text"` puts a row over the entries; `default` restores
 them all. A character is foresight's cell, 0.6 font sizes wide and 1 high. `font` is read and ignored (foresight has one
-font) and `noenhanced` accepted (foresight writes text as it is); `enhanced` is refused.
+font); `noenhanced` writes the key's texts as they are, not as [enhanced text](#enhanced-text).
 
 ## Grid, zero axes and border
 
@@ -1226,6 +1227,50 @@ set label 'note' at character 2, 1                  # 2 cells from the left, 1 u
 <Plot name="cb_arrow_styles" svg :width="560" :height="360" />
 
 Not supported: `boxed`, `hypertext`, `set style circle|ellipse|textbox`, `units xx|yy`.
+
+## Enhanced text
+
+Titles, axis labels, key entries, labels and tick labels read gnuplot's enhanced text markup, on by default as in
+gnuplot's svg terminal:
+
+```gnuplot
+set title "{/:Bold Decay} of u(t) = u_0 e^{-t/{/Symbol t}}"
+set ylabel "u / u_0"
+set label 2 "run_07/u_probe.dat" at 2.3,-0.45 noenhanced    # as it is
+plot exp(-x) t "e^{-t/{/Symbol t}}"
+```
+
+<Plot name="cb_enhanced" svg :width="560" :height="340" />
+
+| Markup | Meaning |
+|---|---|
+| `x^2`, `x^{n+1}` | superscript: 0.8 of the size, raised half the current size |
+| `x_i`, `x_{i,j}` | subscript: 0.8 of the size, lowered 0.3 of it; nested ones apply again |
+| `{...}` | a group: the operand of `^ _ @ & ~`, the extent of a font |
+| `{/Symbol a}` | the Symbol font: the Latin letters as the Greek ones (`a` α, `b` β, `c` χ, `p` π, `t` τ, `W` Ω, ...) |
+| `{/=16 B}`, `{/*1.5 B}` | an absolute size (points, the base is 12) or a relative one |
+| `{/:Bold B}`, `{/:Italic I}`, `{/Helvetica:Italic t}` | weight, style, family |
+| `@` | the next element takes no room: `x@^2_i` stacks the superscript over the subscript |
+| `&{text}` | the text invisible, its room kept |
+| `~a{.8-}` | overprint: the second element over the first, raised by 0.8 of the size |
+| `\^`, `\_`, `\{`, `\@`, ... | the character as it is: `'\^'` in single quotes, `"\\^"` in double quotes |
+
+- The markup characters `^ _ { } @ & ~ \` act in any title: `"R&D"` hides the `D`, as in gnuplot. Write `"R\\&D"`
+  (or `'R\&D'`), or the text `noenhanced`.
+- `set termoption noenhanced` or `set terminal svg noenhanced` turns it off, `enhanced` on again.
+- `noenhanced` keeps one text as it is: `set title`, `set xlabel` (`ylabel`, `y2label`, `x2label`), `set key` (its
+  entries and title), `set label`, `set xtics` (and the other axes; `set tics` all of them) and a plot item.
+- The automatic titles stay as they are, as gnuplot's: the file name and its `using` columns, the function. A
+  column header title or an explicit one is enhanced text: `plot 'run.dat' u 1:2 t 'p_{ref}'`.
+- The text devices (`dumb`, `block`) drop the markup, the Symbol font as its Latin letters (gnuplot's dumb terminal
+  also lifts a superscript one row).
+- The HTML viewer draws the tick labels again after a zoom as enhanced text too.
+- The Fortran library writes its texts as they are unless [`fig%set_enhanced(.true.)`](library#methods): a `_` in a
+  title passed from a program stays a `_`.
+
+Departures from gnuplot: the Symbol font is written as Unicode Greek letters (gnuplot's svg names the font
+`Symbol`, which few systems have), and the `<text>` elements carry `xml:space="preserve"`, so the blank at the start
+of a run is kept by every SVG renderer.
 
 ## Parallel axes and spider plots
 
@@ -1723,7 +1768,7 @@ Inline ranges in polar mode, `set link x2|y2`, `splot`,
 `fit` beyond [its subset](#fit), log bases other than 10, a negative `set size ratio`; `set rlabel`,
 `mttics`, `set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `offset`;
-enhanced text (`set termoption enhanced`); `set offsets`, `set parametric`, `set timestamp`; in `set format`, the
+in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `set offsets`, `set parametric`, `set timestamp`; in `set format`, the
 `%L` conversion and gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing` and
 `commentschars`; `filledcurves r=`; `lc variable` and `lc palette z` with other styles than
 lines, points, linespoints and impulses, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of

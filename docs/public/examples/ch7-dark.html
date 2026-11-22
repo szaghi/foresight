@@ -647,11 +647,15 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
   // the data or an explicit list, give mode "labels" and {labels}; after "auto" or a step they are
   // added to those ticks ({add}), as gnuplot `set xtics add`; "minor auto|N" sets {minor}: "auto",
   // N intervals, or "" by default; "out" outward ticks ({out}); "rotate A ANCHOR" rotated labels
-  // ({rotate: degrees counterclockwise, anchor}); "scale MAJOR MINOR" tick lengths ({scale})
+  // ({rotate: degrees counterclockwise, anchor}); "scale MAJOR MINOR" tick lengths ({scale});
+  // "noenhanced" anywhere, labels not read as enhanced text ({plain})
   function readTics(positions, format) {
     var tics = {mode: "auto", start: "", step: "", end: "", format: format || "", minor: "",
       out: false, rotate: 0, anchor: "middle", scale: [1, 0.5]};
-    var words = positions ? positions.split(" ") : [], k = words.indexOf("labels");
+    var words = positions ? positions.split(" ") : [], k;
+    tics.plain = words.indexOf("noenhanced") >= 0;
+    words = words.filter(function (w) { return w !== "noenhanced"; });
+    k = words.indexOf("labels");
     var series = k < 0 ? words : words.slice(0, k), j, w, cut = series.length;
     for (j = 0; j < series.length; j++) {
       w = series[j];
@@ -1229,10 +1233,196 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     return ticks.sort(function (x, y) { return x.value - y.value; });
   }
 
+  // ---- enhanced text (mirror of foresight_enhanced): gnuplot's markup as styled runs ----
+
+  var ADVANCE = 0.55;  // mean character advance [font size]
+  var LATIN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  var GREEK = [945, 946, 967, 948, 949, 966, 947, 951, 953, 981, 954, 955, 956, 957, 959, 960,
+    952, 961, 963, 964, 965, 982, 969, 958, 968, 950, 913, 914, 935, 916, 917, 934, 915, 919, 921,
+    977, 922, 923, 924, 925, 927, 928, 920, 929, 931, 932, 933, 962, 937, 926, 936, 918];
+
+  // whether `text` holds a character of the markup
+  function hasMarkup(text) { return /[\^_{}@&~\\]/.test(text); }
+
+  // the letters of the Symbol font (Adobe's encoding) as the Greek letters
+  function greek(text) {
+    return Array.from(text).map(function (c) {
+      var k = LATIN.indexOf(c);
+      return k < 0 ? c : String.fromCodePoint(GREEK[k]);
+    }).join("");
+  }
+
+  // the leading decimal number of `text`, 0 if none (mirror of number_of)
+  function numberOf(text) {
+    var m = /^[0-9.+\-eE]*/.exec(text)[0], v = Number(m);
+    return m && isFinite(v) ? v : 0;
+  }
+
+  // width of `runs` [base size]: phantom runs take none unless `all`
+  function runsWidth(runs, all) {
+    return runs.reduce(function (w, r) {
+      return w - r.back + (all || !r.phantom ? ADVANCE * r.size * Array.from(r.text).length : 0);
+    }, 0);
+  }
+
+  // the runs of the enhanced `text`:
+  // {text, size, shift, back, bold, italic, hidden, phantom, family, symbol (Latin `text`)}
+  function enhancedRuns(text) {
+    var c = Array.from(text), at = {pos: 0}, runs = [];
+    var base = {size: 1, shift: 0, bold: false, italic: false, hidden: false, phantom: false,
+      symbol: false, family: ""};
+
+    function copy(state) { return Object.assign({}, state); }
+
+    function put(piece, state) {
+      var last = runs[runs.length - 1];
+      if (last && last.size === state.size && last.shift === state.shift &&
+        last.bold === state.bold && last.italic === state.italic && last.hidden === state.hidden &&
+        last.phantom === state.phantom && !state.phantom && last.family === state.family &&
+        last.symbol === state.symbol) {
+        last.text += piece;
+        return;
+      }
+      runs.push({text: piece, size: state.size, shift: state.shift, back: 0, bold: state.bold,
+        italic: state.italic, hidden: state.hidden, phantom: state.phantom, family: state.family,
+        symbol: state.symbol});
+    }
+
+    function sequence(state, group) {
+      while (at.pos < c.length) {
+        if (group && c[at.pos] === "}") { at.pos++; return; }
+        element(state);
+      }
+    }
+
+    // `/Font:Bold:Italic=N` or `/*F` after `{`: the style
+    function fontSpec(state) {
+      var j = at.pos, spec, k, v, name;
+      while (j < c.length && c[j] !== " " && c[j] !== "}") j++;
+      spec = c.slice(at.pos + 1, j).join("");
+      at.pos = j;
+      if (c[at.pos] === " ") at.pos++;
+      k = spec.search(/[=*]/);
+      if (k >= 0) {
+        v = numberOf(spec.slice(k + 1));
+        if (v > 0) state.size = spec[k] === "*" ? state.size * v : v / 12;
+        spec = spec.slice(0, k);
+      }
+      if (spec.indexOf(":Bold") >= 0) state.bold = true;
+      if (spec.indexOf(":Italic") >= 0) state.italic = true;
+      name = spec.split(":")[0];
+      if (name === "Symbol") state.symbol = true;
+      else if (name) state.family = name;
+    }
+
+    function element(state) {
+      var inner, first, w, raise, m;
+      switch (c[at.pos]) {
+        case "\\":
+          if (at.pos < c.length - 1) at.pos++;
+          put(c[at.pos], state);
+          at.pos++;
+          break;
+        case "^":
+        case "_":
+          inner = copy(state);
+          inner.size = 0.8 * state.size;
+          inner.shift = state.shift + (c[at.pos] === "^" ? 0.5 : -0.3) * state.size;
+          at.pos++;
+          if (at.pos < c.length) element(inner);
+          break;
+        case "{":
+          at.pos++;
+          inner = copy(state);
+          if (c[at.pos] === "/") fontSpec(inner);
+          sequence(inner, true);
+          break;
+        case "@":
+          // the next element takes no room: the one after it steps back over it
+          inner = copy(state);
+          inner.phantom = true;
+          at.pos++;
+          first = runs.length;
+          if (at.pos < c.length) element(inner);
+          w = runsWidth(runs.slice(first), true);
+          if (at.pos < c.length) {
+            first = runs.length;
+            element(state);
+            if (first < runs.length) runs[first].back += w;
+          }
+          break;
+        case "&":
+          // the next element invisible, its room kept
+          inner = copy(state);
+          inner.hidden = true;
+          at.pos++;
+          if (at.pos < c.length) element(inner);
+          break;
+        case "~":
+          // ~a{.8-}: the second element over the first, raised by the fraction of the size
+          at.pos++;
+          first = runs.length;
+          if (at.pos < c.length) element(state);
+          w = runsWidth(runs.slice(first));
+          if (at.pos < c.length) {
+            raise = 0;
+            inner = copy(state);
+            if (c[at.pos] === "{") {
+              at.pos++;
+              m = /^[+\-]?[0-9.]*/.exec(c.slice(at.pos).join(""))[0];
+              if (/[0-9]/.test(m)) {
+                raise = numberOf(m);
+                at.pos += m.length;
+              }
+              inner.shift = state.shift + raise * state.size;
+              first = runs.length;
+              sequence(inner, true);
+            } else {
+              first = runs.length;
+              element(inner);
+            }
+            if (first < runs.length) {
+              runs[first].back += w;
+              runs[runs.length - 1].phantom = true;
+            }
+          }
+          break;
+        default:
+          put(c[at.pos], state);
+          at.pos++;
+      }
+    }
+
+    sequence(base, false);
+    return runs;
+  }
+
+  // `v` with two decimals, no trailing zeros (mirror of fixed)
+  function fixed(v) { return String(Number(v.toFixed(2))); }
+
+  // the <tspan> attributes and texts of the runs at `fontSize` [px] (mirror of markup_svg; one
+  // span with no attribute is the text alone), the Symbol font as the Greek letters
+  function runsSpans(runs, fontSize) {
+    var shift = 0;
+    return runs.map(function (r) {
+      var a = {};
+      if (r.size !== 1) a["font-size"] = fixed(r.size * fontSize);
+      if (r.back !== 0) a.dx = fixed(-r.back * fontSize);
+      if (r.shift !== shift) a.dy = fixed(-(r.shift - shift) * fontSize);
+      if (r.bold) a["font-weight"] = "bold";
+      if (r.italic) a["font-style"] = "italic";
+      if (r.family) a["font-family"] = r.family;
+      if (r.hidden) a.fill = "none";
+      shift = r.shift;
+      return {attributes: a, text: r.symbol ? greek(r.text) : r.text};
+    });
+  }
+
   var core = {niceStep: niceStep, gnuplotStep: gnuplotStep,
     decimalStr: decimalStr, linearTicks: linearTicks,
     logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
-    decimalOf: decimalOf, readTics: readTics, strftime: strftime, timeTicks: timeTicks};
+    decimalOf: decimalOf, readTics: readTics, strftime: strftime, timeTicks: timeTicks,
+    hasMarkup: hasMarkup, enhancedRuns: enhancedRuns, runsSpans: runsSpans};
   if (typeof module === "object" && module.exports) {
     module.exports = core;
     return;
@@ -1281,15 +1471,37 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     return element(parent, "line", attributes);
   }
 
-  // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks
-  function label(parent, x, y, tick, anchor, rotate, lines) {
+  var XML_NS = "http://www.w3.org/XML/1998/namespace";
+
+  // `text` into `node`: as enhanced text at `markup` [px] font size (<tspan> elements), or as it
+  // is (0)
+  function styledText(node, text, markup) {
+    var spans = markup && hasMarkup(text) ? runsSpans(enhancedRuns(text), markup) : null;
+    if (!spans) {
+      node.appendChild(document.createTextNode(text));
+      return;
+    }
+    if (spans.length === 1 && Object.keys(spans[0].attributes).length === 0) {
+      node.appendChild(document.createTextNode(spans[0].text));
+      return;
+    }
+    // the blanks at the ends of the runs kept (mirror of the svg device)
+    node.closest("text").setAttributeNS(XML_NS, "xml:space", "preserve");
+    spans.forEach(function (span) {
+      element(node, "tspan", span.attributes).textContent = span.text;
+    });
+  }
+
+  // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks;
+  // enhanced text at `markup` [px] font size, as it is with 0
+  function label(parent, x, y, tick, anchor, rotate, lines, markup) {
     var attributes = {x: x, y: y, "text-anchor": anchor};
     if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
     var node = element(parent, "text", attributes), parts = String(tick.label).split("\n");
     if (!lines || rotate) parts = [parts.join(" ")];
-    node.appendChild(document.createTextNode(parts[0]));
+    styledText(node, parts[0], markup);
     parts.slice(1).forEach(function (part) {
-      element(node, "tspan", {x: x, dy: "1.25em"}).textContent = part;
+      styledText(element(node, "tspan", {x: x, dy: "1.25em"}), part, markup);
     });
     if (tick.sup) {
       element(node, "tspan", {dy: "-0.45em", "font-size": "0.75em"}).textContent = tick.sup;
@@ -1331,6 +1543,8 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
     this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
     this.fontSize = Number(group.getAttribute("data-font-size"));
+    // tick labels read as enhanced text (gnuplot's markup), unless an axis says noenhanced
+    this.enhanced = group.getAttribute("data-enhanced") === "1";
     this.grid = group.getAttribute("data-grid") === "1";
     // grid lines (x, y, x2, y2 major, mx, my minor; x and y by default) and their style (mirror of
     // draw_grid): "color width dashes"
@@ -1458,6 +1672,12 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     if (shape <= 13) return poly([0, 1.414, 0, -1.414], [-1.414, 0, 1.414, 0]);
     return poly([0, 1.265, 0.782, -0.782, -1.265], [1.33, 0.411, -1.067, -1.067, 0.411]);
   }
+
+  // the font size of the enhanced tick labels of an axis with `tics` settings, 0 for them as
+  // they are
+  Panel.prototype.markup = function (tics) {
+    return this.enhanced && !(tics && tics.plain) ? this.fontSize : 0;
+  };
 
   Panel.prototype.isHome = function () {
     var v = this.view;
@@ -1645,9 +1865,11 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       // rotated: the glyph band centred on the tick (mirror of rotated_anchor)
       if (angle) {
         label(self.xticks, p + 0.35 * fs * Math.sin(rad),
-          self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle);
+          self.bottom + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle, false,
+          self.markup(xt));
       } else {
-        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true);
+        label(self.xticks, p, self.bottom + shift + GAP + fs, t, "middle", 0, true,
+          self.markup(xt));
       }
       if (self.polarGrid) return;
       gridLine(self, p, self.bottom, p, self.top, t.major ? "x" : "mx");
@@ -1666,7 +1888,7 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
         return;
       }
       label(self.yticks, self.left - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
-        "end");
+        "end", 0, false, self.markup(yt));
       if (self.polarGrid) return;
       gridLine(self, self.left, p, self.right, p, t.major ? "y" : "my");
     });
@@ -1684,8 +1906,7 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       }
       if (t.major) {
         label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
-          t,
-          "start");
+          t, "start", 0, false, self.markup(y2t));
         gridLine(self, self.left, p, self.right, p, "y2");
       }
     });
@@ -1721,7 +1942,7 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       }
       if (t.major) {
         label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
-          t, "middle");
+          t, "middle", 0, false, self.markup(x2t));
         gridLine(self, p, self.bottom, p, self.top, "x2");
       }
     });

@@ -31,6 +31,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
+| `set_enhanced([on])` | `set termoption enhanced` (`on=.false.`: `noenhanced`): the texts read as [enhanced text](gnuplot-subset#enhanced-text), `x^2`, `T_{n-1}`, `{/Symbol a}`; off by default in the library, on in the scripts |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)`, `set_x2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2`, `x2`, `cb` (all when absent) |
 | `set_grid([on], [polar], [spider])` | `set grid`, `unset grid`; `polar=30._R8P`: `set grid polar 30` (spoke step in degrees, 0 for the rectangular grid); `spider=.true.`: `set grid spiderplot` |

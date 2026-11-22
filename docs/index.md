@@ -199,6 +199,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
   <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />
   <Plot name="cb_key_layout" svg :width="560" :height="320" caption="a key in its own layout" />
+  <Plot name="cb_enhanced" svg :width="560" :height="340" caption="enhanced text: sub and superscripts, Greek letters" />
   <Plot name="cb_grid_zero" svg :width="560" :height="320" caption="grid lines, zero axes and border" />
   <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
   <Plot name="cb_margins" svg :width="560" :height="360" caption="panels lined up (margins)" />

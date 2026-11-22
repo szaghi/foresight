@@ -190,7 +190,7 @@
 </g>
 <g class="fs-key-entry" data-series="2">
 <polyline fill="none" stroke="#1f5f8b" stroke-width="1" stroke-dasharray="8,4" points="190.4,44.5 226.4,44.5"/>
-<text x="184.4" y="48.7" text-anchor="end">h^2</text>
+<text x="184.4" y="48.7" text-anchor="end" xml:space="preserve"><tspan>h</tspan><tspan font-size="9.6" dy="-6">2</tspan></text>
 </g>
 </g>
 </svg>

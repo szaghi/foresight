@@ -30,7 +30,7 @@ set title 'inferno'; set palette inferno; plot 'ramp.dat' matrix w image notitle
 set title 'plasma'; set palette plasma; plot 'ramp.dat' matrix w image notitle
 set title 'viridis'; set palette viridis; plot 'ramp.dat' matrix w image notitle
 set title 'cividis'; set palette cividis; plot 'ramp.dat' matrix w image notitle
-set title 'black_body'; set palette black_body; plot 'ramp.dat' matrix w image notitle
+set title 'black_body' noenhanced; set palette black_body; plot 'ramp.dat' matrix w image notitle
 set title 'bam'; set palette bam; plot 'ramp.dat' matrix w image notitle
 set title 'berlin'; set palette berlin; plot 'ramp.dat' matrix w image notitle
 set title 'broc'; set palette broc; plot 'ramp.dat' matrix w image notitle

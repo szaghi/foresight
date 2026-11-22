@@ -320,6 +320,16 @@ instead. See [Key](/guide/gnuplot-subset#key).
 `reverse` puts the samples first and `Left` justifies the titles, `invert` lists the last run first, `opaque` paints the
 key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot-subset#key).
 
+### Enhanced text: sub and superscripts, Greek letters
+
+<<< @/examples/snippets/cb_enhanced.gp{gnuplot}
+
+<Plot name="cb_enhanced" svg :width="560" :height="340" />
+
+gnuplot's markup, on by default: `_0` and `^{...}` sub and superscripts, `{/Symbol t}` a Greek τ, `{/:Bold ...}` and
+`{/:Italic ...}`, also in the tick labels of a list. `noenhanced` writes a file name with its underscores as it is;
+the automatic titles stay as they are. See [Enhanced text](/guide/gnuplot-subset#enhanced-text).
+
 ### Grid lines, zero axes and border
 
 <<< @/examples/snippets/cb_grid_zero.gp{gnuplot}
