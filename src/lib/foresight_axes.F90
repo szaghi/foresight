@@ -276,6 +276,23 @@ type :: axes_object
 endtype axes_object
 
 contains
+   pure function tick_length(tics, major) result(length)
+   !< Length of a major or minor tick of an axis [px]: the major length times the axis' scale (gnuplot `set tics scale`).
+   type(tics_object), intent(in) :: tics   !< Axis tick settings.
+   logical,           intent(in) :: major  !< A major tick.
+   real(R8P)                     :: length !< Length.
+
+   length = TICK_MAJOR * merge(tics%scale(1), tics%scale(2), major)
+   endfunction tick_length
+
+   pure function out_shift(tics) result(shift)
+   !< Room outward ticks take beyond the border [px], 0 for inward ones.
+   type(tics_object), intent(in) :: tics  !< Axis tick settings.
+   real(R8P)                     :: shift !< Room.
+
+   shift = merge(tick_length(tics, .true.), 0.0_R8P, tics%out)
+   endfunction out_shift
+
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
                          length, angle, major, minor, labels, label, head, origins, curve, channels, at, colors, &
@@ -1582,7 +1599,7 @@ contains
 
    room = 0.0_R8P
    if (self%x2_active) then
-      if (self%x2axis%tics%out .and. size(self%x2axis%ticks) > 0) room = TICK_MAJOR
+      if (self%x2axis%tics%out .and. size(self%x2axis%ticks) > 0) room = tick_length(self%x2axis%tics, .true.)
       if (any(self%x2axis%ticks%major)) room = room + GAP + merge(self%x2_rise, LINE_HEIGHT * font_size, &
                                                                    self%x2_rise > 0.0_R8P)
    endif
@@ -1714,7 +1731,7 @@ contains
 
    angle = 0.0_R8P
    if (backend%rotates_text()) angle = self%xaxis%tics%rotate
-   shift = merge(TICK_MAJOR, 0.0_R8P, self%xaxis%tics%out)
+   shift = out_shift(self%xaxis%tics)
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
       if (iand(self%border, 15_I4P) == 15_I4P) then
          call backend%rect(left, top, right - left, bottom - top, FRAME_COLOR, 'none', 1.0_R8P)
@@ -1727,7 +1744,7 @@ contains
       call backend%begin_group('fs-xticks')
       do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
          p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
-         length = merge(TICK_MAJOR, TICK_MINOR, self%xaxis%ticks(t)%major)
+         length = tick_length(self%xaxis%tics, self%xaxis%ticks(t)%major)
          if (self%xaxis%tics%out) then
             call backend%polyline([p, p], [bottom, bottom + length], FRAME_COLOR, 1.0_R8P, '')
             if (self%xaxis%tics%mirror) call backend%polyline([p, p], [top, top - length], FRAME_COLOR, 1.0_R8P, '')
@@ -1756,11 +1773,11 @@ contains
       call backend%begin_group('fs-yticks')
       do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
          p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
-         length = merge(TICK_MAJOR, TICK_MINOR, self%yaxis%ticks(t)%major)
+         length = tick_length(self%yaxis%tics, self%yaxis%ticks(t)%major)
          if (self%yaxis%tics%out) then
             call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
             if (self%yaxis%tics%mirror) call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%yaxis%ticks(t)%major) call backend%text(left - GAP - TICK_MAJOR, p + 0.35_R8P * font_size, &
+            if (self%yaxis%ticks(t)%major) call backend%text(left - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
                                                              self%yaxis%ticks(t)%label, 'end', sup=self%yaxis%ticks(t)%sup)
             cycle
          endif
@@ -1774,12 +1791,13 @@ contains
          call backend%begin_group('fs-y2ticks')
          do t = 1_I4P, size(self%y2axis%ticks, kind=I4P)
             p = bottom - self%y2axis%to_unit(self%y2axis%ticks(t)%value) * (bottom - top)
-            length = merge(TICK_MAJOR, TICK_MINOR, self%y2axis%ticks(t)%major)
+            length = tick_length(self%y2axis%tics, self%y2axis%ticks(t)%major)
             if (self%y2axis%tics%out) then
                call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
                if (self%y2axis%tics%mirror) &
                   call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-               if (self%y2axis%ticks(t)%major) call backend%text(right + GAP + TICK_MAJOR, p + 0.35_R8P * font_size, &
+               if (self%y2axis%ticks(t)%major) call backend%text(right + GAP + out_shift(self%y2axis%tics), &
+                                                                 p + 0.35_R8P * font_size, &
                                                                  self%y2axis%ticks(t)%label, 'start', &
                                                                  sup=self%y2axis%ticks(t)%sup)
                cycle
@@ -1797,7 +1815,7 @@ contains
          call backend%begin_group('fs-x2ticks')
          do t = 1_I4P, size(self%x2axis%ticks, kind=I4P)
             p = left + self%x2axis%to_unit(self%x2axis%ticks(t)%value) * (right - left)
-            length = merge(TICK_MAJOR, TICK_MINOR, self%x2axis%ticks(t)%major)
+            length = tick_length(self%x2axis%tics, self%x2axis%ticks(t)%major)
             if (self%x2axis%tics%out) then
                call backend%polyline([p, p], [top, top - length], FRAME_COLOR, 1.0_R8P, '')
                if (self%x2axis%tics%mirror) &
@@ -1813,11 +1831,11 @@ contains
                rise = rotated_rise(backend%text_width(self%x2axis%ticks(t)%label, self%x2axis%ticks(t)%sup, font_size), &
                                    self%x2axis%tics%rotate, self%x2axis%tics%anchor(), font_size)
                call backend%text(p + 0.35_R8P * font_size * sin(self%x2axis%tics%rotate * PI_R8 / 180.0_R8P), &
-                                 top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - rise(1), &
+                                 top - out_shift(self%x2axis%tics) - GAP - rise(1), &
                                  self%x2axis%ticks(t)%label, trim(self%x2axis%tics%anchor()), &
                                  sup=self%x2axis%ticks(t)%sup, rotate=-self%x2axis%tics%rotate)
             else
-               call backend%text(p, top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - 0.25_R8P * font_size, &
+               call backend%text(p, top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size, &
                                  self%x2axis%ticks(t)%label, 'middle', sup=self%x2axis%ticks(t)%sup)
             endif
          enddo
@@ -1828,7 +1846,7 @@ contains
          ! on a text device, the row right above the x2 tick labels, as gnuplot's dumb terminal (the pixel gap could
          ! leave an empty row between them, depending on what lies above)
          if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
-            if (any(self%x2axis%ticks%major)) label_y = top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - &
+            if (any(self%x2axis%ticks%major)) label_y = top - out_shift(self%x2axis%tics) - GAP - &
                                                        0.25_R8P * font_size - backend%row_height()
          endif
          call backend%text(0.5_R8P * (left + right), label_y, self%x2axis%label, 'middle')
@@ -1860,7 +1878,7 @@ contains
             if (self%x2axis%has_label() .and. any(self%x2axis%ticks%major)) then
                title_y = label_y - backend%row_height()
             elseif (any(self%x2axis%ticks%major)) then
-               title_y = top - merge(TICK_MAJOR, 0.0_R8P, self%x2axis%tics%out) - GAP - 0.25_R8P * font_size - &
+               title_y = top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size - &
                          backend%row_height()
             endif
          endif
@@ -1956,7 +1974,7 @@ contains
    if (self%raxis_on) then
       do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
          p = cx + (self%raxis%ticks(t)%value - self%raxis%lo) * sx
-         length = merge(TICK_MAJOR, TICK_MINOR, self%raxis%ticks(t)%major)
+         length = tick_length(self%raxis%tics, self%raxis%ticks(t)%major)
          call backend%polyline([p, p], [cy, cy - length], FRAME_COLOR, 1.0_R8P, '')
          if (self%raxis%ticks(t)%major) call backend%text(p, cy + GAP + font_size, self%raxis%ticks(t)%label, &
                                                           'middle', sup=self%raxis%ticks(t)%sup)
@@ -4610,7 +4628,7 @@ contains
    extent = 0.0_R8P
    if (rotated) extent = self%xlabels_extent(backend, font_size)
    margins(1) = PAD + labels_width(self%yaxis) + GAP
-   if (self%yaxis%tics%out) margins(1) = margins(1) + TICK_MAJOR
+   if (self%yaxis%tics%out) margins(1) = margins(1) + tick_length(self%yaxis%tics, .true.)
    if (self%yaxis%has_label()) margins(1) = margins(1) + LINE_HEIGHT * font_size + GAP
    ! rotated x labels of the leftmost tick may reach beyond the left border
    if (rotated) margins(1) = max(margins(1), PAD + extent(2))
@@ -4628,7 +4646,7 @@ contains
       y2_margin = PAD
       if (self%y2_active) then
          if (any(self%y2axis%ticks%major)) y2_margin = y2_margin + labels_width(self%y2axis) + GAP
-         if (self%y2axis%tics%out) y2_margin = y2_margin + TICK_MAJOR
+         if (self%y2axis%tics%out) y2_margin = y2_margin + tick_length(self%y2axis%tics, .true.)
       endif
       if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
       margins(2) = max(margins(2), y2_margin)
@@ -4656,15 +4674,16 @@ contains
    margins(4) = PAD + 0.5_R8P * font_size
    if (any(self%xaxis%ticks%major)) then
       if (rotated) then
-         margins(4) = PAD + merge(TICK_MAJOR, 0.0_R8P, self%xaxis%tics%out) + extent(1)
+         margins(4) = PAD + out_shift(self%xaxis%tics) + extent(1)
       elseif (self%xaxis%tics%out) then
-         margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P) + TICK_MAJOR
+         margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P) + &
+                      tick_length(self%xaxis%tics, .true.)
       else
          margins(4) = PAD + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks), R8P)
       endif
       margins(4) = margins(4) + LINE_HEIGHT * font_size * real(self%group_rows(), R8P)
    elseif (self%xaxis%tics%out .and. size(self%xaxis%ticks) > 0) then
-      margins(4) = margins(4) + TICK_MAJOR
+      margins(4) = margins(4) + tick_length(self%xaxis%tics, .true.)
    endif
    if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
    if (self%polar .and. self%ttics%mode /= TICS_NONE) then
@@ -4757,6 +4776,8 @@ contains
    real(R8P)                            :: g         !< Gray level.
    real(R8P)                            :: widest    !< Widest tick label [px].
    logical                              :: labelled  !< Any tick label.
+   real(R8P)                            :: cb_major  !< Major tick length [px].
+   real(R8P)                            :: cb_minor  !< Minor tick length [px].
    integer(I4P)                         :: n         !< Gradient steps.
    integer(I4P)                         :: k         !< Counter.
 
@@ -4793,6 +4814,8 @@ contains
    enddo
    widest = 0.0_R8P
    labelled = .false.
+   cb_major = tick_length(self%cbaxis%tics, .true.)
+   cb_minor = tick_length(self%cbaxis%tics, .false.)
    call backend%begin_group('fs-colorbox')
    associate(left => box(1), top => box(2), bw => box(3), bh => box(4))
       call backend%image(left, top, left + bw, top + bh, rgba)
@@ -4803,24 +4826,24 @@ contains
             if (self%cbaxis%tics%minor == MINOR_DEFAULT) cycle
             if (self%cbox%horizontal) then
                pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
-               call backend%polyline([pos, pos], [top + bh, top + bh - TICK_MINOR], FRAME_COLOR, 1.0_R8P, '')
+               call backend%polyline([pos, pos], [top + bh, top + bh - cb_minor], FRAME_COLOR, 1.0_R8P, '')
             else
                pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
                pos = merge(top + pos, top + bh - pos, self%cbox%invert)
-               call backend%polyline([left + bw, left + bw - TICK_MINOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+               call backend%polyline([left + bw, left + bw - cb_minor], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
             endif
             cycle
          endif
          labelled = .true.
          if (self%cbox%horizontal) then
             pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
-            call backend%polyline([pos, pos], [top + bh, top + bh - TICK_MAJOR], FRAME_COLOR, 1.0_R8P, '')
+            call backend%polyline([pos, pos], [top + bh, top + bh - cb_major], FRAME_COLOR, 1.0_R8P, '')
             call backend%text(pos, top + bh + GAP + font_size, self%cbaxis%ticks(k)%label, 'middle', &
                               sup=self%cbaxis%ticks(k)%sup)
          else
             pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
             pos = merge(top + pos, top + bh - pos, self%cbox%invert)
-            call backend%polyline([left + bw, left + bw - TICK_MAJOR], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+            call backend%polyline([left + bw, left + bw - cb_major], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
             call backend%text(left + bw + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
                               sup=self%cbaxis%ticks(k)%sup)
          endif

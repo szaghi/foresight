@@ -218,15 +218,15 @@
   // the data or an explicit list, give mode "labels" and {labels}; after "auto" or a step they are
   // added to those ticks ({add}), as gnuplot `set xtics add`; "minor auto|N" sets {minor}: "auto",
   // N intervals, or "" by default; "out" outward ticks ({out}); "rotate A ANCHOR" rotated labels
-  // ({rotate: degrees counterclockwise, anchor})
+  // ({rotate: degrees counterclockwise, anchor}); "scale MAJOR MINOR" tick lengths ({scale})
   function readTics(positions, format) {
     var tics = {mode: "auto", start: "", step: "", end: "", format: format || "", minor: "",
-      out: false, rotate: 0, anchor: "middle"};
+      out: false, rotate: 0, anchor: "middle", scale: [1, 0.5]};
     var words = positions ? positions.split(" ") : [], k = words.indexOf("labels");
     var series = k < 0 ? words : words.slice(0, k), j, w, cut = series.length;
     for (j = 0; j < series.length; j++) {
       w = series[j];
-      if (w !== "minor" && w !== "out" && w !== "rotate") continue;
+      if (w !== "minor" && w !== "out" && w !== "rotate" && w !== "scale") continue;
       cut = Math.min(cut, j);
       if (w === "minor") tics.minor = series[j + 1] === "auto" ? "auto" : Number(series[j + 1]);
       if (w === "out") tics.out = true;
@@ -234,6 +234,7 @@
         tics.rotate = Number(series[j + 1]);
         tics.anchor = series[j + 2];
       }
+      if (w === "scale") tics.scale = [Number(series[j + 1]), Number(series[j + 2])];
     }
     series = series.slice(0, cut);
     if (k >= 0) {
@@ -1194,10 +1195,10 @@
     clear(this.yticks);
     var xt = this.x.tics || {}, yt = this.y.tics || {}, angle = xt.rotate || 0;
     var rad = angle * Math.PI / 180;
-    var xs = xt.out ? -1 : 1, shift = xt.out ? TICK_MAJOR : 0;
+    var xs = xt.out ? -1 : 1, shift = xt.out ? tickLength(xt, true) : 0;
     this.x.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
-      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      var length = tickLength(xt, t.major);
       if (p < self.left - 0.5 || p > self.right + 0.5) return;
       line(self.xticks, p, self.bottom, p, self.bottom - xs * length, FRAME_COLOR, 1);
       if (self.mirror[0]) line(self.xticks, p, self.top, p, self.top + xs * length, FRAME_COLOR, 1);
@@ -1214,7 +1215,7 @@
     });
     this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
-      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      var length = tickLength(yt, t.major);
       if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
       var ys = yt.out ? -1 : 1;
       line(self.yticks, self.left, p, self.left + ys * length, p, FRAME_COLOR, 1);
@@ -1222,7 +1223,7 @@
         line(self.yticks, self.right, p, self.right - ys * length, p, FRAME_COLOR, 1);
       }
       if (!t.major) return;
-      label(self.yticks, self.left - GAP - (yt.out ? TICK_MAJOR : 0), p + 0.35 * fs, t,
+      label(self.yticks, self.left - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
         "end");
       if (self.polarGrid) return;
       line(self.gridGroup, self.left, p, self.right, p, GRID_COLOR, 0.5, GRID_DASHES);
@@ -1232,19 +1233,26 @@
     clear(this.y2ticks);
     this.y2.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
-      var length = t.major ? TICK_MAJOR : TICK_MINOR;
-      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
       var y2t = self.y2.tics || {}, s2 = y2t.out ? -1 : 1;
+      var length = tickLength(y2t, t.major);
+      if (p < self.top - 0.5 || p > self.bottom + 0.5) return;
       line(self.y2ticks, self.right, p, self.right - s2 * length, p, FRAME_COLOR, 1);
       if (self.mirror[2]) {
         line(self.y2ticks, self.left, p, self.left + s2 * length, p, FRAME_COLOR, 1);
       }
       if (t.major) {
-        label(self.y2ticks, self.right + GAP + (y2t.out ? TICK_MAJOR : 0), p + 0.35 * fs, t,
+        label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
+          t,
           "start");
       }
     });
   };
+
+  // tick length of an axis' settings (mirror of tick_length): the major length times its scale
+  function tickLength(tics, major) {
+    var scale = tics.scale || [1, 0.5];
+    return TICK_MAJOR * (major ? scale[0] : scale[1]);
+  }
 
   // second x axis ticks above the top border (mirror of the x2 part of draw_frame)
   Panel.prototype.drawX2Ticks = function () {
@@ -1254,15 +1262,15 @@
     var x2t = this.x2.tics || {}, s2 = x2t.out ? -1 : 1;
     this.x2.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x2.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
-      var length = t.major ? TICK_MAJOR : TICK_MINOR;
+      var length = tickLength(x2t, t.major);
       if (p < self.left - 0.5 || p > self.right + 0.5) return;
       line(self.x2ticks, p, self.top, p, self.top + s2 * length, FRAME_COLOR, 1);
       if (self.x2mirror) {
         line(self.x2ticks, p, self.bottom, p, self.bottom - s2 * length, FRAME_COLOR, 1);
       }
       if (t.major) {
-        label(self.x2ticks, p, self.top - (x2t.out ? TICK_MAJOR : 0) - GAP - 0.25 * fs, t,
-          "middle");
+        label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
+          t, "middle");
       }
     });
   };

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(122)                           !< Per-check outcome.
+logical                       :: test_passed(123)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2582,6 +2582,34 @@ test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'on
 open(newunit=unit, file='foresight_script_test_gpval.txt')
 close(unit, status='delete')
 
+! set tics (every axis), set ticscale, scale per axis, unset tics, as gnuplot 6.0: a scale MAJOR alone makes MINOR its
+! half, default is 1, 0.5; the tick lengths and the viewer attribute follow
+call interpreter%init(scratch)
+call interpreter%run_text('set tics nomirror out scale 2, 0.25; set ytics scale default', iostat, iomsg)
+test_passed(123) = iostat == 0_I4P
+associate(panel => interpreter%figure%panels(1))
+   test_passed(123) = test_passed(123) .and. .not. panel%xaxis%tics%mirror .and. panel%x2axis%tics%out .and. &
+                      all(panel%xaxis%tics%scale == [2.0_R8P, 0.25_R8P]) .and. &
+                      all(panel%cbaxis%tics%scale == [2.0_R8P, 0.25_R8P]) .and. &
+                      all(panel%yaxis%tics%scale == [1.0_R8P, 0.5_R8P]) .and. &
+                      index(panel%xaxis%tics%attribute(), 'out scale 2e0 2.5e-1') > 0
+endassociate
+call interpreter%run_text('set ticscale 3', iostat, iomsg)
+test_passed(123) = test_passed(123) .and. iostat == 0_I4P .and. &
+                   all(interpreter%figure%panels(1)%y2axis%tics%scale == [3.0_R8P, 1.5_R8P])
+call interpreter%run_text('unset tics', iostat, iomsg)
+test_passed(123) = test_passed(123) .and. iostat == 0_I4P .and. &
+                   interpreter%figure%panels(1)%xaxis%tics%attribute() == 'none' .and. &
+                   interpreter%figure%panels(1)%cbaxis%tics%attribute() == 'none'
+call interpreter%run_text('set tics; set output "foresight_script_test_tics.svg"; set tics scale 2; plot [0:10] x', &
+                          iostat, iomsg)
+test_passed(123) = test_passed(123) .and. iostat == 0_I4P .and. &
+                   interpreter%figure%panels(1)%xaxis%tics%attribute() /= 'none'
+call interpreter%run_text('set tics front', iostat, iomsg)
+test_passed(123) = test_passed(123) .and. iostat /= 0_I4P .and. index(iomsg, 'supported options are mirror') > 0
+open(newunit=unit, file='foresight_script_test_tics.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2590,7 +2618,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,122L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,123L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

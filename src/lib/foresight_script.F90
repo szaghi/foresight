@@ -5861,6 +5861,11 @@ contains
       endif
    elseif (keyword(option, 'style', 2_I4P)) then
       call style_option
+   elseif (keyword(option, 'ticscale', 5_I4P)) then
+      ! gnuplot's old form of set tics scale
+      call all_tics_option(scale_only=.true.)
+   elseif (keyword(option, 'tics', 3_I4P)) then
+      call all_tics_option(scale_only=.false.)
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%xaxis%tics)
    elseif (keyword(option, 'ytics', 3_I4P)) then
@@ -6994,6 +6999,102 @@ contains
       endif
       endsubroutine border_option
 
+      subroutine all_tics_option(scale_only)
+      !< gnuplot `set tics [mirror|nomirror] [in|out] [scale MAJOR[,MINOR]|default] [border]`: the options of every axis
+      !< (scale also the color box's); bare, the x and y ticks on. `set ticscale MAJOR [MINOR]` (`scale_only`) its scale.
+      logical, intent(in)  :: scale_only !< `set ticscale`.
+      real(R8P)            :: scale(2)   !< Tick scale.
+      type(token_object), allocatable :: toks(:) !< Tokens, `scale` put first for ticscale.
+      logical              :: scaled     !< A scale given.
+
+      toks = tokens
+      scaled = .false.
+      associate(panel => self%figure%panels(self%figure%current))
+         if (size(toks) == 1) then
+            if (scale_only) then
+               call fail('set ticscale: a scale is expected', iostat, iomsg)
+               return
+            endif
+            call panel%xaxis%tics%enable
+            call panel%yaxis%tics%enable
+            return
+         endif
+         if (scale_only) toks(1)%text = 'scale'
+         i = merge(1_I4P, 2_I4P, scale_only)
+         do while (i <= size(toks, kind=I4P))
+            if (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'scale', 2_I4P)) then
+               if (.not. scale_values(toks, i, scale)) return
+               scaled = .true.
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'mirror nomirror')) then
+               panel%xaxis%tics%mirror = toks(i)%text == 'mirror'
+               panel%yaxis%tics%mirror = toks(i)%text == 'mirror'
+               panel%x2axis%tics%mirror = toks(i)%text == 'mirror'
+               panel%y2axis%tics%mirror = toks(i)%text == 'mirror'
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'in out')) then
+               panel%xaxis%tics%out = toks(i)%text == 'out'
+               panel%yaxis%tics%out = toks(i)%text == 'out'
+               panel%x2axis%tics%out = toks(i)%text == 'out'
+               panel%y2axis%tics%out = toks(i)%text == 'out'
+            elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'border') then
+               ! the ticks on the border: foresight's only placement
+               continue
+            else
+               call fail('set tics: supported options are mirror, nomirror, in, out, scale and border, not "'// &
+                         toks(i)%text//'"', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+         enddo
+         if (scaled) then
+            panel%xaxis%tics%scale = scale
+            panel%yaxis%tics%scale = scale
+            panel%x2axis%tics%scale = scale
+            panel%y2axis%tics%scale = scale
+            panel%cbaxis%tics%scale = scale
+         endif
+      endassociate
+      endsubroutine all_tics_option
+
+      function scale_values(toks, k, scale) result(ok)
+      !< `scale MAJOR[,MINOR]` or `scale default` at token `k` (left on its last token): the tick lengths in major lengths,
+      !< MINOR half MAJOR if absent, as gnuplot; default 1, 0.5.
+      type(token_object), intent(in)    :: toks(:)  !< Tokens.
+      integer(I4P),       intent(inout) :: k        !< Token counter.
+      real(R8P),          intent(inout) :: scale(2) !< Tick scale.
+      logical                           :: ok       !< Well formed.
+      real(R8P)                         :: v        !< A number.
+
+      ok = .false.
+      if (k >= size(toks, kind=I4P)) then
+         call fail('set '//option//': scale needs MAJOR[,MINOR] or default', iostat, iomsg)
+         return
+      endif
+      if (toks(k + 1_I4P)%text == 'default') then
+         scale = [1.0_R8P, 0.5_R8P]
+         k = k + 1_I4P
+         ok = .true.
+         return
+      endif
+      if (.not. to_number(toks(k + 1_I4P)%text, v) .or. v < 0.0_R8P) then
+         call fail('set '//option//': scale needs MAJOR[,MINOR] or default, not "'//toks(k + 1_I4P)%text//'"', iostat, &
+                   iomsg)
+         return
+      endif
+      k = k + 1_I4P
+      scale = [v, 0.5_R8P * v]
+      if (k + 1_I4P < size(toks, kind=I4P)) then
+         if (toks(k + 1_I4P)%kind == TOKEN_COMMA) then
+            if (.not. to_number(toks(k + 2_I4P)%text, v) .or. v < 0.0_R8P) then
+               call fail('set '//option//': scale needs MAJOR[,MINOR], not "'//toks(k + 2_I4P)%text//'"', iostat, iomsg)
+               return
+            endif
+            scale(2) = v
+            k = k + 2_I4P
+         endif
+      endif
+      ok = .true.
+      endfunction scale_values
+
       subroutine tics_option(tics, words)
       !< `set xtics|ytics|y2tics|cbtics [add] [auto|autofreq|STEP|START,STEP|START,STEP,END|("label" pos level, ...)]
       !< [mirror|nomirror] [in|out] [rotate [by ANGLE]|norotate] [left|right|center]`: without positions the last ones
@@ -7073,6 +7174,8 @@ contains
             endselect
          elseif (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['left  ', 'right ', 'center'])) then
             justify = toks(i)%text
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'scale', 2_I4P)) then
+            if (.not. scale_values(toks, i, tics%scale)) return
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'mirror', 3_I4P)) then
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
@@ -7879,6 +7982,13 @@ contains
       call self%figure%set_y2range()
    elseif (keyword(option, 'x2range', 3_I4P)) then
       call self%figure%set_x2range()
+   elseif (keyword(option, 'tics', 3_I4P)) then
+      ! every axis, as gnuplot
+      call self%figure%unset_xtics
+      call self%figure%unset_ytics
+      call self%figure%unset_x2tics
+      call self%figure%unset_y2tics
+      call self%figure%unset_cbtics
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then

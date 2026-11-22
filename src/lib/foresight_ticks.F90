@@ -98,6 +98,8 @@ type :: tics_object
    character(len=6)              :: justify = ''      !< Label justification of rotated labels: `left`, `right`,
                                                       !< `center`, or blank for gnuplot's (`right` for `rotate`).
    logical                       :: out = .false.     !< Ticks outward, gnuplot `out`.
+   real(R8P)                     :: scale(2) = [1.0_R8P, 0.5_R8P] !< Major and minor tick lengths, in major lengths
+                                                      !< (gnuplot `scale MAJOR,MINOR`; 0 draws no tick).
    type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
@@ -121,8 +123,9 @@ integer(I8P), parameter :: MAX_POWER = 10000_I8P  !< Largest power of a fixed lo
 contains
    pure function attribute(self, lo, hi) result(text)
    !< Tick positions for the viewer: empty for automatic, `none`, or `START STEP END` with `*` for an absent end, then
-   !< `minor auto|N` unless minor ticks are by default (`auto` first if automatic), `out` for outward ticks and
-   !< `rotate ANGLE ANCHOR` for rotated labels. With an explicit list (and the axis
+   !< `minor auto|N` unless minor ticks are by default (`auto` first if automatic), `out` for outward ticks,
+   !< `rotate ANGLE ANCHOR` for rotated labels and `scale MAJOR MINOR` for tick lengths not the default. With an
+   !< explicit list (and the axis
    !< range [`lo`, `hi`], for the default labels of its items): `labels` and its items (see `labels_attribute`), after
    !< `auto` or the step when the list is added to them.
    class(tics_object), intent(in)           :: self  !< Settings.
@@ -149,10 +152,12 @@ contains
          text = text//' minor '//int_str(int(self%minor, I8P))
       endselect
    endif
-   if (self%out .or. self%rotate /= 0.0_R8P) then
+   if (self%out .or. self%rotate /= 0.0_R8P .or. any(self%scale /= [1.0_R8P, 0.5_R8P])) then
       if (len(text) == 0) text = 'auto'
       if (self%out) text = text//' out'
       if (self%rotate /= 0.0_R8P) text = text//' rotate '//real_str(self%rotate)//' '//trim(self%anchor())
+      if (any(self%scale /= [1.0_R8P, 0.5_R8P])) text = text//' scale '//real_str(self%scale(1))//' '// &
+                                                         real_str(self%scale(2))
    endif
    if (.not. (self%has_list() .and. present(lo) .and. present(hi))) return
    call list_ticks(self, lo, hi, .true., items)
