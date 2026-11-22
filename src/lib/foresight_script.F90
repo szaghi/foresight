@@ -5881,6 +5881,8 @@ contains
       call offsets_option
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       call timestamp_option
+   elseif (keyword(option, 'jitter', 3_I4P)) then
+      call jitter_option
    elseif (keyword(option, 'parametric', 3_I4P)) then
       ! gnuplot `set parametric`: function items in pairs, x(t), y(t) over trange
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
@@ -6674,6 +6676,58 @@ contains
          i = i + 1_I4P
       enddo
       endsubroutine fit_option
+
+      subroutine jitter_option
+      !< gnuplot `set jitter [overlap [first] N] [spread S] [wrap W] [swarm|square|vertical]`: the overlapping points
+      !< of `with points` spread out; bare: overlap 1 character, spread 1, no wrap, swarm (gnuplot's set_jitter).
+      real(R8P) :: v !< A number.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%jitter_overlap = 1.0_R8P
+         panel%jitter_first = .false.
+         panel%jitter_spread = 1.0_R8P
+         panel%jitter_wrap = 0.0_R8P
+         panel%jitter_style = 0_I4P
+         i = 2_I4P
+         do while (i <= size(tokens, kind=I4P))
+            if (keyword(tokens(i)%text, 'overlap', 4_I4P)) then
+               if (i < size(tokens, kind=I4P)) then
+                  if (is_word(tokens(i + 1_I4P)%text, 'first character')) then
+                     panel%jitter_first = tokens(i + 1_I4P)%text == 'first'
+                     i = i + 1_I4P
+                  endif
+               endif
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'set jitter: overlap: '//iomsg
+                  return
+               endif
+               panel%jitter_overlap = v
+            elseif (tokens(i)%text == 'spread') then
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'set jitter: spread: '//iomsg
+                  return
+               endif
+               panel%jitter_spread = merge(v, 1.0_R8P, v > 0.0_R8P)
+            elseif (tokens(i)%text == 'wrap') then
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'set jitter: wrap: '//iomsg
+                  return
+               endif
+               panel%jitter_wrap = v
+            elseif (tokens(i)%text == 'swarm') then
+               panel%jitter_style = 0_I4P
+            elseif (tokens(i)%text == 'square') then
+               panel%jitter_style = 1_I4P
+            elseif (keyword(tokens(i)%text, 'vertical', 4_I4P)) then
+               panel%jitter_style = 2_I4P
+            else
+               call fail('set jitter: unrecognized keyword "'//tokens(i)%text//'"', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+         enddo
+      endassociate
+      endsubroutine jitter_option
 
       subroutine timestamp_option
       !< gnuplot `set timestamp ["format"] [top|bottom] [rotate|norotate] [offset X[,Y]] [font F] [textcolor C]`: the
@@ -9101,6 +9155,9 @@ contains
       return
    elseif (keyword(option, 'parametric', 3_I4P)) then
       self%parametric = .false.
+      return
+   elseif (keyword(option, 'jitter', 3_I4P)) then
+      self%figure%panels(self%figure%current)%jitter_spread = 0.0_R8P
       return
    elseif (keyword(option, 'clip', 2_I4P)) then
       ! gnuplot `unset clip [points|one|two|radial]`: bare, points, one and two

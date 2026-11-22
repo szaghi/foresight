@@ -26,6 +26,7 @@ private
 public :: bin_values
 public :: smooth
 public :: smooth_curve
+public :: sorted
 public :: CURVE_MODES
 public :: SMOOTH_MODES
 

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(142)                           !< Per-check outcome.
+logical                       :: test_passed(143)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3024,6 +3024,31 @@ test_passed(142) = test_passed(142) .and. iostat /= 0_I4P .and. index(iomsg, 'no
 call interpreter%run_text('unset parametric; plot [0:1] x', iostat, iomsg)
 test_passed(142) = test_passed(142) .and. iostat == 0_I4P .and. .not. interpreter%parametric
 
+! set jitter: overlapping points of with points spread out on x (swarm), y kept; options; unset jitter
+call interpreter%init(scratch)
+call interpreter%run_text('$J << EOD'//new_line('a')//'1 5'//new_line('a')//'1 5'//new_line('a')//'1 5'//new_line('a')// &
+                          'EOD'//new_line('a')//'set term svg; set output "foresight_script_test_jitter.svg"'// &
+                          new_line('a')//'set xrange [0:2]; set yrange [0:10]; plot $J w p pt 7 notitle', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+block
+   character(len=:), allocatable :: plain    !< Without jitter.
+   character(len=:), allocatable :: jittered !< With jitter.
+
+   plain = text_of_file('foresight_script_test_jitter.svg')
+   call interpreter%run_text('set jitter overlap 1.5 spread 0.5 wrap 3 square; replot', iostat, iomsg)
+   jittered = text_of_file('foresight_script_test_jitter.svg')
+   test_passed(143) = iostat == 0_I4P .and. plain /= jittered .and. &
+                      interpreter%figure%panels(1)%jitter_overlap == 1.5_R8P .and. &
+                      interpreter%figure%panels(1)%jitter_spread == 0.5_R8P .and. &
+                      interpreter%figure%panels(1)%jitter_wrap == 3.0_R8P .and. interpreter%figure%panels(1)%jitter_style == 1_I4P
+endblock
+call interpreter%run_text('unset jitter', iostat, iomsg)
+test_passed(143) = test_passed(143) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%jitter_spread == 0.0_R8P
+call interpreter%run_text('set jitter sideways', iostat, iomsg)
+test_passed(143) = test_passed(143) .and. iostat /= 0_I4P .and. index(iomsg, 'unrecognized keyword') > 0
+open(newunit=unit, file='foresight_script_test_jitter.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3032,7 +3057,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,142L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,143L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -3040,6 +3065,25 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function text_of_file(file) result(text)
+   !< The whole text of `file`, its lines joined.
+   character(len=*), intent(in)  :: file !< File.
+   character(len=:), allocatable :: text !< Text.
+   character(len=4096)           :: line !< A line.
+   integer                       :: unit !< Unit.
+   integer                       :: ios  !< Read status.
+
+   text = ''
+   open(newunit=unit, file=file, action='read', status='old', iostat=ios)
+   if (ios /= 0) return
+   do
+      read(unit, '(A)', iostat=ios) line
+      if (ios /= 0) exit
+      text = text//trim(line)//new_line('a')
+   enddo
+   close(unit)
+   endfunction text_of_file
+
    function series_polylines(file) result(count)
    !< The polylines of the first series of the SVG `file` (inside its `fs-series` group).
    character(len=*), intent(in)  :: file  !< SVG file.

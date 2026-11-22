@@ -54,6 +54,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   label_object, shape_object
 use foresight_axis, only : axis_object
 use foresight_time, only : now_seconds, strftime
+use foresight_smooth, only : sorted
 use foresight_enhanced, only : has_markup, markup_literal
 use foresight_format, only : int_str, real_str
 use foresight_backend, only : axes_view, backend_object
@@ -198,6 +199,12 @@ type :: axes_object
    logical                          :: clip_one = .true.    !< Segments with one end out drawn (`clip one`).
    logical                          :: clip_two = .false.   !< Segments with both ends out drawn (`clip two`).
    logical                          :: clip_points = .false. !< Points whose marker crosses the border hidden.
+   ! gnuplot `set jitter`: overlapping points of `with points` spread out (off when the spread is 0)
+   real(R8P)                        :: jitter_spread = 0.0_R8P  !< Displacement multiplier, 0 for no jitter.
+   real(R8P)                        :: jitter_overlap = 1.0_R8P !< Overlap criterion [characters, or y units].
+   logical                          :: jitter_first = .false.   !< `overlap first`: in y axis units.
+   real(R8P)                        :: jitter_wrap = 0.0_R8P    !< Largest displacement [characters], 0 for none.
+   integer(I4P)                     :: jitter_style = 0_I4P     !< 0 swarm, 1 square, 2 vertical.
    real(R8P)                        :: key_height = 0.0_R8P !< Height added to the key [characters], `height`.
    integer(I4P)                     :: key_maxrows = 0_I4P !< Most rows of a vertical key (more: columns), 0 for one
                                                              !< column (gnuplot `maxrows`).
@@ -2951,6 +2958,8 @@ contains
          marked = valid
          if (series%pointinterval > 1_I4P) marked = valid .and. [(mod(i1 - 1_I4P, series%pointinterval) == 0_I4P, &
                                                                   i1 = 1_I4P, n)]
+         ! gnuplot `set jitter`: the overlapping markers of `with points` spread out
+         if (self%jitter_spread > 0.0_R8P .and. series%style%with == WITH_POINTS) call jitter
          ! gnuplot `set clip points`: no marker crossing the border
          if (self%clip_points) then
             do i1 = 1_I4P, n
@@ -3031,6 +3040,64 @@ contains
          endif
       endassociate
       endsubroutine draw_run
+
+      subroutine jitter
+      !< gnuplot's jitter_points: the points sorted by x then y; each point closer than the overlap criterion to the
+      !< first of its group (in pixels) moved aside by (j+1)/2 spread pointsizes (0.7 characters each), alternately
+      !< left and right, wrapped at the wrap; `square` also puts it on the first one's y, `vertical` moves it on y.
+      integer(I4P), allocatable :: order(:) !< Valid points sorted by x, then y.
+      integer(I4P), allocatable :: idx(:)   !< Valid points.
+      real(R8P)                 :: w        !< Plot area width [px].
+      real(R8P)                 :: h        !< Plot area height [px].
+      real(R8P)                 :: gap      !< Overlap criterion [px].
+      real(R8P)                 :: jit      !< Displacement [characters].
+      real(R8P)                 :: u0       !< Unit abscissa of the group's first point.
+      real(R8P)                 :: v0       !< Unit ordinate of the group's first point.
+      integer(I4P)              :: a        !< Group start, in order.
+      integer(I4P)              :: j        !< Offset in the group.
+      integer(I4P)              :: p        !< Point.
+
+      w = max(area(2) - area(1), 1.0_R8P)
+      h = max(area(4) - area(3), 1.0_R8P)
+      if (self%jitter_first .and. .not. yaxis%log) then
+         gap = self%jitter_overlap * h / max(abs(yaxis%hi - yaxis%lo), tiny(1.0_R8P))
+      else
+         gap = self%jitter_overlap * font_size
+      endif
+      idx = pack([(p, p = 1_I4P, n)], valid)
+      if (size(idx) < 2) return
+      ! stable sorts: by y, then by x
+      order = idx(sorted(self%series(s)%y(idx)))
+      order = order(sorted(self%series(s)%x(order)))
+      a = 1_I4P
+      do while (a < size(order, kind=I4P))
+         u0 = u(order(a))
+         v0 = v(order(a))
+         j = 1_I4P
+         do while (a + j <= size(order, kind=I4P))
+            p = order(a + j)
+            if (hypot((u(p) - u0) * w, (v(p) - v0) * h) >= gap) exit
+            jit = real((j + 1_I4P) / 2_I4P, R8P) * self%jitter_spread * self%series(s)%style%pointsize
+            if (self%jitter_wrap > 0.0_R8P) then
+               do while (jit > self%jitter_wrap)
+                  jit = jit - self%jitter_wrap
+               enddo
+            endif
+            if (modulo(j, 2_I4P) == 1_I4P) jit = -jit
+            select case (self%jitter_style)
+            case (2_I4P)
+               v(p) = v(p) + jit * 0.7_R8P * font_size / h
+            case (1_I4P)
+               u(p) = u(p) + jit * 0.7_R8P * CHAR_WIDTH * font_size / w
+               v(p) = v0
+            case default
+               u(p) = u(p) + jit * 0.7_R8P * CHAR_WIDTH * font_size / w
+            endselect
+            j = j + 1_I4P
+         enddo
+         a = a + j
+      enddo
+      endsubroutine jitter
 
       pure function inside_marker(pu, pv, radius) result(yes)
       !< Whether a marker of `radius` [px] at (`pu`, `pv`) [unit] lies within the plot area.
