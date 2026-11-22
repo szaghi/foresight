@@ -5342,15 +5342,15 @@ contains
       call self%axes_extent(xmin, xmax, ymin, ymax, found, xfound)
    endif
    ! a panel with an image fits its pixel edges, as gnuplot
-   self%xaxis%tight = self%has_image()
-   self%yaxis%tight = self%has_image()
+   self%xaxis%tight = self%has_image() .or. self%xaxis%noextend
+   self%yaxis%tight = self%has_image() .or. self%yaxis%noextend
    call collect_labels
    call self%xaxis%setup(xmin(1), xmax(1), xfound(1), area(2) - area(1))
    self%x2_active = .not. self%polar .and. (xfound(2) .or. (self%x2axis%min_fixed .and. self%x2axis%max_fixed) .or. &
                                             self%x2axis%tics%mode /= TICS_NONE)
    if (self%x2_active) then
       ! no data of its own: the range of the first x axis, as is (gnuplot)
-      self%x2axis%tight = self%has_image() .or. .not. xfound(2)
+      self%x2axis%tight = self%has_image() .or. .not. xfound(2) .or. self%x2axis%noextend
       if (xfound(2)) then
          call self%x2axis%setup(xmin(2), xmax(2), .true., area(2) - area(1))
       else
@@ -5375,6 +5375,7 @@ contains
    enddo
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
+   self%y2axis%tight = self%y2axis%noextend
    if (self%y2_active) call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
    ! tick labels on several lines (a time format `%m/%d\n%H:%M`) on the x axis only: one line elsewhere
    if (allocated(self%yaxis%ticks)) call one_line(self%yaxis%ticks)

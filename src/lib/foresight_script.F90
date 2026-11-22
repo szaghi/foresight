@@ -5799,6 +5799,8 @@ contains
          text = 'time'
       endif
       call self%set_time_data(option, len(text) > 0)
+   elseif (option == 'offset' .or. option == 'offsets') then
+      call offsets_option
    elseif (keyword(option, 'linetype', 5_I4P)) then
       call linetype_option
    elseif (keyword(option, 'pointsize', 3_I4P)) then
@@ -5832,19 +5834,19 @@ contains
       call self%figure%set_timefmt(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
       endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%yaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
       endassociate
    elseif (keyword(option, 'y2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%y2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
       endassociate
    elseif (keyword(option, 'x2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%x2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
@@ -5930,7 +5932,7 @@ contains
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%cbaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
@@ -6585,6 +6587,46 @@ contains
          i = i + 1_I4P
       enddo
       endsubroutine fit_option
+
+      subroutine offsets_option
+      !< gnuplot `set offsets [graph] L, [graph] R, [graph] T, [graph] B`: the autoscaled ends of x and y moved out, in
+      !< axis units (`first`) or fractions of the range (`graph`); missing ones are 0.
+      real(R8P) :: v(4)     !< Left, right, top, bottom.
+      logical   :: graph(4) !< In graph fractions.
+      integer(I4P) :: k     !< Offset counter.
+
+      v = 0.0_R8P
+      graph = .false.
+      i = 1_I4P
+      do k = 1_I4P, 4_I4P
+         if (i >= size(tokens, kind=I4P)) exit
+         if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. is_word(tokens(i + 1_I4P)%text, 'graph first')) then
+            graph(k) = tokens(i + 1_I4P)%text == 'graph'
+            i = i + 1_I4P
+         endif
+         if (.not. next_real(tokens, i, v(k), iostat, iomsg, self%symbols)) then
+            iomsg = 'set offsets: '//iomsg
+            return
+         endif
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+               call fail('set offsets: "," expected, found "'//tokens(i + 1_I4P)%text//'"', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+         endif
+      enddo
+      if (i < size(tokens, kind=I4P)) then
+         call fail('set offsets: four offsets at most: left, right, top, bottom', iostat, iomsg)
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%xaxis%offset = [v(1), v(2)]
+         panel%xaxis%offset_graph = [graph(1), graph(2)]
+         panel%yaxis%offset = [v(4), v(3)]
+         panel%yaxis%offset_graph = [graph(4), graph(3)]
+      endassociate
+      endsubroutine offsets_option
 
       subroutine linetype_option
       !< gnuplot `set linetype N [lc C] [lw W] [dt D] [pt P] [ps S] [pi I]`: linetype N redefined, persistent (`reset`
@@ -8904,6 +8946,10 @@ contains
    elseif (keyword(option, 'pointsize', 3_I4P)) then
       self%figure%panels(self%figure%current)%point_scale = 1.0_R8P
       return
+   elseif (option == 'offset' .or. option == 'offsets') then
+      self%figure%panels(self%figure%current)%xaxis%offset = 0.0_R8P
+      self%figure%panels(self%figure%current)%yaxis%offset = 0.0_R8P
+      return
    elseif (keyword(option, 'style', 2_I4P)) then
       ok = .false.
       if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P) .or. keyword(tokens(2)%text, 'arrow', 3_I4P)
@@ -9345,7 +9391,7 @@ contains
 
    if (ends(1)) axis%min_fixed = .false.
    if (ends(2)) axis%max_fixed = .false.
-   if (fix) axis%tight = .true.
+   if (fix) axis%noextend = .true.
    endsubroutine autoscale_axis
 
    function old_if(statement) result(yes)

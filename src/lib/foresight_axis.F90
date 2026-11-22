@@ -19,8 +19,13 @@ public :: axis_object
 type :: axis_object
    !< Plot axis.
    logical                        :: has_data  = .false.    !< Data placed on the axis, set by `setup`.
+   logical                        :: noextend  = .false.    !< Autoscaled ends not extended to the ticks, set by the
+                                                            !< user (gnuplot `set autoscale noextend`, `fix`).
    real(R8P)                      :: data_lo   = 0.0_R8P    !< Smallest data value placed, set by `setup`.
    real(R8P)                      :: data_hi   = 0.0_R8P    !< Largest data value placed, set by `setup`.
+   real(R8P)                      :: offset(2) = 0.0_R8P    !< Autoscaled ends moved out, start and end (gnuplot
+                                                            !< `set offsets`): in axis units, or graph fractions.
+   logical                        :: offset_graph(2) = .false. !< `offset` in graph fractions of the autoscaled range.
    character(len=:), allocatable  :: label                  !< Axis label, empty for none.
    logical                        :: log       = .false.    !< Base-10 logarithmic scale.
    logical                        :: min_fixed = .false.    !< Axis start set by the user, else autoscaled.
@@ -150,6 +155,9 @@ contains
    real(R8P)                         :: hi       !< Value at the axis end.
 
    call self%range_of(dmin, dmax, has_data, lo, hi)
+   ! gnuplot `set offsets`: the autoscaled ends moved out (functions are sampled on the range before), by axis units
+   ! or by fractions of the range (on a log axis in decades, graph fractions only)
+   if (any(self%offset /= 0.0_R8P)) call offsets(lo, hi)
    self%has_data = has_data
    self%data_lo = min(dmin, dmax)
    self%data_hi = max(dmin, dmax)
@@ -179,6 +187,29 @@ contains
       call merge_list(self%tics, lo, hi, self%ticks)
    self%lo = lo
    self%hi = hi
+   contains
+      pure subroutine offsets(lo, hi)
+      !< `lo` and `hi` moved out by the offsets.
+      real(R8P), intent(inout) :: lo   !< Start.
+      real(R8P), intent(inout) :: hi   !< End.
+      real(R8P)                :: span !< Range, before the offsets.
+      real(R8P)                :: d(2) !< Moves, out.
+      real(R8P)                :: a    !< Start before.
+
+      a = lo
+      if (self%log) then
+         if (lo <= 0.0_R8P .or. hi <= 0.0_R8P) return
+         span = log10(hi) - log10(lo)
+         d = merge(self%offset * span, 0.0_R8P, self%offset_graph)
+         if (.not. (self%min_fixed .or. self%plot_min_fixed)) lo = lo / 10.0_R8P**min(300.0_R8P, d(1))
+         if (.not. (self%max_fixed .or. self%plot_max_fixed)) hi = hi * 10.0_R8P**min(300.0_R8P, d(2))
+      else
+         span = hi - lo
+         d = merge(self%offset * span, self%offset, self%offset_graph)
+         if (.not. (self%min_fixed .or. self%plot_min_fixed)) lo = a - d(1)
+         if (.not. (self%max_fixed .or. self%plot_max_fixed)) hi = hi + d(2)
+      endif
+      endsubroutine offsets
    endsubroutine setup
 
    elemental function to_unit(self, v) result(u)

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(138)                           !< Per-check outcome.
+logical                       :: test_passed(139)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2678,7 +2678,7 @@ call interpreter%run_text('set bars 2; set dummy t; set xrange [1:5]; set autosc
 associate(panel => interpreter%figure%panels(1))
    test_passed(126) = test_passed(126) .and. iostat == 0_I4P .and. panel%errorbar_size == 2.0_R8P .and. &
                       interpreter%dummy == 't' .and. .not. panel%xaxis%min_fixed .and. .not. panel%xaxis%max_fixed &
-                      .and. panel%xaxis%tight .and. panel%yaxis%tight .and. panel%yaxis%min_fixed .and. &
+                      .and. panel%xaxis%noextend .and. panel%yaxis%noextend .and. panel%yaxis%min_fixed .and. &
                       panel%yaxis%min_user == 2.0_R8P .and. .not. panel%yaxis%max_fixed
 endassociate
 call interpreter%run_text('set xrange [0:1]; plot t**2', iostat, iomsg)
@@ -2939,6 +2939,29 @@ test_passed(138) = test_passed(138) .and. iostat == 0_I4P .and. size(interpreter
 call interpreter%run_text('set linetype 1 lc palette', iostat, iomsg)
 test_passed(138) = test_passed(138) .and. iostat /= 0_I4P
 
+! set offsets: the autoscaled ends moved out, in axis units or graph fractions, before the tick extension; noextend
+! (set autoscale) honoured; functions sampled on the range before (gnuplot 6.0's ranges)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_offsets.svg"'//new_line('a')// &
+                          'set offsets graph 0.05, 0, 2, 2; set autoscale noextend; plot sin(x)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(139) = iostat == 0_I4P
+if (test_passed(139)) test_passed(139) = interpreter%figure%panels(1)%xaxis%lo == -11.0_R8P .and. &
+                                         interpreter%figure%panels(1)%xaxis%hi == 10.0_R8P .and. &
+                                         abs(interpreter%figure%panels(1)%yaxis%hi - 2.99938455761244_R8P) < 1.0e-12_R8P
+call interpreter%run_text('$O << EOD'//new_line('a')//'1 2'//new_line('a')//'3 5'//new_line('a')//'4 3'//new_line('a')// &
+                          'EOD'//new_line('a')//'reset; set term svg; set output "foresight_script_test_offsets.svg"'// &
+                          new_line('a')//'set offsets 1, 1, 1, 1; plot [0:5] $O', iostat, iomsg)
+test_passed(139) = test_passed(139) .and. iostat == 0_I4P
+if (test_passed(139)) test_passed(139) = interpreter%figure%panels(1)%xaxis%lo == 0.0_R8P .and. &
+                                         interpreter%figure%panels(1)%xaxis%hi == 5.0_R8P .and. &
+                                         interpreter%figure%panels(1)%yaxis%lo == 1.0_R8P .and. &
+                                         interpreter%figure%panels(1)%yaxis%hi == 6.0_R8P
+call interpreter%run_text('unset offsets', iostat, iomsg)
+test_passed(139) = test_passed(139) .and. iostat == 0_I4P .and. all(interpreter%figure%panels(1)%yaxis%offset == 0.0_R8P)
+open(newunit=unit, file='foresight_script_test_offsets.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2947,7 +2970,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,138L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,139L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
