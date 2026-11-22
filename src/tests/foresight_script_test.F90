@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(125)                           !< Per-check outcome.
+logical                       :: test_passed(126)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1711,8 +1711,8 @@ test_passed(101) = iostat == 0_I4P .and. &
            '10', '10', '10', '0 0'])
 call interpreter%run_text("break", iostat, iomsg)
 test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'break outside a loop') > 0
-call interpreter%run_text("if (1) print 1", iostat, iomsg)
-test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'the old one-line form is not supported') > 0
+call interpreter%run_text("if (1)", iostat, iomsg)
+test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, '{ ... } or a command expected') > 0
 call interpreter%run_text("do for [i=1:2] {"//new_line('a')//"print i", iostat, iomsg)
 test_passed(101) = test_passed(101) .and. iostat /= 0_I4P .and. index(iomsg, 'script:1: "{" not closed') > 0
 call interpreter%run_text("do for [i=1:*] { }", iostat, iomsg)
@@ -2656,6 +2656,38 @@ test_passed(125) = test_passed(125) .and. iostat /= 0_I4P .and. index(iomsg, 'on
 open(newunit=unit, file='foresight_script_test_margins.svg')
 close(unit, status='delete')
 
+! rand (gnuplot's generator, to its digits), exist, the old one-line if (else, and refused inside blocks), set bars,
+! set dummy, set autoscale, set xrange [] and noextend
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_batch.txt'"//new_line('a')// &
+                          'print rand(0), rand(-1), rand(5); print exist("rand")'//new_line('a')// &
+                          'x = 1; if (x == 2) print "no"; else print "else"; print "too"'//new_line('a')// &
+                          'if (x == 1) print "yes"; print "same line"'//new_line('a')// &
+                          'if (x == 2) print "skipped"; print "skipped too"'//new_line('a')// &
+                          'set print', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(126) = iostat == 0_I4P .and. &
+   file_is('foresight_script_test_batch.txt', [character(len=60) :: &
+           '0.222457440974512 0.222457440974512 0.999998420858381', '0', 'else', 'too', 'yes', 'same line'])
+call interpreter%run_text('do for [i=1:2] { if (i == 1) print "x"; print "y" }', iostat, iomsg)
+test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'Old-style if/else') > 0
+call interpreter%run_text('set bars 2; set dummy t; set xrange [1:5]; set autoscale x; set yrange [2:3] noextend'// &
+                          new_line('a')//'set yrange []; set autoscale ymax; set autoscale xfix', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(126) = test_passed(126) .and. iostat == 0_I4P .and. panel%errorbar_size == 2.0_R8P .and. &
+                      interpreter%dummy == 't' .and. .not. panel%xaxis%min_fixed .and. .not. panel%xaxis%max_fixed &
+                      .and. panel%xaxis%tight .and. panel%yaxis%tight .and. panel%yaxis%min_fixed .and. &
+                      panel%yaxis%min_user == 2.0_R8P .and. .not. panel%yaxis%max_fixed
+endassociate
+call interpreter%run_text('set xrange [0:1]; plot t**2', iostat, iomsg)
+test_passed(126) = test_passed(126) .and. iostat == 0_I4P
+call interpreter%run_text('print rand(1.5)', iostat, iomsg)
+test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'Illegal seed value') > 0
+call interpreter%run_text('set xrange [0:1] writeback', iostat, iomsg)
+test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "writeback"') > 0
+open(newunit=unit, file='foresight_script_test_batch.txt')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -2664,7 +2696,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,125L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,126L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

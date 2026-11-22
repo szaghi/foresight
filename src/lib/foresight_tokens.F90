@@ -44,7 +44,8 @@ endtype token_object
 contains
    subroutine split_statements(line, statements)
    !< Split `line` at `;` (and new lines) outside quotes and braces, dropping the `#` comment; blank statements are
-   !< skipped. A block `do for [...] { ...; ... }` is one statement.
+   !< skipped. A block `do for [...] { ...; ... }` is one statement. Each statement's `first` and `last` are its
+   !< characters in `line` (whether two are on the same line).
    character(len=*),                intent(in)  :: line          !< Source line.
    type(token_object), allocatable, intent(out) :: statements(:) !< Statements (kind word).
    character(len=1)                             :: quote         !< Open quote, blank if none.
@@ -79,18 +80,19 @@ contains
             depth = max(0_I4P, depth - 1_I4P)
          case (';', achar(10))
             if (depth == 0_I4P) then
-               call add(line(start:i - 1_I4P))
+               call add(line(start:i - 1_I4P), start)
                start = i + 1_I4P
             endif
          endselect
       endif
       i = i + 1_I4P
    enddo
-   call add(line(start:last))
+   call add(line(start:last), start)
    contains
-      subroutine add(statement)
-      !< Append a non-blank statement.
+      subroutine add(statement, offset)
+      !< Append a non-blank statement, starting at character `offset` of the line.
       character(len=*), intent(in) :: statement !< Statement.
+      integer(I4P),     intent(in) :: offset    !< Its first character in the line.
       type(token_object)           :: token     !< New statement.
       integer(I4P)                 :: first     !< First character kept.
       integer(I4P)                 :: last      !< Last character kept.
@@ -100,6 +102,8 @@ contains
       if (first == 0_I4P) return
       last = verify(statement, ' '//achar(9)//achar(10)//achar(13), back=.true., kind=I4P)
       token%text = statement(first:last)
+      token%first = offset + first - 1_I4P
+      token%last = offset + last - 1_I4P
       call push(statements, token)
       endsubroutine add
    endsubroutine split_statements

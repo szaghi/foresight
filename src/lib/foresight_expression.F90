@@ -117,6 +117,7 @@ integer(I4P), parameter :: OP_SHL          = 44_I4P !< `<<`.
 integer(I4P), parameter :: OP_SHR          = 45_I4P !< `>>`, logical (gnuplot's on x86).
 integer(I4P), parameter :: OP_BNOT         = 46_I4P !< `~`, unary.
 integer(I4P), parameter :: OP_BLOCK        = 47_I4P !< Call the function block `blocks(arg)` on its `v%i` arguments.
+integer(I4P), parameter :: OP_RAND         = 48_I4P !< gnuplot's rand(x) of the top: the next pseudo-random number.
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -153,6 +154,7 @@ integer(I4P), parameter :: E_BITWISE    = 10_I4P !< A real or a string given to 
 integer(I4P), parameter :: E_BLOCK      = 11_I4P !< A function block failed: its message in `block_message`.
 integer(I4P), parameter :: E_UNDEF      = 12_I4P !< The value is gnuplot's undefined one (`print` shows `<undefined>`).
 integer(I4P), parameter :: E_UNINIT     = 13_I4P !< An operation on gnuplot's undefined value.
+integer(I4P), parameter :: E_SEED       = 14_I4P !< rand(x): x not an integer seed.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
@@ -328,6 +330,7 @@ abstract interface
 endinterface
 
 procedure(block_call_interface), pointer :: block_hook => null() !< The interpreter's runner of function blocks.
+integer(I8P), save :: rand_seeds(2) = 1234567890_I8P !< gnuplot's rand seeds (L'Ecuyer's combined generator).
 character(len=:), allocatable :: block_message                   !< Message of the last function block failure.
 
 contains
@@ -915,6 +918,7 @@ contains
             return
          endif
          call next
+         if (name == 'exist') name = 'exists'
          if ((name == 'value' .or. name == 'exists') .and. kind == T_STRING) then
             call symbol_query(name)
             return
@@ -954,6 +958,15 @@ contains
          if (iostat /= 0_I4P) return
          if (name(1:1) == '$') then
             call block_call(name, nargs, at)
+            return
+         endif
+         if (name == 'rand') then
+            ! gnuplot's pseudo-random numbers: run on each evaluation
+            if (nargs /= 1_I4P) then
+               call syntax('rand needs 1 argument', at)
+            else
+               call emit(OP_RAND)
+            endif
             return
          endif
          f = findloc(FUNCTIONS, name, dim=1)
@@ -2746,6 +2759,8 @@ contains
             calls = calls - 1_I4P
          case (OP_STOP)
             exit
+         case (OP_RAND)
+            call random_next(stack(sp), ok, err)
          case (OP_BLOCK)
             n = int(instruction%v%i, I4P)
             if (.not. associated(block_hook)) then
@@ -3471,6 +3486,45 @@ contains
    a%is_undef = .true.
    endfunction undefined_value
 
+   subroutine random_next(a, ok, error)
+   !< gnuplot 6.0's rand(x) on `a`, replaced by its value: x = 0 the next number of L'Ecuyer's combined generator (from
+   !< seeds 1234567890), x < 0 the generator reset first, x > 0 an integer seed first; another x is "Illegal seed value".
+   type(value_object), intent(inout) :: a     !< Argument, then value.
+   logical,            intent(inout) :: ok    !< Defined.
+   integer(I4P),       intent(inout) :: error !< Type error.
+   real(R8P)                         :: x     !< Argument.
+   integer(I8P)                      :: k     !< Quotient.
+   integer(I8P)                      :: z     !< Combined value.
+
+   if (a%is_string) then
+      ok = .false.
+      error = E_NONNUMERIC
+      return
+   endif
+   x = real_of(a)
+   if (x /= 0.0_R8P) then
+      if (x /= aint(x) .or. x > 2147483647.0_R8P) then
+         ok = .false.
+         error = E_SEED
+         return
+      endif
+      if (x < 0.0_R8P) then
+         rand_seeds = 1234567890_I8P
+      else
+         rand_seeds = int(x, I8P)
+      endif
+   endif
+   k = rand_seeds(1) / 53668_I8P
+   rand_seeds(1) = 40014_I8P * (rand_seeds(1) - k * 53668_I8P) - k * 12211_I8P
+   if (rand_seeds(1) < 0_I8P) rand_seeds(1) = rand_seeds(1) + 2147483563_I8P
+   k = rand_seeds(2) / 52774_I8P
+   rand_seeds(2) = 40692_I8P * (rand_seeds(2) - k * 52774_I8P) - k * 3791_I8P
+   if (rand_seeds(2) < 0_I8P) rand_seeds(2) = rand_seeds(2) + 2147483399_I8P
+   z = rand_seeds(1) - rand_seeds(2)
+   if (z < 1_I8P) z = z + 2147483562_I8P
+   a = value_object(r=4.656613057e-10_R8P * real(z, R8P))
+   endsubroutine random_next
+
    pure function operands(op, nargs) result(n)
    !< Stack values the operation `op` reads (`nargs`, its `v%i`, for a string function call), 0 for those that only
    !< move them (a load, a call's arguments, a return).
@@ -3480,7 +3534,7 @@ contains
 
    select case (op)
    case (OP_COLUMN_OF, OP_STRCOL, OP_COLUMNHEAD, OP_NEGATE, OP_NOT, OP_TRUTH, OP_FUNCTION, OP_JUMP_UNLESS, &
-         OP_AND_JUMP, OP_OR_JUMP, OP_ELEMENT, OP_BNOT)
+         OP_AND_JUMP, OP_OR_JUMP, OP_ELEMENT, OP_BNOT, OP_RAND)
       n = 1_I4P
    case (OP_TIMECOLUMN, OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR)
       n = 2_I4P
@@ -3558,6 +3612,8 @@ contains
       text = 'undefined value'
    case (E_UNINIT)
       text = 'uninitialized user variable'
+   case (E_SEED)
+      text = 'Illegal seed value'
    case default
       text = 'undefined value'
    endselect

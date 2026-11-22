@@ -222,6 +222,8 @@ type :: script_object
    character(len=:), allocatable   :: encoding                 !< `set encoding`: GPVAL_ENCODING, `default` or `utf8`.
    character(len=:), allocatable   :: term_name                !< The terminal: GPVAL_TERM.
    integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
+   character(len=:), allocatable   :: dummy                    !< `set dummy NAME`: the functions' variable, empty for
+                                                               !< gnuplot's (x, t in polar mode).
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -245,6 +247,8 @@ type :: script_object
       procedure, pass(self), private :: while_block   !< `while (...) { ... }`.
       procedure, pass(self), private :: if_block      !< `if (...) { ... } else ...`.
       procedure, pass(self), private :: run_body      !< The statements of a block.
+      procedure, pass(self), private :: old_if_line   !< gnuplot's old one-line if.
+      procedure, pass(self), private :: run_list      !< Statements in order.
       procedure, pass(self), private :: run_loops     !< Nested `for` clauses of a block.
       procedure, pass(self), private :: string_expression !< A string expression across tokens.
       procedure, pass(self), private :: string_argument   !< The string after a set option.
@@ -320,6 +324,7 @@ contains
    if (allocated(self%locals)) deallocate(self%locals)
    allocate(self%locals(0))
    self%exit_status = 0_I4P
+   self%dummy = ''
    self%encoding = 'default'
    self%term_name = 'html'
    if (len(output) > 4) then
@@ -632,15 +637,25 @@ contains
       integer(I4P),     intent(in)    :: at            !< Its first line.
       type(token_object), allocatable :: statements(:) !< Statements.
       integer(I4P)                    :: s             !< Statement counter.
+      integer(I4P)                    :: e             !< Last statement of an old if's line.
 
       call split_statements(logical_line, statements)
-      do s = 1_I4P, size(statements, kind=I4P)
-         call self%execute(statements(s)%text, iostat, iomsg)
+      s = 1_I4P
+      do while (s <= size(statements, kind=I4P))
+         if (old_if(statements(s)%text)) then
+            ! gnuplot's old one-line if: the statements of its line are its own
+            e = same_line_end(logical_line, statements, s)
+            call self%old_if_line(statements(s:e), iostat, iomsg)
+            s = e
+         else
+            call self%execute(statements(s)%text, iostat, iomsg)
+         endif
          if (iostat /= 0_I4P) then
             iomsg = name//':'//int_str(int(at, I8P))//': '//iomsg
             return
          endif
          if (self%loop_signal >= 3_I4P) return
+         s = s + 1_I4P
       enddo
       endsubroutine process
    endsubroutine run_text
@@ -1180,7 +1195,7 @@ contains
 
    recursive subroutine if_block(self, statement, iostat, iomsg)
    !< gnuplot `if (condition) { ... } [else if (condition) { ... }]... [else { ... }]`: the first block whose condition
-   !< holds is run. gnuplot's old one-line form, `if (condition) command`, is not supported.
+   !< holds is run. gnuplot's old one-line form, `if (condition) command`, is `old_if_line`'s.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    character(len=*),              intent(in)    :: statement !< The whole statement.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
@@ -1204,7 +1219,7 @@ contains
       endif
       rest = after
       if (.not. block_body(rest, body, after)) then
-         call fail('if: { ... } expected after the condition (the old one-line form is not supported)', iostat, iomsg)
+         call fail('if: { ... } or a command expected after the condition', iostat, iomsg)
          return
       endif
       rest = after
@@ -1257,10 +1272,83 @@ contains
    iomsg = ''
    call split_statements(body, statements)
    do s = 1_I4P, size(statements, kind=I4P)
+      if (old_if(statements(s)%text)) then
+         ! as gnuplot 6.0: the old one-line form only outside blocks
+         call fail('Old-style if/else statement encountered inside brackets', iostat, iomsg)
+         return
+      endif
       call self%execute(statements(s)%text, iostat, iomsg)
       if (iostat /= 0_I4P .or. self%loop_signal /= 0_I4P) return
    enddo
    endsubroutine run_body
+
+   recursive subroutine old_if_line(self, statements, iostat, iomsg)
+   !< gnuplot's old one-line `if (condition) command; ...; [else command; ...]`: `statements` the if and the rest of its
+   !< line; when the condition holds the commands up to an `else` run, else those after it (`else if` chains), as
+   !< gnuplot 6.0 still runs it.
+   class(script_object),          intent(inout) :: self          !< Interpreter.
+   type(token_object),            intent(in)    :: statements(:) !< The if and the statements after it on its line.
+   integer(I4P),                  intent(out)   :: iostat        !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg         !< Error message.
+   type(token_object), allocatable              :: list(:)       !< The commands after the condition.
+   character(len=:), allocatable                :: rest          !< Text after `if`.
+   character(len=:), allocatable                :: condition     !< Condition.
+   character(len=:), allocatable                :: after         !< First command.
+   logical                                      :: holds         !< Condition true.
+   integer(I4P)                                 :: e             !< The `else` statement, 0 if none.
+   integer(I4P)                                 :: k             !< Counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   rest = trim(adjustl(statements(1)%text))
+   rest = trim(adjustl(rest(3:)))
+   if (.not. parenthesized(rest, condition, after)) then
+      call fail('if: (condition) expected', iostat, iomsg)
+      return
+   endif
+   list = statements
+   list(1)%text = trim(adjustl(after))
+   e = 0_I4P
+   do k = 2_I4P, size(list, kind=I4P)
+      if (leading_word(list(k)%text) == 'else') then
+         e = k
+         exit
+      endif
+   enddo
+   call truth_of(self, condition, holds, iostat, iomsg)
+   if (iostat /= 0_I4P) then
+      iomsg = 'if: '//iomsg
+      return
+   endif
+   if (holds) then
+      if (e == 0_I4P) e = size(list, kind=I4P) + 1_I4P
+      call self%run_list(list(1:e - 1_I4P), iostat, iomsg)
+   elseif (e > 0_I4P) then
+      list(e)%text = trim(adjustl(list(e)%text(5:)))
+      call self%run_list(list(e:), iostat, iomsg)
+   endif
+   endsubroutine old_if_line
+
+   recursive subroutine run_list(self, statements, iostat, iomsg)
+   !< Run `statements` in order (an old one-line if among them takes the rest), stopping at an error or a signal.
+   class(script_object),          intent(inout) :: self          !< Interpreter.
+   type(token_object),            intent(in)    :: statements(:) !< Statements.
+   integer(I4P),                  intent(out)   :: iostat        !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg         !< Error message.
+   integer(I4P)                                 :: s             !< Statement counter.
+
+   iostat = 0_I4P
+   iomsg = ''
+   do s = 1_I4P, size(statements, kind=I4P)
+      if (len_trim(statements(s)%text) == 0) cycle
+      if (old_if(statements(s)%text)) then
+         call self%old_if_line(statements(s:), iostat, iomsg)
+         return
+      endif
+      call self%execute(statements(s)%text, iostat, iomsg)
+      if (iostat /= 0_I4P .or. self%loop_signal /= 0_I4P) return
+   enddo
+   endsubroutine run_list
 
    subroutine truth_of(self, condition, holds, iostat, iomsg)
    !< Whether the constant expression `condition` holds (a number other than 0; a string is an error).
@@ -2220,6 +2308,7 @@ contains
    endif
    ! gnuplot's dummy variable is t in polar mode
    dummy = merge('t', 'x', self%figure%panels(self%figure%current)%polar)
+   if (len(self%dummy) > 0) dummy = self%dummy
    ! inline ranges, [x] then [y], for this plot only: plot [0:2*pi] [-1:1] sin(x), plot [t=0:1] t**2
    i = 1_I4P
    nranges = 0_I4P
@@ -4578,6 +4667,7 @@ contains
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
+   self%dummy = ''
    call default_styles(self)
    contains
       subroutine clear_keeping_datablocks
@@ -5637,19 +5727,19 @@ contains
       call self%figure%set_timefmt(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
       endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%yaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
       endassociate
    elseif (keyword(option, 'y2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%y2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
       endassociate
    elseif (keyword(option, 'x2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%x2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
@@ -5735,7 +5825,7 @@ contains
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%cbaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%tight)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
@@ -5890,6 +5980,20 @@ contains
          call fail('set margins: L, R, B, T expected', iostat, iomsg)
          return
       endif
+   elseif (keyword(option, 'dummy', 2_I4P)) then
+      ! set dummy NAME[, NAME2...]: the first names the variable of the functions (the others are splot's)
+      if (size(tokens) < 2) then
+         self%dummy = ''
+      elseif (tokens(2)%kind /= TOKEN_WORD .or. &
+              verify(tokens(2)%text, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') /= 0 .or. &
+              scan(tokens(2)%text(1:1), '0123456789') > 0) then
+         call fail('set dummy: a variable name is expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+         return
+      else
+         self%dummy = tokens(2)%text
+      endif
+   elseif (keyword(option, 'autoscale', 4_I4P)) then
+      call autoscale_option
    elseif (keyword(option, 'ticscale', 5_I4P)) then
       ! gnuplot's old form of set tics scale
       call all_tics_option(scale_only=.true.)
@@ -5923,7 +6027,7 @@ contains
       call print_option
    elseif (keyword(option, 'table', 3_I4P)) then
       call table_option
-   elseif (keyword(option, 'errorbars', 6_I4P)) then
+   elseif (keyword(option, 'errorbars', 6_I4P) .or. keyword(option, 'bars', 3_I4P)) then
       call errorbars_option
    elseif (keyword(option, 'samples', 3_I4P)) then
       call samples_option
@@ -5990,18 +6094,38 @@ contains
       call fail('unsupported option "set '//option//'"', iostat, iomsg)
    endif
    contains
-      subroutine set_range(min_fixed, min_user, max_fixed, max_user)
-      !< Parse `[min:max]`: `*` or an empty end autoscales it.
-      logical,   intent(inout) :: min_fixed !< Start fixed.
-      real(R8P), intent(inout) :: min_user  !< Start value.
-      logical,   intent(inout) :: max_fixed !< End fixed.
-      real(R8P), intent(inout) :: max_user  !< End value.
-      integer(I4P)             :: colon     !< Separator position.
+      subroutine set_range(min_fixed, min_user, max_fixed, max_user, tight)
+      !< Parse `[min:max] [noextend|extend] [noreverse] [nowriteback]`: `*` or an empty end autoscales it, `[]` keeps
+      !< both; `noextend` keeps autoscaled ends at the data (`tight`), as gnuplot.
+      logical,   intent(inout)           :: min_fixed !< Start fixed.
+      real(R8P), intent(inout)           :: min_user  !< Start value.
+      logical,   intent(inout)           :: max_fixed !< End fixed.
+      real(R8P), intent(inout)           :: max_user  !< End value.
+      logical,   intent(inout), optional :: tight     !< Autoscaled ends not extended to the ticks.
+      integer(I4P)                       :: colon     !< Separator position.
+      integer(I4P)                       :: k         !< Option counter.
 
-      if (size(tokens) /= 2) then
+      if (size(tokens) < 2) then
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
          return
       endif
+      do k = 3_I4P, size(tokens, kind=I4P)
+         select case (tokens(k)%text)
+         case ('noextend', 'extend')
+            if (.not. present(tight)) then
+               call fail('set '//option//': '//tokens(k)%text//' applies to x, y, x2, y2 and cb', iostat, iomsg)
+               return
+            endif
+            tight = tokens(k)%text == 'noextend'
+         case ('noreverse', 'nowriteback')
+            continue
+         case default
+            call fail('set '//option//': unsupported option "'//tokens(k)%text//'" (noextend, extend, noreverse, '// &
+                      'nowriteback)', iostat, iomsg)
+            return
+         endselect
+      enddo
+      if (tokens(2)%kind == TOKEN_RANGE .and. len_trim(tokens(2)%text) == 0) return
       colon = top_colon(tokens(2)%text)
       if (tokens(2)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
@@ -7143,6 +7267,89 @@ contains
       endif
       endsubroutine border_option
 
+      subroutine autoscale_option
+      !< gnuplot `set autoscale [AXES|AXESmin|AXESmax|AXESfix|fix|noextend|keepfix]...` (AXES x, y, x2, y2, cb, xy):
+      !< the named axes (all without one) autoscaled again, `fix` and `noextend` their ends not extended to the ticks.
+      logical :: named(5)  !< x, y, x2, y2, cb named.
+      logical :: tight     !< fix or noextend.
+      character(len=:), allocatable :: w !< Word.
+      character(len=*), parameter   :: AXES(5) = [character(len=2) :: 'x', 'y', 'x2', 'y2', 'cb'] !< Axis names.
+      integer(I4P) :: a    !< Axis counter.
+      integer(I4P) :: k    !< Token counter.
+      logical      :: ends(2) !< min, max autoscaled.
+
+      named = .false.
+      tight = .false.
+      do k = 2_I4P, size(tokens, kind=I4P)
+         w = tokens(k)%text
+         ends = .true.
+         if (w == 'fix' .or. w == 'noextend') then
+            tight = .true.
+            cycle
+         endif
+         if (w == 'keepfix') cycle
+         if (w == 'xy') then
+            named(1:2) = .true.
+            call autoscale(1_I4P, ends, .false.)
+            call autoscale(2_I4P, ends, .false.)
+            cycle
+         endif
+         do a = 1_I4P, 5_I4P
+            if (index(w, trim(AXES(a))) /= 1) cycle
+            select case (w(len_trim(AXES(a)) + 1:))
+            case ('')
+               exit
+            case ('min')
+               ends = [.true., .false.]
+               exit
+            case ('max')
+               ends = [.false., .true.]
+               exit
+            case ('fix', 'fixmin', 'fixmax')
+               exit
+            endselect
+         enddo
+         if (a > 5_I4P) then
+            call fail('set autoscale: unsupported option "'//w//'" (x, y, x2, y2, cb, xy with min, max, fix; fix, '// &
+                      'noextend)', iostat, iomsg)
+            return
+         endif
+         named(a) = .true.
+         call autoscale(a, ends, index(w, 'fix') > 0)
+      enddo
+      if (.not. any(named)) then
+         do a = 1_I4P, 5_I4P
+            call autoscale(a, [.true., .true.], tight)
+         enddo
+      elseif (tight) then
+         do a = 1_I4P, 5_I4P
+            if (named(a)) call autoscale(a, [.false., .false.], .true.)
+         enddo
+      endif
+      endsubroutine autoscale_option
+
+      subroutine autoscale(a, ends, fix)
+      !< Axis `a` (x, y, x2, y2, cb) autoscaled at its `ends` (min, max), not extended to the ticks with `fix`.
+      integer(I4P), intent(in) :: a       !< Axis.
+      logical,      intent(in) :: ends(2) !< min, max autoscaled.
+      logical,      intent(in) :: fix     !< Ends at the data.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         select case (a)
+         case (1_I4P)
+            call autoscale_axis(panel%xaxis, ends, fix)
+         case (2_I4P)
+            call autoscale_axis(panel%yaxis, ends, fix)
+         case (3_I4P)
+            call autoscale_axis(panel%x2axis, ends, fix)
+         case (4_I4P)
+            call autoscale_axis(panel%y2axis, ends, fix)
+         case default
+            call autoscale_axis(panel%cbaxis, ends, fix)
+         endselect
+      endassociate
+      endsubroutine autoscale
+
       function margin_value(side) result(ok)
       !< A margin after token `i` (left on its last token): `[at screen] N`, or nothing (computed).
       character(len=1), intent(in) :: side   !< `l`, `r`, `t` or `b`.
@@ -8205,7 +8412,7 @@ contains
       self%print_file = ''
    elseif (keyword(option, 'table', 3_I4P)) then
       self%table = .false.
-   elseif (keyword(option, 'errorbars', 6_I4P)) then
+   elseif (keyword(option, 'errorbars', 6_I4P) .or. keyword(option, 'bars', 3_I4P)) then
       ! no crossbars, as gnuplot's unset errorbars
       self%figure%panels(self%figure%current)%errorbar_size = 0.0_R8P
    else
@@ -8434,6 +8641,48 @@ contains
    rest = trim(adjustl(text(close + 1_I4P:)))
    ok = .true.
    endfunction block_body
+
+   pure subroutine autoscale_axis(axis, ends, fix)
+   !< `axis` autoscaled at its `ends` (min, max), not extended to the ticks with `fix` (gnuplot `set autoscale`).
+   type(axis_object), intent(inout) :: axis    !< Axis.
+   logical,           intent(in)    :: ends(2) !< min, max autoscaled.
+   logical,           intent(in)    :: fix     !< Ends at the data.
+
+   if (ends(1)) axis%min_fixed = .false.
+   if (ends(2)) axis%max_fixed = .false.
+   if (fix) axis%tight = .true.
+   endsubroutine autoscale_axis
+
+   function old_if(statement) result(yes)
+   !< Whether `statement` is gnuplot's old one-line `if (condition) command` (no block after the condition).
+   character(len=*), intent(in)  :: statement !< Statement.
+   logical                       :: yes       !< An old if.
+   character(len=:), allocatable :: rest      !< Text after `if`.
+   character(len=:), allocatable :: inside    !< Condition.
+   character(len=:), allocatable :: after     !< Text after the condition.
+
+   yes = leading_word(statement) == 'if'
+   if (.not. yes) return
+   rest = trim(adjustl(statement))
+   rest = trim(adjustl(rest(3:)))
+   yes = parenthesized(rest, inside, after)
+   if (yes) yes = len_trim(after) > 0
+   if (yes) yes = adjustl(after) /= '{' .and. index(adjustl(after), '{') /= 1
+   endfunction old_if
+
+   pure function same_line_end(text, statements, s) result(e)
+   !< The last of `statements` (from `s`) on the same line of `text` as statement `s`.
+   character(len=*),   intent(in) :: text          !< Text the statements come from.
+   type(token_object), intent(in) :: statements(:) !< Statements, with their places in `text`.
+   integer(I4P),       intent(in) :: s             !< First statement.
+   integer(I4P)                   :: e             !< Last on its line.
+
+   e = s
+   do while (e < size(statements, kind=I4P))
+      if (index(text(statements(e)%last + 1:statements(e + 1_I4P)%first - 1), new_line('a')) > 0) exit
+      e = e + 1_I4P
+   enddo
+   endfunction same_line_end
 
    function parenthesized(text, inside, rest) result(ok)
    !< `( inside ) rest`.
