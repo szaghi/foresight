@@ -1946,6 +1946,13 @@ call interpreter%run_text('load "foresight_script_test_none.gp"', iostat, iomsg)
 test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'cannot open script') > 0
 call interpreter%run_text('load "foresight_script_test_sub.gp" 1', iostat, iomsg)
 test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'call passes arguments') > 0
+! undefine as gnuplot: nothing after it does nothing, a number or * alone is not a name, a*b is ignored; functions stay
+call interpreter%run_text('undefine; ff(x) = 2*x; undefine ff; uu = ff(2); undefine a*b', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat == 0_I4P
+call interpreter%run_text('undefine 3', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'not a variable name: "3"') > 0
+call interpreter%run_text('undefine *', iostat, iomsg)
+test_passed(106) = test_passed(106) .and. iostat /= 0_I4P .and. index(iomsg, 'not a variable name') > 0
 open(newunit=unit, file='foresight_script_test_sub.gp')
 close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_blocks.svg')

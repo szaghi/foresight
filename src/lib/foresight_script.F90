@@ -617,17 +617,19 @@ contains
       endif
       call self%run_text(text, iostat, iomsg, source='eval')
    elseif (keyword(command, 'undefine', 3_I4P)) then
-      ! variables and datablocks; NAME* every variable whose name starts with NAME
-      if (size(tokens) < 2) then
-         call fail('undefine: a variable name is expected', iostat, iomsg)
-         return
-      endif
+      ! variables, arrays and datablocks; NAME* every variable whose name starts with NAME; as gnuplot nothing after
+      ! undefine does nothing, a word not starting as a name is "Not a variable name", a name and more (a*b) is ignored
       do i = 2_I4P, size(tokens, kind=I4P)
          text = tokens(i)%text
          if (tokens(i)%kind /= TOKEN_WORD .or. len(text) == 0) then
-            call fail('undefine: a variable name is expected, found "'//text//'"', iostat, iomsg)
+            call fail('undefine: not a variable name: "'//text//'"', iostat, iomsg)
             return
          endif
+         if (scan(text(1:1), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$') == 0) then
+            call fail('undefine: not a variable name: "'//text//'"', iostat, iomsg)
+            return
+         endif
+         if (index(text(1:len(text) - 1), '*') > 0) cycle
          if (text(len(text):len(text)) == '*') then
             call self%symbols%remove_prefix(text(1:len(text) - 1))
          else
