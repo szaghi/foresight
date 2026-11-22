@@ -316,7 +316,7 @@ contains
    !< gnuplot `invigamma(a, p)` (specfun.c f_inverse_igamma, inverse_incomplete_gamma: A&S or NR initial guess, 12
    !< Halley steps on complexfun.c's igamma). Real result: 0 for p = 0, max(100, a + 100 sqrt(a)) for p = 1.
    !< Undefined for a <= 0 (gnuplot warns "invigamma: a<=0 invalid"), p < 0 or p > 1 ("invigamma: p invalid"), and
-   !< when errno is set during the iteration (gnuplot warns "inverse_incomplete_gamma: <strerror>..." and gives NaN).
+   !< when errno is set during the iteration (gnuplot warns `inverse_incomplete_gamma: <strerror>...` and gives NaN).
    !< NaN (status 0) when a Halley step overflows (huge a).
    real(R8P),    intent(in)  :: a      !< Shape, a > 0.
    real(R8P),    intent(in)  :: p      !< Probability in [0, 1].
