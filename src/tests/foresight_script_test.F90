@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(200)                           !< Per-check outcome.
+logical                       :: test_passed(201)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4543,6 +4543,37 @@ if (test_passed(200)) then
    endassociate
 endif
 
+! stats ... matrix: the values of a matrix as one column, its size and the places of its extremes (from 0, in the
+! submatrix every keeps: columns as the points, rows as the blocks), as gnuplot 6.0; every on a matrix image; set xlabel
+! boxed
+call interpreter%init(scratch)
+call interpreter%run_text('$M << EOM'//new_line('a')//'1 2 3 4'//new_line('a')//'5 6 7 8'//new_line('a')// &
+                          '9 10 11 12'//new_line('a')//'EOM'//new_line('a')// &
+                          'stats $M matrix nooutput; a = STATS_size_x; b = STATS_size_y; c = STATS_mean; '// &
+                          'stats $M every ::1::2 matrix nooutput; d = STATS_size_x; e = STATS_index_max_x; '// &
+                          'f = STATS_records; set xlabel "x" boxed; plot $M every 2 matrix with image', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(201) = iostat == 0_I4P
+if (test_passed(201)) then
+   block
+      real(R8P) :: v(6)  !< Values read.
+      logical   :: found !< Found.
+      integer   :: k     !< Counter.
+      character(len=1), parameter :: NAMES(6) = ['a', 'b', 'c', 'd', 'e', 'f'] !< Variables.
+
+      do k = 1, 6
+         call interpreter%symbols%value_of(NAMES(k), v(k), found)
+         test_passed(201) = test_passed(201) .and. found
+      enddo
+      ! gnuplot 6.0: 4 x 3, mean 6.5; every ::1::2 keeps columns 1 and 2: 2 wide, the max (11) at column 1, 6 values
+      test_passed(201) = test_passed(201) .and. all(v == [4.0_R8P, 3.0_R8P, 6.5_R8P, 2.0_R8P, 1.0_R8P, 6.0_R8P])
+   endblock
+   associate(panel => interpreter%figure%panels(1))
+      ! every 2: columns 0 and 2, at their places
+      test_passed(201) = test_passed(201) .and. size(panel%series(1)%grid, 1) == 2 .and. panel%label_boxed == 1_I4P
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4551,7 +4582,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,200L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,201L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -333,6 +333,8 @@ type :: axes_object
    logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
    logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
    type(colormap_object), allocatable :: colormaps(:) !< Named colormaps of the series (`colormap` index).
+   integer(I4P)                     :: label_boxed = 0_I4P !< Axis labels on the background (`set xlabel boxed`):
+                                                         !< bit k-1 for label k (x, y, y2, x2).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: drop_last        !< Forget the last series.
@@ -2081,6 +2083,7 @@ contains
 
       px = x + self%label_offset(1, k) * CHAR_WIDTH * font_size
       py = y - self%label_offset(2, k) * font_size
+      backend%boxed = btest(self%label_boxed, k - 1_I4P)
       if (len_trim(self%label_color(k)) > 0) then
          if (angle /= 0.0_R8P) then
             call backend%text(px, py, string, 'middle', rotate=angle, color=trim(self%label_color(k)))
@@ -2092,6 +2095,7 @@ contains
       else
          call backend%text(px, py, string, 'middle')
       endif
+      backend%boxed = .false.
       endsubroutine axis_text
 
       pure function horizontal_span(axis) result(ends)

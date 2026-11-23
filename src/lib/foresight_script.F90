@@ -1642,6 +1642,8 @@ contains
    logical                                      :: found     !< The file exists.
    logical                                      :: two       !< Two columns.
    logical                                      :: texts     !< The cell texts are read (`strcol`).
+   logical                                      :: is_matrix !< `matrix`: the values of a matrix.
+   integer(I4P)                                 :: msize(2)  !< Columns and rows of the (sub)matrix.
    integer(I4P)                                 :: nranges   !< Ranges given.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
@@ -1680,6 +1682,8 @@ contains
    set_index = -1_I4P
    every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
    skip = 0_I4P
+   is_matrix = .false.
+   msize = 0_I4P
    prefix = 'STATS_'
    output = .false.
    i = i + 1_I4P
@@ -1698,6 +1702,9 @@ contains
       elseif (word == 'skip') then
          ! gnuplot's `skip N`: the first N lines of the file not read
          if (.not. next_integer(tokens, i, skip, iostat, iomsg, self%symbols)) return
+      elseif (keyword(word, 'matrix', 3_I4P)) then
+         ! the values of a matrix (every: columns, rows), as one column
+         is_matrix = .true.
       elseif (word == 'name' .or. keyword(word, 'prefix', 3_I4P)) then
          i = i + 1_I4P
          if (i > size(tokens, kind=I4P)) then
@@ -1739,6 +1746,11 @@ contains
       return
    endif
    self%previous_file = file
+   if (is_matrix .and. allocated(fields)) then
+      call fail('stats: a matrix takes no using', iostat, iomsg)
+      return
+   endif
+   if (is_matrix) fields = plain_columns([1_I4P])
    if (.not. allocated(fields) .and. self%symbols%is_array(file)) then
       ! an array: its values, as gnuplot's
       call parse_using('2', fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
@@ -1764,7 +1776,30 @@ contains
    ! the point number as a last field: NaN only on the rows the table inserts at block breaks, not records
    call point%set_column(0_I4P)
    call push(fields, point)
-   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P) .or. self%column_headers)
+   if (is_matrix) then
+      ! the values of the (sub)matrix row by row, as one column (the point number a last, finite, column)
+      block
+         real(R8P), allocatable        :: z(:,:)   !< Matrix.
+         real(R8P), allocatable        :: sub(:,:) !< Submatrix.
+         real(R8P), allocatable        :: cx(:)    !< Its column indices.
+         real(R8P), allocatable        :: ry(:)    !< Its row indices.
+         character(len=:), allocatable :: problem  !< Matrix problem.
+
+         call data%matrix(set_index, z, problem)
+         if (len(problem) > 0) then
+            call fail('stats: '//problem//' in "'//file//'"', iostat, iomsg)
+            return
+         endif
+         call matrix_every(z, every, sub, cx, ry)
+         msize = [size(sub, 1, kind=I4P), size(sub, 2, kind=I4P)]
+         allocate(values(size(sub), 2))
+         values(:, 1) = reshape(sub, [size(sub)])
+         values(:, 2) = 0.0_R8P
+      endblock
+   else
+      call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P) .or. &
+                      self%column_headers)
+   endif
    ! the variables of an earlier stats with this prefix are forgotten first, as gnuplot
    do k = 1_I4P, size(BASES, kind=I4P)
       call self%symbols%remove(prefix//trim(BASES(k)))
@@ -1835,6 +1870,23 @@ contains
    else
       call set_column(r%y, '')
    endif
+   if (is_matrix) then
+      ! gnuplot's matrix variables: its size, the place (from 0, in the submatrix) of the extremes, a record per value
+      call set_int('records', count(keep))
+      call set_int('columns', msize(1))
+      call set_int('size_x', msize(1))
+      call set_int('size_y', msize(2))
+      block
+         integer(I4P) :: at(2) !< First extreme, row by row.
+
+         at = first_at(minval(values(:, 1), mask=keep))
+         call set_int('index_min_x', at(1))
+         call set_int('index_min_y', at(2))
+         at = first_at(maxval(values(:, 1), mask=keep))
+         call set_int('index_max_x', at(1))
+         call set_int('index_max_y', at(2))
+      endblock
+   endif
    if (.not. output) return
    select case (self%print_file)
    case ('')
@@ -1851,6 +1903,22 @@ contains
       close(unit)
    endselect
    contains
+      function first_at(v) result(at)
+      !< Column and row (from 0) of the first value `v` of the submatrix read row by row.
+      real(R8P), intent(in) :: v     !< Value.
+      integer(I4P)          :: at(2) !< Column, row.
+      integer(I4P)          :: k     !< Value counter.
+
+      at = 0_I4P
+      do k = 1_I4P, size(values, 1, kind=I4P)
+         if (.not. keep(k)) cycle
+         if (values(k, 1) == v) then
+            at = [mod(k - 1_I4P, max(1_I4P, msize(1))), (k - 1_I4P) / max(1_I4P, msize(1))]
+            return
+         endif
+      enddo
+      endfunction first_at
+
       subroutine stats_range(text, n)
       !< Range `n` (1 x, 2 y) of the text `min:max`, either end empty or `*` for none.
       character(len=*), intent(in) :: text  !< Range text.
@@ -5661,6 +5729,20 @@ contains
             call self%figure%image(z(2:, 2:), xs, ys, title=title)
             return
          endif
+         if (any(every /= [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P])) then
+            ! gnuplot's every on a matrix: the columns kept as the points, the rows as the blocks, at their places
+            block
+               real(R8P), allocatable :: sub(:,:) !< Submatrix.
+
+               call matrix_every(z, every, sub, xs, ys)
+               if (size(sub) == 0) then
+                  call fail('plot: every leaves no values of "'//file//'"', iostat, iomsg)
+                  return
+               endif
+               call self%figure%image(sub, xs, ys, title=title)
+            endblock
+            return
+         endif
          call self%figure%image(z, title=title)
          return
       endif
@@ -8916,7 +8998,7 @@ contains
       integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2.
       logical                       :: ok     !< Success.
       character(len=*), parameter   :: WORDS = 'offset font tc textcolor textc textco textcol textcolo rotate norotate '// &
-                                               'left right center centre noenhanced noenh enhanced enh' !< Options.
+                                               'left right center centre noenhanced noenh enhanced enh boxed noboxed' !< Options.
       real(R8P)                     :: offset(2) !< Shift [characters].
       real(R8P)                     :: z      !< gnuplot's z offset, ignored.
       character(len=24)             :: color  !< Color.
@@ -8985,9 +9067,18 @@ contains
             plain = .true.
          case ('enhanced', 'enh')
             plain = .false.
+         case ('boxed')
+            ! on the background (gnuplot's text box, `set style textbox`)
+            associate(panel => self%figure%panels(self%figure%current))
+               panel%label_boxed = ibset(panel%label_boxed, axis - 1_I4P)
+            endassociate
+         case ('noboxed')
+            associate(panel => self%figure%panels(self%figure%current))
+               panel%label_boxed = ibclr(panel%label_boxed, axis - 1_I4P)
+            endassociate
          case default
             call fail('set '//tokens(1)%text//': unexpected "'//tokens(k)%text//'" (offset, font, tc, rotate, '// &
-                      'noenhanced)', iostat, iomsg)
+                      'noenhanced, boxed)', iostat, iomsg)
             return
          endselect
          k = k + 1_I4P
@@ -13556,6 +13647,30 @@ contains
       c = text(1:min(n, len(text, kind=I4P)))
       endfunction first_character
    endfunction line_option
+
+   pure subroutine matrix_every(z, every, sub, cx, ry)
+   !< The submatrix of `z(column, row)` gnuplot's `every` keeps: the columns as the points (point_incr, start_point,
+   !< end_point), the rows as the blocks (block_incr, start_block, end_block), from 0; `cx`, `ry` their indices.
+   real(R8P),              intent(in)  :: z(:,:)   !< Matrix.
+   integer(I4P),           intent(in)  :: every(6) !< `every` fields, ends -1 for none.
+   real(R8P), allocatable, intent(out) :: sub(:,:) !< Submatrix.
+   real(R8P), allocatable, intent(out) :: cx(:)    !< Its column indices.
+   real(R8P), allocatable, intent(out) :: ry(:)    !< Its row indices.
+   integer(I4P), allocatable           :: cols(:)  !< Columns kept (from 1).
+   integer(I4P), allocatable           :: rows(:)  !< Rows kept (from 1).
+   integer(I4P)                        :: last     !< Last index.
+   integer(I4P)                        :: k        !< Counter.
+
+   last = size(z, 1, kind=I4P) - 1_I4P
+   if (every(5) >= 0_I4P) last = min(last, every(5))
+   cols = [(k + 1_I4P, k = every(3), last, max(1_I4P, every(1)))]
+   last = size(z, 2, kind=I4P) - 1_I4P
+   if (every(6) >= 0_I4P) last = min(last, every(6))
+   rows = [(k + 1_I4P, k = every(4), last, max(1_I4P, every(2)))]
+   sub = z(cols, rows)
+   cx = real(cols - 1_I4P, R8P)
+   ry = real(rows - 1_I4P, R8P)
+   endsubroutine matrix_every
 
    subroutine parse_every(spec, every, iostat, iomsg, symbols)
    !< gnuplot `every point_incr:block_incr:start_point:start_block:end_point:end_block`; empty or missing fields keep
