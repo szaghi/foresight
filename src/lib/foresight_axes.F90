@@ -216,6 +216,12 @@ type :: axes_object
    integer(I4P)                     :: key_box_dt = 1_I4P !< Box dash type (`box dt`), 1 solid.
    character(len=:), allocatable    :: key_title !< Key title, a row above the entries (gnuplot `set key title`).
    real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
+   character(len=6)                 :: title_anchor = 'middle' !< Title justification, `set title left|right`:
+                                                               !< start, middle or end, at the centre.
+   character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
+   real(R8P)                        :: label_offset(2, 4) = 0.0_R8P !< x, y, y2, x2 label shifts [characters, y up],
+                                                                    !< `set xlabel offset X,Y`.
+   character(len=24)                :: label_color(4) = ''     !< x, y, y2, x2 label colors, `set xlabel tc`.
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
                                                                   !< `set lmargin`...): characters, or a page fraction
                                                                   !< with `margin_screen`; negative: computed.
@@ -2022,7 +2028,7 @@ contains
                                                        0.25_R8P * font_size - backend%row_height()
          endif
          backend%literal = self%label_plain(4)
-         call backend%text(0.5_R8P * (left + right), label_y, self%x2axis%label, 'middle')
+         call axis_text(0.5_R8P * (left + right), label_y, self%x2axis%label, 4_I4P, 0.0_R8P)
          backend%literal = .false.
       endif
       backend%literal = self%label_plain(1)
@@ -2034,20 +2040,21 @@ contains
                extent = self%xlabels_extent(backend, font_size)
                depth = shift + extent(1)
             endif
-            call backend%text(0.5_R8P * (left + right), bottom + depth + GAP + font_size, self%xaxis%label, 'middle')
+            call axis_text(0.5_R8P * (left + right), bottom + depth + GAP + font_size, self%xaxis%label, 1_I4P, &
+                           0.0_R8P)
          else
-            call backend%text(0.5_R8P * (left + right), bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT * &
-                              real(label_rows(self%xaxis%ticks) + self%group_rows(), R8P)) * font_size, &
-                              self%xaxis%label, 'middle')
+            call axis_text(0.5_R8P * (left + right), bottom + 2.0_R8P * GAP + (1.0_R8P + LINE_HEIGHT * &
+                           real(label_rows(self%xaxis%ticks) + self%group_rows(), R8P)) * font_size, &
+                           self%xaxis%label, 1_I4P, 0.0_R8P)
          endif
       endif
       backend%literal = self%label_plain(2)
-      if (self%yaxis%has_label()) call backend%text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
-                                                    self%yaxis%label, 'middle', rotate=-90.0_R8P)
+      if (self%yaxis%has_label()) call axis_text(x0 + PAD + font_size, 0.5_R8P * (top + bottom), &
+                                                 self%yaxis%label, 2_I4P, -90.0_R8P)
       backend%literal = self%label_plain(3)
       ! read upward as the y label, the glyphs on the left of the baseline
-      if (self%y2axis%has_label()) call backend%text(x1 - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
-                                                     self%y2axis%label, 'middle', rotate=-90.0_R8P)
+      if (self%y2axis%has_label()) call axis_text(x1 - PAD - 0.25_R8P * font_size, 0.5_R8P * (top + bottom), &
+                                                  self%y2axis%label, 3_I4P, -90.0_R8P)
       backend%literal = .false.
       if (self%has_title()) then
          title_y = y0 + PAD + font_size
@@ -2061,13 +2068,46 @@ contains
             endif
          endif
          ! gnuplot `set title offset X,Y`: characters, y up
+         ! `set title left|right`: the anchor at the same centre, as gnuplot
          backend%literal = self%title_plain
-         call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                           title_y - self%title_offset(2) * font_size, self%title, 'middle')
+         if (len_trim(self%title_color) > 0) then
+            call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                              title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
+                              color=trim(self%title_color))
+         else
+            call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                              title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor))
+         endif
          backend%literal = .false.
       endif
    endassociate
    contains
+      subroutine axis_text(x, y, string, k, angle)
+      !< Axis label `k` (1 x, 2 y, 3 y2, 4 x2) at (`x`, `y`) [px], rotated by `angle` (0 for none), shifted by its
+      !< `set xlabel offset X,Y` [characters, y up] and in its `tc` color.
+      real(R8P),        intent(in) :: x      !< Abscissa [px].
+      real(R8P),        intent(in) :: y      !< Ordinate [px].
+      character(len=*), intent(in) :: string !< Label.
+      integer(I4P),     intent(in) :: k      !< Label: 1 x, 2 y, 3 y2, 4 x2.
+      real(R8P),        intent(in) :: angle  !< Rotation [degrees], 0 for none.
+      real(R8P)                    :: px     !< Shifted abscissa [px].
+      real(R8P)                    :: py     !< Shifted ordinate [px].
+
+      px = x + self%label_offset(1, k) * CHAR_WIDTH * font_size
+      py = y - self%label_offset(2, k) * font_size
+      if (len_trim(self%label_color(k)) > 0) then
+         if (angle /= 0.0_R8P) then
+            call backend%text(px, py, string, 'middle', rotate=angle, color=trim(self%label_color(k)))
+         else
+            call backend%text(px, py, string, 'middle', color=trim(self%label_color(k)))
+         endif
+      elseif (angle /= 0.0_R8P) then
+         call backend%text(px, py, string, 'middle', rotate=angle)
+      else
+         call backend%text(px, py, string, 'middle')
+      endif
+      endsubroutine axis_text
+
       pure function horizontal_span(axis) result(ends)
       !< Abscissae of the data range of `axis` on the plot area, clipped to it [px].
       type(axis_object), intent(in) :: axis    !< Axis.

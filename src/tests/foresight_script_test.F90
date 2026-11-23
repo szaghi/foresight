@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(147)                           !< Per-check outcome.
+logical                       :: test_passed(148)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3143,6 +3143,33 @@ if (test_passed(147)) test_passed(147) = size(interpreter%figure%panels(1)%serie
 call interpreter%run_text('plot $H using 1:2 ti col', iostat, iomsg)
 test_passed(147) = test_passed(147) .and. iostat == 0_I4P
 if (test_passed(147)) test_passed(147) = interpreter%figure%panels(1)%series(1)%title == 'b'
+! axis labels and the title as gnuplot 6.0: offset X[,Y] in characters, tc, font, rotate; title left|center|right
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_labels.svg"; '// &
+                          'set ylabel "YY" offset 2,1 tc rgb "#ff0000" rotate parallel font ",12"; '// &
+                          'set xlabel "XX" offset 3; set x2label "X2" offset 0,-1,0; set title "TT" right tc lt 2; plot x', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(148) = iostat == 0_I4P
+if (test_passed(148)) test_passed(148) = all(interpreter%figure%panels(1)%label_offset(:, 2) == [2.0_R8P, 1.0_R8P]) .and. &
+                                       all(interpreter%figure%panels(1)%label_offset(:, 1) == [3.0_R8P, 0.0_R8P]) .and. &
+                                       all(interpreter%figure%panels(1)%label_offset(:, 4) == [0.0_R8P, -1.0_R8P]) .and. &
+                                       interpreter%figure%panels(1)%label_color(2) == '#ff0000' .and. &
+                                       interpreter%figure%panels(1)%title_anchor == 'end'
+block
+   character(len=:), allocatable :: svg !< Output.
+
+   svg = text_of_file('foresight_script_test_labels.svg')
+   test_passed(148) = test_passed(148) .and. index(svg, 'text-anchor="end" fill=') > 0 .and. &
+                     index(svg, 'fill="#ff0000">YY</text>') > 0
+endblock
+call interpreter%run_text('set title "TT" left; set ylabel "YY" offset 1,', iostat, iomsg)
+test_passed(148) = test_passed(148) .and. iostat /= 0_I4P .and. interpreter%figure%panels(1)%title_anchor == 'start'
+call interpreter%run_text('set xlabel "XX" sideways', iostat, iomsg)
+test_passed(148) = test_passed(148) .and. iostat /= 0_I4P .and. index(iomsg, 'unexpected "sideways"') > 0
+open(newunit=unit, file='foresight_script_test_labels.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3151,7 +3178,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,147L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,148L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

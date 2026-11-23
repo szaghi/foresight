@@ -258,6 +258,7 @@ type :: script_object
       procedure, pass(self), private :: run_loops     !< Nested `for` clauses of a block.
       procedure, pass(self), private :: string_expression !< A string expression across tokens.
       procedure, pass(self), private :: string_argument   !< The string after a set option.
+      procedure, pass(self), private :: text_color        !< The color after `tc`.
       procedure, pass(self), private :: register_file !< Remember a data file.
       procedure, pass(self), private :: save_output   !< Render to the current output.
       procedure, pass(self), private :: set_command   !< `set`.
@@ -975,6 +976,49 @@ contains
       ok = .false.
    endif
    endfunction string_argument
+
+   function text_color(self, tokens, i, color, iostat, iomsg) result(ok)
+   !< `tc|textcolor COLOR` with `tc` at token `i`, left on the color's last token: `lt N` (linetype N's color), else as
+   !< a line color (`rgb "red"`, `"#rrggbb"`, a number); palette colors refused.
+   class(script_object),          intent(in)    :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Statement tokens.
+   integer(I4P),                  intent(inout) :: i         !< Token counter.
+   character(len=*),              intent(inout) :: color     !< Color read.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Read.
+   type(token_object), allocatable              :: copy(:)   !< Tokens, `lc` for the color word.
+   type(line_style_object)                      :: probe     !< Color read.
+
+   iostat = 0_I4P
+   iomsg = ''
+   ! `tc lt N`: the color of linetype N
+   if (i < size(tokens, kind=I4P)) then
+      if (tokens(i + 1_I4P)%text == 'lt' .or. keyword(tokens(i + 1_I4P)%text, 'linetype', 5_I4P)) then
+         block
+            integer(I4P) :: n !< Linetype.
+
+            i = i + 1_I4P
+            ok = next_integer(tokens, i, n, iostat, iomsg, self%symbols)
+            if (.not. ok) return
+            color = default_color(max(n, 1_I4P), self%figure%panels(self%figure%current)%linecolors)
+         endblock
+         return
+      endif
+   endif
+   copy = tokens
+   copy(i)%text = 'lc'
+   ok = line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, self%symbols)
+   if (.not. ok) return
+   if (allocated(probe%lc)) then
+      if (index(probe%lc, '*') == 1) then
+         call fail('palette colors do not apply to text', iostat, iomsg)
+         ok = .false.
+         return
+      endif
+      color = probe%lc
+   endif
+   endfunction text_color
 
    recursive subroutine do_block(self, statement, iostat, iomsg)
    !< gnuplot `do for [i = a:b[:c]] [for [...]] { ... }` and `do for [w in "words"] { ... }`: the body run for each value,
@@ -7091,42 +7135,118 @@ contains
       endsubroutine linetype_option
 
       function axis_label(axis) result(ok)
-      !< `set xlabel ["text"] [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, and
-      !< whether it is read as it is, not as enhanced text.
-      integer(I4P), intent(in) :: axis  !< Axis: 1 x, 2 y, 3 y2, 4 x2.
-      logical                  :: ok    !< Success.
-      integer(I4P)             :: n     !< Tokens before the trailing words.
-      logical                  :: plain !< `noenhanced`: the label as it is.
+      !< `set xlabel ["text"] [offset X[,Y]] [font F] [tc COLOR] [rotate ...|norotate] [left|right|center]
+      !< [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, shifted by characters (x right,
+      !< y up), in its color, and whether it is read as it is, not as enhanced text. The font, the rotation and the
+      !< justification are read and ignored, as one font and the axis' own layout are foresight's.
+      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2.
+      logical                       :: ok     !< Success.
+      character(len=*), parameter   :: WORDS = 'offset font tc textcolor textc textco textcol textcolo rotate norotate '// &
+                                               'left right center centre noenhanced noenh enhanced enh' !< Options.
+      real(R8P)                     :: offset(2) !< Shift [characters].
+      real(R8P)                     :: z      !< gnuplot's z offset, ignored.
+      character(len=24)             :: color  !< Color.
+      logical                       :: plain  !< `noenhanced`: the label as it is.
+      integer(I4P)                  :: j      !< First option token.
+      integer(I4P)                  :: k      !< Token counter.
 
-      n = size(tokens, kind=I4P)
-      plain = .false.
-      if (n > 1_I4P) then
-         if (tokens(n)%kind == TOKEN_WORD .and. is_word(tokens(n)%text, 'noenhanced noenh enhanced enh')) then
-            plain = tokens(n)%text(1:2) == 'no'
-            n = n - 1_I4P
+      j = size(tokens, kind=I4P) + 1_I4P
+      do k = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%kind /= TOKEN_WORD) cycle
+         if (is_word(tokens(k)%text, WORDS)) then
+            j = k
+            exit
          endif
-      endif
-      ok = self%string_argument(tokens(1:n), text, iostat, iomsg)
-      if (ok) self%figure%panels(self%figure%current)%label_plain(axis) = plain
+      enddo
+      ok = self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)
+      if (.not. ok) return
+      ok = .false.
+      plain = .false.
+      offset = self%figure%panels(self%figure%current)%label_offset(:, axis)
+      color = self%figure%panels(self%figure%current)%label_color(axis)
+      k = j
+      do while (k <= size(tokens, kind=I4P))
+         select case (tokens(k)%text)
+         case ('offset')
+            if (k < size(tokens, kind=I4P)) then
+               if (is_word(tokens(k + 1_I4P)%text, 'character char')) k = k + 1_I4P
+            endif
+            if (.not. next_real(tokens, k, offset(1), iostat, iomsg, self%symbols)) return
+            offset(2) = 0.0_R8P
+            if (k < size(tokens, kind=I4P)) then
+               if (tokens(k + 1_I4P)%kind == TOKEN_COMMA) then
+                  k = k + 1_I4P
+                  if (.not. next_real(tokens, k, offset(2), iostat, iomsg, self%symbols)) return
+                  ! a third (z) offset is gnuplot's 3D one
+                  if (k < size(tokens, kind=I4P)) then
+                     if (tokens(k + 1_I4P)%kind == TOKEN_COMMA) then
+                        k = k + 1_I4P
+                        if (.not. next_real(tokens, k, z, iostat, iomsg, self%symbols)) return
+                     endif
+                  endif
+               endif
+            endif
+         case ('font')
+            k = k + 1_I4P
+            if (k > size(tokens, kind=I4P)) then
+               call fail('set '//tokens(1)%text//': font needs a name', iostat, iomsg)
+               return
+            endif
+         case ('tc', 'textcolor', 'textc', 'textco', 'textcol', 'textcolo')
+            if (.not. self%text_color(tokens, k, color, iostat, iomsg)) then
+               iomsg = 'set '//tokens(1)%text//': '//iomsg
+               return
+            endif
+         case ('rotate')
+            ! rotate parallel, rotate by A
+            if (k < size(tokens, kind=I4P)) then
+               if (tokens(k + 1_I4P)%text == 'parallel') then
+                  k = k + 1_I4P
+               elseif (tokens(k + 1_I4P)%text == 'by') then
+                  k = k + 2_I4P
+               endif
+            endif
+         case ('norotate', 'left', 'right', 'center', 'centre')
+         case ('noenhanced', 'noenh')
+            plain = .true.
+         case ('enhanced', 'enh')
+            plain = .false.
+         case default
+            call fail('set '//tokens(1)%text//': unexpected "'//tokens(k)%text//'" (offset, font, tc, rotate, '// &
+                      'noenhanced)', iostat, iomsg)
+            return
+         endselect
+         k = k + 1_I4P
+      enddo
+      self%figure%panels(self%figure%current)%label_plain(axis) = plain
+      self%figure%panels(self%figure%current)%label_offset(:, axis) = offset
+      self%figure%panels(self%figure%current)%label_color(axis) = color
+      ok = .true.
       endfunction axis_label
 
       subroutine title_option
-      !< `set title ["text"] [offset X,Y] [font "f"] [noenhanced] [enhanced]`: the text, shifted by characters (x right,
-      !< y up); `font` is read and ignored (one font in foresight); `noenhanced` writes it as it is, not enhanced text.
+      !< `set title ["text"] [offset X,Y] [font "f"] [left|center|right] [tc COLOR] [noenhanced] [enhanced]`: the text,
+      !< shifted by characters (x right, y up), justified about the centre (gnuplot's), in its color; `font` is read and
+      !< ignored (one font in foresight); `noenhanced` writes it as it is, not enhanced text.
       real(R8P) :: offset(2) !< Shift [characters].
       integer(I4P) :: j      !< First option token.
       logical   :: plain     !< `noenhanced`: the title as it is.
+      character(len=6)  :: anchor !< Justification.
+      character(len=24) :: color  !< Color.
 
       j = size(tokens, kind=I4P) + 1_I4P
       do i = 2_I4P, size(tokens, kind=I4P)
          if (tokens(i)%kind /= TOKEN_WORD) cycle
-         if (is_word(tokens(i)%text, 'offset font noenhanced noenh enhanced enh')) then
+         if (is_word(tokens(i)%text, 'offset font noenhanced noenh enhanced enh left right center centre tc '// &
+                     'textcolor textc textco textcol textcolo')) then
             j = i
             exit
          endif
       enddo
       if (.not. self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)) return
       offset = self%figure%panels(self%figure%current)%title_offset
+      anchor = self%figure%panels(self%figure%current)%title_anchor
+      color = self%figure%panels(self%figure%current)%title_color
       plain = .false.
       i = j
       do while (i <= size(tokens, kind=I4P))
@@ -7153,14 +7273,28 @@ contains
             plain = .true.
          case ('enhanced', 'enh')
             plain = .false.
+         case ('left')
+            anchor = 'start'
+         case ('right')
+            anchor = 'end'
+         case ('center', 'centre')
+            anchor = 'middle'
+         case ('tc', 'textcolor', 'textc', 'textco', 'textcol', 'textcolo')
+            if (.not. self%text_color(tokens, i, color, iostat, iomsg)) then
+               iomsg = 'set title: '//iomsg
+               return
+            endif
          case default
-            call fail('set title: unexpected "'//tokens(i)%text//'" (offset, font, noenhanced)', iostat, iomsg)
+            call fail('set title: unexpected "'//tokens(i)%text//'" (offset, font, left, center, right, tc, '// &
+                      'noenhanced)', iostat, iomsg)
             return
          endselect
          i = i + 1_I4P
       enddo
       call self%figure%set_title(text, offset=offset)
       self%figure%panels(self%figure%current)%title_plain = plain
+      self%figure%panels(self%figure%current)%title_anchor = anchor
+      self%figure%panels(self%figure%current)%title_color = color
       endsubroutine title_option
 
       subroutine key_option
