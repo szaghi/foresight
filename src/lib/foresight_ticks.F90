@@ -1452,6 +1452,8 @@ contains
    character(len=:), allocatable :: format  !< Format.
    integer(I4P)                  :: p       !< gnuplot's precision.
    real(R8P)                     :: d       !< Smaller of the range and the start.
+   character(len=1)              :: digit   !< The precision digit (a variable: nvfortran 26.9 sizes `achar(...)` in a
+                                            !< concatenation assigned to a deferred-length variable 57 long, bug 25).
 
    if (tics%has_format()) then
       format = tics%format
@@ -1461,7 +1463,10 @@ contains
    d = min(abs(span(2) - span(1)), abs(span(1)))
    if (span(1) * span(2) > 0.0_R8P .and. d > 0.0_R8P) then
       p = ceiling(-log10(d), I4P)
-      if (p > 4_I4P .and. p < 10_I4P) format = '%.'//achar(48 + p)//'f'
+      if (p > 4_I4P .and. p < 10_I4P) then
+         digit = achar(48 + p)
+         format = '%.'//digit//'f'
+      endif
    endif
    endfunction label_format
 

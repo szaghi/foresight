@@ -2559,6 +2559,8 @@ contains
    character(len=:), allocatable                :: palette_lc !< `lc palette` marker of the item, empty for none.
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
    logical                                      :: arrow_var    !< `arrowstyle variable`: a style per arrow.
+   logical                                      :: string_next  !< A quoted string after the option word.
+   logical                                      :: at_next      !< The word `at` after the option word.
    real(R8P),        allocatable                :: arrow_tags(:) !< Arrow style of each arrow (`arrowstyle variable`).
    real(R8P),        allocatable                :: arrow_z(:)    !< Palette value of each arrow (its style's
                                                                   !< `lc palette z`).
@@ -3067,6 +3069,14 @@ contains
             call fail('plot: unexpected "'//word//'"', iostat, iomsg)
             return
          endif
+         ! the next token, read here and not by internal functions in the conditions below: nvfortran 26.9 -O2 inlined
+         ! those and read the token counter stale (`index "name"` misparsed, bug 24)
+         string_next = .false.
+         at_next = .false.
+         if (i < size(tokens, kind=I4P)) then
+            string_next = tokens(i + 1_I4P)%kind == TOKEN_STRING
+            at_next = tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'at'
+         endif
          if (is_function .and. (keyword(word, 'using', 1_I4P) .or. keyword(word, 'index', 1_I4P) .or. &
                                 keyword(word, 'every', 2_I4P))) then
             call fail('plot: "'//word//'" applies to data files, not to the function "'//written//'"', iostat, iomsg)
@@ -3118,7 +3128,7 @@ contains
                nonuniform = .true.
             endif
             is_matrix = .true.
-         elseif (keyword(word, 'index', 1_I4P) .and. string_after()) then
+         elseif (keyword(word, 'index', 1_I4P) .and. string_next) then
             ! gnuplot `index "name"`: the dataset after the comment line starting with the name
             i = i + 1_I4P
             set_index = named_index(tokens(i)%text)
@@ -3434,7 +3444,7 @@ contains
                call fail('plot: axes x1y1, x1y2, x2y1 or x2y2 expected, found "'//axes//'"', iostat, iomsg)
                return
             endif
-         elseif (keyword(word, 'title', 1_I4P) .and. at_follows()) then
+         elseif (keyword(word, 'title', 1_I4P) .and. at_next) then
             ! `title at ...`: the automatic title, placed
             i = i + 1_I4P
             if (.not. title_place()) return
@@ -5095,14 +5105,6 @@ contains
       endassociate
       endsubroutine mark_last
 
-      function at_follows() result(yes)
-      !< Whether the token after `i` is the word `at`.
-      logical :: yes !< `at` follows.
-
-      yes = .false.
-      if (i < size(tokens, kind=I4P)) yes = tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'at'
-      endfunction at_follows
-
       function title_place() result(ok)
       !< The place after `title ... at` (token `i` is `at`): `beginning`, `end`, or `X,Y` in screen coordinates (an
       !< optional `screen` before each), as gnuplot.
@@ -5777,14 +5779,6 @@ contains
       step = v(2) - v(1)
       yes = step > 0.0_R8P .and. all(abs((v(2:) - v(:size(v) - 1)) - step) <= 1.0e-9_R8P * abs(step) * size(v))
       endfunction even
-
-      function string_after() result(yes)
-      !< Whether the token after `i` is a quoted string.
-      logical :: yes !< A string follows.
-
-      yes = .false.
-      if (i < size(tokens, kind=I4P)) yes = tokens(i + 1_I4P)%kind == TOKEN_STRING
-      endfunction string_after
 
       function named_index(name) result(k)
       !< The dataset (from 0) after the comment line of the item's file starting with `name` (the comment characters and
@@ -7585,6 +7579,7 @@ contains
    logical                                      :: unit_chars !< The last unit given is characters.
    logical                                      :: set_margins !< Multiplot margins given.
    logical                                      :: set_spacing !< Multiplot spacing given.
+   logical                                      :: r_named   !< The option names the r axis alone (`logscale r`).
 
    iostat = 0_I4P
    iomsg = ''
@@ -7592,6 +7587,9 @@ contains
       call fail('set: missing option', iostat, iomsg)
       return
    endif
+   ! read here, not by an internal function: nvfortran 26.9 -O2 inlined one and crashed comparing tokens(2)%text (bug 24)
+   r_named = .false.
+   if (size(tokens) >= 2) r_named = tokens(2)%text == 'r'
    option = tokens(1)%text
    ! gnuplot's old `set noxtics`, `set nokey`, ...: the unset of the option
    if (is_word(option, 'noxtics noytics nox2tics noy2tics nocbtics nomxtics nomytics nokey nogrid noborder')) then
@@ -7700,7 +7698,7 @@ contains
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
                         reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
-   elseif (keyword(option, 'logscale', 3_I4P) .and. r_axis_named()) then
+   elseif (keyword(option, 'logscale', 3_I4P) .and. r_named) then
       ! gnuplot `set logscale r [10]`: the radial axis of the polar panels
       if (size(tokens) > 3) then
          call fail('set logscale r: a base 10 at most is expected', iostat, iomsg)
@@ -11408,14 +11406,6 @@ contains
          self%isosamples = m
       endif
       endsubroutine samples_option
-
-      function r_axis_named() result(yes)
-      !< Whether the option names the r axis alone (`logscale r [base]`).
-      logical :: yes !< The r axis.
-
-      yes = .false.
-      if (size(tokens) >= 2) yes = tokens(2)%text == 'r'
-      endfunction r_axis_named
 
       function integer_expression(n) result(ok)
       !< The expression from token `i` (left on its last token) truncated to an integer, as gnuplot's int_expression.
