@@ -49,6 +49,8 @@ type :: axis_object
    type(tick_object), allocatable :: ticks(:)               !< Ticks, set by `setup`.
    type(tick_object), allocatable :: labels(:)              !< Text labels from the data, by value; none if unallocated
                                                             !< or empty.
+   logical                        :: reverse   = .false.    !< Reversed when an end is autoscaled (gnuplot `set xrange
+                                                             !< reverse`).
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
       procedure, pass(self) :: has_label !< Whether the axis has a label.
@@ -185,6 +187,13 @@ contains
    ! a list added to the ticks, after the extension of the range
    if (.not. self%labelled() .and. self%tics%series .and. self%tics%mode /= TICS_NONE) &
       call merge_list(self%tics, lo, hi, self%ticks)
+   ! gnuplot `reverse`: an axis with an autoscaled end runs from its largest value (axis_invert_if_requested)
+   if (self%reverse .and. .not. ((self%min_fixed .or. self%plot_min_fixed) .and. (self%max_fixed .or. &
+       self%plot_max_fixed)) .and. lo < hi) then
+      self%lo = hi
+      self%hi = lo
+      return
+   endif
    self%lo = lo
    self%hi = hi
    contains

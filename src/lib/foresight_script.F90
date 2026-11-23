@@ -6227,6 +6227,13 @@ contains
    logical                                      :: columns_first !< Multiplot `columnsfirst`.
    logical                                      :: upwards   !< Multiplot `upwards`.
    integer(I4P)                                 :: last      !< Last token of an expression.
+   real(R8P)                                    :: margins(4) !< Multiplot layout margins.
+   real(R8P)                                    :: spacing(2) !< Multiplot layout spacing.
+   logical                                      :: margin_chars(4) !< Those margins in characters.
+   logical                                      :: spacing_chars(2) !< That spacing in characters.
+   logical                                      :: unit_chars !< The last unit given is characters.
+   logical                                      :: set_margins !< Multiplot margins given.
+   logical                                      :: set_spacing !< Multiplot spacing given.
 
    iostat = 0_I4P
    iomsg = ''
@@ -6313,19 +6320,23 @@ contains
       call self%figure%set_timefmt(text)
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse)
       endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%yaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse)
       endassociate
    elseif (keyword(option, 'y2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%y2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse)
       endassociate
    elseif (keyword(option, 'x2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%x2axis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
@@ -6411,7 +6422,8 @@ contains
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%cbaxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
@@ -6664,6 +6676,12 @@ contains
    elseif (keyword(option, 'multiplot', 5_I4P)) then
       rows = 0_I4P
       cols = 0_I4P
+      margins = -1.0_R8P
+      spacing = 0.05_R8P
+      margin_chars = .false.
+      spacing_chars = .false.
+      set_margins = .false.
+      set_spacing = .false.
       text = ''
       columns_first = .false.
       upwards = .false.
@@ -6684,6 +6702,37 @@ contains
                call fail('set multiplot: font needs a name', iostat, iomsg)
                return
             endif
+         elseif (keyword(tokens(i)%text, 'margins', 3_I4P)) then
+            ! `margins [screen|char] L, R, B, T`: the unit of one value is that of the next too
+            unit_chars = .false.
+            do k = 1_I4P, 4_I4P
+               if (k > 1_I4P) then
+                  i = i + 1_I4P
+                  if (i > size(tokens, kind=I4P)) exit
+                  if (tokens(i)%kind /= TOKEN_COMMA) exit
+               endif
+               if (.not. layout_value(margins(k), unit_chars)) return
+               margin_chars(k) = unit_chars
+            enddo
+            if (k <= 4_I4P) then
+               call fail('set multiplot: margins LEFT, RIGHT, BOTTOM, TOP expected', iostat, iomsg)
+               return
+            endif
+            set_margins = .true.
+         elseif (keyword(tokens(i)%text, 'spacing', 3_I4P)) then
+            ! `spacing [screen|char] X [, [screen|char] Y]`: Y is X when absent
+            unit_chars = .false.
+            if (.not. layout_value(spacing(1), unit_chars)) return
+            spacing_chars = unit_chars
+            spacing(2) = spacing(1)
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+                  i = i + 1_I4P
+                  if (.not. layout_value(spacing(2), unit_chars)) return
+                  spacing_chars(2) = unit_chars
+               endif
+            endif
+            set_spacing = .true.
          elseif (keyword(tokens(i)%text, 'layout', 3_I4P)) then
             if (.not. next_integer(tokens, i, rows, iostat, iomsg)) return
             i = i + 1_I4P
@@ -6730,6 +6779,19 @@ contains
          call self%figure%set_multiplot(rows, cols, text)
          self%figure%columns_first = columns_first
          self%figure%upwards = upwards
+         ! gnuplot: margins place every plot area, with spacing (0.05 screen without); spacing alone does nothing
+         if (set_margins) then
+            if (set_spacing .and. (any(margins < 0.0_R8P) .or. any(spacing < 0.0_R8P))) then
+               call fail('set multiplot: must give positive margin and spacing values', iostat, iomsg)
+               return
+            endif
+            self%figure%layout_margins = margins
+            self%figure%layout_chars = margin_chars
+            if (set_spacing) then
+               self%figure%layout_spacing = spacing
+               self%figure%spacing_chars = spacing_chars
+            endif
+         endif
       endif
       self%multiplot = .true.
       self%advance_pending = .false.
@@ -6812,22 +6874,64 @@ contains
       call fail('unsupported option "set '//option//'"', iostat, iomsg)
    endif
    contains
-      subroutine set_range(min_fixed, min_user, max_fixed, max_user, tight)
-      !< Parse `[min:max] [noextend|extend] [noreverse] [nowriteback]`: `*` or an empty end autoscales it, `[]` keeps
-      !< both; `noextend` keeps autoscaled ends at the data (`tight`), as gnuplot.
+      function layout_value(v, chars) result(ok)
+      !< A multiplot margin or spacing after token `i` (left on its last token): `[screen|char[acter]] EXPR`, the unit
+      !< kept from the previous value when absent (`chars`); negative is none (-1), a screen fraction clamped to [0,1].
+      real(R8P), intent(out)   :: v     !< Value.
+      logical,   intent(inout) :: chars !< In characters, else screen.
+      logical                  :: ok    !< Read.
+
+      v = -1.0_R8P
+      ok = .false.
+      i = i + 1_I4P
+      if (i > size(tokens, kind=I4P)) then
+         call fail('set multiplot: a margin or spacing value is expected', iostat, iomsg)
+         return
+      endif
+      if (keyword(tokens(i)%text, 'screen', 2_I4P)) then
+         chars = .false.
+         i = i + 1_I4P
+      elseif (keyword(tokens(i)%text, 'character', 4_I4P)) then
+         chars = .true.
+         i = i + 1_I4P
+      endif
+      if (i > size(tokens, kind=I4P)) then
+         call fail('set multiplot: a margin or spacing value is expected', iostat, iomsg)
+         return
+      endif
+      last = expression_end(tokens, i)
+      call self%symbols%constant(expression_source(tokens(i:last)), v, iostat, iomsg, &
+                                 degrees=self%figure%panels(self%figure%current)%degrees)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set multiplot: '//iomsg
+         return
+      endif
+      i = last
+      if (v < 0.0_R8P) v = -1.0_R8P
+      if (.not. chars .and. v >= 0.0_R8P) v = min(v, 1.0_R8P)
+      ok = .true.
+      endfunction layout_value
+
+      subroutine set_range(min_fixed, min_user, max_fixed, max_user, tight, reverse)
+      !< Parse `[[min:max]] [noextend|extend] [reverse|noreverse] [nowriteback]`: `*` or an empty end autoscales it, `[]`
+      !< or no range keeps both; `noextend` keeps autoscaled ends at the data (`tight`), `reverse` reverses an axis with
+      !< an autoscaled end, as gnuplot.
       logical,   intent(inout)           :: min_fixed !< Start fixed.
       real(R8P), intent(inout)           :: min_user  !< Start value.
       logical,   intent(inout)           :: max_fixed !< End fixed.
       real(R8P), intent(inout)           :: max_user  !< End value.
       logical,   intent(inout), optional :: tight     !< Autoscaled ends not extended to the ticks.
+      logical,   intent(inout), optional :: reverse   !< Reversed with an autoscaled end.
       integer(I4P)                       :: colon     !< Separator position.
       integer(I4P)                       :: k         !< Option counter.
+      integer(I4P)                       :: first     !< First option token.
 
       if (size(tokens) < 2) then
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
          return
       endif
-      do k = 3_I4P, size(tokens, kind=I4P)
+      first = merge(3_I4P, 2_I4P, tokens(2)%kind == TOKEN_RANGE)
+      do k = first, size(tokens, kind=I4P)
          select case (tokens(k)%text)
          case ('noextend', 'extend')
             if (.not. present(tight)) then
@@ -6835,14 +6939,22 @@ contains
                return
             endif
             tight = tokens(k)%text == 'noextend'
-         case ('noreverse', 'nowriteback')
+         case ('reverse', 'noreverse')
+            if (present(reverse)) then
+               reverse = tokens(k)%text == 'reverse'
+            elseif (tokens(k)%text == 'reverse') then
+               call fail('set '//option//': reverse applies to x, y, x2, y2 and cb', iostat, iomsg)
+               return
+            endif
+         case ('nowriteback')
             continue
          case default
-            call fail('set '//option//': unsupported option "'//tokens(k)%text//'" (noextend, extend, noreverse, '// &
-                      'nowriteback)', iostat, iomsg)
+            call fail('set '//option//': unsupported option "'//tokens(k)%text//'" (noextend, extend, reverse, '// &
+                      'noreverse, nowriteback)', iostat, iomsg)
             return
          endselect
       enddo
+      if (first == 2_I4P) return
       if (tokens(2)%kind == TOKEN_RANGE .and. len_trim(tokens(2)%text) == 0) return
       colon = top_colon(tokens(2)%text)
       if (tokens(2)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then

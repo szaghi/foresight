@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(165)                           !< Per-check outcome.
+logical                       :: test_passed(166)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3635,6 +3635,38 @@ if (test_passed(165)) test_passed(165) = trim(interpreter%figure%panels(1)%linec
 call interpreter%run_text('set linetype 3 lc palette', iostat, iomsg)
 test_passed(165) = test_passed(165) .and. iostat /= 0_I4P .and. index(iomsg, 'a fixed color is expected') > 0
 
+
+! set multiplot layout ... margins L,R,B,T spacing X,Y (gnuplot's plot areas at screen fractions, char units too) and
+! set xrange|yrange reverse (an axis with an autoscaled end reversed, an explicit range left as it is)
+call interpreter%init(scratch)
+call interpreter%run_text('set multiplot layout 2,2 margins 0.1, 0.9, 0.1, 0.9 spacing 0.1, 0.2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(166) = iostat == 0_I4P
+if (test_passed(166)) test_passed(166) = all(interpreter%figure%layout_margins == [0.1_R8P, 0.9_R8P, 0.1_R8P, 0.9_R8P]) &
+                                       .and. all(interpreter%figure%layout_spacing == [0.1_R8P, 0.2_R8P])
+call interpreter%run_text('unset multiplot; set multiplot layout 1,2 margins char 3, 3, 2, 4', iostat, iomsg)
+test_passed(166) = test_passed(166) .and. iostat == 0_I4P
+if (test_passed(166)) test_passed(166) = all(interpreter%figure%layout_chars) .and. &
+                                       all(interpreter%figure%layout_spacing == 0.05_R8P)
+call interpreter%run_text('unset multiplot; set multiplot layout 1,2 margins 0.1, -1, 0.1, 0.9 spacing 0.1', iostat, &
+                          iomsg)
+test_passed(166) = test_passed(166) .and. iostat /= 0_I4P .and. index(iomsg, 'positive margin and spacing') > 0
+call interpreter%init(scratch)
+call interpreter%run_text('set yrange reverse; plot [0:1] x', iostat, iomsg)
+test_passed(166) = test_passed(166) .and. iostat == 0_I4P
+if (test_passed(166)) then
+   call interpreter%figure%panels(1)%yaxis%setup(0.0_R8P, 1.0_R8P, .true., 100.0_R8P)
+   test_passed(166) = interpreter%figure%panels(1)%yaxis%lo > interpreter%figure%panels(1)%yaxis%hi
+endif
+call interpreter%run_text('set yrange [0:1] reverse', iostat, iomsg)
+test_passed(166) = test_passed(166) .and. iostat == 0_I4P
+if (test_passed(166)) then
+   call interpreter%figure%panels(1)%yaxis%setup(0.0_R8P, 1.0_R8P, .true., 100.0_R8P)
+   test_passed(166) = interpreter%figure%panels(1)%yaxis%lo < interpreter%figure%panels(1)%yaxis%hi
+endif
+call interpreter%run_text('set rrange reverse', iostat, iomsg)
+test_passed(166) = test_passed(166) .and. iostat /= 0_I4P .and. index(iomsg, 'reverse applies to') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3643,7 +3675,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,165L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,166L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

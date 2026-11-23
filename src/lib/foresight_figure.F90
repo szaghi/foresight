@@ -67,6 +67,13 @@ type :: figure_object
    logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
+   real(R8P)                      :: layout_margins(4) = -1.0_R8P !< Layout plot areas within left, right, bottom, top
+                                                                  !< (gnuplot `set multiplot ... margins`): screen
+                                                                  !< fractions, characters with `layout_chars`; -1 none.
+   logical                        :: layout_chars(4) = .false.    !< Those margins are in characters.
+   real(R8P)                      :: layout_spacing(2) = 0.05_R8P !< Space between the layout plot areas, x and y
+                                                                  !< (gnuplot `spacing`, 0.05 screen by default).
+   logical                        :: spacing_chars(2) = .false.   !< That space is in characters.
    contains
       procedure, pass(self) :: clear           !< Remove the series of the current panel, keeping the settings.
       procedure, pass(self) :: image           !< gnuplot `plot ... with image`, a grid of values.
@@ -1388,6 +1395,10 @@ contains
    if (present(title)) self%title = title
    self%columns_first = .false.
    self%upwards = .false.
+   self%layout_margins = -1.0_R8P
+   self%layout_chars = .false.
+   self%layout_spacing = 0.05_R8P
+   self%spacing_chars = .false.
    endsubroutine set_multiplot
 
    subroutine set_origin(self, x, y)
@@ -2161,8 +2172,26 @@ contains
                rc = [(p - 1_I4P) / self%cols, modulo(p - 1_I4P, self%cols)]
             endif
             if (self%upwards) rc(1) = self%rows - 1_I4P - rc(1)
-            call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
-                              cell(2), self%font_size, canvas=[self%width, self%height])
+            if (self%layout_margins(1) >= 0.0_R8P) then
+               ! gnuplot `margins` (and `spacing`): the plot area of the cell set at screen fractions, the panel's own
+               ! margins kept apart
+               block
+                  real(R8P) :: kept(4)   !< Panel margins.
+                  logical   :: screen(4) !< Panel margins at screen fractions.
+
+                  kept = panel%margin_user
+                  screen = panel%margin_screen
+                  panel%margin_user = layout_area(rc)
+                  panel%margin_screen = .true.
+                  call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
+                                    cell(2), self%font_size, canvas=[self%width, self%height])
+                  panel%margin_user = kept
+                  panel%margin_screen = screen
+               endblock
+            else
+               call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
+                                 cell(2), self%font_size, canvas=[self%width, self%height])
+            endif
          else
             ! fractions from the bottom left of the page below the multiplot title, as gnuplot
             call panel%render(backend, panel%origin(1) * self%width, &
@@ -2173,6 +2202,36 @@ contains
       endassociate
    enddo
    call backend%end_page
+   contains
+      function layout_area(rc) result(m)
+      !< Plot area of the layout cell `rc` (row from the top, column) as screen fractions (left, right, top, bottom: the
+      !< panel margins at screen), as gnuplot's mp_layout_margins_and_spacing; characters are the page's.
+      integer(I4P), intent(in) :: rc(2)  !< Row and column, from 0.
+      real(R8P)                :: m(4)   !< Left, right, top, bottom.
+      real(R8P)                :: e(4)   !< Left, right, bottom, top edges.
+      real(R8P)                :: gap(2) !< Spacing, x and y.
+      real(R8P)                :: w      !< Plot area width.
+      real(R8P)                :: h      !< Plot area height.
+      real(R8P)                :: cx     !< Character width [page fraction].
+      real(R8P)                :: cy     !< Character height [page fraction].
+
+      cx = 0.6_R8P * self%font_size / self%width
+      cy = self%font_size / self%height
+      e = self%layout_margins
+      if (self%layout_chars(1)) e(1) = e(1) * cx
+      if (self%layout_chars(2)) e(2) = 1.0_R8P - e(2) * cx
+      if (self%layout_chars(3)) e(3) = e(3) * cy
+      if (self%layout_chars(4)) e(4) = 1.0_R8P - e(4) * cy
+      gap = self%layout_spacing
+      if (self%spacing_chars(1)) gap(1) = gap(1) * cx
+      if (self%spacing_chars(2)) gap(2) = gap(2) * cy
+      w = (e(2) - e(1) - real(self%cols - 1_I4P, R8P) * gap(1)) / real(self%cols, R8P)
+      h = (e(4) - e(3) - real(self%rows - 1_I4P, R8P) * gap(2)) / real(self%rows, R8P)
+      m(1) = e(1) + real(rc(2), R8P) * (w + gap(1))
+      m(2) = m(1) + w
+      m(4) = e(3) + real(self%rows - rc(1) - 1_I4P, R8P) * (h + gap(2))
+      m(3) = m(4) + h
+      endfunction layout_area
    endsubroutine render
 
    function place(x, y, system, caller) result(p)
