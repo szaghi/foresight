@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(194)                           !< Per-check outcome.
+logical                       :: test_passed(195)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4371,6 +4371,39 @@ if (test_passed(194)) then
    endassociate
 endif
 
+! using forms of the demos: a header substring title `columnhead(2)[1:1]`, empty tic labels as ticks on two axes
+! (`xtic(""):ytic("")`, the rug), a spec continued after a colon, a variable assigned by a field read by the next,
+! every with expressions, labels with further columns
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'A Bee'//new_line('a')//'1 2'//new_line('a')//'3 4'// &
+                          new_line('a')//'EOD'//new_line('a')//'$E << EOD'//new_line('a')//'1 2'//new_line('a')// &
+                          '3 4'//new_line('a')//'EOD'//new_line('a')//'j = 1; '// &
+                          'plot $D using 1:2 title columnhead(2)[1:2], $D using 1:2:xtic(""):ytic("") with points, '// &
+                          '$E using 1: 2 every ::j::j, $D using 1:(T = $1 + $2, T):($2 / T) with yerrorbars, '// &
+                          '$D using 1:2:2:0 with labels', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(195) = iostat == 0_I4P
+if (test_passed(195)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(195) = panel%series(1)%title == 'Be' .and. allocated(panel%series(2)%xlabels) .and. &
+                        allocated(panel%series(2)%xlabels2) .and. panel%series(2)%label_axis == 'y' .and. &
+                        panel%series(2)%label_axis2 == 'x'
+      test_passed(195) = test_passed(195) .and. size(panel%series(3)%x) == 1
+      if (test_passed(195)) test_passed(195) = panel%series(3)%x(1) == 3.0_R8P
+      test_passed(195) = test_passed(195) .and. size(panel%series(4)%y) == 2
+      if (test_passed(195)) test_passed(195) = panel%series(4)%y(2) == 7.0_R8P .and. &
+                                             abs(panel%series(4)%yhigh(2) - (7.0_R8P + 4.0_R8P / 7.0_R8P)) < 1e-12_R8P
+   endassociate
+   call interpreter%run_text('set term svg; set output "foresight_script_test_rug.svg"; replot', iostat, iomsg)
+   test_passed(195) = test_passed(195) .and. iostat == 0_I4P
+   ! the rug: ticks at x = 1, 3 and y = 2, 4 (both data rows), their labels empty
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(195) = test_passed(195) .and. size(panel%xaxis%labels) == 2 .and. size(panel%yaxis%labels) == 2
+   endassociate
+   open(newunit=unit, file='foresight_script_test_rug.svg')
+   close(unit, status='delete')
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4379,7 +4412,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,194L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,195L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

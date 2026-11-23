@@ -114,6 +114,10 @@ type :: series_object
    real(R8P), allocatable        :: arrow_widths(:) !< Line width of each arrow [px].
    real(R8P), allocatable        :: arrow_sizes(:,:) !< Head length and angle of each arrow, as `head_size`.
    character(len=9), allocatable :: arrow_systems(:) !< System of each head length, as `head_system`.
+   character(len=LABEL_LEN), allocatable :: xlabels2(:) !< Text labels of a second axis (`xtic(..):ytic(..)`).
+   character(len=2)              :: label_axis2 = 'y' !< Axis of those labels.
+   logical                       :: blank_ticks = .false. !< A blank text label is a tick too (a script's `xtic("")`,
+                                                          !< the rug, as gnuplot); else no tick (the library's).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

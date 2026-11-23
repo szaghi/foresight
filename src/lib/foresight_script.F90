@@ -1689,7 +1689,7 @@ contains
          if (.not. next_integer(tokens, i, set_index, iostat, iomsg, self%symbols)) return
       elseif (keyword(word, 'every', 2_I4P)) then
          if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-         call parse_every(word, every, iostat, iomsg)
+         call parse_every(word, every, iostat, iomsg, self%symbols)
          if (iostat /= 0_I4P) return
       elseif (word == 'skip') then
          ! gnuplot's `skip N`: the first N lines of the file not read
@@ -2188,7 +2188,7 @@ contains
          if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
       elseif (keyword(word, 'every', 2_I4P)) then
          if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-         call parse_every(word, every, iostat, iomsg)
+         call parse_every(word, every, iostat, iomsg, self%symbols)
          if (iostat /= 0_I4P) return
       elseif (word == 'skip') then
          ! gnuplot's `skip N`: the first N lines of the file not read
@@ -2522,6 +2522,11 @@ contains
    logical                                      :: needs_text !< The cell texts are read (`strcol`, labels).
    logical                                      :: time_axis(2) !< Time data on the x and y axes of the item.
    character(len=:), allocatable                :: xlabels(:) !< Text labels of the points.
+   integer(I4P)                                 :: label_col2 !< A second tic labels field (`xtic(..):ytic(..)`), 1, or
+                                                              !< 0 for none.
+   type(expression_object)                      :: label_field2 !< Its field.
+   character(len=2)                             :: label_axis2  !< Its axis.
+   character(len=:), allocatable                :: labels2(:)   !< Its text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
    logical                                      :: weight_one !< The single column is x, each point of weight 1.
    logical                                      :: is_matrix !< The item reads a `matrix` file.
@@ -2551,6 +2556,7 @@ contains
    logical                                      :: is_function !< The item is a function, else a data file.
    logical                                      :: is_head     !< `title columnhead[(N)]`.
    integer(I4P)                                 :: head_column !< Column of `title columnhead(N)`.
+   integer(I4P)                                 :: head_piece(2) !< Substring `[i:j]` of that header, 0 for all.
    type(loop_level), allocatable                :: levels(:)   !< `for [...]` clauses of the current item.
    integer(I4P)                                 :: item_start  !< First token of an iterated item.
    logical                                      :: skip_item   !< An iteration without values.
@@ -2908,6 +2914,7 @@ contains
       if (allocated(fields)) deallocate(fields)
       spec = ''
       label_col = 0_I4P
+      label_col2 = 0_I4P
       label_axis = 'x'
       is_matrix = .false.
       nonuniform = .false.
@@ -2922,6 +2929,7 @@ contains
       plain_item = .false.
       title = ''
       title_column = -1_I4P
+      head_piece = 0_I4P
       axes = 'x1y1'
       filter = ''
       bandwidth = 0.0_R8P
@@ -2972,8 +2980,27 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+            ! a spec broken after a colon (`using 2:1:\` and the next line): its fields joined, as gnuplot
+            do while (i < size(tokens, kind=I4P))
+               if (spec(len(spec):len(spec)) /= ':' .or. tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+               i = i + 1_I4P
+               spec = spec//tokens(i)%text
+            enddo
             call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field, label_axis)
             if (iostat /= 0_I4P) return
+            if (label_col > 0_I4P .and. .not. keyed) then
+               ! tic labels on two axes, `using 1:2:xtic(""):ytic("")` (the rug plot), as gnuplot
+               block
+                  logical :: keyed2 !< A key(N) field.
+
+                  call split_xtic(spec, label_col2, iostat, iomsg, keyed2, label_field2, label_axis2)
+                  if (iostat /= 0_I4P) return
+                  if (label_col2 > 0_I4P .and. (keyed2 .or. label_axis2 == label_axis)) then
+                     call fail('plot: two tic labels fields need two axes, xtic(..):ytic(..)', iostat, iomsg)
+                     return
+                  endif
+               endblock
+            endif
             if (pseudo > 0_I4P) then
                call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
                                 self%symbols, sampled=sampled)
@@ -3006,7 +3033,7 @@ contains
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
          elseif (keyword(word, 'every', 2_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-            call parse_every(word, every, iostat, iomsg)
+            call parse_every(word, every, iostat, iomsg, self%symbols)
             if (iostat /= 0_I4P) return
          elseif (word == 'skip') then
             ! gnuplot's `skip N`: the first N lines of the file not read
@@ -3353,6 +3380,14 @@ contains
                   call fail('plot: a function has no column header', iostat, iomsg)
                   return
                endif
+               ! `columnhead(N)[i:j]`: a substring of the header, as gnuplot's string expressions
+               head_piece = 0_I4P
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_RANGE) then
+                     i = i + 1_I4P
+                     if (.not. substring_range(tokens(i)%text)) return
+                  endif
+               endif
             elseif (tokens(i)%kind == TOKEN_WORD .or. tokens(i)%kind == TOKEN_STRING) then
                ! a string expression: "speed", 'f' . i, sprintf("p = %.2f", p)
                if (.not. self%string_expression(tokens, i, title, iostat, iomsg)) then
@@ -3629,7 +3664,7 @@ contains
          if (.not. allocated(fields)) then
             label_col = 3_I4P
             call label_field%set_column(label_col)
-         elseif (size(fields) == 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
+         elseif (size(fields) >= 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
                                    merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc())) then
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
             ! written as the text of the first column it reads, as gnuplot; the rotation (`rotate variable`) and the
@@ -3647,7 +3682,9 @@ contains
                label_col = 1_I4P
                label_field = fields(3)
             endif
-            kept = [fields(1:2), fields(4:)]
+            ! further columns read and ignored, as gnuplot (circles.dem's x:y:text:0)
+            kept = [fields(1:2), fields(4:3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
+                                             merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc()))]
             call move_alloc(kept, fields)
          else
             call fail('plot: labels needs using x:y:text_column', iostat, iomsg)
@@ -3922,9 +3959,15 @@ contains
             call fail('plot: no column with header "'//missing//'" in "'//file//'"', iostat, iomsg)
             return
          endif
-         if (title_column >= 0_I4P) title = header_title(max(0_I4P, set_index))
+         if (title_column >= 0_I4P) then
+            title = header_title(max(0_I4P, set_index))
+            if (head_piece(1) > 0_I4P) &
+               title = title(min(head_piece(1), len(title, kind=I4P) + 1_I4P):min(head_piece(2), len(title, kind=I4P)))
+         endif
       endif
       if (label_col > 0_I4P) then
+         if (label_col2 > 0_I4P) &
+            call data%table(fields, set_index, every, values, header=headed, labels=labels2, label=label_field2)
          call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
       else
          call data%table(fields, set_index, every, values, header=headed)
@@ -4902,6 +4945,15 @@ contains
          last = size(panel%series, kind=I4P)
          if (last < 1_I4P) return
          panel%series(last)%label_axis = label_axis
+         ! gnuplot's xtic(..): a blank label still a tick
+         panel%series(last)%blank_ticks = label_col > 0_I4P .and. .not. keyed
+         if (label_col2 > 0_I4P .and. allocated(labels2)) then
+            if (size(labels2) == size(panel%series(last)%x)) then
+               panel%series(last)%label_axis2 = label_axis2
+               allocate(panel%series(last)%xlabels2(size(labels2)))
+               panel%series(last)%xlabels2 = labels2
+            endif
+         endif
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
          if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
          panel%series(last)%ellipse_units = ellipse_units
@@ -5765,6 +5817,33 @@ contains
       ok = len(bad) == 0
       if (.not. ok) call fail('plot: unsupported fill style "'//bad//'"', iostat, iomsg)
       endfunction fill_ok
+
+      function substring_range(text) result(ok)
+      !< The substring range `i:j` (`[i:j]`, `[i:]`, `[:j]`) of a column header title into `head_piece`.
+      character(len=*), intent(in) :: text !< Range, brackets removed.
+      logical                      :: ok   !< Success.
+      integer(I4P)                 :: c    !< Colon.
+      real(R8P)                    :: v    !< End.
+
+      ok = .false.
+      c = index(text, ':', kind=I4P)
+      if (c == 0_I4P) then
+         call fail('plot: title: columnhead(N)[i:j] expected, found "['//text//']"', iostat, iomsg)
+         return
+      endif
+      head_piece = [1_I4P, huge(1_I4P)]
+      if (len_trim(text(1:c - 1_I4P)) > 0 .and. trim(adjustl(text(1:c - 1_I4P))) /= '*') then
+         call self%range_value(text(1:c - 1_I4P), v, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+         head_piece(1) = max(1_I4P, int(v, I4P))
+      endif
+      if (len_trim(text(c + 1_I4P:)) > 0 .and. trim(adjustl(text(c + 1_I4P:))) /= '*') then
+         call self%range_value(text(c + 1_I4P:), v, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+         head_piece(2) = int(v, I4P)
+      endif
+      ok = .true.
+      endfunction substring_range
 
       function header_title(set) result(name)
       !< Header of the column titling the item in dataset `set`: `title_column`, or the first column the y field reads;
@@ -9376,7 +9455,7 @@ contains
                elseif (keyword(word, 'every', 2_I4P)) then
                   i = i + 1_I4P
                   if (.not. next_word(tokens, i, word, iostat, iomsg)) return
-                  call parse_every(word, pevery, iostat, iomsg)
+                  call parse_every(word, pevery, iostat, iomsg, self%symbols)
                   if (iostat /= 0_I4P) return
                else
                   exit
@@ -12857,7 +12936,7 @@ contains
    character(len=:), allocatable,        intent(out) :: iomsg     !< Error message.
    integer(I4P),                         intent(out) :: iostat    !< 0 on success.
    logical,                              intent(in)  :: degrees   !< Angles of the expressions in degrees.
-   type(symbols_object),                 intent(in)  :: symbols   !< User variables and functions.
+   type(symbols_object),                 intent(inout) :: symbols !< User variables and functions.
    character(len=*),           optional, intent(in)  :: sampled   !< Sample variables of a pseudo-file.
    type(expression_object)                           :: field     !< Current field.
    character(len=:), allocatable                     :: text      !< Current field text (a copy: nvfortran 26.9
@@ -12903,6 +12982,8 @@ contains
             iomsg = 'using: '//iomsg
             return
          endif
+         ! a variable a field assigns read when run by the next ones, `(Total = $2+$3, ...):($4/Total)`, as gnuplot
+         call symbols%learn_assigned(field)
          if (.not. is_parenthesized(text)) then
             call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
             return
@@ -13271,22 +13352,55 @@ contains
       endfunction first_character
    endfunction line_option
 
-   subroutine parse_every(spec, every, iostat, iomsg)
+   subroutine parse_every(spec, every, iostat, iomsg, symbols)
    !< gnuplot `every point_incr:block_incr:start_point:start_block:end_point:end_block`; empty or missing fields keep
-   !< their defaults (1, 1, 0, 0, no end, no end).
-   character(len=*),              intent(in)  :: spec     !< Specification.
-   integer(I4P),                  intent(out) :: every(6) !< Fields, ends -1 for none.
-   integer(I4P),                  intent(out) :: iostat   !< 0 on success.
-   character(len=:), allocatable, intent(out) :: iomsg    !< Error message.
-   integer(I4P)                               :: start    !< Field start.
-   integer(I4P)                               :: colon    !< Field end.
-   integer(I4P)                               :: f        !< Field counter.
-   logical                                    :: ok       !< Field valid.
+   !< their defaults (1, 1, 0, 0, no end, no end); with `symbols` a field may be an expression, `every ::j:0:j:0`.
+   character(len=*),              intent(in)           :: spec     !< Specification.
+   integer(I4P),                  intent(out)          :: every(6) !< Fields, ends -1 for none.
+   integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
+   character(len=:), allocatable, intent(out)          :: iomsg    !< Error message.
+   type(symbols_object),          intent(in), optional :: symbols  !< User variables and functions.
+   integer(I4P)                                        :: start    !< Field start.
+   integer(I4P)                                        :: colon    !< Field end.
+   integer(I4P)                                        :: f        !< Field counter.
+   logical                                             :: ok       !< Field valid.
+   real(R8P)                                           :: v        !< Field value.
 
    iostat = 0_I4P
    iomsg = ''
    every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
    ok = verify(spec, '0123456789:') == 0
+   if (.not. ok .and. present(symbols)) then
+      ! expressions in the fields: each evaluated now
+      ok = .true.
+      start = 1_I4P
+      f = 0_I4P
+      do while (ok .and. start <= len(spec) + 1)
+         f = f + 1_I4P
+         colon = index(spec(start:), ':', kind=I4P)
+         if (colon == 0_I4P) then
+            colon = len(spec, kind=I4P) + 1_I4P
+         else
+            colon = start + colon - 1_I4P
+         endif
+         ok = f <= 6_I4P
+         if (ok .and. len_trim(spec(start:colon - 1_I4P)) > 0) then
+            call symbols%constant(spec(start:colon - 1_I4P), v, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'plot: every: '//iomsg
+               return
+            endif
+            ok = v >= 0.0_R8P .and. v < 1.0e9_R8P
+            if (ok) every(f) = int(v, I4P)
+         endif
+         start = colon + 1_I4P
+      enddo
+      if (ok) ok = every(1) > 0_I4P .and. every(2) > 0_I4P
+      if (.not. ok) call fail('plot: every needs up to 6 non-negative integers separated by ":", positive increments '// &
+                              '(point_incr:block_incr:start_point:start_block:end_point:end_block), not "'//spec//'"', &
+                              iostat, iomsg)
+      return
+   endif
    start = 1_I4P
    f = 0_I4P
    do while (ok .and. start <= len(spec) + 1)

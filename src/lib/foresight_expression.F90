@@ -306,6 +306,7 @@ type :: symbols_object
       procedure, pass(self) :: assign_element !< `name[index] = expression`.
       procedure, pass(self) :: set_element    !< Set an array element to a typed value.
       procedure, pass(self) :: get_element    !< Typed value of an array element.
+      procedure, pass(self) :: learn_assigned !< Read the variables an expression assigns at run time from now on.
       procedure, pass(self) :: evaluate_constant !< Typed value of a constant expression.
       procedure, pass(self) :: array_data !< An array as the lines of a data file (index and value).
       procedure, pass(self) :: array_text !< An array as gnuplot's `print` shows it.
@@ -2785,6 +2786,24 @@ contains
    self%arrays(k)%list%items(i) = v
    self%arrays(k)%list%set(i) = .true.
    endsubroutine set_element
+
+   pure subroutine learn_assigned(self, e)
+   !< The variables the expression `e` assigns (`name = value`) read at run time wherever compiled from now on, as
+   !< those of a user function body: `using (Total = $2 + $3):($4 / Total)`.
+   class(symbols_object),   intent(inout) :: self !< Symbols.
+   type(expression_object), intent(in)    :: e    !< Compiled expression.
+   integer(I4P)                           :: k    !< Store counter.
+   integer(I4P)                           :: c    !< Instruction counter.
+
+   if (.not. allocated(e%stores) .or. .not. allocated(e%code)) return
+   if (.not. allocated(self%assigned)) allocate(self%assigned(0))
+   do c = 1_I4P, size(e%code, kind=I4P)
+      if (e%code(c)%op /= OP_ASSIGN) cycle
+      k = e%code(c)%arg
+      if (k < 1_I4P .or. k > size(e%stores, kind=I4P)) cycle
+      if (.not. any_name(self%assigned, e%stores(k)%text)) call push_name(self%assigned, e%stores(k))
+   enddo
+   endsubroutine learn_assigned
 
    pure subroutine get_element(self, name, i, v, found, set)
    !< Typed value of element `i` of the array `name`, `found` false if no such array or `i` is out of range, `set`

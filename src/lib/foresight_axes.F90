@@ -6245,19 +6245,34 @@ contains
 
       allocate(labels(0))
       do s = 1_I4P, size(self%series, kind=I4P)
-         if (.not. allocated(self%series(s)%xlabels)) cycle
-         if (self%series(s)%label_axis /= name) cycle
-         associate(series => self%series(s))
-            do i = 1_I4P, size(series%x, kind=I4P)
-               value = series%x(i)
-               if (name(1:1) == 'y') value = series%y(i)
-               if (len_trim(series%xlabels(i)) == 0 .or. .not. ieee_is_finite(value)) cycle
-               if (size(labels) > 0) then
-                  if (any(labels%value == value)) cycle
-               endif
-               call push(labels, tick_object(value=value, major=.true., label=trim(series%xlabels(i)), sup=''))
-            enddo
-         endassociate
+         ! a blank label is no tick, but with `blank_ticks` (a script's `xtic("")`, the rug, as gnuplot)
+         if (allocated(self%series(s)%xlabels) .and. self%series(s)%label_axis == name) then
+            associate(series => self%series(s))
+               do i = 1_I4P, min(size(series%x, kind=I4P), size(series%xlabels, kind=I4P))
+                  value = series%x(i)
+                  if (name(1:1) == 'y') value = series%y(i)
+                  if (.not. ieee_is_finite(value)) cycle
+                  if (len_trim(series%xlabels(i)) == 0 .and. .not. series%blank_ticks) cycle
+                  if (size(labels) > 0) then
+                     if (any(labels%value == value)) cycle
+                  endif
+                  call push(labels, tick_object(value=value, major=.true., label=trim(series%xlabels(i)), sup=''))
+               enddo
+            endassociate
+         endif
+         if (allocated(self%series(s)%xlabels2) .and. self%series(s)%label_axis2 == name) then
+            associate(series => self%series(s))
+               do i = 1_I4P, min(size(series%x, kind=I4P), size(series%xlabels2, kind=I4P))
+                  value = series%x(i)
+                  if (name(1:1) == 'y') value = series%y(i)
+                  if (.not. ieee_is_finite(value)) cycle
+                  if (size(labels) > 0) then
+                     if (any(labels%value == value)) cycle
+                  endif
+                  call push(labels, tick_object(value=value, major=.true., label=trim(series%xlabels2(i)), sup=''))
+               enddo
+            endassociate
+         endif
       enddo
       n = size(labels, kind=I4P)
       do i = 2_I4P, n
