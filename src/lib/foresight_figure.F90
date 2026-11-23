@@ -1256,7 +1256,8 @@ contains
    subroutine set_grid(self, on, polar, spider, lines, front, lc, lw, dt)
    !< Draw grid lines at the major ticks (`on` absent or true), as gnuplot `set grid`, or not. On a polar panel,
    !< `polar` > 0 draws the polar grid instead (gnuplot `set grid polar STEP`): rings at the major r ticks and spokes
-   !< every `polar` degrees of theta; 0 restores the rectangular grid. `spider` draws the web of the spider plots
+   !< every `polar` degrees of theta (360: none, the rings alone, gnuplot `set grid r`); 0 restores the rectangular
+   !< grid. `spider` draws the web of the spider plots
    !< (gnuplot `set grid spiderplot`) at the ticks of their first axis.
    class(figure_object), intent(inout)        :: self   !< Figure.
    logical,              intent(in), optional :: on     !< Grid on.
@@ -1285,7 +1286,7 @@ contains
    self%panels(self%current)%grid = .true.
    if (present(on)) self%panels(self%current)%grid = on
    if (present(polar)) then
-      if (polar < 0.0_R8P .or. polar >= 360.0_R8P) error stop 'foresight: set_grid: the polar step is 0 to below 360'
+      if (polar < 0.0_R8P .or. polar > 360.0_R8P) error stop 'foresight: set_grid: the polar step is 0 to 360'
       self%panels(self%current)%grid_polar = polar
    endif
    endsubroutine set_grid

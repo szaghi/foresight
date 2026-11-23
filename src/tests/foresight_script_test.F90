@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(171)                           !< Per-check outcome.
+logical                       :: test_passed(172)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3771,6 +3771,26 @@ endif
 open(newunit=unit, file='foresight_script_test_fillsteps.svg')
 close(unit, status='delete')
 
+
+! set grid r [polar STEP] (the polar grid at the r ticks, the rings alone without polar; a STEP beyond a full turn of
+! radians is in degrees, as gnuplot), set grid lt black, set ttics [add] ("label" angle, ...)
+call interpreter%init(scratch)
+call interpreter%run_text('set polar; set grid r polar 60; set grid lt black lw .3; set ttics 0,30; '// &
+                          'set ttics add ("pi" 180, "pi/2" 90)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(172) = iostat == 0_I4P
+if (test_passed(172)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(172) = abs(panel%grid_polar - 60.0_R8P) < 1.0e-12_R8P .and. panel%grid_lc == 'black' .and. &
+                        allocated(panel%ttics%list)
+      if (test_passed(172)) test_passed(172) = size(panel%ttics%list) == 2 .and. panel%ttics%list(1)%label == 'pi'
+   endassociate
+endif
+call interpreter%run_text('set grid r', iostat, iomsg)
+test_passed(172) = test_passed(172) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%grid_polar == 360.0_R8P
+call interpreter%run_text('set grid nor', iostat, iomsg)
+test_passed(172) = test_passed(172) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%grid_polar == 0.0_R8P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3779,7 +3799,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,171L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,172L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

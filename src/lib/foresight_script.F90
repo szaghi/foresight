@@ -134,7 +134,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
                             FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
-use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object
+use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
 use penf, only : I4P, I8P, R8P
@@ -8610,6 +8610,9 @@ contains
       real(R8P)                     :: v      !< A number.
       logical                       :: lines(6) !< x, y, x2, y2, mx, my.
       logical                       :: polar  !< polar given.
+      logical                       :: rings  !< r given: the rings at the r ticks.
+      logical                       :: tokens_black !< `lt black` read.
+      logical                       :: no_rings !< nor given.
       character(len=:), allocatable :: w      !< Word.
       character(len=:), allocatable :: base   !< Word without no.
       type(line_style_object)       :: style  !< Line properties.
@@ -8619,6 +8622,9 @@ contains
          lines = panel%grid_lines
       endassociate
       polar = .false.
+      tokens_black = .false.
+      rings = .false.
+      no_rings = .false.
       step = 30.0_R8P
       i = 2_I4P
       do while (i <= size(tokens, kind=I4P))
@@ -8634,13 +8640,20 @@ contains
             call self%figure%set_grid(front=w == 'front')
          elseif (keyword(w, 'spiderplot', 6_I4P)) then
             call self%figure%set_grid(spider=.true.)
+         elseif (is_word(w, 'r rtics')) then
+            ! gnuplot's polar grid at the r ticks: the rings (with polar, its spokes too)
+            rings = .true.
+         elseif (is_word(w, 'nor nortics')) then
+            rings = .false.
+            no_rings = .true.
          elseif (keyword(w, 'polar', 2_I4P)) then
             polar = .true.
             if (i < size(tokens, kind=I4P)) then
                if (to_number(tokens(i + 1_I4P)%text, v)) then
                   step = v
-                  ! in the angle unit
-                  if (.not. self%figure%panels(self%figure%current)%degrees) step = step * (180.0_R8P / acos(-1.0_R8P))
+                  ! in the angle unit, but beyond a full turn of radians in degrees, as gnuplot's (`polar 60`)
+                  if (.not. self%figure%panels(self%figure%current)%degrees .and. v <= 2.0_R8P * acos(-1.0_R8P)) &
+                     step = step * (180.0_R8P / acos(-1.0_R8P))
                   i = i + 1_I4P
                endif
             endif
@@ -8650,8 +8663,19 @@ contains
             endif
          elseif (is_line_option(w)) then
             if (keyword(w, 'linetype', 5_I4P) .or. w == 'lt') then
-               ! lt 0: gnuplot's grid dots, lt -1: the border's solid black
-               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+               ! lt 0: gnuplot's grid dots, lt -1 (black): the border's solid black
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%text == 'black') then
+                     tokens_black = .true.
+                  endif
+               endif
+               if (tokens_black) then
+                  i = i + 1_I4P
+                  v = -1.0_R8P
+                  tokens_black = .false.
+               elseif (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  return
+               endif
                if (nint(v) == 0) then
                   call self%figure%set_grid(lc='', dt=0_I4P)
                elseif (nint(v) == -1) then
@@ -8672,7 +8696,7 @@ contains
             continue
          else
             call fail('set grid: unsupported option "'//w//'" (x, y, x2, y2, mx, my and their {no}{m}tics forms, '// &
-                      'front, back, layerdefault, lt, lc, lw, dt, polar [STEP], spiderplot)', iostat, iomsg)
+                      'r, front, back, layerdefault, lt, lc, lw, dt, polar [STEP], spiderplot)', iostat, iomsg)
             return
          endif
          i = i + 1_I4P
@@ -8680,6 +8704,11 @@ contains
       if (.not. any(lines)) lines(1:2) = .true.
       if (polar) then
          call self%figure%set_grid(.true., polar=step, lines=lines)
+      elseif (rings) then
+         ! the rings alone: no spoke (a step of a full turn draws none)
+         call self%figure%set_grid(.true., polar=360.0_R8P, lines=lines)
+      elseif (no_rings) then
+         call self%figure%set_grid(polar=0.0_R8P)
       else
          call self%figure%set_grid(.true., lines=lines)
          if (size(tokens) == 1 .or. any(is_word_list(tokens(2:)))) then
@@ -8763,6 +8792,32 @@ contains
       integer(I4P)                  :: k       !< Token counter.
 
       last = size(tokens, kind=I4P)
+      ! `[add] ("label" angle [level], ...)`: an explicit list, replacing the labels or added to them
+      if (last >= 2_I4P) then
+         block
+            type(tic_item), allocatable :: items(:) !< List items.
+            logical                     :: add      !< `add`.
+            integer(I4P)                :: at       !< List token.
+
+            add = tokens(2)%text == 'add'
+            at = merge(3_I4P, 2_I4P, add)
+            if (at <= last) then
+               if (tokens(at)%text(1:min(1, len(tokens(at)%text))) == '(') then
+                  if (at /= last) then
+                     call fail('set ttics: unexpected "'//tokens(at + 1_I4P)%text//'" after the list', iostat, iomsg)
+                     return
+                  endif
+                  call list_items(tokens(at)%text, items)
+                  if (iostat /= 0_I4P) return
+                  associate(ttics => self%figure%panels(self%figure%current)%ttics)
+                     if (ttics%mode == TICS_NONE) call self%figure%set_ttics()
+                     call ttics%set_list(items, add)
+                  endassociate
+                  return
+               endif
+            endif
+         endblock
+      endif
       ! `font F` at the end: one font in foresight, read and ignored
       if (last >= 3_I4P) then
          if (tokens(last - 1_I4P)%kind == TOKEN_WORD .and. tokens(last - 1_I4P)%text == 'font') last = last - 2_I4P

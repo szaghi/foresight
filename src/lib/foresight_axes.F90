@@ -69,7 +69,8 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
                             WITH_PARALLELAXES, WITH_SPIDERPLOT
-use foresight_ticks, only : labels_attribute, linear_ticks, MINOR_DEFAULT, push, tick_object, tics_object, TICS_FIXED, &
+use foresight_ticks, only : labels_attribute, linear_ticks, merge_list, MINOR_DEFAULT, push, tick_object, tics_object, &
+                            TICS_FIXED, &
                            TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -2288,7 +2289,8 @@ contains
                                  0.5_R8P, GRID_DASHES)
    enddo
    k = 0_I4P
-   do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P)
+   ! a step of a full turn (`set grid r` alone): the rings only
+   do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P .and. self%grid_polar < 360.0_R8P)
       a = self%page_angle(real(k, R8P) * self%grid_polar)
       call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius * cos(a)]), &
                                  self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), GRID_COLOR, 0.5_R8P, GRID_DASHES)
@@ -2343,7 +2345,13 @@ contains
    if (tics%mode /= TICS_FIXED) call tics%set_fixed('45', '0', '', message)
    lo = 0.0_R8P
    hi = 360.0_R8P
-   call linear_ticks(lo, hi, 1.0_R8P, .false., .false., thetas, tics)
+   if (tics%series) then
+      call linear_ticks(lo, hi, 1.0_R8P, .false., .false., thetas, tics)
+   else
+      allocate(thetas(0))
+   endif
+   ! an explicit list (`set ttics add ("pi" 180)`), its items replacing the ticks at their angles
+   if (allocated(tics%list)) call merge_list(tics, lo, hi, thetas)
    do t = 1_I4P, size(thetas, kind=I4P)
       ! a full turn names the start direction again
       if (thetas(t)%value >= 360.0_R8P - 1.0e-9_R8P .and. any(thetas%value <= 1.0e-9_R8P)) cycle
