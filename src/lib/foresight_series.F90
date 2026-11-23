@@ -100,7 +100,8 @@ type :: series_object
    character(len=9)              :: head_system = 'first' !< System of the head length: first, graph, screen,
                                                           !< character.
    integer(I4P)                  :: title_at = 0_I4P !< Title place (gnuplot `title ... at`): 0 the key, 1 before the
-                                                     !< first point, 2 after the last one, 3 a page position.
+                                                     !< first point, 2 after the last one, 3 a page position, 4 a
+                                                     !< plot area position (graph coordinates).
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
    integer(I4P)                  :: pointnumber = 0_I4P !< About N point markers evenly spread, 0 for all (gnuplot
                                                         !< `pointnumber`).

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(212)                           !< Per-check outcome.
+logical                       :: test_passed(213)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4824,6 +4824,41 @@ if (test_passed(212)) then
    endblock
 endif
 
+! column forms of the corpus: a using spec with blanks around ':', a user function calling timecolumn twice, labels
+! `offset X` alone, `title at graph X, Y`, vectors with yticlabels, a log tic series, `% h` as `% g` in tables
+call interpreter%init(scratch)
+call interpreter%run_text('$G << EOD'//new_line('a')//'03 1 2'//new_line('a')//'05 2 3'//new_line('a')//'EOD'// &
+                          new_line('a')//'g(c) = timecolumn(c, "%H"); set logscale y; set ytics 10 logscale; '// &
+                          'set format y "% h"; set table $T; plot $G using (g(1) + g(1)) : 2; unset table; '// &
+                          'set print "foresight_script_test_table.txt"; print $T; set print; '// &
+                          'plot $G using 2 : 3 : 1 with labels offset -2 title "L" at graph 0.5, 0.9, '// &
+                          '$G using 2:3:(1):(0):yticlabel(1) with vectors', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(213) = iostat == 0_I4P
+if (test_passed(213)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(213) = panel%series(1)%title_at == 4_I4P .and. allocated(panel%series(2)%xlabels)
+   endassociate
+   block
+      character(len=200) :: line  !< Table line.
+      integer(I4P)       :: ios   !< Read status.
+      logical            :: found !< Line found.
+
+      ! gnuplot 6.0: " 21600  1  i", the timecolumn sum, "% h" as "% g" in a table
+      found = .false.
+      open(newunit=unit, file='foresight_script_test_table.txt')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (trim(line) == ' 21600  1  i') found = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(213) = test_passed(213) .and. found
+   endblock
+endif
+call interpreter%run_text('set ytics 10 nologscale', iostat, iomsg)
+test_passed(213) = test_passed(213) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4832,7 +4867,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,212L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,213L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

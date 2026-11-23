@@ -879,8 +879,8 @@ contains
       select case (op)
       case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD, OP_FETCH)
          depth = depth + 1_I4P
-      case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
-         ! the conditional jumps pop on the path that falls through
+      case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP, OP_TIMECOLUMN)
+         ! the conditional jumps pop on the path that falls through; timecolumn takes the column and the format
          depth = depth - 1_I4P
       case (OP_SUBSTRING)
          depth = depth - 2_I4P

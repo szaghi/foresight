@@ -2762,9 +2762,15 @@ contains
    if (.not. allocated(self%series) .or. self%polar) return
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%series(s)%title_at == 0_I4P .or. len(self%series(s)%title) == 0) cycle
-      if (self%series(s)%title_at == 3_I4P) then
+      if (self%series(s)%title_at == 3_I4P .or. self%series(s)%title_at == 4_I4P) then
          if (.not. self%key) cycle
-         p = [self%series(s)%title_xy(1) * self%canvas(1), (1.0_R8P - self%series(s)%title_xy(2)) * self%canvas(2)]
+         if (self%series(s)%title_at == 4_I4P) then
+            ! graph coordinates: fractions of the plot area
+            p = [area(1) + self%series(s)%title_xy(1) * (area(2) - area(1)), &
+                 area(4) - self%series(s)%title_xy(2) * (area(4) - area(3))]
+         else
+            p = [self%series(s)%title_xy(1) * self%canvas(1), (1.0_R8P - self%series(s)%title_xy(2)) * self%canvas(2)]
+         endif
          xs = [p(1) + GAP, p(1) + GAP + self%key_sample(font_size)]
          call backend%begin_group('fs-key-entry', series=s)
          call key_sample_marks(self%series(s), backend, xs, p(2), font_size)

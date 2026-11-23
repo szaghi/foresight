@@ -2708,6 +2708,7 @@ contains
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
    logical                                      :: arrow_var    !< `arrowstyle variable`: a style per arrow.
    logical                                      :: string_next  !< A quoted string after the option word.
+   logical                                      :: single_offset !< A label offset X alone.
    logical                                      :: band_smooth  !< A smoothed band of filledcurves (x:y1:y2).
    real(R8P),        allocatable                :: band_low(:)  !< Its second curve smoothed.
    logical                                      :: at_next      !< The word `at` after the option word.
@@ -3231,9 +3232,11 @@ contains
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
-            ! a spec broken after a colon (`using 2:1:\` and the next line): its fields joined, as gnuplot
+            ! a spec broken after a colon (`using 2:1:\` and the next line), or written with blanks around its colons
+            ! (`using (T(2)) : ($0) : 1`): its fields joined, as gnuplot
             do while (i < size(tokens, kind=I4P))
-               if (spec(len(spec):len(spec)) /= ':' .or. tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+               if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+               if (spec(len(spec):len(spec)) /= ':' .and. tokens(i + 1_I4P)%text(1:1) /= ':') exit
                i = i + 1_I4P
                spec = spec//tokens(i)%text
             enddo
@@ -4526,14 +4529,14 @@ contains
       elseif (with == 'vectors') then
          if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, dx=xlow, &
-                               dy=xhigh, head=heads)
+                               dy=xhigh, head=heads, xlabels=xlabels)
          call head_last
          if (lcvar) call color_last
          if (arrow_var) call arrow_styles_last
       elseif (with == 'arrows') then
          if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
-                               length=xlow, angle=xhigh, head=heads)
+                               length=xlow, angle=xhigh, head=heads, xlabels=xlabels)
          call head_last
          if (lcvar) call color_last
          if (arrow_var) call arrow_styles_last
@@ -4926,16 +4929,20 @@ contains
          if (i < size(tokens, kind=I4P)) then
             if (keyword(tokens(i + 1_I4P)%text, 'character', 4_I4P)) i = i + 1_I4P
          endif
-         if (i + 3_I4P > size(tokens, kind=I4P)) then
+         if (i + 1_I4P > size(tokens, kind=I4P)) then
             call fail('plot: labels offset X,Y expected', iostat, iomsg)
             return
          endif
-         if (tokens(i + 2_I4P)%kind /= TOKEN_COMMA) then
-            call fail('plot: labels offset X,Y expected', iostat, iomsg)
-            return
+         ! `offset X` alone: Y 0, as gnuplot
+         single_offset = .true.
+         if (i + 3_I4P <= size(tokens, kind=I4P)) single_offset = tokens(i + 2_I4P)%kind /= TOKEN_COMMA
+         if (single_offset) then
+            label_opts = label_opts//' offset '//tokens(i + 1_I4P)%text//',0'
+            i = i + 1_I4P
+         else
+            label_opts = label_opts//' offset '//tokens(i + 1_I4P)%text//','//tokens(i + 3_I4P)%text
+            i = i + 3_I4P
          endif
-         label_opts = label_opts//' offset '//tokens(i + 1_I4P)%text//','//tokens(i + 3_I4P)%text
-         i = i + 3_I4P
       case ('tc', 'textcolor')
          block
             logical :: rgb !< `rgb` given.
@@ -5327,6 +5334,8 @@ contains
          i = i + 1_I4P
          title_at = 2_I4P
       else
+         ! screen coordinates (3), or graph ones (4): one system for both
+         title_at = 3_I4P
          do c = 1_I4P, 2_I4P
             if (c == 2_I4P) then
                if (i + 1_I4P > size(tokens, kind=I4P)) exit
@@ -5337,7 +5346,20 @@ contains
                i = i + 1_I4P
             endif
             if (i < size(tokens, kind=I4P)) then
-               if (tokens(i + 1_I4P)%text == 'screen') i = i + 1_I4P
+               if (tokens(i + 1_I4P)%text == 'screen') then
+                  i = i + 1_I4P
+                  if (c == 2_I4P .and. title_at == 4_I4P) then
+                     call fail('plot: title at: X and Y in one system (screen or graph)', iostat, iomsg)
+                     return
+                  endif
+               elseif (tokens(i + 1_I4P)%text == 'graph') then
+                  i = i + 1_I4P
+                  if (c == 2_I4P .and. title_at == 3_I4P) then
+                     call fail('plot: title at: X and Y in one system (screen or graph)', iostat, iomsg)
+                     return
+                  endif
+                  title_at = 4_I4P
+               endif
             endif
             if (.not. next_real(tokens, i, v, iostat, iomsg)) then
                iomsg = 'plot: title at: '//iomsg
@@ -5345,7 +5367,6 @@ contains
             endif
             title_xy(c) = v
          enddo
-         title_at = 3_I4P
       endif
       ok = .true.
       endfunction title_place
@@ -6859,9 +6880,34 @@ contains
          return
       endif
       call decimal_of(v, mantissa, e)
-      call format_decimal(format, mantissa, e, t, sup)
+      call format_decimal(table_conversions(format), mantissa, e, t, sup)
       if (len(sup) > 0) t = t//'e'//sup
       endfunction number
+
+      pure function table_conversions(format) result(f)
+      !< `format` with its `%h`/`%H` conversions as `%g`/`%G`: a table is plain text, as gnuplot 6.0 writes it.
+      character(len=*), intent(in)  :: format !< Format.
+      character(len=:), allocatable :: f      !< Table format.
+      integer(I4P)                  :: i      !< Character counter.
+
+      f = format
+      i = 1_I4P
+      do while (i < len(f, kind=I4P))
+         if (f(i:i) == '%') then
+            i = i + 1_I4P
+            if (f(i:i) == '%') then
+               i = i + 1_I4P
+               cycle
+            endif
+            do while (i < len(f, kind=I4P) .and. scan(f(i:i), ' +-#0123456789.') > 0)
+               i = i + 1_I4P
+            enddo
+            if (f(i:i) == 'h') f(i:i) = 'g'
+            if (f(i:i) == 'H') f(i:i) = 'G'
+         endif
+         i = i + 1_I4P
+      enddo
+      endfunction table_conversions
 
       pure function outside(v, axis) result(yes)
       !< Whether `v` lies outside the fixed ends of `axis`.
@@ -11323,6 +11369,12 @@ contains
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
+         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'logscale') then
+            ! gnuplot's logscale tic series: the step a factor on a log axis, foresight's own
+            continue
+         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'nologscale') then
+            call fail('set '//option//': nologscale (an additive step on a log axis) is not supported', iostat, iomsg)
+            return
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'add') then
             add = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
