@@ -63,6 +63,7 @@ type, abstract :: backend_object
    logical            :: enhanced = .false. !< Texts read as gnuplot's enhanced text (foresight_enhanced).
    logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
    real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
+   logical            :: boxed = .false.     !< The texts written now are boxed (gnuplot's textbox): on the background.
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.

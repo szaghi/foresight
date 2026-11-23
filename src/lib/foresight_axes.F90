@@ -3348,6 +3348,8 @@ contains
          if (series%text_point .and. any(valid)) &
             call backend%data_dots(pack(u, valid), pack(v, valid), color, series%style%point_diameter(), &
                                    pt=series%style%pointtype, line_width=series%style%linewidth)
+         ! `boxed`: each text on the background (gnuplot's svg textbox)
+         backend%boxed = series%text_boxed
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
             if (len_trim(series%texts(i)) == 0) cycle
@@ -3355,6 +3357,7 @@ contains
                                     color, series%text_offset(1) * 0.6_R8P * font_size, &
                                     -series%text_offset(2) * font_size + 0.35_R8P * font_size)
          enddo
+         backend%boxed = .false.
       endassociate
       endsubroutine draw_labels
 
@@ -4927,6 +4930,8 @@ contains
          series%text_point = .true.
       case ('nopoint')
          series%text_point = .false.
+      case ('boxed')
+         series%text_boxed = .true.
       case ('tc', 'textcolor')
          call scan_word(words, pos, arg)
          if (arg == 'rgb') call scan_word(words, pos, arg)

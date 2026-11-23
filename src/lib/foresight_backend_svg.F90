@@ -51,6 +51,7 @@ type, extends(backend_object) :: backend_svg
    integer(I4P)                  :: patterns = 0_I4P !< Fill pattern definitions written.
    character(len=:), allocatable :: pattern_key   !< Key of the last pattern definition (pattern, color, space).
    integer(I4P)                  :: series = 0_I4P !< Series of the open group, 0 for none.
+   logical                       :: textbox = .false. !< The textbox filter is defined.
    contains
       ! deferred bindings
       procedure, pass(self) :: begin_page
@@ -299,6 +300,7 @@ contains
    character(len=:), allocatable            :: runs   !< Enhanced text runs.
 
    line = '<text x="'//px(x)//'" y="'//px(y)//'"'
+   if (self%boxed) line = line//textbox_attribute(self)
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
    if (present(color)) line = line//' fill="'//self%theme%map(color)//'"'
@@ -610,6 +612,7 @@ contains
    p = [x * self%area(3) + dx, (1.0_R8P - y) * self%area(4) + dy]
    line = '<text class="fs-label"'
    if (self%series > 0_I4P) line = line//series_attribute(self%series)
+   if (self%boxed) line = line//textbox_attribute(self)
    line = line//' data-u="'//fixed(x, UNIT_DECIMALS)//'" data-v="'//fixed(1.0_R8P - y, UNIT_DECIMALS)//'" data-dx="'// &
           px(dx)//'" data-dy="'//px(dy)//'" x="'//px(p(1))//'" y="'//px(p(2))//'"'
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
@@ -618,6 +621,21 @@ contains
    line = line//' fill="'//self%theme%map(color)//'">'//xml_escape(string)//'</text>'
    self%labels = self%labels//line//new_line('a')
    endsubroutine data_label
+
+   function textbox_attribute(self) result(attribute)
+   !< The filter attribute of a boxed text, gnuplot's svg textbox: the background flooding the text's bounding box (no
+   !< border, no margin, as gnuplot's svg terminal draws it); the filter defined once, before its first use.
+   class(backend_svg), intent(inout) :: self      !< Device.
+   character(len=:), allocatable     :: attribute !< Attribute.
+
+   if (.not. self%textbox) then
+      call self%put('<defs><filter id="textbox" filterUnits="objectBoundingBox" x="0" y="0" height="1" width="1">'// &
+                    '<feFlood flood-color="'//self%theme%map('white')//'" flood-opacity="1" result="bgnd"/>'// &
+                    '<feComposite in="SourceGraphic" in2="bgnd" operator="atop"/></filter></defs>')
+      self%textbox = .true.
+   endif
+   attribute = ' filter="url(#textbox)"'
+   endfunction textbox_attribute
 
    subroutine data_polygon(self, x, y, fill, opacity, stroke, line_width, ghost)
    !< Closed polygon of the vertices (`x`, `y`) [unit square], clipped by the plot area; its border keeps its pixel width
@@ -780,6 +798,7 @@ contains
    character(len=*),   intent(in), optional :: attributes !< Extra attributes.
    character(len=:), allocatable            :: extra      !< Extra attributes or empty.
 
+   self%textbox = .false.
    self%patterns = 0_I4P
    self%pattern_key = ''
    extra = ''

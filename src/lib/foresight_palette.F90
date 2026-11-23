@@ -206,6 +206,26 @@ contains
    enddo
    endfunction hex_color
 
+   pure function color_index(name) result(k)
+   !< Index of gnuplot's color `name` (trailing blanks allowed), 0 if none: an exact match, else the first name of the
+   !< table that begins `name`, as gnuplot's lookup_table_nth (`grey75` is `grey`).
+   character(len=*), intent(in) :: name !< Color name.
+   integer(I4P)                 :: k    !< Index.
+   integer(I4P)                 :: j    !< Counter.
+
+   do k = 1_I4P, COLOR_NAMES_COUNT
+      if (name == COLOR_NAMES(k)) return
+   enddo
+   k = 0_I4P
+   if (len_trim(name) == 0) return
+   do j = 1_I4P, COLOR_NAMES_COUNT
+      if (index(trim(name), trim(COLOR_NAMES(j))) == 1) then
+         k = j
+         return
+      endif
+   enddo
+   endfunction color_index
+
    pure subroutine named_color(name, c, ok)
    !< Channels of a palette color, as gnuplot `set palette defined`: `#rrggbb`, `0xrrggbb` or one of gnuplot's 111
    !< color names (`show colornames`: `red`, `dark-green`, `gray90`, ..., case sensitive).
@@ -216,12 +236,8 @@ contains
    integer(I4P)                  :: k    !< Name counter.
 
    hex = ''
-   do k = 1_I4P, COLOR_NAMES_COUNT
-      if (name == COLOR_NAMES(k)) then
-         hex = COLOR_VALUES(k)
-         exit
-      endif
-   enddo
+   k = color_index(name)
+   if (k > 0_I4P) hex = COLOR_VALUES(k)
    if (len(hex) == 0) then
       if (len_trim(name) == 7) then
          if (name(1:1) == '#' .and. verify(name(2:7), '0123456789abcdefABCDEF') == 0) hex = name(2:7)
@@ -252,17 +268,16 @@ contains
 
    color = ''
    ok = .false.
-   do k = 1_I4P, COLOR_NAMES_COUNT
-      if (spec == COLOR_NAMES(k)) then
-         if (spec == 'black' .or. spec == 'white') then
-            color = trim(spec)
-         else
-            color = '#'//COLOR_VALUES(k)
-         endif
-         ok = .true.
-         return
+   k = color_index(spec)
+   if (k > 0_I4P) then
+      if (trim(COLOR_NAMES(k)) == 'black' .or. trim(COLOR_NAMES(k)) == 'white') then
+         color = trim(COLOR_NAMES(k))
+      else
+         color = '#'//COLOR_VALUES(k)
       endif
-   enddo
+      ok = .true.
+      return
+   endif
    digits = ''
    if (len_trim(spec) >= 2) then
       if (spec(1:1) == '#') then

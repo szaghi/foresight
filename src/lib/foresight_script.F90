@@ -210,6 +210,9 @@ type :: script_object
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    character(len=:), allocatable   :: missing                  !< Missing data string, empty for none.
    character(len=:), allocatable   :: comments                 !< Characters starting a comment in data files.
+   logical                         :: textbox_drawn(0:3) = .true. !< `set style textbox [N]`: the boxed texts of style N
+                                                               !< have their box (opaque, or a border: gnuplot's svg
+                                                               !< draws the background then).
    logical                         :: column_headers = .false. !< `set datafile columnheaders`: the first row of each
                                                                !< dataset is a header.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
@@ -2407,6 +2410,7 @@ contains
    character(len=1)                             :: quote     !< Quote of the data file.
    character(len=:), allocatable                :: loaded    !< File in `data`.
    character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
+   logical                                      :: head_skipped !< `notitle columnhead`: the first row a header.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -2822,6 +2826,7 @@ contains
       rose_linear = .false.
       if (allocated(fs)) deallocate(fs)
       if (allocated(fill_rgb)) deallocate(fill_rgb)
+      head_skipped = .false.
       if (allocated(base)) deallocate(base)
       shaping = ''
       line = line_style_object()
@@ -3065,7 +3070,7 @@ contains
                endif
             endblock
          elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
-                                                'tc textcolor')) then
+                                                'tc textcolor boxed')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
             if (.not. label_option()) return
          elseif (word == 'at' .and. with == 'parallelaxes') then
@@ -3159,6 +3164,16 @@ contains
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
             has_title = .true.
+            ! `notitle columnhead [N]`: no title, the first row still a header
+            if (i < size(tokens, kind=I4P)) then
+               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 3_I4P) .or. tokens(i + 1_I4P)%text == 'col') then
+                  i = i + 1_I4P
+                  head_skipped = .true.
+                  if (i < size(tokens, kind=I4P)) then
+                     if (verify(tokens(i + 1_I4P)%text, '0123456789') == 0) i = i + 1_I4P
+                  endif
+               endif
+            endif
          elseif (is_word(word, 'noenhanced enhanced')) then
             ! the title as it is, or as enhanced text
             plain_item = word == 'noenhanced'
@@ -3619,7 +3634,7 @@ contains
       endif
       ! the first row of each dataset is a header as soon as one is used, as gnuplot
       headed = title_column >= 0_I4P .or. self%autotitle == 'columnhead' .or. any(fields%name_count() > 0_I4P) .or. &
-               self%column_headers
+               self%column_headers .or. head_skipped
       if (headed) then
          missing = data%missing_name(fields, set_index)
          if (len(missing) > 0) then
@@ -4235,6 +4250,25 @@ contains
          endif
          label_opts = label_opts//' tc "'//tokens(i + 1_I4P)%text//'"'
          i = i + 1_I4P
+      case ('boxed')
+         ! in text box style 0, or `bs N`: drawn when the style is opaque or has a border (gnuplot's svg)
+         block
+            integer(I4P) :: bs !< Text box style.
+
+            bs = 0_I4P
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'bs') then
+                  i = i + 1_I4P
+                  if (.not. next_integer(tokens, i, bs, iostat, iomsg, self%symbols)) return
+                  if (bs < 0_I4P .or. bs > size(self%textbox_drawn, kind=I4P) - 1_I4P) then
+                     call fail('plot: labels boxed bs N: N from 0 to '// &
+                               int_str(int(size(self%textbox_drawn) - 1, I8P)), iostat, iomsg)
+                     return
+                  endif
+               endif
+            endif
+            if (self%textbox_drawn(bs)) label_opts = label_opts//' boxed'
+         endblock
       case default
          label_opts = label_opts//' '//tokens(i)%text
       endselect
@@ -10199,8 +10233,68 @@ contains
             return
          endif
       endif
-      call fail('set style: only "data STYLE", "function STYLE", "line N ...", "fill ..." and "histogram ..." are '// &
-                'supported', iostat, iomsg)
+      if (size(tokens) >= 2) then
+         if (keyword(tokens(2)%text, 'textbox', 4_I4P)) then
+            ! `set style textbox [N] [opaque|transparent] [fc C] [border [lc C] [lw W]|noborder] [margins X,Y]
+            ! [linewidth W]`: gnuplot's svg terminal draws the background of a boxed text when the style is opaque or
+            ! has a border, without border nor margins (their values are read)
+            block
+               integer(I4P) :: n        !< Style number.
+               logical      :: opaque   !< opaque given last.
+               logical      :: noborder !< noborder given last.
+               integer(I4P) :: k        !< Token counter.
+
+               n = 0_I4P
+               k = 3_I4P
+               if (k <= size(tokens, kind=I4P)) then
+                  if (verify(tokens(k)%text, '0123456789') == 0) then
+                     read(tokens(k)%text, *) n
+                     k = k + 1_I4P
+                  endif
+               endif
+               if (n > 3_I4P) then
+                  call fail('set style textbox: the styles are 0 to 3', iostat, iomsg)
+                  return
+               endif
+               opaque = .false.
+               noborder = .false.
+               do while (k <= size(tokens, kind=I4P))
+                  select case (tokens(k)%text)
+                  case ('opaque')
+                     opaque = .true.
+                  case ('transparent')
+                     opaque = .false.
+                  case ('noborder')
+                     noborder = .true.
+                  case ('border')
+                     noborder = .false.
+                  case ('fc', 'fillcolor', 'lc', 'linecolor', 'lt', 'linetype', 'lw', 'linewidth', 'margins', 'margin')
+                     ! a value follows (a color, a width, X,Y): read and not drawn by the svg
+                     if (tokens(k)%text(1:min(6, len(tokens(k)%text))) == 'margin') then
+                        k = k + 1_I4P
+                        if (k < size(tokens, kind=I4P)) then
+                           if (tokens(k + 1_I4P)%kind == TOKEN_COMMA) k = k + 2_I4P
+                        endif
+                     else
+                        k = k + 1_I4P
+                        if (k <= size(tokens, kind=I4P)) then
+                           if (is_word(tokens(k)%text, 'rgb rgbcolor')) k = k + 1_I4P
+                        endif
+                     endif
+                  case default
+                     call fail('set style textbox: unsupported option "'//tokens(k)%text//'" (opaque, transparent, '// &
+                               'fc, border, noborder, lc, lw, margins)', iostat, iomsg)
+                     return
+                  endselect
+                  k = k + 1_I4P
+               enddo
+               self%textbox_drawn(n) = opaque .or. .not. noborder
+            endblock
+            return
+         endif
+      endif
+      call fail('set style: only "data STYLE", "function STYLE", "line N ...", "fill ...", "histogram ..." and '// &
+                '"textbox ..." are supported', iostat, iomsg)
       endsubroutine style_option
    endsubroutine set_command
 

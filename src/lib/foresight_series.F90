@@ -94,6 +94,7 @@ type :: series_object
    logical                       :: spanned = .false. !< The autoscale also includes `span`.
    real(R8P)                     :: span(4) = 0.0_R8P !< Extent beyond the points, x from-to and y from-to: the outer
                                                       !< edges of `bins` and their y = 0, as gnuplot.
+   logical                       :: text_boxed = .false. !< Labels in a text box (gnuplot `with labels boxed`).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

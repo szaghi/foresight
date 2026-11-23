@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(173)                           !< Per-check outcome.
+logical                       :: test_passed(174)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3810,6 +3810,35 @@ if (test_passed(173)) then
    endassociate
 endif
 
+
+! set style textbox and `with labels boxed [bs N]`: gnuplot's svg textbox, the text on the background through a filter
+! (opaque or bordered styles); color names matched by prefix (grey75 is grey); `notitle columnhead`
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_textbox.svg"; '// &
+                          'set style textbox 2 opaque margins 6,1.5 fc "grey75" border lc black; '// &
+                          'set style textbox 3 transparent noborder'//new_line('a')//'$D << EOD'//new_line('a')// &
+                          'h v'//new_line('a')//'1 5'//new_line('a')//'2 6'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $D using 1:2:2 with labels boxed bs 2 notitle column, $D using 1:2:2 with labels '// &
+                          'boxed bs 3 notitle columnhead, $D using 1:2 lc "grey75" notitle', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(174) = iostat == 0_I4P
+if (test_passed(174)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_textbox.svg')
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(174) = series(1)%text_boxed .and. .not. series(2)%text_boxed .and. size(series(1)%x) == 2 .and. &
+                           series(3)%style%color == '#c0c0c0' .and. index(svg, '<filter id="textbox"') > 0 .and. &
+                           index(svg, 'filter="url(#textbox)"') > 0
+      endassociate
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_textbox.svg')
+close(unit, status='delete')
+call interpreter%run_text('set style textbox 4 opaque', iostat, iomsg)
+test_passed(174) = test_passed(174) .and. iostat /= 0_I4P .and. index(iomsg, 'styles are 0 to 3') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3818,7 +3847,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,173L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,174L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
