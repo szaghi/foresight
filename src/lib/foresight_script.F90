@@ -119,7 +119,8 @@ use foresight_expression, only : block_hook, fetch_hook, store_hook, expression_
 use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
-use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, int_str, real_from_decimal
+use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
+                             real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_sys, only : command_output, sleep_ms
 use foresight_time, only : strptime, time_format_check
@@ -8097,7 +8098,10 @@ contains
       !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette). `file 'f' [index N] [every E]
       !< [using U]` reads a gradient as gnuplot: 4 columns gray:r:g:b, or 3 columns r:g:b evenly spaced (default: 4
       !< if the rows have a 4th column), components 0 to 1 (clipped), `#` comments skipped, no blank lines.
+      !< `functions R, G, B`: three expressions of `gray` (0 to 1), clipped to 0..1, the components of the model (RGB or
+      !< HSV), sampled at 1025 gray levels into a gradient (linear between them, far below a color step).
       type(palette_object)                 :: probe  !< Palette the words are tried on.
+      character(len=:), allocatable        :: formulas(:) !< `functions` expressions, empty if none.
       character(len=:), allocatable        :: words  !< Palette words.
       character(len=:), allocatable        :: after  !< Palette words after the file.
       character(len=:), allocatable        :: bad    !< Unknown word.
@@ -8117,9 +8121,42 @@ contains
       file = ''
       pindex = -1_I4P
       pevery = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+      allocate(character(len=0) :: formulas(0))
       i = 2_I4P
       do while (i <= size(tokens, kind=I4P))
-         if (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'file' .and. len(file) == 0) then
+         if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'functions', 2_I4P) .and. len(file) == 0) then
+            ! three expressions of gray, comma separated
+            block
+               character(len=:), allocatable :: part(:) !< The three texts.
+               integer(I4P)                  :: c       !< Component.
+               integer(I4P)                  :: e       !< Last token of one.
+               integer(I4P)                  :: width   !< Longest.
+               type(token_object)            :: f(3)    !< Texts.
+
+               do c = 1_I4P, 3_I4P
+                  i = i + 1_I4P
+                  if (c > 1_I4P) then
+                     if (i <= size(tokens, kind=I4P)) then
+                        if (tokens(i)%kind /= TOKEN_COMMA) i = size(tokens, kind=I4P) + 1_I4P
+                     endif
+                     i = i + 1_I4P
+                  endif
+                  if (i > size(tokens, kind=I4P)) then
+                     call fail('set palette: functions R, G, B expected (expressions of gray)', iostat, iomsg)
+                     return
+                  endif
+                  e = expression_end(tokens, i)
+                  f(c)%text = expression_source(tokens(i:e))
+                  i = e
+               enddo
+               width = max(len(f(1)%text), len(f(2)%text), len(f(3)%text))
+               allocate(character(len=width) :: part(3))
+               do c = 1_I4P, 3_I4P
+                  part(c) = f(c)%text
+               enddo
+               call move_alloc(part, formulas)
+            endblock
+         elseif (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'file' .and. len(file) == 0) then
             if (i == size(tokens, kind=I4P)) then
                call fail('set palette: file needs a file name', iostat, iomsg)
                return
@@ -8163,6 +8200,42 @@ contains
       if (len(file) == 0 .or. len_trim(words) > 0) call palette_words(words, probe, bad)
       if (len(bad) > 0) then
          call fail('set palette: unsupported option "'//bad//'"', iostat, iomsg)
+         return
+      endif
+      if (size(formulas) == 3) then
+         ! the functions sampled into a gradient, the words (model, negative, ...) kept
+         block
+            type(expression_object) :: fe(3)       !< Compiled functions.
+            real(R8P)               :: grays(1025) !< Gray levels.
+            real(R8P)               :: comps(3, 1025) !< Components.
+            integer(I4P)            :: c           !< Component.
+            integer(I4P)            :: g           !< Level.
+
+            do c = 1_I4P, 3_I4P
+               call fe(c)%compile(trim(formulas(c)), iostat, iomsg, variable='gray', &
+                                  degrees=self%figure%panels(self%figure%current)%degrees, symbols=self%symbols)
+               if (iostat /= 0_I4P) then
+                  iomsg = 'set palette functions: '//iomsg
+                  return
+               endif
+            enddo
+            do g = 1_I4P, 1025_I4P
+               grays(g) = real(g - 1_I4P, R8P) / 1024.0_R8P
+               do c = 1_I4P, 3_I4P
+                  comps(c, g) = fe(c)%value_at(grays(g))
+                  if (comps(c, g) /= comps(c, g)) then
+                     call fail('set palette functions: undefined at gray = '//gnuplot_real(grays(g)), iostat, iomsg)
+                     return
+                  endif
+               enddo
+            enddo
+            call palette_gradient(probe, grays, comps, bad)
+            if (len(bad) > 0) then
+               call fail('set palette functions: '//bad, iostat, iomsg)
+               return
+            endif
+            self%figure%panels(self%figure%current)%palette = probe
+         endblock
          return
       endif
       if (len(file) == 0) then

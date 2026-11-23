@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(166)                           !< Per-check outcome.
+logical                       :: test_passed(167)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -570,7 +570,10 @@ if (test_passed(57)) then
 endif
 ! image errors
 call interpreter%run_text("set palette functions", iostat, iomsg)
-test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: unsupported option "functions"') > 0
+test_passed(58) = iostat /= 0_I4P .and. index(iomsg, 'set palette: functions R, G, B expected') > 0
+call interpreter%run_text("set palette fit2rgbformulae", iostat, iomsg)
+test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. &
+                  index(iomsg, 'set palette: unsupported option "fit2rgbformulae"') > 0
 call interpreter%run_text("set palette cubehelix start 0 cycles 1 saturation 2 negative", iostat, iomsg)
 associate(palette => interpreter%figure%panels(interpreter%figure%current)%palette)
    test_passed(58) = test_passed(58) .and. iostat == 0_I4P .and. palette%negative .and. &
@@ -3667,6 +3670,22 @@ endif
 call interpreter%run_text('set rrange reverse', iostat, iomsg)
 test_passed(166) = test_passed(166) .and. iostat /= 0_I4P .and. index(iomsg, 'reverse applies to') > 0
 
+
+! set palette functions R, G, B: expressions of gray (clipped to 0..1), in the palette's model (RGB, HSV)
+call interpreter%init(scratch)
+call interpreter%run_text('set palette functions gray, gray**2, 1 - gray', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(167) = iostat == 0_I4P
+if (test_passed(167)) test_passed(167) = all(interpreter%figure%panels(1)%palette%rgb(0.5_R8P) == [128, 64, 128]) .and. &
+                                       all(interpreter%figure%panels(1)%palette%rgb(0.3_R8P) == [77, 23, 179])
+call interpreter%run_text('set palette model HSV func 0, 0, 2*gray', iostat, iomsg)
+test_passed(167) = test_passed(167) .and. iostat == 0_I4P
+if (test_passed(167)) test_passed(167) = interpreter%figure%panels(1)%palette%hsv .and. &
+                                       all(interpreter%figure%panels(1)%palette%rgb(0.25_R8P) == [128, 128, 128]) .and. &
+                                       all(interpreter%figure%panels(1)%palette%rgb(0.75_R8P) == [255, 255, 255])
+call interpreter%run_text('set palette functions gray, gray', iostat, iomsg)
+test_passed(167) = test_passed(167) .and. iostat /= 0_I4P .and. index(iomsg, 'functions R, G, B expected') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3675,7 +3694,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,166L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,167L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
