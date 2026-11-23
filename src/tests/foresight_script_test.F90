@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(167)                           !< Per-check outcome.
+logical                       :: test_passed(168)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3686,6 +3686,22 @@ if (test_passed(167)) test_passed(167) = interpreter%figure%panels(1)%palette%hs
 call interpreter%run_text('set palette functions gray, gray', iostat, iomsg)
 test_passed(167) = test_passed(167) .and. iostat /= 0_I4P .and. index(iomsg, 'functions R, G, B expected') > 0
 
+
+! fc|fillcolor COLOR in a plot item (the fill's own color, the line keeps lc) and `rgb NAME`, a string variable
+call interpreter%init(scratch)
+call interpreter%run_text('Shade = "#80E0A080"; plot x with filledcurves y=0 fc rgb Shade lc "red", '// &
+                          '2*x with boxes fs solid fillcolor "blue" lc rgb Shade', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(168) = iostat == 0_I4P
+if (test_passed(168)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(168) = series(1)%style%fill_color() == '#e0a0807f' .and. series(1)%style%color == '#ff0000' .and. &
+                        series(2)%style%fill_color() == '#0000ff' .and. series(2)%style%color == '#e0a0807f'
+   endassociate
+endif
+call interpreter%run_text('plot x with filledcurves fc palette', iostat, iomsg)
+test_passed(168) = test_passed(168) .and. iostat /= 0_I4P .and. index(iomsg, 'fc: variable and palette') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3694,7 +3710,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,167L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,168L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

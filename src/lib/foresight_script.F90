@@ -833,6 +833,22 @@ contains
    call tokenize(statement, tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (size(tokens) == 0) return
+   ! `rgb NAME`, a string variable holding the color (gnuplot reads a string expression there)
+   do i = 2_I4P, size(tokens, kind=I4P)
+      if (tokens(i)%kind /= TOKEN_WORD .or. tokens(i - 1_I4P)%kind /= TOKEN_WORD) cycle
+      if (.not. keyword(tokens(i - 1_I4P)%text, 'rgbcolor', 3_I4P)) cycle
+      if (is_word(tokens(i)%text, 'variable var')) cycle
+      block
+         character(len=:), allocatable :: value !< The variable's string.
+         logical                       :: found !< A string variable.
+
+         call self%symbols%string_of(tokens(i)%text, value, found)
+         if (found) then
+            tokens(i)%kind = TOKEN_STRING
+            tokens(i)%text = value
+         endif
+      endblock
+   enddo
    call resolve_colors(tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
    if (tokens(1)%kind /= TOKEN_WORD) then
@@ -2387,6 +2403,7 @@ contains
    character(len=:), allocatable                :: using     !< `using` keyword as written.
    character(len=1)                             :: quote     !< Quote of the data file.
    character(len=:), allocatable                :: loaded    !< File in `data`.
+   character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -2801,6 +2818,7 @@ contains
       cells = 0_I4P
       rose_linear = .false.
       if (allocated(fs)) deallocate(fs)
+      if (allocated(fill_rgb)) deallocate(fill_rgb)
       if (allocated(base)) deallocate(base)
       shaping = ''
       line = line_style_object()
@@ -3022,6 +3040,27 @@ contains
          elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
             call fill_words(fs)
             if (iostat /= 0_I4P) return
+         elseif (word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) then
+            ! the fill color, gnuplot's: read as a line color, the line keeps its own
+            block
+               type(token_object), allocatable :: copy(:)  !< Tokens, `lc` for the word.
+               type(line_style_object)         :: probe    !< Color read.
+
+               copy = tokens
+               copy(i)%text = 'lc'
+               if (.not. line_option(copy, i, probe, iostat, iomsg, &
+                                     self%figure%panels(self%figure%current)%linecolors, self%symbols)) then
+                  iomsg = 'plot: fc: '//iomsg
+                  return
+               endif
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') == 1) then
+                     call fail('plot: fc: variable and palette colors are not supported', iostat, iomsg)
+                     return
+                  endif
+                  fill_rgb = probe%lc
+               endif
+            endblock
          elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
                                                 'tc textcolor')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
@@ -3266,6 +3305,7 @@ contains
          endif
          if (len(palette_lc) > 0) call paint_last
          call mark_last
+         call fill_last
          call push(functions, func)
          if (self%parametric) call push(yfunctions, yfunc)
          if (allocated(base)) then
@@ -3903,6 +3943,7 @@ contains
       endif
       if (len(palette_lc) > 0) call paint_last
       call mark_last
+      call fill_last
       if (binned) then
          ! the autoscale spans the outer bin edges and y = 0, as gnuplot
          associate(panel => self%figure%panels(self%figure%current))
@@ -4195,6 +4236,14 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine fill_last
+      !< The fill color of the item (`fc`) on its series.
+      if (.not. allocated(fill_rgb)) return
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%series(size(panel%series))%style%fill_rgb = fill_rgb
+      endassociate
+      endsubroutine fill_last
 
       subroutine color_last
       !< `lc variable` of circles, ellipses and boxes: each shape in its point's color, the key sample in the first one's

@@ -112,6 +112,8 @@ type :: style_object
    character(len=:), allocatable :: border_color           !< Border color, empty for the line color.
    integer(I4P)                  :: segments  = 0_I4P      !< Cells over the y range of a segmented fill, 0 for none.
    integer(I4P)                  :: pattern   = 0_I4P      !< Fill pattern (FILL_PATTERN), cycling every PATTERNS.
+   character(len=:), allocatable :: fill_rgb               !< Fill color (gnuplot `fc`), empty or unallocated for the
+                                                           !< line color.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.
@@ -603,7 +605,7 @@ contains
    endfunction fills
 
    pure function fill_color(self) result(color)
-   !< Fill color of a filled style: the line color when solid, `none` when empty.
+   !< Fill color of a filled style: its own (`fc`) or the line color when solid, `none` when empty.
    class(style_object), intent(in) :: self  !< Style.
    character(len=:), allocatable   :: color !< SVG color or `none`.
    character(len=1)                :: digit !< Pattern number (a fixed length: nvfortran 26.9 sizes a deferred-length
@@ -611,16 +613,22 @@ contains
 
    !< A pattern fill is `pattern:N:color` (see `pattern_parts`), N from 1 to PATTERNS - 1 but 3, the solid one, given
    !< as its color; pattern 0 is empty.
+   character(len=:), allocatable   :: base  !< The fill's own color (`fc`), else the line color.
+
    color = 'none'
-   if (self%fill == FILL_SOLID) color = self%color
+   base = self%color
+   if (allocated(self%fill_rgb)) then
+      if (len(self%fill_rgb) > 0) base = self%fill_rgb
+   endif
+   if (self%fill == FILL_SOLID) color = base
    if (self%fill == FILL_PATTERN) then
       select case (modulo(self%pattern, PATTERNS))
       case (0_I4P)
       case (3_I4P)
-         color = self%color
+         color = base
       case default
          digit = achar(iachar('0') + modulo(self%pattern, PATTERNS))
-         color = 'pattern:'//digit//':'//self%color
+         color = 'pattern:'//digit//':'//base
       endselect
    endif
    endfunction fill_color
