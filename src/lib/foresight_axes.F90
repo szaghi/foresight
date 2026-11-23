@@ -6704,8 +6704,8 @@ contains
    integer(I4P),      intent(in)    :: k      !< Forward map index.
    real(R8P),         intent(in)    :: npx    !< Axis length [px].
    type(axis_object)                :: probe  !< Secondary axis over the mapped range.
-   type(axis_object)                :: labeller !< Secondary axis labelling the mapped primary ticks.
    type(tic_item), allocatable      :: items(:) !< The mapped primary ticks.
+   integer(I4P)                     :: n      !< Mapped primary ticks.
    real(R8P)                        :: a      !< Mapped start.
    real(R8P)                        :: b      !< Mapped end.
    real(R8P)                        :: v      !< A tick at its primary value.
@@ -6733,30 +6733,36 @@ contains
       if (allocated(second%ticks)) deallocate(second%ticks)
       allocate(second%ticks(0))
       if (.not. allocated(probe%ticks)) return
-      allocate(items(0))
+      ! the mapped primary ticks, labelled by the secondary axis as an explicit list
+      allocate(items(count(probe%ticks%major)))
+      n = 0_I4P
       do t = 1_I4P, size(probe%ticks, kind=I4P)
          if (.not. probe%ticks(t)%major) cycle
          v = maps(k)%value_at(probe%ticks(t)%value)
          if (.not. ieee_is_finite(v)) cycle
-         items = [items, tic_item(value=v, major=.true., labelled=.false., label='')]
+         n = n + 1_I4P
+         items(n)%value = v
+         items(n)%major = .true.
+         items(n)%labelled = .false.
+         items(n)%label = ''
       enddo
-      if (size(items) == 0) return
-      labeller = second
-      labeller%tight = .true.
-      labeller%log = .false.
-      labeller%tics%series = .false.
-      labeller%tics%list = items
-      call labeller%setup(min(a, b), max(a, b), .true., npx)
-      if (.not. allocated(labeller%ticks)) return
+      if (n == 0_I4P) return
       do t = 1_I4P, size(probe%ticks, kind=I4P)
          if (probe%ticks(t)%major) cycle
          call push(second%ticks, tick_object(value=probe%ticks(t)%value, major=.false., label='', sup=''))
       enddo
-      do t = 1_I4P, size(labeller%ticks, kind=I4P)
-         v = maps(k + 1_I4P)%value_at(labeller%ticks(t)%value)
+      ! the same probe labels them (a second local axis: nvfortran 26.9 stops with an internal compiler error)
+      probe = second
+      probe%tight = .true.
+      probe%log = .false.
+      call probe%tics%set_list(items(1:n), .false.)
+      call probe%setup(min(a, b), max(a, b), .true., npx)
+      if (.not. allocated(probe%ticks)) return
+      do t = 1_I4P, size(probe%ticks, kind=I4P)
+         v = maps(k + 1_I4P)%value_at(probe%ticks(t)%value)
          if (.not. ieee_is_finite(v)) cycle
-         call push(second%ticks, tick_object(value=v, major=.true., label=labeller%ticks(t)%label, &
-                                             sup=labeller%ticks(t)%sup))
+         call push(second%ticks, tick_object(value=v, major=.true., label=probe%ticks(t)%label, &
+                                             sup=probe%ticks(t)%sup))
       enddo
       return
    endif
