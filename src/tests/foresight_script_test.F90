@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(208)                           !< Per-check outcome.
+logical                       :: test_passed(209)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1222,8 +1222,10 @@ test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. &
                   index(iomsg, 'rotate is supported on xtics, x2tics and rtics only') > 0
 call interpreter%run_text('set cbtics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'in and out are supported on xtics') > 0
+! a justification of unrotated labels is read (gnuplot also moves them), kept for a rotation
 call interpreter%run_text('set xtics right', iostat, iomsg)
-test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'right justifies rotated labels') > 0
+test_passed(84) = test_passed(84) .and. iostat == 0_I4P .and. &
+                  interpreter%figure%panels(1)%xaxis%tics%attribute() == '* 5 *'
 call interpreter%run_text('set xtics rotate by', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate by needs an angle') > 0
 
@@ -4732,6 +4734,26 @@ endif
 open(newunit=unit, file='foresight_script_test_polar_inline.svg')
 close(unit, status='delete')
 
+! parallel axes: set paxis N range [a:*] reverse, tics left (unrotated labels: read), lc variable and lc palette z of
+! the first item (a color per row, using Y:COLOR), as gnuplot 6.0's parallel.dem
+call interpreter%init(scratch)
+call interpreter%run_text('$P << EOD'//new_line('a')//'1 2 3'//new_line('a')//'2 3 1'//new_line('a')//'3 1 2'// &
+                          new_line('a')//'EOD'//new_line('a')//'set style data parallelaxes; '// &
+                          'set paxis 2 range [0:*] reverse; set paxis 2 tics left offset 4; '// &
+                          'plot $P using 1:($0+1) lc variable, '''' using 2, '''' using 3', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(209) = iostat == 0_I4P
+if (test_passed(209)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(209) = panel%paxes(2)%axis%reverse .and. allocated(panel%series(1)%colors)
+      if (test_passed(209)) test_passed(209) = size(panel%series(1)%colors) == 3
+   endassociate
+endif
+call interpreter%run_text('plot $P using 1:0 lc palette, '''' using 2, '''' using 3', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(209) = test_passed(209) .and. iostat == 0_I4P
+if (test_passed(209)) test_passed(209) = interpreter%figure%panels(1)%series(1)%palette_mode == 1_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4740,7 +4762,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,208L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,209L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -5675,12 +5675,12 @@ contains
                   endif
                endif
             endassociate
-            if (size(lx) > 1) call backend%polyline(lx, ly, first%style%color, first%style%linewidth, &
+            if (size(lx) > 1) call backend%polyline(lx, ly, row_color(j), first%style%linewidth, &
                                                     first%style%dasharray())
             deallocate(lx, ly)
             allocate(lx(0), ly(0))
          enddo
-         if (size(lx) > 1) call backend%polyline(lx, ly, first%style%color, first%style%linewidth, first%style%dasharray())
+         if (size(lx) > 1) call backend%polyline(lx, ly, row_color(j), first%style%linewidth, first%style%dasharray())
          deallocate(lx, ly)
       enddo
    endassociate
@@ -5699,6 +5699,38 @@ contains
       endassociate
    enddo
    call backend%end_group
+   contains
+      function row_color(row) result(color)
+      !< Color of the line of `row`: its own (`lc variable` of the first item, gnuplot's), else the first item's.
+      integer(I4P), intent(in)      :: row   !< Row.
+      character(len=:), allocatable :: color !< Color.
+
+      color = trim(self%series(1)%style%color)
+      if (allocated(self%series(1)%colors)) then
+         if (row <= size(self%series(1)%colors)) color = trim(self%series(1)%colors(row))
+      endif
+      ! lc palette z: the palette color of the row's z over the z range (a panel chart has no color axis)
+      if (self%series(1)%palette_mode == 1_I4P .and. allocated(self%series(1)%zvalues)) then
+         associate(z => self%series(1)%zvalues)
+            if (row <= size(z)) then
+               if (ieee_is_finite(z(row))) then
+                  block
+                     real(R8P) :: lo !< Smallest z.
+                     real(R8P) :: hi !< Largest z.
+
+                     lo = minval(z, mask=ieee_is_finite(z))
+                     hi = maxval(z, mask=ieee_is_finite(z))
+                     if (hi > lo) then
+                        color = trim(hex_color(self%palette%rgb((z(row) - lo) / (hi - lo))))
+                     else
+                        color = trim(hex_color(self%palette%rgb(0.0_R8P)))
+                     endif
+                  endblock
+               endif
+            endif
+         endassociate
+      endif
+      endfunction row_color
    endsubroutine draw_parallel
 
    subroutine draw_spider(self, backend, box, font_size)

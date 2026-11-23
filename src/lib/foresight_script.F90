@@ -3618,9 +3618,11 @@ contains
       endif
       if (allocated(line%lc)) then
          ! labels take tc palette z (their colors from the last column), not one palette color
-         if (index(line%lc, '*palette') == 1 .and. (is_word(with, 'readout gauge pie radar rose parallelaxes '// &
+         ! parallel axes take lc palette z (a color per row, gnuplot's using Y:Z)
+         if (index(line%lc, '*palette') == 1 .and. (is_word(with, 'readout gauge pie radar rose '// &
                                                                   'spiderplot image rgbimage rgbalpha') .or. &
-                                                    (with == 'labels' .and. line%lc /= LC_PALETTE_Z))) then
+                                                    (with == 'labels' .and. line%lc /= LC_PALETTE_Z) .or. &
+                                                    (with == 'parallelaxes' .and. line%lc /= LC_PALETTE_Z))) then
             call fail('plot: lc palette does not apply to '//with, iostat, iomsg)
             return
          endif
@@ -3907,7 +3909,8 @@ contains
          call point%set_column(0_I4P)
          kept = [point, fields(1)]
          call move_alloc(kept, fields)
-      elseif (with == 'histograms' .and. size(fields) == 2 .and. variable_lc()) then
+      elseif ((with == 'histograms' .and. size(fields) == 2 .and. variable_lc()) .or. &
+              (with == 'parallelaxes' .and. size(fields) == 2 .and. (variable_lc() .or. palette_z_lc()))) then
          ! histograms Y:COLOR with lc variable, at the point numbers
          call point%set_column(0_I4P)
          kept = [point, fields]
@@ -3935,10 +3938,11 @@ contains
          word = trim(merge('lc palette z', 'lc variable ', lcz))
          if (.not. is_word(with, 'lines points linespoints impulses vectors arrows circles ellipses boxes '// &
                            'candlesticks financebars boxxyerror boxerrorbars histograms filledcurves polygons '// &
-                           'xerrorbars yerrorbars xyerrorbars xerrorlines yerrorlines xyerrorlines labels')) then
+                           'xerrorbars yerrorbars xyerrorbars xerrorlines yerrorlines xyerrorlines labels '// &
+                           'parallelaxes')) then
             call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors, arrows, circles, '// &
                       'ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, filledcurves, '// &
-                      'polygons, the error bars and labels (tc variable), not to '//with, iostat, iomsg)
+                      'polygons, the error bars, parallel axes and labels (tc variable), not to '//with, iostat, iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -3967,7 +3971,8 @@ contains
             return
          endif
       case ('histograms', 'pie', 'radar', 'rose', 'parallelaxes', 'spiderplot')
-         if (.not. (one_field .or. (with == 'histograms' .and. lcvar .and. nbar == 0_I4P))) then
+         if (.not. (one_field .or. (with == 'histograms' .and. lcvar .and. nbar == 0_I4P) .or. &
+                    (with == 'parallelaxes' .and. (lcvar .or. lcz) .and. nbar == 0_I4P))) then
             call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
             return
          endif
@@ -4407,12 +4412,15 @@ contains
             x = x(1:1)
             y = y(1:1)
          endif
+         ! lc variable of parallel axes: a color per row (gnuplot's using Y:COLOR)
+         if (lcvar) deallocate(line%lc)
          if (keyed) then
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, labels=xlabels, &
                                   at=at_x)
          else
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, at=at_x)
          endif
+         if (lcvar) call color_last
       elseif (with == 'boxplot') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -10109,10 +10117,29 @@ contains
       call self%figure%set_paxis(n)
       associate(panel => self%figure%panels(self%figure%current))
          if (keyword(tokens(3)%text, 'range', 3_I4P)) then
-            if (size(tokens) /= 4) then
+            if (size(tokens) < 4) then
                call fail('set paxis: range [min:max] expected', iostat, iomsg)
                return
             endif
+            ! the range options after it, as set xrange's: reverse (an axis with an autoscaled end), extend
+            block
+               integer(I4P) :: k !< Option counter.
+
+               do k = 5_I4P, size(tokens, kind=I4P)
+                  select case (tokens(k)%text)
+                  case ('reverse', 'noreverse')
+                     panel%paxes(n)%axis%reverse = tokens(k)%text == 'reverse'
+                  case ('extend', 'noextend')
+                     panel%paxes(n)%axis%noextend = tokens(k)%text == 'noextend'
+                  case ('writeback', 'nowriteback', 'restore')
+                     continue
+                  case default
+                     call fail('set paxis: range [min:max] [reverse|noreverse] [extend|noextend] expected, found "'// &
+                               tokens(k)%text//'"', iostat, iomsg)
+                     return
+                  endselect
+               enddo
+            endblock
             block
                integer(I4P) :: colon !< Separator position.
 
@@ -11136,10 +11163,8 @@ contains
       enddo
       if (allocated(fmt)) tics%format = fmt
       if (len_trim(justify) > 0) then
-         if (tics%rotate == 0.0_R8P) then
-            call fail('set '//option//': '//trim(justify)//' justifies rotated labels (with rotate)', iostat, iomsg)
-            return
-         endif
+         ! the justification of the labels: of the rotated ones (gnuplot also moves the unrotated ones: read and
+         ! kept for a rotation)
          tics%justify = justify
       endif
       n = size(args, kind=I4P)
