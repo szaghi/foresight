@@ -117,6 +117,8 @@ type :: style_object
    integer(I4P)                  :: pattern   = 0_I4P      !< Fill pattern (FILL_PATTERN), cycling every PATTERNS.
    character(len=:), allocatable :: fill_rgb               !< Fill color (gnuplot `fc`), empty or unallocated for the
                                                            !< line color.
+   character(len=:), allocatable :: point_char             !< A character as the point (gnuplot `pt "c"`), drawn in
+                                                           !< place of the point type when allocated and not empty.
    contains
       procedure, pass(self) :: dasharray      !< SVG dash array.
       procedure, pass(self) :: draws_xbars    !< Whether horizontal error bars are drawn.

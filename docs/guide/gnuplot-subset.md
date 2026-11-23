@@ -1579,6 +1579,16 @@ with the symbol of its color. `set pointsize S` sets the size of the points with
 replaces it, as gnuplot's); `unset pointsize` and `reset` restore 1.
 
 ```gnuplot
+plot '+' using 1:(cos(x)) with linespoints pt "C" pi 4 tc rgb "blue"   # a character every 4 points, in blue
+plot 'run.dat' with linespoints pt "✠" pn 10                           # about 10 points, evenly spread
+```
+
+`pt "c"` draws the first character of the string (UTF-8) as the point, centred, in the series color or the item's
+`tc` color, as text that keeps its size under zoom; also in `set style line`. An item's `font` is read and ignored.
+`pn N` (`pointnumber`) marks about N of the placeable points, every (count-1)/(N-1)-th, the start shifted by the
+item's number, as gnuplot.
+
+```gnuplot
 set jitter overlap 1 spread 0.5            # a swarm: overlapping points moved aside
 set jitter square; set jitter vertical     # also onto one row; along y instead
 ```
@@ -2075,7 +2085,7 @@ x2 and y2 ticks, `log`/`nolog`; the complex forms of the functions but `abs`, `a
 in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,
 `commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` with boxplot, error bars and labels, `lc palette z` with other styles than lines, points, linespoints, impulses, vectors and arrows, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
-`newhistogram` groups; `pointnumber` (`pn`), the line gap of a negative `pointinterval`; `reread`
+`newhistogram` groups; the line gap of a negative `pointinterval` or `pointnumber`; `reread`
 (deprecated in gnuplot 6.0), arrays as function arguments; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options; two tick

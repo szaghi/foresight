@@ -51,7 +51,8 @@ module foresight_script
 !<   columnstacked: `key(N)` the row names), `plot newhistogram ["title"] [lt N] [fs FILL] [at X], ...` groups;
 !<   `using ...:xtic(N)` / `xticlabels(N)`: the text of column N labels the abscissae, the labels replacing the x
 !<   ticks; `xtic(EXPR)` a string expression (`strcol(1) . ' K'`); `x2tic`, `ytic`, `y2tic` likewise on their axis (the
-!<   ordinates for y and y2; x2 and y2 once their ticks are set); `pi|pointinterval N` a marker every N points;
+!<   ordinates for y and y2; x2 and y2 once their ticks are set); `pi|pointinterval N` a marker every N points,
+!<   `pn|pointnumber N` about N; `pt "c"` a character as the point (`tc` its color, `font` ignored);
 !<   `set errorbars [small|large|fullwidth|SIZE] [lc C] [lw W]`, `unset errorbars`;
 !< - string columns in `using` expressions: `strcol(N)`, `stringcolumn(N)` (N a number or a header name),
 !<   `columnhead(N)`, the pseudo-columns `column(-1)` (block) and `column(-2)` (dataset); the text of labels a column
@@ -174,6 +175,8 @@ type :: line_style_object
    integer(I4P),     allocatable :: pt         !< Point type.
    integer(I4P),     allocatable :: pi         !< A point every N (`pointinterval`).
    real(R8P)                     :: palette = 0.0_R8P !< Value of `lc palette cb V` or `frac F`.
+   character(len=:), allocatable :: pt_char    !< A character as the point (`pt "c"`).
+   integer(I4P),     allocatable :: pn         !< About N points evenly spread (`pointnumber`).
 endtype line_style_object
 
 type :: loop_level
@@ -2462,6 +2465,7 @@ contains
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
    real(R8P)                                    :: item_head(2) !< Their head length (0 the default) and angle [deg].
    integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
+   character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
    real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
@@ -2887,6 +2891,7 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      if (allocated(point_tc)) deallocate(point_tc)
       title_at = 0_I4P
       title_xy = 0.0_R8P
       item_head = 0.0_R8P
@@ -3294,6 +3299,25 @@ contains
             if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
                                   self%symbols)) then
                iomsg = 'plot: '//iomsg
+               return
+            endif
+         elseif (word == 'tc' .or. keyword(word, 'textcolor', 5_I4P)) then
+            ! the color of the character points (`pt "c"`), as gnuplot
+            block
+               character(len=64) :: color !< Color read.
+
+               color = ''
+               if (.not. self%text_color(tokens, i, color, iostat, iomsg)) then
+                  iomsg = 'plot: '//iomsg
+                  return
+               endif
+               point_tc = trim(color)
+            endblock
+         elseif (word == 'font') then
+            ! read and ignored: foresight has one font
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('plot: font needs a "name,size"', iostat, iomsg)
                return
             endif
          else
@@ -4574,9 +4598,13 @@ contains
          if (last < 1_I4P) return
          panel%series(last)%label_axis = label_axis
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
+         if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_at = title_at
          panel%series(last)%title_xy = title_xy
+         if (allocated(line%pt_char)) panel%series(last)%style%point_char = line%pt_char
+         if (allocated(point_tc) .and. panel%series(last)%style%with /= WITH_LABELS) &
+            panel%series(last)%text_color = point_tc
       endassociate
       endsubroutine mark_last
 
@@ -7644,6 +7672,7 @@ contains
       fixed = .true.
       value = v
       endsubroutine range_end
+
       subroutine print_option
       !< `set print ["file" [append] | "-" | $NAME [append]]`: where `print` writes; a file or a datablock is emptied
       !< unless `append`; bare, the standard error.
@@ -12356,6 +12385,8 @@ contains
       if (allocated(styles(s)%dt)) line%dt = styles(s)%dt
       if (allocated(styles(s)%ps)) line%ps = styles(s)%ps
       if (allocated(styles(s)%pt)) line%pt = styles(s)%pt
+      if (allocated(styles(s)%pt_char)) line%pt_char = styles(s)%pt_char
+      if (allocated(styles(s)%pn)) line%pn = styles(s)%pn
       return
    enddo
    line%lc = default_color(id, colors)
@@ -12415,7 +12446,8 @@ contains
    is = word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. keyword(word, 'linetype', 5_I4P) &
         .or. word == 'lw' .or. keyword(word, 'linewidth', 5_I4P) .or. word == 'dt' .or. keyword(word, 'dashtype', 5_I4P) &
         .or. word == 'ps' .or. keyword(word, 'pointsize', 6_I4P) .or. word == 'pt' .or. keyword(word, 'pointtype', 6_I4P) &
-        .or. word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)
+        .or. word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P) .or. word == 'pn' &
+        .or. keyword(word, 'pointnumber', 6_I4P)
    endfunction is_line_option
 
    pure function special_color(word) result(color)
@@ -12580,6 +12612,15 @@ contains
          ok = .false.
       endif
       if (ok) line%pi = abs(number)
+   elseif (word == 'pn' .or. keyword(word, 'pointnumber', 6_I4P)) then
+      ! about N points evenly spread (the negative N's line gap not drawn), as gnuplot
+      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
+      if (ok) line%pn = abs(number)
+   elseif ((word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) .and. string_next()) then
+      ! gnuplot `pt "c"`: the first character of the string as the point
+      i = i + 1_I4P
+      line%pt_char = first_character(tokens(i)%text)
+      ok = .true.
    elseif (word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) then
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok .and. number < 0_I4P) then
@@ -12591,6 +12632,35 @@ contains
       ok = next_real(tokens, i, value, iostat, iomsg, symbols)
       if (ok) line%ps = value
    endif
+   contains
+      function string_next() result(yes)
+      !< Whether the token after `i` is a quoted string.
+      logical :: yes !< A string follows.
+
+      yes = .false.
+      if (i < size(tokens, kind=I4P)) yes = tokens(i + 1_I4P)%kind == TOKEN_STRING
+      endfunction string_next
+
+      pure function first_character(text) result(c)
+      !< The first character of `text`, UTF-8 (1 to 4 bytes); empty for an empty text.
+      character(len=*), intent(in)  :: text !< Text.
+      character(len=:), allocatable :: c    !< First character.
+      integer(I4P)                  :: b    !< Its first byte.
+      integer(I4P)                  :: n    !< Its bytes.
+
+      c = ''
+      if (len(text) == 0) return
+      b = iachar(text(1:1))
+      n = 1_I4P
+      if (b >= 240) then
+         n = 4_I4P
+      elseif (b >= 224) then
+         n = 3_I4P
+      elseif (b >= 192) then
+         n = 2_I4P
+      endif
+      c = text(1:min(n, len(text, kind=I4P)))
+      endfunction first_character
    endfunction line_option
 
    subroutine parse_every(spec, every, iostat, iomsg)

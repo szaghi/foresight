@@ -2656,8 +2656,20 @@ contains
       if (allocated(series%colors)) then
          if (size(series%colors) > 0) sample = trim(series%colors(size(series%colors)))
       endif
-      if (sample /= 'none') call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
-                                              pt=series%style%pointtype, line_width=series%style%linewidth)
+      if (sample == 'none') return
+      if (allocated(series%style%point_char)) then
+         if (len(series%style%point_char) > 0) then
+            ! gnuplot `pt "c"`: the character (in the `tc` color)
+            if (allocated(series%text_color)) sample = series%text_color
+            backend%literal = .true.
+            call backend%text(0.5_R8P * (xs(1) + xs(2)), yc + 0.35_R8P * font_size, series%style%point_char, 'middle', &
+                              color=sample)
+            backend%literal = .false.
+            return
+         endif
+      endif
+      call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
+                        pt=series%style%pointtype, line_width=series%style%linewidth)
    endif
    endsubroutine key_sample_marks
 
@@ -3117,6 +3129,24 @@ contains
          marked = valid
          if (series%pointinterval > 1_I4P) marked = valid .and. [(mod(i1 - 1_I4P, series%pointinterval) == 0_I4P, &
                                                                   i1 = 1_I4P, n)]
+         ! gnuplot `pointnumber N`: over N placeable points, every (count-1)/(N-1)-th, the start shifted by the plot's
+         ! number (plot_points)
+         if (series%pointnumber > 0_I4P .and. count(valid) > series%pointnumber) then
+            block
+               integer(I4P) :: every  !< Interval.
+               integer(I4P) :: offset !< First marked point.
+
+               if (series%pointnumber > 1_I4P) then
+                  every = (count(valid, kind=I4P) - 1_I4P) / (series%pointnumber - 1_I4P)
+               else
+                  every = count(valid, kind=I4P)
+               endif
+               every = max(every, 1_I4P)
+               offset = (s - 1_I4P) * ceiling(real(every, R8P) / 6.0_R8P)
+               ! as C's %, Fortran's mod takes the dividend's sign: the multiples before the offset are marked too
+               marked = valid .and. [(mod(i1 - 1_I4P - offset, every) == 0_I4P, i1 = 1_I4P, n)]
+            endblock
+         endif
          ! gnuplot `set jitter`: the overlapping markers of `with points` spread out
          if (self%jitter_spread > 0.0_R8P .and. series%style%with == WITH_POINTS) call jitter
          ! markers are drawn whole (gnuplot `unset clip points`), those centred out of the plot area not at all
@@ -3129,7 +3159,24 @@ contains
                marked(i1) = inside_marker(u(i1), v(i1), 0.5_R8P * series%style%point_diameter())
             enddo
          endif
-         if (allocated(series%colors)) then
+         if (char_points()) then
+            ! gnuplot `pt "c"`: the character centred on each point, in the point's color, as text (literal)
+            block
+               character(len=:), allocatable :: color !< Point color.
+
+               backend%literal = .true.
+               do i1 = 1_I4P, n
+                  if (.not. marked(i1)) cycle
+                  color = series%style%color
+                  if (allocated(series%colors)) color = trim(series%colors(i1))
+                  if (allocated(series%text_color)) color = series%text_color
+                  if (color == 'none') cycle
+                  call backend%data_label(u(i1), v(i1), series%style%point_char, 'middle', 0.0_R8P, color, 0.0_R8P, &
+                                          0.35_R8P * font_size)
+               enddo
+               backend%literal = .false.
+            endblock
+         elseif (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
             i1 = 1_I4P
             do while (i1 <= n)
@@ -3151,6 +3198,14 @@ contains
       endif
    endassociate
    contains
+      function char_points() result(yes)
+      !< Whether the series' points are a character (`pt "c"`).
+      logical :: yes !< Character points.
+
+      yes = .false.
+      if (allocated(self%series(s)%style%point_char)) yes = len(self%series(s)%style%point_char) > 0
+      endfunction char_points
+
       subroutine draw_run(i1, i2)
       !< The line through the run of placeable points `i1` to `i2`: straight segments, or the steps of `steps`
       !< (horizontal first), `fsteps` (vertical first), `histeps` (around the points, from and back to y = 0).

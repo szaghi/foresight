@@ -102,6 +102,8 @@ type :: series_object
    integer(I4P)                  :: title_at = 0_I4P !< Title place (gnuplot `title ... at`): 0 the key, 1 before the
                                                      !< first point, 2 after the last one, 3 a page position.
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
+   integer(I4P)                  :: pointnumber = 0_I4P !< About N point markers evenly spread, 0 for all (gnuplot
+                                                        !< `pointnumber`).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

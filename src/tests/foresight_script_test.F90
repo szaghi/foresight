@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(182)                           !< Per-check outcome.
+logical                       :: test_passed(183)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -144,8 +144,8 @@ call interpreter%run_text('set key sparkle 2', iostat, iomsg)
 test_passed(18) = iostat /= 0_I4P .and. index(iomsg, 'set key: unsupported option "sparkle"') > 0
 call interpreter%run_text("plot '"//data_file//"' every 0", iostat, iomsg)
 test_passed(19) = iostat /= 0_I4P .and. index(iomsg, 'positive increments') > 0
-call interpreter%run_text('set style line 1 pn 2', iostat, iomsg)
-test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "pn"') > 0
+call interpreter%run_text('set style line 1 sparkle 2', iostat, iomsg)
+test_passed(20) = iostat /= 0_I4P .and. index(iomsg, 'set style line: unsupported option "sparkle"') > 0
 
 ! functions: 100 samples over [-10:10] without data, the expression as written is the title
 call interpreter%init(scratch)
@@ -4039,6 +4039,40 @@ endif
 open(newunit=unit, file='foresight_script_test_title_at.svg')
 close(unit, status='delete')
 
+! pt "c": the character as the point (the first one of a UTF-8 string), tc its color, in the key too; pn N about N
+! points evenly spread (gnuplot's plot_points); set style line N pt "c"; font read and ignored
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_char_points.svg"; '// &
+                          'set style line 3 pt "Ж"; set samples 21; set xrange [0:20]; '// &
+                          'plot ''+'' using 1:1 with linespoints pt "Cxy" tc rgb "#123456" font ":Bold" pn 5, '// &
+                          '''+'' using 1:(2*$1) with points ls 3', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(183) = iostat == 0_I4P
+if (test_passed(183)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+      integer(I4P)                  :: k   !< Occurrences.
+      integer(I4P)                  :: p   !< Position.
+
+      svg = text_of_file('foresight_script_test_char_points.svg')
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(183) = series(1)%style%point_char == 'C' .and. series(1)%text_color == '#123456' .and. &
+                           series(1)%pointnumber == 5_I4P .and. series(2)%style%point_char == 'Ж'
+      endassociate
+      ! pn 5 over 21 points: every 5th, from the first (plot 0): 5 markers, and the key sample
+      k = 0_I4P
+      p = 0_I4P
+      do
+         if (index(svg(p + 1:), '>C<') == 0) exit
+         p = p + index(svg(p + 1:), '>C<')
+         k = k + 1_I4P
+      enddo
+      test_passed(183) = test_passed(183) .and. k == 6_I4P .and. index(svg, '>Ж<') > 0 .and. index(svg, '#123456') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_char_points.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4047,7 +4081,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,182L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,183L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
