@@ -2695,20 +2695,16 @@ contains
       if (sample_first) exit
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
-      if (nranges > merge(3_I4P, 2_I4P, self%parametric)) then
-         if (self%parametric) then
+      if (nranges > merge(3_I4P, 2_I4P, self%parametric .or. self%figure%panels(self%figure%current)%polar)) then
+         if (self%parametric .or. self%figure%panels(self%figure%current)%polar) then
             call fail('plot: at most three inline ranges, [t], [x] and [y], in parametric mode', iostat, iomsg)
          else
             call fail('plot: at most two inline ranges, [x] and [y], are supported', iostat, iomsg)
          endif
          return
       endif
-      if (self%figure%panels(self%figure%current)%polar) then
-         call fail('plot: inline ranges are not supported in polar mode (use set trange and set rrange)', iostat, iomsg)
-         return
-      endif
-      ! parametric: [t] [x] [y]
-      if (self%parametric) then
+      ! parametric and polar: [t] [x] [y], as gnuplot
+      if (self%parametric .or. self%figure%panels(self%figure%current)%polar) then
          call inline_range(tokens(i)%text, merge(3_I4P, nranges - 1_I4P, nranges == 1_I4P))
       else
          call inline_range(tokens(i)%text, nranges)
@@ -6120,6 +6116,9 @@ contains
             hi = merge(360.0_R8P, 2.0_R8P * acos(-1.0_R8P), panel%degrees)
             if (panel%taxis%min_fixed) lo = panel%taxis%min_user
             if (panel%taxis%max_fixed) hi = panel%taxis%max_user
+            ! an inline [t=a:b] of this plot
+            if (panel%taxis%plot_min_fixed) lo = panel%taxis%plot_min
+            if (panel%taxis%plot_max_fixed) hi = panel%taxis%plot_max
             allocate(xs(n), ys(n))
             do j = 1_I4P, n
                xs(j) = lo + real(j - 1_I4P, R8P) * ((hi - lo) / real(n - 1_I4P, R8P))

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(207)                           !< Per-check outcome.
+logical                       :: test_passed(208)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4718,6 +4718,20 @@ close(unit, status='delete')
 call interpreter%run_text('unset link x2', iostat, iomsg)
 test_passed(207) = test_passed(207) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%link_x2
 
+! polar inline ranges, as gnuplot 6.0: the first the t range of the functions of this plot, [t=a:b] or [a:b]
+call interpreter%init(scratch)
+call interpreter%run_text('set polar; set samples 11; set term svg; set output "foresight_script_test_polar_inline.svg"; '// &
+                          'plot [t=0:pi] t', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(208) = iostat == 0_I4P
+if (test_passed(208)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(208) = panel%taxis%plot_max_fixed .and. abs(panel%taxis%plot_max - acos(-1.0_R8P)) < 1.0e-12_R8P
+   endassociate
+endif
+open(newunit=unit, file='foresight_script_test_polar_inline.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4726,7 +4740,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,207L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,208L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
