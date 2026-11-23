@@ -1550,7 +1550,8 @@ contains
    subroutine set_size(self, width, height, ratio)
    !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
    !< multiplot (not with a layout). `ratio` > 0 fixes the plot area height over width (gnuplot `set size ratio R`,
-   !< `square` is 1), 0 frees it (`noratio`).
+   !< `square` is 1), 0 frees it (`noratio`); a negative ratio -R makes a y unit R times an x unit long (gnuplot
+   !< `set size ratio -1`: equal units, the plot area shrunk to the ranges).
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in), optional :: width  !< Width, page width fraction, > 0.
    real(R8P),            intent(in), optional :: height !< Height, page height fraction, > 0.
@@ -1562,7 +1563,6 @@ contains
       if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
    endif
    if (present(ratio)) then
-      if (ratio < 0.0_R8P) error stop 'foresight: set_size: the ratio must not be negative'
    endif
    call self%ensure_panels
    associate(panel => self%panels(self%current))

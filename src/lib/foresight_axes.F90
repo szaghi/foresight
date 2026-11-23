@@ -121,8 +121,8 @@ character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill:
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
 character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, yerrorbars, '// &
-                                               'closed filledcurves, sectors and readouts, on the first axes' !< Polar
-                                                                                                              !< styles.
+                                               'labels, closed filledcurves, sectors and readouts, on the first axes' !<
+                                                                                                              !< Polar styles.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
 
@@ -309,7 +309,8 @@ type :: axes_object
                                                          !< right.
    logical                          :: border_polar = .false. !< Circle at the largest r (`set border polar`).
    real(R8P)                        :: ratio = 0.0_R8P   !< Plot area height over width (`set size ratio`, `square` is
-                                                         !< 1); 0 for none.
+                                                         !< 1); 0 for none; negative -R: a y unit R x units long
+                                                         !< (`ratio -1`, equal units).
    type(boxplot_style)              :: boxplot           !< Layout of the boxplots, `set style boxplot`.
    type(paxis_object), allocatable  :: paxes(:)          !< Parallel axes p1, p2, ... (`set paxis`), as many as set.
    logical                          :: spiderplot = .false. !< Spider plot coordinates (`set spiderplot`).
@@ -5567,7 +5568,8 @@ contains
    logical                         :: ok     !< Polar series.
 
    select case (series%style%with)
-   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES, WITH_YERRORBARS)
+   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES, WITH_YERRORBARS, &
+         WITH_LABELS)
       ! yerrorbars: radial bars, r low to r high at theta (gnuplot's polar error bars)
       ok = .true.
    case (WITH_FILLEDCURVES)
@@ -6223,23 +6225,32 @@ contains
    if (self%margin_user(4) >= 0.0_R8P) area(4) = merge((1.0_R8P - self%margin_user(4)) * self%canvas(2), &
                                                        y0 + height - self%margin_user(4) * font_size, &
                                                        self%margin_screen(4))
-   if (self%ratio > 0.0_R8P) call fit_ratio(area)
+   if (self%ratio > 0.0_R8P) then
+      call fit_ratio(area, self%ratio)
+   elseif (self%ratio < 0.0_R8P) then
+      ! gnuplot `set size ratio -R`: a y unit R times an x unit, from the ranges set up so far (refined twice)
+      associate(dx => abs(self%xaxis%hi - self%xaxis%lo), dy => abs(self%yaxis%hi - self%yaxis%lo))
+         if (dx > 0.0_R8P .and. dy > 0.0_R8P .and. .not. (self%xaxis%log .or. self%yaxis%log)) &
+            call fit_ratio(area, -self%ratio * dy / dx)
+      endassociate
+   endif
    contains
-      pure subroutine fit_ratio(area)
+      pure subroutine fit_ratio(area, ratio)
       !< Shrink the plot area to the height over width `ratio`, centred, as gnuplot `set size ratio`.
       !< The area is an argument: a pure procedure defines no host-associated variable (F2018 C1594).
       real(R8P), intent(inout) :: area(4) !< Plot area [px].
+      real(R8P), intent(in)    :: ratio   !< Height over width.
       real(R8P)                :: w       !< Width [px].
       real(R8P)                :: h       !< Height [px].
 
       w = area(2) - area(1)
       h = area(4) - area(3)
-      if (h > self%ratio * w) then
-         area(3) = area(3) + 0.5_R8P * (h - self%ratio * w)
-         area(4) = area(3) + self%ratio * w
+      if (h > ratio * w) then
+         area(3) = area(3) + 0.5_R8P * (h - ratio * w)
+         area(4) = area(3) + ratio * w
       else
-         area(1) = area(1) + 0.5_R8P * (w - h / self%ratio)
-         area(2) = area(1) + h / self%ratio
+         area(1) = area(1) + 0.5_R8P * (w - h / ratio)
+         area(2) = area(1) + h / ratio
       endif
       endsubroutine fit_ratio
 

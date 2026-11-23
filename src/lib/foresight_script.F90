@@ -3664,7 +3664,8 @@ contains
       endif
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
-            polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars filledcurves sectors readout') .and. &
+            polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars labels filledcurves sectors readout') &
+                       .and. &
                        (.not. allocated(base) .or. polar_base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
             if (.not. polar_ok) then
@@ -6756,6 +6757,7 @@ contains
    logical                                      :: placed    !< A position given.
    logical                                      :: kind_set  !< An object kind given.
    real(R8P)                                    :: v         !< A number.
+   logical                                      :: polar_place !< A position `polar THETA, R`.
 
    iostat = 0_I4P
    iomsg = ''
@@ -6951,6 +6953,40 @@ contains
       type(place_object), intent(out) :: q !< Position.
 
       q = place_object()
+      ! gnuplot's `polar THETA, R`: the first-axis x, y of that theta and radius on a polar panel, with the theta
+      ! origin, direction and angle unit set now (gnuplot converts when drawing)
+      polar_place = .false.
+      if (i < size(tokens, kind=I4P)) polar_place = tokens(i + 1_I4P)%text == 'polar'
+      if (polar_place) then
+         i = i + 1_I4P
+         call coordinate(q%x, q%sx)
+         if (iostat /= 0_I4P) return
+         if (i >= size(tokens, kind=I4P)) then
+            call fail('set '//option//': a polar position is "polar theta, r"', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+         call coordinate(q%y, q%sy)
+         if (iostat /= 0_I4P) return
+         associate(panel => self%figure%panels(self%figure%current))
+            block
+               real(R8P) :: phi !< Page angle [rad].
+               real(R8P) :: rho !< Distance from the pole.
+
+               phi = q%x
+               if (panel%degrees) phi = phi * acos(-1.0_R8P) / 180.0_R8P
+               if (panel%theta_clockwise) phi = -phi
+               phi = phi + panel%theta_origin * acos(-1.0_R8P) / 180.0_R8P
+               rho = q%y
+               if (panel%raxis%min_fixed) rho = rho - panel%raxis%min_user
+               q%x = rho * cos(phi)
+               q%y = rho * sin(phi)
+               q%sx = 'first'
+               q%sy = 'first'
+            endblock
+         endassociate
+         return
+      endif
       call coordinate(q%x, q%sx)
       if (iostat /= 0_I4P) return
       q%sy = q%sx
@@ -10024,11 +10060,9 @@ contains
             i = i + 1_I4P
             ok_ratio: block
                if (i <= size(tokens, kind=I4P)) then
-                  if (to_number(tokens(i)%text, ratio)) then
-                     if (ratio > 0.0_R8P) exit ok_ratio
-                  endif
+                  if (to_number(tokens(i)%text, ratio)) exit ok_ratio
                endif
-               call fail('set size: ratio needs a positive number (negative ratios are not supported)', iostat, iomsg)
+               call fail('set size: ratio needs a number', iostat, iomsg)
                return
             endblock ok_ratio
          else

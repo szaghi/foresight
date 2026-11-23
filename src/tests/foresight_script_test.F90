@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(205)                           !< Per-check outcome.
+logical                       :: test_passed(206)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -723,8 +723,8 @@ call interpreter%run_text("set rrange [3:1]", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'max must exceed min') > 0
 call interpreter%run_text("set ttics 0,-30", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'set ttics: supported forms') > 0
-call interpreter%run_text("set size ratio -1", iostat, iomsg)
-test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'negative ratios are not supported') > 0
+call interpreter%run_text("set size ratio square", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'ratio needs a number') > 0
 call interpreter%run_text("set border 2.5", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'the mask is an integer') > 0
 call interpreter%run_text("set angles gradians", iostat, iomsg)
@@ -4654,6 +4654,43 @@ endif
 open(newunit=unit, file='foresight_script_test_h_labels.svg')
 close(unit, status='delete')
 
+! set size ratio -1: equal units, the plot area height over width the y span over the x span; positions `polar
+! THETA, R` and labels on a polar panel
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_ratio.svg"; set size ratio -1; '// &
+                          'set xrange [0:4]; set yrange [0:1]; plot x/4', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(206) = iostat == 0_I4P
+if (test_passed(206)) then
+   block
+      character(len=:), allocatable :: svg  !< Output.
+      real(R8P)                     :: a(4) !< Plot area.
+      integer                       :: k    !< Position.
+      integer                       :: ios  !< Status.
+
+      svg = text_of_file('foresight_script_test_ratio.svg')
+      k = index(svg, 'data-area="')
+      test_passed(206) = k > 0
+      if (test_passed(206)) then
+         read(svg(k + 11:index(svg(k + 11:), '"') + k + 9), *, iostat=ios) a
+         test_passed(206) = ios == 0
+         if (test_passed(206)) test_passed(206) = abs((a(4) - a(3)) / (a(2) - a(1)) - 0.25_R8P) < 1.0e-3_R8P
+      endif
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_ratio.svg')
+close(unit, status='delete')
+call interpreter%init(scratch)
+call interpreter%run_text('set polar; set angles degrees; set theta top cw; set label 1 at polar 90, 2 "E"'//new_line('a')// &
+                          '$L << EOD'//new_line('a')//'0 1 N'//new_line('a')//'EOD'//new_line('a')// &
+                          'set rrange [0:3]; plot $L using 1:2:3 with labels', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+associate(note => interpreter%figure%panels(1)%notes(1))
+   ! theta 90 clockwise from the top: on the right, x = 2
+   test_passed(206) = test_passed(206) .and. iostat == 0_I4P .and. abs(note%at%x - 2.0_R8P) < 1.0e-12_R8P .and. &
+                     abs(note%at%y) < 1.0e-12_R8P
+endassociate
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4662,7 +4699,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,205L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,206L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
