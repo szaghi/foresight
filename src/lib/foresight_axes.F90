@@ -6443,7 +6443,11 @@ contains
                                             self%x2axis%tics%mode /= TICS_NONE)
    if (self%x2_active .and. self%link_x2) then
       ! gnuplot `set link x2`: the range of x; with `via`, ticks at nice x2 values placed at their x
-      call linked_axis(self%x2axis, self%xaxis, self%link_x2_via, 1_I4P, area(2) - area(1))
+      if (self%link_x2_via .and. allocated(self%link_maps)) then
+         call linked_axis(self%x2axis, self%xaxis, k=1_I4P, npx=area(2) - area(1), maps=self%link_maps)
+      else
+         call linked_axis(self%x2axis, self%xaxis, k=1_I4P, npx=area(2) - area(1))
+      endif
    elseif (self%x2_active) then
       ! no data of its own: the range of the first x axis, as is (gnuplot)
       self%x2axis%tight = self%has_image() .or. .not. xfound(2) .or. self%x2axis%noextend
@@ -6474,7 +6478,11 @@ contains
    self%y2axis%tight = self%y2axis%noextend
    if (self%link_y2) then
       self%y2_active = self%y2axis%tics%mode /= TICS_NONE
-      if (self%y2_active) call linked_axis(self%y2axis, self%yaxis, self%link_y2_via, 3_I4P, area(4) - area(3))
+      if (self%y2_active .and. self%link_y2_via .and. allocated(self%link_maps)) then
+         call linked_axis(self%y2axis, self%yaxis, k=3_I4P, npx=area(4) - area(3), maps=self%link_maps)
+      elseif (self%y2_active) then
+         call linked_axis(self%y2axis, self%yaxis, k=3_I4P, npx=area(4) - area(3))
+      endif
    elseif (self%y2_active) then
       call self%y2axis%setup(ymin(2), ymax(2), found(2), area(4) - area(3))
    endif
@@ -6485,48 +6493,6 @@ contains
    if (allocated(self%xaxis%ticks) .and. self%xaxis%tics%rotate /= 0.0_R8P) call one_line(self%xaxis%ticks)
    if (self%has_image(palette=.true.)) call setup_colors
    contains
-      subroutine linked_axis(second, first, via, k, npx)
-      !< The secondary axis `second` linked to `first` (gnuplot `set link`): the same range; with `via` (the maps
-      !< `link_maps(k)` forward, `k + 1` inverse) its ticks are made over the forward range in its own units (its tics
-      !< settings) and placed at their inverse, the labels its values.
-      type(axis_object), intent(inout) :: second !< Secondary axis.
-      type(axis_object), intent(in)    :: first  !< Primary axis.
-      logical,           intent(in)    :: via    !< Mapped through expressions.
-      integer(I4P),      intent(in)    :: k      !< Forward map index.
-      real(R8P),         intent(in)    :: npx    !< Axis length [px].
-      type(axis_object)                :: probe  !< Secondary axis over the mapped range.
-      real(R8P)                        :: a      !< Mapped start.
-      real(R8P)                        :: b      !< Mapped end.
-      real(R8P)                        :: v      !< A tick at its primary value.
-      integer(I4P)                     :: t      !< Tick counter.
-
-      second%tight = .true.
-      second%min_fixed = .false.
-      second%max_fixed = .false.
-      call second%setup(min(first%lo, first%hi), max(first%lo, first%hi), .true., npx)
-      second%lo = first%lo
-      second%hi = first%hi
-      second%log = first%log
-      if (.not. via .or. .not. allocated(self%link_maps)) return
-      a = self%link_maps(k)%value_at(first%lo)
-      b = self%link_maps(k)%value_at(first%hi)
-      if (.not. (ieee_is_finite(a) .and. ieee_is_finite(b)) .or. a == b) return
-      probe = second
-      probe%tight = .true.
-      probe%log = .false.
-      call probe%setup(min(a, b), max(a, b), .true., npx)
-      if (allocated(second%ticks)) deallocate(second%ticks)
-      allocate(second%ticks(0))
-      if (.not. allocated(probe%ticks)) return
-      do t = 1_I4P, size(probe%ticks, kind=I4P)
-         v = self%link_maps(k + 1_I4P)%value_at(probe%ticks(t)%value)
-         if (.not. ieee_is_finite(v)) cycle
-         if (v < min(first%lo, first%hi) - 1.0e-9_R8P * abs(first%hi - first%lo) .or. &
-             v > max(first%lo, first%hi) + 1.0e-9_R8P * abs(first%hi - first%lo)) cycle
-         call push(second%ticks, tick_object(value=v, major=probe%ticks(t)%major, label=probe%ticks(t)%label, &
-                                             sup=probe%ticks(t)%sup))
-      enddo
-      endsubroutine linked_axis
 
       subroutine setup_polar
       !< The r axis from the largest |r| of the series (the pole at r = 0 unless set), extended to the r ticks; the
@@ -6645,6 +6611,50 @@ contains
       call move_alloc(labels, axis%labels)
       endsubroutine axis_labels
    endsubroutine setup_axes
+
+   subroutine linked_axis(second, first, maps, k, npx)
+   !< The secondary axis `second` linked to `first` (gnuplot `set link`): the same range; with `maps` (`maps(k)`
+   !< forward, `k + 1` inverse) its ticks are made over the forward range in its own units (its tics settings) and placed
+   !< at their inverse, the labels its values. A module procedure: as an internal one of setup_axes, given a component of
+   !< its host's panel, nvfortran 26.9 stopped with an internal compiler error.
+   type(axis_object), intent(inout) :: second !< Secondary axis.
+   type(axis_object), intent(in)    :: first  !< Primary axis.
+   type(expression_object), intent(in), optional :: maps(:) !< Maps (`via`), absent for the same axis.
+   integer(I4P),      intent(in)    :: k      !< Forward map index.
+   real(R8P),         intent(in)    :: npx    !< Axis length [px].
+   type(axis_object)                :: probe  !< Secondary axis over the mapped range.
+   real(R8P)                        :: a      !< Mapped start.
+   real(R8P)                        :: b      !< Mapped end.
+   real(R8P)                        :: v      !< A tick at its primary value.
+   integer(I4P)                     :: t      !< Tick counter.
+
+   second%tight = .true.
+   second%min_fixed = .false.
+   second%max_fixed = .false.
+   call second%setup(min(first%lo, first%hi), max(first%lo, first%hi), .true., npx)
+   second%lo = first%lo
+   second%hi = first%hi
+   second%log = first%log
+   if (.not. present(maps)) return
+   a = maps(k)%value_at(first%lo)
+   b = maps(k)%value_at(first%hi)
+   if (.not. (ieee_is_finite(a) .and. ieee_is_finite(b)) .or. a == b) return
+   probe = second
+   probe%tight = .true.
+   probe%log = .false.
+   call probe%setup(min(a, b), max(a, b), .true., npx)
+   if (allocated(second%ticks)) deallocate(second%ticks)
+   allocate(second%ticks(0))
+   if (.not. allocated(probe%ticks)) return
+   do t = 1_I4P, size(probe%ticks, kind=I4P)
+      v = maps(k + 1_I4P)%value_at(probe%ticks(t)%value)
+      if (.not. ieee_is_finite(v)) cycle
+      if (v < min(first%lo, first%hi) - 1.0e-9_R8P * abs(first%hi - first%lo) .or. &
+          v > max(first%lo, first%hi) + 1.0e-9_R8P * abs(first%hi - first%lo)) cycle
+      call push(second%ticks, tick_object(value=v, major=probe%ticks(t)%major, label=probe%ticks(t)%label, &
+                                          sup=probe%ticks(t)%sup))
+   enddo
+   endsubroutine linked_axis
 
    subroutine plain_ticks(self)
    !< On an enhanced text device, the tick labels of the `noenhanced` axes escaped, read as they are (their widths
