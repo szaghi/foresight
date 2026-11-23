@@ -137,7 +137,8 @@ use foresight_theme, only : THEMES
 use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
-                            FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
+                            FILL_SOLID, FILL_PATTERN, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, &
+                            WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
@@ -2730,6 +2731,9 @@ contains
          is_function = .true.
          written = 'NaN'
          keyentry = .true.
+         ! its own function (a keyentry first in the plot has no other)
+         call func%compile(written, iostat, iomsg)
+         if (iostat /= 0_I4P) return
       elseif (is_function) then
          ! the expression runs up to the first item option: blanks may separate its words, `x * 2`
          head = i
@@ -2992,6 +2996,21 @@ contains
                      endif
                      has_table_if = .true.
                   endif
+               endif
+            endif
+            ! keyentry of another style: its key sample only, a filled box for the filled styles, a line and points for
+            ! the error lines, else a line (the panel charts have no key entries of their own)
+            if (keyentry .and. .not. function_drawable(with) .and. with /= 'table') then
+               if (is_word(with, 'spiderplot parallelaxes pie radar rose gauge readout')) then
+                  call fail('plot: keyentry with '//with//' is not supported', iostat, iomsg)
+                  return
+               elseif (is_word(with, 'polygons circles ellipses boxplot candlesticks boxxyerror boxerrorbars '// &
+                               'histograms sectors')) then
+                  with = 'filledcurves'
+               elseif (is_word(with, 'xerrorlines yerrorlines xyerrorlines')) then
+                  with = 'linespoints'
+               else
+                  with = 'lines'
                endif
             endif
             if (is_function .and. .not. function_drawable(with) .and. with /= 'table') then
@@ -4699,6 +4718,8 @@ contains
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
          if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
          panel%series(last)%ellipse_units = ellipse_units
+         ! a keyentry takes the linetype of the next item without using it up, as gnuplot
+         if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_at = title_at
          panel%series(last)%title_xy = title_xy

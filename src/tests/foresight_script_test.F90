@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(186)                           !< Per-check outcome.
+logical                       :: test_passed(187)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4146,6 +4146,28 @@ endif
 open(newunit=unit, file='foresight_script_test_rotate_var.svg')
 close(unit, status='delete')
 
+! keyentry with the styles functions cannot take: its key sample (a filled box for the filled styles, else a line),
+! first in the plot too; a keyentry does not use up a linetype (the next item takes it), as gnuplot; refused with the
+! panel charts
+call interpreter%init(scratch)
+call interpreter%run_text('plot keyentry with boxplot title "box", keyentry with yerrorbars lc 4 title "bars", sin(x)', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(187) = iostat == 0_I4P
+if (test_passed(187)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(187) = size(series) == 3
+      if (test_passed(187)) test_passed(187) = series(1)%style%with == WITH_FILLEDCURVES .and. &
+                                             series(1)%title == 'box' .and. series(2)%style%with == WITH_LINES .and. &
+                                             series(1)%style%color == default_color(1_I4P) .and. &
+                                             series(3)%style%color == default_color(1_I4P)
+   endassociate
+endif
+if (test_passed(187)) then
+   call interpreter%run_text('set spiderplot; plot keyentry with spiderplot title "s"', iostat, iomsg)
+   test_passed(187) = iostat /= 0_I4P .and. index(iomsg, 'keyentry with spiderplot is not supported') > 0
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4154,7 +4176,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,186L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,187L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
