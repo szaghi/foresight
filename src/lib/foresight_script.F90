@@ -7327,7 +7327,7 @@ contains
       !< linetypes still cycle as gnuplot's), the rest the defaults of its series; `set linetype cycle N` reuses the
       !< first N colors for the higher linetypes.
       type(line_style_object)       :: lt     !< Properties read.
-      character(len=7), allocatable :: list(:) !< Linetype colors.
+      character(len=9), allocatable :: list(:) !< Linetype colors.
       integer(I4P)                  :: n      !< Linetype.
       integer(I4P)                  :: base   !< Colors of a cycle now.
       integer(I4P)                  :: m      !< Colors after.
@@ -7388,15 +7388,15 @@ contains
       enddo
       associate(panel => self%figure%panels(self%figure%current))
          if (allocated(lt%lc)) then
-            ! the names kept for the themes (black, white) as their #rrggbb
-            if (len(lt%lc) /= 7 .or. lt%lc(1:1) /= '#') then
+            ! the names kept for the themes (black, white) as their #rrggbb; gnuplot's #AARRGGBB is kept as #rrggbbaa
+            if (.not. ((len(lt%lc) == 7 .or. len(lt%lc) == 9) .and. lt%lc(1:1) == '#')) then
                block
                   integer(I4P) :: c(3) !< Channels.
                   logical      :: ok   !< A named color.
 
                   call named_color(lt%lc, c, ok)
                   if (.not. ok) then
-                     call fail('set linetype: a fixed opaque color is expected, not "'//lt%lc//'"', iostat, iomsg)
+                     call fail('set linetype: a fixed color is expected, not "'//lt%lc//'"', iostat, iomsg)
                      return
                   endif
                   lt%lc = hex_color(c)
@@ -7944,7 +7944,7 @@ contains
       subroutine colorsequence_option
       !< `set colorsequence default|podo|classic` (gnuplot's linetype colors), or foresight's `NAME [N]`: the first N
       !< colors (8 by default) of a categorical order (`batlowS`, ..., any case).
-      character(len=7), allocatable :: list(:) !< Colors.
+      character(len=9), allocatable :: list(:) !< Colors.
       character(len=:), allocatable :: bad     !< Problem.
       real(R8P)                     :: v       !< Number of colors.
       integer(I4P)                  :: n       !< Number of colors.
@@ -11290,7 +11290,7 @@ contains
    type(line_style_object), intent(in)    :: styles(:) !< Defined styles.
    integer(I4P),            intent(in)    :: id        !< Style number.
    type(line_style_object), intent(inout) :: line      !< Line properties.
-   character(len=7),        intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
+   character(len=9),        intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
    integer(I4P)                           :: s         !< Counter.
 
    do s = 1_I4P, size(styles, kind=I4P)
@@ -11390,7 +11390,7 @@ contains
    type(line_style_object),       intent(inout) :: line      !< Line properties.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
-   character(len=7),              intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
+   character(len=9),              intent(in), optional :: colors(:) !< Active linetype colors (`set colorsequence`).
    type(symbols_object),          intent(in), optional :: symbols   !< User variables: `lc i`, `lw w`.
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: word      !< Property word.

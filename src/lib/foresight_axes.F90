@@ -263,7 +263,7 @@ type :: axes_object
    integer(I4P)                     :: color_shift = 0_I4P  !< Shift of the default linetype colors of the next
                                                             !< series (gnuplot `newhistogram lt N`).
    type(palette_object)             :: palette          !< Palette of the images, `set palette`.
-   character(len=7), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
+   character(len=9), allocatable    :: linecolors(:)    !< Linetype colors, `set colorsequence`; unallocated: gnuplot's.
    type(axis_object)                :: cbaxis         !< Color axis of the images, `set cbrange`; tight, see
                                                       !< `set_defaults`.
    logical                          :: colorbox = .true. !< Draw the color box of the images.
@@ -3919,7 +3919,7 @@ contains
    integer(I4P),        intent(in)           :: mode          !< HIST_CLUSTERED, HIST_ROWSTACKED, ...
    real(R8P),           intent(in)           :: gap           !< Gap between clusters [bar slots].
    real(R8P),           intent(in)           :: boxwidth      !< Bar width factor, 0 for 1.
-   character(len=7),    intent(in), optional :: linecolors(:) !< Linetype colors (`set colorsequence`).
+   character(len=9),    intent(in), optional :: linecolors(:) !< Linetype colors (`set colorsequence`).
    real(R8P), allocatable             :: up(:)      !< Top of the positive stack of each row.
    real(R8P), allocatable             :: down(:)    !< Bottom of the negative stack of each row.
    real(R8P)                          :: slot       !< Clustered slot width.

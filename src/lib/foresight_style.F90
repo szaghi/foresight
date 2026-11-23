@@ -129,7 +129,7 @@ contains
    !< Color of linetype `index`, cycling the active sequence `colors` (`set colorsequence`), else gnuplot 5's
    !< linetype colors.
    integer(I4P),     intent(in)           :: index     !< Series index, from 1.
-   character(len=7), intent(in), optional :: colors(:) !< Active color sequence; absent or empty: gnuplot's default.
+   character(len=9), intent(in), optional :: colors(:) !< Active color sequence; absent or empty: gnuplot's default.
    character(len=:), allocatable          :: color     !< SVG color.
 
    if (present(colors)) then
@@ -147,7 +147,7 @@ contains
    !< of foresight_colormaps (`batlowS`, ..., any case), its first `n` colors (8 if `n` < 1), the most distinct first.
    character(len=*),              intent(in)  :: name      !< Sequence name.
    integer(I4P),                  intent(in)  :: n         !< Colors of a categorical order; < 1 for 8.
-   character(len=7), allocatable, intent(out) :: colors(:) !< Colors, `#rrggbb`; empty for gnuplot's default.
+   character(len=9), allocatable, intent(out) :: colors(:) !< Colors, `#rrggbb`; empty for gnuplot's default.
    character(len=:), allocatable, intent(out) :: bad       !< Why not, empty if done.
    integer(I4P)                               :: id        !< Categorical order.
    integer(I4P)                               :: m         !< Colors taken.

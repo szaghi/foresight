@@ -555,7 +555,7 @@ contains
    class(figure_object), intent(inout)        :: self   !< Figure.
    character(len=*),     intent(in)           :: name   !< Sequence.
    integer(I4P),         intent(in), optional :: colors !< Colors of a categorical order, 1 to 100.
-   character(len=7), allocatable              :: list(:) !< Colors.
+   character(len=9), allocatable              :: list(:) !< Colors.
    character(len=:), allocatable              :: bad    !< Problem.
    integer(I4P)                               :: n      !< Colors asked.
 

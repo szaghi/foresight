@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(164)                           !< Per-check outcome.
+logical                       :: test_passed(165)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3624,6 +3624,17 @@ test_passed(164) = test_passed(164) .and. iostat /= 0_I4P
 call interpreter%run_text('y = {1, a}', iostat, iomsg)
 test_passed(164) = test_passed(164) .and. iostat /= 0_I4P .and. index(iomsg, 'invalid complex constant') > 0
 
+
+! set linetype N lc "#AARRGGBB": gnuplot's transparent colors kept as #rrggbbaa (alpha 255 - AA)
+call interpreter%init(scratch)
+call interpreter%run_text('set linetype 9 lc "#80bb33bb"; plot x lt 9', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(165) = iostat == 0_I4P
+if (test_passed(165)) test_passed(165) = trim(interpreter%figure%panels(1)%linecolors(9)) == '#bb33bb7f' .and. &
+                                       interpreter%figure%panels(1)%series(1)%style%color == '#bb33bb7f'
+call interpreter%run_text('set linetype 3 lc palette', iostat, iomsg)
+test_passed(165) = test_passed(165) .and. iostat /= 0_I4P .and. index(iomsg, 'a fixed color is expected') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3632,7 +3643,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,164L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,165L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
