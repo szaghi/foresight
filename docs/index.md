@@ -238,6 +238,16 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
   <Plot name="cb_fillsteps" svg :width="560" :height="320" caption="filled steps (fillsteps)" />
+  <Plot name="cb_sampled" svg :width="560" :height="400" caption="sampled pseudo-files ('+', '++')" />
+  <Plot name="cb_vector_heads" svg :width="560" :height="360" caption="arrow styles on vectors" />
+  <Plot name="cb_title_at" svg :width="560" :height="320" caption="titles at the curves" />
+  <Plot name="cb_char_points" svg :width="560" :height="320" caption="characters as points" />
+  <Plot name="cb_autoscale_limits" svg :width="560" :height="320" caption="limits of the autoscale" />
+  <Plot name="cb_label_rotate" svg :width="560" :height="360" caption="labels turned by a column" />
+  <Plot name="cb_polar_fill" svg :width="480" :height="420" caption="a polar band (filledcurves r=)" />
+  <Plot name="cb_polar_log" svg :width="480" :height="420" caption="a log r axis" />
+  <Plot name="cb_nonuniform" svg :width="560" :height="360" caption="a nonuniform matrix" />
+  <Plot name="cb_keyentry" svg :width="560" :height="320" caption="key entries of their own" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
   <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />

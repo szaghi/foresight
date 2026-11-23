@@ -1640,7 +1640,9 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
       var d = path.getAttribute("d").replace(/\s+/g, ""), m;
       var style = {head: Number(path.getAttribute("data-head")), series: seriesOf(path),
         filled: path.getAttribute("data-filled") === "1", color: path.getAttribute("stroke"),
-        width: path.getAttribute("stroke-width")};
+        width: path.getAttribute("stroke-width"),
+        length: Number(path.getAttribute("data-length") || HEAD_LENGTH),
+        angle: Number(path.getAttribute("data-angle") || HEAD_ANGLE)};
       while ((m = pattern.exec(d)) !== null) {
         vectors.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
       }
@@ -1648,14 +1650,15 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     return vectors;
   }
 
-  // barbs of an arrowhead at tip, pointing away from tail (mirror of arrow_head)
-  function arrowHead(tail, tip) {
-    var a = Math.PI, h = HEAD_ANGLE * Math.PI / 180;
+  // barbs of an arrowhead at tip, pointing away from tail (mirror of sized_head): length [px]
+  // and angle [deg], gnuplot's default head without them
+  function arrowHead(tail, tip, length, angle) {
+    var l = length || HEAD_LENGTH, a = Math.PI, h = (angle || HEAD_ANGLE) * Math.PI / 180;
     if (tail[0] !== tip[0] || tail[1] !== tip[1]) {
       a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
     }
-    return [[tip[0] + HEAD_LENGTH * Math.cos(a + h), tip[1] + HEAD_LENGTH * Math.sin(a + h)],
-      [tip[0] + HEAD_LENGTH * Math.cos(a - h), tip[1] + HEAD_LENGTH * Math.sin(a - h)]];
+    return [[tip[0] + l * Math.cos(a + h), tip[1] + l * Math.sin(a + h)],
+      [tip[0] + l * Math.cos(a - h), tip[1] + l * Math.sin(a - h)]];
   }
 
   // point type markers: centres in viewBox coordinates (unit square, y downward) and the marker
@@ -1823,7 +1826,7 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
         return [(e[0] - v.u0) / (v.u1 - v.u0) * w, (e[1] - (1 - v.v1)) / (v.v1 - v.v0) * h];
       });
       var draw = function (tail, tip) {
-        var b = arrowHead(tail, tip);
+        var b = arrowHead(tail, tip, s.length, s.angle);
         element(self.heads, s.filled ? "polygon" : "polyline", {"data-series": s.series,
           points: [b[0], tip, b[1]].map(function (q) {
             return px(q[0]) + "," + px(q[1]);

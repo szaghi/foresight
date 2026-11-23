@@ -197,6 +197,16 @@ same seed. `exists("steps")` lets a caller set the length first. See
 
 <Plot name="cb_reversed" svg :width="560" :height="320" />
 
+
+### Limits of the autoscale
+
+<<< @/examples/snippets/cb_autoscale_limits.gp{gnuplot}
+
+<Plot name="cb_autoscale_limits" svg :width="560" :height="320" />
+
+`lb<*` and `*<ub` keep an autoscaled end within limits: the y range spans at least -1 to 1, the x range autoscales
+within 0 to 12 whatever the data. See [Grid, zero axes and border](/guide/gnuplot-subset#grid-zero-axes-and-border).
+
 ### Tick steps and label formats
 
 <<< @/examples/snippets/cb_ticks.gp{gnuplot}
@@ -340,6 +350,16 @@ instead. See [Key](/guide/gnuplot-subset#key).
 
 `notitle` keeps one item out of the key; `set key noautotitle` all the untitled ones.
 
+
+### Titles at the curves
+
+<<< @/examples/snippets/cb_title_at.gp{gnuplot}
+
+<Plot name="cb_title_at" svg :width="560" :height="320" />
+
+`title ... at end` writes each title after the last point of its curve, with or without the key (`at beginning`
+before the first one; `at X,Y` a key entry at a screen position). See [Key](/guide/gnuplot-subset#key).
+
 ### A key in its own layout
 
 <<< @/examples/snippets/cb_key_layout.gp{gnuplot}
@@ -357,6 +377,16 @@ key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot
 
 `maxrows 3` starts a column every 3 entries, `tc variable` writes each title in its series' color, `lt 4 lw 1.5` styles
 the box. See [Key](/guide/gnuplot-subset#key).
+
+
+### Key entries of their own
+
+<<< @/examples/snippets/cb_keyentry.gp{gnuplot}
+
+<Plot name="cb_keyentry" svg :width="560" :height="320" />
+
+`keyentry` adds a key entry with no data, here the samples of a boxplot and of error bars; `set style data
+filledcurves y=0` gives the data items their fill to y = 0. See [Key](/guide/gnuplot-subset#key).
 
 ### Key columns, label offsets, a title on the right
 
@@ -538,6 +568,16 @@ points without their own. See [Styles](/guide/gnuplot-subset#styles).
 The 16 point types (`pt 0` a dot, odd ones from 5 filled) and the 5 dash types, for picking one; a one-line datablock
 gives the point its place, `plot for` repeats it.
 
+
+### Characters as points
+
+<<< @/examples/snippets/cb_char_points.gp{gnuplot}
+
+<Plot name="cb_char_points" svg :width="560" :height="320" />
+
+`pt "c"` draws a character as the point, in the item's `tc` color; `pi N` marks every N-th point, `pn N` about N
+evenly spread. See [Point types](/guide/gnuplot-subset#point-types).
+
 ### Dash patterns of your own
 
 <<< @/examples/snippets/cb_dashes.gp{gnuplot}
@@ -655,6 +695,17 @@ Without data, functions are sampled over [-10:10], or the `xrange`; `set samples
 
 `set parametric` reads each function item as a pair x(t), y(t), sampled over `trange`. See
 [Parametric plots](/guide/gnuplot-subset#parametric-plots).
+
+
+### Sampled pseudo-files
+
+<<< @/examples/snippets/cb_sampled.gp{gnuplot}
+
+<Plot name="cb_sampled" svg :width="560" :height="400" />
+
+The pseudo-file `'+'` samples a variable as its column 1, here `t` over the item's own range by `pi/20`; `'++'` is
+a grid of `u` and `v` (`set samples`, `set isosamples` points over `urange`, `vrange`), the columns of a vector field
+colored by its length. See [Sampled pseudo-files](/guide/gnuplot-subset#sampled-pseudo-files-and).
 
 ### Asymptotes and clipping
 
@@ -954,6 +1005,17 @@ writes the text of a column at each point, here with its point and an offset. Se
 [Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors). In the
 HTML page the heads and the labels keep their size while the zoom moves them with the data.
 
+
+### Arrow styles on vectors
+
+<<< @/examples/snippets/cb_vector_heads.gp{gnuplot}
+
+<Plot name="cb_vector_heads" svg :width="560" :height="360" />
+
+`with vectors as N` takes the heads, the fill, the head size and the color of `set style arrow N`; `size L,A` (x
+axis values, or `screen`, `graph`, `character`) and `filled` set them on the item. See
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+
 ### Arrows by length and angle
 
 <<< @/examples/snippets/cb_arrows.gp{gnuplot}
@@ -1035,6 +1097,16 @@ See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects
 `with labels boxed` writes each text on the background, over the line, when the text box style is opaque or has a
 border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
+
+### Labels turned and colored by columns
+
+<<< @/examples/snippets/cb_label_rotate.gp{gnuplot}
+
+<Plot name="cb_label_rotate" svg :width="560" :height="360" />
+
+`with labels rotate variable` turns each label by the fourth column, `tc variable` colors it by the last one. See
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+
 ### Arrow styles and dashed objects
 
 <<< @/examples/snippets/cb_arrow_styles.gp{gnuplot}
@@ -1063,6 +1135,17 @@ stands X cells from the left and Y up from the bottom of the page.
 
 `matrix` reads the values as they lie in the file: columns along x, rows along y. `maxcolors 10` quantizes the
 palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
+
+### A matrix with its coordinates
+
+<<< @/examples/snippets/cb_nonuniform.gp{gnuplot}
+
+<Plot name="cb_nonuniform" svg :width="560" :height="360" />
+
+`nonuniform matrix` reads the x of the columns in the first row and the y of the rows in the first column; `index
+"fine"` picks the dataset after the comment line `# fine`. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 ### Palettes
 
@@ -1163,6 +1246,25 @@ and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subse
 `set ttics add` names angles (here in radians, with Unicode), `set mttics` adds minor ticks on the polar border and
 `set grid r polar 45` draws the rings of the r ticks and spokes every 45 degrees. See
 [Polar plots](/guide/gnuplot-subset#polar-plots).
+
+
+### A band outside a circle
+
+<<< @/examples/snippets/cb_polar_fill.gp{gnuplot}
+
+<Plot name="cb_polar_fill" svg :width="480" :height="420" />
+
+`filledcurves above r=2.5` fills the band between the curve and the circle of radius 2.5 where the curve is outside
+it (`below`: inside). See [Polar plots](/guide/gnuplot-subset#polar-plots).
+
+### A log r axis
+
+<<< @/examples/snippets/cb_polar_log.gp{gnuplot}
+
+<Plot name="cb_polar_log" svg :width="480" :height="420" />
+
+`set logscale r` spaces the decades evenly from the pole at the `rrange` start; `impulses` go from the pole and
+`set ttics rotate` turns the theta labels along their angle. See [Polar plots](/guide/gnuplot-subset#polar-plots).
 
 ### A level in decibels
 
