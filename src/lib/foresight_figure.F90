@@ -16,7 +16,7 @@ module foresight_figure
 !<```
 use foresight_axes, only : axes_names, axes_object, boxplot_words, colorbox_object, key_position, paxis_object, &
                            polar_series, push, readout_position, spider_words, POLAR_STYLES
-use foresight_axis, only : axis_object
+use foresight_axis, only : axis_object, paxis_default
 use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
@@ -1208,7 +1208,7 @@ contains
             if (k <= size(panel%paxes)) then
                more(k) = panel%paxes(k)
             else
-               more(k)%axis = axis_object(tight=.true., tics=tics_object(mode=TICS_NONE))
+               more(k)%axis = paxis_default()
             endif
          enddo
          call move_alloc(more, panel%paxes)

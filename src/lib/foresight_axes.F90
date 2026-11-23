@@ -52,7 +52,7 @@ module foresight_axes
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
                                   label_object, shape_object
-use foresight_axis, only : axis_object
+use foresight_axis, only : axis_object, paxis_default
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
 use foresight_enhanced, only : has_markup, markup_literal
@@ -5403,7 +5403,7 @@ contains
    type(axis_object)              :: axis !< Axis.
    real(R8P), allocatable         :: v(:) !< Finite values.
 
-   axis = axis_object(tight=.true., tics=tics_object(mode=TICS_NONE))
+   axis = paxis_default()
    if (allocated(self%paxes)) then
       if (k <= size(self%paxes)) axis = self%paxes(k)%axis
    endif

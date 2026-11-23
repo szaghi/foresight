@@ -15,6 +15,7 @@ use foresight_ticks, only : linear_ticks, list_ticks, log_ticks, merge_list, tic
 implicit none
 private
 public :: axis_object
+public :: paxis_default
 
 type :: axis_object
    !< Plot axis.
@@ -65,6 +66,18 @@ type :: axis_object
 endtype axis_object
 
 contains
+   pure function paxis_default() result(axis)
+   !< A parallel axis as set at first: autoscaled to its values without extension, no ticks. Built by components, not
+   !< by a structure constructor: nvfortran 26.9 -O0 leaves the default-initialized array components (`bounded`) of a
+   !< constructed axis undefined.
+   type(axis_object) :: axis !< Axis.
+
+   axis%tight = .true.
+   axis%tics%mode = TICS_NONE
+   axis%bounded = .false.
+   axis%limits = 0.0_R8P
+   endfunction paxis_default
+
    elemental function accepts(self, v) result(ok)
    !< Whether `v` can be placed on the axis: finite, and positive on a log axis.
    class(axis_object), intent(in) :: self !< Axis.
