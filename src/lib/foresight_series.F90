@@ -126,6 +126,8 @@ type :: series_object
                                                       !< for the row linetypes.
    real(R8P)                     :: spider_lw = 0.0_R8P !< Polygon border width of the group (the lw of its first
                                                         !< item), 0 for the spider plot style's.
+   logical                       :: radial_bars = .false. !< Error bars of a polar panel: the ends x:y in xlow:ylow and
+                                                          !< xhigh:yhigh, drawn along the radius.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

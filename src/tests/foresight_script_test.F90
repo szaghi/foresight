@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(197)                           !< Per-check outcome.
+logical                       :: test_passed(198)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4455,6 +4455,29 @@ endif
 open(newunit=unit, file='foresight_script_test_spider.svg')
 close(unit, status='delete')
 
+! polar error bars: yerrorbars on a polar panel, each bar along the radius from r - dr to r + dr at theta, its caps
+! across it (gnuplot 6.0's poldat.dem); the r range reaches the bar ends
+call interpreter%init(scratch)
+call interpreter%run_text('$P << EOD'//new_line('a')//'0 1.3 0.2'//new_line('a')//'90 0.5 0.1'//new_line('a')//'EOD'// &
+                          new_line('a')//'set term svg; set output "foresight_script_test_polar_bars.svg"; '// &
+                          'set polar; set angles degrees; plot $P with yerrorbars', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(198) = iostat == 0_I4P
+if (test_passed(198)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(198) = allocated(panel%series(1)%yhigh)
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_polar_bars.svg')
+      ! radial bars drawn as lines (no vertical fs-ybars)
+      test_passed(198) = test_passed(198) .and. index(svg, 'fs-ybars') == 0 .and. index(svg, 'polyline') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_polar_bars.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4463,7 +4486,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,197L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,198L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

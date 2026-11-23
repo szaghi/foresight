@@ -119,8 +119,9 @@ character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array
 character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
-character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, closed '// &
-                                               'filledcurves, sectors and readouts, on the first axes' !< Polar styles.
+character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, yerrorbars, '// &
+                                               'closed filledcurves, sectors and readouts, on the first axes' !< Polar
+                                                                                                              !< styles.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
 
@@ -3147,8 +3148,12 @@ contains
          enddo
       endif
       if (series%style%with == WITH_IMPULSES) call draw_impulses
-      if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
-      if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, xaxis, .false.)
+      if (series%radial_bars) then
+         call draw_radial_bars
+      else
+         if (series%style%draws_ybars()) call draw_bars(series%ylow, series%yhigh, yaxis, .true.)
+         if (series%style%draws_xbars()) call draw_bars(series%xlow, series%xhigh, xaxis, .false.)
+      endif
       if (series%style%draws_points() .and. any(valid)) then
          ! `pointinterval N`: a marker on the first point and every N-th after it
          marked = valid
@@ -4208,6 +4213,54 @@ contains
       endassociate
       endsubroutine draw_fill
 
+      subroutine draw_radial_bars
+      !< The radial error bars of a polar panel (`radial_bars`: the ends x:y in xlow:ylow, xhigh:yhigh), each a line
+      !< with its caps across it at both ends, as gnuplot's polar error bars.
+      real(R8P)                     :: w     !< Plot width [px].
+      real(R8P)                     :: h     !< Plot height [px].
+      real(R8P)                     :: a(2)  !< Bar start [unit].
+      real(R8P)                     :: b(2)  !< Bar end [unit].
+      real(R8P)                     :: d(2)  !< Bar direction [px].
+      real(R8P)                     :: c(2)  !< Half cap [px].
+      real(R8P)                     :: width !< Bar width [px].
+      character(len=:), allocatable :: color !< Bar color.
+      integer(I4P)                  :: i     !< Point counter.
+      integer(I4P)                  :: e     !< End counter.
+
+      w = area(2) - area(1)
+      h = area(4) - area(3)
+      associate(series => self%series(s))
+         width = series%style%linewidth
+         if (self%errorbar_lw > 0.0_R8P) width = self%errorbar_lw
+         do i = 1_I4P, n
+            if (.not. valid(i)) cycle
+            if (.not. (ieee_is_finite(series%xlow(i)) .and. ieee_is_finite(series%ylow(i)) .and. &
+                       ieee_is_finite(series%xhigh(i)) .and. ieee_is_finite(series%yhigh(i)))) cycle
+            if (.not. (xaxis%accepts(series%xlow(i)) .and. xaxis%accepts(series%xhigh(i)) .and. &
+                       yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
+            color = series%style%color
+            if (allocated(series%colors)) then
+               if (i <= size(series%colors, kind=I4P)) color = trim(series%colors(i))
+            endif
+            if (allocated(self%errorbar_color)) color = self%errorbar_color
+            if (color == 'none') cycle
+            a = [xaxis%to_unit(series%xlow(i)), yaxis%to_unit(series%ylow(i))]
+            b = [xaxis%to_unit(series%xhigh(i)), yaxis%to_unit(series%yhigh(i))]
+            call backend%data_polyline([a(1), b(1)], [a(2), b(2)], color, width, '')
+            ! the caps across the bar, in pixels
+            d = [(b(1) - a(1)) * w, (b(2) - a(2)) * h]
+            if (norm2(d) <= 0.0_R8P) cycle
+            c = 0.5_R8P * self%errorbar_size * CAP_LENGTH * [-d(2), d(1)] / norm2(d)
+            do e = 1_I4P, 2_I4P
+               associate(p => merge(a, b, e == 1_I4P))
+                  call backend%data_polyline([p(1) - c(1) / w, p(1) + c(1) / w], [p(2) - c(2) / h, p(2) + c(2) / h], &
+                                             color, width, '')
+               endassociate
+            enddo
+         enddo
+      endassociate
+      endsubroutine draw_radial_bars
+
       subroutine draw_bars(low, high, axis, vertical)
       !< Error bars of the placeable points whose both ends are placeable on `axis`.
       real(R8P),         intent(in) :: low(:)   !< Bar starts.
@@ -4881,6 +4934,12 @@ contains
          if (.not. (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i)))) cycle
          rmax = max(rmax, abs(all(s)%y(i)))
          found = .true.
+         ! the radial error bars
+         if (all(s)%style%with == WITH_YERRORBARS .and. allocated(all(s)%yhigh)) then
+            if (i <= size(all(s)%yhigh)) then
+               if (ieee_is_finite(all(s)%yhigh(i))) rmax = max(rmax, abs(all(s)%yhigh(i)))
+            endif
+         endif
       enddo
    enddo
    endsubroutine polar_extent
@@ -5041,12 +5100,26 @@ contains
    real(R8P)                          :: nan       !< Undefined value.
    real(R8P)                          :: phi       !< Page angle [rad].
    real(R8P)                          :: rho       !< Distance from the pole [r units].
+   real(R8P)                          :: r         !< An error bar end [r units].
    integer(I4P)                       :: s         !< Series counter.
    integer(I4P)                       :: i         !< Point counter.
 
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
    do s = 1_I4P, size(all, kind=I4P)
       if (all(s)%style%with == WITH_READOUT) cycle
+      if (all(s)%style%with == WITH_YERRORBARS .and. allocated(all(s)%ylow) .and. allocated(all(s)%yhigh)) then
+         ! the radial error bars: the ends at r low and r high, as x:y in xlow:ylow and xhigh:yhigh
+         if (allocated(all(s)%xlow)) deallocate(all(s)%xlow)
+         if (allocated(all(s)%xhigh)) deallocate(all(s)%xhigh)
+         allocate(all(s)%xlow(size(all(s)%x)), all(s)%xhigh(size(all(s)%x)))
+         do i = 1_I4P, size(all(s)%x, kind=I4P)
+            r = all(s)%ylow(i)
+            call project(all(s)%x(i), r, all(s)%xlow(i), all(s)%ylow(i))
+            r = all(s)%yhigh(i)
+            call project(all(s)%x(i), r, all(s)%xhigh(i), all(s)%yhigh(i))
+         enddo
+         all(s)%radial_bars = .true.
+      endif
       do i = 1_I4P, size(all(s)%x, kind=I4P)
          if (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i))) then
             if (all(s)%y(i) >= rmin .or. .not. cut) then
@@ -5068,6 +5141,33 @@ contains
          all(s)%y(i) = nan
       enddo
    enddo
+   contains
+      pure subroutine project(theta, r, px, py)
+      !< x:y of theta:r, as the points (undefined below a cut pole).
+      real(R8P), intent(in)  :: theta !< Theta.
+      real(R8P), intent(in)  :: r     !< Radius.
+      real(R8P), intent(out) :: px    !< Abscissa.
+      real(R8P), intent(out) :: py    !< Ordinate.
+      real(R8P)              :: a     !< Page angle [rad].
+      real(R8P)              :: d     !< Distance from the pole.
+
+      px = nan
+      py = nan
+      if (.not. (ieee_is_finite(theta) .and. ieee_is_finite(r))) return
+      if (r < rmin .and. cut) return
+      a = theta
+      if (degrees) a = a * (PI_R8 / 180.0_R8P)
+      if (clockwise) a = -a
+      a = a + origin * (PI_R8 / 180.0_R8P)
+      if (logr) then
+         if (.not. r > 0.0_R8P) return
+         d = log10(r / rmin)
+      else
+         d = r - rmin
+      endif
+      px = d * cos(a)
+      py = d * sin(a)
+      endsubroutine project
    endsubroutine polar_project
 
    pure subroutine boxplot_words(words, style, bad)
@@ -5439,7 +5539,8 @@ contains
    logical                         :: ok     !< Polar series.
 
    select case (series%style%with)
-   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES)
+   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES, WITH_YERRORBARS)
+      ! yerrorbars: radial bars, r low to r high at theta (gnuplot's polar error bars)
       ok = .true.
    case (WITH_FILLEDCURVES)
       ! a base (ylow) is the circle of `r=V`

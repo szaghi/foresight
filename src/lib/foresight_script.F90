@@ -3573,7 +3573,7 @@ contains
       endif
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
-            polar_ok = is_word(with, 'lines points linespoints impulses filledcurves sectors readout') .and. &
+            polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars filledcurves sectors readout') .and. &
                        (.not. allocated(base) .or. polar_base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
             if (.not. polar_ok) then
