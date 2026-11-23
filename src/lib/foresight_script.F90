@@ -8968,13 +8968,16 @@ contains
       ! an expression written with blanks is several words: one argument (`set ytics 0, ymax / 10.0, ymax`)
       block
          type(token_object), allocatable :: merged(:) !< Arguments, the words between commas joined.
+         character(len=:), allocatable   :: joined    !< Words joined.
          integer(I4P)                    :: a         !< Argument counter.
 
          allocate(merged(0))
          do a = 1_I4P, n
             if (size(merged) > 0 .and. args(a)%kind == TOKEN_WORD) then
                if (merged(size(merged))%kind == TOKEN_WORD) then
-                  merged(size(merged))%text = merged(size(merged))%text//' '//args(a)%text
+                  ! through a temporary: nvfortran 26.9 corrupts `c%text = c%text//...` (its bug 1)
+                  joined = merged(size(merged))%text//' '//args(a)%text
+                  merged(size(merged))%text = joined
                   cycle
                endif
             endif
