@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(162)                           !< Per-check outcome.
+logical                       :: test_passed(163)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3552,6 +3552,40 @@ endif
 open(newunit=unit, file='foresight_script_test_call.gp')
 close(unit, status='delete')
 
+
+! skip N (plot, stats), tic list labels as string expressions, unterminated strings closed by the line end, escapes
+! kept through command substitution, as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'# h'//new_line('a')//'1 10'//new_line('a')//'2 20'// &
+                          new_line('a')//'3 30'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $D skip 2 using 1:2; stats $D skip 3 using 2 nooutput; '// &
+                          'lab = "L"; set xtics (sprintf("%dσ", 2) 2, lab 3, "q" 4 1, 5); '// &
+                          't = "x\`y\`"; set title "open', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(163) = iostat == 0_I4P
+if (test_passed(163)) test_passed(163) = all(interpreter%figure%panels(1)%series(1)%y == [20.0_R8P, 30.0_R8P])
+if (test_passed(163)) then
+   block
+      real(R8P)                     :: n     !< STATS_records.
+      character(len=:), allocatable :: text  !< t.
+      logical                       :: found !< Found.
+
+      call interpreter%symbols%constant('STATS_records', n, iostat, iomsg)
+      test_passed(163) = iostat == 0_I4P .and. n == 1.0_R8P
+      call interpreter%symbols%string_of('t', text, found)
+      test_passed(163) = test_passed(163) .and. found .and. text == 'x`y`'
+   endblock
+endif
+if (test_passed(163)) then
+   associate(items => interpreter%figure%panels(1)%xaxis%tics%list)
+      test_passed(163) = size(items) == 4
+      if (test_passed(163)) test_passed(163) = items(1)%label == '2σ' .and. items(1)%value == 2.0_R8P .and. &
+                                             items(2)%label == 'L' .and. items(3)%label == 'q' .and. &
+                                             .not. items(3)%major .and. .not. items(4)%labelled
+   endassociate
+endif
+if (test_passed(163)) test_passed(163) = interpreter%figure%panels(1)%title == 'open'
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3560,7 +3594,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,162L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,163L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -79,14 +79,14 @@ type :: datafile_object
 endtype datafile_object
 
 contains
-   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments, keep_text, content)
+   subroutine load(self, file, iostat, iomsg, separator, label_column, missing, comments, keep_text, content, skip)
    !< Read `file`, replacing the current content; cells are separated by whitespace, or by any of the `separator`
    !< characters when given and not empty; with `label_column` > 0 the text of that column of each row is kept. The
    !< cells equal to `missing` (blanks and double quotes around them removed; none if empty) are missing data, the
    !< points reading them left out (gnuplot `set datafile missing`); `comments` are the characters starting a comment
    !< (`#` by default, none if empty: gnuplot `set datafile commentschars`). With `keep_text` the text of every cell
    !< is kept (gnuplot's `strcol`). With `content` the lines are those of that text (a gnuplot datablock, `$D << EOD`,
-   !< named `file`), not of a file.
+   !< named `file`), not of a file. With `skip` its first lines are not read (gnuplot `plot 'f' skip N`).
    class(datafile_object),        intent(inout)        :: self      !< Data.
    character(len=*),              intent(in)           :: file      !< File name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
@@ -97,7 +97,9 @@ contains
    character(len=*),              intent(in), optional :: comments  !< Comment characters.
    logical,                       intent(in), optional :: keep_text !< Keep the text of every cell.
    character(len=*),              intent(in), optional :: content   !< Lines to read instead of the file's.
+   integer(I4P),                  intent(in), optional :: skip      !< First lines not read.
    character(len=:), allocatable                       :: miss      !< Missing data string, empty for none.
+   integer(I4P)                                        :: skipped   !< Lines not read yet to skip.
    character(len=:), allocatable                       :: marks     !< Comment characters.
    character(len=:), allocatable                       :: line      !< Current line.
    character(len=:), allocatable                       :: sep       !< Cell separator characters, empty for whitespace.
@@ -156,6 +158,8 @@ contains
    blanks = 0_I4P
    dset = 0_I4P
    blk = 0_I4P
+   skipped = 0_I4P
+   if (present(skip)) skipped = max(0_I4P, skip)
    do
       if (present(content)) then
          call next_line
@@ -167,6 +171,12 @@ contains
          exit
       endif
       if (eof .and. len(line) == 0) exit
+      if (skipped > 0_I4P) then
+         ! gnuplot's `skip N`: the first N lines, whatever they hold
+         skipped = skipped - 1_I4P
+         if (eof) exit
+         cycle
+      endif
       n = scan(line, marks, kind=I4P) - 1_I4P
       if (n < 0_I4P) n = len(line, kind=I4P)
       if (len_trim(line(1:n)) == 0) then

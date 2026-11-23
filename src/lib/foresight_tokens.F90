@@ -206,11 +206,8 @@ contains
          i = i + 1_I4P
       case ("'")
          j = index(statement(i + 1_I4P:), "'", kind=I4P)
-         if (j == 0_I4P) then
-            iostat = 1_I4P
-            iomsg = 'unterminated string'
-            return
-         endif
+         ! unterminated: the string ends with the line, as gnuplot's scanner closes it
+         if (j == 0_I4P) j = n - i + 1_I4P
          token%kind = TOKEN_STRING
          token%quote = c
          token%text = statement(i + 1_I4P:i + j - 1_I4P)
@@ -221,11 +218,8 @@ contains
          token%text = ''
          i = i + 1_I4P
          do
-            if (i > n) then
-               iostat = 1_I4P
-               iomsg = 'unterminated string'
-               return
-            endif
+            ! unterminated: the string ends with the line, as gnuplot's scanner closes it
+            if (i > n) exit
             if (statement(i:i) == '"') exit
             if (statement(i:i) == '\' .and. i < n) then
                i = i + 1_I4P

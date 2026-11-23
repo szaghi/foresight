@@ -1570,6 +1570,7 @@ contains
    integer(I4P)                                 :: nranges   !< Ranges given.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
+   integer(I4P)                                 :: skip      !< First lines of the file not read (`skip N`).
    integer(I4P)                                 :: i         !< Token counter.
    integer(I4P)                                 :: k         !< Counter.
    integer(I4P)                                 :: unit      !< Report unit.
@@ -1603,6 +1604,7 @@ contains
    spec = ''
    set_index = -1_I4P
    every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+   skip = 0_I4P
    prefix = 'STATS_'
    output = .false.
    i = i + 1_I4P
@@ -1618,6 +1620,9 @@ contains
          if (.not. next_word(tokens, i, word, iostat, iomsg)) return
          call parse_every(word, every, iostat, iomsg)
          if (iostat /= 0_I4P) return
+      elseif (word == 'skip') then
+         ! gnuplot's `skip N`: the first N lines of the file not read
+         if (.not. next_integer(tokens, i, skip, iostat, iomsg, self%symbols)) return
       elseif (word == 'name' .or. keyword(word, 'prefix', 3_I4P)) then
          i = i + 1_I4P
          if (i > size(tokens, kind=I4P)) then
@@ -1653,7 +1658,7 @@ contains
    endif
    texts = .false.
    if (allocated(fields)) texts = any(fields%uses_text())
-   call self%load_data(data, file, iostat, iomsg, keep_text=texts)
+   call self%load_data(data, file, iostat, iomsg, keep_text=texts, skip=skip)
    if (iostat /= 0_I4P) then
       iomsg = 'stats: '//iomsg
       return
@@ -2046,6 +2051,7 @@ contains
    logical                                      :: unit      !< `unitweights` given.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
+   integer(I4P)                                 :: skip      !< First lines of the file not read (`skip N`).
    integer(I4P)                                 :: i         !< Token counter.
    integer(I4P)                                 :: k         !< Counter.
    integer(I4P)                                 :: colon     !< Range separator.
@@ -2091,6 +2097,7 @@ contains
    spec = ''
    set_index = -1_I4P
    every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+   skip = 0_I4P
    weighted = .false.
    unit = .false.
    allocate(names(0))
@@ -2107,6 +2114,9 @@ contains
          if (.not. next_word(tokens, i, word, iostat, iomsg)) return
          call parse_every(word, every, iostat, iomsg)
          if (iostat /= 0_I4P) return
+      elseif (word == 'skip') then
+         ! gnuplot's `skip N`: the first N lines of the file not read
+         if (.not. next_integer(tokens, i, skip, iostat, iomsg, self%symbols)) return
       elseif (word == 'yerrors' .or. word == 'yerror' .or. word == 'zerror' .or. word == 'zerrors') then
          weighted = .true.
          unit = .false.
@@ -2156,7 +2166,7 @@ contains
       call fail('fit: yerrors needs using X:Y:YERROR', iostat, iomsg)
       return
    endif
-   call self%load_data(data, file, iostat, iomsg, keep_text=any(fields%uses_text()))
+   call self%load_data(data, file, iostat, iomsg, keep_text=any(fields%uses_text()), skip=skip)
    if (iostat /= 0_I4P) then
       iomsg = 'fit: '//iomsg
       return
@@ -2376,6 +2386,7 @@ contains
    character(len=:), allocatable                :: using     !< `using` keyword as written.
    character(len=1)                             :: quote     !< Quote of the data file.
    character(len=:), allocatable                :: loaded    !< File in `data`.
+   integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
    character(len=:), allocatable                :: with      !< Item style.
@@ -2439,6 +2450,7 @@ contains
    integer(I4P)                                 :: nbar      !< Error bar columns.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
+   integer(I4P)                                 :: skip      !< First lines of the file not read (`skip N`).
    integer(I4P)                                 :: number    !< Integer argument.
    integer(I4P)                                 :: i         !< Token counter.
    integer(I4P)                                 :: head      !< First token of a function.
@@ -2472,6 +2484,7 @@ contains
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
+   loaded_skip = 0_I4P
    allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0))
    call self%figure%clear
    if (size(tokens) == 0) then
@@ -2757,6 +2770,7 @@ contains
       is_matrix = .false.
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
+      skip = 0_I4P
       with = self%data_style
       if (is_function) with = self%function_style
       has_table_if = .false.
@@ -2820,6 +2834,13 @@ contains
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             call parse_every(word, every, iostat, iomsg)
             if (iostat /= 0_I4P) return
+         elseif (word == 'skip') then
+            ! gnuplot's `skip N`: the first N lines of the file not read
+            if (is_function) then
+               call fail('plot: "skip" applies to data files, not to the function "'//written//'"', iostat, iomsg)
+               return
+            endif
+            if (.not. next_integer(tokens, i, skip, iostat, iomsg, self%symbols)) return
          elseif (keyword(word, 'with', 1_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             with = canonical_style(word)
@@ -3330,10 +3351,11 @@ contains
       time_axis(2) = merge(self%time_data(3), self%time_data(2), axes(4:4) == '2')
       needs_text = label_col > 0_I4P .or. any(time_axis) .or. with == 'table'
       if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
-      if (file /= loaded .or. (needs_text .and. .not. data%has_text)) then
-         call self%load_data(data, file, iostat, iomsg, keep_text=needs_text)
+      if (file /= loaded .or. (needs_text .and. .not. data%has_text) .or. skip /= loaded_skip) then
+         call self%load_data(data, file, iostat, iomsg, keep_text=needs_text, skip=skip)
          if (iostat /= 0_I4P) return
          loaded = file
+         loaded_skip = skip
          call self%register_file(file)
       endif
       if (with == 'table') then
@@ -6117,21 +6139,23 @@ contains
    call self%figure%set_time_axes(trim(axis), on=on, timefmt=self%timefmt)
    endsubroutine set_time_data
 
-   subroutine load_data(self, data, file, iostat, iomsg, keep_text)
-   !< Load the data file `file`, or the datablock it names (`$DATA`), with the `set datafile` options.
+   subroutine load_data(self, data, file, iostat, iomsg, keep_text, skip)
+   !< Load the data file `file`, or the datablock it names (`$DATA`), with the `set datafile` options; `skip` its first
+   !< lines not read (gnuplot `skip N`).
    class(script_object),          intent(in)           :: self      !< Interpreter.
    type(datafile_object),         intent(inout)        :: data      !< Data.
    character(len=*),              intent(in)           :: file      !< File or datablock name.
    integer(I4P),                  intent(out)          :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
    logical,                       intent(in), optional :: keep_text !< Keep the cell texts.
+   integer(I4P),                  intent(in), optional :: skip      !< First lines not read.
    character(len=:), allocatable                       :: lines     !< Datablock lines.
    logical                                             :: found     !< Datablock found.
 
    if (self%symbols%is_array(file)) then
       ! an array: the index and the value of each element, as gnuplot's `plot A`
       call data%load(file, iostat, iomsg, separator='', missing=self%missing, comments=self%comments, &
-                     keep_text=keep_text, content=self%symbols%array_data(file))
+                     keep_text=keep_text, content=self%symbols%array_data(file), skip=skip)
    elseif (is_datablock(file)) then
       call self%symbols%string_of(file, lines, found)
       if (.not. found) then
@@ -6139,10 +6163,10 @@ contains
          return
       endif
       call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
-                     keep_text=keep_text, content=lines)
+                     keep_text=keep_text, content=lines, skip=skip)
    else
       call data%load(file, iostat, iomsg, separator=self%separator, missing=self%missing, comments=self%comments, &
-                     keep_text=keep_text)
+                     keep_text=keep_text, skip=skip)
    endif
    endsubroutine load_data
 
@@ -9317,12 +9341,67 @@ contains
             endif
             item%label = entry(2:close - 1_I4P)
             rest = trim(adjustl(entry(close + 1_I4P:)))
+         else
+            ! a label as a string expression, gnuplot's (sprintf("%d", i) i): the first part ending an expression
+            ! before a blank whose value is a string
+            call expression_label(entry, item, rest)
+            if (iostat /= 0_I4P) return
          endif
          call item_position(rest, item)
          if (iostat /= 0_I4P) return
          call push(items, item)
       enddo
       endsubroutine list_items
+
+      subroutine expression_label(text, item, rest)
+      !< The label of a list item `text` given by a string expression (`sprintf("%d", i) i`, a string variable): the
+      !< first part of `text` ending an expression before a blank (no operator on either side) whose value is a string;
+      !< `rest` the text after it, all of `text` when there is none.
+      character(len=*),              intent(in)    :: text  !< Item text.
+      type(tic_item),                intent(inout) :: item  !< Item.
+      character(len=:), allocatable, intent(out)   :: rest  !< Position and level.
+      character(len=*), parameter                  :: OPERATORS = '.+-*/%?:<>=!&|^~,' !< Operator characters.
+      type(value_object)                           :: v     !< Value of a part.
+      character(len=:), allocatable                :: msg   !< Error of a part.
+      character(len=1)                             :: quote !< Open quote, blank if none.
+      integer(I4P)                                 :: depth !< Bracket depth.
+      integer(I4P)                                 :: b     !< Character counter.
+      integer(I4P)                                 :: after !< First non-blank after a blank.
+      integer(I4P)                                 :: status !< Status of a part.
+
+      rest = text
+      quote = ' '
+      depth = 0_I4P
+      do b = 1_I4P, len(text, kind=I4P)
+         if (quote /= ' ') then
+            if (text(b:b) == quote) quote = ' '
+            cycle
+         endif
+         select case (text(b:b))
+         case ('"', "'")
+            quote = text(b:b)
+         case ('(', '[', '{')
+            depth = depth + 1_I4P
+         case (')', ']', '}')
+            depth = depth - 1_I4P
+         case (' ')
+            if (depth /= 0_I4P .or. b == 1_I4P) cycle
+            if (text(b - 1_I4P:b - 1_I4P) == ' ' .or. scan(text(b - 1_I4P:b - 1_I4P), OPERATORS) > 0) cycle
+            after = verify(text(b:), ' ', kind=I4P)
+            if (after == 0_I4P) exit
+            after = b + after - 1_I4P
+            if (scan(text(after:after), OPERATORS) > 0) cycle
+            call self%symbols%evaluate_constant(text(1:b - 1_I4P), v, status, msg, &
+                                                degrees=self%figure%panels(self%figure%current)%degrees)
+            if (status == 0_I4P .and. v%is_string) then
+               item%labelled = .true.
+               item%label = v%s
+               rest = trim(adjustl(text(after:)))
+               return
+            endif
+         endselect
+      enddo
+      endsubroutine expression_label
 
       subroutine item_position(text, item)
       !< Position and level of a list item from `text`, `pos {level}`: the whole text is the position if it is a valid
@@ -10543,7 +10622,7 @@ contains
 
    subroutine expand_backquotes(statement, expanded, iostat, iomsg)
    !< gnuplot's command substitution: each `` `command` `` outside single quotes replaced by the command's standard
-   !< output, its trailing newline dropped.
+   !< output, its trailing newline dropped; in double quotes a backslash escapes the next character (`` \` ``, `\"`).
    character(len=*),              intent(in)  :: statement !< Statement.
    character(len=:), allocatable, intent(out) :: expanded  !< Statement substituted.
    integer(I4P),                  intent(out) :: iostat    !< 0 on success.
@@ -10564,6 +10643,11 @@ contains
          if (statement(i:i) == "'") quote = ' '
       elseif (statement(i:i) == "'" .and. quote == ' ') then
          quote = "'"
+      elseif (quote == '"' .and. statement(i:i) == '\' .and. i < len(statement, kind=I4P)) then
+         ! an escaped character, as it is: the string reader takes the escape
+         expanded = expanded//statement(i:i + 1_I4P)
+         i = i + 2_I4P
+         cycle
       elseif (statement(i:i) == '"') then
          quote = merge(' ', '"', quote == '"')
       elseif (statement(i:i) == '#' .and. quote == ' ') then

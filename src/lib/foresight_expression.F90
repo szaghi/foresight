@@ -688,10 +688,8 @@ contains
          token = ''
          pos = pos + 1_I4P
          do
-            if (pos > n) then
-               call syntax('unterminated string')
-               return
-            endif
+            ! unterminated: the string ends with the text, as gnuplot's scanner closes it
+            if (pos > n) exit
             if (src(pos:pos) == quote) exit
             if (quote == '"' .and. src(pos:pos) == '\' .and. pos < n) then
                pos = pos + 1_I4P
