@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(183)                           !< Per-check outcome.
+logical                       :: test_passed(184)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4073,6 +4073,31 @@ endif
 open(newunit=unit, file='foresight_script_test_char_points.svg')
 close(unit, status='delete')
 
+! autoscale limits, gnuplot's [lb<*<ub:lb<*<ub]: the autoscaled ends within their limits, the tick extension too;
+! set autoscale x forgets them, a bare set autoscale keeps them
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_limits.svg"'//new_line('a')// &
+                          '$D << EOD'//new_line('a')//'-17 -9'//new_line('a')//'18 9'//new_line('a')//'EOD'//new_line('a')// &
+                          'set xrange [*<-40:30<*]; set yrange [-20<*:*<5]; plot $D', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(184) = iostat == 0_I4P
+if (test_passed(184)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(184) = all(panel%xaxis%bounded .eqv. reshape([.false., .true., .true., .false.], [2, 2])) .and. &
+                        abs(panel%xaxis%lo + 40.0_R8P) < 1.0e-9_R8P .and. abs(panel%xaxis%hi - 30.0_R8P) < 1.0e-9_R8P .and. &
+                        abs(panel%yaxis%lo + 10.0_R8P) < 1.0e-9_R8P .and. abs(panel%yaxis%hi - 5.0_R8P) < 1.0e-9_R8P
+   endassociate
+endif
+if (test_passed(184)) then
+   call interpreter%run_text('set autoscale; plot $D', iostat, iomsg)
+   test_passed(184) = iostat == 0_I4P .and. abs(interpreter%figure%panels(1)%xaxis%lo + 40.0_R8P) < 1.0e-9_R8P
+   call interpreter%run_text('set autoscale x; plot $D', iostat, iomsg)
+   test_passed(184) = test_passed(184) .and. iostat == 0_I4P .and. abs(interpreter%figure%panels(1)%xaxis%lo + 20.0_R8P) < &
+                     1.0e-9_R8P .and. .not. any(interpreter%figure%panels(1)%xaxis%bounded)
+endif
+open(newunit=unit, file='foresight_script_test_limits.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4081,7 +4106,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,183L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,184L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

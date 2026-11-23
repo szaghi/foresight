@@ -6989,22 +6989,22 @@ contains
    elseif (keyword(option, 'xrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%xaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
-                        reverse=axis%reverse)
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'yrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%yaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
-                        reverse=axis%reverse)
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'y2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%y2axis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
-                        reverse=axis%reverse)
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'x2range', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%x2axis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
-                        reverse=axis%reverse)
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
@@ -7091,7 +7091,7 @@ contains
    elseif (keyword(option, 'cbrange', 3_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%cbaxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
-                        reverse=axis%reverse)
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
@@ -7599,16 +7599,18 @@ contains
       ok = .true.
       endfunction layout_value
 
-      subroutine set_range(min_fixed, min_user, max_fixed, max_user, tight, reverse)
+      subroutine set_range(min_fixed, min_user, max_fixed, max_user, tight, reverse, bounded, limits)
       !< Parse `[[min:max]] [noextend|extend] [reverse|noreverse] [nowriteback]`: `*` or an empty end autoscales it, `[]`
       !< or no range keeps both; `noextend` keeps autoscaled ends at the data (`tight`), `reverse` reverses an axis with
-      !< an autoscaled end, as gnuplot.
+      !< an autoscaled end, as gnuplot; `lb<*<ub` an autoscaled end within limits (`bounded`, `limits`).
       logical,   intent(inout)           :: min_fixed !< Start fixed.
       real(R8P), intent(inout)           :: min_user  !< Start value.
       logical,   intent(inout)           :: max_fixed !< End fixed.
       real(R8P), intent(inout)           :: max_user  !< End value.
       logical,   intent(inout), optional :: tight     !< Autoscaled ends not extended to the ticks.
       logical,   intent(inout), optional :: reverse   !< Reversed with an autoscaled end.
+      logical,   intent(inout), optional :: bounded(2, 2) !< Limits of the autoscaled ends given (end, lower|upper).
+      real(R8P), intent(inout), optional :: limits(2, 2)  !< Those limits.
       integer(I4P)                       :: colon     !< Separator position.
       integer(I4P)                       :: k         !< Option counter.
       integer(I4P)                       :: first     !< First option token.
@@ -7642,25 +7644,78 @@ contains
          endselect
       enddo
       if (first == 2_I4P) return
-      if (tokens(2)%kind == TOKEN_RANGE .and. len_trim(tokens(2)%text) == 0) return
+      if (tokens(2)%kind == TOKEN_RANGE .and. len_trim(tokens(2)%text) == 0) then
+         ! `[]` keeps the range and forgets the limits of its ends, as gnuplot's load_range
+         if (present(bounded)) bounded = .false.
+         return
+      endif
       colon = top_colon(tokens(2)%text)
       if (tokens(2)%kind /= TOKEN_RANGE .or. colon == 0_I4P) then
          call fail('set '//option//': [min:max] expected', iostat, iomsg)
          return
       endif
-      call range_end(tokens(2)%text(1:colon - 1_I4P), min_fixed, min_user)
+      call range_end(tokens(2)%text(1:colon - 1_I4P), min_fixed, min_user, 1_I4P, bounded, limits)
       if (iostat /= 0_I4P) return
-      call range_end(tokens(2)%text(colon + 1_I4P:), max_fixed, max_user)
+      call range_end(tokens(2)%text(colon + 1_I4P:), max_fixed, max_user, 2_I4P, bounded, limits)
       endsubroutine set_range
 
-      subroutine range_end(text, fixed, value)
-      !< One range end: empty or `*` autoscales, else a number or a constant expression (`2*pi`, user variables).
-      character(len=*), intent(in)    :: text  !< End text.
-      logical,          intent(inout) :: fixed !< End fixed.
-      real(R8P),        intent(inout) :: value !< End value.
+      subroutine range_end(text, fixed, value, e, bounded, limits)
+      !< One range end (`e` 1 the start, 2 the end): empty or `*` autoscales, `lb<*`, `*<ub`, `lb<*<ub` autoscales
+      !< within limits (`bounded`, `limits`), else a number or a constant expression (`2*pi`, user variables).
+      character(len=*), intent(in)              :: text  !< End text.
+      logical,          intent(inout)           :: fixed !< End fixed.
+      real(R8P),        intent(inout)           :: value !< End value.
+      integer(I4P),     intent(in)              :: e     !< End.
+      logical,          intent(inout), optional :: bounded(2, 2) !< Limits given (end, lower|upper).
+      real(R8P),        intent(inout), optional :: limits(2, 2)  !< Limits.
+      character(len=:), allocatable   :: rest  !< Text after the star.
+      integer(I4P)                    :: star  !< The star.
       real(R8P)                       :: v     !< Parsed value.
 
-      if (len_trim(text) == 0 .or. trim(adjustl(text)) == '*') then
+      ! an empty end autoscales and keeps its limits; a given one decides them, as gnuplot's load_one_range
+      if (len_trim(text) == 0) then
+         fixed = .false.
+         return
+      endif
+      if (present(bounded)) bounded(e, :) = .false.
+      if (trim(adjustl(text)) == '*') then
+         fixed = .false.
+         return
+      endif
+      star = index(text, '*', kind=I4P)
+      if (star > 0_I4P .and. index(text, '<') > 0) then
+         ! gnuplot's limits: the star the autoscaled end, a `<` on each side of it
+         if (.not. present(bounded)) then
+            call fail('set '//option//': limits of an autoscaled end apply to x, y, x2, y2 and cb', iostat, iomsg)
+            return
+         endif
+         if (star > 1_I4P) then
+            if (text(star - 1_I4P:star - 1_I4P) /= '<' .or. len_trim(text(1:star - 2_I4P)) == 0) then
+               call fail('set '//option//': LIMIT<*<LIMIT expected, found "'//text//'"', iostat, iomsg)
+               return
+            endif
+            call self%range_value(trim(adjustl(text(1:star - 2_I4P))), v, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'set '//option//': '//iomsg
+               return
+            endif
+            bounded(e, 1) = .true.
+            limits(e, 1) = v
+         endif
+         rest = trim(adjustl(text(star + 1_I4P:)))
+         if (len(rest) > 0) then
+            if (rest(1:1) /= '<' .or. len_trim(rest) < 2) then
+               call fail('set '//option//': LIMIT<*<LIMIT expected, found "'//text//'"', iostat, iomsg)
+               return
+            endif
+            call self%range_value(trim(adjustl(rest(2:))), v, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'set '//option//': '//iomsg
+               return
+            endif
+            bounded(e, 2) = .true.
+            limits(e, 2) = v
+         endif
          fixed = .false.
          return
       endif
@@ -7672,6 +7727,7 @@ contains
       fixed = .true.
       value = v
       endsubroutine range_end
+
 
       subroutine print_option
       !< `set print ["file" [append] | "-" | $NAME [append]]`: where `print` writes; a file or a datablock is emptied
@@ -9150,9 +9206,9 @@ contains
                   return
                endif
                associate(axis => panel%paxes(n)%axis)
-                  call range_end(tokens(4)%text(1:colon - 1_I4P), axis%min_fixed, axis%min_user)
+                  call range_end(tokens(4)%text(1:colon - 1_I4P), axis%min_fixed, axis%min_user, 1_I4P)
                   if (iostat /= 0_I4P) return
-                  call range_end(tokens(4)%text(colon + 1_I4P:), axis%max_fixed, axis%max_user)
+                  call range_end(tokens(4)%text(colon + 1_I4P:), axis%max_fixed, axis%max_user, 2_I4P)
                endassociate
             endblock
          elseif (keyword(tokens(3)%text, 'tics', 3_I4P)) then
@@ -9649,6 +9705,8 @@ contains
          endif
          named(a) = .true.
          call autoscale(a, ends, index(w, 'fix') > 0)
+         ! `set autoscale x` (the axis name alone) forgets the limits of its ends, as gnuplot's set_autoscale_axis
+         if (w == trim(AXES(a))) call forget_limits(a)
       enddo
       if (.not. any(named)) then
          do a = 1_I4P, 5_I4P
@@ -9660,6 +9718,26 @@ contains
          enddo
       endif
       endsubroutine autoscale_option
+
+      subroutine forget_limits(a)
+      !< The limits of the autoscaled ends of axis `a` (x, y, x2, y2, cb) forgotten.
+      integer(I4P), intent(in) :: a !< Axis.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         select case (a)
+         case (1_I4P)
+            panel%xaxis%bounded = .false.
+         case (2_I4P)
+            panel%yaxis%bounded = .false.
+         case (3_I4P)
+            panel%x2axis%bounded = .false.
+         case (4_I4P)
+            panel%y2axis%bounded = .false.
+         case default
+            panel%cbaxis%bounded = .false.
+         endselect
+      endassociate
+      endsubroutine forget_limits
 
       subroutine autoscale(a, ends, fix)
       !< Axis `a` (x, y, x2, y2, cb) autoscaled at its `ends` (min, max), not extended to the ticks with `fix`.

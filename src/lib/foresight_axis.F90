@@ -51,6 +51,9 @@ type :: axis_object
                                                             !< or empty.
    logical                        :: reverse   = .false.    !< Reversed when an end is autoscaled (gnuplot `set xrange
                                                              !< reverse`).
+   logical                        :: bounded(2, 2) = .false. !< Limits of the autoscaled ends given: (end, lower or
+                                                             !< upper), gnuplot `set xrange [lb<*<ub:lb<*<ub]`.
+   real(R8P)                      :: limits(2, 2) = 0.0_R8P  !< Those limits.
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
       procedure, pass(self) :: has_label !< Whether the axis has a label.
@@ -100,6 +103,7 @@ contains
    if (present(min)) self%min_user = min
    self%max_fixed = present(max)
    if (present(max)) self%max_user = max
+   self%bounded = .false.
    endsubroutine set_range
 
    pure subroutine range_of(self, dmin, dmax, has_data, lo, hi)
@@ -130,6 +134,15 @@ contains
    ! a range of the plot command overrides the set one, for that plot
    if (self%plot_min_fixed) lo = self%plot_min
    if (self%plot_max_fixed) hi = self%plot_max
+   ! gnuplot's limits of the autoscaled ends, `[lb<*<ub:...]`: each end kept within its limits
+   if (.not. (self%min_fixed .or. self%plot_min_fixed)) then
+      if (self%bounded(1, 1)) lo = max(lo, self%limits(1, 1))
+      if (self%bounded(1, 2)) lo = min(lo, self%limits(1, 2))
+   endif
+   if (.not. (self%max_fixed .or. self%plot_max_fixed)) then
+      if (self%bounded(2, 1)) hi = max(hi, self%limits(2, 1))
+      if (self%bounded(2, 2)) hi = min(hi, self%limits(2, 2))
+   endif
    associate(min_fixed => self%min_fixed .or. self%plot_min_fixed, max_fixed => self%max_fixed .or. self%plot_max_fixed)
       if (lo == hi .and. .not. (min_fixed .and. max_fixed)) then
          if (self%log) then
@@ -183,6 +196,13 @@ contains
       call linear_ticks(lo, hi, npx, .not. (self%min_fixed .or. self%plot_min_fixed .or. self%tight), &
                         .not. (self%max_fixed .or. self%plot_max_fixed .or. self%tight), &
                         self%ticks, self%tics)
+   endif
+   ! the range extended to the ticks stays within the outer limits of the autoscaled ends, as gnuplot's setup_tics
+   if (any(self%bounded(1, :) .or. self%bounded(2, :))) then
+      if (.not. (self%min_fixed .or. self%plot_min_fixed) .and. self%bounded(1, 1)) lo = max(lo, self%limits(1, 1))
+      if (.not. (self%max_fixed .or. self%plot_max_fixed) .and. self%bounded(2, 2)) hi = min(hi, self%limits(2, 2))
+      if (allocated(self%ticks)) self%ticks = pack(self%ticks, self%ticks%value >= min(lo, hi) - 1.0e-9_R8P * abs(hi - lo) &
+                                                   .and. self%ticks%value <= max(lo, hi) + 1.0e-9_R8P * abs(hi - lo))
    endif
    ! a list added to the ticks, after the extension of the range
    if (.not. self%labelled() .and. self%tics%series .and. self%tics%mode /= TICS_NONE) &

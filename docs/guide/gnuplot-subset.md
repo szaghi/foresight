@@ -62,7 +62,7 @@ that did what it says.
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
 | **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`offset X[,Y]`] [`font F`] [`tc COLOR`] [`rotate` ...\|`norotate`] [`noenhanced`] | axis label (`y2` on the right, `x2` on the top), shifted by `offset` characters (x right, y up; a third, 3D, offset read and ignored), in its `tc` color; `font`, `rotate` and `left`/`center`/`right` read and ignored; `noenhanced`: as it is, not as [enhanced text](#enhanced-text) | no label |
-| **xr**ange / **yr**ange / **y2r**ange / **x2r**ange [`[min:max]`] [`noextend`\|`extend`] [`reverse`\|`noreverse`] [`nowriteback`] | axis range; `*` or empty autoscales an end, `[]` or no range keeps both; `min > max` reverses; `reverse` reverses an axis with an autoscaled end (an explicit range is left as it is, as gnuplot); `noextend` keeps autoscaled ends at the data | autoscale |
+| **xr**ange / **yr**ange / **y2r**ange / **x2r**ange [`[min:max]`] [`noextend`\|`extend`] [`reverse`\|`noreverse`] [`nowriteback`] | axis range; `*` or empty autoscales an end (`lb<*<ub` within limits, see [below](#grid-zero-axes-and-border)), `[]` or no range keeps both; `min > max` reverses; `reverse` reverses an axis with an autoscaled end (an explicit range is left as it is, as gnuplot); `noextend` keeps autoscaled ends at the data | autoscale |
 | **offset**s [`graph`] `L`, [`graph`] `R`, [`graph`] `T`, [`graph`] `B` | autoscaled x and y ends moved out, see [Offsets](#offsets) | no offsets |
 | **par**ametric | [parametric](#parametric-plots) functions: items in pairs x(t), y(t) over `trange` | functions of x |
 | **clip** [`points`\|`one`\|`two`\|`radial`] | [clipping](#clipping) of segments and markers at the border (bare: `points`) | bare: `points`, `one`, `two` off |
@@ -1276,7 +1276,18 @@ of the axes, behind the data and zoomed with it, gnuplot's black dots by default
 `set autoscale` autoscales the named axes again (`x`, `y`, `x2`, `y2`, `cb`, `xy`; `xmin`, `ymax`: one end; all
 without one); `fix` and `noextend` (and `xfix`, ...) keep the autoscaled ends at the data instead of extending them to
 the ticks, as `set xrange [...] noextend`. `set xrange []` keeps the range; `noreverse` and `nowriteback` are accepted.
-Not supported: `unset autoscale`, `keepfix` with effect, `writeback`, `restore`, autoscale limits (`[*<-5:5<*]`).
+Not supported: `unset autoscale`, `keepfix` with effect, `writeback`, `restore`.
+
+```gnuplot
+set yrange [*<-5:5<*]          # autoscaled, at least from -5 to 5
+set xrange [-30<*:*<10]        # autoscaled within [-30:10]
+set xrange [-30<*<10:10<*<15]  # the start between -30 and 10, the end between 10 and 15
+```
+
+As gnuplot 6.0, an autoscaled end takes limits, `lb<*`, `*<ub` or `lb<*<ub` (x, y, x2, y2 and the color axis): the
+end is kept within them before the extension to the ticks, which does not pass the outer one (`lb` of the start, `ub`
+of the end). Each end given decides its own limits; `[]` and `set autoscale x` (the axis name alone) forget them, a
+bare `set autoscale` keeps them.
 
 ## Styles
 
