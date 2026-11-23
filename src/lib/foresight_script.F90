@@ -280,6 +280,7 @@ type :: script_object
       procedure, pass(self), private :: load_data     !< Load a data file or a datablock.
       procedure, pass(self), private :: set_time_data !< `set xdata time`, `set xdata`.
       procedure, pass(self), private :: range_value   !< Value of a range end.
+      procedure, pass(self), private :: colormap_index !< Index of a named colormap, 0 if none.
       procedure, pass(self), private :: annotation_option !< `set label`, `set arrow`, `set object`.
       procedure, pass(self), private :: call_command  !< `load`, `call`.
       procedure, pass(self), private :: expand_macros !< `@name` substitution.
@@ -3465,7 +3466,7 @@ contains
             endif
             if (allocated(line%colormap)) then
                ! `lc palette NAME`: a colormap of `set colormap new NAME`
-               if (findloc_name(self%colormap_names, line%colormap) == 0_I4P) then
+               if (self%colormap_index(line%colormap) == 0_I4P) then
                   call fail('plot: no colormap "'//line%colormap//'" (set colormap new NAME)', iostat, iomsg)
                   return
                endif
@@ -5090,7 +5091,7 @@ contains
                block
                   integer(I4P) :: k !< Colormap counter.
 
-                  k = findloc_name(self%colormap_names, line%colormap)
+                  k = self%colormap_index(line%colormap)
                   if (.not. allocated(panel%colormaps)) allocate(panel%colormaps(0))
                   panel%colormaps = [panel%colormaps, self%colormaps(k)]
                   panel%series(last)%colormap = size(panel%colormaps, kind=I4P)
@@ -9498,7 +9499,7 @@ contains
       if (size(tokens) == 3) then
          if (tokens(2)%text == 'new') then
             map%palette = self%figure%panels(self%figure%current)%palette
-            k = findloc_name(self%colormap_names, tokens(3)%text)
+            k = self%colormap_index(tokens(3)%text)
             if (.not. allocated(self%colormap_names)) allocate(self%colormap_names(0), self%colormaps(0))
             if (k == 0_I4P) then
                self%colormap_names = [self%colormap_names, [character(len=64) :: tokens(3)%text]]
@@ -9511,7 +9512,7 @@ contains
       endif
       if (size(tokens) == 4) then
          if (tokens(3)%text == 'range' .and. tokens(4)%kind == TOKEN_RANGE) then
-            k = findloc_name(self%colormap_names, tokens(2)%text)
+            k = self%colormap_index(tokens(2)%text)
             if (k == 0_I4P) then
                call fail('set colormap: no colormap "'//tokens(2)%text//'" (set colormap new NAME)', iostat, iomsg)
                return
@@ -13280,16 +13281,26 @@ contains
    yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots boxes filledcurves')
    endfunction function_drawable
 
-   pure function findloc_name(names, name) result(k)
-   !< Index of `name` among `names` (unallocated: none), 0 if absent (a loop: nvfortran 26.9 refuses findloc on some
-   !< arrays).
-   character(len=*), allocatable, intent(in) :: names(:) !< Names.
-   character(len=*),              intent(in) :: name     !< Name.
-   integer(I4P)                              :: k        !< Index.
-   integer(I4P)                              :: j        !< Counter.
+   pure function colormap_index(self, name) result(k)
+   !< Index of the colormap `name` (`set colormap new NAME`), 0 if none.
+   class(script_object), intent(in) :: self !< Interpreter.
+   character(len=*),     intent(in) :: name !< Colormap name.
+   integer(I4P)                     :: k    !< Index.
 
    k = 0_I4P
-   if (.not. allocated(names)) return
+   if (allocated(self%colormap_names)) k = findloc_name(self%colormap_names, name)
+   endfunction colormap_index
+
+   pure function findloc_name(names, name) result(k)
+   !< Index of `name` among `names`, 0 if absent (a loop: nvfortran 26.9 refuses findloc on some arrays). `names` is
+   !< not allocatable: with a `character(len=*), allocatable` array dummy here, nvfortran 26.9 -O2 miscompiled the
+   !< internal procedures of annotation_option (set label|arrow|object positions read wrong, bug 24).
+   character(len=*), intent(in) :: names(:) !< Names.
+   character(len=*), intent(in) :: name     !< Name.
+   integer(I4P)                 :: k        !< Index.
+   integer(I4P)                 :: j        !< Counter.
+
+   k = 0_I4P
    do j = 1_I4P, size(names, kind=I4P)
       if (trim(names(j)) == name) then
          k = j
