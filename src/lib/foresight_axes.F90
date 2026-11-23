@@ -5450,22 +5450,33 @@ contains
    ok = ok .and. .not. (series%y2 .or. series%x2)
    endfunction polar_series
 
-   function parallel_axis(self, k, npx) result(axis)
+   function parallel_axis(self, k, npx, members) result(axis)
    !< The parallel axis `k` (`set paxis k`, else autoscaled without extension and without ticks) set up for the values
-   !< of the `k`-th series, `npx` pixels long.
-   class(axes_object), intent(in) :: self !< Panel.
-   integer(I4P),       intent(in) :: k    !< Axis number.
-   real(R8P),          intent(in) :: npx  !< Axis length [px].
-   type(axis_object)              :: axis !< Axis.
-   real(R8P), allocatable         :: v(:) !< Finite values.
+   !< of the `k`-th series (of the series `members`, the spoke of each spider plot group), `npx` pixels long.
+   class(axes_object), intent(in)           :: self       !< Panel.
+   integer(I4P),       intent(in)           :: k          !< Axis number.
+   real(R8P),          intent(in)           :: npx        !< Axis length [px].
+   integer(I4P),       intent(in), optional :: members(:) !< Series of the axis, the `k`-th alone if absent.
+   type(axis_object)                        :: axis       !< Axis.
+   real(R8P), allocatable                   :: v(:)       !< Finite values.
+   integer(I4P)                             :: m          !< Member counter.
 
    axis = paxis_default()
    if (allocated(self%paxes)) then
       if (k <= size(self%paxes)) axis = self%paxes(k)%axis
    endif
-   associate(series => self%series(k))
-      v = pack(series%y, ieee_is_finite(series%y))
-   endassociate
+   if (present(members)) then
+      allocate(v(0))
+      do m = 1_I4P, size(members, kind=I4P)
+         associate(series => self%series(members(m)))
+            v = [v, pack(series%y, ieee_is_finite(series%y))]
+         endassociate
+      enddo
+   else
+      associate(series => self%series(k))
+         v = pack(series%y, ieee_is_finite(series%y))
+      endassociate
+   endif
    if (size(v) > 0) then
       call axis%setup(minval(v), maxval(v), .true., npx)
    else
@@ -5579,21 +5590,67 @@ contains
    integer(I4P)                         :: k         !< Axis counter.
    integer(I4P)                         :: j         !< Row counter.
    integer(I4P)                         :: t         !< Tick counter.
+   integer(I4P), allocatable            :: spoke(:)  !< Spoke of each series (its place in its group), 0 for none.
+   integer(I4P)                         :: s         !< Series counter.
+   integer(I4P)                         :: g         !< Group counter.
+   integer(I4P)                         :: lead      !< First series of a group.
+   integer(I4P)                         :: first     !< First series of the first group.
 
-   n = size(self%series, kind=I4P)
+   ! the spokes: the series of each group (gnuplot `newspiderplot`) in order from the first axis; as many axes as
+   ! the first group has series; key entries (`keyentry with spiderplot`) have none
+   allocate(spoke(size(self%series)))
+   spoke = 0_I4P
+   first = 0_I4P
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%spider_key) cycle
+      if (first == 0_I4P) first = s
+      spoke(s) = 1_I4P + count(.not. self%series(1:s - 1)%spider_key .and. &
+                               self%series(1:s - 1)%spider_group == self%series(s)%spider_group)
+   enddo
+   n = 0_I4P
+   if (first > 0_I4P) n = count(spoke > 0_I4P .and. self%series%spider_group == self%series(first)%spider_group)
+   where (spoke > n) spoke = 0_I4P
+   if (n == 0_I4P) return
    m = 0_I4P
-   do k = 1_I4P, n
-      associate(series => self%series(k))
-         m = max(m, size(series%y, kind=I4P))
-      endassociate
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (spoke(s) > 0_I4P) m = max(m, size(self%series(s)%y, kind=I4P))
    enddo
    allocate(character(len=64) :: names(0))
-   associate(first => self%series(1))
-      if (allocated(first%texts)) names = first%texts
+   associate(lead_series => self%series(first))
+      if (allocated(lead_series%texts)) names = lead_series%texts
    endassociate
    allocate(character(len=16) :: colors(m))
    do j = 1_I4P, m
       colors(j) = default_color(j, self%linecolors)
+   enddo
+   ! the key entries, after the row names
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (.not. self%series(s)%spider_key) cycle
+      if (.not. allocated(self%series(s)%title)) cycle
+      if (len(self%series(s)%title) == 0) cycle
+      block
+         character(len=64), allocatable :: more(:)  !< Names.
+         character(len=16), allocatable :: tints(:) !< Colors.
+
+         allocate(more(size(names) + 1), tints(size(names) + 1))
+         more(1:size(names)) = names
+         more(size(more)) = self%series(s)%title
+         tints(1:min(size(names), size(colors))) = colors(1:min(size(names), size(colors)))
+         tints(size(tints)) = trim(self%series(s)%style%color)
+         if (size(colors) < size(names)) then
+            do j = size(colors, kind=I4P) + 1_I4P, size(names, kind=I4P)
+               tints(j) = default_color(j, self%linecolors)
+            enddo
+         endif
+         deallocate(names, colors)
+         allocate(character(len=64) :: names(size(more)))
+         allocate(character(len=16) :: colors(max(m, size(more))))
+         names = more
+         do j = 1_I4P, size(colors, kind=I4P)
+            colors(j) = default_color(j, self%linecolors)
+         enddo
+         colors(1:size(tints)) = tints
+      endblock
    enddo
    key_width = 0.0_R8P
    if (self%key .and. size(names) > 0) key_width = chart_key_width(backend, names, font_size)
@@ -5601,7 +5658,7 @@ contains
    c = [0.5_R8P * (box(1) + box(2) - key_width), 0.5_R8P * (box(3) + box(4))]
    allocate(axes(n), rx(n), ry(n))
    do k = 1_I4P, n
-      axes(k) = self%parallel_axis(k, radius)
+      axes(k) = self%parallel_axis(k, radius, members=pack([(s, s = 1_I4P, size(self%series, kind=I4P))], spoke == k))
    enddo
    call backend%begin_group('fs-spider')
    ! the web at the ticks of the first axis
@@ -5618,26 +5675,53 @@ contains
          call backend%polyline([rx, rx(1)], [ry, ry(1)], GRID_COLOR, 0.5_R8P, GRID_DASHES)
       enddo
    endif
-   ! a polygon per row, an undefined value at the centre
-   do j = 1_I4P, m
-      do k = 1_I4P, n
-         a = angle(k)
-         f = 0.0_R8P
-         associate(series => self%series(k))
-            if (j <= size(series%y)) then
-               if (ieee_is_finite(series%y(j))) f = min(1.0_R8P, max(0.0_R8P, axes(k)%to_unit(series%y(j))))
-            endif
-         endassociate
-         rx(k) = c(1) + f * radius * cos(a)
-         ry(k) = c(2) - f * radius * sin(a)
+   ! a polygon per row of each group, an undefined value at the centre; the color and width of the group's first
+   ! item if given (else the row linetype and the style's), as gnuplot
+   do g = minval(self%series%spider_group), maxval(self%series%spider_group)
+      lead = 0_I4P
+      do s = 1_I4P, size(self%series, kind=I4P)
+         if (spoke(s) > 0_I4P .and. self%series(s)%spider_group == g) then
+            lead = s
+            exit
+         endif
       enddo
-      associate(st => self%spider_style)
-         call backend%polygon(rx, ry, merge(trim(colors(j)), 'none   ', st%fill /= FILL_EMPTY), st%density, &
-                              merge(trim(colors(j)), 'none   ', st%border .or. st%fill == FILL_EMPTY), &
-                              max(1.0_R8P, st%linewidth))
-         if (st%pointtype >= 0_I4P) call backend%dots(rx, ry, trim(colors(j)), st%point_diameter(), pt=st%pointtype, &
-                                                      line_width=st%linewidth)
-      endassociate
+      if (lead == 0_I4P) cycle
+      do j = 1_I4P, m
+         if (.not. any(spoke > 0_I4P .and. self%series%spider_group == g .and. row_count() >= j)) exit
+         do k = 1_I4P, n
+            a = angle(k)
+            f = 0.0_R8P
+            do s = 1_I4P, size(self%series, kind=I4P)
+               if (spoke(s) /= k .or. self%series(s)%spider_group /= g) cycle
+               associate(series => self%series(s))
+                  if (j <= size(series%y)) then
+                     if (ieee_is_finite(series%y(j))) f = min(1.0_R8P, max(0.0_R8P, axes(k)%to_unit(series%y(j))))
+                  endif
+               endassociate
+               exit
+            enddo
+            rx(k) = c(1) + f * radius * cos(a)
+            ry(k) = c(2) - f * radius * sin(a)
+         enddo
+         block
+            character(len=:), allocatable :: tint   !< Polygon color.
+            character(len=:), allocatable :: inside !< Fill color, `none` for none.
+            character(len=:), allocatable :: edge   !< Border color, `none` for none.
+            real(R8P)                     :: width  !< Border width [px].
+
+            tint = polygon_color(lead, j)
+            inside = 'none'
+            edge = 'none'
+            if (self%spider_style%fill /= FILL_EMPTY) inside = tint
+            if (self%spider_style%border .or. self%spider_style%fill == FILL_EMPTY) edge = tint
+            width = max(1.0_R8P, self%spider_style%linewidth)
+            if (self%series(lead)%spider_lw > 0.0_R8P) width = self%series(lead)%spider_lw
+            call backend%polygon(rx, ry, inside, self%spider_style%density, edge, width)
+            if (self%spider_style%pointtype >= 0_I4P) &
+               call backend%dots(rx, ry, tint, self%spider_style%point_diameter(), pt=self%spider_style%pointtype, &
+                                 line_width=self%spider_style%linewidth)
+         endblock
+      enddo
    enddo
    ! the axes over the polygons, their ticks and labels
    do k = 1_I4P, n
@@ -5656,16 +5740,20 @@ contains
                                                           axes(k)%ticks(t)%label, 'start', sup=axes(k)%ticks(t)%sup)
          endassociate
       enddo
-      ! the item title overrides the axis label, as gnuplot
+      ! the item title (of the first group) overrides the axis label, as gnuplot
       label = ''
       if (allocated(self%paxes)) then
          if (k <= size(self%paxes)) then
             if (allocated(self%paxes(k)%label)) label = self%paxes(k)%label
          endif
       endif
-      associate(series => self%series(k))
-         if (len(series%title) > 0) label = series%title
-      endassociate
+      do s = 1_I4P, size(self%series, kind=I4P)
+         if (spoke(s) /= k .or. self%series(s)%spider_group /= self%series(first)%spider_group) cycle
+         if (allocated(self%series(s)%title)) then
+            if (len(self%series(s)%title) > 0) label = self%series(s)%title
+         endif
+         exit
+      enddo
       if (len(label) > 0) call backend%text(c(1) + 1.12_R8P * radius * cos(a), &
                                             c(2) - 1.12_R8P * radius * sin(a) + 0.35_R8P * font_size, label, &
                                             merge('start ', merge('end   ', 'middle', cos(a) < -0.2_R8P), cos(a) > 0.2_R8P))
@@ -5681,6 +5769,35 @@ contains
 
       rad = (90.0_R8P - 360.0_R8P * real(axis - 1_I4P, R8P) / real(n, R8P)) * DEG
       endfunction angle
+
+      function polygon_color(lead, row) result(tint)
+      !< Color of the polygon of `row` of the group led by series `lead`: its color if given, else the row's linetype.
+      integer(I4P), intent(in)      :: lead !< First series of the group.
+      integer(I4P), intent(in)      :: row  !< Row.
+      character(len=:), allocatable :: tint !< Color.
+
+      if (len_trim(self%series(lead)%spider_color) > 0) then
+         tint = trim(self%series(lead)%spider_color)
+      else
+         tint = trim(default_color(row, self%linecolors))
+      endif
+      endfunction polygon_color
+
+      elemental function row_count_of(series) result(rows)
+      !< Rows of a series.
+      type(series_object), intent(in) :: series !< Series.
+      integer(I4P)                    :: rows   !< Rows.
+
+      rows = 0_I4P
+      if (allocated(series%y)) rows = size(series%y, kind=I4P)
+      endfunction row_count_of
+
+      function row_count() result(rows)
+      !< Rows of each series of the panel.
+      integer(I4P), allocatable :: rows(:) !< Rows.
+
+      rows = row_count_of(self%series)
+      endfunction row_count
    endsubroutine draw_spider
 
    elemental function is_panel_chart(with) result(is)

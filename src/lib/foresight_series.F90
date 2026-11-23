@@ -118,6 +118,14 @@ type :: series_object
    character(len=2)              :: label_axis2 = 'y' !< Axis of those labels.
    logical                       :: blank_ticks = .false. !< A blank text label is a tick too (a script's `xtic("")`,
                                                           !< the rug, as gnuplot); else no tick (the library's).
+   integer(I4P)                  :: spider_group = 0_I4P !< Spider plot group (gnuplot `newspiderplot`), 0 the first:
+                                                         !< its series restart at the first axis.
+   logical                       :: spider_key = .false. !< A key entry of a spider plot group (gnuplot `keyentry with
+                                                         !< spiderplot`), no axis.
+   character(len=24)             :: spider_color = '' !< Polygon color of the group (the lc of its first item), blank
+                                                      !< for the row linetypes.
+   real(R8P)                     :: spider_lw = 0.0_R8P !< Polygon border width of the group (the lw of its first
+                                                        !< item), 0 for the spider plot style's.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

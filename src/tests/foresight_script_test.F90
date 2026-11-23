@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(196)                           !< Per-check outcome.
+logical                       :: test_passed(197)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4165,8 +4165,8 @@ if (test_passed(187)) then
    endassociate
 endif
 if (test_passed(187)) then
-   call interpreter%run_text('set spiderplot; plot keyentry with spiderplot title "s"', iostat, iomsg)
-   test_passed(187) = iostat /= 0_I4P .and. index(iomsg, 'keyentry with spiderplot is not supported') > 0
+   call interpreter%run_text('plot keyentry with gauge title "s"', iostat, iomsg)
+   test_passed(187) = iostat /= 0_I4P .and. index(iomsg, 'keyentry with gauge is not supported') > 0
 endif
 
 ! nonuniform matrix: the first row the x of the columns, the first column the y of the rows; index "name" the dataset
@@ -4424,6 +4424,37 @@ endif
 open(newunit=unit, file='foresight_script_test_sharpen.svg')
 close(unit, status='delete')
 
+! newspiderplot: a new group of polygons on the same axes; keyentry with spiderplot: a key entry, no axis; the polygon
+! color and width of a group from its first item; an array source read for its first row, as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,500; set output "foresight_script_test_spider.svg"; '// &
+                          'array A1 = [15, 75, 20]; array A2 = [25, 25, 50]; set spiderplot; '// &
+                          'set for [i=1:3] paxis i range [0:100]; set style spiderplot fs transparent solid 0.2 border; '// &
+                          'plot keyentry with spiderplot lc 3 lw 3 title "One", '// &
+                          'for [i=1:|A1|] A1 using (A1[i]) lc 3 lw 3 title sprintf("S%d", i), newspiderplot, '// &
+                          'keyentry with spiderplot lc 4 title "Two", for [j=1:|A2|] A2 using (A2[j]) lc 4 notitle', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(197) = iostat == 0_I4P
+if (test_passed(197)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(197) = size(panel%series) == 8 .and. panel%series(1)%spider_key .and. panel%series(5)%spider_key .and. &
+                        all(panel%series(2:4)%spider_group == 0_I4P) .and. &
+                        all(panel%series(6:8)%spider_group == 1_I4P) .and. panel%series(2)%spider_lw == 3.0_R8P
+      if (test_passed(197)) test_passed(197) = size(panel%series(2)%y) == 1 .and. panel%series(3)%y(1) == 75.0_R8P
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_spider.svg')
+      ! the polygon of the first group 3 px wide; the axes named by the first group; the key entries named
+      test_passed(197) = index(svg, '>S2<') > 0 .and. index(svg, '>One<') > 0 .and. index(svg, '>Two<') > 0 .and. &
+                        index(svg, 'stroke-width="3"') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_spider.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4432,7 +4463,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,196L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,197L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

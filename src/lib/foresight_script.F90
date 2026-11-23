@@ -2456,6 +2456,7 @@ contains
    type(expression_object)                      :: yfunc     !< Current y(t) of a parametric pair.
    integer(I4P),            allocatable         :: slots(:)  !< Series index of each function.
    logical,                 allocatable         :: sharpens(:) !< Each function sharpened (gnuplot `sharpen`).
+   integer(I4P)                                 :: spider_group !< Spider plot group (gnuplot `newspiderplot`).
    logical                                      :: sharpen_item !< The item is sharpened.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
@@ -2596,6 +2597,7 @@ contains
    loaded = ''
    loaded_skip = 0_I4P
    allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0), sharpens(0))
+   spider_group = 0_I4P
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
@@ -2661,6 +2663,21 @@ contains
             enddo
             if (i > size(tokens, kind=I4P)) exit
             i = i + 1_I4P
+            cycle
+         endif
+      endif
+      ! newspiderplot: the next spider plot items a new group of polygons on the same axes, as gnuplot
+      if (tokens(i)%kind == TOKEN_WORD) then
+         if (tokens(i)%text == 'newspiderplot') then
+            spider_group = spider_group + 1_I4P
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) exit
+            if (tokens(i)%kind /= TOKEN_COMMA) then
+               call fail('plot: newspiderplot takes no options', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) exit
             cycle
          endif
       endif
@@ -3084,7 +3101,10 @@ contains
             ! keyentry of another style: its key sample only, a filled box for the filled styles, a line and points for
             ! the error lines, else a line (the panel charts have no key entries of their own)
             if (keyentry .and. .not. function_drawable(with) .and. with /= 'table') then
-               if (is_word(with, 'spiderplot parallelaxes pie radar rose gauge readout')) then
+               if (with == 'spiderplot') then
+                  ! a key entry of the spider plot group: no axis (spider_key)
+                  continue
+               elseif (is_word(with, 'parallelaxes pie radar rose gauge readout')) then
                   call fail('plot: keyentry with '//with//' is not supported', iostat, iomsg)
                   return
                elseif (is_word(with, 'polygons circles ellipses boxplot candlesticks boxxyerror boxerrorbars '// &
@@ -3096,7 +3116,8 @@ contains
                   with = 'lines'
                endif
             endif
-            if (is_function .and. .not. function_drawable(with) .and. with /= 'table') then
+            if (is_function .and. .not. function_drawable(with) .and. with /= 'table' .and. &
+                .not. (keyentry .and. with == 'spiderplot')) then
                call fail('plot: a function is drawn with '//FUNCTION_STYLES//', not '//with, iostat, iomsg)
                return
             endif
@@ -4261,6 +4282,11 @@ contains
             call fail('plot: '//with//' takes key(N), not xtic(N)', iostat, iomsg)
             return
          endif
+         ! gnuplot 6.0 reads one row of an array in a spider plot (spiderplot.dem's `Array1 using (Array1[i])`)
+         if (with == 'spiderplot' .and. self%symbols%is_array(file) .and. size(x) > 1) then
+            x = x(1:1)
+            y = y(1:1)
+         endif
          if (keyed) then
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, labels=xlabels, &
                                   at=at_x)
@@ -4952,6 +4978,17 @@ contains
          last = size(panel%series, kind=I4P)
          if (last < 1_I4P) return
          panel%series(last)%label_axis = label_axis
+         if (panel%series(last)%style%with == WITH_SPIDERPLOT) then
+            ! the group, a key entry, and the polygon color and width of the group's first item
+            panel%series(last)%spider_group = spider_group
+            panel%series(last)%spider_key = keyentry
+            if (allocated(line%lc)) then
+               if (len(line%lc) > 0) then
+                  if (line%lc(1:1) /= '*') panel%series(last)%spider_color = line%lc
+               endif
+            endif
+            if (allocated(line%lw)) panel%series(last)%spider_lw = line%lw
+         endif
          ! gnuplot's xtic(..): a blank label still a tick
          panel%series(last)%blank_ticks = label_col > 0_I4P .and. .not. keyed
          if (label_col2 > 0_I4P .and. allocated(labels2)) then
