@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="320" viewBox="0 0 760 320" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
 <rect x="0" y="0" width="760" height="320" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="29.2 370 37 217" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="29.2 370 37 217" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="66.6,217 66.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="133.1,217 133.1,37"/>
@@ -83,7 +83,7 @@
 <text x="199.6" y="301" text-anchor="middle">phi</text>
 </g>
 </g>
-<g class="fs-axes" data-area="409.2 750 37 289" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="409.2 750 37 289" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="446.6,289 446.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="513.1,289 513.1,37"/>

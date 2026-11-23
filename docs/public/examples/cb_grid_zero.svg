@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
 <rect x="0" y="0" width="560" height="320" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="51.4 550 16 280" data-x="-6.28318530717959e0 6.28318530717959e0" data-y="-1.5e0 2e0" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="auto minor 5 out scale 1.5e0 7.5e-1" data-ytics="auto minor 5 out scale 1.5e0 7.5e-1" data-mirror="0 0 0" data-grid-lines="x y mx my" data-grid-style="#bebebe 5e-1 2,4">
+<g class="fs-axes" data-area="51.4 550 16 280" data-x="-6.28318530717959e0 6.28318530717959e0" data-y="-1.5e0 2e0" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="auto minor 5 out scale 1.5e0 7.5e-1" data-ytics="auto minor 5 out scale 1.5e0 7.5e-1" data-xformat="%h" data-yformat="%h" data-mirror="0 0 0" data-grid-lines="x y mx my" data-grid-style="#bebebe 5e-1 2,4">
 <g class="fs-grid">
 <polyline fill="none" stroke="#bebebe" stroke-width="0.5" stroke-dasharray="2,4" points="62.64,280 62.64,16"/>
 <polyline fill="none" stroke="#bebebe" stroke-width="0.5" stroke-dasharray="2,4" points="141.99,280 141.99,16"/>

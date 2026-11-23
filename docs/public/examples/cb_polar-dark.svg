@@ -2,7 +2,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="520" height="400" viewBox="0 0 520 400" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#5d9cff" data-theme="vfd" data-frame="#5d9cff" data-grid-color="#15304a">
 <defs><filter id="fs-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="520" height="400"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
 <rect x="0" y="0" width="520" height="400" fill="#04070a" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="35.8 367.4 34.2 365.8" data-x="-2e0 2e0" data-y="-2e0 2e0" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="35.8 367.4 34.2 365.8" data-x="-2e0 2e0" data-y="-2e0 2e0" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid">
 </g>
 <g class="fs-glow" filter="url(#fs-glow)">

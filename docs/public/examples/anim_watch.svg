@@ -3,7 +3,7 @@
 <g>
 <animate attributeName="visibility" values="visible;hidden" keyTimes="0;0.071429" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -152,7 +152,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.071429;0.142857" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -305,7 +305,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.142857;0.214286" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -464,7 +464,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.214286;0.285714" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -627,7 +627,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.285714;0.357143" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -796,7 +796,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.357143;0.428571" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -969,7 +969,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.428571;0.500000" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -1148,7 +1148,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.500000;0.571429" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -1331,7 +1331,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.571429;0.642857" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -1520,7 +1520,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.642857;0.714286" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -1713,7 +1713,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.714286;0.785714" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -1912,7 +1912,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.785714;0.857143" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -2115,7 +2115,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.857143;0.928571" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>
@@ -2318,7 +2318,7 @@
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.928571;1.000000" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <rect x="0" y="0" width="640" height="380" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *">
+<g class="fs-axes" data-area="76.6 576.6 37 328" data-x="1.709286e9 1.709298e9" data-y="1e-5 1e0" data-y2="2.4e-1 3.6e-1" data-log="0 1 0" data-grid="0" data-font-size="12" data-xformat="%H:%M" data-yformat="%h" data-xtime="%Y-%m-%d %H:%M:%S" data-mirror="1 0 0" data-y2tics="* 0.02 *" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="126.6,328 126.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="201.6,328 201.6,37"/>

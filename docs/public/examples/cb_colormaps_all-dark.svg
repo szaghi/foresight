@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="1280" viewBox="0 0 760 1280" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
 <rect x="0" y="0" width="760" height="1280" fill="#130d0f" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="16 243.33 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="37" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -15,7 +15,7 @@
 </g>
 <text x="129.67" y="22" text-anchor="middle">acton</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="37" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -29,7 +29,7 @@
 </g>
 <text x="383" y="22" text-anchor="middle">bamako</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 37 64" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="37" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -43,7 +43,7 @@
 </g>
 <text x="636.33" y="22" text-anchor="middle">batlow</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="117" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -57,7 +57,7 @@
 </g>
 <text x="129.67" y="102" text-anchor="middle">batlowK</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="117" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -71,7 +71,7 @@
 </g>
 <text x="383" y="102" text-anchor="middle">batlowW</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 117 144" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="117" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -85,7 +85,7 @@
 </g>
 <text x="636.33" y="102" text-anchor="middle">bilbao</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="197" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -99,7 +99,7 @@
 </g>
 <text x="129.67" y="182" text-anchor="middle">buda</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="197" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -113,7 +113,7 @@
 </g>
 <text x="383" y="182" text-anchor="middle">davos</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 197 224" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="197" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -127,7 +127,7 @@
 </g>
 <text x="636.33" y="182" text-anchor="middle">devon</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="277" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -141,7 +141,7 @@
 </g>
 <text x="129.67" y="262" text-anchor="middle">glasgow</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="277" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -155,7 +155,7 @@
 </g>
 <text x="383" y="262" text-anchor="middle">grayC</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 277 304" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="277" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -169,7 +169,7 @@
 </g>
 <text x="636.33" y="262" text-anchor="middle">hawaii</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="357" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -183,7 +183,7 @@
 </g>
 <text x="129.67" y="342" text-anchor="middle">imola</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="357" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -197,7 +197,7 @@
 </g>
 <text x="383" y="342" text-anchor="middle">lajolla</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 357 384" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="357" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -211,7 +211,7 @@
 </g>
 <text x="636.33" y="342" text-anchor="middle">lapaz</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="437" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -225,7 +225,7 @@
 </g>
 <text x="129.67" y="422" text-anchor="middle">lipari</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="437" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -239,7 +239,7 @@
 </g>
 <text x="383" y="422" text-anchor="middle">navia</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 437 464" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="437" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -253,7 +253,7 @@
 </g>
 <text x="636.33" y="422" text-anchor="middle">naviaW</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="517" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -267,7 +267,7 @@
 </g>
 <text x="129.67" y="502" text-anchor="middle">nuuk</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="517" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -281,7 +281,7 @@
 </g>
 <text x="383" y="502" text-anchor="middle">oslo</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 517 544" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="517" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -295,7 +295,7 @@
 </g>
 <text x="636.33" y="502" text-anchor="middle">tokyo</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="597" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -309,7 +309,7 @@
 </g>
 <text x="129.67" y="582" text-anchor="middle">turku</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="597" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -323,7 +323,7 @@
 </g>
 <text x="383" y="582" text-anchor="middle">magma</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 597 624" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="597" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -337,7 +337,7 @@
 </g>
 <text x="636.33" y="582" text-anchor="middle">inferno</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="677" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -351,7 +351,7 @@
 </g>
 <text x="129.67" y="662" text-anchor="middle">plasma</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="677" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -365,7 +365,7 @@
 </g>
 <text x="383" y="662" text-anchor="middle">viridis</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 677 704" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="677" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -379,7 +379,7 @@
 </g>
 <text x="636.33" y="662" text-anchor="middle">cividis</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="757" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -393,7 +393,7 @@
 </g>
 <text x="129.67" y="742" text-anchor="middle">black_body</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="757" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -407,7 +407,7 @@
 </g>
 <text x="383" y="742" text-anchor="middle">bam</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 757 784" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="757" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -421,7 +421,7 @@
 </g>
 <text x="636.33" y="742" text-anchor="middle">berlin</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="837" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -435,7 +435,7 @@
 </g>
 <text x="129.67" y="822" text-anchor="middle">broc</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="837" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -449,7 +449,7 @@
 </g>
 <text x="383" y="822" text-anchor="middle">cork</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 837 864" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="837" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -463,7 +463,7 @@
 </g>
 <text x="636.33" y="822" text-anchor="middle">lisbon</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="917" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -477,7 +477,7 @@
 </g>
 <text x="129.67" y="902" text-anchor="middle">managua</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="917" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -491,7 +491,7 @@
 </g>
 <text x="383" y="902" text-anchor="middle">roma</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 917 944" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="917" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -505,7 +505,7 @@
 </g>
 <text x="636.33" y="902" text-anchor="middle">tofino</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="997" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -519,7 +519,7 @@
 </g>
 <text x="129.67" y="982" text-anchor="middle">vanimo</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="997" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -533,7 +533,7 @@
 </g>
 <text x="383" y="982" text-anchor="middle">vik</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 997 1024" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="997" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -547,7 +547,7 @@
 </g>
 <text x="636.33" y="982" text-anchor="middle">bukavu</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="1077" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -561,7 +561,7 @@
 </g>
 <text x="129.67" y="1062" text-anchor="middle">fes</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="1077" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -575,7 +575,7 @@
 </g>
 <text x="383" y="1062" text-anchor="middle">oleron</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 1077 1104" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="1077" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -589,7 +589,7 @@
 </g>
 <text x="636.33" y="1062" text-anchor="middle">bamO</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="1157" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -603,7 +603,7 @@
 </g>
 <text x="129.67" y="1142" text-anchor="middle">brocO</text>
 </g>
-<g class="fs-axes" data-area="269.33 496.67 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="269.33 496.67 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="269.33" y="1157" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -617,7 +617,7 @@
 </g>
 <text x="383" y="1142" text-anchor="middle">corkO</text>
 </g>
-<g class="fs-axes" data-area="522.67 750 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="522.67 750 1157 1184" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="522.67" y="1157" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -631,7 +631,7 @@
 </g>
 <text x="636.33" y="1142" text-anchor="middle">romaO</text>
 </g>
-<g class="fs-axes" data-area="16 243.33 1237 1264" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none">
+<g class="fs-axes" data-area="16 243.33 1237 1264" data-x="-5e-1 2.555e2" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 </g>
 <svg class="fs-plot" x="16" y="1237" width="227.33" height="27" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">

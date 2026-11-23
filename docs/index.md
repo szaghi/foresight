@@ -248,6 +248,16 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_polar_log" svg :width="480" :height="420" caption="a log r axis" />
   <Plot name="cb_nonuniform" svg :width="560" :height="360" caption="a nonuniform matrix" />
   <Plot name="cb_keyentry" svg :width="560" :height="320" caption="key entries of their own" />
+  <Plot name="cb_array_assign" svg :width="560" :height="320" caption="array elements assigned in an expression" />
+  <Plot name="cb_arrowstyle_var" svg :width="560" :height="360" caption="a style per arrow" />
+  <Plot name="cb_fill_zero" svg :width="560" :height="320" caption="fill above and below zero" />
+  <Plot name="cb_rug" svg :width="560" :height="360" caption="a rug of ticks" />
+  <Plot name="cb_sharpen" svg :width="560" :height="320" caption="sharp extrema (sharpen)" />
+  <Plot name="cb_spider_groups" svg :width="560" :height="420" caption="two sets of spider polygons" />
+  <Plot name="cb_polar_errorbars" svg :width="560" :height="360" caption="polar error bars" />
+  <Plot name="cb_named_colormaps" svg :width="560" :height="360" caption="named colormaps" />
+  <Plot name="cb_smooth_path" svg :width="560" :height="360" caption="a spline along a path" />
+  <Plot name="cb_stats_matrix" svg :width="560" :height="320" caption="statistics of a matrix" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
   <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />

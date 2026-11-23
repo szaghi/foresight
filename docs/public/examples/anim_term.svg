@@ -4,323 +4,323 @@
 <g>
 <animate attributeName="visibility" values="visible;hidden" keyTimes="0;0.071429" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠁                                                                       ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉                                                                      ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.071429;0.142857" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠁                                                                 ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈                                                                ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.142857;0.214286" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⡀                                                          ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄                                                         ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.214286;0.285714" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄                                                   ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡀                                                 ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.285714;0.357143" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⠂                                             ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⠒                                            ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.357143;0.428571" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺                                       ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                                                            ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺                                      ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                                                          ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.428571;0.500000" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠓                               ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠃                              ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.500000;0.571429" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀                         ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠁                         ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                                              ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀                        ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈                         ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                                            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.571429;0.642857" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠                   ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁                   ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⠄                  ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈                   ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.642857;0.714286" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠⣀                  ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁⠁⠋⠓⠣⠢⢢⠄            ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                            ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⢄⡀                 ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈⠈⠘⠑⠓⠖⠴⡠            ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                          ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.714286;0.785714" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠⣀                  ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁⠁⠋⠓⠣⠢⢢⢤⣠⢀          ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                  ⠁⠛⠑⠱⢢     ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                              ⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⢄⡀                 ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈⠈⠘⠑⠓⠖⠴⡠⣠⣀⡀         ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                ⠈⠘⠑⠳⠦⡀    ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                            ⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.785714;0.857143" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠⣀                  ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁⠁⠋⠓⠣⠢⢢⢤⣠⢀          ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                  ⠁⠛⠑⠱⢢⢤⣠⢀⢀ ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                          ⠁⠉⠙⠓⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⢄⡀                 ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈⠈⠘⠑⠓⠖⠴⡠⣠⣀⡀         ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                ⠈⠘⠑⠳⠦⡤⣠⢀⢀ ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                        ⠁⠉⠙⠑⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.857143;0.928571" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠⣀                  ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁⠁⠋⠓⠣⠢⢢⢤⣠⢀          ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                  ⠁⠛⠑⠱⢢⢤⣠⢀⢀ ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                          ⠁⠉⠙⠓⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⢄⡀                 ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈⠈⠘⠑⠓⠖⠴⡠⣠⣀⡀         ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                ⠈⠘⠑⠳⠦⡤⣠⢀⢀ ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                        ⠁⠉⠙⠑⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 <g visibility="hidden">
 <animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;0.928571;1.000000" calcMode="discrete" dur="9.8s" repeatCount="indefinite"/>
 <text x="8" y="16.0" xml:space="preserve" fill="#1d1b18"></text>
-<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                     residual (braille)</text>
-<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">   10^0⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
-<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">       ⡿                                                               residual⠐⠒⠒⠒⠒⠒ ⡇</text>
-<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">       ⡯                                                                              ⡇</text>
-<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  10^-1⣷⠦⢆⢄⣄⣀⢀                                                                       ⠠⡇</text>
-<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">       ⣟    ⠁⠁⠋⠷⠲⢢⢄⣠⢀                                                                 ⡇</text>
-<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">       ⡯          ⠈⠈⠉⠊⠚⠲⠢⢢⢤⣠⢀                                                         ⡇</text>
-<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  10^-2⣧⠄                   ⠁⠋⠊⠧⢆⢄⣄⣀⢀                                                ⠠⡇</text>
-<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">       ⣿                           ⠁⠁⠋⠓⠣⢢⢦⡤⣀⢀                                         ⡇</text>
-<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">       ⣗                                   ⠉⠉⠊⠺⠢⢢⢤⣠⢀⢀                                 ⡇</text>
-<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  10^-3⣧⠄                                          ⠁⠋⠛⠱⠱⢢⢄⣄⣀⢀                        ⠠⡇</text>
-<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                   ⠁⠋⠋⠣⠢⢦⡤⡠⣀                  ⡇</text>
-<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">       ⣗                                                          ⠁⠁⠋⠓⠣⠢⢢⢤⣠⢀          ⡇</text>
-<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  10^-4⣇⡀                                                                  ⠁⠛⠑⠱⢢⢤⣠⢀⢀ ⢀⡇</text>
-<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">       ⣿                                                                          ⠁⠉⠙⠓⡇</text>
-<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">       ⡟                                                                              ⡇</text>
-<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  10^-5⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
-<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">       0              50               100             150              200</text>
+<text x="8" y="30.0" xml:space="preserve" fill="#1d1b18">                                      residual (braille)</text>
+<text x="8" y="44.0" xml:space="preserve" fill="#1d1b18">  1.00000⣶⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡖⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⢲⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⡆</text>
+<text x="8" y="58.0" xml:space="preserve" fill="#1d1b18">         ⡿                                                             residual⠐⠒⠒⠒⠒⠒ ⡇</text>
+<text x="8" y="72.0" xml:space="preserve" fill="#1d1b18">         ⡯                                                                            ⡇</text>
+<text x="8" y="86.0" xml:space="preserve" fill="#1d1b18">  0.10000⣷⠦⢦⢄⢄⣀⢀                                                                     ⠠⡇</text>
+<text x="8" y="100.0" xml:space="preserve" fill="#1d1b18">         ⣟   ⠈⠈⠉⠋⠖⠖⣆⣄⢄⡀                                                               ⡇</text>
+<text x="8" y="114.0" xml:space="preserve" fill="#1d1b18">         ⡯          ⠈⠈⠘⠙⠚⠖⠔⡤⣄⣄⡀                                                       ⡇</text>
+<text x="8" y="128.0" xml:space="preserve" fill="#1d1b18">  0.01000⣧⠄                  ⠈⠘⠑⠹⠴⡤⡠⣀⡀⡀                                              ⠠⡇</text>
+<text x="8" y="142.0" xml:space="preserve" fill="#1d1b18">         ⣿                          ⠁⠉⠙⠑⠱⢲⢦⡤⣀⢀                                        ⡇</text>
+<text x="8" y="156.0" xml:space="preserve" fill="#1d1b18">         ⣗                                  ⠁⠁⠋⠺⠢⢢⢤⣄⣀⢀                                ⡇</text>
+<text x="8" y="170.0" xml:space="preserve" fill="#1d1b18">  0.00100⣧⠄                                         ⠁⠃⠋⠟⠶⢤⢄⢄⡀⡀                       ⠠⡇</text>
+<text x="8" y="184.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                 ⠈⠈⠋⠋⠖⠶⣤⢄⢄⡀                 ⡇</text>
+<text x="8" y="198.0" xml:space="preserve" fill="#1d1b18">         ⣗                                                        ⠈⠈⠘⠑⠓⠖⠴⡠⣠⣀⡀         ⡇</text>
+<text x="8" y="212.0" xml:space="preserve" fill="#1d1b18">  0.00010⣇⡀                                                                ⠈⠘⠑⠳⠦⡤⣠⢀⢀ ⢀⡇</text>
+<text x="8" y="226.0" xml:space="preserve" fill="#1d1b18">         ⣿                                                                        ⠁⠉⠙⠑⡇</text>
+<text x="8" y="240.0" xml:space="preserve" fill="#1d1b18">         ⡟                                                                            ⡇</text>
+<text x="8" y="254.0" xml:space="preserve" fill="#1d1b18">  0.00001⣏⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣄⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡇</text>
+<text x="8" y="268.0" xml:space="preserve" fill="#1d1b18">         0              50              100             150             200</text>
 <text x="8" y="282.0" xml:space="preserve" fill="#1d1b18"></text>
 </g>
 </svg>

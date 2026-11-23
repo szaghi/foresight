@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
 <rect x="0" y="0" width="760" height="300" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="55.6 370 37 269" data-x="0 2.5e2" data-y="1e-5 1e0" data-log="0 1" data-grid="1" data-font-size="12" data-yformat="%h">
+<g class="fs-axes" data-area="55.6 370 37 269" data-x="0 2.5e2" data-y="1e-5 1e0" data-log="0 1" data-grid="1" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="55.6,269 55.6,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="118.48,269 118.48,37"/>
@@ -173,7 +173,7 @@
 </g>
 <text x="212.8" y="22" text-anchor="middle">solver-7: 240 log lines</text>
 </g>
-<g class="fs-axes" data-area="422.4 750 37 269" data-x="0 2.5e2" data-y="0 1.4e-1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="422.4 750 37 269" data-x="0 2.5e2" data-y="0 1.4e-1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="422.4,269 422.4,37"/>
 <polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="487.92,269 487.92,37"/>

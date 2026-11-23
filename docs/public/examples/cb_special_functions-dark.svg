@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
 <rect x="0" y="0" width="720" height="480" fill="#130d0f" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="42.4 350 37 209" data-x="0 2e1" data-y="-1.5e0 1e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="42.4 350 37 209" data-x="0 2e1" data-y="-1.5e0 1e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,209 42.4,37"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="119.3,209 119.3,37"/>
@@ -133,7 +133,7 @@
 <text x="76.28" y="199.7" text-anchor="end" xml:space="preserve"><tspan>Y</tspan><tspan font-size="9.6" dy="3.6">0</tspan></text>
 </g>
 </g>
-<g class="fs-axes" data-area="389.2 710 37 209" data-x="-4e0 5e0" data-y="-6e0 6e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="389.2 710 37 209" data-x="-4e0 5e0" data-y="-6e0 6e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="389.2,209 389.2,37"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="424.84,209 424.84,37"/>
@@ -253,7 +253,7 @@
 <text x="464" y="69.7" text-anchor="end" xml:space="preserve"><tspan>ln|</tspan><tspan>Γ</tspan><tspan>(x)|</tspan></text>
 </g>
 </g>
-<g class="fs-axes" data-area="42.4 350 277 449" data-x="-3e0 3e0" data-y="-1.1e0 1.1e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="42.4 350 277 449" data-x="-3e0 3e0" data-y="-1.1e0 1.1e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,449 42.4,277"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="93.67,449 93.67,277"/>
@@ -364,7 +364,7 @@
 <text x="143.6" y="324.7" text-anchor="end">igamma(2, x)</text>
 </g>
 </g>
-<g class="fs-axes" data-area="402.4 710 277 449" data-x="-2e0 5e0" data-y="-6e-1 1.4e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="402.4 710 277 449" data-x="-2e0 5e0" data-y="-6e-1 1.4e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="402.4,449 402.4,277"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="446.34,449 446.34,277"/>

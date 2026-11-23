@@ -18,7 +18,7 @@
 </g>
 </g>
 </g>
-<g class="fs-axes" data-area="42.4 550 171.48 389" data-x="0 1.2e2" data-y="1.5e-1 5.5e-1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="42.4 550 171.48 389" data-x="0 1.2e2" data-y="1.5e-1 5.5e-1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,389 42.4,171.48"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="127,389 127,171.48"/>

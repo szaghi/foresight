@@ -253,6 +253,15 @@ the documentation's fixed SOURCE_DATE_EPOCH). See [Offsets](/guide/gnuplot-subse
 An explicit list replaces the ticks: names at chosen positions, `""` with level `1` for an unlabelled minor tick. With
 `add` the list joins the automatic ticks; a label holding a conversion is the format of its position (`"%.0f mm"`).
 
+### A rug of ticks
+
+<<< @/examples/snippets/cb_rug.gp{gnuplot}
+
+<Plot name="cb_rug" svg :width="560" :height="360" />
+
+An empty tic label is still a tick: `xtic("")` and `ytic("")` mark every row on both axes, a rug plot. See
+[Text labels on any axis](/guide/gnuplot-subset#text-labels-on-any-axis).
+
 ### Names on the y axis
 
 <<< @/examples/snippets/cb_ytic.gp{gnuplot}
@@ -514,6 +523,16 @@ turn, so each `square(x)` is drawn with the `n` set before it. See
 `using` field runs on each row, so `s` sums along the file and `shift5` keeps the last five values in `b1` ...
 `b5`. See [Expressions](/guide/gnuplot-subset#expressions-in-using).
 
+### Array elements assigned in an expression
+
+<<< @/examples/snippets/cb_array_assign.gp{gnuplot}
+
+<Plot name="cb_array_assign" svg :width="560" :height="320" />
+
+`A[i] = value` is an expression too: a `stats` or `plot` over a file stores each row in an element (`$0` counts
+the rows from 0), and an expression that assigns elements of an array reads them as they are when it runs. See
+[Arrays](/guide/gnuplot-subset#arrays).
+
 ### Recursive functions
 
 <<< @/examples/snippets/cb_recursion.gp{gnuplot}
@@ -687,6 +706,16 @@ drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 
 Without data, functions are sampled over [-10:10], or the `xrange`; `set samples` sets the number of points.
 
+### Sharp extrema of a function
+
+<<< @/examples/snippets/cb_sharpen.gp{gnuplot}
+
+<Plot name="cb_sharpen" svg :width="560" :height="320" />
+
+`sharpen` finds the extrema of a function that fall between its samples (a golden section search where the curve
+turns) and adds them: the minima of `abs(sqrt(sin(x)))` reach 0, while the plain samples stop short. See
+[Functions](/guide/gnuplot-subset#functions).
+
 ### Parametric curves
 
 <<< @/examples/snippets/cb_parametric.gp{gnuplot}
@@ -806,6 +835,15 @@ time of each block. `smooth cumulative` adds the y up to each x: the elapsed tim
 `csplines` passes through every point; `acsplines` weighs fit against smoothness (smaller weights, smoother curve);
 `sbezier` stays inside the points. `kdensity` estimates the distribution of a sample: gnuplot's bandwidth by default,
 narrower to show more detail.
+
+### A spline along a path
+
+<<< @/examples/snippets/cb_smooth_path.gp{gnuplot}
+
+<Plot name="cb_smooth_path" svg :width="560" :height="360" />
+
+`smooth path` fits each set of points (apart at blank lines) in its order, not sorted on x: a closed set wraps
+around, and `with filledcurves closed` closes every set. See [Smoothing](/guide/gnuplot-subset#smoothing).
 
 ### A monotone interpolation
 
@@ -977,6 +1015,15 @@ the x axis. `set style boxplot` sets the whisker range, outliers, sorting.
 `x1` and `x2` fill to the bottom and top of the plot, `xy=X,Y` to a point. The restart at iteration 60 splits the fill as
 it splits a line.
 
+### Fill above and below zero
+
+<<< @/examples/snippets/cb_fill_zero.gp{gnuplot}
+
+<Plot name="cb_fill_zero" svg :width="560" :height="320" />
+
+`above` and `below` without `y=V` fill against y = 0, as gnuplot; next to an axis word (`above x1`) they are
+ignored. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+
 ### Rectangles
 
 <<< @/examples/snippets/cb_boxxyerror.gp{gnuplot}
@@ -1014,6 +1061,16 @@ HTML page the heads and the labels keep their size while the zoom moves them wit
 
 `with vectors as N` takes the heads, the fill, the head size and the color of `set style arrow N`; `size L,A` (x
 axis values, or `screen`, `graph`, `character`) and `filled` set them on the item. See
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+
+### A style per arrow
+
+<<< @/examples/snippets/cb_arrowstyle_var.gp{gnuplot}
+
+<Plot name="cb_arrowstyle_var" svg :width="560" :height="360" />
+
+`arrowstyle variable` (`as variable`) takes the number of an arrow style from the column after the vector's:
+each arrow its heads, fill, width and color. See
 [Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
 
 ### Arrows by length and angle
@@ -1147,6 +1204,16 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 "fine"` picks the dataset after the comment line `# fine`. See
 [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### Statistics of a matrix
+
+<<< @/examples/snippets/cb_stats_matrix.gp{gnuplot}
+
+<Plot name="cb_stats_matrix" svg :width="560" :height="320" />
+
+`stats ... matrix` gives the statistics of the values with the size of the matrix (`STATS_size_x`, `_y`) and the
+places of its extremes; `every` keeps columns (points) and rows (blocks) of a matrix, for `stats` and for the image.
+See [Stats](/guide/gnuplot-subset#stats).
+
 ### Palettes
 
 <<< @/examples/snippets/cb_palettes.gp{gnuplot}
@@ -1216,6 +1283,16 @@ A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour m
 meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
 angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
 
+### Named colormaps
+
+<<< @/examples/snippets/cb_named_colormaps.gp{gnuplot}
+
+<Plot name="cb_named_colormaps" svg :width="560" :height="360" />
+
+`set colormap new NAME` saves the current palette, `lc palette NAME` colors an item's z column by it (over its own
+range with `set colormap NAME range [a:b]`). See [Colors per point and from the
+palette](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+
 ### An RGB image
 
 <<< @/examples/snippets/cb_rgbimage.gp{gnuplot}
@@ -1266,6 +1343,15 @@ it (`below`: inside). See [Polar plots](/guide/gnuplot-subset#polar-plots).
 `set logscale r` spaces the decades evenly from the pole at the `rrange` start; `impulses` go from the pole and
 `set ttics rotate` turns the theta labels along their angle. See [Polar plots](/guide/gnuplot-subset#polar-plots).
 
+### Polar error bars
+
+<<< @/examples/snippets/cb_polar_errorbars.gp{gnuplot}
+
+<Plot name="cb_polar_errorbars" svg :width="560" :height="360" />
+
+On a polar plot `yerrorbars` draw each bar along the radius, from r - dr to r + dr, its caps across it. See
+[Polar plots](/guide/gnuplot-subset#polar-plots).
+
 ### A level in decibels
 
 <<< @/examples/snippets/cb_polar_db.gp{gnuplot}
@@ -1303,6 +1389,16 @@ the upper half only, and leaves out the data beyond it too, as gnuplot.
 
 `set spiderplot`: each item is a radial axis, each row a polygon in its color, named by `key(1)`; `set grid spiderplot`
 draws the web at the ticks of the first axis. foresight's `with radar` is the transposed shorthand (an item per polygon).
+
+### Two sets of spider polygons
+
+<<< @/examples/snippets/cb_spider_groups.gp{gnuplot}
+
+<Plot name="cb_spider_groups" svg :width="560" :height="420" />
+
+`newspiderplot` starts a new set of items whose polygons share the axes of the first set; `keyentry with
+spiderplot` names a set in the key. A set takes the color and width of its first item. See [Parallel axes and
+spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
 
 ### Parallel axes
 

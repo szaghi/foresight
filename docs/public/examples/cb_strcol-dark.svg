@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
 <rect x="0" y="0" width="560" height="320" fill="#130d0f" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="22.6 510.5 16 274" data-x="-5e-1 4.5e0" data-y="0 5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="labels 0:gmres%0A1e%2B05 1e0:bicgstab%0A1e%2B05 2e0:gmres%0A1e%2B06 3e0:bicgstab%0A1e%2B06 4e0:multigrid%0A1e%2B06">
+<g class="fs-axes" data-area="22.6 510.5 16 274" data-x="-5e-1 4.5e0" data-y="0 5e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="labels 0:gmres%0A1e%2B05 1e0:bicgstab%0A1e%2B05 2e0:gmres%0A1e%2B06 3e0:bicgstab%0A1e%2B06 4e0:multigrid%0A1e%2B06" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="71.39,274 71.39,16"/>
 <polyline fill="none" stroke="#5c4950" stroke-width="0.5" stroke-dasharray="2,3" points="168.97,274 168.97,16"/>
