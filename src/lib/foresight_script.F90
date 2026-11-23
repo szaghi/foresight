@@ -141,6 +141,7 @@ interface push
 endinterface push
 
 real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell size [font size].
+integer(I4P),      parameter :: FOREVER = 1000_I4P !< Values of an unbounded plot iteration, `for [i=A:*]`, at most.
 character(len=12), parameter :: LC_VARIABLE     = '*variable'    !< `lc variable` marker in a line color.
 character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb variable` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_Z    = '*palettez'    !< `lc palette [z]` marker in a line color.
@@ -168,6 +169,7 @@ type :: loop_level
    logical                         :: words = .false. !< String values.
    integer(I4P)                    :: pos = 1_I4P    !< Value in use.
    type(saved_variable)            :: saved          !< The variable before the loop.
+   logical                         :: forever = .false. !< `for [i=A:*]`: until an item yields no valid point.
 endtype loop_level
 
 type :: local_state
@@ -2359,11 +2361,17 @@ contains
    logical                                      :: plain_item !< `noenhanced`: the item's title as it is.
    logical                                      :: has_table_if !< A `with table` condition given.
    integer(I4P)                                 :: nranges   !< Inline ranges read.
+   real(R8P),        allocatable                :: own_range(:,:) !< Sampling range of each function, `plot f(x),
+                                                                  !< [A:B] g(x)` (`own_set` the ends given).
+   logical,          allocatable                :: own_set(:,:) !< Ends of `own_range` given.
+   real(R8P)                                    :: item_range(2) !< Sampling range of the current item.
+   logical                                      :: item_set(2) !< Ends of `item_range` given.
+   character(len=:), allocatable                :: item_prefix !< The item's range as written, for its title.
 
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
-   allocate(functions(0), slots(0), yfunctions(0))
+   allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0))
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
@@ -2438,12 +2446,70 @@ contains
             cycle
          endif
       endif
+      ! gnuplot: a range before an item after the first is its own sampling range, `*` the axis end
+      item_set = .false.
+      item_range = 0.0_R8P
+      item_prefix = ''
+      if (tokens(i)%kind == TOKEN_RANGE) then
+         item_prefix = '['//tokens(i)%text//'] '
+         block
+            integer(I4P) :: colon !< Separator.
+
+            colon = top_colon(tokens(i)%text)
+            if (colon == 0_I4P .or. index(tokens(i)%text, '=') > 0) then
+               call fail('plot: a sampling range [min:max] is expected, found "['//tokens(i)%text//']"', iostat, iomsg)
+               return
+            endif
+            call inline_end(tokens(i)%text(1:colon - 1_I4P), item_set(1), item_range(1))
+            if (iostat == 0_I4P) call inline_end(tokens(i)%text(colon + 1_I4P:), item_set(2), item_range(2))
+            if (iostat /= 0_I4P) return
+         endblock
+         i = i + 1_I4P
+         if (i > size(tokens, kind=I4P)) then
+            call fail('plot: missing item after "'//trim(item_prefix)//'"', iostat, iomsg)
+            return
+         endif
+      endif
+      ! gnuplot: an item may be an assignment or a function definition, done in its turn (`plot s=.1, c(t), s=.3,
+      ! c(t)`): the functions after it are compiled with it
+      if (tokens(i)%kind == TOKEN_WORD) then
+         block
+            integer(I4P)                  :: last    !< Last token of the item.
+            character(len=:), allocatable :: message !< Assignment error.
+            integer(I4P)                  :: status  !< Assignment status.
+
+            last = i
+            do while (last < size(tokens, kind=I4P))
+               if (tokens(last + 1_I4P)%kind == TOKEN_COMMA) exit
+               last = last + 1_I4P
+            enddo
+            if (index(text(tokens(i)%first:tokens(last)%last), '=') > 0) then
+               if (self%assignment(text(tokens(i)%first:tokens(last)%last), status, message)) then
+                  if (status /= 0_I4P) then
+                     call fail('plot: '//message, iostat, iomsg)
+                     return
+                  endif
+                  i = last + 1_I4P
+                  if (size(levels) > 0) then
+                     if (next_values()) then
+                        i = item_start
+                        cycle
+                     endif
+                     call iteration_end
+                  endif
+                  if (i > size(tokens, kind=I4P)) exit
+                  i = i + 1_I4P
+                  cycle
+               endif
+            endif
+         endblock
+      endif
       is_function = tokens(i)%kind == TOKEN_WORD
       quote = ' '
       ! a word joined to strings or substrings is a string expression, a file name: d[1:3] . "x.dat"
       if (is_function) is_function = all(tokens(i:expression_end(tokens, i))%kind == TOKEN_WORD)
       if (tokens(i)%kind == TOKEN_RANGE) then
-         call fail('plot: inline ranges go before the first item, found "['//tokens(i)%text//']"', iostat, iomsg)
+         call fail('plot: one sampling range per item, found "['//tokens(i)%text//']"', iostat, iomsg)
          return
       elseif (tokens(i)%kind == TOKEN_COMMA) then
          call fail('plot: missing item before ","', iostat, iomsg)
@@ -2551,6 +2617,10 @@ contains
             return
          endif
          self%previous_file = file
+      endif
+      if (len(item_prefix) > 0 .and. .not. is_function) then
+         write(error_unit, '(A)') 'foresight: warning: ignoring sample range in non-sampled data plot'
+         item_set = .false.
       endif
       ! modifiers
       if (allocated(fields)) deallocate(fields)
@@ -2853,6 +2923,31 @@ contains
             ! columnhead_title sets title_column: called on words only (Fortran does not short-circuit .and.)
             is_head = .false.
             if (tokens(i)%kind == TOKEN_WORD) is_head = columnhead_title(tokens(i)%text, head_column)
+            ! columnhead(EXPRESSION), its column the value now: `for [i=3:22] '' using i title columnheader(i)`
+            if (.not. is_head .and. tokens(i)%kind == TOKEN_WORD) then
+               block
+                  integer(I4P) :: open !< Opening parenthesis.
+                  real(R8P)    :: v    !< Column.
+
+                  open = index(tokens(i)%text, '(', kind=I4P)
+                  if (open > 1_I4P .and. tokens(i)%text(len(tokens(i)%text):) == ')') then
+                     if (keyword(tokens(i)%text(1:open - 1_I4P), 'columnheader', 3_I4P)) then
+                        call self%range_value(tokens(i)%text(open + 1_I4P:len(tokens(i)%text) - 1), v, iostat, iomsg)
+                        if (iostat /= 0_I4P) then
+                           iomsg = 'plot: title: '//iomsg
+                           return
+                        endif
+                        if (v < 1.0_R8P .or. v /= aint(v)) then
+                           call fail('plot: title: columnhead needs a column number, found "'//tokens(i)%text//'"', &
+                                     iostat, iomsg)
+                           return
+                        endif
+                        is_head = .true.
+                        head_column = int(v, I4P)
+                     endif
+                  endif
+               endblock
+            endif
             if (is_head) title_column = head_column
             if (is_head) then
                if (is_function) then
@@ -2982,7 +3077,7 @@ contains
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none') then
             ! the expression as it is, not enhanced text
-            title = written
+            title = item_prefix//written
             auto_title = .true.
          endif
          palette_lc = ''
@@ -3001,6 +3096,8 @@ contains
          call mark_last
          call push(functions, func)
          if (self%parametric) call push(yfunctions, yfunc)
+         own_range = reshape([own_range, item_range], [2, size(functions)])
+         own_set = reshape([own_set, item_set], [2, size(functions)])
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
@@ -3626,6 +3723,18 @@ contains
             panel%series(size(panel%series))%span = [bin_edges(1), bin_edges(2), 0.0_R8P, 0.0_R8P]
          endassociate
       endif
+      ! `for [i=A:*]`: the first item without a valid point ends the iteration, and is not drawn (gnuplot)
+      if (size(levels) > 0) then
+         if (any(levels%forever)) then
+            if (.not. self%figure%panels(self%figure%current)%last_drawable()) then
+               call self%figure%panels(self%figure%current)%drop_last
+               call iteration_end
+               if (i > size(tokens, kind=I4P)) exit
+               i = i + 1_I4P
+               cycle
+            endif
+         endif
+      endif
       if (size(levels) > 0) then
          if (next_values()) then
             i = item_start
@@ -3707,7 +3816,28 @@ contains
                return
             endif
          enddo
-         call for_values(self, tokens(i + 1_I4P)%text, level%name, level%values, level%words, iostat, iomsg)
+         ! gnuplot `for [i=A:*]`, an unbounded iteration of a data item: up to FOREVER values, ended by the first
+         ! item without a valid point
+         level%forever = .false.
+         block
+            character(len=:), allocatable :: parts(:) !< Range ends.
+            character(len=:), allocatable :: clause   !< Clause, `*` replaced.
+            integer(I4P)                  :: e        !< `=`.
+
+            clause = tokens(i + 1_I4P)%text
+            e = index(clause, '=', kind=I4P)
+            if (e > 0_I4P .and. index(clause, ' in ') == 0) then
+               call split_range(clause(e + 1_I4P:), parts)
+               if (size(parts) >= 2) then
+                  if (trim(adjustl(parts(2))) == '*' .and. trim(adjustl(parts(1))) /= '*') then
+                     level%forever = .true.
+                     clause = clause(1:e)//trim(parts(1))//':('//trim(parts(1))//')+'//int_str(int(FOREVER - 1, I8P))
+                     if (size(parts) == 3) clause = clause//':'//trim(parts(3))
+                  endif
+               endif
+            endif
+            call for_values(self, clause, level%name, level%values, level%words, iostat, iomsg)
+         endblock
          if (iostat /= 0_I4P) then
             iomsg = 'plot: for ['//tokens(i + 1_I4P)%text//']: '//iomsg
             return
@@ -4510,6 +4640,31 @@ contains
          allocate(ys(n))
          do f = 1_I4P, size(functions, kind=I4P)
             associate(series => panel%series(slots(f)))
+               if (any(own_set(:, f))) then
+                  ! its own sampling range, the axis ends for those not given
+                  block
+                     real(R8P), allocatable :: grid(:) !< Abscissae of the item.
+                     real(R8P)              :: ends(2) !< Item range.
+                     logical                :: good    !< Placeable samples.
+
+                     if (.not. ok(merge(2_I4P, 1_I4P, series%x2))) cycle
+                     if (series%x2) then
+                        ends = [xs2(1), xs2(size(xs2))]
+                     else
+                        ends = [xs(1), xs(size(xs))]
+                     endif
+                     where (own_set(:, f)) ends = own_range(:, f)
+                     call sample_grid(merge(panel%x2axis%log, panel%xaxis%log, series%x2), ends(1), ends(2), grid, &
+                                      good)
+                     if (.not. good) cycle
+                     do j = 1_I4P, n
+                        ys(j) = functions(f)%value_at(grid(j))
+                     enddo
+                     series%x = grid
+                  endblock
+                  series%y = ys
+                  cycle
+               endif
                ! a log axis on a non-positive range is reported by the rendering
                if (.not. ok(merge(2_I4P, 1_I4P, series%x2))) cycle
                do j = 1_I4P, n
@@ -7042,7 +7197,7 @@ contains
          case ('autotitle', 'auto')
             self%autotitle = 'file'
             if (i < size(tokens, kind=I4P)) then
-               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 6_I4P)) self%autotitle = 'columnhead'
+               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 3_I4P)) self%autotitle = 'columnhead'
             endif
          case ('noautotitle')
             self%autotitle = 'none'
@@ -10563,10 +10718,10 @@ contains
    column = 0_I4P
    open = index(word, '(', kind=I4P)
    if (open == 0_I4P) then
-      ok = keyword(word, 'columnheader', 7_I4P)
+      ok = keyword(word, 'columnheader', 3_I4P)
       return
    endif
-   ok = keyword(word(1:open - 1_I4P), 'columnheader', 7_I4P) .and. word(len(word):len(word)) == ')' .and. &
+   ok = keyword(word(1:open - 1_I4P), 'columnheader', 3_I4P) .and. word(len(word):len(word)) == ')' .and. &
         len(word) > open + 1
    if (.not. ok) return
    ok = verify(word(open + 1_I4P:len(word) - 1), '0123456789') == 0

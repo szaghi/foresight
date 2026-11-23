@@ -311,6 +311,8 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
+      procedure, pass(self) :: drop_last        !< Forget the last series.
+      procedure, pass(self) :: last_drawable    !< Whether the last series has a valid point.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
       procedure, pass(self) :: series_extent               !< Extent of a series on its axes.
       procedure, pass(self) :: axes_extent                 !< Extent of the placeable data, per axis.
@@ -2866,6 +2868,30 @@ contains
       endif
    endif
    endfunction key_place
+
+   subroutine drop_last(self)
+   !< Forget the last series (gnuplot's unbounded iteration ends on an empty item, not drawn).
+   class(axes_object), intent(inout) :: self    !< Panel.
+   type(series_object), allocatable  :: kept(:) !< Series kept.
+
+   if (.not. allocated(self%series)) return
+   if (size(self%series) == 0) return
+   kept = self%series(1:size(self%series) - 1)
+   call move_alloc(kept, self%series)
+   endsubroutine drop_last
+
+   function last_drawable(self) result(yes)
+   !< Whether the last series has a point of finite coordinates.
+   class(axes_object), intent(in) :: self !< Panel.
+   logical                        :: yes  !< It has.
+
+   yes = .false.
+   if (.not. allocated(self%series)) return
+   if (size(self%series) == 0) return
+   associate(last => self%series(size(self%series)))
+      if (allocated(last%x) .and. allocated(last%y)) yes = any(ieee_is_finite(last%x) .and. ieee_is_finite(last%y))
+   endassociate
+   endfunction last_drawable
 
    subroutine draw_series(self, backend, s, xaxis, yaxis, area, font_size)
    !< Draw the `s`-th series in the plot area against its axes `xaxis` and `yaxis`; unplaceable points (NaN, non-positive

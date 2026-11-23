@@ -1504,6 +1504,9 @@ contains
          call emit(OP_CONSTANT, v=symbols%variables(k)%v)
       elseif (name == 'pi') then
          call emit(OP_CONSTANT, v=value_object(r=PI))
+      elseif (name == 'NaN') then
+         ! gnuplot's predefined NaN (a variable a script may redefine, as pi)
+         call emit(OP_CONSTANT, v=value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan)))
       elseif (loose) then
          call emit(OP_CONSTANT, v=value_object())
       else
