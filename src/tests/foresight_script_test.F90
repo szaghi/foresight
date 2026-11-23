@@ -9,7 +9,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_ticks, only : MINOR_AUTO, TICS_NONE
-use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
+use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, WITH_FILLSTEPS, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
                             WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(170)                           !< Per-check outcome.
+logical                       :: test_passed(171)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3750,6 +3750,27 @@ endif
 call interpreter%run_text('unset datafile columnheaders', iostat, iomsg)
 test_passed(170) = test_passed(170) .and. iostat == 0_I4P .and. .not. interpreter%column_headers
 
+
+! with fillsteps: the area under steps from y = 0, a run one polygon (its fill), the steps themselves without a fill
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_fillsteps.svg"; set style fill solid'// &
+                          new_line('a')//'$D << EOD'//new_line('a')//'1 2'//new_line('a')//'2 3'//new_line('a')// &
+                          '3 1'//new_line('a')//'EOD'//new_line('a')//'plot $D with fillst lc rgb "#123456"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(171) = iostat == 0_I4P
+if (test_passed(171)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_fillsteps.svg')
+      test_passed(171) = interpreter%figure%panels(1)%series(1)%style%with == WITH_FILLSTEPS .and. &
+                        index(svg, 'fill="#123456"') > 0 .and. &
+                        index(svg(index(svg, 'fill="#123456"') + 1:), 'fill="#123456"') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_fillsteps.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3758,7 +3779,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,170L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,171L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

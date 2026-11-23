@@ -25,6 +25,7 @@ public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
+          WITH_FILLSTEPS, &
           WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
           WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
           WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT
@@ -77,7 +78,9 @@ integer(I4P), parameter :: WITH_SECTORS     = 35_I4P !< gnuplot `with sectors`: 
 integer(I4P), parameter :: WITH_PARALLELAXES = 36_I4P !< gnuplot `with parallelaxes`: an axis per item, a line per row.
 integer(I4P), parameter :: WITH_SPIDERPLOT  = 37_I4P !< gnuplot `with spiderplot`: a radial axis per item, a polygon
                                                     !< per row.
-character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
+integer(I4P), parameter :: WITH_FILLSTEPS   = 38_I4P !< gnuplot `with fillsteps`: the area under `steps` filled.
+character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, '// &
+                                             'fillsteps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
                                              'xyerrorlines, boxes, boxerrorbars, boxxyerror, candlesticks, '// &
                                              'financebars, boxplot, vectors, arrows, ellipses, polygons, labels, '// &
@@ -326,7 +329,7 @@ contains
    elseif (gnuplot_abbreviates(word, 'st$eps')) then
       name = 'steps'
    elseif (gnuplot_abbreviates(word, 'fillst$eps')) then
-      name = ''
+      name = 'fillsteps'
    elseif (gnuplot_abbreviates(word, 'fs$teps')) then
       name = 'fsteps'
    elseif (gnuplot_abbreviates(word, 'his$teps')) then
@@ -453,6 +456,8 @@ contains
       with = WITH_FSTEPS
    case ('histeps')
       with = WITH_HISTEPS
+   case ('fillsteps')
+      with = WITH_FILLSTEPS
    case ('dots')
       with = WITH_DOTS
    case ('yerrorlines')
@@ -574,7 +579,8 @@ contains
                                     WITH_CIRCLES, WITH_PIE, WITH_GAUGE, WITH_RADAR, WITH_ROSE, WITH_IMPULSES, WITH_STEPS, &
                                     WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                                     WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, &
-                                    WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT])
+                                    WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT, &
+                                    WITH_FILLSTEPS])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)
@@ -601,7 +607,7 @@ contains
 
    filled = any(self%with == [WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_CIRCLES, WITH_PIE, WITH_GAUGE, &
                               WITH_RADAR, WITH_ROSE, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_BOXPLOT, &
-                              WITH_ELLIPSES, WITH_POLYGONS, WITH_SECTORS])
+                              WITH_ELLIPSES, WITH_POLYGONS, WITH_SECTORS, WITH_FILLSTEPS])
    endfunction fills
 
    pure function fill_color(self) result(color)

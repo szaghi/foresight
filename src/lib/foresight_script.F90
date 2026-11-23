@@ -3231,7 +3231,8 @@ contains
          return
       endif
       if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
-                                            'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors')) then
+                                            'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors '// &
+                                            'fillsteps')) then
          call fail('plot: fs applies to boxes, filledcurves, histograms, circles, the box styles and the panel charts '// &
                    'only', iostat, iomsg)
          return

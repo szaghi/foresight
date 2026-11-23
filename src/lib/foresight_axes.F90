@@ -63,6 +63,7 @@ use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check
 use foresight_series, only : push, series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
+                            WITH_FILLSTEPS, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
@@ -2988,6 +2989,7 @@ contains
       if (series%style%with == WITH_CANDLESTICKS .or. series%style%with == WITH_FINANCEBARS .or. &
           series%style%with == WITH_BOXPLOT) call draw_candles
       if (series%style%with == WITH_FILLEDCURVES) call draw_fill
+      if (series%style%with == WITH_FILLSTEPS) call draw_fillsteps
       if (series%style%draws_lines()) then
          i1 = 1_I4P
          do while (i1 <= n)
@@ -3493,6 +3495,65 @@ contains
                                 line_width=series%style%linewidth)
       endassociate
       endsubroutine draw_outliers
+
+      subroutine draw_fillsteps
+      !< `fillsteps`: between two consecutive placeable points, the box from the baseline (y = 0 within the y range, the
+      !< bottom of a log axis) to the first value, as gnuplot's plot_steps, a run of them one polygon (no seam between
+      !< the boxes); with an empty fill the steps themselves.
+      real(R8P)                     :: v0    !< Unit ordinate of the baseline.
+      real(R8P), allocatable        :: pu(:) !< Polygon abscissae [unit].
+      real(R8P), allocatable        :: pv(:) !< Polygon ordinates [unit].
+      character(len=:), allocatable :: fill  !< Fill color.
+      integer(I4P)                  :: i     !< Point counter.
+      integer(I4P)                  :: i1    !< First point of a run.
+      integer(I4P)                  :: i2    !< Last point of a run.
+      integer(I4P)                  :: k     !< Vertex counter.
+
+      associate(series => self%series(s))
+         fill = series%style%fill_color()
+         if (yaxis%log) then
+            v0 = 0.0_R8P
+         else
+            v0 = min(1.0_R8P, max(0.0_R8P, yaxis%to_unit(0.0_R8P)))
+         endif
+         i1 = 1_I4P
+         do while (i1 <= n)
+            if (.not. valid(i1)) then
+               i1 = i1 + 1_I4P
+               cycle
+            endif
+            i2 = i1
+            do while (i2 < n)
+               if (.not. valid(i2 + 1_I4P)) exit
+               i2 = i2 + 1_I4P
+            enddo
+            if (i2 > i1) then
+               if (fill == 'none') then
+                  do i = i1 + 1_I4P, i2
+                     call backend%data_polyline([u(i - 1_I4P), u(i), u(i)], [v(i - 1_I4P), v(i - 1_I4P), v(i)], &
+                                                series%style%color, series%style%linewidth, series%style%dasharray())
+                  enddo
+               else
+                  ! the baseline under the first point, the steps, the baseline under the last point
+                  allocate(pu(2_I4P * (i2 - i1) + 2_I4P), pv(2_I4P * (i2 - i1) + 2_I4P))
+                  pu(1) = u(i1)
+                  pv(1) = v0
+                  k = 1_I4P
+                  do i = i1, i2 - 1_I4P
+                     pu(k + 1_I4P:k + 2_I4P) = [u(i), u(i + 1_I4P)]
+                     pv(k + 1_I4P:k + 2_I4P) = [v(i), v(i)]
+                     k = k + 2_I4P
+                  enddo
+                  pu(k + 1_I4P) = u(i2)
+                  pv(k + 1_I4P) = v0
+                  call backend%data_polygon(pu, pv, fill, series%style%density, 'none', 0.0_R8P)
+                  deallocate(pu, pv)
+               endif
+            endif
+            i1 = i2 + 1_I4P
+         enddo
+      endassociate
+      endsubroutine draw_fillsteps
 
       subroutine draw_impulses
       !< A segment from y = 0 (the axis bottom on a log axis) to each placeable point.
