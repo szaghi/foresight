@@ -263,6 +263,8 @@ type :: script_object
                                                                !< of the data filledcurves given none.
    character(len=:), allocatable   :: function_curve           !< The same of the functions (`set style function`).
    character(len=64), allocatable  :: colormap_names(:)        !< Named colormaps (`set colormap new NAME`).
+   character(len=:), allocatable   :: dummies                  !< `set dummy` names, blank separated (the variables of
+                                                               !< a fit of several), empty for gnuplot's x y.
    type(colormap_object), allocatable :: colormaps(:)          !< Their palettes and ranges.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
@@ -310,6 +312,8 @@ type, extends(fit_model) :: script_model
    real(R8P), allocatable         :: x(:)     !< Abscissae.
    logical                        :: degrees = .false. !< Angles in degrees.
    type(symbols_object)           :: symbols  !< User variables and functions, a copy of the script's.
+   real(R8P), allocatable         :: xs(:,:)  !< Independent variables of each point (point, variable), several.
+   character(len=:), allocatable  :: vars     !< Their names, blank separated (columns 1, 2, ... of a row).
    contains
       procedure, pass(self) :: values => script_model_values !< Values at the abscissae.
 endtype script_model
@@ -381,6 +385,7 @@ contains
    allocate(self%locals(0))
    self%exit_status = 0_I4P
    self%dummy = ''
+   self%dummies = ''
    self%parametric = .false.
    self%encoding = 'default'
    self%term_name = 'html'
@@ -2188,9 +2193,12 @@ contains
    real(R8P), allocatable                       :: err(:)    !< Errors of the data.
    real(R8P), allocatable                       :: start(:)  !< Initial parameters.
    logical, allocatable                         :: use(:)    !< Points fitted.
-   real(R8P)                                    :: range(2)  !< x range, inline.
+   real(R8P)                                    :: range(2, 13) !< Ranges of the variables, then of the data, inline.
+   logical                                      :: limited(2, 13) !< Their ends given.
+   integer(I4P)                                 :: nranges   !< Ranges given.
+   integer(I4P)                                 :: nvar      !< Independent variables.
+   character(len=:), allocatable                :: vars      !< Their names, blank separated.
    real(R8P)                                    :: v         !< Number.
-   logical                                      :: ranged    !< x range given.
    logical                                      :: found     !< Variable found.
    logical                                      :: weighted  !< Errors given.
    logical                                      :: unit      !< `unitweights` given.
@@ -2204,28 +2212,45 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
-   ranged = .false.
    i = 1_I4P
    if (size(tokens) == 0) then
       call fail('fit: a function, a data file and via are expected', iostat, iomsg)
       return
    endif
-   if (tokens(1)%kind == TOKEN_RANGE) then
-      colon = index(tokens(1)%text, ':', kind=I4P)
-      if (colon == 0_I4P .or. index(tokens(1)%text, '=') > 0) then
-         call fail('fit: the range is [min:max], of x', iostat, iomsg)
+   ! the ranges of the independent variables in order, then of the data (gnuplot's): [min:max], [] or `*` none
+   nranges = 0_I4P
+   limited = .false.
+   range = 0.0_R8P
+   do while (i <= size(tokens, kind=I4P))
+      if (tokens(i)%kind /= TOKEN_RANGE) exit
+      nranges = nranges + 1_I4P
+      if (nranges > 13_I4P) then
+         call fail('fit: at most 13 ranges (12 variables and the data)', iostat, iomsg)
          return
       endif
-      call self%symbols%constant(trim(adjustl(tokens(1)%text(1:colon - 1_I4P))), range(1), iostat, iomsg)
-      if (iostat == 0_I4P) call self%symbols%constant(trim(adjustl(tokens(1)%text(colon + 1_I4P:))), range(2), &
-                                                      iostat, iomsg)
-      if (iostat /= 0_I4P) then
-         iomsg = 'fit: range: '//iomsg
-         return
+      if (len_trim(tokens(i)%text) > 0) then
+         colon = index(tokens(i)%text, ':', kind=I4P)
+         if (colon == 0_I4P .or. index(tokens(i)%text, '=') > 0) then
+            call fail('fit: a range is [min:max]', iostat, iomsg)
+            return
+         endif
+         do k = 1_I4P, 2_I4P
+            if (k == 1_I4P) then
+               word = trim(adjustl(tokens(i)%text(1:colon - 1_I4P)))
+            else
+               word = trim(adjustl(tokens(i)%text(colon + 1_I4P:)))
+            endif
+            if (len(word) == 0 .or. word == '*') cycle
+            call self%symbols%constant(word, range(k, nranges), iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iomsg = 'fit: range: '//iomsg
+               return
+            endif
+            limited(k, nranges) = .true.
+         enddo
       endif
-      ranged = .true.
-      i = 2_I4P
-   endif
+      i = i + 1_I4P
+   enddo
    ! the model: the text up to the data file name
    first = i
    do while (i <= size(tokens, kind=I4P))
@@ -2284,6 +2309,13 @@ contains
                allocate(kept(size(names) + 1))
                kept(1:size(names)) = names
                kept(size(kept)) = tokens(i)%text
+               ! an array element, `via A[1], A[2]` (the index a range token)
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_RANGE) then
+                     i = i + 1_I4P
+                     kept(size(kept)) = trim(kept(size(kept)))//'['//trim(adjustl(tokens(i)%text))//']'
+                  endif
+               endif
                call move_alloc(kept, names)
             endif
             i = i + 1_I4P
@@ -2299,21 +2331,31 @@ contains
       call fail('fit: via and the names of the parameters are expected', iostat, iomsg)
       return
    endif
-   ! the data: x, z and the errors of z (`using 1:2:3`, gnuplot's version 4 syntax, or with yerrors)
+   ! the data: the independent variables, the data and their errors (`using X:Z:S`, `using X:Y:Z:S`, ...; with
+   ! unitweights no errors, `using X:Y:Z`), as gnuplot: 2 columns X:Z, more the last the errors unless unitweights
    if (.not. allocated(fields)) fields = plain_columns([1_I4P, 2_I4P])
-   if (size(fields) == 1 .or. size(fields) > 3) then
-      call fail('fit: using X:Y or X:Y:YERROR (one independent variable)', iostat, iomsg)
+   if (size(fields) == 1) then
+      call fail('fit: using X:Z, X:Z:S, X:Y:Z:S, ... expected', iostat, iomsg)
       return
    endif
-   ! three columns with unitweights are gnuplot's x:y:z, a function of x and y
-   if (size(fields) == 3 .and. unit) then
-      call fail('fit: using X:Y:Z unitweights fits a function of two variables (one independent variable is '// &
-                'supported)', iostat, iomsg)
+   if (size(fields) >= 3 .and. .not. unit) weighted = .true.
+   nvar = size(fields, kind=I4P) - merge(2_I4P, 1_I4P, weighted)
+   if (nvar < 1_I4P .or. nvar > 12_I4P) then
+      call fail('fit: 1 to 12 independent variables, using X:Z[:S], X:Y:Z[:S], ...', iostat, iomsg)
       return
    endif
-   if (size(fields) == 3) weighted = .true.
-   if (weighted .and. size(fields) /= 3) then
-      call fail('fit: yerrors needs using X:Y:YERROR', iostat, iomsg)
+   if (nranges > nvar + 1_I4P) then
+      call fail('fit: more ranges than variables and data', iostat, iomsg)
+      return
+   endif
+   ! their names: `set dummy` (all of them), else x then y, as gnuplot
+   vars = ' x y'
+   if (len(self%dummy) > 0) vars = ' '//self%dummy//' y'
+   if (allocated(self%dummies)) then
+      if (len_trim(self%dummies) > 0) vars = self%dummies
+   endif
+   if (word_count(vars) < nvar) then
+      call fail('fit: name the independent variables beyond the second with set dummy', iostat, iomsg)
       return
    endif
    call self%load_data(data, file, iostat, iomsg, keep_text=any(fields%uses_text()), skip=skip)
@@ -2323,17 +2365,22 @@ contains
    endif
    call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P) .or. self%column_headers)
    allocate(use(size(values, 1)))
-   use = ieee_is_finite(values(:, 1)) .and. ieee_is_finite(values(:, 2))
-   if (weighted) use = use .and. ieee_is_finite(values(:, 3))
-   if (ranged) then
+   use = .true.
+   do k = 1_I4P, nvar + 1_I4P + merge(1_I4P, 0_I4P, weighted)
+      use = use .and. ieee_is_finite(values(:, k))
+   enddo
+   ! the ranges: of the variables, then of the data
+   do i = 1_I4P, nranges
       do k = 1_I4P, size(use, kind=I4P)
-         if (use(k)) use(k) = values(k, 1) >= min(range(1), range(2)) .and. values(k, 1) <= max(range(1), range(2))
+         if (.not. use(k)) cycle
+         if (limited(1, i)) use(k) = values(k, i) >= range(1, i)
+         if (limited(2, i) .and. use(k)) use(k) = values(k, i) <= range(2, i)
       enddo
-   endif
+   enddo
    x = pack(values(:, 1), use)
-   z = pack(values(:, 2), use)
+   z = pack(values(:, nvar + 1_I4P), use)
    if (weighted) then
-      err = pack(values(:, 3), use)
+      err = pack(values(:, nvar + 2_I4P), use)
    else
       allocate(err(size(z)))
       err = 1.0_R8P
@@ -2341,13 +2388,18 @@ contains
    ! the parameters: their values now, 1 if undefined (gnuplot)
    allocate(start(size(names)))
    do k = 1_I4P, size(names, kind=I4P)
-      call self%symbols%value_of(trim(names(k)), v, found)
+      call get_parameter(self%symbols, trim(names(k)), v, found)
       if (.not. found) v = 1.0_R8P
       start(k) = v
-      call self%symbols%set_value(trim(names(k)), v, .false.)
+      call set_parameter(self%symbols, trim(names(k)), v)
    enddo
-   call model%compile(text, iostat, iomsg, variable='x', degrees=self%figure%panels(self%figure%current)%degrees, &
-                      symbols=self%symbols)
+   if (nvar == 1_I4P) then
+      call model%compile(text, iostat, iomsg, variable=first_word(vars), &
+                         degrees=self%figure%panels(self%figure%current)%degrees, symbols=self%symbols)
+   else
+      call model%compile(text, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees, &
+                         symbols=self%symbols, sampled=vars)
+   endif
    if (iostat /= 0_I4P) then
       iomsg = 'fit: '//iomsg
       return
@@ -2366,17 +2418,27 @@ contains
    fitted%text = text
    fitted%names = names
    fitted%x = x
+   if (nvar == 1_I4P) then
+      fitted%vars = first_word(vars)
+   else
+      fitted%vars = vars
+      allocate(fitted%xs(size(x), nvar))
+      do k = 1_I4P, nvar
+         fitted%xs(:, k) = pack(values(:, k), use)
+      enddo
+   endif
    fitted%degrees = self%figure%panels(self%figure%current)%degrees
    fitted%symbols = self%symbols
    call levenberg_marquardt(fitted, z, err, start, options, result, weighted)
    if (len(result%message) > 0) then
       do k = 1_I4P, size(names, kind=I4P)
-         call self%symbols%set_value(trim(names(k)), start(k), .false.)
+         call set_parameter(self%symbols, trim(names(k)), start(k))
       enddo
    else
       do k = 1_I4P, size(names, kind=I4P)
-         call self%symbols%set_value(trim(names(k)), result%params(k), .false.)
-         if (self%fit_errorvariables) call self%symbols%set_value(trim(names(k))//'_err', result%errors(k), .false.)
+         call set_parameter(self%symbols, trim(names(k)), result%params(k))
+         if (self%fit_errorvariables .and. index(names(k), '[') == 0) &
+            call self%symbols%set_value(trim(names(k))//'_err', result%errors(k), .false.)
       enddo
       call self%symbols%set_value('FIT_NDF', real(result%ndf, R8P), .true.)
       call self%symbols%set_value('FIT_WSSR', result%wssr, .false.)
@@ -2404,16 +2466,102 @@ contains
    integer(I4P)                       :: q    !< Counter.
 
    do q = 1_I4P, size(p, kind=I4P)
-      call self%symbols%set_value(trim(self%names(q)), p(q), .false.)
+      call set_parameter(self%symbols, trim(self%names(q)), p(q))
    enddo
-   call e%compile(self%text, ios, msg, variable='x', degrees=self%degrees, symbols=self%symbols)
-   ok = ios == 0_I4P
-   if (.not. ok) return
-   do q = 1_I4P, size(self%x, kind=I4P)
-      f(q) = e%value_at(self%x(q))
-   enddo
+   if (allocated(self%xs)) then
+      ! several independent variables: their names read the columns of a row of xs
+      call e%compile(self%text, ios, msg, degrees=self%degrees, symbols=self%symbols, sampled=self%vars)
+      ok = ios == 0_I4P
+      if (.not. ok) return
+      do q = 1_I4P, size(self%xs, 1, kind=I4P)
+         f(q) = e%evaluate(self%xs(q, :), q - 1_I4P)
+      enddo
+   else
+      call e%compile(self%text, ios, msg, variable=self%vars, degrees=self%degrees, symbols=self%symbols)
+      ok = ios == 0_I4P
+      if (.not. ok) return
+      do q = 1_I4P, size(self%x, kind=I4P)
+         f(q) = e%value_at(self%x(q))
+      enddo
+   endif
    ok = all(ieee_is_finite(f))
    endsubroutine script_model_values
+
+   pure function word_count(text) result(n)
+   !< Number of blank separated words of `text`.
+   character(len=*), intent(in) :: text !< Text.
+   integer(I4P)                 :: n    !< Words.
+   integer(I4P)                 :: k    !< Character counter.
+
+   n = 0_I4P
+   do k = 1_I4P, len(text, kind=I4P)
+      if (text(k:k) == ' ') cycle
+      if (k == 1_I4P) then
+         n = n + 1_I4P
+      elseif (text(k - 1_I4P:k - 1_I4P) == ' ') then
+         n = n + 1_I4P
+      endif
+   enddo
+   endfunction word_count
+
+   pure function first_word(text) result(word)
+   !< The first blank separated word of `text`.
+   character(len=*), intent(in)  :: text !< Text.
+   character(len=:), allocatable :: word !< First word.
+   integer(I4P)                  :: b    !< Its end.
+
+   word = trim(adjustl(text))
+   b = index(word, ' ', kind=I4P)
+   if (b > 0_I4P) word = word(1:b - 1_I4P)
+   endfunction first_word
+
+   subroutine set_parameter(symbols, name, v)
+   !< Set the fit parameter `name` to `v`: a user variable, or an array element `A[i]` (gnuplot's `via A[1], A[2]`).
+   type(symbols_object), intent(inout) :: symbols !< Symbols.
+   character(len=*),     intent(in)    :: name    !< Parameter.
+   real(R8P),            intent(in)    :: v       !< Value.
+   integer(I4P)                        :: b       !< Bracket.
+   integer(I8P)                        :: k       !< Element.
+   integer(I4P)                        :: ios     !< Read status.
+   logical                             :: ok      !< Set.
+   type(value_object)                  :: e       !< Element value (by components: nvfortran 26.9).
+
+   b = index(name, '[', kind=I4P)
+   if (b > 1_I4P .and. name(len(name):len(name)) == ']') then
+      read(name(b + 1_I4P:len(name) - 1), *, iostat=ios) k
+      e%r = v
+      if (ios == 0_I4P) call symbols%set_element(name(1:b - 1_I4P), k, e, ok)
+   else
+      call symbols%set_value(name, v, .false.)
+   endif
+   endsubroutine set_parameter
+
+   subroutine get_parameter(symbols, name, v, found)
+   !< Value of the fit parameter `name`: a user variable or an array element `A[i]`; `found` false if none (or none
+   !< set).
+   type(symbols_object), intent(in)  :: symbols !< Symbols.
+   character(len=*),     intent(in)  :: name    !< Parameter.
+   real(R8P),            intent(out) :: v       !< Value.
+   logical,              intent(out) :: found   !< A value found.
+   integer(I4P)                      :: b       !< Bracket.
+   integer(I8P)                      :: k       !< Element.
+   integer(I4P)                      :: ios     !< Read status.
+   type(value_object)                :: e       !< Element.
+   logical                           :: set     !< Element set.
+
+   v = 0.0_R8P
+   found = .false.
+   b = index(name, '[', kind=I4P)
+   if (b > 1_I4P .and. name(len(name):len(name)) == ']') then
+      read(name(b + 1_I4P:len(name) - 1), *, iostat=ios) k
+      if (ios /= 0_I4P) return
+      call symbols%get_element(name(1:b - 1_I4P), k, e, found, set)
+      found = found .and. set .and. .not. e%is_string
+      if (found) v = merge(real(e%i, R8P), e%r, e%is_int)
+   else
+      call symbols%value_of(name, v, found)
+   endif
+   endsubroutine get_parameter
 
    ! private procedures
    function assignment(self, statement, iostat, iomsg) result(done)
@@ -6547,6 +6695,7 @@ contains
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
    self%dummy = ''
+   self%dummies = ''
    self%parametric = .false.
    call default_styles(self)
    contains
@@ -8071,6 +8220,7 @@ contains
       ! set dummy NAME[, NAME2...]: the first names the variable of the functions (the others are splot's)
       if (size(tokens) < 2) then
          self%dummy = ''
+   self%dummies = ''
       elseif (tokens(2)%kind /= TOKEN_WORD .or. &
               verify(tokens(2)%text, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') /= 0 .or. &
               scan(tokens(2)%text(1:1), '0123456789') > 0) then
@@ -8078,6 +8228,11 @@ contains
          return
       else
          self%dummy = tokens(2)%text
+         ! all the names, for a fit of several variables (`set dummy x, y, x2, x3`)
+         self%dummies = ''
+         do i = 2_I4P, size(tokens, kind=I4P)
+            if (tokens(i)%kind == TOKEN_WORD) self%dummies = self%dummies//' '//tokens(i)%text
+         enddo
       endif
    elseif (keyword(option, 'autoscale', 4_I4P)) then
       call autoscale_option

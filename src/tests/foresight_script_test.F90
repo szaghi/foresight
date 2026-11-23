@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(211)                           !< Per-check outcome.
+logical                       :: test_passed(212)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1614,8 +1614,8 @@ call interpreter%run_text("fit m*x+q '"//data_file//"' via 'p.par'", iostat, iom
 test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'via a parameter file is not supported') > 0
 call interpreter%run_text("set fit verbose", iostat, iomsg)
 test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "verbose"') > 0
-call interpreter%run_text("fit m*x+q '"//data_file//"' using 1:2:3 unitweights via m, q", iostat, iomsg)
-test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'fits a function of two variables') > 0
+call interpreter%run_text("fit m*x+q '"//data_file//"' using 1 via m, q", iostat, iomsg)
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'using X:Z, X:Z:S, X:Y:Z:S') > 0
 call interpreter%run_text("set fit limit 1e-9 maxiter 3 results noerrorvariables", iostat, iomsg)
 test_passed(98) = test_passed(98) .and. iostat == 0_I4P .and. interpreter%fit_options%limit == 1.0e-9_R8P .and. &
                   interpreter%fit_options%maxiter == 3_I4P .and. interpreter%fit_verbosity == 'results' .and. &
@@ -4800,6 +4800,30 @@ endif
 call interpreter%run_text('plot $B using 1:2 "%*lf %lf"', iostat, iomsg)
 test_passed(211) = test_passed(211) .and. iostat /= 0_I4P .and. index(iomsg, 'blank separated %lf') > 0
 
+! fit of several independent variables (gnuplot's using X:Y:Z:S, names x, y then set dummy's), a range per variable,
+! array elements as parameters (via A[1], A[2])
+call interpreter%init(scratch)
+call interpreter%run_text('$F << EOD'//new_line('a')//'1 0 0 2'//new_line('a')//'0 1 0 -3'//new_line('a')// &
+                          '1 1 1 3'//new_line('a')//'2 1 0 1'//new_line('a')//'1 2 1 0'//new_line('a')//'3 1 2 7'// &
+                          new_line('a')//'EOD'//new_line('a')// &
+                          'm(x,y) = a*x + b*y; a = 1; b = 1; fit m(x,y) $F using 1:2:4:(1) via a, b; '// &
+                          'set dummy x, y, w; array A[3] = [1, 1, 1]; n(x,y,w) = A[1]*x + A[2]*y + A[3]*w; '// &
+                          'fit n(x,y,w) $F using 1:2:3:4:(1) via A[1], A[2], A[3]; p = A[3]', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(212) = iostat == 0_I4P
+if (test_passed(212)) then
+   block
+      real(R8P) :: v(3)  !< Values.
+      logical   :: found !< Found.
+
+      call interpreter%symbols%value_of('a', v(1), found)
+      call interpreter%symbols%value_of('b', v(2), found)
+      call interpreter%symbols%value_of('p', v(3), found)
+      ! the least squares solution, as gnuplot 6.0 prints it: A = [1.53571428571479,-2.14285714285658,2.57142857142707]
+      test_passed(212) = found .and. abs(v(3) - 2.57142857142707_R8P) < 1.0e-9_R8P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4808,7 +4832,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,211L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,212L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
