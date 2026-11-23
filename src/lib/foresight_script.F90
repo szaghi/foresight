@@ -5777,8 +5777,9 @@ contains
          call fail('set '//option//': a coordinate is missing', iostat, iomsg)
          return
       endif
-      if (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'first second graph screen character')) then
-         system = tokens(i)%text
+      if (tokens(i)%kind == TOKEN_WORD .and. coordinate_system(tokens(i)%text) /= '') then
+         ! gnuplot's abbreviations: fir$st, sec$ond, gr$aph, sc$reen, char$acter
+         system = coordinate_system(tokens(i)%text)
          i = i + 1_I4P
          if (i > size(tokens, kind=I4P)) then
             call fail('set '//option//': a coordinate is missing after '//trim(system), iostat, iomsg)
@@ -5902,8 +5903,30 @@ contains
             if (i < size(tokens, kind=I4P)) then
                if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) i = i + 2_I4P
             endif
-         elseif (is_word(word, 'filled empty nofilled noborder')) then
+         elseif (is_word(word, 'filled empty nofilled noborder') .or. keyword(word, 'filled', 3_I4P)) then
+            ! `fill` abbreviates filled (gnuplot's fil$led)
             arrow%fill = word
+            if (keyword(word, 'filled', 3_I4P)) arrow%fill = 'filled'
+         elseif (word == 'ls' .or. keyword(word, 'linestyle', 5_I4P)) then
+            ! the color, width and dashes of line style N
+            block
+               integer(I4P)            :: n     !< Line style.
+               type(line_style_object) :: probe !< Its line.
+
+               if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+               call apply_line_style(self%line_styles, n, probe, self%figure%panels(self%figure%current)%linecolors)
+               if (allocated(probe%lc)) arrow%color = probe%lc
+               if (allocated(probe%lw)) arrow%lw = probe%lw
+               if (allocated(probe%dt)) then
+                  block
+                     type(style_object) :: dashes !< Line of the dash type.
+
+                     dashes%dashtype = probe%dt
+                     dashes%linewidth = arrow%lw
+                     arrow%dashes = dashes%dasharray()
+                  endblock
+               endif
+            endblock
          elseif (word == 'front' .or. word == 'back') then
             arrow%front = word == 'front'
          elseif (is_line_option(word)) then
@@ -5995,7 +6018,8 @@ contains
             allocate(object%points(1))
             object%points(1) = p
             if (trim(object%kind) == 'rectangle') object%sized = .true.
-         elseif (word == 'size') then
+         elseif (word == 'size' .or. (word == 'radius' .and. trim(object%kind) == 'circle')) then
+            ! `radius R` names a circle's size, as gnuplot
             system = 'first'
             if (allocated(object%points)) system = object%points(1)%sx
             call pair(size2, system)
@@ -11332,6 +11356,19 @@ contains
    iomsg = message
    endsubroutine fail
 
+   pure function coordinate_system(word) result(system)
+   !< The coordinate system `word` abbreviates (gnuplot's fir$st, sec$ond, gr$aph, sc$reen, char$acter), empty if none.
+   character(len=*), intent(in)  :: word   !< Word.
+   character(len=:), allocatable :: system !< System name.
+
+   system = ''
+   if (keyword(word, 'first', 3_I4P)) system = 'first'
+   if (keyword(word, 'second', 3_I4P)) system = 'second'
+   if (keyword(word, 'graph', 2_I4P)) system = 'graph'
+   if (keyword(word, 'screen', 2_I4P)) system = 'screen'
+   if (keyword(word, 'character', 4_I4P)) system = 'character'
+   endfunction coordinate_system
+
    pure function keyword(word, full, minimum) result(match)
    !< Whether `word` abbreviates `full` with at least `minimum` characters, as gnuplot keywords.
    character(len=*), intent(in) :: word    !< Word.
@@ -11966,6 +12003,10 @@ contains
       endif
       if (a%kind == TOKEN_WORD .and. len(a%text) > 0) then
          yes = scan(a%text(len(a%text):len(a%text)), OPERATORS) > 0 .or. a%text == 'eq' .or. a%text == 'ne'
+         ! a number ending with its point (`4.`) ends there, the point is no `.` operator
+         if (yes .and. a%text(len(a%text):len(a%text)) == '.' .and. len(a%text) > 1) then
+            if (verify(a%text, '0123456789.') == 0) yes = .false.
+         endif
       endif
       if (b%kind == TOKEN_WORD .and. len(b%text) > 0 .and. .not. yes) then
          yes = scan(b%text(1:1), OPERATORS) > 0 .or. b%text == 'eq' .or. b%text == 'ne'

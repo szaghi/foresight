@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(172)                           !< Per-check outcome.
+logical                       :: test_passed(173)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3791,6 +3791,25 @@ test_passed(172) = test_passed(172) .and. iostat == 0_I4P .and. interpreter%figu
 call interpreter%run_text('set grid nor', iostat, iomsg)
 test_passed(172) = test_passed(172) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%grid_polar == 0.0_R8P
 
+
+! arrow `fill` (gnuplot's fil$led) and `ls N`, coordinate system abbreviations (char, sc, gr), a circle's `radius`, a
+! number ending with its point before a keyword (`size 2.,4. angle 20.`)
+call interpreter%init(scratch)
+call interpreter%run_text('set style line 2 lc "red" lw 3; set arrow 1 from 0,0 to 1,1 fill ls 2; '// &
+                          'set object 2 rect at 0,0 size char 3, char 1; '// &
+                          'set object 3 ellipse center 1.5,1.0 size 2.,4. angle 20.; '// &
+                          'set object 4 circle at sc 0.5, 0.5 radius 0.25', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(173) = iostat == 0_I4P
+if (test_passed(173)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(173) = panel%arrows(1)%fill == 'filled' .and. panel%arrows(1)%color == '#ff0000' .and. &
+                        panel%arrows(1)%lw == 3.0_R8P .and. trim(panel%objects(1)%size%sx) == 'character' .and. &
+                        panel%objects(2)%size%y == 4.0_R8P .and. panel%objects(2)%angle == 20.0_R8P .and. &
+                        trim(panel%objects(3)%points(1)%sx) == 'screen' .and. panel%objects(3)%size%x == 0.25_R8P
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3799,7 +3818,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,172L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,173L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
