@@ -258,6 +258,15 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_named_colormaps" svg :width="560" :height="360" caption="named colormaps" />
   <Plot name="cb_smooth_path" svg :width="560" :height="360" caption="a spline along a path" />
   <Plot name="cb_stats_matrix" svg :width="560" :height="320" caption="statistics of a matrix" />
+  <Plot name="cb_inline_data" svg :width="560" :height="320" caption="data after the plot command" />
+  <Plot name="cb_format_none" svg :width="560" :height="320" caption="ticks without labels" />
+  <Plot name="cb_linked_axes" svg :width="560" :height="360" caption="a top axis linked to the bottom one" />
+  <Plot name="cb_key_samples" svg :width="560" :height="320" caption="key samples of vectors and fills" />
+  <Plot name="cb_size_square" svg :width="560" :height="360" caption="one unit as long on both axes" />
+  <Plot name="cb_fit_surface" svg :width="560" :height="320" caption="a fit of two variables" />
+  <Plot name="cb_smooth_band" svg :width="560" :height="320" caption="a smoothed band" />
+  <Plot name="cb_gantt" svg :width="560" :height="320" caption="a Gantt chart" />
+  <Plot name="cb_paxis_ranges" svg :width="560" :height="360" caption="parallel axes with their own ranges" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
   <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />

@@ -40,6 +40,12 @@
 0.6,0.71385 0.625,0.714207 0.65,0.716731 0.675,0.721062 0.7,0.726761 0.725,0.733348 0.75,0.740332 0.775,0.747246
 0.8,0.753672 0.825,0.75926 0.85,0.763747 0.875,0.766961 0.9,0.768826 0.925,0.769355 0.95,0.768643 0.975,0.766852
 1,0.764194Z"/>
+<polyline fill="none" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0,0.625 0.025,0.634793 0.05,0.650741 0.075,0.671279 0.1,0.694705 0.125,0.719303 0.15,0.74345 0.175,0.765701
+0.2,0.784869 0.225,0.800068 0.25,0.81074 0.275,0.81666 0.3,0.817915 0.325,0.814873 0.35,0.808129 0.375,0.798451
+0.4,0.786713 0.425,0.773833 0.45,0.760713 0.475,0.748182 0.5,0.736956 0.525,0.7276 0.55,0.720513 0.575,0.715914
+0.6,0.71385 0.625,0.714207 0.65,0.716731 0.675,0.721062 0.7,0.726761 0.725,0.733348 0.75,0.740332 0.775,0.747246
+0.8,0.753672 0.825,0.75926 0.85,0.763747 0.875,0.766961 0.9,0.768826 0.925,0.769355 0.95,0.768643 0.975,0.766852
+1,0.764194"/>
 </g>
 <g class="fs-series" data-series="3">
 <path fill="#2e7d4f" fill-opacity="0.6" stroke="#2e7d4f" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M-0.005,1 0.005,1 0.005,1 -0.005,1Z"/>
@@ -136,11 +142,11 @@
 <text x="16.6" y="20.2" text-anchor="end">8</text>
 </g>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" fill-opacity="0.35" stroke="none" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
+<path fill="#b3163f" fill-opacity="0.35" stroke="#b3163f" stroke-width="1" stroke-linejoin="miter" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
 <text x="498" y="33.7" text-anchor="end">filledcurves y=5</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#1f5f8b" fill-opacity="0.35" stroke="none" d="M504,48.7 540,48.7 540,40.3 504,40.3Z"/>
+<path fill="#1f5f8b" fill-opacity="0.35" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="miter" d="M504,48.7 540,48.7 540,40.3 504,40.3Z"/>
 <text x="498" y="48.7" text-anchor="end">filledcurves closed</text>
 </g>
 <g class="fs-key-entry" data-series="3">

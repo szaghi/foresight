@@ -116,6 +116,7 @@ M0.928571,0.232143L1.009714,0.23975"/>
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#b3163f" stroke-width="1" points="307,382.5 343,382.5"/>
+<polyline fill="none" stroke="#b3163f" stroke-width="1" points="335.8,384.42 343,382.5 335.8,380.58"/>
 <text x="301" y="386.7" text-anchor="end">velocity</text>
 </g>
 </g>

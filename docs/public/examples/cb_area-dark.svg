@@ -51,6 +51,7 @@
 </g>
 <g class="fs-series" data-series="2">
 <path fill="#6cb6ff" fill-opacity="0.4" stroke="none" vector-effect="non-scaling-stroke" d="M0.6,0.8 0.9,0.8 0.95,0.4 0.75,0.1 0.55,0.4Z"/>
+<polyline fill="none" stroke="#6cb6ff" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.6,0.8 0.9,0.8 0.95,0.4 0.75,0.1 0.55,0.4"/>
 </g>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="273" fill="none" stroke="#e8ecf0" stroke-width="1"/>
@@ -95,11 +96,11 @@
 <text x="29.8" y="20.2" text-anchor="end">1</text>
 </g>
 <g class="fs-key-entry" data-series="1">
-<path fill="#ff7092" fill-opacity="0.4" stroke="none" d="M182.6,33.7 218.6,33.7 218.6,25.3 182.6,25.3Z"/>
+<path fill="#ff7092" fill-opacity="0.4" stroke="#ff7092" stroke-width="1" stroke-linejoin="miter" d="M182.6,33.7 218.6,33.7 218.6,25.3 182.6,25.3Z"/>
 <text x="176.6" y="33.7" text-anchor="end">to the bottom (x1)</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#6cb6ff" fill-opacity="0.4" stroke="none" d="M182.6,48.7 218.6,48.7 218.6,40.3 182.6,40.3Z"/>
+<path fill="#6cb6ff" fill-opacity="0.4" stroke="#6cb6ff" stroke-width="1" stroke-linejoin="miter" d="M182.6,48.7 218.6,48.7 218.6,40.3 182.6,40.3Z"/>
 <text x="176.6" y="48.7" text-anchor="end">closed</text>
 </g>
 </g>

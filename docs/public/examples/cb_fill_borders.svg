@@ -93,16 +93,16 @@
 <text x="16.6" y="20.2" text-anchor="end">9</text>
 </g>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" fill-opacity="0.6" stroke="none" d="M207.4,33.7 243.4,33.7 243.4,25.3 207.4,25.3Z"/>
+<path fill="#b3163f" fill-opacity="0.6" stroke="#b3163f" stroke-width="1" stroke-linejoin="miter" d="M207.4,33.7 243.4,33.7 243.4,25.3 207.4,25.3Z"/>
 <text x="201.4" y="33.7" text-anchor="end">y1</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#1f5f8b" fill-opacity="0.6" stroke="none" d="M287.2,33.7 323.2,33.7 323.2,25.3 287.2,25.3Z"/>
+<path fill="#1f5f8b" fill-opacity="0.6" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="miter" d="M287.2,33.7 323.2,33.7 323.2,25.3 287.2,25.3Z"/>
 <text x="281.2" y="33.7" text-anchor="end">y2</text>
 </g>
 <g class="fs-key-entry" data-series="3">
 <defs><pattern id="fs-pattern-2" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-4,0 L8,12 M0,-4 L12,8" fill="none" stroke="#2e7d4f" stroke-width="1"/></pattern></defs>
-<path fill="url(#fs-pattern-2)" stroke="none" d="M367,33.7 403,33.7 403,25.3 367,25.3Z"/>
+<path fill="url(#fs-pattern-2)" stroke="#2e7d4f" stroke-width="1" stroke-linejoin="miter" d="M367,33.7 403,33.7 403,25.3 367,25.3Z"/>
 <text x="361" y="33.7" text-anchor="end">x=5</text>
 </g>
 </g>

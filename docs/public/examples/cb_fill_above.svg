@@ -162,11 +162,11 @@
 <text x="306.7" y="307" text-anchor="middle">iteration</text>
 <text x="22" y="142" text-anchor="middle" transform="rotate(-90 22 142)">cd</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" fill-opacity="0.35" stroke="none" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
+<path fill="#b3163f" fill-opacity="0.35" stroke="#b3163f" stroke-width="1" stroke-linejoin="miter" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
 <text x="498" y="33.7" text-anchor="end">above 0.35</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#1f5f8b" fill-opacity="0.35" stroke="none" d="M504,48.7 540,48.7 540,40.3 504,40.3Z"/>
+<path fill="#1f5f8b" fill-opacity="0.35" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="miter" d="M504,48.7 540,48.7 540,40.3 504,40.3Z"/>
 <text x="498" y="48.7" text-anchor="end">below 0.35</text>
 </g>
 <g class="fs-key-entry" data-series="3">

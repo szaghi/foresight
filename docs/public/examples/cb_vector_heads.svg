@@ -127,14 +127,17 @@ M0.9,0.875L0.98,0.875"/>
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#0f7c80" stroke-width="2" points="504,29.5 540,29.5"/>
+<polyline fill="none" stroke="#0f7c80" stroke-width="2" points="532.8,31.42 540,29.5 532.8,27.58"/>
 <text x="498" y="33.7" text-anchor="end">as 1</text>
 </g>
 <g class="fs-key-entry" data-series="2">
 <polyline fill="none" stroke="#d55e00" stroke-width="1" points="504,44.5 540,44.5"/>
+<polyline fill="none" stroke="#d55e00" stroke-width="1" points="532.8,46.42 540,44.5 532.8,42.58"/>
 <text x="498" y="48.7" text-anchor="end">as 2</text>
 </g>
 <g class="fs-key-entry" data-series="3">
 <polyline fill="none" stroke="#1f5f8b" stroke-width="1" points="504,59.5 540,59.5"/>
+<polyline fill="none" stroke="#1f5f8b" stroke-width="1" points="532.8,61.42 540,59.5 532.8,57.58"/>
 <text x="498" y="63.7" text-anchor="end">size 0.4,15</text>
 </g>
 </g>

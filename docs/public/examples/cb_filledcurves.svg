@@ -130,7 +130,7 @@
 <text x="36.4" y="20.2" text-anchor="end">0.6</text>
 </g>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" fill-opacity="0.3" stroke="none" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
+<path fill="#b3163f" fill-opacity="0.3" stroke="#b3163f" stroke-width="1" stroke-linejoin="miter" d="M504,33.7 540,33.7 540,25.3 504,25.3Z"/>
 <text x="498" y="33.7" text-anchor="end">cd +/- dcd</text>
 </g>
 <g class="fs-key-entry" data-series="2">

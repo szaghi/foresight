@@ -103,6 +103,7 @@ M0.25,0.288889L0.2,0.109328"/>
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" points="409.3,302.5 445.3,302.5"/>
+<polyline fill="none" stroke="#ff7092" stroke-width="2" points="438.1,304.42 445.3,302.5 438.1,300.58"/>
 <text x="403.3" y="306.7" text-anchor="end">wind (length: speed, angle: direction)</text>
 </g>
 </g>

@@ -93,6 +93,15 @@ The `-` cells are missing data: those points are left out and the lines go on; `
 A datablock keeps the data in the script itself: `plot`, `fit` and `stats` read `$CONV` as a file. See
 [Datablocks and scripts](/guide/gnuplot-subset#datablocks-and-scripts).
 
+### Data after the plot command
+
+<<< @/examples/snippets/cb_inline_data.gp{gnuplot}
+
+<Plot name="cb_inline_data" svg :width="560" :height="320" />
+
+`'-'` reads the data from the lines after the statement, gnuplot's inline data: up to a line starting with `e`, one
+block per `'-'` item, in order. See [Datablocks and scripts](/guide/gnuplot-subset#datablocks-and-scripts).
+
 ### A script with arguments
 
 <<< @/examples/snippets/cb_call.gp{gnuplot}
@@ -215,6 +224,15 @@ within 0 to 12 whatever the data. See [Grid, zero axes and border](/guide/gnuplo
 
 On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 
+### Ticks without labels
+
+<<< @/examples/snippets/cb_format_none.gp{gnuplot}
+
+<Plot name="cb_format_none" svg :width="560" :height="320" />
+
+`set format y ""` keeps the ticks and drops their labels (and their margin); a format without a conversion writes its
+text at every tick. See [Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+
 ### Powers of ten and unit prefixes
 
 <<< @/examples/snippets/cb_format_powers.gp{gnuplot}
@@ -324,6 +342,16 @@ The top border in another unit: the x2 axis takes the `x2range` given, here the 
 number. The points are the same peaks plotted `axes x2y1`, against x2: each lands on its impulse, the check that the
 two scales agree. Without a set `x2range`, items on x2 autoscale it on their own.
 
+### A top axis linked to the bottom one
+
+<<< @/examples/snippets/cb_linked_axes.gp{gnuplot}
+
+<Plot name="cb_linked_axes" svg :width="560" :height="360" />
+
+`set link x2 via F(x) inverse G(x)` maps the bottom axis onto the top one: wavenumber = 10⁴ / wavelength. As gnuplot
+6.0, the top ticks sit at the bottom axis' automatic ticks, labelled by their mapped values. See
+[Second x axis](/guide/gnuplot-subset#second-x-axis).
+
 ### Rotated labels on top
 
 <<< @/examples/snippets/cb_x2_rotate.gp{gnuplot}
@@ -397,6 +425,16 @@ the box. See [Key](/guide/gnuplot-subset#key).
 `keyentry` adds a key entry with no data, here the samples of a boxplot and of error bars; `set style data
 filledcurves y=0` gives the data items their fill to y = 0. See [Key](/guide/gnuplot-subset#key).
 
+### Key samples of vectors, fills and labels
+
+<<< @/examples/snippets/cb_key_samples.gp{gnuplot}
+
+<Plot name="cb_key_samples" svg :width="560" :height="320" />
+
+The key samples are gnuplot 6.0's: an arrow for vectors, a filled box with the fill style's border, none for a
+`keyentry` of labels; `set key title "..." left` puts the title at the left of the key. See
+[Key](/guide/gnuplot-subset#key).
+
 ### Key columns, label offsets, a title on the right
 
 <<< @/examples/snippets/cb_key_options.gp{gnuplot}
@@ -426,6 +464,15 @@ the automatic titles stay as they are. See [Enhanced text](/guide/gnuplot-subset
 Grid lines at the major and minor ticks in their own style, the lines at x = 0 and y = 0, the left and bottom sides of
 the border only, outward ticks longer than the default, x ends at the data (`set autoscale xfix`). See
 [Grid, zero axes and border](/guide/gnuplot-subset#grid-zero-axes-and-border).
+
+### One unit as long on both axes
+
+<<< @/examples/snippets/cb_size_square.gp{gnuplot}
+
+<Plot name="cb_size_square" svg :width="560" :height="360" />
+
+`set size ratio -1` makes a unit of y as long as a unit of x, whatever the ranges: the circle stays round. `ratio -R`
+makes a y unit R times an x unit. See [`set` options](/guide/gnuplot-subset#set-unset-options).
 
 ### A grid of panels
 
@@ -805,6 +852,17 @@ unless asked: `set fit results` prints gnuplot's report, `set fit logfile 'fit.l
 slope `p` is the observed order of accuracy of a scheme. From Fortran, `call fit(model, x, y, params)` does the same
 ([library](../guide/library.md)).
 
+### A fit of two variables
+
+<<< @/examples/snippets/cb_fit_surface.gp{gnuplot}
+
+<<< @/examples/output/cb_fit_surface.txt{text}
+
+<Plot name="cb_fit_surface" svg :width="560" :height="320" />
+
+`fit` takes a function of `x` and `y`: `using x:y:z:s`, the last column the errors (here 1, unweighted). The fitted
+plane is drawn at each y as a line. See [Fit](/guide/gnuplot-subset#fit).
+
 ### Histogram and distribution
 
 <<< @/examples/snippets/cb_smooth.gp{gnuplot}
@@ -996,6 +1054,16 @@ the x axis. `set style boxplot` sets the whisker range, outliers, sorting.
 `x:y1:y2` fills between two columns; `filledcurves y=0` fills down to a line.
 
 
+### A smoothed band
+
+<<< @/examples/snippets/cb_smooth_band.gp{gnuplot}
+
+<Plot name="cb_smooth_band" svg :width="560" :height="320" />
+
+A band `x:y1:y2` of filledcurves takes the curve filters: `smooth csplines` smooths both curves on the same samples.
+The format string after `using` reads the fields by scanf conversions, as gnuplot. See
+[Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+
 ### A transparent fill color
 
 <<< @/examples/snippets/cb_fill_color.gp{gnuplot}
@@ -1072,6 +1140,16 @@ axis values, or `screen`, `graph`, `character`) and `filled` set them on the ite
 `arrowstyle variable` (`as variable`) takes the number of an arrow style from the column after the vector's:
 each arrow its heads, fill, width and color. See
 [Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+
+### A Gantt chart
+
+<<< @/examples/snippets/cb_gantt.gp{gnuplot}
+
+<Plot name="cb_gantt" svg :width="560" :height="320" />
+
+Each task is a vector from its start to its end, without a head, thick; `ytic(1)` names its row. The blanks around the
+colons of `using` are read as gnuplot does, and `title ... at graph X, Y` places a key entry in the plot area. See
+[Vectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
 
 ### Arrows by length and angle
 
@@ -1408,6 +1486,16 @@ spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
 
 `parallelaxes`: each item is an axis (a column), each row a line across them; `set paxis N range` and `set paxis N tics`
 scale and tick each axis. See [Parallel axes and spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
+
+### Parallel axes with their own ranges
+
+<<< @/examples/snippets/cb_paxis_ranges.gp{gnuplot}
+
+<Plot name="cb_paxis_ranges" svg :width="560" :height="360" />
+
+Each axis has a range (`[350:100]` runs downwards) and ticks of its own; `lc variable` on the first item reads a
+second field, here a group number, the color of every line. See
+[Parallel axes and spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
 
 ### A pie and a donut
 
