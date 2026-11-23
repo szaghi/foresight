@@ -100,7 +100,7 @@ that did what it says.
 | **obj**ect [`N`] ... | an [object](#labels-arrows-and-objects): a rectangle, circle, ellipse or polygon | `unset object [N]` |
 | **st**yle **arr**ow `N` [`default`\|*arrow options*] | arrow style `N`, used by `set arrow ... as N` | `unset style arrow`: all |
 | **st**yle **rect**angle [`fc C`] [`fs FILL`] [`lw W`] [`dt N`] | the look of the rectangles set next | — |
-| **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
+| **dataf**ile **sep**arator [`whitespace`\|`tab`\|`comma`\|`"chars"`] (`'\t'` the tab too, as gnuplot) | cell separators of data files, see [Data Files](data-files#separators-csv); no argument: whitespace | whitespace (`unset datafile`) |
 | **dataf**ile **mis**sing [`"string"`\|`NaN`] | the cells holding `string` are missing data: a point reading one is left out, its line not broken, see [Data Files](data-files#missing-data-and-comments); no argument: none | none |
 | **dataf**ile **com**mentschars [`"chars"`] | the characters starting a comment in data files; no argument: `#` | `#` |
 | **dataf**ile **columnhead**ers \| **nocolumnhead**ers | the first row of each dataset is a header, in plots, `stats` and `fit` (other datafile options may follow) | not a header |
@@ -138,7 +138,7 @@ that did what it says.
 
 ```gnuplot
 plot [XRANGE] [YRANGE] ITEM, ITEM, ...
-plot 'file' [using SPEC] [index N] [every N] [smooth FILTER | bins[=N] ...] [with STYLE] [title "text" | notitle]
+plot 'file' [using SPEC] [index N] [every N] [smooth FILTER | bins[=N] ...] [with STYLE] [title "text" [at ...] | notitle]
             [noenhanced] [axes x1y1|x1y2|x2y1|x2y2] [lc [rgb] "color" | lc N | lc [rgb] variable | lc palette ...]
             [lw W] [dt N] [ps S], ...
 plot FUNCTION [with STYLE] [title "text" | notitle] [noenhanced] [axes x1y1|x1y2|x2y1|x2y2] [lc ...] [lw W] [dt N]
@@ -1238,6 +1238,16 @@ vertical key N rows and as many columns as it needs, filled top down, and `maxco
 of a horizontal key (`auto`, as many as fit, by default), as gnuplot; `columns N` lays the key out in exactly N
 columns, filled top down (gnuplot's; `maxcol`, `maxrow` abbreviate). `textcolor`/`tc COLOR` writes the titles in a
 color, `tc variable` each in the color of its series. After `box`, `lt`, `lw`, `lc`, `dt` and `ls` set its line.
+
+```gnuplot
+unset key; plot for [c in "A B C"] 'run.dat' using 1:(column(c)) title columnhead at end
+plot 'a.dat' title "left" at 0.75, 0.18, 'b.dat' title at 0.75, 0.15   # one key area for several panels
+```
+
+As gnuplot 6.0, `title ... at end` writes the item's title after its last point, left-justified, and `at beginning`
+before its first point, right-justified, with or without the key; `at X,Y` (screen coordinates, `screen` optional)
+draws a key entry there, the title right-justified at the position and its sample after it, while the key is shown.
+These titles leave the key; `title at ...` alone places the automatic title.
 `set key auto` is `autotitle`, `fixed` (the key of `splot`) is accepted as it is. `set key default` resets them all.
 
 ## Grid, zero axes and border

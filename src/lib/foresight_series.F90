@@ -99,6 +99,9 @@ type :: series_object
                                                            !< of `vectors` and `arrows` (gnuplot `size L,A`).
    character(len=9)              :: head_system = 'first' !< System of the head length: first, graph, screen,
                                                           !< character.
+   integer(I4P)                  :: title_at = 0_I4P !< Title place (gnuplot `title ... at`): 0 the key, 1 before the
+                                                     !< first point, 2 after the last one, 3 a page position.
+   real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

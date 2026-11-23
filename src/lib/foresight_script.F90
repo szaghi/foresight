@@ -2461,6 +2461,8 @@ contains
    real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
    real(R8P)                                    :: item_head(2) !< Their head length (0 the default) and angle [deg].
+   integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
+   real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
    logical                                      :: keyed     !< The label column is `key(N)`, row names.
@@ -2885,6 +2887,8 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      title_at = 0_I4P
+      title_xy = 0.0_R8P
       item_head = 0.0_R8P
       item_head_system = 'first'
       label_opts = ''
@@ -3203,6 +3207,10 @@ contains
                call fail('plot: axes x1y1, x1y2, x2y1 or x2y2 expected, found "'//axes//'"', iostat, iomsg)
                return
             endif
+         elseif (keyword(word, 'title', 1_I4P) .and. at_follows()) then
+            ! `title at ...`: the automatic title, placed
+            i = i + 1_I4P
+            if (.not. title_place()) return
          elseif (keyword(word, 'title', 1_I4P)) then
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -3254,6 +3262,13 @@ contains
                return
             endif
             has_title = .true.
+            ! gnuplot `title ... at beginning|end|X,Y`: by the curve, or a key entry at a screen position
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'at') then
+                  i = i + 1_I4P
+                  if (.not. title_place()) return
+               endif
+            endif
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
             has_title = .true.
@@ -4560,8 +4575,60 @@ contains
          panel%series(last)%label_axis = label_axis
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
          panel%series(last)%title_plain = auto_title .or. plain_item
+         panel%series(last)%title_at = title_at
+         panel%series(last)%title_xy = title_xy
       endassociate
       endsubroutine mark_last
+
+      function at_follows() result(yes)
+      !< Whether the token after `i` is the word `at`.
+      logical :: yes !< `at` follows.
+
+      yes = .false.
+      if (i < size(tokens, kind=I4P)) yes = tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'at'
+      endfunction at_follows
+
+      function title_place() result(ok)
+      !< The place after `title ... at` (token `i` is `at`): `beginning`, `end`, or `X,Y` in screen coordinates (an
+      !< optional `screen` before each), as gnuplot.
+      logical      :: ok !< Success.
+      integer(I4P) :: c  !< Coordinate.
+      real(R8P)    :: v  !< Value.
+
+      ok = .false.
+      if (i >= size(tokens, kind=I4P)) then
+         call fail('plot: title at: beginning, end or X,Y expected', iostat, iomsg)
+         return
+      endif
+      if (keyword(tokens(i + 1_I4P)%text, 'beginning', 3_I4P)) then
+         i = i + 1_I4P
+         title_at = 1_I4P
+      elseif (tokens(i + 1_I4P)%text == 'end') then
+         i = i + 1_I4P
+         title_at = 2_I4P
+      else
+         do c = 1_I4P, 2_I4P
+            if (c == 2_I4P) then
+               if (i + 1_I4P > size(tokens, kind=I4P)) exit
+               if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+                  call fail('plot: title at X,Y expected', iostat, iomsg)
+                  return
+               endif
+               i = i + 1_I4P
+            endif
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'screen') i = i + 1_I4P
+            endif
+            if (.not. next_real(tokens, i, v, iostat, iomsg)) then
+               iomsg = 'plot: title at: '//iomsg
+               return
+            endif
+            title_xy(c) = v
+         enddo
+         title_at = 3_I4P
+      endif
+      ok = .true.
+      endfunction title_place
 
       subroutine paint_last
       !< Color the series just added from the palette (`lc palette`, marker `palette_lc`): its `z` values (a point of
@@ -10335,6 +10402,9 @@ contains
       endif
       if (size(tokens) == 2) then
          self%separator = ''
+      elseif (tokens(3)%kind == TOKEN_STRING .and. tokens(3)%quote == "'" .and. tokens(3)%text == '\t') then
+         ! gnuplot takes the single-quoted '\t' (no escapes there) as the tab too
+         self%separator = achar(9)
       elseif (tokens(3)%kind == TOKEN_STRING) then
          ! "" is whitespace, as no argument
          self%separator = tokens(3)%text

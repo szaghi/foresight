@@ -1488,6 +1488,7 @@ contains
    endif
    if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
                                                          grid, key)
+   call draw_titles_at(self, backend, area, font_size)
    if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, &
                                                                                  [x0, y0, x0 + width, y0 + height], font_size)
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
@@ -2402,7 +2403,6 @@ contains
    real(R8P)                            :: entry     !< Entry width, spacing included [px].
    real(R8P)                            :: left      !< Key left [px].
    real(R8P)                            :: top       !< Key top [px].
-   character(len=:), allocatable        :: sample    !< Color of the point sample.
    integer(I4P)                         :: k         !< Entry counter.
    integer(I4P)                         :: s         !< Series counter.
    real(R8P)                            :: tx        !< Title abscissa [px].
@@ -2502,38 +2502,12 @@ contains
    k = 0_I4P
    do s = 1_I4P, size(self%series, kind=I4P)
       if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
+      if (self%series(s)%title_at > 0_I4P) cycle
       ! entry k (from 0; the last first with invert) in column mod(k, columns), row k / columns
       call entry_place(merge(grid(1) - 1_I4P - k, k, self%key_invert), xs, yc, tx, anchor)
       k = k + 1_I4P
       call backend%begin_group('fs-key-entry', series=s)
-      if (self%series(s)%style%fills()) &
-         call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
-                              [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
-                               yc - 0.35_R8P * font_size], self%series(s)%style%fill_color(), &
-                              self%series(s)%style%density, self%series(s)%style%stroke_color(), &
-                              self%series(s)%style%linewidth)
-      if ((self%series(s)%style%draws_lines() .or. any(self%series(s)%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, &
-                                                                                    WITH_VECTORS, WITH_ARROWS])) .and. &
-          trim(self%series(s)%style%color) /= 'none') &
-         call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, &
-                               self%series(s)%style%dasharray())
-      if (self%series(s)%style%draws_ybars()) &
-         call backend%polyline([0.5_R8P * (xs(1) + xs(2)), 0.5_R8P * (xs(1) + xs(2))], &
-                               [yc - 0.4_R8P * font_size, yc + 0.4_R8P * font_size], self%series(s)%style%color, &
-                               self%series(s)%style%linewidth, '')
-      if (self%series(s)%style%draws_xbars()) &
-         call backend%polyline(xs, [yc, yc], self%series(s)%style%color, self%series(s)%style%linewidth, '')
-      if (self%series(s)%style%draws_points()) then
-         ! with a color per point, the point sample in the last point's color, as gnuplot (the line sample: the first's)
-         sample = self%series(s)%style%color
-         if (allocated(self%series(s)%colors)) then
-            if (size(self%series(s)%colors) > 0) sample = trim(self%series(s)%colors(size(self%series(s)%colors)))
-         endif
-         if (sample /= 'none') call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, &
-                                                 self%series(s)%style%point_diameter(), &
-                                                 pt=self%series(s)%style%pointtype, &
-                                                 line_width=self%series(s)%style%linewidth)
-      endif
+      call key_sample_marks(self%series(s), backend, xs, yc, font_size)
       backend%literal = self%key_plain .or. self%series(s)%title_plain
       ! gnuplot `textcolor`: the titles in a color, or each in its series' (`variable`)
       if (trim(self%key_tc) == 'variable') then
@@ -2652,6 +2626,109 @@ contains
       endselect
       endsubroutine key_anchor
    endsubroutine draw_key
+
+   subroutine key_sample_marks(series, backend, xs, yc, font_size)
+   !< The key sample of `series` from `xs(1)` to `xs(2)` about the row centre `yc` [px]: its fill, line, error bars
+   !< and point, as the series is drawn.
+   type(series_object),   intent(in)    :: series    !< Series.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: xs(2)     !< Sample abscissae [px].
+   real(R8P),             intent(in)    :: yc        !< Row centre [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   character(len=:), allocatable        :: sample    !< Color of the point sample.
+
+   if (series%style%fills()) &
+      call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
+                           [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
+                            yc - 0.35_R8P * font_size], series%style%fill_color(), series%style%density, &
+                           series%style%stroke_color(), series%style%linewidth)
+   if ((series%style%draws_lines() .or. any(series%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, WITH_VECTORS, &
+                                                                  WITH_ARROWS])) .and. trim(series%style%color) /= 'none') &
+      call backend%polyline(xs, [yc, yc], series%style%color, series%style%linewidth, series%style%dasharray())
+   if (series%style%draws_ybars()) &
+      call backend%polyline([0.5_R8P * (xs(1) + xs(2)), 0.5_R8P * (xs(1) + xs(2))], &
+                            [yc - 0.4_R8P * font_size, yc + 0.4_R8P * font_size], series%style%color, &
+                            series%style%linewidth, '')
+   if (series%style%draws_xbars()) call backend%polyline(xs, [yc, yc], series%style%color, series%style%linewidth, '')
+   if (series%style%draws_points()) then
+      ! with a color per point, the point sample in the last point's color, as gnuplot (the line sample: the first's)
+      sample = series%style%color
+      if (allocated(series%colors)) then
+         if (size(series%colors) > 0) sample = trim(series%colors(size(series%colors)))
+      endif
+      if (sample /= 'none') call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
+                                              pt=series%style%pointtype, line_width=series%style%linewidth)
+   endif
+   endsubroutine key_sample_marks
+
+   subroutine draw_titles_at(self, backend, area, font_size)
+   !< The titles placed by gnuplot's `title ... at`: `at beginning` right-justified before the first placeable point,
+   !< `at end` left-justified after the last one (key or not), `at X,Y` a key entry (title right-justified at the
+   !< screen position, its sample after it) while the key is shown.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   logical, allocatable                 :: valid(:)  !< Placeable points.
+   real(R8P)                            :: p(2)      !< Title anchor [px].
+   real(R8P)                            :: xs(2)     !< Sample abscissae [px].
+   integer(I4P)                         :: s         !< Series counter.
+   integer(I4P)                         :: i         !< Point counter.
+
+   if (.not. allocated(self%series) .or. self%polar) return
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%title_at == 0_I4P .or. len(self%series(s)%title) == 0) cycle
+      if (self%series(s)%title_at == 3_I4P) then
+         if (.not. self%key) cycle
+         p = [self%series(s)%title_xy(1) * self%canvas(1), (1.0_R8P - self%series(s)%title_xy(2)) * self%canvas(2)]
+         xs = [p(1) + GAP, p(1) + GAP + self%key_sample(font_size)]
+         call backend%begin_group('fs-key-entry', series=s)
+         call key_sample_marks(self%series(s), backend, xs, p(2), font_size)
+         backend%literal = self%key_plain .or. self%series(s)%title_plain
+         call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, 'end')
+         backend%literal = .false.
+         call backend%end_group
+         cycle
+      endif
+      if (.not. allocated(self%series(s)%x)) cycle
+      if (size(self%series(s)%x) == 0) cycle
+      if (self%series(s)%x2 .and. self%series(s)%y2) then
+         valid = self%series(s)%valid(self%x2axis, self%y2axis)
+      elseif (self%series(s)%x2) then
+         valid = self%series(s)%valid(self%x2axis, self%yaxis)
+      elseif (self%series(s)%y2) then
+         valid = self%series(s)%valid(self%xaxis, self%y2axis)
+      else
+         valid = self%series(s)%valid(self%xaxis, self%yaxis)
+      endif
+      if (.not. any(valid)) cycle
+      ! the first or the last placeable point (a loop: nvfortran 26.9 refuses findloc on a logical array)
+      if (self%series(s)%title_at == 1_I4P) then
+         do i = 1_I4P, size(valid, kind=I4P)
+            if (valid(i)) exit
+         enddo
+      else
+         do i = size(valid, kind=I4P), 1_I4P, -1_I4P
+            if (valid(i)) exit
+         enddo
+      endif
+      if (self%series(s)%x2) then
+         p(1) = self%x2axis%to_unit(self%series(s)%x(i))
+      else
+         p(1) = self%xaxis%to_unit(self%series(s)%x(i))
+      endif
+      if (self%series(s)%y2) then
+         p(2) = self%y2axis%to_unit(self%series(s)%y(i))
+      else
+         p(2) = self%yaxis%to_unit(self%series(s)%y(i))
+      endif
+      p = [area(1) + p(1) * (area(2) - area(1)), area(4) - p(2) * (area(4) - area(3))]
+      backend%literal = self%key_plain .or. self%series(s)%title_plain
+      call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, &
+                        trim(merge('end  ', 'start', self%series(s)%title_at == 1_I4P)))
+      backend%literal = .false.
+   enddo
+   endsubroutine draw_titles_at
 
    subroutine draw_readouts(self, backend, area, font_size, fill)
    !< Draw the block of readouts in `area`, as the key is placed inside the plot area: a column (or a row) of readouts,
@@ -2823,6 +2900,7 @@ contains
    if (allocated(self%series)) then
       do s = 1_I4P, size(self%series, kind=I4P)
          if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
+         if (self%series(s)%title_at > 0_I4P) cycle
          grid(1) = grid(1) + 1_I4P
          entry = max(entry, backend%text_width(self%series(s)%title, '', font_size))
       enddo
