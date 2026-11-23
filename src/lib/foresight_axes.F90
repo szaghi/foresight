@@ -3299,9 +3299,10 @@ contains
 
       subroutine draw_polygons
       !< `polygons` and `sectors`: each run of placeable points (blocks of the data, or the vertices of a sector) a
-      !< closed polygon in the fill style.
-      integer(I4P) :: i1 !< First point of a run.
-      integer(I4P) :: i2 !< Last point of a run.
+      !< closed polygon in the fill style (its first point's color with `lc variable`).
+      integer(I4P)       :: i1  !< First point of a run.
+      integer(I4P)       :: i2  !< Last point of a run.
+      type(style_object) :: row !< Style of a polygon.
 
       associate(series => self%series(s))
          i1 = 1_I4P
@@ -3315,9 +3316,12 @@ contains
                if (.not. valid(i2 + 1_I4P)) exit
                i2 = i2 + 1_I4P
             enddo
-            if (i2 > i1 + 1_I4P) call backend%data_polygon(u(i1:i2), v(i1:i2), series%style%fill_color(), &
-                                                         series%style%density, series%style%stroke_color(), &
-                                                         series%style%linewidth)
+            row = series%style
+            if (allocated(series%colors)) then
+               if (size(series%colors) >= i1) row%color = trim(series%colors(i1))
+            endif
+            if (i2 > i1 + 1_I4P) call backend%data_polygon(u(i1:i2), v(i1:i2), row%fill_color(), row%density, &
+                                                         row%stroke_color(), row%linewidth)
             i1 = i2 + 1_I4P
          enddo
       endassociate
@@ -3358,19 +3362,24 @@ contains
       endsubroutine draw_box_bars
 
       subroutine draw_rectangles
-      !< `boxxyerror`: a rectangle from xlow to xhigh, ylow to yhigh per placeable point, in the fill style.
-      integer(I4P) :: i !< Point counter.
+      !< `boxxyerror`: a rectangle from xlow to xhigh, ylow to yhigh per placeable point, in the fill style (its point's
+      !< color with `lc variable`).
+      integer(I4P)       :: i   !< Point counter.
+      type(style_object) :: row !< Style of a rectangle.
 
       associate(series => self%series(s))
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
             if (.not. (xaxis%accepts(series%xlow(i)) .and. xaxis%accepts(series%xhigh(i)) .and. &
                        yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
+            row = series%style
+            if (allocated(series%colors)) then
+               if (size(series%colors) >= i) row%color = trim(series%colors(i))
+            endif
             call backend%data_polygon(xaxis%to_unit([series%xlow(i), series%xhigh(i), series%xhigh(i), &
                                                           series%xlow(i)]), &
                                       yaxis%to_unit([series%ylow(i), series%ylow(i), series%yhigh(i), series%yhigh(i)]), &
-                                      series%style%fill_color(), series%style%density, series%style%stroke_color(), &
-                                      series%style%linewidth)
+                                      row%fill_color(), row%density, row%stroke_color(), row%linewidth)
          enddo
       endassociate
       endsubroutine draw_rectangles
@@ -3391,6 +3400,7 @@ contains
       real(R8P)                     :: density !< Box fill opacity.
       character(len=:), allocatable :: fill    !< Box fill color.
       logical                       :: finance !< Drawn as a finance bar.
+      type(style_object)            :: row     !< Style of a candle (its color with `lc variable`).
       integer(I4P)                  :: i       !< Point counter.
 
       tick = 0.5_R8P * self%errorbar_size * CAP_LENGTH / (area(2) - area(1))
@@ -3399,22 +3409,27 @@ contains
                    (series%style%with == WITH_BOXPLOT .and. self%boxplot%financebars)
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
+            ! `lc variable`: the candle in its point's color
+            row = series%style
+            if (allocated(series%colors)) then
+               if (size(series%colors) >= i) row%color = trim(series%colors(i))
+            endif
             if (.not. (yaxis%accepts(series%bounds(1, i)) .and. yaxis%accepts(series%bounds(2, i)) .and. &
                        yaxis%accepts(series%ylow(i)) .and. yaxis%accepts(series%yhigh(i)))) cycle
             b = yaxis%to_unit(series%bounds(:, i))
             wv = yaxis%to_unit([min(series%ylow(i), series%yhigh(i)), max(series%ylow(i), series%yhigh(i))])
             if (finance) then
-               call backend%data_polyline([u(i), u(i)], wv, series%style%color, series%style%linewidth, '')
-               call backend%data_polyline([u(i) - tick, u(i)], [b(1), b(1)], series%style%color, &
-                                          series%style%linewidth, '')
-               call backend%data_polyline([u(i), u(i) + tick], [b(2), b(2)], series%style%color, &
-                                          series%style%linewidth, '')
-               if (series%style%with == WITH_BOXPLOT) &
-                  call backend%data_polyline([u(i) - tick, u(i) + tick], [v(i), v(i)], series%style%color, &
-                                             series%style%linewidth, '')
+               call backend%data_polyline([u(i), u(i)], wv, row%color, row%linewidth, '')
+               call backend%data_polyline([u(i) - tick, u(i)], [b(1), b(1)], row%color, &
+                                          row%linewidth, '')
+               call backend%data_polyline([u(i), u(i) + tick], [b(2), b(2)], row%color, &
+                                          row%linewidth, '')
+               if (row%with == WITH_BOXPLOT) &
+                  call backend%data_polyline([u(i) - tick, u(i) + tick], [v(i), v(i)], row%color, &
+                                             row%linewidth, '')
                cycle
             endif
-            if (series%style%with == WITH_BOXPLOT) then
+            if (row%with == WITH_BOXPLOT) then
                ! the box: the middle third of the autoscale extent
                ul = xaxis%to_unit(series%x(i) - (series%x(i) - series%xlow(i)) / 3.0_R8P)
                ur = xaxis%to_unit(series%x(i) + (series%xhigh(i) - series%x(i)) / 3.0_R8P)
@@ -3426,33 +3441,33 @@ contains
                ul = u(i) - tick
                ur = u(i) + tick
             endif
-            fill = series%style%fill_color()
-            density = series%style%density
-            if (series%style%with == WITH_CANDLESTICKS .and. series%style%fill == FILL_EMPTY .and. &
+            fill = row%fill_color()
+            density = row%density
+            if (row%with == WITH_CANDLESTICKS .and. row%fill == FILL_EMPTY .and. &
                 series%bounds(2, i) < series%bounds(1, i)) then
-               fill = series%style%color
+               fill = row%color
                density = 1.0_R8P
             endif
             call backend%data_polygon([ul, ur, ur, ul], [b(1), b(1), b(2), b(2)], fill, density, &
-                                      series%style%stroke_color(), series%style%linewidth)
-            if (series%style%with == WITH_BOXPLOT) then
+                                      row%stroke_color(), row%linewidth)
+            if (row%with == WITH_BOXPLOT) then
                ! capped whiskers, as gnuplot's boxplots
-               call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, series%style%color, &
-                                      series%style%linewidth, self%errorbar_size * CAP_LENGTH, .true.)
+               call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, row%color, &
+                                      row%linewidth, self%errorbar_size * CAP_LENGTH, .true.)
                mw = self%boxplot%median_width
-               if (mw < 0.0_R8P) mw = series%style%linewidth
-               if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], series%style%color, mw, '')
+               if (mw < 0.0_R8P) mw = row%linewidth
+               if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], row%color, mw, '')
             else
-               call backend%data_polyline([u(i), u(i)], [minval(b), wv(1)], series%style%color, &
-                                          series%style%linewidth, '')
-               call backend%data_polyline([u(i), u(i)], [maxval(b), wv(2)], series%style%color, &
-                                          series%style%linewidth, '')
+               call backend%data_polyline([u(i), u(i)], [minval(b), wv(1)], row%color, &
+                                          row%linewidth, '')
+               call backend%data_polyline([u(i), u(i)], [maxval(b), wv(2)], row%color, &
+                                          row%linewidth, '')
                if (series%whiskerbars > 0.0_R8P) then
                   c = 0.5_R8P * series%whiskerbars * (ur - ul)
-                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(1), wv(1)], series%style%color, &
-                                             series%style%linewidth, '')
-                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(2), wv(2)], series%style%color, &
-                                             series%style%linewidth, '')
+                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(1), wv(1)], row%color, &
+                                             row%linewidth, '')
+                  call backend%data_polyline([u(i) - c, u(i) + c], [wv(2), wv(2)], row%color, &
+                                             row%linewidth, '')
                endif
             endif
          enddo
@@ -3723,6 +3738,8 @@ contains
       integer(I4P)           :: b      !< Last point of a run.
       integer(I4P)           :: k      !< Point counter.
       logical                :: based  !< Filled to a baseline.
+      character(len=:), allocatable :: fill !< Fill color of a run (its first point's with `lc variable`).
+      type(style_object)     :: row    !< Style of a run.
 
       associate(series => self%series(s))
          ok = valid
@@ -3763,6 +3780,14 @@ contains
                b = b + 1_I4P
             enddo
             if (b > a) then
+               fill = series%style%fill_color()
+               if (allocated(series%colors)) then
+                  if (size(series%colors) >= a) then
+                     row = series%style
+                     row%color = trim(series%colors(a))
+                     fill = row%fill_color()
+                  endif
+               endif
                if (based) then
                   ! the run with the crossings of its baseline, then each side kept or flattened onto the baseline
                   pu = [u(a)]
@@ -3782,15 +3807,15 @@ contains
                   if (series%curve_side > 0_I4P) pv = max(pv, pw)
                   if (series%curve_side < 0_I4P) pv = min(pv, pw)
                   call backend%data_polygon([pu, pu(size(pu):1:-1)], [pv, pw(size(pw):1:-1)], &
-                                            series%style%fill_color(), series%style%density, 'none', 0.0_R8P)
+                                            fill, series%style%density, 'none', 0.0_R8P)
                elseif (series%curve_to == 3_I4P) then
-                  call backend%data_polygon([u(a:b), p(1)], [v(a:b), p(2)], series%style%fill_color(), &
+                  call backend%data_polygon([u(a:b), p(1)], [v(a:b), p(2)], fill, &
                                             series%style%density, 'none', 0.0_R8P)
                elseif (series%curve_to >= 4_I4P) then
-                  call backend%data_polygon([u(a:b), p(1), p(1)], [v(a:b), v(b), v(a)], series%style%fill_color(), &
+                  call backend%data_polygon([u(a:b), p(1), p(1)], [v(a:b), v(b), v(a)], fill, &
                                             series%style%density, 'none', 0.0_R8P)
                else
-                  call backend%data_polygon(u(a:b), v(a:b), series%style%fill_color(), series%style%density, 'none', &
+                  call backend%data_polygon(u(a:b), v(a:b), fill, series%style%density, 'none', &
                                             0.0_R8P)
                endif
             endif

@@ -3355,7 +3355,12 @@ contains
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
             ! written as the text of the first column it reads, as gnuplot
             word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
-            if (len(word) > 0 .and. verify(word, '0123456789') == 0 .and. len(word) <= 9) then
+            if (word == '0' .or. word == '-1' .or. word == '-2') then
+               ! a pseudo-column: its integer as the text, gnuplot's "label hack"
+               label_col = 1_I4P
+               call label_field%compile('sprintf("%d", int(column('//word//')))', iostat, iomsg)
+               if (iostat /= 0_I4P) return
+            elseif (len(word) > 0 .and. verify(word, '0123456789') == 0 .and. len(word) <= 9) then
                read(word, *) label_col
                call label_field%set_column(label_col)
             else
@@ -3455,6 +3460,11 @@ contains
          call point%set_column(0_I4P)
          kept = [point, fields(1)]
          call move_alloc(kept, fields)
+      elseif (with == 'histograms' .and. size(fields) == 2 .and. variable_lc()) then
+         ! histograms Y:COLOR with lc variable, at the point numbers
+         call point%set_column(0_I4P)
+         kept = [point, fields]
+         call move_alloc(kept, fields)
       elseif (errorbars .and. (size(fields) == 2 .or. size(fields) == 3)) then
          ! errorbars histograms: Y:ERR or Y:LOW:HIGH, at the point numbers
          one_field = .true.
@@ -3477,9 +3487,11 @@ contains
       if (lcvar .or. lcz) then
          word = trim(merge('lc palette z', 'lc variable ', lcz))
          if (.not. (is_word(with, 'lines points linespoints impulses') .or. &
-                    (lcvar .and. is_word(with, 'circles ellipses boxes')))) then
+                    (lcvar .and. is_word(with, 'circles ellipses boxes candlesticks financebars boxxyerror '// &
+                                         'boxerrorbars histograms filledcurves polygons')))) then
             call fail('plot: '//word//' applies to lines, points, linespoints and impulses (lc variable also to '// &
-                      'circles, ellipses and boxes), not to '//with, iostat, iomsg)
+                      'circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, '// &
+                      'filledcurves and polygons), not to '//with, iostat, iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -3508,7 +3520,7 @@ contains
             return
          endif
       case ('histograms', 'pie', 'radar', 'rose', 'parallelaxes', 'spiderplot')
-         if (.not. one_field) then
+         if (.not. (one_field .or. (with == 'histograms' .and. lcvar .and. nbar == 0_I4P))) then
             call fail('plot: '//with//' needs using Y or Y:xtic(N) (the rows are the point numbers)', iostat, iomsg)
             return
          endif
@@ -3811,15 +3823,19 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, xlow=xlow, &
                                xhigh=xhigh, ylow=ylow, yhigh=yhigh, axes=axes, width=widths, fs=fs, xlabels=xlabels)
+         if (lcvar) call color_last
       elseif (with == 'candlesticks' .or. with == 'financebars') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, &
                                yhigh=yhigh, close=closes, axes=axes, width=widths, fs=fs, xlabels=xlabels, &
                                whiskerbars=whisker)
+         if (lcvar) call color_last
       elseif (with == 'vectors') then
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, dx=xlow, &
                                dy=xhigh, head=heads)
@@ -3901,6 +3917,7 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          ! a column stack: the rows named by key(N) in the key; titled by columnhead, the stack's x tick label
          if (is_head .and. len(title) > 0) then
             block
@@ -3923,6 +3940,7 @@ contains
          else
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs)
          endif
+         if (lcvar) call color_last
       elseif (with == 'boxes' .or. with == 'filledcurves' .or. with == 'histograms') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -4237,6 +4255,14 @@ contains
       ok = .true.
       endfunction next_number
 
+      function variable_lc() result(yes)
+      !< Whether the item's line color is `lc [rgb] variable`.
+      logical :: yes !< The color column marker.
+
+      yes = .false.
+      if (allocated(line%lc)) yes = line%lc == LC_VARIABLE .or. line%lc == LC_RGB_VARIABLE
+      endfunction variable_lc
+
       subroutine fill_last
       !< The fill color of the item (`fc`) on its series.
       if (.not. allocated(fill_rgb)) return
@@ -4246,7 +4272,8 @@ contains
       endsubroutine fill_last
 
       subroutine color_last
-      !< `lc variable` of circles, ellipses and boxes: each shape in its point's color, the key sample in the first one's
+      !< `lc variable` of circles, ellipses, boxes and candlesticks: each shape in its point's color, the key sample in
+      !< the first one's
       !< (gnuplot).
       associate(panel => self%figure%panels(self%figure%current))
          associate(last => panel%series(size(panel%series)))

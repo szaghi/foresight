@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(168)                           !< Per-check outcome.
+logical                       :: test_passed(169)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3210,8 +3210,8 @@ if (test_passed(150)) then
                                              all(panel%series(1)%radius == 0.2_R8P)
    endassociate
 endif
-call interpreter%run_text('plot $C using 1:2:3 with candlesticks lc variable', iostat, iomsg)
-test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'circles, ellipses and boxes') > 0
+call interpreter%run_text('plot $C using 1:2:3 with steps lc variable', iostat, iomsg)
+test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves and polygons') > 0
 
 ! set key columns N (gnuplot's user columns: N columns, filled top down), maxcol and maxrow abbreviations
 call interpreter%init(scratch)
@@ -3702,6 +3702,32 @@ endif
 call interpreter%run_text('plot x with filledcurves fc palette', iostat, iomsg)
 test_passed(168) = test_passed(168) .and. iostat /= 0_I4P .and. index(iomsg, 'fc: variable and palette') > 0
 
+
+! lc variable on candlesticks, boxxyerror, histograms (Y:COLOR), filledcurves and polygons (a color per run, its
+! first point's); labels of a pseudo-column (using 1:2:0) are its integers, as gnuplot's label hack
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'1 2 1 3 2'//new_line('a')//'2 3 2 4 3'//new_line('a')// &
+                          new_line('a')//'3 1 0 2 1'//new_line('a')//'4 2 1 3 2'//new_line('a')//'EOD'// &
+                          new_line('a')//'plot $D using 1:2:3:4:5:1 with candlesticks lc variable, '// &
+                          '$D using 2:1 with histograms lc variable, '// &
+                          '$D using 1:2:(column(-1)+3) with filledcurves lc variable, '// &
+                          '$D using 1:2:(column(-1)+5) with polygons lc variable, '// &
+                          '$D using 1:2:0 with labels', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(169) = iostat == 0_I4P
+if (test_passed(169)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(169) = size(series) == 5
+      ! the blank line between the blocks is a gap point, the third
+      if (test_passed(169)) test_passed(169) = series(1)%colors(4) == default_color(3_I4P) .and. &
+                                             series(2)%colors(5) == default_color(4_I4P) .and. &
+                                             series(3)%colors(1) == default_color(3_I4P) .and. &
+                                             series(3)%colors(4) == default_color(4_I4P) .and. &
+                                             series(4)%colors(4) == default_color(6_I4P) .and. &
+                                             trim(series(5)%texts(1)) == '0' .and. trim(series(5)%texts(5)) == '3'
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3710,7 +3736,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,168L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,169L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
