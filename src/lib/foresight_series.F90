@@ -95,6 +95,10 @@ type :: series_object
    real(R8P)                     :: span(4) = 0.0_R8P !< Extent beyond the points, x from-to and y from-to: the outer
                                                       !< edges of `bins` and their y = 0, as gnuplot.
    logical                       :: text_boxed = .false. !< Labels in a text box (gnuplot `with labels boxed`).
+   real(R8P)                     :: head_size(2) = 0.0_R8P !< Arrowhead length (0: the default head) and angle [deg]
+                                                           !< of `vectors` and `arrows` (gnuplot `size L,A`).
+   character(len=9)              :: head_system = 'first' !< System of the head length: first, graph, screen,
+                                                          !< character.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

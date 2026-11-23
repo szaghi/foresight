@@ -8,7 +8,7 @@ module foresight_backend_svg
 !< Panels are `<g class="fs-axes">` carrying their geometry and axis ranges as `data-*` attributes; decorations the
 !< interactive viewer regenerates are `<g class="fs-...">` groups. The second y axis and the mirror settings add their
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
-use foresight_backend, only : arrow_head, axes_view, backend_object
+use foresight_backend, only : arrow_head, axes_view, backend_object, sized_head
 use foresight_enhanced, only : has_markup, markup_svg, markup_width
 use foresight_format, only : fixed, int_str, real_str, xml_escape
 use foresight_png, only : png_base64
@@ -550,8 +550,11 @@ contains
    integer(I4P)                      :: i          !< Counter.
 
    if (size(x1) == 0) return
-   write(self%unit, '(A)', advance='no') '<path class="fs-vectors" data-head="'//int_str(int(head, I8P))// &
-                                         '" data-filled="'//flag(filled)//'" fill="none" stroke="'// &
+   write(self%unit, '(A)', advance='no') '<path class="fs-vectors" data-head="'//int_str(int(head, I8P))//'"'
+   ! a head size of its own (gnuplot `size L,A`), the viewer's too
+   if (self%head_px(1) > 0.0_R8P) write(self%unit, '(A)', advance='no') ' data-length="'//px(self%head_px(1))// &
+                                                                       '" data-angle="'//px(self%head_px(2))//'"'
+   write(self%unit, '(A)', advance='no') ' data-filled="'//flag(filled)//'" fill="none" stroke="'// &
                                          self%theme%map(color)//'" stroke-width="'//px(line_width)// &
                                          '" vector-effect="non-scaling-stroke" d="'
    do i = 1_I4P, size(x1, kind=I4P)
@@ -580,7 +583,11 @@ contains
       real(R8P)             :: barbs(2, 2) !< Barb ends [px].
       character(len=:), allocatable :: points !< Vertices.
 
-      call arrow_head(tail, tip, barbs)
+      if (self%head_px(1) > 0.0_R8P) then
+         call sized_head(tail, tip, self%head_px(1), self%head_px(2), barbs)
+      else
+         call arrow_head(tail, tip, barbs)
+      endif
       points = px(barbs(1, 1))//','//px(barbs(2, 1))//' '//px(tip(1))//','//px(tip(2))//' '//px(barbs(1, 2))//','// &
                px(barbs(2, 2))
       if (filled) then

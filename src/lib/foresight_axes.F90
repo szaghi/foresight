@@ -3270,8 +3270,54 @@ contains
                tv(i) = v(i) + l * sin(a) / h
             endif
          enddo
-         if (any(ok)) call backend%data_arrows(pack(u, ok), pack(v, ok), pack(tu, ok), pack(tv, ok), series%style%color, &
-                                               series%style%linewidth, series%head, series%head_filled)
+         ! a head size of its own: the length in its system, as `set arrow ... size`
+         backend%head_px = 0.0_R8P
+         if (series%head_size(1) > 0.0_R8P) then
+            select case (trim(series%head_system))
+            case ('graph')
+               backend%head_px(1) = series%head_size(1) * w
+            case ('screen')
+               backend%head_px(1) = series%head_size(1) * self%canvas(1)
+            case ('character')
+               backend%head_px(1) = series%head_size(1) * 0.6_R8P * font_size
+            case default
+               if (xaxis%log) then
+                  backend%head_px(1) = abs(series%head_size(1) / (log10(xaxis%hi) - log10(xaxis%lo))) * w
+               else
+                  backend%head_px(1) = abs(series%head_size(1) / (xaxis%hi - xaxis%lo)) * w
+               endif
+            endselect
+            backend%head_px(2) = series%head_size(2)
+         endif
+         if (allocated(series%colors)) then
+            ! a color per arrow (lc variable, lc palette z): a path per run of one color
+            block
+               integer(I4P) :: i1 !< First arrow of a run.
+               integer(I4P) :: i2 !< Last arrow of a run.
+
+               i1 = 1_I4P
+               do while (i1 <= n)
+                  if (.not. ok(i1) .or. i1 > size(series%colors, kind=I4P)) then
+                     i1 = i1 + 1_I4P
+                     cycle
+                  endif
+                  i2 = i1
+                  do while (i2 < n .and. i2 < size(series%colors, kind=I4P))
+                     if (.not. ok(i2 + 1_I4P)) exit
+                     if (series%colors(i2 + 1_I4P) /= series%colors(i1)) exit
+                     i2 = i2 + 1_I4P
+                  enddo
+                  if (series%colors(i1) /= 'none') &
+                     call backend%data_arrows(u(i1:i2), v(i1:i2), tu(i1:i2), tv(i1:i2), trim(series%colors(i1)), &
+                                              series%style%linewidth, series%head, series%head_filled)
+                  i1 = i2 + 1_I4P
+               enddo
+            endblock
+         elseif (any(ok)) then
+            call backend%data_arrows(pack(u, ok), pack(v, ok), pack(tu, ok), pack(tv, ok), series%style%color, &
+                                     series%style%linewidth, series%head, series%head_filled)
+         endif
+         backend%head_px = 0.0_R8P
       endassociate
       endsubroutine draw_arrows
 

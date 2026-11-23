@@ -34,7 +34,8 @@ module foresight_script
 !< - `with boxerrorbars|boxxyerror|candlesticks [whiskerbars [F]]|financebars|boxplot` (gnuplot's layouts), `set style
 !<   boxplot [range R|fraction F] [[no]outliers] [pointtype P] [candlesticks|financebars] [medianlinewidth W]
 !<   [separation S] [labels off|auto|x] [sorted|unsorted]`;
-!< - `with vectors|arrows [head|heads|nohead|backhead] [filled|empty|nofilled]`, `with ellipses [units xy]`,
+!< - `with vectors|arrows [head|heads|nohead|backhead] [filled|empty|nofilled|noborder] [size [SYS] L,A] [fixed]
+!<   [as|arrowstyle N]`, `with ellipses [units xy]`,
 !<   `with polygons`, `with labels [left|center|right] [rotate by A] [offset X,Y] [point] [tc "c"]` (`using x:y:N`, the
 !<   text of column N), `with sectors` (gnuplot's layouts); `unset xrange|yrange|y2range` autoscales;
 !< - `with parallelaxes [at X]`, `set|unset spiderplot`, `with spiderplot` (`using Y[:key(N)]`, an axis per item, a line or
@@ -2449,6 +2450,8 @@ contains
    real(R8P),        allocatable                :: whisker   !< Candlestick whisker crossbars (`whiskerbars [F]`).
    real(R8P),        allocatable                :: closes(:) !< Closing values of candlesticks and finance bars.
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
+   real(R8P)                                    :: item_head(2) !< Their head length (0 the default) and angle [deg].
+   character(len=9)                             :: item_head_system !< System of the head length.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
    logical                                      :: keyed     !< The label column is `key(N)`, row names.
    real(R8P),        allocatable                :: at_x      !< Position of a parallel axis (`at X`).
@@ -2872,6 +2875,8 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      item_head = 0.0_R8P
+      item_head_system = 'first'
       label_opts = ''
       curve = ''
       keyed = .false.
@@ -2991,11 +2996,28 @@ contains
                enddo
             endif
             if (with == 'vectors' .or. with == 'arrows') then
-               ! arrow style words right after the style, as gnuplot
+               ! arrow style words right after the style, as gnuplot: heads, fills, `size [SYS] L,A[,B]`, `fixed`,
+               ! `as|arrowstyle N`
                do while (i < size(tokens, kind=I4P))
-                  if (.not. is_word(tokens(i + 1_I4P)%text, 'head heads nohead backhead filled empty nofilled')) exit
-                  i = i + 1_I4P
-                  heads = heads//' '//tokens(i)%text
+                  word = tokens(i + 1_I4P)%text
+                  if (is_word(word, 'head heads nohead backhead filled empty nofilled')) then
+                     i = i + 1_I4P
+                     heads = heads//' '//word
+                  elseif (word == 'noborder') then
+                     i = i + 1_I4P
+                     heads = heads//' filled'
+                  elseif (word == 'fixed') then
+                     ! foresight's heads keep their size on short arrows anyway
+                     i = i + 1_I4P
+                  elseif (word == 'size') then
+                     i = i + 1_I4P
+                     if (.not. head_size_option()) return
+                  elseif (word == 'as' .or. keyword(word, 'arrowstyle', 6_I4P)) then
+                     i = i + 1_I4P
+                     if (.not. item_arrow_style()) return
+                  else
+                     exit
+                  endif
                enddo
             endif
             if (with == 'ellipses' .and. i < size(tokens, kind=I4P)) then
@@ -3577,12 +3599,12 @@ contains
       endif
       if (lcvar .or. lcz) then
          word = trim(merge('lc palette z', 'lc variable ', lcz))
-         if (.not. (is_word(with, 'lines points linespoints impulses') .or. &
+         if (.not. (is_word(with, 'lines points linespoints impulses vectors arrows') .or. &
                     (lcvar .and. is_word(with, 'circles ellipses boxes candlesticks financebars boxxyerror '// &
                                          'boxerrorbars histograms filledcurves polygons')))) then
-            call fail('plot: '//word//' applies to lines, points, linespoints and impulses (lc variable also to '// &
-                      'circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, '// &
-                      'filledcurves and polygons), not to '//with, iostat, iomsg)
+            call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors and arrows (lc '// &
+                      'variable also to circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, '// &
+                      'histograms, filledcurves and polygons), not to '//with, iostat, iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -3728,7 +3750,17 @@ contains
       x = values(:, 1)
       y = values(:, 2)
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
-      if (lcz) zcolors = values(:, size(values, 2))
+      if (lcz) then
+         ! a row with an undefined field is no point for gnuplot: nor a palette value of the color axis
+         zcolors = values(:, size(values, 2))
+         block
+            integer(I4P) :: r !< Row.
+
+            do r = 1_I4P, size(values, 1, kind=I4P)
+               if (.not. all(ieee_is_finite(values(r, :)))) zcolors(r) = ieee_value(1.0_R8P, ieee_quiet_nan)
+            enddo
+         endblock
+      endif
       ! lc palette: the series gets its palette colors once added (paint_last); no SVG color meanwhile
       palette_lc = ''
       if (allocated(line%lc)) then
@@ -3929,11 +3961,17 @@ contains
                                whiskerbars=whisker)
          if (lcvar) call color_last
       elseif (with == 'vectors') then
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, dx=xlow, &
                                dy=xhigh, head=heads)
+         call head_last
+         if (lcvar) call color_last
       elseif (with == 'arrows') then
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
                                length=xlow, angle=xhigh, head=heads)
+         call head_last
+         if (lcvar) call color_last
       elseif (with == 'ellipses' .or. with == 'polygons') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -4382,6 +4420,101 @@ contains
       endassociate
       endsubroutine fill_last
 
+      subroutine head_last
+      !< The head size of the vectors or arrows just added (`size L,A`).
+      associate(panel => self%figure%panels(self%figure%current))
+         associate(last => panel%series(size(panel%series)))
+            last%head_size = item_head
+            last%head_system = item_head_system
+         endassociate
+      endassociate
+      endsubroutine head_last
+
+      function head_size_option() result(ok)
+      !< `size [first|graph|screen|character] L,A[,B]` of vectors and arrows (token `i` is `size`): the head length in
+      !< the system (x axis values by default) and its angle [deg]; the back angle B is read and ignored.
+      logical                       :: ok    !< Success.
+      real(R8P)                     :: v     !< Number.
+      integer(I4P)                  :: k     !< Number counter.
+      character(len=:), allocatable :: piece !< Number text.
+
+      ok = .false.
+      item_head_system = 'first'
+      if (i < size(tokens, kind=I4P)) then
+         if (is_word(tokens(i + 1_I4P)%text, 'first graph screen character')) then
+            i = i + 1_I4P
+            item_head_system = tokens(i)%text
+         endif
+      endif
+      do k = 1_I4P, 3_I4P
+         if (k > 1_I4P) then
+            ! a comma, then a number: the next value (not the next item)
+            if (i + 1_I4P >= size(tokens, kind=I4P)) exit
+            if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) exit
+            if (tokens(i + 2_I4P)%kind /= TOKEN_WORD) exit
+            if (verify(tokens(i + 2_I4P)%text(1:1), '0123456789.+-') /= 0) exit
+            i = i + 1_I4P
+         endif
+         if (i >= size(tokens, kind=I4P)) then
+            call fail('plot: size [first|graph|screen|character] LENGTH,ANGLE expected', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+         piece = tokens(i)%text
+         call self%symbols%constant(piece, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: size: '//iomsg
+            return
+         endif
+         if (k == 1_I4P) item_head(1) = abs(v)
+         if (k == 2_I4P) item_head(2) = v
+      enddo
+      if (item_head(2) == 0.0_R8P) item_head(2) = 15.0_R8P
+      ok = .true.
+      endfunction head_size_option
+
+      function item_arrow_style() result(ok)
+      !< `as N` or `arrowstyle N` of vectors and arrows (token `i` the keyword): the heads, fill, size, color and width
+      !< of `set style arrow N`, as gnuplot.
+      logical      :: ok !< Success.
+      integer(I4P) :: n  !< Style number.
+      integer(I4P) :: j  !< Style counter.
+
+      ok = .false.
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%text == 'variable' .or. tokens(i + 1_I4P)%text == 'var') then
+            call fail('plot: arrowstyle variable is not supported', iostat, iomsg)
+            return
+         endif
+      endif
+      if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+      ok = .true.
+      if (.not. allocated(self%arrow_styles)) return
+      do j = 1_I4P, size(self%arrow_styles, kind=I4P)
+         if (self%arrow_styles(j)%tag /= n) cycle
+         associate(style => self%arrow_styles(j))
+            heads = heads//' '//trim(merge('nohead  ', 'head    ', style%head == 0_I4P))
+            if (style%head == 2_I4P) heads = heads//' backhead'
+            if (style%head == 3_I4P) heads = heads//' heads'
+            if (any(trim(style%fill) == ['filled  ', 'noborder'])) then
+               heads = heads//' filled'
+            else
+               heads = heads//' nofilled'
+            endif
+            item_head = 0.0_R8P
+            if (style%length > 0.0_R8P) then
+               item_head = [style%length, style%angle]
+               item_head_system = style%length_system
+            endif
+            if (allocated(style%color)) then
+               if (len(style%color) > 0) line%lc = style%color
+            endif
+            line%lw = style%lw
+         endassociate
+         exit
+      enddo
+      endfunction item_arrow_style
+
       subroutine color_last
       !< `lc variable` of circles, ellipses, boxes and candlesticks: each shape in its point's color, the key sample in
       !< the first one's
@@ -4549,7 +4682,8 @@ contains
 
       subroutine variable_colors(c, rgb)
       !< The colors of the points from their color column `c`, gnuplot `lc variable`: the linetype color of each
-      !< number (`set colorsequence`), or with `rgb` the 24-bit color 0xRRGGBB; an undefined value takes linetype 1.
+      !< number (`set colorsequence`), or with `rgb` the color 0xAARRGGBB (AA the transparency, 0 opaque, as gnuplot);
+      !< an undefined value takes linetype 1.
       !< The linetype colors go to default_color as the component itself, never through an associate name: they are
       !< unallocated by default (gnuplot's), and an associate selector must be allocated (nvfortran -O0 faults on it).
       real(R8P), intent(in)       :: c(:)  !< Color column.
@@ -4566,12 +4700,17 @@ contains
          if (.not. ieee_is_finite(c(k))) then
             point_colors(k) = default_color(1_I4P, self%figure%panels(self%figure%current)%linecolors)
          elseif (rgb) then
+            ! 0xAARRGGBB: a transparency AA (0 opaque) is the SVG opacity 255 - AA, #rrggbbaa
             code = iand(int(c(k), I8P), int(z'FFFFFF', I8P))
             point_colors(k) = '#'
             do d = 5_I4P, 0_I4P, -1_I4P
                digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
                point_colors(k)(7 - d:7 - d) = HEX(digit + 1:digit + 1)
             enddo
+            code = 255_I8P - iand(ishft(int(c(k), I8P), -24_I4P), 255_I8P)
+            if (code < 255_I8P .and. len(point_colors) >= 9) &
+               point_colors(k)(8:9) = HEX(code / 16_I8P + 1_I8P:code / 16_I8P + 1_I8P)// &
+                                      HEX(mod(code, 16_I8P) + 1_I8P:mod(code, 16_I8P) + 1_I8P)
          else
             point_colors(k) = default_color(int(c(k), I4P), self%figure%panels(self%figure%current)%linecolors)
          endif
@@ -5923,6 +6062,16 @@ contains
    object%tag = tag
    placed = found
    kind_set = found
+   ! gnuplot: `set style arrow N` again changes style N, the options not given kept (`default` resets it)
+   if (option == 'style arrow' .and. allocated(self%arrow_styles)) then
+      block
+         integer(I4P) :: j !< Style counter.
+
+         do j = 1_I4P, size(self%arrow_styles, kind=I4P)
+            if (self%arrow_styles(j)%tag == tag) arrow = self%arrow_styles(j)
+         enddo
+      endblock
+   endif
    select case (option)
    case ('label')
       call label_words
@@ -5961,7 +6110,7 @@ contains
    endselect
    contains
       subroutine store_arrow_style
-      !< Keep `arrow` as the arrow style of its tag (replacing it): its look only.
+      !< Keep `arrow` as the arrow style of its tag (the earlier one changed by the options): its look only.
       integer(I4P) :: j !< Style counter.
 
       if (option == 'style arrow' .and. placed) then

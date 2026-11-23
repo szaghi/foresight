@@ -18,6 +18,7 @@ private
 public :: axes_view
 public :: backend_object
 public :: arrow_head
+public :: sized_head
 public :: HEAD_ANGLE, HEAD_LENGTH
 
 real(R8P), parameter :: HEAD_LENGTH = 18.0_R8P !< Arrowhead barb length [px], gnuplot svg default.
@@ -64,6 +65,8 @@ type, abstract :: backend_object
    logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
    real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
    logical            :: boxed = .false.     !< The texts written now are boxed (gnuplot's textbox): on the background.
+   real(R8P)          :: head_px(2) = 0.0_R8P !< Length [px] and angle [deg] of the data arrowheads drawn now, 0 for
+                                              !< the default head.
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.
@@ -329,15 +332,27 @@ contains
    real(R8P), intent(in)  :: tail(2)     !< Tail [px].
    real(R8P), intent(in)  :: tip(2)      !< Tip [px].
    real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
+
+   call sized_head(tail, tip, HEAD_LENGTH, HEAD_ANGLE, barbs)
+   endsubroutine arrow_head
+
+   pure subroutine sized_head(tail, tip, length, angle, barbs)
+   !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation], `length` px long, `angle`
+   !< degrees off the shaft: `barbs(:, 1)` and `barbs(:, 2)`. A zero length shaft points right.
+   real(R8P), intent(in)  :: tail(2)     !< Tail [px].
+   real(R8P), intent(in)  :: tip(2)      !< Tip [px].
+   real(R8P), intent(in)  :: length      !< Barb length [px].
+   real(R8P), intent(in)  :: angle       !< Barb angle [deg].
+   real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
    real(R8P)              :: a           !< Shaft direction, tip to tail [rad].
    real(R8P)              :: h           !< Barb half angle [rad].
 
    a = 0.0_R8P
    if (any(tip /= tail)) a = atan2(tail(2) - tip(2), tail(1) - tip(1))
    if (all(tip == tail)) a = 4.0_R8P * atan(1.0_R8P)
-   h = HEAD_ANGLE * atan(1.0_R8P) / 45.0_R8P
-   barbs(:, 1) = tip + HEAD_LENGTH * [cos(a + h), sin(a + h)]
-   barbs(:, 2) = tip + HEAD_LENGTH * [cos(a - h), sin(a - h)]
-   endsubroutine arrow_head
+   h = angle * atan(1.0_R8P) / 45.0_R8P
+   barbs(:, 1) = tip + length * [cos(a + h), sin(a + h)]
+   barbs(:, 2) = tip + length * [cos(a - h), sin(a - h)]
+   endsubroutine sized_head
 
 endmodule foresight_backend

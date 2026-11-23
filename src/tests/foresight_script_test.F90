@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(178)                           !< Per-check outcome.
+logical                       :: test_passed(180)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3919,6 +3919,48 @@ if (test_passed(178)) then
    if (test_passed(178)) test_passed(178) = abs(interpreter%figure%panels(1)%series(1)%x(2) - 0.25_R8P) < 1.0e-12_R8P
 endif
 
+! with vectors as N: the heads, fill and size of `set style arrow N` (a second `set style arrow N` changes the first),
+! the head size in the svg (and for the viewer); lc rgb variable 0xAARRGGBB, the transparency AA as the opacity 255-AA
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_vectors_as.svg"; '// &
+                          'set style arrow 1 size screen 0.03,20 noborder; set style arrow 1 lc rgb variable lw 3; '// &
+                          'set xrange [-1:1]; set yrange [-1:1]; '// &
+                          'plot sample [i=0:1:1] ''+'' using (0):(0):(i):(1):(0x80FF0000 + i) with vectors as 1', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(179) = iostat == 0_I4P
+if (test_passed(179)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_vectors_as.svg')
+      associate(series => interpreter%figure%panels(1)%series(1))
+         test_passed(179) = series%head_filled .and. abs(series%head_size(1) - 0.03_R8P) < 1.0e-12_R8P .and. &
+                           abs(series%head_size(2) - 20.0_R8P) < 1.0e-12_R8P .and. series%head_system == 'screen' .and. &
+                           index(svg, 'data-length="18" data-angle="20"') > 0 .and. &
+                           index(svg, 'stroke="#ff00007f"') > 0 .and. index(svg, 'stroke="#ff00017f"') > 0
+      endassociate
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_vectors_as.svg')
+close(unit, status='delete')
+
+! with vectors size first L,A filled and lc palette z (a row with an undefined field out of the color range)
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'0 0 1 1 2'//new_line('a')//'1 1 NaN 1 0'//new_line('a')// &
+                          '2 2 1 0 4'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $D using 1:2:3:4:5 with vectors size 0.5,30 filled lc palette z', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(180) = iostat == 0_I4P
+if (test_passed(180)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(180) = series%head_filled .and. abs(series%head_size(1) - 0.5_R8P) < 1.0e-12_R8P .and. &
+                        abs(series%head_size(2) - 30.0_R8P) < 1.0e-12_R8P .and. series%head_system == 'first' .and. &
+                        series%palette_mode == 1_I4P
+      if (test_passed(180)) test_passed(180) = ieee_is_nan(series%zvalues(2)) .and. series%zvalues(3) == 4.0_R8P
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3927,7 +3969,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,178L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,180L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

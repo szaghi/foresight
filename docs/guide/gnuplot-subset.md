@@ -1331,14 +1331,15 @@ plot 'run.dat' u 1:2 w l lc palette cb 0.5        # one color: the value 0.5 of 
 | Color | Meaning |
 |---|---|
 | `lc variable` | the last `using` column is a linetype number per point, its color in the [color sequence](#styles) |
-| `lc rgb variable` | the last `using` column is a 24-bit color, `0xRRGGBB` |
+| `lc rgb variable` | the last `using` column is a color, `0xRRGGBB`, or `0xAARRGGBB` with AA the transparency (0 opaque, 255 invisible), as gnuplot |
 | `lc palette` [`z`] | the last `using` column is a value per point, colored through the [palette](#images-and-palettes) over the color axis; the color axis spans these values (unless `set cbrange`) and the color box is drawn |
 | `lc palette cb V` | one color for the item: the value V of the color axis (gnuplot's default [-10:10] when nothing sets or spans it) |
 | `lc palette frac F` | one color for the item: the fraction F (0 to 1) of the palette |
 
 As gnuplot, a line segment takes the color of its end point; a point whose palette value is undefined is not drawn,
 nor the segment to it, but still counts for the autoscale.
-The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints` and `impulses` (`lc variable`
+The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints`, `impulses`, `vectors` and
+`arrows` (`lc variable`
 also to circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, `Y:COLOR`
 included, filledcurves and polygons, a run of the last two in its first point's color), and not with `smooth` or
 `bins`; `palette cb` and `frac` to every style but the readouts, the panel charts and `labels`, and to
@@ -1401,17 +1402,21 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 
 | Style | `using` | Drawing |
 |---|---|---|
-| `vectors` | `x:y:xdelta:ydelta` | an arrow from x:y to x+xdelta:y+ydelta; `head` (default), `heads`, `nohead`, `backhead`, `filled`, `empty` after the style |
+| `vectors` | `x:y:xdelta:ydelta` | an arrow from x:y to x+xdelta:y+ydelta; after the style `head` (default), `heads`, `nohead`, `backhead`, `filled`, `empty`, `noborder` (filled), `size [first\|graph\|screen\|character] L,A` (head length, x axis values by default, and barb angle [deg]), `fixed`, `as N`\|`arrowstyle N` (the heads, fill, size, color and width of `set style arrow N`) |
 | `arrows` | `x:y:length:angle` | an arrow of `length` (> 0: x units, the same on the page at any `angle` [deg]; in (-1, 0): a fraction of the plot width) |
 | `ellipses` | `x:y`, `x:y:diameter`, `x:y:major:minor[:angle]` | an ellipse in the fill style, the major diameter in x units and the minor one in y units, rotated on the page (gnuplot `units xy`); without diameters (or a negative one) 5% x 3% of the plot |
 | `polygons` | `x:y` | a closed polygon per block of the data (blocks end at single blank lines), in the fill style |
 | `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `offset X,Y` (characters), `point` (with `pt`, `ps`), `tc "color"` anywhere in the item |
 | `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r |
 
-Arrowheads are gnuplot's (18 px, 15 degrees) and, as label texts, keep their pixel size: in the HTML page a zoom
-moves them with the data. Labels are black (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike
-gnuplot, sectors widen the autoscale to their whole extent. Not supported: `arrowstyle`, variable colors and
-rotations, `units xx|yy`, label fonts and `hypertext`.
+Arrowheads are gnuplot's (18 px, 15 degrees) unless `size` is given and, as label texts, keep their pixel size: in
+the HTML page a zoom moves them with the data. `fixed` is read: foresight's heads never shrink on short arrows (gnuplot
+shrinks them without it). `lc variable`, `lc rgb variable` (0xAARRGGBB, AA the transparency) and `lc palette z` color
+each vector or arrow from the last `using` column; a row with an undefined field is no point and out of the color
+range, as gnuplot. A second `set style arrow N` changes style N (`default` resets it), as gnuplot. Labels are black
+(the frame color of a theme) unless `tc` is given, as gnuplot. Unlike gnuplot, sectors widen the autoscale to their
+whole extent. Not supported: `arrowstyle variable`, the dashes of an arrow style on data arrows, the back angle of
+`size`, variable rotations, `units xx|yy`, label fonts and `hypertext`.
 
 ## Labels, arrows and objects
 
@@ -2054,12 +2059,12 @@ x2 and y2 ticks, `log`/`nolog`; the complex forms of the functions but `abs`, `a
 (`VP`, `erfi`, `FresnelC`, ...);
 in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,
-`commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` with boxplot, error bars, vectors and labels, `lc palette z` with other styles than the first four, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
+`commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` with boxplot, error bars and labels, `lc palette z` with other styles than lines, points, linespoints, impulses, vectors and arrows, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
 `newhistogram` groups; `pointnumber` (`pn`), the line gap of a negative `pointinterval`; `reread`
 (deprecated in gnuplot 6.0), arrays as function arguments; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options; two tick
 label fields in one `using` (`xtic(1):ytic(2)`); `set multiplot` `scale`, `offset`; palette
 models other than RGB and HSV; `set ttics rotate`; `title at`; `keyentry` with
-other styles than those of functions; `with vectors as N`;
+other styles than those of functions;
 `fillsteps` options (`above`, `below`, `y=`); `set minussign` and `set micro` with `set encoding utf8`.
