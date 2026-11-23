@@ -3171,16 +3171,10 @@ contains
          else
             own_base = [own_base, ieee_value(1.0_R8P, ieee_quiet_nan)]
          endif
-         ! grown through temporaries: nvfortran 26.9 -O2 zeroes `a = reshape([a, ...], ...)` (see boxplot_stats)
-         block
-            real(R8P), allocatable :: grown_range(:,:) !< own_range, one more.
-            logical,   allocatable :: grown_set(:,:)   !< own_set, one more.
-
-            grown_range = reshape([own_range, item_range], [2, size(functions)])
-            call move_alloc(grown_range, own_range)
-            grown_set = reshape([own_set, item_set], [2, size(functions)])
-            call move_alloc(grown_set, own_set)
-         endblock
+         ! a plain reshape: through block temporaries and move_alloc, nvfortran 26.9 -O2 miscompiled plot_command
+         ! (checks 85, 96, 124, 134, 147 and the keys golden failed)
+         own_range = reshape([own_range, item_range], [2, size(functions)])
+         own_set = reshape([own_set, item_set], [2, size(functions)])
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
