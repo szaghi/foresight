@@ -1409,8 +1409,18 @@ contains
    if (self%yaxis%labelled()) view%ytics = labels_attribute(self%yaxis%labels)
    view%xformat = ''
    view%yformat = ''
-   if (self%xaxis%tics%has_format()) view%xformat = self%xaxis%tics%format
-   if (self%yaxis%tics%has_format()) view%yformat = self%yaxis%tics%format
+   if (self%xaxis%tics%has_format()) then
+      view%xformat = self%xaxis%tics%format
+   elseif (self%xaxis%tics%per_label) then
+      ! the scripts' gnuplot labels, also when the viewer relabels
+      view%xformat = '%h'
+   endif
+   if (self%yaxis%tics%has_format()) then
+      view%yformat = self%yaxis%tics%format
+   elseif (self%yaxis%tics%per_label) then
+      ! the scripts' gnuplot labels, also when the viewer relabels
+      view%yformat = '%h'
+   endif
    view%mirror = [self%xaxis%tics%mirror, self%yaxis%tics%mirror, self%y2axis%tics%mirror]
    view%y2_active = self%y2_active
    if (self%y2_active) then
@@ -1419,7 +1429,12 @@ contains
       view%y2tics = self%y2axis%tics%attribute(self%y2axis%lo, self%y2axis%hi)
       if (self%y2axis%labelled()) view%y2tics = labels_attribute(self%y2axis%labels)
       view%y2format = ''
-      if (self%y2axis%tics%has_format()) view%y2format = self%y2axis%tics%format
+      if (self%y2axis%tics%has_format()) then
+         view%y2format = self%y2axis%tics%format
+      elseif (self%y2axis%tics%per_label) then
+         ! the scripts' gnuplot labels, also when the viewer relabels
+         view%y2format = '%h'
+      endif
    endif
    view%x2_active = self%x2_active
    if (self%x2_active) then
@@ -1429,7 +1444,12 @@ contains
       view%x2tics = self%x2axis%tics%attribute(self%x2axis%lo, self%x2axis%hi)
       if (self%x2axis%labelled()) view%x2tics = labels_attribute(self%x2axis%labels)
       view%x2format = ''
-      if (self%x2axis%tics%has_format()) view%x2format = self%x2axis%tics%format
+      if (self%x2axis%tics%has_format()) then
+         view%x2format = self%x2axis%tics%format
+      elseif (self%x2axis%tics%per_label) then
+         ! the scripts' gnuplot labels, also when the viewer relabels
+         view%x2format = '%h'
+      endif
    endif
    ! tick labels with markup, drawn again by the viewer as enhanced text
    view%markup = axis_markup(self%xaxis) .or. axis_markup(self%yaxis)

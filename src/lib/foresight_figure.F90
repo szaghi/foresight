@@ -74,6 +74,8 @@ type :: figure_object
    real(R8P)                      :: layout_spacing(2) = 0.05_R8P !< Space between the layout plot areas, x and y
                                                                   !< (gnuplot `spacing`, 0.05 screen by default).
    logical                        :: spacing_chars(2) = .false.   !< That space is in characters.
+   logical                        :: gnuplot_labels = .false. !< gnuplot's default tick labels, `% h` per label
+                                                               !< (the scripts'), on every axis of every panel.
    contains
       procedure, pass(self) :: clear           !< Remove the series of the current panel, keeping the settings.
       procedure, pass(self) :: image           !< gnuplot `plot ... with image`, a grid of values.
@@ -2164,6 +2166,15 @@ contains
       associate(panel => self%panels(p))
          if (size(self%panels) > 1) then
             if (.not. allocated(panel%series)) cycle
+         endif
+         if (self%gnuplot_labels) then
+            ! the scripts' default tick labels: gnuplot's `% h`, each label by %g
+            panel%xaxis%tics%per_label = .true.
+            panel%yaxis%tics%per_label = .true.
+            panel%x2axis%tics%per_label = .true.
+            panel%y2axis%tics%per_label = .true.
+            panel%cbaxis%tics%per_label = .true.
+            panel%raxis%tics%per_label = .true.
          endif
          if (self%layout) then
             ! the grid cell of panel p: row by row (or column by column), from the top row (or the bottom one)

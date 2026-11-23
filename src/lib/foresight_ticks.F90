@@ -106,6 +106,9 @@ type :: tics_object
    real(R8P)                     :: scale(2) = [1.0_R8P, 0.5_R8P] !< Major and minor tick lengths, in major lengths
                                                       !< (gnuplot `scale MAJOR,MINOR`; 0 draws no tick).
    type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.
+   logical                       :: per_label = .false. !< gnuplot's default `% h` labels, each by %g (with a x10
+                                                        !< superscript exponent), of the scripts; else the
+                                                        !< library's per-axis rule (SCI_HIGH, SCI_LOW).
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
       procedure, pass(self) :: clear_list !< Forget the explicit list, back to the automatic or fixed ticks.
@@ -948,7 +951,7 @@ contains
    allocate(ticks(max(0_I8P, kmax - kmin + 1_I8P)))
    do k = kmin, kmax
       ticks(k - kmin + 1_I8P)%value = grid_value(k * m, e)
-      call tick_label(k * m, e, sci, ticks(k - kmin + 1_I8P)%label, ticks(k - kmin + 1_I8P)%sup, tics)
+      call tick_label(k * m, e, sci, ticks(k - kmin + 1_I8P)%label, ticks(k - kmin + 1_I8P)%sup, tics, [lo, hi])
    enddo
    if (present(tics)) call append_minors(ticks, 0.0_R8P, step, .false., minor_count(tics, m, .false.), lo, hi, &
                                          -huge(1.0_R8P), huge(1.0_R8P))
@@ -1006,7 +1009,7 @@ contains
          call fixed_log_ticks(lo, hi, tics, ticks)
          return
       endif
-      custom = tics%has_format()
+      custom = tics%has_format() .or. tics%per_label
    endif
    ta = log10(min(lo, hi))
    tb = log10(max(lo, hi))
@@ -1027,7 +1030,7 @@ contains
       tick%value = grid_value(1_I8P, int(k, I4P))
       tick%major = .true.
       if (custom) then
-         call format_decimal(tics%format, 1_I8P, int(k, I4P), tick%label, tick%sup)
+         call format_decimal(label_format(tics, [lo, hi]), 1_I8P, int(k, I4P), tick%label, tick%sup)
       elseif (plain) then
          tick%label = decimal_str(1_I8P, int(-k, I4P))
          tick%sup = ''
@@ -1048,7 +1051,7 @@ contains
             tick%major = plain
             tick%sup = ''
             if (plain .and. custom) then
-               call format_decimal(tics%format, d, int(k, I4P), tick%label, tick%sup)
+               call format_decimal(label_format(tics, [lo, hi]), d, int(k, I4P), tick%label, tick%sup)
             elseif (plain) then
                tick%label = decimal_str(d, int(-k, I4P))
             else
@@ -1260,7 +1263,7 @@ contains
          if (item%major) then
             call decimal_of(item%value, n, e)
             if (.not. item%labelled) then
-               call tick_label(n, e, sci, tick%label, tick%sup, tics)
+               call tick_label(n, e, sci, tick%label, tick%sup, tics, [lo, hi])
             elseif (index(item%label, '%') > 0 .and. len(format_check(item%label)) == 0) then
                call format_decimal(item%label, n, e, tick%label, tick%sup)
             else
@@ -1357,7 +1360,7 @@ contains
    do k = kmin, kmax
       associate(tick => ticks(k - kmin + 1_I8P))
          tick%value = grid_value(n(2) + k * n(1), e(1))
-         call tick_label(n(2) + k * n(1), e(1), sci, tick%label, tick%sup, tics)
+         call tick_label(n(2) + k * n(1), e(1), sci, tick%label, tick%sup, tics, [lo, hi])
       endassociate
    enddo
    call append_minors(ticks, first, step, .false., minor_count(tics, n(1), .false.), lo, hi, &
@@ -1414,7 +1417,7 @@ contains
       associate(tick => ticks(k - kmin + 1_I8P))
          tick%value = v
          call decimal_of(v, mantissa, exponent)
-         call tick_label(mantissa, exponent, sci, tick%label, tick%sup, tics)
+         call tick_label(mantissa, exponent, sci, tick%label, tick%sup, tics, [lo, hi])
       endassociate
       v = v * factor
    enddo
@@ -1440,18 +1443,51 @@ contains
    enddo
    endfunction power
 
-   pure subroutine tick_label(n, e, sci, label, sup, tics)
-   !< Label of the tick value `n * 10**e`: by the user format of `tics` if any, else by `format_label`.
-   integer(I8P),                  intent(in)           :: n     !< Value mantissa.
-   integer(I4P),                  intent(in)           :: e     !< Value exponent.
-   logical,                       intent(in)           :: sci   !< Scientific notation (default labels).
-   character(len=:), allocatable, intent(out)          :: label !< Label text.
-   character(len=:), allocatable, intent(out)          :: sup   !< Label superscript.
-   type(tics_object),             intent(in), optional :: tics  !< User settings.
+   pure function label_format(tics, span) result(format)
+   !< The label format of `tics`: the user's, else gnuplot's default (per_label) over the axis `span`: `%.Pf` when the
+   !< ends have one sign and P = ceil(-log10(min(|hi - lo|, |lo|))) is 5 to 9 (gnuplot's copy_or_invent_formatstring),
+   !< else `%h`, %g per label.
+   type(tics_object), intent(in) :: tics    !< Settings.
+   real(R8P),         intent(in) :: span(2) !< Axis start and end.
+   character(len=:), allocatable :: format  !< Format.
+   integer(I4P)                  :: p       !< gnuplot's precision.
+   real(R8P)                     :: d       !< Smaller of the range and the start.
+
+   if (tics%has_format()) then
+      format = tics%format
+      return
+   endif
+   format = '%h'
+   d = min(abs(span(2) - span(1)), abs(span(1)))
+   if (span(1) * span(2) > 0.0_R8P .and. d > 0.0_R8P) then
+      p = ceiling(-log10(d), I4P)
+      if (p > 4_I4P .and. p < 10_I4P) format = '%.'//achar(48 + p)//'f'
+   endif
+   endfunction label_format
+
+   pure subroutine tick_label(n, e, sci, label, sup, tics, span)
+   !< Label of the tick value `n * 10**e`: by the user format of `tics` if any, else by `format_label`; gnuplot's
+   !< default (`per_label`) over the axis `span`: `%.Pf` when the ends have one sign and P = ceil(-log10(min(|hi - lo|,
+   !< |lo|))) is 5 to 9 (gnuplot's copy_or_invent_formatstring), else %h per label.
+   integer(I8P),                  intent(in)           :: n       !< Value mantissa.
+   integer(I4P),                  intent(in)           :: e       !< Value exponent.
+   logical,                       intent(in)           :: sci     !< Scientific notation (default labels).
+   character(len=:), allocatable, intent(out)          :: label   !< Label text.
+   character(len=:), allocatable, intent(out)          :: sup     !< Label superscript.
+   type(tics_object),             intent(in), optional :: tics    !< User settings.
+   real(R8P),                     intent(in), optional :: span(2) !< Axis start and end.
 
    if (present(tics)) then
       if (tics%has_format()) then
          call format_decimal(tics%format, n, e, label, sup)
+         return
+      elseif (tics%per_label) then
+         ! gnuplot's default format, `% h`: %g per label (100000, 1x10^6, 0.0005, 1x10^-5)
+         if (present(span)) then
+            call format_decimal(label_format(tics, span), n, e, label, sup)
+         else
+            call format_decimal('%h', n, e, label, sup)
+         endif
          return
       endif
    endif

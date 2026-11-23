@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(204)                           !< Per-check outcome.
+logical                       :: test_passed(205)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4635,6 +4635,25 @@ associate(panel => interpreter%figure%panels(1))
                      panel%xaxis%max_fixed .and. panel%xaxis%max_user == 10.0_R8P
 endassociate
 
+! the scripts' default tick labels are gnuplot's `% h`: %g per label (500000, 1x10^6), `%.Pf` for a narrow axis away
+! from 0 (gnuplot's invented precision); the library keeps its rule (its goldens)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_h_labels.svg"; set yrange [0:2e6]; '// &
+                          'set xrange [1e-6:1e-5]; plot x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(205) = iostat == 0_I4P
+if (test_passed(205)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_h_labels.svg')
+      test_passed(205) = index(svg, '>500000</text>') > 0 .and. index(svg, '>1.5x10<tspan') > 0 .and. &
+                        index(svg, '>0.000010</text>') > 0 .and. index(svg, 'data-yformat="%h"') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_h_labels.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4643,7 +4662,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,204L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,205L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

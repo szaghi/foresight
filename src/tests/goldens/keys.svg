@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" font-family="Arial,Helvetica,sans-serif" font-size="12">
 <rect x="0" y="0" width="900" height="600" fill="white" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="35.8 317.2 16 269" data-x="-1e1 1e1" data-y="-2e1 2e1" data-y2="-1e1 1e1" data-log="0 0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="35.8 317.2 16 269" data-x="-1e1 1e1" data-y="-2e1 2e1" data-y2="-1e1 1e1" data-log="0 0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h" data-y2format="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="35.8,269 35.8,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="106.15,269 106.15,16"/>
@@ -137,7 +137,7 @@
 <text x="398" y="57.7" text-anchor="end">gamma</text>
 </g>
 </g>
-<g class="fs-axes" data-area="603.8 890 16 269" data-x="-1e1 1e1" data-y="-2e1 2e1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="603.8 890 16 269" data-x="-1e1 1e1" data-y="-2e1 2e1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="603.8,269 603.8,16"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="675.35,269 675.35,16"/>
@@ -263,7 +263,7 @@
 <text x="505" y="265.7" text-anchor="end">gamma</text>
 </g>
 </g>
-<g class="fs-axes" data-area="56.8 440 316 508" data-x="-1e1 1e1" data-y="-4e1 4e1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="56.8 440 316 508" data-x="-1e1 1e1" data-y="-4e1 4e1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="56.8,508 56.8,316"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="152.6,508 152.6,316"/>
@@ -428,7 +428,7 @@
 <text x="97.2" y="586.7" text-anchor="end">epsilon</text>
 </g>
 </g>
-<g class="fs-axes" data-area="506.8 890 358 548" data-x="-1e1 1e1" data-y="-1e1 1e1" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="506.8 890 358 548" data-x="-1e1 1e1" data-y="-1e1 1e1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="506.8,548 506.8,358"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="602.6,548 602.6,358"/>

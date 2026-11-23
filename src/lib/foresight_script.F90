@@ -327,6 +327,8 @@ contains
    call self%figure%init
    ! gnuplot's enhanced text, on by default in the scripts (its svg and dumb terminals)
    call self%figure%set_enhanced(.true.)
+   ! gnuplot's default tick labels, `% h` (100000, not 1x10^5): the scripts' (the library keeps its rule)
+   self%figure%gnuplot_labels = .true.
    if (present(theme)) then
       if (len_trim(theme) > 0) call self%figure%set_theme(name=trim(theme))
    endif
