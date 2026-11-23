@@ -4814,6 +4814,83 @@ contains
    enddo
    endsubroutine polar_extent
 
+   subroutine polar_bands(all)
+   !< The filled curves with a base (`filledcurves [above|below] r=V`, the base in `ylow`) of the series `all`
+   !< (theta:r) made closed polygons of theta:r, apart at undefined points: each piece of the band between the curve
+   !< and the circle r = V (only where the curve is above it, or below, with `above`, `below`), the curve forward and
+   !< the circle back, the crossings interpolated in theta, as gnuplot's polar filledcurves.
+   type(series_object), intent(inout) :: all(:)  !< Series, theta:r.
+   real(R8P), allocatable             :: px(:)   !< Polygon thetas.
+   real(R8P), allocatable             :: py(:)   !< Polygon radii.
+   real(R8P), allocatable             :: bx(:)   !< Polygon thetas of the circle, back.
+   real(R8P), allocatable             :: by(:)   !< Polygon radii of the circle, back.
+   real(R8P)                          :: nan     !< Undefined value.
+   real(R8P)                          :: f       !< Crossing fraction.
+   real(R8P)                          :: tc      !< Crossing theta.
+   integer(I4P)                       :: s       !< Series counter.
+   integer(I4P)                       :: i       !< Point counter.
+   integer(I4P)                       :: n       !< Points.
+   logical                            :: inside  !< The current point in the band.
+   logical                            :: was     !< The previous point in the band.
+   logical                            :: open_   !< A polygon in progress.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with /= WITH_FILLEDCURVES .or. .not. allocated(all(s)%ylow)) cycle
+      allocate(px(0), py(0), bx(0), by(0))
+      n = size(all(s)%x, kind=I4P)
+      open_ = .false.
+      was = .false.
+      do i = 1_I4P, n
+         inside = ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i)) .and. ieee_is_finite(all(s)%ylow(i))
+         if (inside .and. all(s)%curve_side > 0_I4P) inside = all(s)%y(i) >= all(s)%ylow(i)
+         if (inside .and. all(s)%curve_side < 0_I4P) inside = all(s)%y(i) <= all(s)%ylow(i)
+         if (i > 1_I4P .and. all(s)%curve_side /= 0_I4P .and. (inside .neqv. was)) then
+            ! the curve crosses the circle between the points: the piece starts or ends there
+            if (ieee_is_finite(all(s)%y(i - 1_I4P)) .and. ieee_is_finite(all(s)%y(i))) then
+               f = (all(s)%ylow(i - 1_I4P) - all(s)%y(i - 1_I4P)) / &
+                   ((all(s)%y(i) - all(s)%y(i - 1_I4P)) - (all(s)%ylow(i) - all(s)%ylow(i - 1_I4P)))
+               tc = all(s)%x(i - 1_I4P) + f * (all(s)%x(i) - all(s)%x(i - 1_I4P))
+               px = [px, tc]
+               py = [py, all(s)%ylow(i - 1_I4P) + f * (all(s)%ylow(i) - all(s)%ylow(i - 1_I4P))]
+               if (.not. inside) call close_piece
+            elseif (.not. inside) then
+               call close_piece
+            endif
+         elseif (.not. inside .and. open_) then
+            call close_piece
+         endif
+         if (inside) then
+            px = [px, all(s)%x(i)]
+            py = [py, all(s)%y(i)]
+            bx = [all(s)%x(i), bx]
+            by = [all(s)%ylow(i), by]
+            open_ = .true.
+         endif
+         was = inside
+      enddo
+      if (open_) call close_piece
+      all(s)%x = px
+      all(s)%y = py
+      deallocate(all(s)%ylow)
+      all(s)%curve_side = 0_I4P
+      all(s)%curve_to = 0_I4P
+      deallocate(px, py, bx, by)
+   enddo
+   contains
+      subroutine close_piece
+      !< The piece in progress closed: the circle back to its start, then a gap.
+
+      if (size(px) > 0) then
+         px = [px, bx, nan]
+         py = [py, by, nan]
+      endif
+      deallocate(bx, by)
+      allocate(bx(0), by(0))
+      open_ = .false.
+      endsubroutine close_piece
+   endsubroutine polar_bands
+
    pure subroutine polar_positive_min(all, rmin)
    !< Smallest positive r of the points of the series `all` (theta:r), readouts aside; 0 if none.
    type(series_object), intent(in)  :: all(:) !< Series, theta:r.
@@ -5294,7 +5371,8 @@ contains
    case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES)
       ok = .true.
    case (WITH_FILLEDCURVES)
-      ok = .not. allocated(series%ylow)
+      ! a base (ylow) is the circle of `r=V`
+      ok = .true.
    case default
       ok = .false.
    endselect
@@ -6026,6 +6104,8 @@ contains
       self%series = raw
       call polar_window(self%series, [self%taxis%min_fixed, self%taxis%max_fixed], &
                         [self%taxis%min_user, self%taxis%max_user])
+      ! gnuplot `filledcurves [above|below] r=V`: the bands to the circle r = V, closed polygons of theta:r
+      call polar_bands(self%series)
       call polar_extent(self%series, rmax, any_r)
       rmin = 0.0_R8P
       if (self%raxis%log) then

@@ -2469,6 +2469,7 @@ contains
    character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
    character(len=2)                             :: ellipse_units !< Units of the ellipse diameters (`units xy|xx|yy`).
    logical                                      :: rotate_var !< Labels rotated by a using field (`rotate variable`).
+   logical                                      :: polar_base !< The base is a polar `r=V`.
    real(R8P),        allocatable                :: label_rotations(:) !< Their rotations [deg].
    real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
@@ -2900,6 +2901,7 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      polar_base = .false.
       rotate_var = .false.
       ellipse_units = 'xy'
       if (allocated(point_tc)) deallocate(point_tc)
@@ -3150,8 +3152,21 @@ contains
                      endif
                      curve = curve//' '//word//','//tokens(i + 3_I4P)%text
                      i = i + 3_I4P
-                  elseif (word == 'r' .or. index(word, 'r=') == 1) then
-                     call fail('plot: filledcurves '//word//' (polar) is not supported', iostat, iomsg)
+                  elseif (index(word, 'r=') == 1) then
+                     ! gnuplot's polar `r=V`: the band to the circle of radius V
+                     if (.not. self%figure%panels(self%figure%current)%polar) then
+                        call fail('plot: filledcurves r=V applies to polar plots', iostat, iomsg)
+                        return
+                     endif
+                     i = i + 1_I4P
+                     allocate(base)
+                     if (.not. to_number(word(3:), base)) then
+                        call fail('plot: filledcurves r=V needs a number, found "'//word//'"', iostat, iomsg)
+                        return
+                     endif
+                     polar_base = .true.
+                  elseif (word == 'r') then
+                     call fail('plot: filledcurves r=V expected (the radius of the circle)', iostat, iomsg)
                      return
                   else
                      exit
@@ -3442,7 +3457,7 @@ contains
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
             polar_ok = is_word(with, 'lines points linespoints impulses filledcurves sectors readout') .and. &
-                       .not. allocated(base)
+                       (.not. allocated(base) .or. polar_base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
             if (.not. polar_ok) then
                call fail('plot: '//POLAR_STYLES, iostat, iomsg)

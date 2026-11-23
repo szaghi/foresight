@@ -2044,8 +2044,9 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
 - `set logscale r` (base 10) places r at log10(r / rmin) from the pole, rmin the `rrange` start (else the smallest
   positive r), the points below it undefined; the rings and the r ticks follow, `set rtics rotate by A` turns their
   labels, as gnuplot;
-- the items are `lines`, `points`, `linespoints`, `impulses` (from the pole), closed `filledcurves` (`using theta:r`)
-  or readouts (of r), on the first axes; x and y stay linear.
+- the items are `lines`, `points`, `linespoints`, `impulses` (from the pole), `filledcurves` (closed, `using
+  theta:r`, or `[above|below] r=V`: the band between the curve and the circle of radius V, where the curve is above,
+  or below, it, as gnuplot) or readouts (of r), on the first axes; x and y stay linear.
 
 In the HTML page a polar panel zooms as any other: the curves, rings, spokes and border are data, the r tick labels
 and theta labels are hidden while zoomed. Unlike gnuplot, points beyond rmax are clipped at the plot area as the lines
@@ -2100,7 +2101,7 @@ x2 and y2 ticks, `log`/`nolog`; the complex forms of the functions but `abs`, `a
 (`VP`, `erfi`, `FresnelC`, ...);
 in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,
-`commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` and `lc palette z` with boxplot, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
+`commentschars` and `columnheaders`; `lc variable` and `lc palette z` with boxplot, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
 `newhistogram` groups; the line gap of a negative `pointinterval` or `pointnumber`; `reread`
 (deprecated in gnuplot 6.0), arrays as function arguments; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(189)                           !< Per-check outcome.
+logical                       :: test_passed(190)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -895,7 +895,7 @@ test_passed(74) = iostat /= 0_I4P .and. index(iomsg, 'rgbimage needs using x:y:r
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves x1 above", iostat, iomsg)
 test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'not with y=V nor a band') > 0
 call interpreter%run_text("plot '"//data_file//"' w filledcurves r=1", iostat, iomsg)
-test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves r=1 (polar) is not supported') &
+test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves r=V applies to polar plots') &
                    > 0
 call interpreter%run_text("set rgbmax 0", iostat, iomsg)
 test_passed(74) = test_passed(74) .and. iostat /= 0_I4P .and. index(iomsg, 'set rgbmax: a positive number') > 0
@@ -2358,7 +2358,7 @@ test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'ti
 call interpreter%run_text('set errorbars wide', iostat, iomsg)
 test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "wide"') > 0
 call interpreter%run_text('plot "foresight_script_test_gaps.dat" u 0:2 w filledcurves r=1', iostat, iomsg)
-test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, '(polar) is not supported') > 0
+test_passed(114) = test_passed(114) .and. iostat /= 0_I4P .and. index(iomsg, 'r=V applies to polar plots') > 0
 open(newunit=unit, file='foresight_script_test_gaps.dat')
 close(unit, status='delete')
 open(newunit=unit, file='foresight_script_test_gaps.svg')
@@ -4232,6 +4232,33 @@ endif
 open(newunit=unit, file='foresight_script_test_logr.svg')
 close(unit, status='delete')
 
+! polar filledcurves [above|below] r=V: the band between the curve and the circle of radius V, in pieces where the
+! curve is above (or below) it, closed polygons apart at gaps; refused on a cartesian panel
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 500,500; set output "foresight_script_test_polar_fill.svg"; set polar; '// &
+                          'set samples 9; set trange [0:2*pi]; plot 2+cos(2*t) with filledcurves above r=2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(190) = iostat == 0_I4P
+if (test_passed(190)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(190) = series%style%with == WITH_FILLEDCURVES .and. allocated(series%ylow) .and. &
+                        series%curve_side == 1_I4P
+      if (test_passed(190)) test_passed(190) = all(series%ylow == 2.0_R8P)
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_polar_fill.svg')
+      test_passed(190) = test_passed(190) .and. index(svg, '<path') > 0
+   endblock
+endif
+if (test_passed(190)) then
+   call interpreter%run_text('unset polar; plot x with filledcurves r=2', iostat, iomsg)
+   test_passed(190) = iostat /= 0_I4P .and. index(iomsg, 'r=V applies to polar plots') > 0
+endif
+open(newunit=unit, file='foresight_script_test_polar_fill.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4240,7 +4267,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,189L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,190L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
