@@ -26,6 +26,7 @@ private
 public :: bin_values
 public :: smooth
 public :: smooth_curve
+public :: path_spline
 public :: sorted
 public :: CURVE_MODES
 public :: SMOOTH_MODES
@@ -535,6 +536,127 @@ contains
    y = my(1:n)
    w = mw(1:n)
    endsubroutine merge_equal
+
+   pure subroutine path_spline(x, y, samples, xrange, yrange, closed, xs, ys)
+   !< gnuplot 6.0's `smooth path` (filters.c gen_2d_path_splines): each set of points (apart at undefined ones) a
+   !< natural cubic spline of x and of y against the path length (scaled by `xrange`, `yrange`, normalized to 0..1),
+   !< sampled `samples` times over the whole path and kept along the points, in their order; a set whose ends meet is
+   !< closed (the spline wraps around), and `closed` (filledcurves closed) closes every set. Undefined points and
+   !< repeated ones are dropped, a set of fewer than 3 points too; the sets apart at undefined points in `xs`, `ys`.
+   real(R8P),              intent(in)  :: x(:)    !< Abscissae.
+   real(R8P),              intent(in)  :: y(:)    !< Ordinates.
+   integer(I4P),           intent(in)  :: samples !< Samples of a whole path.
+   real(R8P),              intent(in)  :: xrange  !< x scale of the path length.
+   real(R8P),              intent(in)  :: yrange  !< y scale of the path length.
+   logical,                intent(in)  :: closed  !< Close every set.
+   real(R8P), allocatable, intent(out) :: xs(:)   !< Curve abscissae.
+   real(R8P), allocatable, intent(out) :: ys(:)   !< Curve ordinates.
+   real(R8P), allocatable              :: px(:)   !< Points of a set, with the ends around (0:n+1).
+   real(R8P), allocatable              :: py(:)   !< Their ordinates.
+   real(R8P), allocatable              :: t(:)    !< Path fraction of each.
+   real(R8P), allocatable              :: cx(:,:) !< Spline of x.
+   real(R8P), allocatable              :: cy(:,:) !< Spline of y.
+   real(R8P)                           :: xr      !< x scale.
+   real(R8P)                           :: yr      !< y scale.
+   real(R8P)                           :: tt      !< Path fraction sampled.
+   real(R8P)                           :: d       !< Fraction in the interval.
+   real(R8P)                           :: nan     !< Undefined value.
+   integer(I4P)                        :: i1      !< First point of a set.
+   integer(I4P)                        :: i2      !< Last point of a set.
+   integer(I4P)                        :: n       !< Points of a set.
+   integer(I4P)                        :: k       !< Counter.
+   integer(I4P)                        :: l       !< Interval.
+   logical                             :: ring    !< Closed set.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   allocate(xs(0), ys(0))
+   xr = abs(xrange)
+   yr = abs(yrange)
+   if (xr == 0.0_R8P) xr = 1.0_R8P
+   if (yr == 0.0_R8P) yr = 1.0_R8P
+   i1 = 1_I4P
+   do while (i1 <= size(x, kind=I4P))
+      i2 = i1
+      do while (i2 <= size(x, kind=I4P))
+         if (.not. (ieee_is_finite(x(i2)) .and. ieee_is_finite(y(i2)))) exit
+         i2 = i2 + 1_I4P
+      enddo
+      ! the set i1..i2-1, without its repeated points; room for the ends around it and a closing point
+      allocate(px(0:i2 - i1 + 2_I4P), py(0:i2 - i1 + 2_I4P))
+      n = 0_I4P
+      do k = i1, i2 - 1_I4P
+         if (n > 0_I4P) then
+            if (x(k) == px(n) .and. y(k) == py(n)) cycle
+         endif
+         n = n + 1_I4P
+         px(n) = x(k)
+         py(n) = y(k)
+      enddo
+      i1 = i2 + 1_I4P
+      if (n < 3_I4P) then
+         deallocate(px, py)
+         cycle
+      endif
+      ring = px(1) == px(n) .and. py(1) == py(n)
+      if (closed .and. .not. ring) then
+         n = n + 1_I4P
+         px(n) = px(1)
+         py(n) = py(1)
+         ring = .true.
+      endif
+      if (ring) then
+         ! wrapped around: one point before and one after the closure
+         px(0) = px(n - 1_I4P)
+         py(0) = py(n - 1_I4P)
+         px(n + 1_I4P) = px(2)
+         py(n + 1_I4P) = py(2)
+      else
+         ! the ends extended straight
+         px(0) = 2.0_R8P * px(1) - px(2)
+         py(0) = 2.0_R8P * py(1) - py(2)
+         px(n + 1_I4P) = 2.0_R8P * px(n) - px(n - 1_I4P)
+         py(n + 1_I4P) = 2.0_R8P * py(n) - py(n - 1_I4P)
+      endif
+      allocate(t(0:n + 1_I4P))
+      t(0) = 0.0_R8P
+      do k = 1_I4P, n + 1_I4P
+         t(k) = t(k - 1_I4P) + sqrt(((px(k) - px(k - 1_I4P)) / xr)**2 + ((py(k) - py(k - 1_I4P)) / yr)**2)
+      enddo
+      t(1:) = t(1:) / t(n + 1_I4P)
+      ! allocated first: the coefficients indexed from 0, as natural_spline's
+      if (allocated(cx)) deallocate(cx, cy)
+      allocate(cx(0:3, n + 2_I4P), cy(0:3, n + 2_I4P))
+      cx(:, :) = natural_spline(t(0:n + 1_I4P), px(0:n + 1_I4P))
+      cy(:, :) = natural_spline(t(0:n + 1_I4P), py(0:n + 1_I4P))
+      ! the first point, then the samples along the points, then the last point
+      xs = [xs, px(1)]
+      ys = [ys, py(1)]
+      k = 0_I4P
+      do while (real(k, R8P) / real(samples - 1_I4P, R8P) < t(1) .and. k < samples)
+         k = k + 1_I4P
+      enddo
+      l = 0_I4P
+      do while (k < samples)
+         tt = real(k, R8P) / real(samples - 1_I4P, R8P)
+         if (tt > t(n)) then
+            xs = [xs, px(n)]
+            ys = [ys, py(n)]
+            exit
+         endif
+         do while (tt >= t(l + 1_I4P) .and. l < n)
+            l = l + 1_I4P
+         enddo
+         d = tt - t(l)
+         ! natural_spline's interval l + 1 is t(l)..t(l+1) (its knots from 1)
+         xs = [xs, ((cx(3, l + 1_I4P) * d + cx(2, l + 1_I4P)) * d + cx(1, l + 1_I4P)) * d + cx(0, l + 1_I4P)]
+         ys = [ys, ((cy(3, l + 1_I4P) * d + cy(2, l + 1_I4P)) * d + cy(1, l + 1_I4P)) * d + cy(0, l + 1_I4P)]
+         k = k + 1_I4P
+      enddo
+      xs = [xs, nan]
+      ys = [ys, nan]
+      deallocate(px, py, t)
+   enddo
+   endsubroutine path_spline
 
    pure function natural_spline(x, y) result(c)
    !< Coefficients `c(0:3, i)` of the natural cubic spline through (`x`, `y`) (x increasing, at least 3 points) on each

@@ -132,7 +132,7 @@ use foresight_sys, only : command_output, sleep_ms
 use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
-use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
+use foresight_smooth, only : bin_values, CURVE_MODES, path_spline, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : custom_dashtype, default_color, fill_style, &
@@ -3276,9 +3276,9 @@ contains
                cycle
             endif
             filter = smooth_name(filter)
-            if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES))) then
-               call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES//')', &
-                         iostat, iomsg)
+            if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES) .or. filter == 'path')) then
+               call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES// &
+                         ' path)', iostat, iomsg)
                return
             endif
             ! smooth kdensity bandwidth B
@@ -4063,6 +4063,8 @@ contains
       elseif (is_word(filter, CURVE_MODES)) then
          call curve_filter
          if (iostat /= 0_I4P) return
+      elseif (filter == 'path') then
+         call path_filter
       elseif (len(filter) > 0) then
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
@@ -5293,6 +5295,36 @@ contains
       endassociate
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
+
+      subroutine path_filter
+      !< gnuplot's `smooth path` of the item into (x, y): a spline along each set of points in their order (path_spline),
+      !< `set samples` points over a path, the path length scaled by the x and y ranges (set, else the data's), every
+      !< set closed with filledcurves.
+      real(R8P)            :: span(2) !< x and y scales.
+      logical, allocatable :: finite(:) !< Finite points.
+      integer(I4P)         :: k       !< Axis counter.
+
+      finite = ieee_is_finite(values(:, 1)) .and. ieee_is_finite(values(:, 2))
+      span = 1.0_R8P
+      associate(panel => self%figure%panels(self%figure%current))
+         do k = 1_I4P, 2_I4P
+            if (any(finite)) span(k) = maxval(values(:, k), mask=finite) - minval(values(:, k), mask=finite)
+            ! a set range instead (no merge of axes: gfortran 16 frees their components twice)
+            if (k == 1_I4P .and. axes(1:2) == 'x2') then
+               if (panel%x2axis%min_fixed .and. panel%x2axis%max_fixed) &
+                  span(k) = panel%x2axis%max_user - panel%x2axis%min_user
+            elseif (k == 1_I4P) then
+               if (panel%xaxis%min_fixed .and. panel%xaxis%max_fixed) span(k) = panel%xaxis%max_user - panel%xaxis%min_user
+            elseif (axes(3:4) == 'y2') then
+               if (panel%y2axis%min_fixed .and. panel%y2axis%max_fixed) &
+                  span(k) = panel%y2axis%max_user - panel%y2axis%min_user
+            else
+               if (panel%yaxis%min_fixed .and. panel%yaxis%max_fixed) span(k) = panel%yaxis%max_user - panel%yaxis%min_user
+            endif
+         enddo
+      endassociate
+      call path_spline(values(:, 1), values(:, 2), self%samples, span(1), span(2), with == 'filledcurves', x, y)
+      endsubroutine path_filter
 
       subroutine new_histogram
       !< `newhistogram ["title"] [lt|linetype N] [fs|fillstyle FILL] [at X]` at token `i`, up to the next comma (`i` on

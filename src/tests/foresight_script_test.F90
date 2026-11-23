@@ -5,7 +5,7 @@ program foresight_script_test
 !< axis, and unsupported constructs reported as errors.
 !<
 !< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference file.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(199)                           !< Per-check outcome.
+logical                       :: test_passed(200)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4511,6 +4511,38 @@ close(unit, status='delete')
 call interpreter%run_text('plot $C using 1:2:3 with points lc palette greens', iostat, iomsg)
 test_passed(199) = test_passed(199) .and. iostat /= 0_I4P .and. index(iomsg, 'no colormap "greens"') > 0
 
+! smooth path: a spline along each set of points in their order (gnuplot 6.0's along-path splines), from the first point
+! to the last, the sets apart; with filledcurves every set closed
+call interpreter%init(scratch)
+call interpreter%run_text('$S << EOD'//new_line('a')//'1 2'//new_line('a')//'1.5 2'//new_line('a')//'2 2.5'// &
+                          new_line('a')//'3 5'//new_line('a')//''//new_line('a')//'3 3'//new_line('a')//'3.5 3.1'// &
+                          new_line('a')//'3.6 3.7'//new_line('a')//'3 3'//new_line('a')//'EOD'//new_line('a')// &
+                          'set samples 50; plot $S using 1:2 smooth path with lines, $S smooth path with filledcurves closed', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(200) = iostat == 0_I4P
+if (test_passed(200)) then
+   associate(open_path => interpreter%figure%panels(1)%series(1), closed_path => interpreter%figure%panels(1)%series(2))
+      ! two sets apart at an undefined point; the open one from (1, 2) to (3, 5), the second (a ring) back to (3, 3)
+      test_passed(200) = size(open_path%x) > 20 .and. count(.not. ieee_is_finite(open_path%x)) == 2
+      if (test_passed(200)) test_passed(200) = open_path%x(1) == 1.0_R8P .and. open_path%y(1) == 2.0_R8P
+      if (test_passed(200)) then
+         block
+            integer(I4P) :: k !< End of the first set.
+
+            k = 1_I4P
+            do while (ieee_is_finite(open_path%x(k + 1_I4P)))
+               k = k + 1_I4P
+            enddo
+            test_passed(200) = open_path%x(k) == 3.0_R8P .and. open_path%y(k) == 5.0_R8P .and. &
+                              open_path%x(k + 1_I4P + 1_I4P) == 3.0_R8P
+         endblock
+      endif
+      ! filledcurves closes the open set too: its last point is its first
+      test_passed(200) = test_passed(200) .and. size(closed_path%x) > size(open_path%x)
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4519,7 +4551,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,199L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,200L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
