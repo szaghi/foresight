@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(209)                           !< Per-check outcome.
+logical                       :: test_passed(210)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4754,6 +4754,27 @@ if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(209) = test_passed(209) .and. iostat == 0_I4P
 if (test_passed(209)) test_passed(209) = interpreter%figure%panels(1)%series(1)%palette_mode == 1_I4P
 
+! tick formats without a conversion: their text on every tick (`set format y "    "`, layout.dem); `set format x ""`
+! and `set xtics format ""` hide the labels, as gnuplot; `set format x` restores the default
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_format_text.svg"; set format y "abc"; '// &
+                          'set format x ""; set yrange [0:2]; set xrange [0:4]; plot x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(210) = iostat == 0_I4P
+if (test_passed(210)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_format_text.svg')
+      test_passed(210) = index(svg, '>abc</text>') > 0 .and. index(svg, '>1</text>') == 0 .and. &
+                        interpreter%figure%panels(1)%xaxis%tics%format == ' '
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_format_text.svg')
+close(unit, status='delete')
+call interpreter%run_text('set format x; set xtics format ""', iostat, iomsg)
+test_passed(210) = test_passed(210) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%tics%format == ' '
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4762,7 +4783,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,209L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,210L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

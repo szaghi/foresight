@@ -291,7 +291,8 @@ contains
    !< superscript exponent), `t l` (the mantissa to base 10; foresight's log axes are base 10), `s` (the mantissa to
    !< a power of 1000), `T L` (the power of 10), `S` (the power of 1000), `c` (its SI prefix letter), `b` `B` (the
    !< mantissa to a power of 1024 and its binary prefix), `P` (multiple of pi), `x X o` (the integer part in hex or
-   !< octal); `%%` writes `%`.
+   !< octal); `%%` writes `%`. A format without a conversion is its text on every tick, as gnuplot (`"    "` blank
+   !< labels).
    character(len=*), intent(in)  :: format  !< Format.
    character(len=:), allocatable :: message !< Problem, empty if none.
    character(len=:), allocatable :: text    !< Literal text.
@@ -310,7 +311,6 @@ contains
       if (type == ' ') exit
       count = count + 1_I4P
    enddo
-   if (count == 0_I4P) message = 'no conversion in "'//format//'"'
    endfunction format_check
 
    pure subroutine format_decimal(format, n, e, label, sup)

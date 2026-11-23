@@ -11161,7 +11161,11 @@ contains
          endif
          i = i + 1_I4P
       enddo
-      if (allocated(fmt)) tics%format = fmt
+      if (allocated(fmt)) then
+         ! `format ""`: no labels, as gnuplot (a blank one each)
+         if (len(fmt) == 0) fmt = ' '
+         tics%format = fmt
+      endif
       if (len_trim(justify) > 0) then
          ! the justification of the labels: of the rotated ones (gnuplot also moves the unrotated ones: read and
          ! kept for a rotation)
@@ -11646,6 +11650,8 @@ contains
             call fail('set format: unexpected "'//tokens(i + 1_I4P)%text//'" after the format', iostat, iomsg)
             return
          endif
+         ! gnuplot's `set format x ""`: no labels (a blank one each); `set format x` alone restores the default
+         if (len(format) == 0) format = ' '
          if (len(format) > 0) then
             ! a time format only for time axes (`%d` is a day there, not an integer)
             message = format_check(format)

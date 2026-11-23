@@ -50,8 +50,9 @@ test_passed(24) = label == '1.5x10' .and. sup == '6'
 test_passed(25) = label_of('%-6.1f|', 5_I8P, -1_I4P) == '0.5   |'
 test_passed(26) = len(format_check('%.3g')) == 0 .and. index(format_check('%d'), 'unsupported conversion') > 0
 ! several conversions of the same value, as gnuplot; a conversion it does not know
-test_passed(27) = label_of('%.0f %.1e', 25_I8P, -1_I4P) == '2 2.5e+00' .and. index(format_check('abc'), 'no conversion') > 0 &
-                  .and. index(format_check('%y'), 'unsupported conversion') > 0
+! a format without a conversion is its text, as gnuplot
+test_passed(27) = label_of('%.0f %.1e', 25_I8P, -1_I4P) == '2 2.5e+00' .and. len(format_check('abc')) == 0 .and. &
+                  label_of('abc', 25_I8P, -1_I4P) == 'abc' .and. index(format_check('%y'), 'unsupported conversion') > 0
 ! gnuplot 6.0's mantissas, powers and prefixes (its gprintf output, base 10 as for the tick labels); on a decimal tie
 ! (12.5, 255, 3.45 to one decimal) the mantissa is libm's pow: glibc (gfortran, gnuplot) rounds it one way, nvfortran's
 ! own library the other, so either label is right there
