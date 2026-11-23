@@ -115,7 +115,7 @@ module foresight_script
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
-                           spider_words, POLAR_STYLES
+                           spider_words, POLAR_STYLES, colormap_object
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : block_hook, element_fetch_hook, element_hook, fetch_hook, store_hook, expression_object, &
                                  list_text, push, &
@@ -179,6 +179,7 @@ type :: line_style_object
    real(R8P)                     :: palette = 0.0_R8P !< Value of `lc palette cb V` or `frac F`.
    character(len=:), allocatable :: pt_char    !< A character as the point (`pt "c"`).
    integer(I4P),     allocatable :: pn         !< About N points evenly spread (`pointnumber`).
+   character(len=:), allocatable :: colormap   !< A named colormap (`lc palette NAME`).
 endtype line_style_object
 
 type :: loop_level
@@ -261,6 +262,8 @@ type :: script_object
    character(len=:), allocatable   :: data_curve               !< `set style data filledcurves OPTIONS`: the options
                                                                !< of the data filledcurves given none.
    character(len=:), allocatable   :: function_curve           !< The same of the functions (`set style function`).
+   character(len=64), allocatable  :: colormap_names(:)        !< Named colormaps (`set colormap new NAME`).
+   type(colormap_object), allocatable :: colormaps(:)          !< Their palettes and ranges.
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -3460,6 +3463,13 @@ contains
                iomsg = 'plot: '//iomsg
                return
             endif
+            if (allocated(line%colormap)) then
+               ! `lc palette NAME`: a colormap of `set colormap new NAME`
+               if (findloc_name(self%colormap_names, line%colormap) == 0_I4P) then
+                  call fail('plot: no colormap "'//line%colormap//'" (set colormap new NAME)', iostat, iomsg)
+                  return
+               endif
+            endif
          elseif (word == 'tc' .or. keyword(word, 'textcolor', 5_I4P)) then
             ! the color of the character points (`pt "c"`), as gnuplot
             block
@@ -5073,6 +5083,17 @@ contains
          case (LC_PALETTE_Z)
             panel%series(last)%palette_mode = 1_I4P
             panel%series(last)%zvalues = zcolors
+            if (allocated(line%colormap)) then
+               ! a named colormap: a copy in the panel, the series pointing at it
+               block
+                  integer(I4P) :: k !< Colormap counter.
+
+                  k = findloc_name(self%colormap_names, line%colormap)
+                  if (.not. allocated(panel%colormaps)) allocate(panel%colormaps(0))
+                  panel%colormaps = [panel%colormaps, self%colormaps(k)]
+                  panel%series(last)%colormap = size(panel%colormaps, kind=I4P)
+               endblock
+            endif
          case (LC_PALETTE_CB)
             panel%series(last)%palette_mode = 2_I4P
             panel%series(last)%palette_value = line%palette
@@ -7655,6 +7676,8 @@ contains
       call readout_option
    elseif (keyword(option, 'palette', 3_I4P)) then
       call palette_option
+   elseif (option == 'colormap') then
+      call colormap_option
    elseif (keyword(option, 'colorsequence', 6_I4P)) then
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
@@ -9204,6 +9227,14 @@ contains
                   self%figure%panels(self%figure%current)%key_tc = 'variable'
                   cycle
                endif
+               ! `rgb variable`, as gnuplot: each title in its series' color
+               if (i + 1_I4P < size(tokens, kind=I4P)) then
+                  if (is_word(tokens(i + 1_I4P)%text, 'rgb rgbcolor') .and. tokens(i + 2_I4P)%text == 'variable') then
+                     i = i + 2_I4P
+                     self%figure%panels(self%figure%current)%key_tc = 'variable'
+                     cycle
+                  endif
+               endif
             endif
             block
                type(token_object), allocatable :: copy(:) !< Tokens with `lc` for the color word.
@@ -9424,6 +9455,52 @@ contains
          if (size(list) > 0) panel%linecolors = list
       endassociate
       endsubroutine colorsequence_option
+
+      subroutine colormap_option
+      !< gnuplot 6.0's `set colormap new NAME` (the current palette saved as NAME, for `lc palette NAME`) and `set
+      !< colormap NAME range [min:max]` (its own range, else the color axis').
+      integer(I4P)          :: k     !< Colormap index.
+      integer(I4P)          :: colon !< Range separator.
+      type(colormap_object) :: map   !< New colormap.
+
+      if (size(tokens) == 3) then
+         if (tokens(2)%text == 'new') then
+            map%palette = self%figure%panels(self%figure%current)%palette
+            k = findloc_name(self%colormap_names, tokens(3)%text)
+            if (.not. allocated(self%colormap_names)) allocate(self%colormap_names(0), self%colormaps(0))
+            if (k == 0_I4P) then
+               self%colormap_names = [self%colormap_names, [character(len=64) :: tokens(3)%text]]
+               self%colormaps = [self%colormaps, map]
+            else
+               self%colormaps(k) = map
+            endif
+            return
+         endif
+      endif
+      if (size(tokens) == 4) then
+         if (tokens(3)%text == 'range' .and. tokens(4)%kind == TOKEN_RANGE) then
+            k = findloc_name(self%colormap_names, tokens(2)%text)
+            if (k == 0_I4P) then
+               call fail('set colormap: no colormap "'//tokens(2)%text//'" (set colormap new NAME)', iostat, iomsg)
+               return
+            endif
+            colon = index(tokens(4)%text, ':', kind=I4P)
+            if (colon == 0_I4P) then
+               call fail('set colormap: range [min:max] expected', iostat, iomsg)
+               return
+            endif
+            associate(map_k => self%colormaps(k))
+               call self%range_value(tokens(4)%text(1:colon - 1_I4P), map_k%range(1), iostat, iomsg)
+               if (iostat /= 0_I4P) return
+               call self%range_value(tokens(4)%text(colon + 1_I4P:), map_k%range(2), iostat, iomsg)
+               if (iostat /= 0_I4P) return
+               map_k%ranged = .true.
+            endassociate
+            return
+         endif
+      endif
+      call fail('set colormap: new NAME or NAME range [min:max] expected', iostat, iomsg)
+      endsubroutine colormap_option
 
       subroutine palette_option
       !< `set palette [WORDS]`: checked on a copy, then applied (see foresight_palette). `file 'f' [index N] [every E]
@@ -13171,6 +13248,24 @@ contains
    yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots boxes filledcurves')
    endfunction function_drawable
 
+   pure function findloc_name(names, name) result(k)
+   !< Index of `name` among `names` (unallocated: none), 0 if absent (a loop: nvfortran 26.9 refuses findloc on some
+   !< arrays).
+   character(len=*), allocatable, intent(in) :: names(:) !< Names.
+   character(len=*),              intent(in) :: name     !< Name.
+   integer(I4P)                              :: k        !< Index.
+   integer(I4P)                              :: j        !< Counter.
+
+   k = 0_I4P
+   if (.not. allocated(names)) return
+   do j = 1_I4P, size(names, kind=I4P)
+      if (trim(names(j)) == name) then
+         k = j
+         return
+      endif
+   enddo
+   endfunction findloc_name
+
    pure function is_item_option(word) result(is)
    !< Whether `word` is a plot item option: it ends a function expression.
    character(len=*), intent(in) :: word !< Word.
@@ -13277,11 +13372,11 @@ contains
                   endif
                   line%lc = trim(LC_PALETTE_FRAC)
                case default
+                  ! a named colormap (gnuplot `set colormap new NAME`): z colored by it
                   if (.not. (is_item_option(tokens(i + 1_I4P)%text) .or. &
                              is_line_option(tokens(i + 1_I4P)%text))) then
-                     call fail('lc palette '//tokens(i + 1_I4P)%text//': only z, cb V and frac F (no named colormap)', &
-                               iostat, iomsg)
-                     ok = .false.
+                     i = i + 1_I4P
+                     line%colormap = tokens(i)%text
                   endif
                endselect
             endif
@@ -13339,6 +13434,15 @@ contains
                call symbols%text_of(tokens(i + 1_I4P)%text, spec, is_string, status, message)
                if (status /= 0_I4P .or. .not. is_string) spec = ''
                if (status == 0_I4P .and. is_string .and. len(spec) == 0) spec = ' '
+            endif
+         endif
+         if (i < size(tokens, kind=I4P) .and. len(spec) == 0) then
+            ! gnuplot's `dt solid`: dash type 1
+            if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'solid') then
+               i = i + 1_I4P
+               line%dt = 1_I4P
+               ok = .true.
+               return
             endif
          endif
          if (len(spec) > 0) then

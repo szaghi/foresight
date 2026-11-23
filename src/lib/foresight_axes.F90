@@ -80,6 +80,7 @@ private
 public :: axes_object
 public :: MAX_LINETYPES
 public :: colorbox_object
+public :: colormap_object
 public :: axes_names
 public :: boxplot_style
 public :: paxis_object
@@ -153,6 +154,14 @@ type :: colorbox_object
    real(R8P) :: origin(2)  = [0.9_R8P, 0.2_R8P]       !< User box bottom left, canvas fractions from the bottom left.
    real(R8P) :: size(2)    = [0.05_R8P, 0.6_R8P]      !< User box width and height, canvas fractions.
 endtype colorbox_object
+
+type :: colormap_object
+   !< A named colormap of a panel (gnuplot `set colormap new NAME`, `lc palette NAME`): a palette, mapped over its own
+   !< range if set, else over the color axis.
+   type(palette_object) :: palette               !< Colors.
+   logical              :: ranged = .false.      !< Own range set (`set colormap NAME range [min:max]`).
+   real(R8P)            :: range(2) = 0.0_R8P    !< That range.
+endtype colormap_object
 
 type :: axes_object
    !< Plot panel.
@@ -323,6 +332,7 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
    logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
+   type(colormap_object), allocatable :: colormaps(:) !< Named colormaps of the series (`colormap` index).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: drop_last        !< Forget the last series.
@@ -1376,8 +1386,13 @@ contains
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
    ! the series colored by the palette, over the color axis just set up
-   if (self%has_image(palette=.true.)) call paint_series(self%series, effective_palette(self%palette, &
-                                                                                     backend%theme%name), self%cbaxis)
+   if (self%has_image(palette=.true.)) then
+      if (allocated(self%colormaps)) then
+         call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis, self%colormaps)
+      else
+         call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis)
+      endif
+   endif
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
@@ -5944,7 +5959,7 @@ contains
    enddo
    endfunction any_image
 
-   pure subroutine paint_series(all, p, cbaxis)
+   pure subroutine paint_series(all, p, cbaxis, maps)
    !< The colors of the series of `all` colored by the palette `p` (gnuplot `lc palette`): per point over the color
    !< axis `cbaxis` (`z`; the key line sample takes the first point's color, the point sample the last's), one color
    !< axis value (`cb`) or one fraction
@@ -5953,6 +5968,7 @@ contains
    type(series_object),  intent(inout) :: all(:) !< Series of the panel.
    type(palette_object), intent(in)    :: p      !< Effective palette.
    type(axis_object),    intent(in)    :: cbaxis !< Color axis.
+   type(colormap_object), intent(in), optional :: maps(:) !< Named colormaps (a series' `colormap`).
    integer(I4P)                        :: s      !< Series counter.
    integer(I4P)                        :: i      !< Point counter.
 
@@ -5960,6 +5976,18 @@ contains
       select case (all(s)%palette_mode)
       case (1_I4P)
          if (.not. allocated(all(s)%zvalues)) cycle
+         if (all(s)%colormap > 0_I4P .and. present(maps)) then
+            ! a named colormap (gnuplot `lc palette NAME`): its colors, over its range if set
+            if (all(s)%colormap <= size(maps)) then
+               if (allocated(all(s)%colors)) deallocate(all(s)%colors)
+               allocate(all(s)%colors(size(all(s)%zvalues)))
+               do i = 1_I4P, size(all(s)%zvalues, kind=I4P)
+                  all(s)%colors(i) = map_color(maps(all(s)%colormap), all(s)%zvalues(i))
+               enddo
+               if (size(all(s)%colors) > 0) all(s)%style%color = all(s)%colors(1)
+               cycle
+            endif
+         endif
          if (allocated(all(s)%arrow_heads)) then
             ! arrowstyle variable: only the arrows of a palette style (a z value) take a palette color
             do i = 1_I4P, min(size(all(s)%zvalues, kind=I4P), size(all(s)%colors, kind=I4P))
@@ -5994,6 +6022,26 @@ contains
          hex = hex_color(p%rgb(cbaxis%to_unit(value)))
       endif
       endfunction cb_color
+
+      pure function map_color(map, value) result(hex)
+      !< Color of `value` in the named colormap `map`: over its range if set, else over the color axis.
+      type(colormap_object), intent(in) :: map   !< Colormap.
+      real(R8P),             intent(in) :: value !< Value.
+      character(len=7)                  :: hex   !< Color.
+      real(R8P)                         :: f     !< Fraction.
+
+      if (.not. ieee_is_finite(value)) then
+         hex = 'none'
+      elseif (map%ranged) then
+         f = 0.0_R8P
+         if (map%range(2) /= map%range(1)) f = (value - map%range(1)) / (map%range(2) - map%range(1))
+         hex = hex_color(map%palette%rgb(min(1.0_R8P, max(0.0_R8P, f))))
+      elseif (cbaxis%log .and. value <= 0.0_R8P) then
+         hex = hex_color(map%palette%rgb(merge(0.0_R8P, 1.0_R8P, cbaxis%lo < cbaxis%hi)))
+      else
+         hex = hex_color(map%palette%rgb(min(1.0_R8P, max(0.0_R8P, cbaxis%to_unit(value)))))
+      endif
+      endfunction map_color
    endsubroutine paint_series
 
    function effective_palette(palette, theme) result(p)

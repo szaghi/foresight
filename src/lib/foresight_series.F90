@@ -128,6 +128,8 @@ type :: series_object
                                                         !< item), 0 for the spider plot style's.
    logical                       :: radial_bars = .false. !< Error bars of a polar panel: the ends x:y in xlow:ylow and
                                                           !< xhigh:yhigh, drawn along the radius.
+   integer(I4P)                  :: colormap = 0_I4P !< Named colormap of the palette colors (the panel's `colormaps`),
+                                                     !< 0 for the panel palette.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

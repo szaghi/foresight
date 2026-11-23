@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(198)                           !< Per-check outcome.
+logical                       :: test_passed(199)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1481,7 +1481,7 @@ test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc p
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w steps lc palette z", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z applies to lines') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette viridis", iostat, iomsg)
-test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'no named colormap') > 0
+test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'no colormap "viridis"') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette frac 2", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'a fraction from 0 to 1') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w pie lc palette frac 0.5", iostat, iomsg)
@@ -4478,6 +4478,39 @@ endif
 open(newunit=unit, file='foresight_script_test_polar_bars.svg')
 close(unit, status='delete')
 
+! named colormaps: `set colormap new NAME` saves the palette, `lc palette NAME` colors z by it (over its range if set,
+! `set colormap NAME range [a:b]`); `set key textcolor rgb variable`; `dt solid`
+call interpreter%init(scratch)
+call interpreter%run_text('$C << EOD'//new_line('a')//'1 1 0'//new_line('a')//'2 2 10'//new_line('a')//'EOD'// &
+                          new_line('a')//'set term svg; set output "foresight_script_test_colormap.svg"; '// &
+                          'set palette defined (0 "white", 1 "red"); set colormap new reds; '// &
+                          'set palette defined (0 "white", 1 "blue"); set colormap new blues; '// &
+                          'set colormap blues range [0:20]; set cbrange [0:10]; set key textcolor rgb variable; '// &
+                          'set errorbars lw 1 dt solid; '// &
+                          'plot $C using 1:2:3 with points lc palette reds, $C using 1:($2+1):3 with points lc pal blues', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(199) = iostat == 0_I4P
+if (test_passed(199)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(199) = panel%key_tc == 'variable' .and. allocated(panel%colormaps)
+      if (test_passed(199)) test_passed(199) = size(panel%colormaps) == 2 .and. panel%series(1)%colormap == 1_I4P .and. &
+                                             panel%series(2)%colormap == 2_I4P .and. panel%colormaps(2)%ranged
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_colormap.svg')
+      ! z = 10: full red with reds over the cb range [0:10]; half blue (#8080ff) with blues over its own [0:20]
+      test_passed(199) = test_passed(199) .and. index(svg, '#ff0000') > 0 .and. index(svg, '#7f7fff') + &
+                        index(svg, '#8080ff') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_colormap.svg')
+close(unit, status='delete')
+call interpreter%run_text('plot $C using 1:2:3 with points lc palette greens', iostat, iomsg)
+test_passed(199) = test_passed(199) .and. iostat /= 0_I4P .and. index(iomsg, 'no colormap "greens"') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4486,7 +4519,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,198L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,199L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
