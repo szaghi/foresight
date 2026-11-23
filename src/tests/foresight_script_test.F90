@@ -9,7 +9,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_ticks, only : MINOR_AUTO, TICS_NONE
-use foresight_style, only : FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
+use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
                             WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
@@ -1323,7 +1323,7 @@ associate(panel => interpreter%figure%panels(1))
                                           panel%series(2)%colors(5) == '#0900ff' .and. size(panel%series(1)%x) == 5 &
                                           .and. panel%series(2)%style%color == '#0100ff' ! key: the first point's
 endassociate
-call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w boxes lc variable", iostat, iomsg)
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w steps lc variable", iostat, iomsg)
 test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable applies to lines') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w p lc variable", iostat, iomsg)
 test_passed(88) = test_passed(88) .and. iostat /= 0_I4P .and. index(iomsg, 'lc variable needs using x:y:color') > 0
