@@ -1364,11 +1364,11 @@ plot 'run.dat' u 1:2 w l lc palette cb 0.5        # one color: the value 0.5 of 
 
 As gnuplot, a line segment takes the color of its end point; a point whose palette value is undefined is not drawn,
 nor the segment to it, but still counts for the autoscale.
-The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints`, `impulses`, `vectors` and
-`arrows` (`lc variable`
-also to circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, `Y:COLOR`
-included, filledcurves and polygons, a run of the last two in its first point's color), and not with `smooth` or
-`bins`; `palette cb` and `frac` to every style but the readouts, the panel charts and `labels`, and to
+The per-point forms (`variable`, `palette z`) apply to `lines`, `points`, `linespoints`, `impulses`, `vectors`,
+`arrows`, the error bars (each bar in its point's color), circles, ellipses, boxes, boxerrorbars, boxxyerror,
+candlesticks, financebars, histograms (`Y:COLOR` included), filledcurves and polygons (a run of the last two in its
+first point's color), and to `labels` as `tc variable`, `tc rgb variable` or `tc palette z` (`using x:y:text:color`);
+not with `smooth` or `bins`; `palette cb` and `frac` to every style but the readouts, the panel charts and `labels`, and to
 functions; all of them in `set style line`. In the key, the line sample takes the color of the first point and the
 point sample that of the last one, as gnuplot. Not supported: `lc palette NAME` (a named colormap of gnuplot 6).
 
@@ -1430,7 +1430,7 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 |---|---|---|
 | `vectors` | `x:y:xdelta:ydelta` | an arrow from x:y to x+xdelta:y+ydelta; after the style `head` (default), `heads`, `nohead`, `backhead`, `filled`, `empty`, `noborder` (filled), `size [first\|graph\|screen\|character] L,A` (head length, x axis values by default, and barb angle [deg]), `fixed`, `as N`\|`arrowstyle N` (the heads, fill, size, color and width of `set style arrow N`) |
 | `arrows` | `x:y:length:angle` | an arrow of `length` (> 0: x units, the same on the page at any `angle` [deg]; in (-1, 0): a fraction of the plot width) |
-| `ellipses` | `x:y`, `x:y:diameter`, `x:y:major:minor[:angle]` | an ellipse in the fill style, the major diameter in x units and the minor one in y units, rotated on the page (gnuplot `units xy`); without diameters (or a negative one) 5% x 3% of the plot |
+| `ellipses` | `x:y`, `x:y:diameter`, `x:y:major:minor[:angle]` | an ellipse in the fill style, the major diameter in x units and the minor one in y units, rotated on the page (gnuplot `units xy`; `units xx` and `units yy` both in x, or y, units); without diameters (or a negative one) 5% x 3% of the plot |
 | `polygons` | `x:y` | a closed polygon per block of the data (blocks end at single blank lines), in the fill style |
 | `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `offset X,Y` (characters), `point` (with `pt`, `ps`), `tc "color"` anywhere in the item |
 | `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r |
@@ -1442,7 +1442,7 @@ each vector or arrow from the last `using` column; a row with an undefined field
 range, as gnuplot. A second `set style arrow N` changes style N (`default` resets it), as gnuplot. Labels are black
 (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike gnuplot, sectors widen the autoscale to their
 whole extent. Not supported: `arrowstyle variable`, the dashes of an arrow style on data arrows, the back angle of
-`size`, variable rotations, `units xx|yy`, label fonts and `hypertext`.
+`size`, variable rotations, label fonts and `hypertext`.
 
 ## Labels, arrows and objects
 
@@ -2095,7 +2095,7 @@ x2 and y2 ticks, `log`/`nolog`; the complex forms of the functions but `abs`, `a
 (`VP`, `erfi`, `FresnelC`, ...);
 in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,
-`commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` with boxplot, error bars and labels, `lc palette z` with other styles than lines, points, linespoints, impulses, vectors and arrows, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
+`commentschars` and `columnheaders`; `filledcurves r=`; `lc variable` and `lc palette z` with boxplot, `lc palette NAME`, `set style boxplot labels x2`; the blank key rows of
 `newhistogram` groups; the line gap of a negative `pointinterval` or `pointnumber`; `reread`
 (deprecated in gnuplot 6.0), arrays as function arguments; the `smooth` filters
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,

@@ -63,7 +63,8 @@ use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check
 use foresight_series, only : push, series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
                             WITH_CIRCLES, WITH_DOTS, WITH_FILLEDCURVES, WITH_FSTEPS, WITH_GAUGE, WITH_HISTEPS, &
-                            WITH_FILLSTEPS, &
+                            WITH_FILLSTEPS, WITH_XERRORBARS, WITH_YERRORBARS, WITH_XYERRORBARS, WITH_XERRORLINES, &
+                            WITH_YERRORLINES, WITH_XYERRORLINES, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
@@ -759,8 +760,11 @@ contains
       error stop 'foresight: plot: a boxplot takes factors, not xlabels'
    if (present(colors)) then
       if (size(colors) /= size(x)) error stop 'foresight: plot: colors and x have different sizes'
-      if (.not. any(series%style%with == [WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_IMPULSES])) &
-         error stop 'foresight: plot: colors (lc variable) apply to lines, points, linespoints and impulses'
+      if (.not. any(series%style%with == [WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_IMPULSES, WITH_XERRORBARS, &
+                                          WITH_YERRORBARS, WITH_XYERRORBARS, WITH_XERRORLINES, WITH_YERRORLINES, &
+                                          WITH_XYERRORLINES])) &
+         error stop 'foresight: plot: colors (lc variable) apply to lines, points, linespoints, impulses and the error '// &
+                    'bars'
       allocate(series%colors(size(colors)))
       series%colors(:) = colors
       if (size(colors) > 0) series%style%color = colors(1) ! the key line sample: the first point's color (gnuplot)
@@ -3455,7 +3459,8 @@ contains
       endsubroutine draw_arrows
 
       subroutine draw_ellipses
-      !< An ellipse per placeable point, as gnuplot `units xy`: the major diameter in x units and the minor one in y units,
+      !< An ellipse per placeable point, as gnuplot `units xy`: the major diameter in x units and the minor one in y units
+      !< (`units xx`, `yy`: both in x, or y, units),
       !< converted to pixels, then rotated by its angle on the page; with no diameters, the default 5% x 3% of the plot
       !< area. (On log axes the diameters are taken at the centre.)
       real(R8P)    :: t(65)  !< Vertex parameters [rad].
@@ -3478,10 +3483,24 @@ contains
             phi = series%shape(3, i) * (PI_R8 / 180.0_R8P)
             if (ieee_is_finite(series%shape(1, i))) then
                ! semi-axes in pixels: the unit extents of the diameters about the centre
-               if (.not. (xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
-                          yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(2, i)))) cycle
-               a = abs(xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
-               b = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(2, i)) - v(i)) * h
+               ! gnuplot `units xy` (the default), `xx` or `yy`: the axis of each diameter
+               select case (series%ellipse_units)
+               case ('xx')
+                  if (.not. (xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
+                             xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(2, i)))) cycle
+                  a = abs(xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
+                  b = abs(xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(2, i)) - u(i)) * w
+               case ('yy')
+                  if (.not. (yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(1, i)) .and. &
+                             yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(2, i)))) cycle
+                  a = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(1, i)) - v(i)) * h
+                  b = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(2, i)) - v(i)) * h
+               case default
+                  if (.not. (xaxis%accepts(series%x(i) + 0.5_R8P * series%shape(1, i)) .and. &
+                             yaxis%accepts(series%y(i) + 0.5_R8P * series%shape(2, i)))) cycle
+                  a = abs(xaxis%to_unit(series%x(i) + 0.5_R8P * series%shape(1, i)) - u(i)) * w
+                  b = abs(yaxis%to_unit(series%y(i) + 0.5_R8P * series%shape(2, i)) - v(i)) * h
+               endselect
             else
                a = 0.025_R8P * w
                b = 0.015_R8P * h
@@ -3539,6 +3558,17 @@ contains
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
             if (len_trim(series%texts(i)) == 0) cycle
+            ! tc variable: each label in its point's color
+            if (allocated(series%colors)) then
+               if (i <= size(series%colors, kind=I4P)) then
+                  if (series%colors(i) == 'none') cycle
+                  call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
+                                          series%text_rotate, trim(series%colors(i)), &
+                                          series%text_offset(1) * 0.6_R8P * font_size, &
+                                          -series%text_offset(2) * font_size + 0.35_R8P * font_size)
+                  cycle
+               endif
+            endif
             call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), series%text_rotate, &
                                     color, series%text_offset(1) * 0.6_R8P * font_size, &
                                     -series%text_offset(2) * font_size + 0.35_R8P * font_size)
@@ -4104,7 +4134,28 @@ contains
          if (allocated(self%errorbar_color)) color = self%errorbar_color
          width = series%style%linewidth
          if (self%errorbar_lw > 0.0_R8P) width = self%errorbar_lw
-         if (vertical) then
+         if (allocated(series%colors) .and. .not. allocated(self%errorbar_color)) then
+            ! lc variable, lc palette z: each bar in its point's color
+            block
+               integer(I4P) :: i !< Point counter.
+               integer(I4P) :: k !< Bar counter.
+
+               k = 0_I4P
+               do i = 1_I4P, size(ok, kind=I4P)
+                  if (.not. ok(i)) cycle
+                  k = k + 1_I4P
+                  if (i > size(series%colors, kind=I4P)) cycle
+                  if (series%colors(i) == 'none') cycle
+                  if (vertical) then
+                     call backend%data_bars([u(i)], a(k:k), [u(i)], b(k:k), trim(series%colors(i)), width, &
+                                            self%errorbar_size * CAP_LENGTH, .true.)
+                  else
+                     call backend%data_bars(a(k:k), [v(i)], b(k:k), [v(i)], trim(series%colors(i)), width, &
+                                            self%errorbar_size * CAP_LENGTH, .false.)
+                  endif
+               enddo
+            endblock
+         elseif (vertical) then
             call backend%data_bars(pack(u, ok), a, pack(u, ok), b, color, width, self%errorbar_size * CAP_LENGTH, .true.)
          else
             call backend%data_bars(a, pack(v, ok), b, pack(v, ok), color, width, self%errorbar_size * CAP_LENGTH, .false.)

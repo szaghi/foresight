@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(184)                           !< Per-check outcome.
+logical                       :: test_passed(185)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -850,8 +850,8 @@ call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w vectors", iostat, io
 test_passed(72) = iostat /= 0_I4P .and. index(iomsg, 'vectors needs using x:y:xdelta:ydelta') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:(1/0) w labels", iostat, iomsg)
 test_passed(72) = test_passed(72) .and. iostat == 0_I4P
-call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w ellipses units xx", iostat, iomsg)
-test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'units xy only') > 0
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w ellipses units xz", iostat, iomsg)
+test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'units xy, xx or yy') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w sectors", iostat, iomsg)
 test_passed(72) = test_passed(72) .and. iostat /= 0_I4P .and. index(iomsg, 'sectors needs using') > 0
 call interpreter%run_text("unset xrange; unset yrange; unset y2range", iostat, iomsg)
@@ -1477,7 +1477,7 @@ call interpreter%run_text("plot sin(x) lc palette z", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z needs using x:y:z') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z needs using x:y:z') > 0
-call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w boxes lc palette z", iostat, iomsg)
+call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w steps lc palette z", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z applies to lines') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w l lc palette viridis", iostat, iomsg)
 test_passed(93) = test_passed(93) .and. iostat /= 0_I4P .and. index(iomsg, 'no named colormap') > 0
@@ -3211,7 +3211,7 @@ if (test_passed(150)) then
    endassociate
 endif
 call interpreter%run_text('plot $C using 1:2:3 with steps lc variable', iostat, iomsg)
-test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'filledcurves and polygons') > 0
+test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'polygons, the error bars') > 0
 
 ! set key columns N (gnuplot's user columns: N columns, filled top down), maxcol and maxrow abbreviations
 call interpreter%init(scratch)
@@ -4098,6 +4098,28 @@ endif
 open(newunit=unit, file='foresight_script_test_limits.svg')
 close(unit, status='delete')
 
+! lc palette z on boxes and ellipses, lc variable on error bars (a bar per point in its color), labels tc variable and
+! tc palette z (the text the third column, the color the fourth), ellipses units xx|yy
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_varcolor.svg"'//new_line('a')// &
+                          '$D << EOD'//new_line('a')//'1 2 1'//new_line('a')//'2 3 2'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $D using 1:2:3 with boxes lc palette z, $D using 1:2:(0.2):3 with yerrorbars lc variable, '// &
+                          '$D using 1:2:2:3 with labels tc variable, $D using 1:2:2:3 with labels tc palette z, '// &
+                          '$D using 1:2:(1):(0.5):(0):3 with ellipses units yy lc palette', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(185) = iostat == 0_I4P
+if (test_passed(185)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(185) = series(1)%palette_mode == 1_I4P .and. allocated(series(2)%colors) .and. &
+                        allocated(series(3)%colors) .and. series(4)%palette_mode == 1_I4P .and. &
+                        series(5)%ellipse_units == 'yy' .and. series(5)%palette_mode == 1_I4P
+      if (test_passed(185)) test_passed(185) = series(2)%colors(1) /= series(2)%colors(2) .and. &
+                                             trim(series(3)%texts(2)) == '3'
+   endassociate
+endif
+open(newunit=unit, file='foresight_script_test_varcolor.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4106,7 +4128,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,184L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,185L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

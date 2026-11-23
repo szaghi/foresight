@@ -2466,6 +2466,7 @@ contains
    real(R8P)                                    :: item_head(2) !< Their head length (0 the default) and angle [deg].
    integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
    character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
+   character(len=2)                             :: ellipse_units !< Units of the ellipse diameters (`units xy|xx|yy`).
    real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
@@ -2891,6 +2892,7 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      ellipse_units = 'xy'
       if (allocated(point_tc)) deallocate(point_tc)
       title_at = 0_I4P
       title_xy = 0.0_R8P
@@ -3046,10 +3048,11 @@ contains
                      call fail('plot: ellipses units xy expected', iostat, iomsg)
                      return
                   endif
-                  if (tokens(i)%text /= 'xy') then
-                     call fail('plot: ellipses take units xy only (diameters in x and y units)', iostat, iomsg)
+                  if (.not. is_word(tokens(i)%text, 'xy xx yy')) then
+                     call fail('plot: ellipses take units xy, xx or yy (the axes of the two diameters)', iostat, iomsg)
                      return
                   endif
+                  ellipse_units = tokens(i)%text
                endif
             endif
             if (with == 'rose' .and. i < size(tokens, kind=I4P)) then
@@ -3354,8 +3357,10 @@ contains
          endif
       endif
       if (allocated(line%lc)) then
-         if (index(line%lc, '*palette') == 1 .and. is_word(with, 'readout gauge pie radar rose parallelaxes '// &
-                                                                 'spiderplot labels image rgbimage rgbalpha')) then
+         ! labels take tc palette z (their colors from the last column), not one palette color
+         if (index(line%lc, '*palette') == 1 .and. (is_word(with, 'readout gauge pie radar rose parallelaxes '// &
+                                                                  'spiderplot image rgbimage rgbalpha') .or. &
+                                                    (with == 'labels' .and. line%lc /= LC_PALETTE_Z))) then
             call fail('plot: lc palette does not apply to '//with, iostat, iomsg)
             return
          endif
@@ -3514,10 +3519,15 @@ contains
          if (.not. allocated(fields)) then
             label_col = 3_I4P
             call label_field%set_column(label_col)
-         elseif (size(fields) == 3) then
+         elseif (size(fields) == 3 .or. (size(fields) == 4 .and. (variable_lc() .or. palette_z_lc()))) then
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
-            ! written as the text of the first column it reads, as gnuplot
-            word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
+            ! written as the text of the first column it reads, as gnuplot; with tc variable the color column after it
+            if (size(fields) == 4) then
+               word = spec(1:index(spec, ':', back=.true.) - 1)
+               word = trim(adjustl(word(index(word, ':', back=.true.) + 1:)))
+            else
+               word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
+            endif
             if (word == '0' .or. word == '-1' .or. word == '-2') then
                ! a pseudo-column: its integer as the text, gnuplot's "label hack"
                label_col = 1_I4P
@@ -3530,7 +3540,11 @@ contains
                label_col = 1_I4P
                label_field = fields(3)
             endif
-            kept = fields(1:2)
+            if (size(fields) == 4) then
+               kept = [fields(1:2), fields(4)]
+            else
+               kept = fields(1:2)
+            endif
             call move_alloc(kept, fields)
          else
             call fail('plot: labels needs using x:y:text_column', iostat, iomsg)
@@ -3660,12 +3674,12 @@ contains
       endif
       if (lcvar .or. lcz) then
          word = trim(merge('lc palette z', 'lc variable ', lcz))
-         if (.not. (is_word(with, 'lines points linespoints impulses vectors arrows') .or. &
-                    (lcvar .and. is_word(with, 'circles ellipses boxes candlesticks financebars boxxyerror '// &
-                                         'boxerrorbars histograms filledcurves polygons')))) then
-            call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors and arrows (lc '// &
-                      'variable also to circles, ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, '// &
-                      'histograms, filledcurves and polygons), not to '//with, iostat, iomsg)
+         if (.not. is_word(with, 'lines points linespoints impulses vectors arrows circles ellipses boxes '// &
+                           'candlesticks financebars boxxyerror boxerrorbars histograms filledcurves polygons '// &
+                           'xerrorbars yerrorbars xyerrorbars xerrorlines yerrorlines xyerrorlines labels')) then
+            call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors, arrows, circles, '// &
+                      'ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, filledcurves, '// &
+                      'polygons, the error bars and labels (tc variable), not to '//with, iostat, iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -4053,8 +4067,10 @@ contains
                                   angle=xlow, width=xhigh)
          endif
       elseif (with == 'labels') then
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
                                axes=axes, labels=xlabels, label=label_opts)
+         if (lcvar) call color_last
       elseif (with == 'parallelaxes' .or. with == 'spiderplot') then
          if (keyed .and. with == 'parallelaxes') then
             call fail('plot: key(N) names the rows of a spider plot', iostat, iomsg)
@@ -4408,9 +4424,37 @@ contains
          label_opts = label_opts//' offset '//tokens(i + 1_I4P)%text//','//tokens(i + 3_I4P)%text
          i = i + 3_I4P
       case ('tc', 'textcolor')
-         if (i < size(tokens, kind=I4P)) then
-            if (tokens(i + 1_I4P)%text == 'rgb') i = i + 1_I4P
-         endif
+         block
+            logical :: rgb !< `rgb` given.
+
+            rgb = .false.
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'rgb') then
+                  i = i + 1_I4P
+                  rgb = .true.
+               endif
+            endif
+            ! `tc [rgb] variable`: each label in the color of the last using column, as lc variable (gnuplot)
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(i + 1_I4P)%text, 'variable', 3_I4P)) then
+                  i = i + 1_I4P
+                  line%lc = trim(merge(LC_RGB_VARIABLE, LC_VARIABLE, rgb))
+                  ok = .true.
+                  return
+               endif
+               ! `tc palette [z]`: each label in the palette color of the last using column
+               if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(i + 1_I4P)%text, 'palette', 3_I4P) .and. &
+                   .not. rgb) then
+                  i = i + 1_I4P
+                  if (i < size(tokens, kind=I4P)) then
+                     if (tokens(i + 1_I4P)%text == 'z') i = i + 1_I4P
+                  endif
+                  line%lc = trim(LC_PALETTE_Z)
+                  ok = .true.
+                  return
+               endif
+            endif
+         endblock
          if (i >= size(tokens, kind=I4P)) then
             call fail('plot: labels tc "color" expected', iostat, iomsg)
             return
@@ -4480,6 +4524,14 @@ contains
          panel%series(size(panel%series))%style%fill_rgb = fill_rgb
       endassociate
       endsubroutine fill_last
+
+      function palette_z_lc() result(yes)
+      !< Whether the item's color is `lc|tc palette z`.
+      logical :: yes !< Palette color by the last column.
+
+      yes = .false.
+      if (allocated(line%lc)) yes = line%lc == LC_PALETTE_Z
+      endfunction palette_z_lc
 
       subroutine head_last
       !< The head size of the vectors or arrows just added (`size L,A`).
@@ -4599,6 +4651,7 @@ contains
          panel%series(last)%label_axis = label_axis
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
          if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
+         panel%series(last)%ellipse_units = ellipse_units
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_at = title_at
          panel%series(last)%title_xy = title_xy

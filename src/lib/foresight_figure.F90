@@ -315,9 +315,9 @@ contains
                    minor, labels, label, head, origins, curve, at, colors, palette_z, palette_cb, palette_frac, pi, &
                    labels_axis)
    !< Add the series (`x`, `y`) to the current panel, as gnuplot `plot ... title ... with ... lc ... lw ... dt ... ps
-   !< ... axes`. `colors` gives each point its color (gnuplot `lc variable`) with lines, points, linespoints and
-   !< impulses: a line segment takes the color of its end point; in the key, the line sample that of the first point, the
-   !< point sample that of the last one.
+   !< ... axes`. `colors` gives each point its color (gnuplot `lc variable`) with lines, points, linespoints, impulses
+   !< and the error bars: a line segment takes the color of its end point, a bar its point's; in the key, the line sample
+   !< that of the first point, the point sample that of the last one.
    !< `palette_z` colors each point by its value through the palette over the color axis (gnuplot `lc palette z`, the
    !< same styles and rules; the color axis spans these values and its box is drawn); `palette_cb` (a color axis value)
    !< and `palette_frac` (a fraction of the palette, 0 to 1) color the whole series (`lc palette cb|frac`).

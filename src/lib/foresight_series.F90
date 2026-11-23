@@ -104,6 +104,8 @@ type :: series_object
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
    integer(I4P)                  :: pointnumber = 0_I4P !< About N point markers evenly spread, 0 for all (gnuplot
                                                         !< `pointnumber`).
+   character(len=2)              :: ellipse_units = 'xy' !< Units of the ellipse diameters: `xy` (major in x, minor
+                                                         !< in y), `xx` (both in x), `yy` (both in y).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.
