@@ -4549,7 +4549,8 @@ contains
       endsubroutine rgb_item
 
       subroutine split_xtic(spec, column, iostat, iomsg, keyed, field, axis)
-      !< Remove a last `using` field `xtic(...)` or `xticlabels(...)` from `spec`, returning its `field`: a column N
+      !< Remove a last `using` field `xtic(...)` or `xticlabels(...)` (any gnuplot abbreviation between, `xticlabel`)
+      !< from `spec`, returning its `field`: a column N
       !< (`column` N), or a string expression (`xtic(strcol(1) . ' K')`, `xtic("a")` the same text on every row;
       !< `column` 1), `column` 0 if none; `key(N)` (the row names of a spider plot) likewise, with `keyed` true.
       !< `x2tic(...)`, `ytic(...)`, `y2tic(...)` (and their `ticlabels` forms) likewise, the labels on that `axis`.
@@ -4587,18 +4588,18 @@ contains
       keyed = index(last, 'key(') == 1
       head = ''
       if (index(last, '(') > 1) head = last(1:index(last, '(') - 1)
-      select case (head)
-      case ('xtic', 'xticlabels')
+      ! gnuplot's xtic$labels: xtic, xticl, ..., xticlabel, xticlabels
+      if (gnuplot_abbreviates(head, 'xtic$labels')) then
          axis = 'x'
-      case ('x2tic', 'x2ticlabels')
+      elseif (gnuplot_abbreviates(head, 'x2tic$labels')) then
          axis = 'x2'
-      case ('ytic', 'yticlabels')
+      elseif (gnuplot_abbreviates(head, 'ytic$labels')) then
          axis = 'y'
-      case ('y2tic', 'y2ticlabels')
+      elseif (gnuplot_abbreviates(head, 'y2tic$labels')) then
          axis = 'y2'
-      case default
-         if (.not. keyed) return
-      endselect
+      elseif (.not. keyed) then
+         return
+      endif
       inner = last(index(last, '(') + 1:len(last) - 1)
       if (last(len(last):len(last)) /= ')') then
          call fail('plot: xtic needs a column number or an expression, xtic(1), found "'//last//'"', iostat, iomsg)

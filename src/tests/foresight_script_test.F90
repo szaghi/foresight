@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(155)                           !< Per-check outcome.
+logical                       :: test_passed(156)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3339,6 +3339,19 @@ endif
 call interpreter%run_text('print sum [i=1:3 i', iostat, iomsg)
 test_passed(155) = test_passed(155) .and. iostat /= 0_I4P
 
+! using ... :xticlabel(N): any gnuplot abbreviation of xticlabels (xtic$labels), and its x2, y, y2 forms
+call interpreter%init(scratch)
+call interpreter%run_text('$L << EOD'//new_line('a')//'a 1'//new_line('a')//'b 2'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $L using 2:xticlabel(1), $L using 2:xticl(1), $L using 2:yticlabel(1)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(156) = iostat == 0_I4P
+if (test_passed(156)) test_passed(156) = allocated(interpreter%figure%panels(1)%series(1)%xlabels) .and. &
+                                       allocated(interpreter%figure%panels(1)%series(2)%xlabels)
+if (test_passed(156)) test_passed(156) = interpreter%figure%panels(1)%series(1)%xlabels(2) == 'b' .and. &
+                                       interpreter%figure%panels(1)%series(2)%xlabels(1) == 'a'
+call interpreter%run_text('plot $L using 2:xticlabelsx(1)', iostat, iomsg)
+test_passed(156) = test_passed(156) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3347,7 +3360,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,155L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,156L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
