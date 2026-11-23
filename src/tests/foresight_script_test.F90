@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(151)                           !< Per-check outcome.
+logical                       :: test_passed(152)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3235,6 +3235,34 @@ endblock
 open(newunit=unit, file='foresight_script_test_keycols.svg')
 close(unit, status='delete')
 
+! set multiplot layout R,C columnsfirst|rowsfirst upwards|downwards, title ... font: the fill order of the cells
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_mpfill.svg"; '// &
+                          'set multiplot layout 2,2 columnsfirst upwards title "M" font ",14"; '// &
+                          'set title "P1"; plot x; set title "P2"; plot x; unset multiplot', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+block
+   character(len=:), allocatable :: svg !< Output.
+   real(R8P)                     :: y1  !< Baseline of P1.
+   real(R8P)                     :: y2  !< Baseline of P2.
+
+   svg = text_of_file('foresight_script_test_mpfill.svg')
+   test_passed(152) = iostat == 0_I4P .and. index(svg, '>P1</text>') > 0 .and. index(svg, '>P2</text>') > 0
+   if (test_passed(152)) then
+      ! columns first, upwards: P1 bottom left, P2 above it (top left)
+      y1 = baseline(svg, index(svg, '>P1</text>'))
+      y2 = baseline(svg, index(svg, '>P2</text>'))
+      test_passed(152) = y2 < y1
+   endif
+endblock
+call interpreter%run_text('set multiplot layout 2,2 scale 1,1', iostat, iomsg)
+test_passed(152) = test_passed(152) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "scale"') > 0
+open(newunit=unit, file='foresight_script_test_mpfill.svg')
+close(unit, status='delete')
+
+call interpreter%run_text('set key autotitle column; set key columns 3', iostat, iomsg)
+test_passed(152) = test_passed(152) .and. iostat == 0_I4P .and. interpreter%autotitle == 'columnhead' .and. &
+                   interpreter%figure%panels(1)%key_columns == 3_I4P
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3243,7 +3271,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,151L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,152L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

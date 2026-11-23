@@ -60,6 +60,10 @@ type :: figure_object
    integer(I4P)                   :: current      = 1_I4P     !< Current panel, filled row by row.
    logical                        :: layout       = .false.   !< Multiplot grid: panels in cells, else in their
                                                               !< `origin`/`size` boxes (single plot, manual multiplot).
+   logical                        :: columns_first = .false.  !< Layout filled column by column (gnuplot
+                                                              !< `columnsfirst`), else row by row.
+   logical                        :: upwards      = .false.   !< Layout filled from the bottom row (gnuplot
+                                                              !< `upwards`), else from the top.
    logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
@@ -1382,6 +1386,8 @@ contains
    self%current = 1_I4P
    self%title = ''
    if (present(title)) self%title = title
+   self%columns_first = .false.
+   self%upwards = .false.
    endsubroutine set_multiplot
 
    subroutine set_origin(self, x, y)
@@ -2129,6 +2135,7 @@ contains
    real(R8P)                            :: top     !< Top of the panel grid [px].
    real(R8P)                            :: cell(2) !< Grid cell width and height [px].
    integer(I4P)                         :: p       !< Panel counter.
+   integer(I4P)                         :: rc(2)   !< Row and column of a panel's cell, from 0.
 
    backend%enhanced = self%enhanced
    backend%text_size = self%font_size
@@ -2147,9 +2154,15 @@ contains
             if (.not. allocated(panel%series)) cycle
          endif
          if (self%layout) then
-            call panel%render(backend, real(modulo(p - 1_I4P, self%cols), R8P) * cell(1), &
-                              top + real((p - 1_I4P) / self%cols, R8P) * cell(2), cell(1), cell(2), self%font_size, &
-                              canvas=[self%width, self%height])
+            ! the grid cell of panel p: row by row (or column by column), from the top row (or the bottom one)
+            if (self%columns_first) then
+               rc = [modulo(p - 1_I4P, self%rows), (p - 1_I4P) / self%rows]
+            else
+               rc = [(p - 1_I4P) / self%cols, modulo(p - 1_I4P, self%cols)]
+            endif
+            if (self%upwards) rc(1) = self%rows - 1_I4P - rc(1)
+            call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
+                              cell(2), self%font_size, canvas=[self%width, self%height])
          else
             ! fractions from the bottom left of the page below the multiplot title, as gnuplot
             call panel%render(backend, panel%origin(1) * self%width, &

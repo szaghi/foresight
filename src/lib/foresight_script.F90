@@ -6110,6 +6110,8 @@ contains
    integer(I4P)                                 :: seconds   !< Refresh period.
    integer(I4P)                                 :: rows      !< Multiplot rows.
    integer(I4P)                                 :: cols      !< Multiplot columns.
+   logical                                      :: columns_first !< Multiplot `columnsfirst`.
+   logical                                      :: upwards   !< Multiplot `upwards`.
 
    iostat = 0_I4P
    iomsg = ''
@@ -6543,9 +6545,26 @@ contains
       rows = 0_I4P
       cols = 0_I4P
       text = ''
+      columns_first = .false.
+      upwards = .false.
       i = 2_I4P
       do while (i <= size(tokens, kind=I4P))
-         if (keyword(tokens(i)%text, 'layout', 3_I4P)) then
+         if (keyword(tokens(i)%text, 'rowsfirst', 3_I4P)) then
+            columns_first = .false.
+         elseif (keyword(tokens(i)%text, 'columnsfirst', 3_I4P)) then
+            columns_first = .true.
+         elseif (keyword(tokens(i)%text, 'downwards', 4_I4P)) then
+            upwards = .false.
+         elseif (keyword(tokens(i)%text, 'upwards', 2_I4P)) then
+            upwards = .true.
+         elseif (tokens(i)%text == 'font') then
+            ! the font of the title: one font in foresight, the name read and ignored
+            i = i + 1_I4P
+            if (i > size(tokens, kind=I4P)) then
+               call fail('set multiplot: font needs a name', iostat, iomsg)
+               return
+            endif
+         elseif (keyword(tokens(i)%text, 'layout', 3_I4P)) then
             if (.not. next_integer(tokens, i, rows, iostat, iomsg)) return
             i = i + 1_I4P
             if (i > size(tokens, kind=I4P)) then
@@ -6589,6 +6608,8 @@ contains
             endif
          endassociate
          call self%figure%set_multiplot(rows, cols, text)
+         self%figure%columns_first = columns_first
+         self%figure%upwards = upwards
       endif
       self%multiplot = .true.
       self%advance_pending = .false.
@@ -7402,7 +7423,11 @@ contains
          case ('autotitle', 'auto')
             self%autotitle = 'file'
             if (i < size(tokens, kind=I4P)) then
-               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 3_I4P)) self%autotitle = 'columnhead'
+               ! `col`, `column`, `columnhead`: gnuplot's col$umnheader, not the `columns N` option
+               if (keyword(tokens(i + 1_I4P)%text, 'columnheader', 3_I4P)) then
+                  self%autotitle = 'columnhead'
+                  i = i + 1_I4P
+               endif
             endif
          case ('noautotitle')
             self%autotitle = 'none'
