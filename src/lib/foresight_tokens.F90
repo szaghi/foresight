@@ -262,6 +262,9 @@ contains
                endif
             elseif (statement(j:j) == '"' .or. statement(j:j) == "'") then
                quote = statement(j:j)
+            elseif (statement(j:j) == '{' .and. complex_end(j) > 0_I4P) then
+               ! a complex constant, gnuplot's {re, im}: its comma inside the word
+               j = complex_end(j)
             else
                depth = count_parentheses(statement(j:j), depth)
             endif
@@ -293,6 +296,37 @@ contains
       enddo
       close = 0_I4P
       endfunction closing_quote
+
+      pure function complex_end(open) result(close)
+      !< Position of the `}` ending a complex constant `{re, im}` (two signed numbers) opened at `open`, 0 if none.
+      integer(I4P), intent(in) :: open  !< Opening brace position.
+      integer(I4P)             :: close !< Closing brace position.
+      integer(I4P)             :: comma !< Its comma.
+
+      close = 0_I4P
+      comma = index(statement(open + 1_I4P:), ',', kind=I4P)
+      if (comma == 0_I4P) return
+      comma = open + comma
+      close = index(statement(comma + 1_I4P:), '}', kind=I4P)
+      if (close == 0_I4P) return
+      close = comma + close
+      if (.not. (is_number(statement(open + 1_I4P:comma - 1_I4P)) .and. is_number(statement(comma + 1_I4P:close - 1_I4P)))) &
+         close = 0_I4P
+      endfunction complex_end
+
+      pure function is_number(text) result(yes)
+      !< Whether `text` (blanks around) is a signed decimal number.
+      character(len=*), intent(in)  :: text !< Text.
+      logical                       :: yes  !< A number.
+      character(len=:), allocatable :: t    !< Text, trimmed.
+
+      t = trim(adjustl(text))
+      yes = len(t) > 0
+      if (.not. yes) return
+      if (scan(t(1:1), '+-') > 0) t = t(2:)
+      yes = len(t) > 0
+      if (yes) yes = verify(t, '0123456789.eE+-') == 0 .and. scan(t(1:1), '0123456789.') > 0
+      endfunction is_number
 
       pure function count_parentheses(c, depth) result(new_depth)
       !< Parenthesis depth after character `c`.

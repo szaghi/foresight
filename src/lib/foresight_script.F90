@@ -8999,17 +8999,17 @@ contains
       elseif (toks(i)%text == 'nooffset') then
          tics%offset = 0.0_R8P
       elseif (toks(i)%text == 'tc' .or. keyword(toks(i)%text, 'textcolor', 5_I4P)) then
-         copy = toks
-         copy(i)%text = 'lc'
-         if (.not. line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
-                               self%symbols)) return
-         if (allocated(probe%lc)) then
-            if (index(probe%lc, '*') == 1 .or. len(probe%lc) > len(tics%color)) then
-               call fail('set '//option//': textcolor: variable and palette colors do not apply', iostat, iomsg)
+         ! a line color, or `lt N` (linetype N's color, `set ytics tc lt 1`)
+         block
+            character(len=len(tics%color)) :: color !< Color read.
+
+            color = tics%color
+            if (.not. self%text_color(toks, i, color, iostat, iomsg)) then
+               iomsg = 'set '//option//': textcolor: '//iomsg
                return
             endif
-            tics%color = probe%lc
-         endif
+            tics%color = color
+         endblock
       else
          handled = .false.
       endif
@@ -10730,9 +10730,10 @@ contains
          select case (text(i:i))
          case ('"', "'")
             quote = text(i:i)
-         case ('(', '[')
+         case ('(', '[', '{')
+            ! braces: gnuplot's complex constants {re, im}
             depth = depth + 1_I4P
-         case (')', ']')
+         case (')', ']', '}')
             depth = max(0_I4P, depth - 1_I4P)
          case (',')
             if (depth == 0_I4P) then

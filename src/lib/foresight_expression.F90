@@ -36,6 +36,12 @@ module foresight_expression
 !< `index` and `join`) and `join(A, sep)`, their arguments known when compiled. Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
 !< or where a number cannot be read, is an error of a constant expression and a gap on a data row.
 !<
+!< Complex numbers, as gnuplot's: constants `{re, im}` and `I` (`{0,1}`); `+ - * / **` (gnuplot's formulas: powers in
+!< polar form, a negative base with a fractional exponent complex), `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
+!< `exp`, `log`, `log10` (of negative reals too), `sin`, `cos`, `tan`, `sinh`, `cosh`; comparisons `<`... of the real
+!< parts, `==` `!=` of both; a plotted value whose imaginary part exceeds 1e-8 is undefined (gnuplot's `set zero`); the
+!< other functions of a complex argument are undefined.
+!<
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
 !< IEEE invalid, division by zero or overflow exception.
@@ -150,9 +156,9 @@ integer(I4P), parameter :: NO_COLUMN = -huge(1_I4P) !< Column of a header name f
 character(len=*), parameter :: DEFAULT_TIMEFMT = '%d/%m/%y,%H:%M' !< gnuplot's default `set timefmt`.
 
 ! one-argument functions, the `OP_FUNCTION` argument is the index
-character(len=*), parameter :: FUNCTIONS(19) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
+character(len=*), parameter :: FUNCTIONS(22) = [character(len=5) :: 'abs', 'acos', 'asin', 'atan', 'ceil', 'cos', &
                                                 'cosh', 'exp', 'floor', 'int', 'log', 'log10', 'sgn', 'sin', 'sinh', &
-                                                'sqrt', 'tan', 'tanh', 'real']
+                                                'sqrt', 'tan', 'tanh', 'real', 'imag', 'arg', 'conj']
 
 ! functions of strings, the `OP_CALL` argument is the index; their least and most arguments
 character(len=*), parameter :: STRING_FUNCTIONS(10) = [character(len=8) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
@@ -200,6 +206,8 @@ real(R8P),    parameter :: INT_LIMIT   = 2.0_R8P**63                 !< Reals fr
 real(R8P),    parameter :: INT_GUARANTEED = 9.22337203685477478e+18_R8P !< gnuplot's LARGEST_GUARANTEED_NONOVERFLOW: int().
 real(R8P),    parameter :: EXACT_HALF  = 2.0_R8P**52                 !< gnuplot's LARGEST_EXACT_INT/2: floor(), ceil().
 real(R8P),    parameter :: PI          = acos(-1.0_R8P)              !< pi.
+real(R8P),    parameter :: ZERO_IMAG   = 1.0e-8_R8P                  !< gnuplot's `set zero`: a larger imaginary part
+                                                                     !< makes a plotted value undefined.
 
 type :: value_object
    !< Stack value: an integer, a real or a string, as in gnuplot.
@@ -210,6 +218,7 @@ type :: value_object
    ! before `s`: nvfortran 26.9 fort1 crashes on a component after the deferred-length one here
    logical                       :: is_undef = .false.  !< gnuplot's undefined value: an array element without one, a
                                                         !< function block's missing return.
+   real(R8P)                     :: im        = 0.0_R8P !< Imaginary part of a complex value, gnuplot's {re, im}.
    character(len=:), allocatable :: s                   !< String value.
 endtype value_object
 
@@ -663,6 +672,11 @@ contains
             call real_from_decimal(token, number%r, ok)
             if (.not. ok) call syntax('number out of range')
          endif
+      elseif (src(pos:pos) == '{') then
+         ! a complex constant, gnuplot's {re, im}: two numbers
+         kind = T_NUMBER
+         call complex_constant
+         token = src(start:min(pos - 1_I4P, n))
       elseif (src(pos:pos) == '$' .and. next_is(LETTERS, 1_I4P)) then
          ! a datablock name, `$DATA`
          kind = T_NAME
@@ -729,6 +743,38 @@ contains
          endselect
       endif
       endsubroutine next
+
+      subroutine complex_constant
+      !< `number` from the complex constant at `pos` (`{`): `{re, im}`, each part a signed number; `pos` after `}`.
+      real(R8P)    :: part(2) !< Real and imaginary parts.
+      integer(I4P) :: p       !< Part counter.
+      integer(I4P) :: first   !< Start of a number.
+      logical      :: ok      !< Number read.
+
+      pos = pos + 1_I4P
+      do p = 1_I4P, 2_I4P
+         call skip(' '//achar(9))
+         first = pos
+         if (next_is('+-', 0_I4P)) pos = pos + 1_I4P
+         call skip('0123456789.')
+         if (next_is('eE', 0_I4P)) then
+            pos = pos + 1_I4P
+            if (next_is('+-', 0_I4P)) pos = pos + 1_I4P
+            call skip('0123456789')
+         endif
+         ok = pos > first
+         if (ok) call real_from_decimal(src(first:pos - 1_I4P), part(p), ok)
+         call skip(' '//achar(9))
+         if (ok) ok = next_is(merge(',', '}', p == 1_I4P), 0_I4P)
+         if (.not. ok) then
+            call syntax('invalid complex constant', start)
+            return
+         endif
+         pos = pos + 1_I4P
+      enddo
+      number = value_object(r=part(1))
+      number%im = part(2)
+      endsubroutine complex_constant
 
       subroutine radix_number(digits, radix)
       !< `number` from the `digits` of an integer in base `radix`, a real past the largest integer (gnuplot).
@@ -1403,7 +1449,7 @@ contains
             if (v%is_string .neqv. list%items(k)%is_string) cycle
             if (v%is_string) then
                if (v%s /= list%items(k)%s) cycle
-            elseif (real_of(v) /= real_of(list%items(k))) then
+            elseif (real_of(v) /= real_of(list%items(k)) .or. v%im /= list%items(k)%im) then
                cycle
             endif
             found = int(k, I8P)
@@ -1780,6 +1826,14 @@ contains
          call emit(OP_CONSTANT, v=symbols%variables(k)%v)
       elseif (name == 'pi') then
          call emit(OP_CONSTANT, v=value_object(r=PI))
+      elseif (name == 'I') then
+         ! gnuplot 6.0's imaginary unit, {0,1} (a variable a script may redefine, as pi)
+         block
+            type(value_object) :: unit !< {0,1}.
+
+            unit%im = 1.0_R8P
+            call emit(OP_CONSTANT, v=unit)
+         endblock
       elseif (name == 'NaN') then
          ! gnuplot's predefined NaN (a variable a script may redefine, as pi)
          call emit(OP_CONSTANT, v=value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan)))
@@ -2904,7 +2958,14 @@ contains
    endif
    call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
    if (defined .and. top%is_string) call numeric(top, defined, err)
-   if (defined) v = real_of(top)
+   if (defined) then
+      ! a complex value: undefined beyond gnuplot's `set zero`
+      if (abs(top%im) > ZERO_IMAG) then
+         defined = .false.
+      else
+         v = real_of(top)
+      endif
+   endif
    endfunction evaluate
 
    pure function cells_time(cells, c, format) result(t)
@@ -3101,7 +3162,9 @@ contains
             elseif (stack(sp)%is_int .and. stack(sp)%i /= LEAST) then
                stack(sp)%i = -stack(sp)%i
             else
-               stack(sp) = value_object(r=-real_of(stack(sp)))
+               result = value_object(r=-real_of(stack(sp)))
+               result%im = -stack(sp)%im
+               stack(sp) = result
             endif
          case (OP_NOT)
             call condition(stack(sp), ok, err)
@@ -3655,6 +3718,15 @@ contains
    if (done .or. .not. ok) return
    x = real_of(a)
    y = real_of(b)
+   if (a%im /= 0.0_R8P .or. b%im /= 0.0_R8P) then
+      call complex_binary(op, a, b, c, ok)
+      return
+   endif
+   if (op == OP_POWER .and. x < 0.0_R8P .and. y /= aint(y)) then
+      ! a negative base with a fractional exponent: complex, gnuplot's polar power
+      call complex_binary(op, a, b, c, ok)
+      return
+   endif
    select case (op)
    case (OP_ADD)
       call safe_add(x, y, c%r, ok)
@@ -3841,7 +3913,13 @@ contains
 
    select case (trim(FUNCTIONS(f)))
    case ('sin', 'cos', 'tan')
-      call unary(f, value_object(r=real_of(a) * (PI / 180.0_R8P)), c, ok)
+      block
+         type(value_object) :: radians !< The argument in radians, both parts.
+
+         radians = value_object(r=real_of(a) * (PI / 180.0_R8P))
+         radians%im = a%im * (PI / 180.0_R8P)
+         call unary(f, radians, c, ok)
+      endblock
    case ('asin', 'acos', 'atan')
       call unary(f, a, c, ok)
       if (ok) c%r = c%r * (180.0_R8P / PI)
@@ -3850,7 +3928,7 @@ contains
    endselect
    endsubroutine unary_degrees
 
-   pure subroutine unary(f, a, c, ok)
+   pure recursive subroutine unary(f, a, c, ok)
    !< c = FUNCTIONS(f)(a); `ok` false if undefined.
    integer(I4P),       intent(in)    :: f    !< Function index.
    type(value_object), intent(in)    :: a    !< Argument.
@@ -3862,7 +3940,19 @@ contains
    c = value_object()
    x = real_of(a)
    name = trim(FUNCTIONS(f))
+   if (a%im /= 0.0_R8P .or. (x < 0.0_R8P .and. (name == 'sqrt' .or. name == 'log' .or. name == 'log10'))) then
+      ! a complex argument, or a negative one of sqrt and log: gnuplot's complex result
+      call complex_unary(name, a, c, ok)
+      return
+   endif
    select case (name)
+   case ('arg')
+      ! gnuplot's angle of a real
+      if (x < 0.0_R8P) c%r = PI
+   case ('imag')
+      c%r = 0.0_R8P
+   case ('conj')
+      c = a
    case ('abs')
       if (a%is_int .and. a%i /= LEAST) then
          c = int_value(abs(a%i))
@@ -3932,6 +4022,224 @@ contains
       c%r = x
    endselect
    endsubroutine unary
+
+   pure function magnitude(a) result(m)
+   !< gnuplot's magnitude of a complex value, without spurious overflow.
+   type(value_object), intent(in) :: a !< Value.
+   real(R8P)                      :: m !< |a|.
+   real(R8P)                      :: q !< Quotient of the parts.
+
+   associate(re => abs(real_of(a)), im => abs(a%im))
+      if (im == 0.0_R8P) then
+         m = re
+      elseif (re > im) then
+         q = im / re
+         m = re * sqrt(1.0_R8P + q * q)
+      else
+         q = re / im
+         m = im * sqrt(1.0_R8P + q * q)
+      endif
+   endassociate
+   endfunction magnitude
+
+   pure function angle(a) result(t)
+   !< gnuplot's angle of a complex value: 0 or pi for a real, atan2 else.
+   type(value_object), intent(in) :: a !< Value.
+   real(R8P)                      :: t !< Angle [rad].
+
+   if (a%im == 0.0_R8P) then
+      t = merge(0.0_R8P, PI, real_of(a) >= 0.0_R8P)
+   else
+      t = atan2(a%im, real_of(a))
+   endif
+   endfunction angle
+
+   pure function complex_value(re, im) result(c)
+   !< The value {re, im} (a real when `im` is 0).
+   real(R8P), intent(in) :: re !< Real part.
+   real(R8P), intent(in) :: im !< Imaginary part.
+   type(value_object)    :: c  !< Value.
+
+   c = value_object(r=re)
+   c%im = im
+   endfunction complex_value
+
+   pure subroutine complex_binary(op, a, b, c, ok)
+   !< c = a op b, one of them complex, by gnuplot's formulas (internal.c); `ok` false if undefined.
+   integer(I4P),       intent(in)    :: op  !< Operation code.
+   type(value_object), intent(in)    :: a   !< Left operand.
+   type(value_object), intent(in)    :: b   !< Right operand.
+   type(value_object), intent(out)   :: c   !< Result.
+   logical,            intent(inout) :: ok  !< Defined.
+   real(R8P), parameter              :: BIG = 1.0e150_R8P !< Larger parts are not multiplied (no overflow).
+   real(R8P)                         :: ar  !< a, real part.
+   real(R8P)                         :: ai  !< a, imaginary part.
+   real(R8P)                         :: br  !< b, real part.
+   real(R8P)                         :: bi  !< b, imaginary part.
+   real(R8P)                         :: f1  !< Division factor.
+   real(R8P)                         :: f2  !< Division factor.
+   real(R8P)                         :: den !< Division denominator.
+   real(R8P)                         :: mag !< Power magnitude.
+   real(R8P)                         :: ang !< Power angle.
+   real(R8P)                         :: e   !< An exponent.
+
+   c = value_object()
+   ar = real_of(a)
+   ai = a%im
+   br = real_of(b)
+   bi = b%im
+   if (a%is_string .or. b%is_string) then
+      ok = .false.
+      return
+   endif
+   select case (op)
+   case (OP_ADD, OP_SUBTRACT)
+      if (op == OP_SUBTRACT) then
+         br = -br
+         bi = -bi
+      endif
+      call safe_add(ar, br, f1, ok)
+      if (ok) call safe_add(ai, bi, f2, ok)
+      if (ok) c = complex_value(f1, f2)
+   case (OP_MULTIPLY)
+      ok = max(abs(ar), abs(ai), abs(br), abs(bi)) < BIG
+      if (ok) c = complex_value(ar * br - ai * bi, ar * bi + ai * br)
+   case (OP_DIVIDE)
+      ! gnuplot's cmplx_divide
+      ok = abs(br) + abs(bi) > 0.0_R8P .and. max(abs(ar), abs(ai), abs(br), abs(bi)) < BIG
+      if (.not. ok) return
+      if (abs(br) >= abs(bi)) then
+         f1 = 1.0_R8P
+         f2 = bi / br
+      else
+         f1 = br / bi
+         f2 = 1.0_R8P
+      endif
+      den = br * f1 + bi * f2
+      ok = abs(den) > 1.0_R8P / BIG
+      if (ok) c = complex_value((ar * f1 + ai * f2) / den, (ai * f1 - ar * f2) / den)
+   case (OP_POWER)
+      if (ar == 0.0_R8P .and. ai == 0.0_R8P) then
+         ! 0**b: 1 for b 0, else 0; undefined for a complex or negative b
+         ok = bi == 0.0_R8P .and. br >= 0.0_R8P
+         c = value_object(r=merge(1.0_R8P, 0.0_R8P, br == 0.0_R8P))
+         return
+      endif
+      ! the magnitude, its powers checked against overflow
+      e = log(magnitude(a)) * abs(br)
+      ok = e <= LOG_HUGE
+      if (.not. ok) return
+      mag = 0.0_R8P
+      if (e > LOG_TINY) mag = magnitude(a)**abs(br)
+      if (br < 0.0_R8P) then
+         ok = mag /= 0.0_R8P
+         if (.not. ok) return
+         mag = 1.0_R8P / mag
+      endif
+      if (b%is_int) then
+         ang = angle(a) * br
+      else
+         e = -bi * angle(a)
+         ok = e <= LOG_HUGE
+         if (.not. ok) return
+         if (e > LOG_TINY) then
+            mag = mag * exp(e)
+         else
+            mag = 0.0_R8P
+         endif
+         ang = br * angle(a) + bi * log(magnitude(a))
+      endif
+      c = complex_value(mag * cos(ang), mag * sin(ang))
+   case (OP_LT)
+      c = logical_value(ar < br)
+   case (OP_LE)
+      c = logical_value(ar <= br)
+   case (OP_GT)
+      c = logical_value(ar > br)
+   case (OP_GE)
+      c = logical_value(ar >= br)
+   case (OP_EQ)
+      c = logical_value(ar == br .and. ai == bi)
+   case (OP_NE)
+      c = logical_value(ar /= br .or. ai /= bi)
+   case default
+      ! `%` and atan2 of complex values: undefined
+      ok = .false.
+   endselect
+   endsubroutine complex_binary
+
+   pure recursive subroutine complex_unary(name, a, c, ok)
+   !< c = name(a) for a complex argument (or a negative real one of sqrt, log, log10), by gnuplot's formulas
+   !< (standard.c); the functions with no complex form here are undefined.
+   character(len=*),   intent(in)    :: name !< Function name.
+   type(value_object), intent(in)    :: a    !< Argument.
+   type(value_object), intent(out)   :: c    !< Result.
+   logical,            intent(inout) :: ok   !< Defined.
+   real(R8P)                         :: re   !< Real part.
+   real(R8P)                         :: im   !< Imaginary part.
+   real(R8P)                         :: mag  !< A magnitude.
+   real(R8P)                         :: ang  !< An angle.
+   real(R8P)                         :: den  !< A denominator.
+
+   c = value_object()
+   re = real_of(a)
+   im = a%im
+   select case (name)
+   case ('abs')
+      c%r = magnitude(a)
+   case ('arg')
+      c%r = angle(a)
+   case ('real')
+      c%r = re
+   case ('imag')
+      c%r = im
+   case ('conj')
+      c = complex_value(re, -im)
+   case ('sqrt')
+      mag = sqrt(magnitude(a))
+      if (im == 0.0_R8P) then
+         c = complex_value(0.0_R8P, mag)
+      else
+         ang = angle(a) / 2.0_R8P
+         c = complex_value(mag * cos(ang), mag * sin(ang))
+      endif
+   case ('exp')
+      ok = re <= LOG_HUGE
+      if (.not. ok) return
+      mag = 0.0_R8P
+      if (re > LOG_TINY) mag = exp(re)
+      c = complex_value(mag * cos(im), mag * sin(im))
+   case ('log', 'log10')
+      ok = magnitude(a) > 0.0_R8P
+      if (.not. ok) return
+      c = complex_value(log(magnitude(a)), angle(a))
+      if (name == 'log10') c = complex_value(c%r / log(10.0_R8P), c%im / log(10.0_R8P))
+   case ('sin', 'cos', 'sinh', 'cosh')
+      ok = abs(im) <= LOG_HUGE .and. abs(re) <= LOG_HUGE
+      if (.not. ok) return
+      select case (name)
+      case ('sin')
+         c = complex_value(sin(re) * cosh(im), cos(re) * sinh(im))
+      case ('cos')
+         c = complex_value(cos(re) * cosh(im), -sin(re) * sinh(im))
+      case ('sinh')
+         c = complex_value(sinh(re) * cos(im), cosh(re) * sin(im))
+      case default
+         c = complex_value(cosh(re) * cos(im), sinh(re) * sin(im))
+      endselect
+   case ('tan')
+      ok = abs(2.0_R8P * im) <= LOG_HUGE
+      if (.not. ok) return
+      den = cos(2.0_R8P * re) + cosh(2.0_R8P * im)
+      ok = den /= 0.0_R8P
+      if (ok) c = complex_value(sin(2.0_R8P * re) / den, sinh(2.0_R8P * im) / den)
+   case ('int', 'floor', 'ceil', 'sgn')
+      ! of the real part, as gnuplot
+      call unary(findloc(FUNCTIONS, name, dim=1, kind=I4P), value_object(r=re), c, ok)
+   case default
+      ok = .false.
+   endselect
+   endsubroutine complex_unary
 
    pure subroutine safe_add(x, y, z, ok)
    !< z = x + y, undefined on overflow.
@@ -4111,6 +4419,9 @@ contains
       text = a%s
    elseif (a%is_int) then
       text = int_str(a%i)
+   elseif (a%im /= 0.0_R8P) then
+      ! gnuplot's complex value
+      text = '{'//gnuplot_real(a%r)//', '//gnuplot_real(a%im)//'}'
    else
       text = gnuplot_real(a%r)
    endif

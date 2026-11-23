@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(163)                           !< Per-check outcome.
+logical                       :: test_passed(164)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3586,6 +3586,44 @@ if (test_passed(163)) then
 endif
 if (test_passed(163)) test_passed(163) = interpreter%figure%panels(1)%title == 'open'
 
+
+! complex numbers as gnuplot 6.0: {re, im}, I, arithmetic and powers by its formulas, abs/arg/real/imag/conj, sqrt and
+! log of negative reals; printed as {re, im}; a plotted value with an imaginary part beyond 1e-8 is undefined
+call interpreter%init(scratch)
+call interpreter%run_text('a = abs({3,4}); b = 180/pi*arg({0,1}); c = real({1,2}*{3,4}); d = imag(1/{0,1}); '// &
+                          'e = imag(sqrt(-4)); f = imag(log(-1)); g = imag((-8)**(1./3)); h = real(I*I); '// &
+                          'k = ({1,2} == {1,2}) + ({1,2} < {2,0}); m = imag(conj(7*I)); '// &
+                          'set samples 3; plot [0:2] abs({1,1}*x), {1,1}*x, sqrt(x-1); set ytics tc lt 2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(164) = iostat == 0_I4P
+if (test_passed(164)) then
+   block
+      real(R8P)                   :: v(10) !< a to m.
+      integer(I4P)                :: j     !< Counter.
+      character(len=1), parameter :: NAMES(10) = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'k', 'm'] !< Variables.
+
+      do j = 1_I4P, 10_I4P
+         call interpreter%symbols%constant(NAMES(j), v(j), iostat, iomsg)
+         test_passed(164) = test_passed(164) .and. iostat == 0_I4P
+      enddo
+      test_passed(164) = test_passed(164) .and. v(1) == 5.0_R8P .and. abs(v(2) - 90.0_R8P) < 1.0e-12_R8P .and. &
+                        v(3) == -5.0_R8P .and. v(4) == -1.0_R8P .and. v(5) == 2.0_R8P .and. &
+                        abs(v(6) - acos(-1.0_R8P)) < 1.0e-15_R8P .and. abs(v(7) - sqrt(3.0_R8P)) < 1.0e-14_R8P .and. &
+                        v(8) == -1.0_R8P .and. v(9) == 2.0_R8P .and. v(10) == -7.0_R8P
+   endblock
+endif
+if (test_passed(164)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(164) = abs(series(1)%y(3) - 2.0_R8P * sqrt(2.0_R8P)) < 1.0e-14_R8P .and. series(2)%y(1) == 0.0_R8P &
+                        .and. ieee_is_nan(series(2)%y(2)) .and. ieee_is_nan(series(3)%y(1)) .and. series(3)%y(3) == 1.0_R8P
+   endassociate
+   test_passed(164) = test_passed(164) .and. interpreter%figure%panels(1)%yaxis%tics%color == default_color(2_I4P)
+endif
+call interpreter%run_text('x = {1,2} % 2', iostat, iomsg)
+test_passed(164) = test_passed(164) .and. iostat /= 0_I4P
+call interpreter%run_text('y = {1, a}', iostat, iomsg)
+test_passed(164) = test_passed(164) .and. iostat /= 0_I4P .and. index(iomsg, 'invalid complex constant') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3594,7 +3632,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,163L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,164L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
