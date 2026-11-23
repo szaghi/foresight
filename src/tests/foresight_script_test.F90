@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(154)                           !< Per-check outcome.
+logical                       :: test_passed(155)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3304,6 +3304,41 @@ call interpreter%run_text('ymax = 0.23911711601960603; set ytics 0, ymax / 10.0,
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(154) = test_passed(154) .and. iostat == 0_I4P .and. &
                    interpreter%figure%panels(1)%yaxis%tics%step == '0.023911711602'
+! sum [i=a:b] EXPRESSION (integers stay integers, empty is 0, nested, in a user function and a plotted function),
+! GPVAL_LINENO, show and test run as no-ops
+call interpreter%init(scratch)
+call interpreter%run_text('a = sum [i=1:3] 1234567891; b = sum [i=1:0] i; c = sum [i=1:3] 0.5*i; '// &
+                          'd = sum [i=1:2] sum [j=1:3] i*j; f(x) = sum [k=1:3] k*x; e = f(2)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(155) = iostat == 0_I4P
+if (test_passed(155)) then
+   block
+      real(R8P) :: v(5) !< a to e.
+
+      call interpreter%symbols%constant('a', v(1), iostat, iomsg)
+      call interpreter%symbols%constant('b', v(2), iostat, iomsg)
+      call interpreter%symbols%constant('c', v(3), iostat, iomsg)
+      call interpreter%symbols%constant('d', v(4), iostat, iomsg)
+      call interpreter%symbols%constant('e', v(5), iostat, iomsg)
+      test_passed(155) = all(v == [3703703673.0_R8P, 0.0_R8P, 3.0_R8P, 18.0_R8P, 12.0_R8P])
+   endblock
+endif
+call interpreter%run_text('set samples 3; plot [0:2] sum [k=1:2] k*x', iostat, iomsg)
+test_passed(155) = test_passed(155) .and. iostat == 0_I4P
+if (test_passed(155)) test_passed(155) = all(interpreter%figure%panels(1)%series(1)%y == [0.0_R8P, 3.0_R8P, 6.0_R8P])
+call interpreter%run_text('show xrange; test'//new_line('a')//'n = GPVAL_LINENO', iostat, iomsg)
+test_passed(155) = test_passed(155) .and. iostat == 0_I4P
+if (test_passed(155)) then
+   block
+      real(R8P) :: n !< Line.
+
+      call interpreter%symbols%constant('n', n, iostat, iomsg)
+      test_passed(155) = iostat == 0_I4P .and. n == 2.0_R8P
+   endblock
+endif
+call interpreter%run_text('print sum [i=1:3 i', iostat, iomsg)
+test_passed(155) = test_passed(155) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3312,7 +3347,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,154L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,155L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

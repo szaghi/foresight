@@ -98,6 +98,7 @@ integer(I4P), parameter :: OP_AND_JUMP    = 23_I4P !< If the top is false: make 
 integer(I4P), parameter :: OP_OR_JUMP     = 24_I4P !< If the top is true: make it 1, jump to `arg`; else pop.
 integer(I4P), parameter :: OP_COLUMN_NAMED = 25_I4P !< Push the column of header `names(arg)`: undefined until resolved.
 integer(I4P), parameter :: OP_LOAD         = 26_I4P !< Push a copy of stack slot `arg` (a user function argument).
+character(len=*), parameter :: SUM_FRAME = '(sum)' !< Frame name of a `sum` variable (no function is named so).
 integer(I4P), parameter :: OP_COLLAPSE     = 27_I4P !< Drop the `arg` values under the top (a call's arguments).
 integer(I4P), parameter :: OP_CONCAT       = 28_I4P !< `.`: string join.
 integer(I4P), parameter :: OP_STREQ        = 29_I4P !< `eq`.
@@ -918,6 +919,10 @@ contains
          at = start
          call next
          if (iostat /= 0_I4P) return
+         if (name == 'sum' .and. kind == T_OPERATOR .and. token == '[') then
+            call sum_expression
+            return
+         endif
          if (.not. (kind == T_OPERATOR .and. token == '(')) then
             call name_value(name, at)
             return
@@ -1444,8 +1449,15 @@ contains
       character(len=*), intent(in) :: name !< Name.
       logical                      :: yes  !< The variable.
 
+      integer(I4P)                 :: f    !< Frame.
+
       yes = .false.
-      if (present(variable) .and. size(frames) == 0) yes = name == variable
+      if (.not. present(variable)) return
+      ! inside `sum` frames only, the dummy variable is still seen
+      do f = 1_I4P, size(frames, kind=I4P)
+         if (frames(f)%name /= SUM_FRAME) return
+      enddo
+      yes = name == variable
       endfunction is_variable
 
       recursive subroutine name_value(name, at)
@@ -1454,16 +1466,20 @@ contains
       integer(I4P),     intent(in) :: at   !< Position.
       integer(I4P)                 :: k    !< Parameter or variable index.
 
-      if (size(frames) > 0) then
-         associate(frame => frames(size(frames)))
-            do k = 1_I4P, size(frame%params, kind=I4P)
-               if (frame%params(k)%text == name) then
-                  call emit(OP_LOAD, arg=frame%base + k - 1_I4P)
+      ! the innermost frame, and those around a `sum` (whose variable alone it binds)
+      block
+         integer(I4P) :: f !< Frame.
+
+         do f = size(frames, kind=I4P), 1_I4P, -1_I4P
+            do k = 1_I4P, size(frames(f)%params, kind=I4P)
+               if (frames(f)%params(k)%text == name) then
+                  call emit(OP_LOAD, arg=frames(f)%base + k - 1_I4P)
                   return
                endif
             enddo
-         endassociate
-      endif
+            if (frames(f)%name /= SUM_FRAME) exit
+         enddo
+      endblock
       if (is_variable(name)) then
          call emit(OP_COLUMN, arg=1_I4P)
          return
@@ -1594,6 +1610,105 @@ contains
          depth = depth - nargs
       endif
       endsubroutine user_call
+
+      recursive subroutine sum_expression
+      !< gnuplot `sum [VAR = START:END] EXPRESSION`, the current token `[`: the ends known now (integers), the expression
+      !< compiled once per value of VAR (a stack slot read as a function argument, the names around still seen) and the
+      !< terms added; an empty range is the integer 0, as gnuplot. EXPRESSION extends as far as an expression goes.
+      character(len=:), allocatable :: var      !< Summation variable.
+      character(len=:), allocatable :: body_token !< First token of the expression.
+      type(value_object)            :: v        !< An end.
+      type(value_object)            :: body_number !< Its number.
+      integer(I8P)                  :: ends(2)  !< First and last values.
+      integer(I8P)                  :: i        !< Value.
+      integer(I4P)                  :: body(3)  !< Reader state at the expression: position, kind, start.
+      integer(I4P)                  :: first    !< First instruction of an end.
+      integer(I4P)                  :: j        !< Character counter.
+      logical                       :: found    !< A numeric end.
+      type(name_object)             :: param(1) !< VAR, as a parameter (components, not a constructor: nvfortran).
+      character(len=*), parameter   :: NAME_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789'
+
+      if (in_procedure) then
+         call syntax('sum is not supported inside a function block')
+         return
+      endif
+      ! `VAR =`, read from the text (a lone = is no operator)
+      j = pos
+      do while (j <= len(src, kind=I4P))
+         if (src(j:j) /= ' ') exit
+         j = j + 1_I4P
+      enddo
+      start = j
+      do while (j <= len(src, kind=I4P))
+         if (scan(src(j:j), NAME_CHARS) == 0) exit
+         j = j + 1_I4P
+      enddo
+      var = src(start:j - 1_I4P)
+      param(1)%text = var
+      do while (j <= len(src, kind=I4P))
+         if (src(j:j) /= ' ') exit
+         j = j + 1_I4P
+      enddo
+      if (len(var) == 0 .or. j > len(src, kind=I4P)) then
+         call syntax('expecting sum [<var> = <start>:<end>] <expression>')
+         return
+      endif
+      if (src(j:j) /= '=' .or. scan(var(1:1), NAME_CHARS(1:53)) == 0) then
+         call syntax('expecting sum [<var> = <start>:<end>] <expression>')
+         return
+      endif
+      pos = j + 1_I4P
+      call next
+      if (iostat /= 0_I4P) return
+      do j = 1_I4P, 2_I4P
+         first = size(self%code, kind=I4P) + 1_I4P
+         call parse_ternary
+         if (iostat /= 0_I4P) return
+         call fold(first, v)
+         if (iostat /= 0_I4P) return
+         call index_of(v, ends(j), found)
+         if (.not. found) then
+            call syntax('the ends of a sum are integers')
+            return
+         endif
+         call expect(trim(merge(':', ']', j == 1_I4P)))
+         if (iostat /= 0_I4P) return
+      enddo
+      if (loose) ends(2) = ends(1)
+      if (ends(2) - ends(1) >= 10000_I8P) then
+         call syntax('a sum of more than 10000 terms is not supported')
+         return
+      endif
+      body = [pos, kind, start]
+      body_token = token
+      body_number = number
+      i = ends(1)
+      do
+         ! one term: VAR's value pushed, the expression compiled reading it, then VAR dropped under the term
+         pos = body(1)
+         kind = body(2)
+         start = body(3)
+         token = body_token
+         number = body_number
+         call emit(OP_CONSTANT, v=int_value(i))
+         call push_frame(name=SUM_FRAME, params=param, base=depth)
+         call parse_ternary
+         call pop_frame
+         if (iostat /= 0_I4P) return
+         call emit(OP_COLLAPSE, arg=1_I4P)
+         depth = depth - 1_I4P
+         if (ends(2) < ends(1)) then
+            ! an empty sum: 0, the expression read once to pass it
+            call emit(OP_CONSTANT, v=int_value(0_I8P))
+            call emit(OP_COLLAPSE, arg=1_I4P)
+            depth = depth - 1_I4P
+            exit
+         endif
+         if (i > ends(1)) call emit(OP_ADD)
+         if (i >= ends(2)) exit
+         i = i + 1_I8P
+      enddo
+      endsubroutine sum_expression
 
       subroutine push_frame(name, params, base)
       !< Push the frame of a user function compiled inline (by a temporary: see `push`).

@@ -651,6 +651,8 @@ contains
       integer(I4P)                    :: e             !< Last statement of an old if's line.
 
       call split_statements(logical_line, statements)
+      ! gnuplot's GPVAL_LINENO: the line of the statement in its file
+      call self%symbols%set_value('GPVAL_LINENO', real(at, R8P), is_int=.true.)
       s = 1_I4P
       do while (s <= size(statements, kind=I4P))
          if (old_if(statements(s)%text)) then
@@ -903,6 +905,9 @@ contains
       call resolve_colors(tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
       call self%plot_command(tokens, self%last_plot, iostat, iomsg)
+   elseif (keyword(command, 'show', 2_I4P) .or. command == 'test') then
+      ! gnuplot `show ...` prints settings, `test` draws a test page: nothing here, as a script runs on
+      continue
    else
       call fail('unsupported command "'//command//'"', iostat, iomsg)
    endif
@@ -2571,6 +2576,11 @@ contains
          ! the expression runs up to the first item option: blanks may separate its words, `x * 2`
          head = i
          do while (i < size(tokens, kind=I4P))
+            ! the range of `sum [i=a:b] term` is the sum's
+            if (tokens(i + 1_I4P)%kind == TOKEN_RANGE .and. sum_head(tokens(i))) then
+               i = i + 1_I4P
+               cycle
+            endif
             if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
             if (is_item_option(tokens(i + 1_I4P)%text)) exit
             i = i + 1_I4P
@@ -2616,6 +2626,10 @@ contains
                   i = i + 2_I4P
                   head2 = i
                   do while (i < size(tokens, kind=I4P))
+                     if (tokens(i + 1_I4P)%kind == TOKEN_RANGE .and. sum_head(tokens(i))) then
+                        i = i + 1_I4P
+                        cycle
+                     endif
                      if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
                      if (is_item_option(tokens(i + 1_I4P)%text)) exit
                      i = i + 1_I4P
@@ -11209,6 +11223,22 @@ contains
       call fields(f)%set_column(columns(f))
    enddo
    endfunction plain_columns
+
+   pure function sum_head(token) result(yes)
+   !< Whether `token` ends with gnuplot's `sum`, its range next: `sum [i=1:n] term`, `2*sum [i=1:n] term`.
+   type(token_object), intent(in) :: token !< Token.
+   logical                        :: yes   !< A sum head.
+   integer(I4P)                   :: n     !< Length.
+
+   yes = .false.
+   if (token%kind /= TOKEN_WORD) return
+   n = len(token%text, kind=I4P)
+   if (n < 3_I4P) return
+   if (token%text(n - 2_I4P:n) /= 'sum') return
+   yes = n == 3_I4P
+   if (.not. yes) yes = scan(token%text(n - 3_I4P:n - 3_I4P), &
+                             'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789$') == 0
+   endfunction sum_head
 
    function expression_end(tokens, first) result(last)
    !< Last token of the expression starting at token `first`: tokens join where an operator lies between them (a word
