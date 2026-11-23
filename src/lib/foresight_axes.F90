@@ -3442,56 +3442,112 @@ contains
                tv(i) = v(i) + l * sin(a) / h
             endif
          enddo
-         ! a head size of its own: the length in its system, as `set arrow ... size`
-         backend%head_px = 0.0_R8P
-         if (series%head_size(1) > 0.0_R8P) then
-            select case (trim(series%head_system))
-            case ('graph')
-               backend%head_px(1) = series%head_size(1) * w
-            case ('screen')
-               backend%head_px(1) = series%head_size(1) * self%canvas(1)
-            case ('character')
-               backend%head_px(1) = series%head_size(1) * 0.6_R8P * font_size
-            case default
-               if (xaxis%log) then
-                  backend%head_px(1) = abs(series%head_size(1) / (log10(xaxis%hi) - log10(xaxis%lo))) * w
-               else
-                  backend%head_px(1) = abs(series%head_size(1) / (xaxis%hi - xaxis%lo)) * w
-               endif
-            endselect
-            backend%head_px(2) = series%head_size(2)
-         endif
-         if (allocated(series%colors)) then
-            ! a color per arrow (lc variable, lc palette z): a path per run of one color
+         if (allocated(series%colors) .or. allocated(series%arrow_heads)) then
+            ! a color (lc variable, lc palette z) or a style (arrowstyle variable) per arrow: a path per run of alike
+            ! arrows
             block
                integer(I4P) :: i1 !< First arrow of a run.
                integer(I4P) :: i2 !< Last arrow of a run.
 
                i1 = 1_I4P
                do while (i1 <= n)
-                  if (.not. ok(i1) .or. i1 > size(series%colors, kind=I4P)) then
+                  if (.not. ok(i1) .or. .not. has_style(i1)) then
                      i1 = i1 + 1_I4P
                      cycle
                   endif
                   i2 = i1
-                  do while (i2 < n .and. i2 < size(series%colors, kind=I4P))
-                     if (.not. ok(i2 + 1_I4P)) exit
-                     if (series%colors(i2 + 1_I4P) /= series%colors(i1)) exit
+                  do while (i2 < n)
+                     if (.not. ok(i2 + 1_I4P) .or. .not. has_style(i2 + 1_I4P)) exit
+                     if (.not. alike(i1, i2 + 1_I4P)) exit
                      i2 = i2 + 1_I4P
                   enddo
-                  if (series%colors(i1) /= 'none') &
-                     call backend%data_arrows(u(i1:i2), v(i1:i2), tu(i1:i2), tv(i1:i2), trim(series%colors(i1)), &
-                                              series%style%linewidth, series%head, series%head_filled)
+                  if (trim(arrow_color(i1)) /= 'none') then
+                     if (allocated(series%arrow_heads)) then
+                        call head_pixels(series%arrow_sizes(:, i1), series%arrow_systems(i1), w)
+                        call backend%data_arrows(u(i1:i2), v(i1:i2), tu(i1:i2), tv(i1:i2), trim(arrow_color(i1)), &
+                                                 series%arrow_widths(i1), series%arrow_heads(i1), series%arrow_filled(i1))
+                     else
+                        call head_pixels(series%head_size, series%head_system, w)
+                        call backend%data_arrows(u(i1:i2), v(i1:i2), tu(i1:i2), tv(i1:i2), trim(arrow_color(i1)), &
+                                                 series%style%linewidth, series%head, series%head_filled)
+                     endif
+                  endif
                   i1 = i2 + 1_I4P
                enddo
             endblock
          elseif (any(ok)) then
+            call head_pixels(series%head_size, series%head_system, w)
             call backend%data_arrows(pack(u, ok), pack(v, ok), pack(tu, ok), pack(tv, ok), series%style%color, &
                                      series%style%linewidth, series%head, series%head_filled)
          endif
          backend%head_px = 0.0_R8P
       endassociate
       endsubroutine draw_arrows
+
+      function has_style(i) result(yes)
+      !< Whether arrow `i` has its color and style (the per-arrow arrays may be shorter).
+      integer(I4P), intent(in) :: i   !< Arrow.
+      logical                  :: yes !< Drawable.
+
+      yes = .true.
+      if (allocated(self%series(s)%colors)) yes = i <= size(self%series(s)%colors, kind=I4P)
+      if (allocated(self%series(s)%arrow_heads)) yes = yes .and. i <= size(self%series(s)%arrow_heads, kind=I4P)
+      endfunction has_style
+
+      function arrow_color(i) result(color)
+      !< Color of arrow `i`: its own, else the series'.
+      integer(I4P), intent(in)      :: i     !< Arrow.
+      character(len=:), allocatable :: color !< Color.
+
+      if (allocated(self%series(s)%colors)) then
+         color = trim(self%series(s)%colors(i))
+      else
+         color = trim(self%series(s)%style%color)
+      endif
+      endfunction arrow_color
+
+      function alike(i, j) result(yes)
+      !< Whether arrows `i` and `j` share their color and style: one path.
+      integer(I4P), intent(in) :: i   !< An arrow.
+      integer(I4P), intent(in) :: j   !< Another arrow.
+      logical                  :: yes !< Alike.
+
+      yes = arrow_color(i) == arrow_color(j)
+      if (.not. yes .or. .not. allocated(self%series(s)%arrow_heads)) return
+      associate(series => self%series(s))
+         yes = series%arrow_heads(i) == series%arrow_heads(j) .and. &
+               (series%arrow_filled(i) .eqv. series%arrow_filled(j)) .and. &
+               series%arrow_widths(i) == series%arrow_widths(j) .and. &
+               all(series%arrow_sizes(:, i) == series%arrow_sizes(:, j)) .and. &
+               series%arrow_systems(i) == series%arrow_systems(j)
+      endassociate
+      endfunction alike
+
+      subroutine head_pixels(head_size, system, w)
+      !< The backend's head size from a head length in its system (none: the default head), as `set arrow ...
+      !< size`.
+      real(R8P),        intent(in) :: head_size(2) !< Length and angle [deg].
+      character(len=*), intent(in) :: system       !< System of the length.
+      real(R8P),        intent(in) :: w            !< Plot width [px].
+
+      backend%head_px = 0.0_R8P
+      if (head_size(1) <= 0.0_R8P) return
+      select case (trim(system))
+      case ('graph')
+         backend%head_px(1) = head_size(1) * w
+      case ('screen')
+         backend%head_px(1) = head_size(1) * self%canvas(1)
+      case ('character')
+         backend%head_px(1) = head_size(1) * 0.6_R8P * font_size
+      case default
+         if (xaxis%log) then
+            backend%head_px(1) = abs(head_size(1) / (log10(xaxis%hi) - log10(xaxis%lo))) * w
+         else
+            backend%head_px(1) = abs(head_size(1) / (xaxis%hi - xaxis%lo)) * w
+         endif
+      endselect
+      backend%head_px(2) = head_size(2)
+      endsubroutine head_pixels
 
       subroutine draw_ellipses
       !< An ellipse per placeable point, as gnuplot `units xy`: the major diameter in x units and the minor one in y units
@@ -5686,6 +5742,13 @@ contains
       select case (all(s)%palette_mode)
       case (1_I4P)
          if (.not. allocated(all(s)%zvalues)) cycle
+         if (allocated(all(s)%arrow_heads)) then
+            ! arrowstyle variable: only the arrows of a palette style (a z value) take a palette color
+            do i = 1_I4P, min(size(all(s)%zvalues, kind=I4P), size(all(s)%colors, kind=I4P))
+               if (ieee_is_finite(all(s)%zvalues(i))) all(s)%colors(i) = cb_color(all(s)%zvalues(i))
+            enddo
+            cycle
+         endif
          if (allocated(all(s)%colors)) deallocate(all(s)%colors)
          allocate(all(s)%colors(size(all(s)%zvalues)))
          do i = 1_I4P, size(all(s)%zvalues, kind=I4P)

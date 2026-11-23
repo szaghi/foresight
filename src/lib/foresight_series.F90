@@ -108,6 +108,12 @@ type :: series_object
                                                          !< in y), `xx` (both in x), `yy` (both in y).
    real(R8P), allocatable        :: text_rotations(:) !< Rotation of each label [deg] (gnuplot `rotate variable`),
                                                       !< `text_rotate` for all when unallocated.
+   integer(I4P), allocatable     :: arrow_heads(:) !< Heads of each arrow (gnuplot `arrowstyle variable`), as `head`;
+                                                   !< the series' own for all when unallocated.
+   logical, allocatable          :: arrow_filled(:) !< Filled heads of each arrow, as `head_filled`.
+   real(R8P), allocatable        :: arrow_widths(:) !< Line width of each arrow [px].
+   real(R8P), allocatable        :: arrow_sizes(:,:) !< Head length and angle of each arrow, as `head_size`.
+   character(len=9), allocatable :: arrow_systems(:) !< System of each head length, as `head_system`.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

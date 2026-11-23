@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(192)                           !< Per-check outcome.
+logical                       :: test_passed(193)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4314,6 +4314,40 @@ endif
 call interpreter%run_text('w = (A[4] = 1)', iostat, iomsg)
 test_passed(192) = test_passed(192) .and. iostat /= 0_I4P .and. index(iomsg, 'out of range') > 0
 
+! arrowstyle variable: each arrow the heads, fill, width and color of the style its column names (a style not defined
+! the item's own); arrow words among the other options, `with vectors lt 4 filled`
+call interpreter%init(scratch)
+call interpreter%run_text('$V << EOD'//new_line('a')//'0 0 1 1 1'//new_line('a')//'1 0 1 1 2'//new_line('a')// &
+                          '2 0 1 1 99'//new_line('a')//'EOD'//new_line('a')// &
+                          'set term svg; set output "foresight_script_test_arrowvar.svg"; '// &
+                          'set style arrow 1 nohead lc rgb "red" lw 3; set style arrow 2 heads filled lc rgb "blue"; '// &
+                          'plot $V using 1:2:3:4:5 with vectors as var title "T", '// &
+                          '$V using 1:($2+2):3:4 with vectors lt 4 filled', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(193) = iostat == 0_I4P
+if (test_passed(193)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(193) = allocated(series(1)%arrow_heads)
+      if (test_passed(193)) test_passed(193) = all(series(1)%arrow_heads == [0_I4P, 3_I4P, 1_I4P]) .and. &
+                                             all(series(1)%arrow_filled .eqv. [.false., .true., .false.]) .and. &
+                                             all(series(1)%arrow_widths == [3.0_R8P, 1.0_R8P, 1.0_R8P])
+      test_passed(193) = test_passed(193) .and. series(2)%head_filled .and. .not. allocated(series(2)%arrow_heads)
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_arrowvar.svg')
+      test_passed(193) = test_passed(193) .and. index(svg, 'data-head="0" data-filled="0" fill="none" stroke="#ff0000" '// &
+                                                        'stroke-width="3"') > 0 .and. &
+                        index(svg, 'data-head="3" data-filled="1" fill="none" stroke="#0000ff"') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_arrowvar.svg')
+close(unit, status='delete')
+! an arrowstyle variable item needs its style column
+call interpreter%run_text('plot $V using 1:2:3:4 with vectors as variable', iostat, iomsg)
+test_passed(193) = test_passed(193) .and. iostat /= 0_I4P .and. index(iomsg, 'style[:z]') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4322,7 +4356,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,192L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,193L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

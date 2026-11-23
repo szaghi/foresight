@@ -2481,6 +2481,10 @@ contains
    logical                                      :: lcz       !< lc palette z: the palette values from the last column.
    character(len=:), allocatable                :: palette_lc !< `lc palette` marker of the item, empty for none.
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
+   logical                                      :: arrow_var    !< `arrowstyle variable`: a style per arrow.
+   real(R8P),        allocatable                :: arrow_tags(:) !< Arrow style of each arrow (`arrowstyle variable`).
+   real(R8P),        allocatable                :: arrow_z(:)    !< Palette value of each arrow (its style's
+                                                                  !< `lc palette z`).
    character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
@@ -2931,6 +2935,7 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      arrow_var = .false.
       polar_base = .false.
       rotate_var = .false.
       ellipse_units = 'xy'
@@ -3406,6 +3411,17 @@ contains
                call fail('plot: font needs a "name,size"', iostat, iomsg)
                return
             endif
+         elseif (arrow_word(word)) then
+            ! arrow words among the other options of vectors and arrows, as gnuplot (`with vectors lt 4 filled`)
+            if (is_word(word, 'head heads nohead backhead filled empty nofilled')) then
+               heads = heads//' '//word
+            elseif (word == 'noborder') then
+               heads = heads//' filled'
+            elseif (word == 'size') then
+               if (.not. head_size_option()) return
+            elseif (word == 'as' .or. keyword(word, 'arrowstyle', 6_I4P)) then
+               if (.not. item_arrow_style()) return
+            endif
          else
             call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -3806,7 +3822,16 @@ contains
             return
          endif
       case ('vectors', 'arrows')
-         if (nbar /= 2_I4P) then
+         if (arrow_var .and. (lcvar .or. lcz)) then
+            call fail('plot: arrowstyle variable takes the colors of the arrow styles (no lc variable nor palette)', &
+                      iostat, iomsg)
+            return
+         endif
+         if (arrow_var .and. nbar /= 3_I4P .and. nbar /= 4_I4P) then
+            call fail('plot: '//with//' arrowstyle variable needs using x:y:'// &
+                      trim(merge('xdelta:ydelta', 'length:angle ', with == 'vectors'))//':style[:z]', iostat, iomsg)
+            return
+         elseif (.not. arrow_var .and. nbar /= 2_I4P) then
             call fail('plot: '//with//' needs using x:y:'//trim(merge('xdelta:ydelta', 'length:angle ', with == 'vectors')), &
                       iostat, iomsg)
             return
@@ -3902,6 +3927,17 @@ contains
       x = values(:, 1)
       y = values(:, 2)
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
+      if (arrow_var) then
+         ! the style column, and the palette value of the styles with lc palette z
+         arrow_tags = values(:, 5)
+         if (size(values, 2) >= 6) then
+            arrow_z = values(:, 6)
+         else
+            if (allocated(arrow_z)) deallocate(arrow_z)
+            allocate(arrow_z(size(values, 1)))
+            arrow_z = ieee_value(1.0_R8P, ieee_quiet_nan)
+         endif
+      endif
       if (with == 'labels' .and. rotate_var) label_rotations = values(:, 3)
       if (lcz) then
          ! a row with an undefined field is no point for gnuplot: nor a palette value of the color axis
@@ -4119,12 +4155,14 @@ contains
                                dy=xhigh, head=heads)
          call head_last
          if (lcvar) call color_last
+         if (arrow_var) call arrow_styles_last
       elseif (with == 'arrows') then
          if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, &
                                length=xlow, angle=xhigh, head=heads)
          call head_last
          if (lcvar) call color_last
+         if (arrow_var) call arrow_styles_last
       elseif (with == 'ellipses' .or. with == 'polygons') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -4661,6 +4699,79 @@ contains
       if (allocated(line%lc)) yes = line%lc == LC_PALETTE_Z
       endfunction palette_z_lc
 
+      subroutine arrow_styles_last
+      !< `arrowstyle variable` of the vectors or arrows just added: each arrow the heads, fill, head size, width and
+      !< color of the arrow style its column names (`set style arrow N`), a style of `lc palette z` the palette color
+      !< of its z column; a style not defined leaves the arrow the item's own, as the key sample.
+      integer(I4P) :: last  !< Series just added.
+      integer(I4P) :: k     !< Arrow counter.
+      integer(I4P) :: j     !< Style counter.
+      integer(I4P) :: n     !< Arrows.
+      logical      :: paint !< A style of lc palette z.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         last = size(panel%series, kind=I4P)
+         associate(series => panel%series(last))
+            n = size(series%x, kind=I4P)
+            if (size(arrow_tags) /= n) return
+            allocate(series%arrow_heads(n), series%arrow_filled(n), series%arrow_widths(n), series%arrow_sizes(2, n), &
+                     series%arrow_systems(n), series%colors(n))
+            allocate(series%zvalues(n))
+            series%zvalues = ieee_value(1.0_R8P, ieee_quiet_nan)
+            paint = .false.
+            do k = 1_I4P, n
+               series%arrow_heads(k) = series%head
+               series%arrow_filled(k) = series%head_filled
+               series%arrow_widths(k) = series%style%linewidth
+               series%arrow_sizes(:, k) = series%head_size
+               series%arrow_systems(k) = series%head_system
+               series%colors(k) = series%style%color
+               if (.not. allocated(self%arrow_styles) .or. .not. ieee_is_finite(arrow_tags(k))) cycle
+               do j = 1_I4P, size(self%arrow_styles, kind=I4P)
+                  if (real(self%arrow_styles(j)%tag, R8P) /= arrow_tags(k)) cycle
+                  associate(style => self%arrow_styles(j))
+                     series%arrow_heads(k) = style%head
+                     series%arrow_filled(k) = any(trim(style%fill) == ['filled  ', 'noborder'])
+                     series%arrow_widths(k) = style%lw
+                     series%arrow_sizes(:, k) = 0.0_R8P
+                     if (style%length > 0.0_R8P) then
+                        series%arrow_sizes(:, k) = [style%length, style%angle]
+                        series%arrow_systems(k) = style%length_system
+                     endif
+                     if (allocated(style%color)) then
+                        if (style%color == LC_PALETTE_Z) then
+                           series%zvalues(k) = arrow_z(k)
+                           paint = .true.
+                        elseif (len(style%color) > 0 .and. style%color(1:1) /= '*') then
+                           series%colors(k) = style%color
+                        endif
+                     endif
+                  endassociate
+                  exit
+               enddo
+            enddo
+            ! the arrows of palette colors colored with the color axis (the others keep theirs)
+            if (paint) then
+               series%palette_mode = 1_I4P
+            else
+               deallocate(series%zvalues)
+            endif
+         endassociate
+      endassociate
+      endsubroutine arrow_styles_last
+
+      function arrow_word(word) result(yes)
+      !< Whether `word` is an arrow option of an item drawn with vectors or arrows.
+      character(len=*), intent(in) :: word !< Option.
+      logical                      :: yes  !< An arrow option.
+
+      yes = .false.
+      if (.not. allocated(with)) return
+      if (.not. (with == 'vectors' .or. with == 'arrows')) return
+      yes = is_word(word, 'head heads nohead backhead filled empty nofilled noborder fixed size as') .or. &
+            keyword(word, 'arrowstyle', 6_I4P)
+      endfunction arrow_word
+
       subroutine head_last
       !< The head size of the vectors or arrows just added (`size L,A`).
       associate(panel => self%figure%panels(self%figure%current))
@@ -4724,7 +4835,10 @@ contains
       ok = .false.
       if (i < size(tokens, kind=I4P)) then
          if (tokens(i + 1_I4P)%text == 'variable' .or. tokens(i + 1_I4P)%text == 'var') then
-            call fail('plot: arrowstyle variable is not supported', iostat, iomsg)
+            ! a style per arrow, from the column after the vector's (gnuplot `arrowstyle variable`)
+            i = i + 1_I4P
+            arrow_var = .true.
+            ok = .true.
             return
          endif
       endif
