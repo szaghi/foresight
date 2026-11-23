@@ -3171,8 +3171,16 @@ contains
          else
             own_base = [own_base, ieee_value(1.0_R8P, ieee_quiet_nan)]
          endif
-         own_range = reshape([own_range, item_range], [2, size(functions)])
-         own_set = reshape([own_set, item_set], [2, size(functions)])
+         ! grown through temporaries: nvfortran 26.9 -O2 zeroes `a = reshape([a, ...], ...)` (see boxplot_stats)
+         block
+            real(R8P), allocatable :: grown_range(:,:) !< own_range, one more.
+            logical,   allocatable :: grown_set(:,:)   !< own_set, one more.
+
+            grown_range = reshape([own_range, item_range], [2, size(functions)])
+            call move_alloc(grown_range, own_range)
+            grown_set = reshape([own_set, item_set], [2, size(functions)])
+            call move_alloc(grown_set, own_set)
+         endblock
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
          associate(panel => self%figure%panels(self%figure%current))
             slots = [slots, size(panel%series, kind=I4P)]
@@ -3331,9 +3339,10 @@ contains
       endif
       if (lcvar .or. lcz) then
          word = trim(merge('lc palette z', 'lc variable ', lcz))
-         if (.not. is_word(with, 'lines points linespoints impulses')) then
-            call fail('plot: '//word//' applies to lines, points, linespoints and impulses, not to '//with, iostat, &
-                      iomsg)
+         if (.not. (is_word(with, 'lines points linespoints impulses') .or. &
+                    (lcvar .and. is_word(with, 'circles ellipses boxes')))) then
+            call fail('plot: '//word//' applies to lines, points, linespoints and impulses (lc variable also to '// &
+                      'circles, ellipses and boxes), not to '//with, iostat, iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -3637,8 +3646,10 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
                                xlabels=xlabels, radius=widths, angles=arcs)
+         if (lcvar) call color_last
       elseif (with == 'pie') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -3682,8 +3693,10 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
                                major=xlow, minor=xhigh, angle=ylow)
+         if (lcvar) call color_last
       elseif (with == 'sectors') then
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
@@ -3777,8 +3790,10 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
                                width=widths, base=base, fs=fs, xlabels=xlabels, yhigh=yhigh)
+         if (lcvar) call color_last
       elseif (lcvar) then
          ! the key sample and the default color of the item: its own, not the marker
          deallocate(line%lc)
@@ -4083,6 +4098,18 @@ contains
       endif
       ok = .true.
       endfunction next_number
+
+      subroutine color_last
+      !< `lc variable` of circles, ellipses and boxes: each shape in its point's color, the key sample in the first one's
+      !< (gnuplot).
+      associate(panel => self%figure%panels(self%figure%current))
+         associate(last => panel%series(size(panel%series)))
+            if (size(point_colors) /= size(last%x)) return
+            last%colors = point_colors
+            if (size(point_colors) > 0) last%style%color = trim(point_colors(1))
+         endassociate
+      endassociate
+      endsubroutine color_last
 
       subroutine mark_last
       !< The series just added: the axis of its text labels (`ytic(N)`, ...) and its point interval.

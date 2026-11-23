@@ -3283,8 +3283,7 @@ contains
             endif
             ex = u(i) + (a * cos(t) * cos(phi) - b * sin(t) * sin(phi)) / w
             ey = v(i) + (a * cos(t) * sin(phi) + b * sin(t) * cos(phi)) / h
-            call backend%data_polygon(ex, ey, series%style%fill_color(), series%style%density, &
-                                      series%style%stroke_color(), series%style%linewidth)
+            call shape_polygon(i, ex, ey)
          enddo
       endassociate
       endsubroutine draw_ellipses
@@ -3589,11 +3588,25 @@ contains
             else
                call outline(r, 0.0_R8P, 0.0_R8P, 360.0_R8P, px, py)
             endif
-            call backend%data_polygon(u(i) + px / w, v(i) + py / h, series%style%fill_color(), series%style%density, &
-                                      series%style%stroke_color(), series%style%linewidth)
+            call shape_polygon(i, u(i) + px / w, v(i) + py / h)
          enddo
       endassociate
       endsubroutine draw_circles
+
+      subroutine shape_polygon(i, pu, pv)
+      !< The polygon (`pu`, `pv`) [unit] of point `i`: in the series style, or in the point's color (`lc variable`).
+      integer(I4P), intent(in) :: i     !< Point.
+      real(R8P),    intent(in) :: pu(:) !< Abscissae [unit].
+      real(R8P),    intent(in) :: pv(:) !< Ordinates [unit].
+      type(style_object)       :: row   !< Style of the point.
+
+      row = self%series(s)%style
+      if (allocated(self%series(s)%colors)) then
+         if (self%series(s)%colors(i) == 'none') return
+         row%color = trim(self%series(s)%colors(i))
+      endif
+      call backend%data_polygon(pu, pv, row%fill_color(), row%density, row%stroke_color(), row%linewidth)
+      endsubroutine shape_polygon
 
       subroutine draw_image
       !< The image pixels in the palette colors over the color axis, undefined values transparent; reversed axes flip it.

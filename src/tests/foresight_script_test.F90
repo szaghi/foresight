@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(149)                           !< Per-check outcome.
+logical                       :: test_passed(150)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3188,6 +3188,28 @@ test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'ne
 call interpreter%run_text('plot x with yerrorbars', iostat, iomsg)
 test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes or filledcurves') > 0
 
+! lc variable on circles, ellipses and boxes: each shape in its point's color, the key sample in the first one's
+call interpreter%init(scratch)
+call interpreter%run_text('$C << EOD'//new_line('a')//'1 1 1'//new_line('a')//'2 2 2'//new_line('a')//'3 1 3'// &
+                          new_line('a')//'EOD'//new_line('a')//'plot $C using 1:2:(.2):3 with circles lc variable, '// &
+                          '$C using 1:2:3 with boxes lc variable, $C using 1:2:(1):(.5):(0):3 with ellipses lc variable', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(150) = iostat == 0_I4P
+if (test_passed(150)) test_passed(150) = size(interpreter%figure%panels(1)%series) == 3
+if (test_passed(150)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(150) = allocated(panel%series(1)%colors) .and. allocated(panel%series(2)%colors) .and. &
+                        allocated(panel%series(3)%colors)
+      if (test_passed(150)) test_passed(150) = panel%series(1)%colors(2) == default_color(2_I4P) .and. &
+                                             panel%series(2)%colors(3) == default_color(3_I4P) .and. &
+                                             panel%series(3)%colors(1) == default_color(1_I4P) .and. &
+                                             all(panel%series(1)%radius == 0.2_R8P)
+   endassociate
+endif
+call interpreter%run_text('plot $C using 1:2:3 with candlesticks lc variable', iostat, iomsg)
+test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'circles, ellipses and boxes') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3196,7 +3218,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,149L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,150L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
