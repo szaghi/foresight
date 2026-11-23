@@ -182,8 +182,9 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | *A* | an [array](#arrays): its index and value, as a file |
 | `$NAME` | a [datablock](#datablocks-and-scripts), as a file |
 | **newhist**ogram [`"title"`] [`lt N`] [`fs FILL`] [`at X`] | a new group of [histograms](#histograms), before the histograms of the group |
-| **i**ndex `N` | dataset `N` (0-based) of the file |
+| **i**ndex `N` \| `"name"` | dataset `N` (0-based) of the file, or the dataset after the comment line starting with `name` (the comment characters and blanks before it removed), as gnuplot |
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
+| **nonuni**form **mat**rix | the first row of the matrix holds the x of the columns (after a value ignored), the first column the y of the rows, as gnuplot; for `with image`, evenly spaced (uneven pixels are not supported) |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
 | `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; the linetype of the next item, not used up; with the other styles of a plot panel its sample is a filled box (polygons, boxplots, circles, ellipses, candlesticks, the box styles, histograms, sectors), a line and points (error lines) or a line |

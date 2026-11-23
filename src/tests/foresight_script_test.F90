@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(187)                           !< Per-check outcome.
+logical                       :: test_passed(188)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4168,6 +4168,28 @@ if (test_passed(187)) then
    test_passed(187) = iostat /= 0_I4P .and. index(iomsg, 'keyentry with spiderplot is not supported') > 0
 endif
 
+! nonuniform matrix: the first row the x of the columns, the first column the y of the rows; index "name" the dataset
+! after the comment line starting with the name (a quoted datablock name read as the datablock)
+call interpreter%init(scratch)
+call interpreter%run_text('$M << EOM'//new_line('a')//'# junk'//new_line('a')//''//new_line('a')//'# setA'//new_line('a')// &
+                          '0 0.5 1.5'//new_line('a')//'2 3 4'//new_line('a')//'4 5 6'//new_line('a')//''//new_line('a')// &
+                          ''//new_line('a')//'# setB'//new_line('a')//'0 10 20'//new_line('a')//'1 7 8'//new_line('a')// &
+                          '3 9 10'//new_line('a')//'EOM'//new_line('a')// &
+                          'plot ''$M'' nonuniform matrix index "setB" with image', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(188) = iostat == 0_I4P
+if (test_passed(188)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(188) = series%style%with == WITH_IMAGE
+      if (test_passed(188)) test_passed(188) = all(abs(series%grid - reshape([7.0_R8P, 8.0_R8P, 9.0_R8P, 10.0_R8P], &
+                                                                         [2, 2])) < 1.0e-12_R8P)
+   endassociate
+endif
+if (test_passed(188)) then
+   call interpreter%run_text('plot ''$M'' nonuniform matrix index "setZ" with image', iostat, iomsg)
+   test_passed(188) = iostat /= 0_I4P .and. index(iomsg, 'no dataset of that name') > 0
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4176,7 +4198,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,187L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,188L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

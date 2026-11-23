@@ -2490,6 +2490,7 @@ contains
    logical                                      :: one_field !< `using` gives one field (before the point number).
    logical                                      :: weight_one !< The single column is x, each point of weight 1.
    logical                                      :: is_matrix !< The item reads a `matrix` file.
+   logical                                      :: nonuniform !< A `nonuniform matrix`: x and y in its first row and column.
    type(line_style_object)                      :: line      !< Item line properties.
    real(R8P),        allocatable                :: x(:)      !< Abscissae.
    real(R8P),        allocatable                :: y(:)      !< Ordinates.
@@ -2874,6 +2875,7 @@ contains
       label_col = 0_I4P
       label_axis = 'x'
       is_matrix = .false.
+      nonuniform = .false.
       set_index = -1_I4P
       every = [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P]
       skip = 0_I4P
@@ -2943,12 +2945,26 @@ contains
                                 self%symbols)
             endif
             if (iostat /= 0_I4P) return
-         elseif (keyword(word, 'matrix', 3_I4P)) then
+         elseif (keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'nonuniform', 4_I4P)) then
             if (is_function) then
                call fail('plot: matrix applies to data files, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
+            ! gnuplot `nonuniform matrix`: the first row the x values, the first column the y ones
+            if (keyword(word, 'nonuniform', 4_I4P)) then
+               if (.not. next_word(tokens, i, word, iostat, iomsg)) return
+               if (.not. keyword(word, 'matrix', 3_I4P)) then
+                  call fail('plot: nonuniform matrix expected', iostat, iomsg)
+                  return
+               endif
+               nonuniform = .true.
+            endif
             is_matrix = .true.
+         elseif (keyword(word, 'index', 1_I4P) .and. string_after()) then
+            ! gnuplot `index "name"`: the dataset after the comment line starting with the name
+            i = i + 1_I4P
+            set_index = named_index(tokens(i)%text)
+            if (iostat /= 0_I4P) return
          elseif (keyword(word, 'index', 1_I4P)) then
             if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
          elseif (keyword(word, 'every', 2_I4P)) then
@@ -5307,6 +5323,23 @@ contains
             call fail('plot: no values in "'//file//'"', iostat, iomsg)
             return
          endif
+         if (nonuniform) then
+            ! the first row (its first value ignored) the x of the columns, the first column the y of the rows
+            if (size(z, 1) < 2 .or. size(z, 2) < 2) then
+               call fail('plot: a nonuniform matrix needs its x row, its y column and values in "'//file//'"', iostat, &
+                         iomsg)
+               return
+            endif
+            xs = z(2:, 1)
+            ys = z(1, 2:)
+            if (.not. (even(xs) .and. even(ys))) then
+               call fail('plot: image of a nonuniform matrix: evenly spaced x and y increasing are expected (the '// &
+                         'pixels of uneven ones are not supported)', iostat, iomsg)
+               return
+            endif
+            call self%figure%image(z(2:, 2:), xs, ys, title=title)
+            return
+         endif
          call self%figure%image(z, title=title)
          return
       endif
@@ -5327,6 +5360,78 @@ contains
       endif
       call self%figure%image(z, xs, ys, title=title)
       endsubroutine image_item
+
+      pure function even(v) result(yes)
+      !< Whether `v` increases by an even step (one value: even).
+      real(R8P), intent(in) :: v(:) !< Values.
+      logical               :: yes  !< Even and increasing.
+      real(R8P)             :: step !< First step.
+
+      yes = .true.
+      if (size(v) < 2) return
+      step = v(2) - v(1)
+      yes = step > 0.0_R8P .and. all(abs((v(2:) - v(:size(v) - 1)) - step) <= 1.0e-9_R8P * abs(step) * size(v))
+      endfunction even
+
+      function string_after() result(yes)
+      !< Whether the token after `i` is a quoted string.
+      logical :: yes !< A string follows.
+
+      yes = .false.
+      if (i < size(tokens, kind=I4P)) yes = tokens(i + 1_I4P)%kind == TOKEN_STRING
+      endfunction string_after
+
+      function named_index(name) result(k)
+      !< The dataset (from 0) after the comment line of the item's file starting with `name` (the comment characters and
+      !< blanks before it removed), as gnuplot; datasets apart at two blank lines; fails the plot if none.
+      character(len=*), intent(in)  :: name  !< Dataset name.
+      integer(I4P)                  :: k     !< Dataset.
+      character(len=:), allocatable :: text  !< File or datablock content.
+      character(len=:), allocatable :: line  !< Current line.
+      integer(I4P)                  :: p     !< Line start.
+      integer(I4P)                  :: q     !< Line end.
+      integer(I4P)                  :: blank !< Blank lines in a row.
+      logical                       :: seen  !< Data rows read.
+      logical                       :: named !< The name found.
+      logical                       :: found !< Datablock found.
+
+      k = 0_I4P
+      if (is_datablock(file)) then
+         call self%symbols%string_of(file, text, found)
+      else
+         found = read_whole(file, text)
+      endif
+      if (.not. found) then
+         call fail('plot: index "'//name//'": cannot read "'//file//'"', iostat, iomsg)
+         return
+      endif
+      blank = 0_I4P
+      seen = .false.
+      named = .false.
+      p = 1_I4P
+      do while (p <= len(text, kind=I4P))
+         q = index(text(p:), new_line('a'), kind=I4P)
+         if (q == 0_I4P) then
+            q = len(text, kind=I4P) + 1_I4P
+         else
+            q = p + q - 1_I4P
+         endif
+         line = trim(adjustl(text(p:q - 1_I4P)))
+         p = q + 1_I4P
+         if (len(line) == 0) then
+            blank = blank + 1_I4P
+         elseif (scan(line(1:1), self%comments) > 0) then
+            line = trim(adjustl(line(verify(line, self%comments//' '//achar(9)):)))
+            if (index(line, name) == 1) named = .true.
+         else
+            if (seen .and. blank >= 2_I4P) k = k + 1_I4P
+            blank = 0_I4P
+            seen = .true.
+            if (named) return
+         endif
+      enddo
+      call fail('plot: index "'//name//'": no dataset of that name in "'//file//'"', iostat, iomsg)
+      endfunction named_index
 
       subroutine rgb_item
       !< An `rgbimage` (`using x:y:r:g:b`) or `rgbalpha` (`x:y:r:g:b:a`) item on a regular grid, the components scaled
@@ -13057,6 +13162,26 @@ contains
       endif
    enddo
    endsubroutine filled_options
+
+   function read_whole(file, text) result(ok)
+   !< The whole content of `file`, `ok` false if it cannot be read.
+   character(len=*),              intent(in)  :: file !< File name.
+   character(len=:), allocatable, intent(out) :: text !< Content.
+   logical                                    :: ok   !< Read.
+   integer(I4P)                               :: unit !< File unit.
+   integer(I4P)                               :: bytes !< Size [bytes].
+   integer(I4P)                               :: status !< I/O status.
+
+   text = ''
+   open(newunit=unit, file=file, access='stream', form='unformatted', action='read', status='old', iostat=status)
+   ok = status == 0_I4P
+   if (.not. ok) return
+   inquire(unit=unit, size=bytes)
+   allocate(character(len=max(0_I4P, bytes)) :: text)
+   if (bytes > 0_I4P) read(unit, iostat=status) text
+   close(unit)
+   ok = status == 0_I4P
+   endfunction read_whole
 
    function to_number(word, value) result(ok)
    !< Parse a number; false if malformed or beyond the real range.
