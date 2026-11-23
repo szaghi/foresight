@@ -365,6 +365,7 @@ type :: axes_object
       procedure, pass(self), private :: key_place          !< Where the key lies.
       procedure, pass(self), private :: draw_series        !< Draw a series.
       procedure, pass(self), private :: has_title          !< Whether the panel has a title.
+      procedure, pass(self), private :: title_rows         !< Lines of the title.
       procedure, pass(self), private :: is_readout         !< Whether a series is a readout.
       procedure, pass(self), private :: has_image          !< Whether the panel has an image.
       procedure, pass(self), private :: draw_colorbox      !< Draw the color box.
@@ -1323,9 +1324,10 @@ contains
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
             backend%literal = self%title_plain
-            call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle', &
+                           row_step(backend, font_size), '')
             backend%literal = .false.
-            area(3) = area(3) + LINE_HEIGHT * font_size + GAP
+            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
          endif
          select case (self%series(1)%style%with)
          case (WITH_PIE)
@@ -1348,9 +1350,10 @@ contains
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
             backend%literal = self%title_plain
-            call backend%text(x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle')
+            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle', &
+                           row_step(backend, font_size), '')
             backend%literal = .false.
-            area(3) = area(3) + LINE_HEIGHT * font_size + GAP
+            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
          endif
          if (self%readout) call self%draw_readouts(backend, area, font_size, .true.)
          return
@@ -2047,24 +2050,20 @@ contains
          ! on a text device, the row right above the x2 label or tick labels, with no empty row between them
          if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
             if (self%x2axis%has_label() .and. any(self%x2axis%ticks%major)) then
-               title_y = label_y - backend%row_height()
+               title_y = label_y - real(self%title_rows(), R8P) * backend%row_height()
             elseif (any(self%x2axis%ticks%major)) then
                title_y = top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size - &
-                         backend%row_height()
+                         real(self%title_rows(), R8P) * backend%row_height()
             endif
          endif
          ! gnuplot `set title offset X,Y`: characters, y up
          ! `set title left|right`: the anchor at the same centre, as gnuplot
          backend%literal = self%title_plain
          backend%boxed = self%title_boxed
-         if (len_trim(self%title_color) > 0) then
-            call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                              title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
-                              color=trim(self%title_color))
-         else
-            call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                              title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor))
-         endif
+         ! a title on several lines (new lines in it, gnuplot's "\n"), each a row lower
+         call text_rows(backend, 0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                        title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
+                        row_step(backend, font_size), trim(self%title_color))
          backend%literal = .false.
          backend%boxed = .false.
       endif
@@ -6065,6 +6064,16 @@ contains
    is = self%series(s)%style%with == WITH_READOUT
    endfunction is_readout
 
+   pure function title_rows(self) result(rows)
+   !< Lines of the title: one more per new line in it (gnuplot's "\n").
+   class(axes_object), intent(in) :: self !< Panel.
+   integer(I4P)                   :: rows !< Lines.
+   integer(I4P)                   :: k    !< Character counter.
+
+   rows = 1_I4P
+   if (allocated(self%title)) rows = 1_I4P + count([(self%title(k:k) == new_line('a'), k = 1_I4P, len(self%title, kind=I4P))])
+   endfunction title_rows
+
    pure function has_title(self) result(has)
    !< Whether the panel has a non-empty title.
    class(axes_object), intent(in) :: self !< Panel.
@@ -6126,7 +6135,7 @@ contains
    if (self%colorbox .and. self%has_image(palette=.true.) .and. .not. (self%cbox%user .or. self%cbox%horizontal)) &
       margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
-   if (self%has_title()) margins(3) = margins(3) + LINE_HEIGHT * font_size + GAP
+   if (self%has_title()) margins(3) = margins(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
    ! the row of a timestamp at the top (gnuplot `set timestamp top`)
    if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) margins(3) = margins(3) + LINE_HEIGHT * font_size
    margins(3) = margins(3) + above + self%x2_room(font_size)
@@ -6616,6 +6625,48 @@ contains
       rows = max(rows, n)
    enddo
    endfunction label_rows
+
+   function row_step(backend, font_size) result(step)
+   !< Distance between two lines of text [px]: a row of a text device, else a line height.
+   class(backend_object), intent(in) :: backend   !< Output device.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: step      !< Line step [px].
+
+   step = backend%row_height()
+   if (.not. step > 0.0_R8P) step = LINE_HEIGHT * font_size
+   endfunction row_step
+
+   subroutine text_rows(backend, x, y, text, anchor, step, color)
+   !< A text on several lines (new lines in `text`), the first baseline at `y`, the next `step` lower, each anchored at
+   !< `x` by `anchor`; in `color` unless blank.
+   class(backend_object), intent(inout) :: backend !< Output device.
+   real(R8P),             intent(in)    :: x       !< Anchor abscissa [px].
+   real(R8P),             intent(in)    :: y       !< First baseline [px].
+   character(len=*),      intent(in)    :: text    !< Text.
+   character(len=*),      intent(in)    :: anchor  !< start, middle or end.
+   real(R8P),             intent(in)    :: step    !< Line spacing [px].
+   character(len=*),      intent(in)    :: color   !< Text color, the frame's if blank.
+   integer(I4P)                         :: first   !< Line start.
+   integer(I4P)                         :: k       !< New line position.
+   integer(I4P)                         :: row     !< Line counter.
+
+   first = 1_I4P
+   row = 0_I4P
+   do
+      k = index(text(first:), new_line('a'), kind=I4P)
+      if (k == 0_I4P) then
+         k = len(text, kind=I4P) - first + 2_I4P
+      endif
+      if (len_trim(color) > 0) then
+         call backend%text(x, y + real(row, R8P) * step, text(first:first + k - 2_I4P), anchor, color=color)
+      else
+         call backend%text(x, y + real(row, R8P) * step, text(first:first + k - 2_I4P), anchor)
+      endif
+      first = first + k
+      row = row + 1_I4P
+      if (first > len(text, kind=I4P)) exit
+   enddo
+   endsubroutine text_rows
 
    subroutine lines_text(backend, x, y, label, sup, step, color)
    !< A centred text on several lines (new lines in `label`), the first baseline at `y`, the next `step` lower; the
