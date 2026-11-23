@@ -302,7 +302,8 @@ contains
    !< to 99 the 1900s, else the 2000s), `%Y` (up to 4), `%j` (up to 3), `%S` (seconds with a fraction), `%s` (seconds
    !< since the epoch), `%b %B` (month names or their 3 first letters), `%a %A` (weekday names, skipped), `%p` (`pm`
    !< adds 12 hours), `%tH %tM %tS` (elapsed hours, minutes, seconds, signed, the last with a fraction); a blank
-   !< matches any run of blanks, any other character itself. Fields not given are those of 1970-01-01 00:00:00.
+   !< matches any run of blanks, any other character itself. Fields not given are those of 1970-01-01 00:00:00, also
+   !< those after the end of the text (gnuplot reads "1/6/93" with "%d/%m/%y %H%M").
    !< `ok` false (`t` NaN) if `text` does not match.
    character(len=*), intent(in)  :: format !< Time format.
    character(len=*), intent(in)  :: text   !< Text.
@@ -338,6 +339,9 @@ contains
    i = 1_I4P
    j = 1_I4P
    do while (i <= len(format, kind=I4P))
+      ! a text that ends before the format: its fields read, the others their defaults (gnuplot: "1/6/93" with
+      ! "%d/%m/%y %H%M")
+      if (j > len(text, kind=I4P) .and. j > 1_I4P) exit
       if (format(i:i) == ' ') then
          do while (j <= len(text, kind=I4P))
             if (text(j:j) /= ' ' .and. text(j:j) /= achar(9)) exit

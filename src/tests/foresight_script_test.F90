@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(210)                           !< Per-check outcome.
+logical                       :: test_passed(211)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2013,7 +2013,7 @@ if (test_passed(107)) then
                          .and. axis%ticks(2)%label == '15:00'
    endassociate
 endif
-call interpreter%run_text('set xrange ["2024-03-01":*]', iostat, iomsg)
+call interpreter%run_text('set xrange ["2024/03/01":*]', iostat, iomsg)
 test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'does not match the timefmt') > 0
 call interpreter%run_text("set xdata; set format y '%Y'", iostat, iomsg)
 test_passed(107) = test_passed(107) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion') > 0
@@ -4775,6 +4775,31 @@ close(unit, status='delete')
 call interpreter%run_text('set format x; set xtics format ""', iostat, iomsg)
 test_passed(210) = test_passed(210) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%tics%format == ' '
 
+! a using data format of plain %lf conversions; a band x:y1:y2 of filledcurves smoothed (both curves on the same
+! samples); a time shorter than the timefmt read with the other fields at their defaults, as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text('$B << EOD'//new_line('a')//'1 1 0'//new_line('a')//'2 3 1'//new_line('a')//'3 2 0'// &
+                          new_line('a')//'4 4 2'//new_line('a')//'EOD'//new_line('a')//'set samples 20; '// &
+                          'plot $B using 1:2:3 "%lf %lf %lf" smooth csplines with filledcurves; '// &
+                          'set timefmt "%d/%m/%y\t%H%M"; t = strptime("%d/%m/%y\t%H%M", "1/6/93")', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(211) = iostat == 0_I4P
+if (test_passed(211)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      test_passed(211) = size(series%x) == 20 .and. allocated(series%ylow)
+      if (test_passed(211)) test_passed(211) = size(series%ylow) == 20
+   endassociate
+   block
+      real(R8P) :: v     !< Value.
+      logical   :: found !< Found.
+
+      call interpreter%symbols%value_of('t', v, found)
+      test_passed(211) = test_passed(211) .and. found .and. v == 738892800.0_R8P
+   endblock
+endif
+call interpreter%run_text('plot $B using 1:2 "%*lf %lf"', iostat, iomsg)
+test_passed(211) = test_passed(211) .and. iostat /= 0_I4P .and. index(iomsg, 'blank separated %lf') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4783,7 +4808,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,210L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,211L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

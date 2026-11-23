@@ -2560,6 +2560,8 @@ contains
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
    logical                                      :: arrow_var    !< `arrowstyle variable`: a style per arrow.
    logical                                      :: string_next  !< A quoted string after the option word.
+   logical                                      :: band_smooth  !< A smoothed band of filledcurves (x:y1:y2).
+   real(R8P),        allocatable                :: band_low(:)  !< Its second curve smoothed.
    logical                                      :: at_next      !< The word `at` after the option word.
    real(R8P),        allocatable                :: arrow_tags(:) !< Arrow style of each arrow (`arrowstyle variable`).
    real(R8P),        allocatable                :: arrow_z(:)    !< Palette value of each arrow (its style's
@@ -3036,6 +3038,7 @@ contains
       heads = ''
       arrow_var = .false.
       sharpen_item = .false.
+      band_smooth = .false.
       polar_base = .false.
       rotate_var = .false.
       ellipse_units = 'xy'
@@ -3086,6 +3089,18 @@ contains
                i = i + 1_I4P
                spec = spec//tokens(i)%text
             enddo
+            ! gnuplot's data format after the spec, `using 1:2:3 "%lf %lf %lf"`: blank separated numeric conversions
+            ! read the columns as foresight does (other formats are refused)
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_STRING) then
+                  i = i + 1_I4P
+                  if (.not. plain_data_format(tokens(i)%text)) then
+                     call fail('plot: a using format of blank separated %lf, %f, %le, %e, %g conversions is '// &
+                               'supported, not "'//tokens(i)%text//'"', iostat, iomsg)
+                     return
+                  endif
+               endif
+            endif
             call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field, label_axis)
             if (iostat /= 0_I4P) return
             if (label_col > 0_I4P .and. .not. keyed) then
@@ -4059,7 +4074,11 @@ contains
             return
          endif
       endselect
-      if (len(filter) > 0 .and. nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines')) then
+      ! a band x:y1:y2 of filledcurves takes the curve filters (each curve smoothed on the same samples), as gnuplot
+      band_smooth = with == 'filledcurves' .and. nbar == 1_I4P .and. is_word(filter, CURVE_MODES) .and. &
+                    filter /= 'acsplines'
+      if (len(filter) > 0 .and. nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines') .and. &
+          .not. band_smooth) then
          call fail('plot: smooth applies to lines, points and linespoints, not to '//with, iostat, iomsg)
          return
       endif
@@ -4198,6 +4217,7 @@ contains
          if (nbar == 3_I4P) arcs = transpose(values(:, 4:5))
       case ('filledcurves')
          if (nbar == 1_I4P) ylow = values(:, 3)
+         if (band_smooth .and. allocated(band_low)) ylow = band_low
       case ('histograms')
          if (errorbars .and. nbar == 1_I4P) then
             ylow = y - values(:, 3)
@@ -5400,6 +5420,18 @@ contains
          call smooth_curve(filter, values(:, 1), values(:, 2), weights, self%samples, lo, hi, bandwidth, &
                            merge(panel%x2axis%log, panel%xaxis%log, axes(1:2) == 'x2'), &
                            merge(panel%y2axis%log, panel%yaxis%log, axes(3:4) == 'y2'), x, y, problem)
+         if (allocated(band_low)) deallocate(band_low)
+         if (band_smooth .and. len(problem) == 0 .and. size(values, 2) >= 3) then
+            ! the second curve of the band, on the same samples
+            block
+               real(R8P), allocatable :: x2(:) !< Its abscissae (those of the first).
+
+               call smooth_curve(filter, values(:, 1), values(:, 3), weights, self%samples, lo, hi, bandwidth, &
+                                 merge(panel%x2axis%log, panel%xaxis%log, axes(1:2) == 'x2'), &
+                                 merge(panel%y2axis%log, panel%yaxis%log, axes(3:4) == 'y2'), x2, band_low, problem)
+               if (size(band_low) /= size(y)) deallocate(band_low)
+            endblock
+         endif
       endassociate
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
@@ -13557,6 +13589,31 @@ contains
    k = 0_I4P
    if (allocated(self%colormap_names)) k = findloc_name(self%colormap_names, name)
    endfunction colormap_index
+
+   pure function plain_data_format(format) result(plain)
+   !< Whether the data `format` of a using spec is blank separated numeric scanf conversions (`%lf %lf`):
+   !< the default reading (a skipped column, `%*lf`, is not).
+   character(len=*), intent(in) :: format !< Format.
+   logical                      :: plain  !< Plain conversions.
+   integer(I4P)                 :: k      !< Character counter.
+   integer(I4P)                 :: e      !< Conversion end.
+
+   plain = len_trim(format) > 0
+   k = 1_I4P
+   do while (plain .and. k <= len_trim(format, kind=I4P))
+      if (format(k:k) == ' ' .or. format(k:k) == achar(9)) then
+         k = k + 1_I4P
+         cycle
+      endif
+      e = k
+      do while (e <= len_trim(format, kind=I4P))
+         if (format(e:e) == ' ' .or. format(e:e) == achar(9)) exit
+         e = e + 1_I4P
+      enddo
+      plain = is_word(format(k:e - 1_I4P), '%lf %f %le %e %lg %g')
+      k = e
+   enddo
+   endfunction plain_data_format
 
    pure function findloc_name(names, name) result(k)
    !< Index of `name` among `names`, 0 if absent (a loop: nvfortran 26.9 refuses findloc on some arrays). `names` is
