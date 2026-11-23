@@ -2467,6 +2467,8 @@ contains
    integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
    character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
    character(len=2)                             :: ellipse_units !< Units of the ellipse diameters (`units xy|xx|yy`).
+   logical                                      :: rotate_var !< Labels rotated by a using field (`rotate variable`).
+   real(R8P),        allocatable                :: label_rotations(:) !< Their rotations [deg].
    real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
    character(len=:), allocatable                :: curve     !< Filled curve option words.
@@ -2892,6 +2894,7 @@ contains
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
+      rotate_var = .false.
       ellipse_units = 'xy'
       if (allocated(point_tc)) deallocate(point_tc)
       title_at = 0_I4P
@@ -3519,15 +3522,12 @@ contains
          if (.not. allocated(fields)) then
             label_col = 3_I4P
             call label_field%set_column(label_col)
-         elseif (size(fields) == 3 .or. (size(fields) == 4 .and. (variable_lc() .or. palette_z_lc()))) then
+         elseif (size(fields) == 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
+                                   merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc())) then
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
-            ! written as the text of the first column it reads, as gnuplot; with tc variable the color column after it
-            if (size(fields) == 4) then
-               word = spec(1:index(spec, ':', back=.true.) - 1)
-               word = trim(adjustl(word(index(word, ':', back=.true.) + 1:)))
-            else
-               word = trim(adjustl(spec(index(spec, ':', back=.true.) + 1:)))
-            endif
+            ! written as the text of the first column it reads, as gnuplot; the rotation (`rotate variable`) and the
+            ! color (tc variable) columns after it
+            word = third_field(spec)
             if (word == '0' .or. word == '-1' .or. word == '-2') then
                ! a pseudo-column: its integer as the text, gnuplot's "label hack"
                label_col = 1_I4P
@@ -3540,11 +3540,7 @@ contains
                label_col = 1_I4P
                label_field = fields(3)
             endif
-            if (size(fields) == 4) then
-               kept = [fields(1:2), fields(4)]
-            else
-               kept = fields(1:2)
-            endif
+            kept = [fields(1:2), fields(4:)]
             call move_alloc(kept, fields)
          else
             call fail('plot: labels needs using x:y:text_column', iostat, iomsg)
@@ -3745,7 +3741,7 @@ contains
             return
          endif
       case ('polygons', 'labels')
-         if (nbar /= 0_I4P) then
+         if (nbar /= merge(1_I4P, 0_I4P, rotate_var .and. with == 'labels')) then
             call fail('plot: '//with//' needs using x:y'//trim(merge(':text_column', '            ', with == 'labels')), &
                       iostat, iomsg)
             return
@@ -3825,6 +3821,7 @@ contains
       x = values(:, 1)
       y = values(:, 2)
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
+      if (with == 'labels' .and. rotate_var) label_rotations = values(:, 3)
       if (lcz) then
          ! a row with an undefined field is no point for gnuplot: nor a palette value of the color axis
          zcolors = values(:, size(values, 2))
@@ -4071,6 +4068,11 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
                                axes=axes, labels=xlabels, label=label_opts)
          if (lcvar) call color_last
+         if (rotate_var) then
+            associate(panel => self%figure%panels(self%figure%current))
+               panel%series(size(panel%series))%text_rotations = label_rotations
+            endassociate
+         endif
       elseif (with == 'parallelaxes' .or. with == 'spiderplot') then
          if (keyed .and. with == 'parallelaxes') then
             call fail('plot: key(N) names the rows of a spider plot', iostat, iomsg)
@@ -4403,6 +4405,15 @@ contains
       ok = .false.
       select case (tokens(i)%text)
       case ('rotate')
+         ! `rotate variable`: each label by the angle of its fourth using field, as gnuplot
+         if (i < size(tokens, kind=I4P)) then
+            if (keyword(tokens(i + 1_I4P)%text, 'variable', 3_I4P)) then
+               i = i + 1_I4P
+               rotate_var = .true.
+               ok = .true.
+               return
+            endif
+         endif
          if (i + 2_I4P > size(tokens, kind=I4P)) then
             call fail('plot: labels rotate by A expected', iostat, iomsg)
             return
@@ -4524,6 +4535,42 @@ contains
          panel%series(size(panel%series))%style%fill_rgb = fill_rgb
       endassociate
       endsubroutine fill_last
+
+      pure function third_field(text) result(field)
+      !< The third field of a `using` specification (fields apart at the `:` outside parentheses and quotes).
+      character(len=*), intent(in)  :: text  !< Specification.
+      character(len=:), allocatable :: field !< Third field, trimmed.
+      character(len=1)              :: quote !< Open quote, blank if none.
+      integer(I4P)                  :: depth !< Parenthesis depth.
+      integer(I4P)                  :: f     !< Field counter.
+      integer(I4P)                  :: start !< Field start.
+      integer(I4P)                  :: c     !< Character counter.
+
+      field = ''
+      quote = ' '
+      depth = 0_I4P
+      f = 1_I4P
+      start = 1_I4P
+      do c = 1_I4P, len(text, kind=I4P)
+         if (quote /= ' ') then
+            if (text(c:c) == quote) quote = ' '
+         elseif (text(c:c) == '"' .or. text(c:c) == "'") then
+            quote = text(c:c)
+         elseif (text(c:c) == '(') then
+            depth = depth + 1_I4P
+         elseif (text(c:c) == ')') then
+            depth = depth - 1_I4P
+         elseif (text(c:c) == ':' .and. depth == 0_I4P) then
+            if (f == 3_I4P) then
+               field = trim(adjustl(text(start:c - 1_I4P)))
+               return
+            endif
+            f = f + 1_I4P
+            start = c + 1_I4P
+         endif
+      enddo
+      if (f == 3_I4P) field = trim(adjustl(text(start:)))
+      endfunction third_field
 
       function palette_z_lc() result(yes)
       !< Whether the item's color is `lc|tc palette z`.

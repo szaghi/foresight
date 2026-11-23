@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(185)                           !< Per-check outcome.
+logical                       :: test_passed(186)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4120,6 +4120,32 @@ endif
 open(newunit=unit, file='foresight_script_test_varcolor.svg')
 close(unit, status='delete')
 
+! with labels rotate variable: x:y:text:angle (and the color last, tc variable), each label at its angle
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 600,400; set output "foresight_script_test_rotate_var.svg"'//new_line('a')// &
+                          '$D << EOD'//new_line('a')//'1 one -30'//new_line('a')//'2 two 45'//new_line('a')//'EOD'// &
+                          new_line('a')//'plot $D using 1:1:2:3:0 with labels rotate variable tc variable, '// &
+                          '$D using 1:1:2:3 with labels rotate var font ",20"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(186) = iostat == 0_I4P
+if (test_passed(186)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(186) = allocated(series(1)%text_rotations) .and. allocated(series(1)%colors) .and. &
+                        allocated(series(2)%text_rotations)
+      if (test_passed(186)) test_passed(186) = all(abs(series(1)%text_rotations - [-30.0_R8P, 45.0_R8P]) < 1.0e-12_R8P) &
+                                             .and. trim(series(1)%texts(2)) == 'two' .and. &
+                                             .not. allocated(series(2)%colors)
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_rotate_var.svg')
+      test_passed(186) = test_passed(186) .and. index(svg, 'rotate(-45') > 0 .and. index(svg, 'rotate(30') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_rotate_var.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4128,7 +4154,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,185L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,186L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

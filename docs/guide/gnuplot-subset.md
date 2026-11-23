@@ -1432,7 +1432,7 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 | `arrows` | `x:y:length:angle` | an arrow of `length` (> 0: x units, the same on the page at any `angle` [deg]; in (-1, 0): a fraction of the plot width) |
 | `ellipses` | `x:y`, `x:y:diameter`, `x:y:major:minor[:angle]` | an ellipse in the fill style, the major diameter in x units and the minor one in y units, rotated on the page (gnuplot `units xy`; `units xx` and `units yy` both in x, or y, units); without diameters (or a negative one) 5% x 3% of the plot |
 | `polygons` | `x:y` | a closed polygon per block of the data (blocks end at single blank lines), in the fill style |
-| `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `offset X,Y` (characters), `point` (with `pt`, `ps`), `tc "color"` anywhere in the item |
+| `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `rotate variable` (the angle of a fourth column, `x:y:text:angle`), `offset X,Y` (characters), `point` (with `pt`, `ps`), `tc "color"`, `tc variable`, `tc palette z` (the color of the last column) anywhere in the item |
 | `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r |
 
 Arrowheads are gnuplot's (18 px, 15 degrees) unless `size` is given and, as label texts, keep their pixel size: in
@@ -1442,7 +1442,7 @@ each vector or arrow from the last `using` column; a row with an undefined field
 range, as gnuplot. A second `set style arrow N` changes style N (`default` resets it), as gnuplot. Labels are black
 (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike gnuplot, sectors widen the autoscale to their
 whole extent. Not supported: `arrowstyle variable`, the dashes of an arrow style on data arrows, the back angle of
-`size`, variable rotations, label fonts and `hypertext`.
+`size`, label fonts and `hypertext`.
 
 ## Labels, arrows and objects
 

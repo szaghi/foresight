@@ -3202,6 +3202,20 @@ contains
       endif
    endassociate
    contains
+      function label_angle(i) result(angle)
+      !< Rotation of label `i` [deg]: its own (`rotate variable`, undefined as 0), else the series'.
+      integer(I4P), intent(in) :: i     !< Label.
+      real(R8P)                :: angle !< Rotation.
+
+      angle = self%series(s)%text_rotate
+      if (allocated(self%series(s)%text_rotations)) then
+         if (i <= size(self%series(s)%text_rotations, kind=I4P)) then
+            angle = self%series(s)%text_rotations(i)
+            if (.not. ieee_is_finite(angle)) angle = 0.0_R8P
+         endif
+      endif
+      endfunction label_angle
+
       function char_points() result(yes)
       !< Whether the series' points are a character (`pt "c"`).
       logical :: yes !< Character points.
@@ -3563,13 +3577,13 @@ contains
                if (i <= size(series%colors, kind=I4P)) then
                   if (series%colors(i) == 'none') cycle
                   call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
-                                          series%text_rotate, trim(series%colors(i)), &
+                                          label_angle(i), trim(series%colors(i)), &
                                           series%text_offset(1) * 0.6_R8P * font_size, &
                                           -series%text_offset(2) * font_size + 0.35_R8P * font_size)
                   cycle
                endif
             endif
-            call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), series%text_rotate, &
+            call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), label_angle(i), &
                                     color, series%text_offset(1) * 0.6_R8P * font_size, &
                                     -series%text_offset(2) * font_size + 0.35_R8P * font_size)
          enddo

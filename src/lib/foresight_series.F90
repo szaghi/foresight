@@ -106,6 +106,8 @@ type :: series_object
                                                         !< `pointnumber`).
    character(len=2)              :: ellipse_units = 'xy' !< Units of the ellipse diameters: `xy` (major in x, minor
                                                          !< in y), `xx` (both in x), `yy` (both in y).
+   real(R8P), allocatable        :: text_rotations(:) !< Rotation of each label [deg] (gnuplot `rotate variable`),
+                                                      !< `text_rotate` for all when unallocated.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.
