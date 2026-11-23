@@ -3570,6 +3570,9 @@ contains
                call fail('plot: font needs a "name,size"', iostat, iomsg)
                return
             endif
+         elseif (word == 'volatile') then
+            ! gnuplot's volatile (the data may change, for replot and the mouse): read and ignored
+            continue
          elseif (word == 'pixels' .and. (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha')) then
             ! gnuplot draws the image as a rectangle per pixel: foresight's images are drawn so anyway
             continue
@@ -4099,6 +4102,33 @@ contains
       endif
       x = values(:, 1)
       y = values(:, 2)
+      ! gnuplot `set link x2|y2`: values on the linked axis plotted on the first one (through `inverse`)
+      associate(panel => self%figure%panels(self%figure%current))
+         if (axes(1:2) == 'x2' .and. panel%link_x2) then
+            if (panel%link_x2_via) then
+               block
+                  integer(I4P) :: r !< Row.
+
+                  do r = 1_I4P, size(x, kind=I4P)
+                     x(r) = panel%link_maps(2)%value_at(x(r))
+                  enddo
+               endblock
+            endif
+            axes(1:2) = 'x1'
+         endif
+         if (axes(3:4) == 'y2' .and. panel%link_y2) then
+            if (panel%link_y2_via) then
+               block
+                  integer(I4P) :: r !< Row.
+
+                  do r = 1_I4P, size(y, kind=I4P)
+                     y(r) = panel%link_maps(4)%value_at(y(r))
+                  enddo
+               endblock
+            endif
+            axes(3:4) = 'y1'
+         endif
+      endassociate
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
       if (arrow_var) then
          ! the style column, and the palette value of the styles with lc palette z
@@ -7829,6 +7859,8 @@ contains
       call palette_option
    elseif (option == 'colormap') then
       call colormap_option
+   elseif (option == 'link') then
+      call link_option
    elseif (keyword(option, 'colorsequence', 6_I4P)) then
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
@@ -9613,6 +9645,81 @@ contains
          if (size(list) > 0) panel%linecolors = list
       endassociate
       endsubroutine colorsequence_option
+
+      subroutine link_option
+      !< gnuplot `set link x2|y2 [via EXPR inverse EXPR]` (`x`, `y` name them too): the secondary axis on the range of
+      !< the first, its ticks through the maps (of `x`, of `y`), its data plotted through the inverse.
+      type(expression_object)       :: fwd     !< Forward map.
+      type(expression_object)       :: inv     !< Inverse map.
+      character(len=:), allocatable :: axis    !< x2 or y2.
+      character(len=1)              :: dummy   !< Map variable.
+      integer(I4P)                  :: k       !< Token counter.
+      integer(I4P)                  :: v       !< Token of `via`.
+      integer(I4P)                  :: w       !< Token of `inverse`.
+
+      if (size(tokens) < 2) then
+         call fail('set link: x2 or y2 expected', iostat, iomsg)
+         return
+      endif
+      axis = tokens(2)%text
+      if (axis == 'x') axis = 'x2'
+      if (axis == 'y') axis = 'y2'
+      if (.not. (axis == 'x2' .or. axis == 'y2')) then
+         call fail('set link: x2 or y2 expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+         return
+      endif
+      dummy = axis(1:1)
+      v = 0_I4P
+      w = 0_I4P
+      do k = 3_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%text == 'via') v = k
+         if (keyword(tokens(k)%text, 'inverse', 3_I4P)) w = k
+      enddo
+      associate(panel => self%figure%panels(self%figure%current))
+         if (v == 0_I4P) then
+            if (size(tokens) > 2) then
+               call fail('set link: via EXPR inverse EXPR expected', iostat, iomsg)
+               return
+            endif
+            if (axis == 'x2') then
+               panel%link_x2 = .true.
+               panel%link_x2_via = .false.
+            else
+               panel%link_y2 = .true.
+               panel%link_y2_via = .false.
+            endif
+            return
+         endif
+         if (v /= 3_I4P .or. w <= v + 1_I4P .or. w >= size(tokens, kind=I4P)) then
+            call fail('set link: via EXPR inverse EXPR expected', iostat, iomsg)
+            return
+         endif
+         call fwd%compile(expression_source(tokens(v + 1_I4P:w - 1_I4P)), iostat, iomsg, variable=dummy, &
+                          degrees=panel%degrees, symbols=self%symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set link: via: '//iomsg
+            return
+         endif
+         call inv%compile(expression_source(tokens(w + 1_I4P:)), iostat, iomsg, variable=dummy, &
+                          degrees=panel%degrees, symbols=self%symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set link: inverse: '//iomsg
+            return
+         endif
+         if (.not. allocated(panel%link_maps)) allocate(panel%link_maps(4))
+         if (axis == 'x2') then
+            panel%link_maps(1) = fwd
+            panel%link_maps(2) = inv
+            panel%link_x2 = .true.
+            panel%link_x2_via = .true.
+         else
+            panel%link_maps(3) = fwd
+            panel%link_maps(4) = inv
+            panel%link_y2 = .true.
+            panel%link_y2_via = .true.
+         endif
+      endassociate
+      endsubroutine link_option
 
       subroutine colormap_option
       !< gnuplot 6.0's `set colormap new NAME` (the current palette saved as NAME, for `lc palette NAME`) and `set
@@ -11968,7 +12075,7 @@ contains
    endif
    ! labels, arrows, objects take a tag (handled below)
    if (.not. (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. &
-              keyword(option, 'object', 3_I4P))) then
+              keyword(option, 'object', 3_I4P) .or. option == 'link')) then
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
    endif
    if (keyword(option, 'multiplot', 5_I4P)) then
@@ -11998,6 +12105,21 @@ contains
    elseif (keyword(option, 'spiderplot', 3_I4P)) then
       call self%figure%set_spiderplot(.false.)
       if (self%data_style == 'spiderplot') self%data_style = 'lines'
+   elseif (option == 'link') then
+      ! gnuplot `unset link [x2|y2]`: both, or the one named
+      associate(panel => self%figure%panels(self%figure%current))
+         if (size(tokens) < 2) then
+            panel%link_x2 = .false.
+            panel%link_y2 = .false.
+         elseif (is_word(tokens(2)%text, 'x x2')) then
+            panel%link_x2 = .false.
+         elseif (is_word(tokens(2)%text, 'y y2')) then
+            panel%link_y2 = .false.
+         else
+            call fail('unset link: x2 or y2 expected', iostat, iomsg)
+            return
+         endif
+      endassociate
    elseif (option == 'theta') then
       call self%figure%set_theta('right', .false.)
    elseif (keyword(option, 'raxis', 3_I4P)) then
@@ -13435,7 +13557,7 @@ contains
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
-        word == 'sharpen'
+        word == 'sharpen' .or. word == 'volatile'
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

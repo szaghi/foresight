@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(206)                           !< Per-check outcome.
+logical                       :: test_passed(207)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4691,6 +4691,33 @@ associate(note => interpreter%figure%panels(1)%notes(1))
                      abs(note%at%y) < 1.0e-12_R8P
 endassociate
 
+! set link x2 [via f inverse g]: x2 on the range of x, its ticks at nice x2 values placed through the inverse; data
+! given on x2 plotted on x through the inverse; unset link
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_link.svg"; set x2tics 1; '// &
+                          'set link x2 via x*2 inv x/2; set xrange [1:5]; '// &
+                          'plot sample [i=2:10:2] ''+'' using (i):(i) axes x2y1 with lp', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(207) = iostat == 0_I4P
+if (test_passed(207)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(207) = panel%link_x2 .and. panel%link_x2_via .and. .not. panel%series(1)%x2
+      if (test_passed(207)) test_passed(207) = abs(panel%series(1)%x(1) - 1.0_R8P) < 1.0e-12_R8P .and. &
+                                             abs(panel%series(1)%x(5) - 5.0_R8P) < 1.0e-12_R8P
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_link.svg')
+      ! the x2 labels are the doubled values: 2 ... 10, the 10 at x = 5
+      test_passed(207) = test_passed(207) .and. index(svg, '>10</text>') > 0 .and. index(svg, '>9</text>') > 0
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_link.svg')
+close(unit, status='delete')
+call interpreter%run_text('unset link x2', iostat, iomsg)
+test_passed(207) = test_passed(207) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%link_x2
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4699,7 +4726,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,206L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,207L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
