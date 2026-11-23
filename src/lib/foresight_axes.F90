@@ -2380,12 +2380,27 @@ contains
                                                    [cy - radius * sy * sin(a), cy - (radius * sy - length) * sin(a)], &
                                                    FRAME_COLOR, 1.0_R8P, '')
       if (.not. thetas(t)%major) cycle
+      if (tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+         ! gnuplot `set ttics rotate`: centred at 1.1 radii (plus 0.05 per `offset`), turned along the angle
+         block
+            real(R8P) :: r  !< Label distance [px].
+            real(R8P) :: q  !< Rotation [rad, clockwise].
+
+            r = radius * sx * (1.1_R8P + 0.05_R8P * tics%offset(1))
+            q = (90.0_R8P - a * 180.0_R8P / PI_R8) * PI_R8 / 180.0_R8P
+            call backend%text(cx + r * cos(a) - 0.35_R8P * font_size * sin(q), &
+                              cy - r * sin(a) + 0.35_R8P * font_size * cos(q), thetas(t)%label, 'middle', &
+                              sup=thetas(t)%sup, rotate=90.0_R8P - a * 180.0_R8P / PI_R8)
+         endblock
+         cycle
+      endif
       anchor = 'middle'
       if (cos(a) > 0.3_R8P) anchor = 'start'
       if (cos(a) < -0.3_R8P) anchor = 'end'
-      call backend%text(cx + (radius * sx + GAP) * cos(a), &
-                        cy - (radius * sy + GAP + 0.5_R8P * font_size) * sin(a) + 0.35_R8P * font_size, &
-                        thetas(t)%label, trim(anchor), sup=thetas(t)%sup)
+      ! `offset R`: out by 0.05 radii per unit, gnuplot's radial use of it
+      call backend%text(cx + (radius * sx * (1.0_R8P + 0.05_R8P * tics%offset(1)) + GAP) * cos(a), &
+                        cy - (radius * sy * (1.0_R8P + 0.05_R8P * tics%offset(1)) + GAP + 0.5_R8P * font_size) * &
+                        sin(a) + 0.35_R8P * font_size, thetas(t)%label, trim(anchor), sup=thetas(t)%sup)
    enddo
    endsubroutine draw_polar_axes
 

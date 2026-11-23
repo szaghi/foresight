@@ -8,7 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
-use foresight_ticks, only : MINOR_AUTO, TICS_NONE
+use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
 use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, WITH_FILLSTEPS, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
                             WITH_ROSE, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, WITH_DOTS, WITH_YERRORLINES, &
@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(190)                           !< Per-check outcome.
+logical                       :: test_passed(191)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4259,6 +4259,35 @@ endif
 open(newunit=unit, file='foresight_script_test_polar_fill.svg')
 close(unit, status='delete')
 
+! set ttics rotate: the theta labels turned along their angle, centred at 1.1 radii; offset R moves them out (radially,
+! as gnuplot); the label options alone keep the ticks, new positions keep the options
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 500,500; set output "foresight_script_test_ttics_rotate.svg"; '// &
+                          'set polar; set angles degrees; set ttics 0,90; set ttics rotate offset 1; set rrange [0:2]; '// &
+                          'set border polar; plot 1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(191) = iostat == 0_I4P
+if (test_passed(191)) then
+   associate(ttics => interpreter%figure%panels(1)%ttics)
+      test_passed(191) = ttics%rotate == 90.0_R8P .and. ttics%offset(1) == 1.0_R8P .and. ttics%mode == TICS_FIXED
+   endassociate
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_ttics_rotate.svg')
+      ! theta 90 at the top is upright (no turn), theta 0 on the right turned by 90 degrees
+      test_passed(191) = test_passed(191) .and. index(svg, 'rotate(90 ') > 0 .and. index(svg, 'rotate(-90 ') > 0
+   endblock
+endif
+if (test_passed(191)) then
+   call interpreter%run_text('set ttics 0,45', iostat, iomsg)
+   test_passed(191) = iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%rotate == 90.0_R8P
+   call interpreter%run_text('set ttics norotate', iostat, iomsg)
+   test_passed(191) = test_passed(191) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%rotate == 0.0_R8P
+endif
+open(newunit=unit, file='foresight_script_test_ttics_rotate.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4267,7 +4296,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,190L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,191L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

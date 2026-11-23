@@ -9712,8 +9712,9 @@ contains
       endsubroutine theta_option
 
       subroutine ttics_option
-      !< `set ttics [[START,]STEP] [format FMT] [font F]`: theta labels [deg]; no step: every 45 degrees; FMT a string
-      !< expression; the font read and ignored.
+      !< `set ttics [[START,]STEP] [format FMT] [font F] [rotate|norotate] [offset R]`: theta labels [deg]; no step:
+      !< every 45 degrees; FMT a string expression; the font read and ignored; `rotate` turns the labels along their
+      !< angle, `offset` moves them out (gnuplot's radial use of its x), alone they keep the ticks.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Format problem.
       real(R8P)                     :: v(2)    !< Start, step.
@@ -9721,7 +9722,75 @@ contains
       integer(I4P)                  :: last    !< Last token before `font`.
       integer(I4P)                  :: j       !< Format expression end.
       integer(I4P)                  :: k       !< Token counter.
+      type(token_object), allocatable :: kept(:) !< The tokens but the label options.
+      logical                       :: rotated !< `rotate` or `norotate` given.
+      logical                       :: shifted !< `offset` given.
+      real(R8P)                     :: shift   !< Radial offset.
+      logical                       :: turn    !< `rotate`.
 
+      ! `rotate [by A]`, `norotate`, `offset X[,Y]`: taken out of the tokens
+      rotated = .false.
+      shifted = .false.
+      turn = .false.
+      shift = 0.0_R8P
+      allocate(kept(0))
+      k = 1_I4P
+      do while (k <= size(tokens, kind=I4P))
+         if (tokens(k)%kind == TOKEN_WORD .and. (tokens(k)%text == 'rotate' .or. tokens(k)%text == 'norotate')) then
+            rotated = .true.
+            turn = tokens(k)%text == 'rotate'
+            if (turn .and. k + 1_I4P < size(tokens, kind=I4P)) then
+               if (tokens(k + 1_I4P)%text == 'by') k = k + 2_I4P
+            endif
+         elseif (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'offset') then
+            if (k == size(tokens, kind=I4P)) then
+               call fail('set ttics: offset R expected', iostat, iomsg)
+               return
+            endif
+            k = k + 1_I4P
+            if (.not. to_number(tokens(k)%text, shift)) then
+               call fail('set ttics: offset R expected (a number, the radial shift)', iostat, iomsg)
+               return
+            endif
+            shifted = .true.
+            ! a y offset read and ignored, as gnuplot
+            if (k + 2_I4P <= size(tokens, kind=I4P)) then
+               if (tokens(k + 1_I4P)%kind == TOKEN_COMMA) k = k + 2_I4P
+            endif
+         else
+            call push(kept, tokens(k))
+         endif
+         k = k + 1_I4P
+      enddo
+      associate(ttics => self%figure%panels(self%figure%current)%ttics)
+         if (rotated) ttics%rotate = merge(90.0_R8P, 0.0_R8P, turn)
+         if (shifted) ttics%offset(1) = shift
+         ! the label options alone: the ticks kept (on if off)
+         if ((rotated .or. shifted) .and. size(kept) == 1) then
+            if (ttics%mode == TICS_NONE) call self%figure%set_ttics()
+            return
+         endif
+      endassociate
+      call ttics_positions(kept)
+      endsubroutine ttics_option
+
+      subroutine ttics_positions(tokens)
+      !< The positions, list and format of `set ttics` (see `ttics_option`), its label options taken out.
+      type(token_object), intent(in) :: tokens(:) !< Option tokens.
+      character(len=:), allocatable :: format  !< Label format.
+      character(len=:), allocatable :: message !< Format problem.
+      real(R8P)                     :: v(2)    !< Start, step.
+      integer(I4P)                  :: n       !< Position tokens.
+      integer(I4P)                  :: last    !< Last token before `font`.
+      integer(I4P)                  :: j       !< Format expression end.
+      integer(I4P)                  :: k       !< Token counter.
+      real(R8P)                     :: turned  !< Label rotation kept.
+      real(R8P)                     :: moved   !< Label offset kept.
+
+      associate(ttics => self%figure%panels(self%figure%current)%ttics)
+         turned = ttics%rotate
+         moved = ttics%offset(1)
+      endassociate
       last = size(tokens, kind=I4P)
       ! `[add] ("label" angle [level], ...)`: an explicit list, replacing the labels or added to them
       if (last >= 2_I4P) then
@@ -9796,7 +9865,12 @@ contains
       endselect
       if (n < 0_I4P) call fail('set ttics: supported forms are STEP and START,STEP (degrees, step > 0), with '// &
                                'format "fmt"', iostat, iomsg)
-      endsubroutine ttics_option
+      ! the label options survive the new positions
+      associate(ttics => self%figure%panels(self%figure%current)%ttics)
+         ttics%rotate = turned
+         ttics%offset(1) = moved
+      endassociate
+      endsubroutine ttics_positions
 
       subroutine border_option
       !< `set border [MASK] [polar] [front|back|behind] [LINE OPTIONS]`: the sides of the frame (1 bottom, 2 left, 4 top,

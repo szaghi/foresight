@@ -2039,8 +2039,10 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
   written 0 to 360;
 - x and y autoscale to the disc, [-R:R] for R = rmax - rmin, extended to their ticks when these are on;
 - `set grid polar` draws rings at the r ticks and spokes (`set grid r` the rings alone), `set border polar` the circle
-  of rmax, `set ttics` the theta labels outside it (always in degrees; `set ttics add ("π" 180)` names an angle),
-  `set mttics N` minor ticks on that circle, `set size square` keeps the circle round;
+  of rmax, `set ttics` the theta labels outside it (always in degrees; `set ttics add ("π" 180)` names an angle;
+  `rotate` turns them along their angle, centred at 1.1 radii, `offset R` moves them out by 0.05 radii a unit, as
+  gnuplot's radial use of it; these options alone keep the ticks), `set mttics N` minor ticks on that circle,
+  `set size square` keeps the circle round;
 - `set logscale r` (base 10) places r at log10(r / rmin) from the pole, rmin the `rrange` start (else the smallest
   positive r), the points below it undefined; the rings and the r ticks follow, `set rtics rotate by A` turns their
   labels, as gnuplot;
@@ -2107,5 +2109,5 @@ gnuplot's `geographic` formats; `set datafile` options other than `separator`, `
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options; two tick
 label fields in one `using` (`xtic(1):ytic(2)`); `set multiplot` `scale`, `offset`; palette
-models other than RGB and HSV; `set ttics rotate`; `keyentry` with the panel charts (spider plots, pies, ...);
+models other than RGB and HSV; `keyentry` with the panel charts (spider plots, pies, ...);
 `fillsteps` options (`above`, `below`, `y=`); `set minussign` and `set micro` with `set encoding utf8`.
