@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(152)                           !< Per-check outcome.
+logical                       :: test_passed(153)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3263,6 +3263,29 @@ close(unit, status='delete')
 call interpreter%run_text('set key autotitle column; set key columns 3', iostat, iomsg)
 test_passed(152) = test_passed(152) .and. iostat == 0_I4P .and. interpreter%autotitle == 'columnhead' .and. &
                    interpreter%figure%panels(1)%key_columns == 3_I4P
+! layout options as gnuplot 6.0: fill style abbreviations and border lt N, set border back and an expression mask,
+! set rmargin screen F (without at)
+call interpreter%init(scratch)
+call interpreter%run_text('$B << EOD'//new_line('a')//'1 1'//new_line('a')//'2 2'//new_line('a')//'EOD'//new_line('a')// &
+                          'set style fill tr s 0.2 bo lt 8; plot $B with boxes', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(153) = iostat == 0_I4P
+if (test_passed(153)) test_passed(153) = interpreter%figure%panels(1)%series(1)%style%border_color == default_color(8_I4P) .and. &
+                                       abs(interpreter%figure%panels(1)%series(1)%style%density - 0.2_R8P) < 1.0e-12_R8P
+call interpreter%run_text('set style fill solid border lt -1; plot $B with boxes', iostat, iomsg)
+test_passed(153) = test_passed(153) .and. iostat == 0_I4P
+if (test_passed(153)) test_passed(153) = interpreter%figure%panels(1)%series(1)%style%border_color == 'black'
+call interpreter%run_text('bb = 1 + 2; set border bb back', iostat, iomsg)
+test_passed(153) = test_passed(153) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%border == 3_I4P
+call interpreter%run_text('set rmargin screen 0.7', iostat, iomsg)
+test_passed(153) = test_passed(153) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%margin_screen(2) .and. &
+                  interpreter%figure%panels(1)%margin_user(2) == 0.7_R8P
+call interpreter%run_text('set border sideways', iostat, iomsg)
+test_passed(153) = test_passed(153) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "sideways"') > 0
+
+call interpreter%run_text('set style fill pattern 2 bo 3; plot $B with boxes', iostat, iomsg)
+test_passed(153) = test_passed(153) .and. iostat == 0_I4P
+if (test_passed(153)) test_passed(153) = interpreter%figure%panels(1)%series(1)%style%border_color == default_color(3_I4P)
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3271,7 +3294,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,152L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,153L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

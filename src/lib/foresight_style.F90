@@ -527,18 +527,40 @@ contains
 
    subroutine fill_style(words, style, bad)
    !< Update the fill of `style` from gnuplot fill style words, blank separated: `empty`, `solid [D]`,
-   !< `transparent solid [D]`, `border [lc [rgb] COLOR | -1]` (COLOR quoted or not), `noborder`, and foresight's
+   !< `transparent solid [D]`, `border [lc [rgb] COLOR | lt N | -1]` (COLOR quoted or not), `noborder` (abbreviated as
+   !< gnuplot: `s`, `bo`, `nobo`, ...), and foresight's
    !< `segments N` (N from 1 to 1000; `segments 0` for none); `bad` is the first word not understood.
    character(len=*),              intent(in)    :: words !< Fill style words.
    type(style_object),            intent(inout) :: style !< Style updated.
    character(len=:), allocatable, intent(out)   :: bad   !< First word not understood, empty if none.
    character(len=:), allocatable                :: list(:) !< Words.
+   character(len=:), allocatable                :: full    !< Words, written in full.
    real(R8P)                                    :: v     !< Density.
    logical                                      :: ok    !< Number read.
    integer(I4P)                                 :: k     !< Word counter.
 
    bad = ''
    list = split(words)
+   ! gnuplot's abbreviations, the words written in full: e$mpty, s$olid, p$attern, tr$ansparent, bo$rder, nobo$rder
+   full = ''
+   do k = 1_I4P, size(list, kind=I4P)
+      if (gnuplot_abbreviates(trim(list(k)), 'e$mpty')) then
+         full = full//' empty'
+      elseif (gnuplot_abbreviates(trim(list(k)), 's$olid')) then
+         full = full//' solid'
+      elseif (gnuplot_abbreviates(trim(list(k)), 'p$attern')) then
+         full = full//' pattern'
+      elseif (gnuplot_abbreviates(trim(list(k)), 'tr$ansparent')) then
+         full = full//' transparent'
+      elseif (gnuplot_abbreviates(trim(list(k)), 'bo$rder')) then
+         full = full//' border'
+      elseif (gnuplot_abbreviates(trim(list(k)), 'nobo$rder')) then
+         full = full//' noborder'
+      else
+         full = full//' '//trim(list(k))
+      endif
+   enddo
+   list = split(full)
    k = 1_I4P
    do while (k <= size(list, kind=I4P))
       select case (trim(list(k)))
@@ -563,10 +585,37 @@ contains
          style%border = .true.
          style%border_color = ''
          if (k < size(list, kind=I4P)) then
+            ! gnuplot `border {lt} N`: a bare number is a linetype too
+            call real_from_decimal(trim(list(k + 1_I4P)), v, ok)
+            if (ok .and. trim(list(k + 1_I4P)) /= '-1') then
+               k = k + 1_I4P
+               if (v < 0.0_R8P) then
+                  style%border_color = 'black'
+               else
+                  style%border_color = default_color(max(1_I4P, nint(v, I4P)))
+               endif
+               k = k + 1_I4P
+               cycle
+            endif
             select case (trim(list(k + 1_I4P)))
             case ('-1')
                style%border_color = 'black'
                k = k + 1_I4P
+            case ('lt', 'linetype')
+               ! the color of linetype N, -1 black (gnuplot's `border lt N`)
+               k = k + 1_I4P
+               ok = .false.
+               if (k < size(list, kind=I4P)) call real_from_decimal(trim(list(k + 1_I4P)), v, ok)
+               if (.not. ok) then
+                  bad = 'border lt (a linetype number is expected)'
+                  return
+               endif
+               k = k + 1_I4P
+               if (v < 0.0_R8P) then
+                  style%border_color = 'black'
+               else
+                  style%border_color = default_color(max(1_I4P, nint(v, I4P)))
+               endif
             case ('lc', 'linecolor')
                k = k + 1_I4P
                if (k < size(list, kind=I4P)) then

@@ -8315,8 +8315,9 @@ contains
       endsubroutine ttics_option
 
       subroutine border_option
-      !< `set border [MASK] [polar]`: the sides of the frame (1 bottom, 2 left, 4 top, 8 right; 31 by default) and the
-      !< circle of the largest r on a polar panel.
+      !< `set border [MASK] [polar] [front|back|behind] [LINE OPTIONS]`: the sides of the frame (1 bottom, 2 left, 4 top,
+      !< 8 right; 31 by default; MASK a number or a constant expression) and the circle of the largest r on a polar panel;
+      !< the layer is read and ignored (the border over the data).
       integer(I4P) :: mask  !< Sides, -1 if not given.
       logical      :: polar !< Polar border.
       real(R8P)    :: v     !< Mask value.
@@ -8328,21 +8329,31 @@ contains
          i = i + 1_I4P
          if (tokens(i)%kind == TOKEN_WORD .and. keyword(tokens(i)%text, 'polar', 2_I4P)) then
             polar = .true.
-         elseif (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'front') then
-            ! foresight draws the border over the data, gnuplot's default
+         elseif (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'front back behind')) then
+            ! foresight draws the border over the data, gnuplot's default: the layer is read and ignored
             continue
          elseif (tokens(i)%kind == TOKEN_WORD .and. is_line_option(tokens(i)%text)) then
             if (.not. line_props(tokens, i, 'border')) return
-         elseif (to_number(tokens(i)%text, v)) then
+         else
+            ! the mask: a number or a constant expression (`set border bb`)
+            if (.not. to_number(tokens(i)%text, v)) then
+               block
+                  character(len=:), allocatable :: message !< Not a constant.
+                  integer(I4P)                  :: status  !< Constant status.
+
+                  call self%symbols%constant(trim(tokens(i)%text), v, status, message)
+                  if (status /= 0_I4P) then
+                     call fail('set border: unsupported option "'//tokens(i)%text//'" (MASK, polar, front, back, '// &
+                               'behind, lt, lc, lw, dt)', iostat, iomsg)
+                     return
+                  endif
+               endblock
+            endif
             if (v < 0.0_R8P .or. v > 4095.0_R8P .or. v /= aint(v)) then
                call fail('set border: the mask is an integer 0 to 4095', iostat, iomsg)
                return
             endif
             mask = int(v, I4P)
-         else
-            call fail('set border: unsupported option "'//tokens(i)%text//'" (MASK, polar, front, lt, lc, lw, dt)', &
-                      iostat, iomsg)
-            return
          endif
       enddo
       if (mask >= 0_I4P) then
@@ -8527,7 +8538,11 @@ contains
          return
       endif
       screen = .false.
-      if (tokens(i + 1_I4P)%text == 'at') then
+      if (keyword(tokens(i + 1_I4P)%text, 'screen', 2_I4P)) then
+         ! gnuplot also reads `set lmargin screen X`, without `at`
+         screen = .true.
+         i = i + 1_I4P
+      elseif (tokens(i + 1_I4P)%text == 'at') then
          if (i + 2_I4P > size(tokens, kind=I4P)) then
             call fail('set '//option//': at screen F expected', iostat, iomsg)
             ok = .false.
