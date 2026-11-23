@@ -8368,8 +8368,9 @@ contains
       endsubroutine set_range
 
       subroutine range_end(text, fixed, value, e, bounded, limits)
-      !< One range end (`e` 1 the start, 2 the end): empty or `*` autoscales, `lb<*`, `*<ub`, `lb<*<ub` autoscales
-      !< within limits (`bounded`, `limits`), else a number or a constant expression (`2*pi`, user variables).
+      !< One range end (`e` 1 the start, 2 the end): empty keeps the end as it is (fixed or autoscaled, as gnuplot 6.0:
+      !< `set xrange [2:5]; set xrange [:10]` is [2:10]), `*` autoscales, `lb<*`, `*<ub`, `lb<*<ub` autoscales within
+      !< limits (`bounded`, `limits`), else a number or a constant expression (`2*pi`, user variables).
       character(len=*), intent(in)              :: text  !< End text.
       logical,          intent(inout)           :: fixed !< End fixed.
       real(R8P),        intent(inout)           :: value !< End value.
@@ -8380,11 +8381,8 @@ contains
       integer(I4P)                    :: star  !< The star.
       real(R8P)                       :: v     !< Parsed value.
 
-      ! an empty end autoscales and keeps its limits; a given one decides them, as gnuplot's load_one_range
-      if (len_trim(text) == 0) then
-         fixed = .false.
-         return
-      endif
+      ! an empty end keeps the end and its limits (probed: gnuplot 6.0 keeps a set value); a given one decides them
+      if (len_trim(text) == 0) return
       if (present(bounded)) bounded(e, :) = .false.
       if (trim(adjustl(text)) == '*') then
          fixed = .false.

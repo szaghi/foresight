@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(203)                           !< Per-check outcome.
+logical                       :: test_passed(204)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4617,6 +4617,24 @@ endif
 open(newunit=unit, file='foresight_script_test_title_lines.svg')
 close(unit, status='delete')
 
+! an empty range end keeps the end as it is (gnuplot 6.0: `set xrange [2:5]; set xrange [:10]` is [2:10]); `*`
+! autoscales it
+call interpreter%init(scratch)
+call interpreter%run_text('set xrange [2:5]; set xrange [:10]; set yrange [1:2]; set yrange [*:3]', iostat, iomsg)
+test_passed(204) = iostat == 0_I4P
+if (test_passed(204)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(204) = panel%xaxis%min_fixed .and. panel%xaxis%min_user == 2.0_R8P .and. panel%xaxis%max_fixed .and. &
+                        panel%xaxis%max_user == 10.0_R8P .and. .not. panel%yaxis%min_fixed .and. &
+                        panel%yaxis%max_user == 3.0_R8P
+   endassociate
+endif
+call interpreter%run_text('set xrange [3:]', iostat, iomsg)
+associate(panel => interpreter%figure%panels(1))
+   test_passed(204) = test_passed(204) .and. iostat == 0_I4P .and. panel%xaxis%min_user == 3.0_R8P .and. &
+                     panel%xaxis%max_fixed .and. panel%xaxis%max_user == 10.0_R8P
+endassociate
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4625,7 +4643,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,203L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,204L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
