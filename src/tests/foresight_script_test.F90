@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(180)                           !< Per-check outcome.
+logical                       :: test_passed(181)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3961,6 +3961,43 @@ if (test_passed(180)) then
    endassociate
 endif
 
+! set style data|function filledcurves OPTIONS: the options of the filledcurves items given none (y=0 the base line,
+! x1 a curve word); options of other styles refused, as gnuplot; set fit nolog, fit on an array
+call interpreter%init(scratch)
+call interpreter%run_text('set style data filledcurves y=0; set style function filledcurves y1=-1'//new_line('a')// &
+                          '$D << EOD'//new_line('a')//'1 2'//new_line('a')//'2 3'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $D, x with filledcurves, $D with filledcurves x1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(181) = iostat == 0_I4P
+if (test_passed(181)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(181) = series(1)%style%with == WITH_FILLEDCURVES .and. all(series(1)%ylow == 0.0_R8P) .and. &
+                        all(series(2)%ylow == -1.0_R8P) .and. .not. allocated(series(3)%ylow) .and. &
+                        series(3)%curve_to > 0_I4P
+   endassociate
+endif
+if (test_passed(181)) then
+   call interpreter%init(scratch)
+   call interpreter%run_text('set style data lines y=0', iostat, iomsg)
+   test_passed(181) = iostat /= 0_I4P .and. index(iomsg, 'filledcurves only') > 0
+endif
+if (test_passed(181)) then
+   call interpreter%init(scratch)
+   call interpreter%run_text('set fit nolog quiet; array A[5] = [1, 2, 3, 4, 5]; a = 0.5; '// &
+                             'fit a*x A using 1:2 via a', iostat, iomsg)
+   if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+   test_passed(181) = iostat == 0_I4P
+   if (test_passed(181)) then
+      block
+         real(R8P) :: v     !< Fitted a.
+         logical   :: found !< Defined.
+
+         call interpreter%symbols%value_of('a', v, found)
+         test_passed(181) = found .and. abs(v - 1.0_R8P) < 1.0e-6_R8P
+      endblock
+   endif
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3969,7 +4006,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,180L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,181L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

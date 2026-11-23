@@ -920,6 +920,7 @@ The [cookbook](/manual/cookbook#a-histogram-of-a-sample) overlays the density of
 f(x) = c*x**p
 fit f(x) 'convergence.dat' using 1:2 via c, p                 # c and p fitted, c_err, p_err, FIT_* set
 fit [0.01:0.1] a*x + b 'run.dat' using 1:2:3 via a, b         # an x range, the third column the errors of y
+fit a*x A using 1:2 via a                                     # an array: index and value
 ```
 
 `fit` is gnuplot 6.0's: nonlinear least squares by the Marquardt-Levenberg method, translated from gnuplot's sources
@@ -942,7 +943,7 @@ rule), so the parameters, their errors and the iterations agree with gnuplot's t
 | `set fit` option | Effect |
 |---|---|
 | `quiet` (default) \| `results` \| `brief` | no report; gnuplot's results on the standard error; with the progress lines too |
-| `logfile "file"` \| `nologfile` (default) | append the full report to a file; no log file |
+| `logfile "file"` \| `nologfile` (default; `log`, `nolog` abbreviate them) | append the full report to a file; no log file |
 | `limit E` \| `limit_abs E` | stop when chi-square changes by less than E times itself (1e-5) plus `limit_abs` (0) |
 | `maxiter N` \| `maxiter default` | at most N iterations; no limit |
 | `start-lambda L` \| `lambda-factor F` | the first lambda (gnuplot's estimate by default); its factor (10) |
@@ -1276,6 +1277,10 @@ plot 'run.dat' u 1:2 ls 1 t 'residual', '' u 1:3 lt 3 t 'momentum'
 ```
 
 `ls N` of an undefined style takes the color of linetype `N`, as gnuplot.
+
+`set style data filledcurves OPTIONS` and `set style function filledcurves OPTIONS` (`y=0`, `y1=0`, `x1`, `below`,
+...) give their options to the filledcurves items of data or functions given none, the default style or an explicit
+`with filledcurves`, as gnuplot; options after another style are refused, as gnuplot.
 
 Style names and `smooth` filters take gnuplot's abbreviations, read from its keyword tables in their order: `l`,
 `line`, `p`, `point`, `lp`, `e` (yerrorbars), `errorl` (yerrorlines), `his` (histeps), `hist` (histograms), ...;

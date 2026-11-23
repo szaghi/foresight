@@ -253,6 +253,9 @@ type :: script_object
    integer(I4P)                    :: isosamples = 10_I4P      !< `set isosamples N,M`: M, the v samples of `'++'`.
    real(R8P)                       :: uv_range(2, 2) = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
                                                                !< `set urange`, `set vrange` (columns u, v).
+   character(len=:), allocatable   :: data_curve               !< `set style data filledcurves OPTIONS`: the options
+                                                               !< of the data filledcurves given none.
+   character(len=:), allocatable   :: function_curve           !< The same of the functions (`set style function`).
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -328,6 +331,8 @@ contains
    allocate(self%data_files(0))
    self%data_style = 'lines'
    self%function_style = 'lines'
+   self%data_curve = ''
+   self%function_curve = ''
    self%autotitle = 'file'
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
@@ -2118,10 +2123,15 @@ contains
    do while (i <= size(tokens, kind=I4P))
       if (tokens(i)%kind == TOKEN_STRING) exit
       if (is_datablock(tokens(i)%text)) exit
+      ! an array, as gnuplot's `fit f(x) A using 1:2 via a` (its element A[i] is the model's)
+      if (i > first .and. tokens(i)%kind == TOKEN_WORD .and. self%symbols%is_array(tokens(i)%text)) then
+         if (i == size(tokens, kind=I4P)) exit
+         if (is_word(tokens(i + 1_I4P)%text, 'using u via index every')) exit
+      endif
       i = i + 1_I4P
    enddo
    if (i > size(tokens, kind=I4P) .or. i == first) then
-      call fail('fit: a function then a quoted data file (or a datablock) are expected', iostat, iomsg)
+      call fail('fit: a function then a quoted data file (or a datablock, an array) are expected', iostat, iomsg)
       return
    endif
    text = trim(adjustl(statement(tokens(first)%first:tokens(i)%first - 1_I4P)))
@@ -3327,6 +3337,18 @@ contains
       if (allocated(whisker) .and. with /= 'candlesticks') then
          call fail('plot: whiskerbars applies to candlesticks only', iostat, iomsg)
          return
+      endif
+      ! filledcurves without options: those of `set style data|function filledcurves ...`, as gnuplot
+      if (with == 'filledcurves' .and. len_trim(curve) == 0 .and. .not. allocated(base)) then
+         block
+            character(len=:), allocatable :: bad !< Problem (none: checked when set).
+
+            if (is_function) then
+               if (allocated(self%function_curve)) call filled_options(self%function_curve, curve, base, bad)
+            else
+               if (allocated(self%data_curve)) call filled_options(self%data_curve, curve, base, bad)
+            endif
+         endblock
       endif
       if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
                                             'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors '// &
@@ -7791,7 +7813,8 @@ contains
          select case (word)
          case ('quiet', 'results', 'brief')
             self%fit_verbosity = word
-         case ('logfile')
+         case ('log', 'logf', 'logfi', 'logfil', 'logfile')
+            ! gnuplot's log$file
             if (i == size(tokens, kind=I4P)) then
                call fail('set fit logfile: a "file" is expected', iostat, iomsg)
                return
@@ -7802,7 +7825,7 @@ contains
                return
             endif
             self%fit_logfile = tokens(i)%text
-         case ('nologfile')
+         case ('nolog', 'nologf', 'nologfi', 'nologfil', 'nologfile')
             self%fit_logfile = ''
          case ('limit', 'limit_abs', 'start-lambda', 'lambda-factor')
             if (.not. next_real(tokens, i, v, iostat, iomsg)) then
@@ -10471,9 +10494,10 @@ contains
       endfunction time_axes
 
       subroutine style_option
-      !< `set style data|function STYLE`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
+      !< `set style data|function STYLE [filledcurves options]`, `set style line N [lc ...] [lt N] [lw W] [dt N] [ps S]`.
       type(line_style_object) :: style !< New line style.
       character(len=:), allocatable :: with !< Style name.
+      character(len=:), allocatable :: curve_text !< Filledcurves options of `set style data|function`.
       integer(I4P) :: s !< Counter.
 
       if (size(tokens) >= 2) then
@@ -10489,7 +10513,7 @@ contains
             endblock
             return
          elseif (keyword(tokens(2)%text, 'data', 1_I4P)) then
-            if (size(tokens) /= 3) then
+            if (size(tokens) < 3) then
                call fail('set style data: one style is expected', iostat, iomsg)
                return
             endif
@@ -10498,7 +10522,9 @@ contains
                call fail('set style data: unsupported style "'//tokens(3)%text//'"', iostat, iomsg)
                return
             endif
+            if (.not. style_curve('data', with, curve_text)) return
             self%data_style = with
+            self%data_curve = curve_text
             return
          elseif (keyword(tokens(2)%text, 'spiderplot', 6_I4P)) then
             block
@@ -10627,7 +10653,7 @@ contains
             endblock
             return
          elseif (keyword(tokens(2)%text, 'function', 1_I4P)) then
-            if (size(tokens) /= 3) then
+            if (size(tokens) < 3) then
                call fail('set style function: one style is expected', iostat, iomsg)
                return
             endif
@@ -10641,7 +10667,9 @@ contains
                          ' are)', iostat, iomsg)
                return
             endif
+            if (.not. style_curve('function', with, curve_text)) return
             self%function_style = with
+            self%function_curve = curve_text
             return
          elseif (keyword(tokens(2)%text, 'line', 1_I4P)) then
             i = 2_I4P
@@ -10736,6 +10764,42 @@ contains
       call fail('set style: only "data STYLE", "function STYLE", "line N ...", "fill ...", "histogram ..." and '// &
                 '"textbox ..." are supported', iostat, iomsg)
       endsubroutine style_option
+
+      function style_curve(kind, with, curve_text) result(ok)
+      !< The options after the style `with` of `set style data|function` (`kind`): filledcurves' only (as gnuplot),
+      !< checked and kept as `curve_text`.
+      character(len=*),              intent(in)  :: kind       !< `data` or `function`.
+      character(len=*),              intent(in)  :: with       !< Style.
+      character(len=:), allocatable, intent(out) :: curve_text !< Options.
+      logical                       :: ok    !< Success.
+      character(len=:), allocatable :: curve !< Option words.
+      character(len=:), allocatable :: bad   !< Problem.
+      real(R8P),        allocatable :: base  !< Base line.
+      integer(I4P)                  :: t     !< Token counter.
+
+      ok = .false.
+      curve_text = ''
+      do t = 4_I4P, size(tokens, kind=I4P)
+         if (tokens(t)%kind == TOKEN_COMMA) then
+            curve_text = curve_text//','
+         elseif (t > 4_I4P .and. tokens(t - 1_I4P)%kind == TOKEN_COMMA) then
+            curve_text = curve_text//tokens(t)%text
+         else
+            curve_text = curve_text//' '//tokens(t)%text
+         endif
+      enddo
+      curve_text = trim(adjustl(curve_text))
+      if (len(curve_text) > 0 .and. with /= 'filledcurves') then
+         call fail('set style '//kind//': options apply to filledcurves only, as gnuplot', iostat, iomsg)
+         return
+      endif
+      call filled_options(curve_text, curve, base, bad)
+      if (len(bad) > 0) then
+         call fail('set style '//kind//': filledcurves '//bad, iostat, iomsg)
+         return
+      endif
+      ok = .true.
+      endfunction style_curve
    endsubroutine set_command
 
    subroutine unset_command(self, tokens, iostat, iomsg)
@@ -12609,6 +12673,51 @@ contains
    call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
    ok = len(names) > 0 .and. len(bad) == 0
    endfunction valid_axes
+
+   subroutine filled_options(text, curve, base, bad)
+   !< The filledcurves options of `text` (words blank separated, `xy=X,Y` one word) as a plot item reads them: the
+   !< curve words (`closed`, `x1`, `x2`, `above`, `below`, `y1`, `y2`, `y`, `x=V`, `xy=X,Y`) in `curve`, `y=V` (`y1=`,
+   !< `y2=`) the `base`; `bad` names the problem, empty if none.
+   character(len=*),              intent(in)    :: text  !< Options.
+   character(len=:), allocatable, intent(inout) :: curve !< Curve words.
+   real(R8P),        allocatable, intent(inout) :: base  !< Base line.
+   character(len=:), allocatable, intent(out)   :: bad   !< Problem, empty if none.
+   character(len=:), allocatable                :: rest  !< Words not read.
+   character(len=:), allocatable                :: word  !< Current word.
+   integer(I4P)                                 :: b     !< Blank after the word.
+   real(R8P)                                    :: v     !< Number.
+
+   bad = ''
+   if (.not. allocated(curve)) curve = ''
+   rest = trim(adjustl(text))
+   do while (len(rest) > 0)
+      b = index(rest, ' ', kind=I4P)
+      if (b == 0_I4P) b = len(rest, kind=I4P) + 1_I4P
+      word = rest(1:b - 1_I4P)
+      rest = trim(adjustl(rest(min(b, len(rest, kind=I4P) + 1_I4P):)))
+      if (is_word(word, 'closed x1 x2 above below y1 y2 y')) then
+         curve = curve//' '//word
+      elseif (index(word, 'x=') == 1 .or. index(word, 'x1=') == 1 .or. index(word, 'x2=') == 1) then
+         if (.not. to_number(word(index(word, '=') + 1:), v)) then
+            bad = word(1:index(word, '='))//'V needs a number, found "'//word//'"'
+            return
+         endif
+         curve = curve//' '//word
+      elseif (index(word, 'y=') == 1 .or. index(word, 'y1=') == 1 .or. index(word, 'y2=') == 1) then
+         if (.not. to_number(word(index(word, '=') + 1:), v)) then
+            bad = 'y=V needs a number, found "'//word//'"'
+            return
+         endif
+         if (allocated(base)) deallocate(base)
+         allocate(base, source=v)
+      elseif (index(word, 'xy=') == 1 .and. index(word, ',') > 0) then
+         curve = curve//' '//word
+      else
+         bad = 'unsupported option "'//word//'"'
+         return
+      endif
+   enddo
+   endsubroutine filled_options
 
    function to_number(word, value) result(ok)
    !< Parse a number; false if malformed or beyond the real range.
