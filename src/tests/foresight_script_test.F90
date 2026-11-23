@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(157)                           !< Per-check outcome.
+logical                       :: test_passed(158)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3378,6 +3378,19 @@ test_passed(157) = test_passed(157) .and. iostat /= 0_I4P .and. index(iomsg, 'a 
 open(newunit=unit, file='foresight_script_test_dash.svg')
 close(unit, status='delete')
 
+! set palette model HSV (and gnuplot's `mode HSV`): the components are hue, saturation, value, as gnuplot
+call interpreter%init(scratch)
+call interpreter%run_text('set palette mode HSV; set palette defined (0 0 1 1, 1 1 1 1)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(158) = iostat == 0_I4P .and. interpreter%figure%panels(1)%palette%hsv
+if (test_passed(158)) test_passed(158) = all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [255, 0, 0]) .and. &
+                                       all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P/3.0_R8P) == [0, 255, 0]) .and. &
+                                       all(interpreter%figure%panels(1)%palette%rgb(0.5_R8P) == [0, 255, 255])
+call interpreter%run_text('set palette model RGB', iostat, iomsg)
+test_passed(158) = test_passed(158) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%palette%hsv
+call interpreter%run_text('set palette model CMY', iostat, iomsg)
+test_passed(158) = test_passed(158) .and. iostat /= 0_I4P .and. index(iomsg, 'RGB and HSV are supported') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3386,7 +3399,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,157L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,158L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

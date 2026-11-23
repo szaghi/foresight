@@ -79,6 +79,7 @@ type :: palette_object
    integer(I4P)           :: formulae(3) = [7, 5, 15]   !< gnuplot rgbformulae, R, G, B.
    logical                :: negative = .false.          !< Gray axis reversed.
    integer(I4P)           :: maxcolors = 0_I4P           !< Colors of a quantized palette, 0 for continuous.
+   logical                :: hsv = .false.               !< `model HSV`: the components are hue, saturation, value.
    integer(I4P)           :: table = 0_I4P               !< Named palette (foresight_colormaps index), `PAL_TABLE`.
    real(R8P)              :: cubehelix(3) = CUBEHELIX_DEFAULT !< `cubehelix` start, cycles, saturation.
    integer(I4P)           :: color_mode = PAL_FORMULAE   !< Mode `color` restores: the last set by `rgbformulae`,
@@ -149,8 +150,47 @@ contains
          f(k) = formula(self%formulae(k), g)
       enddo
    endselect
+   ! gnuplot `model HSV`: the components (clamped) are hue, saturation and value, the gray palette excepted
+   if (self%hsv .and. self%mode /= PAL_GRAY) f = hsv_rgb(min(1.0_R8P, max(0.0_R8P, f)))
    c = nint(255.0_R8P * min(1.0_R8P, max(0.0_R8P, f)), I4P)
    endfunction rgb
+
+   pure function hsv_rgb(hsv) result(f)
+   !< Red, green, blue (0..1) of `hsv`, hue 0..1 (not degrees), as gnuplot's HSV_2_RGB.
+   real(R8P), intent(in) :: hsv(3) !< Hue, saturation, value.
+   real(R8P)             :: f(3)   !< Red, green, blue.
+   real(R8P)             :: h      !< Hue sextant position.
+   real(R8P)             :: r      !< Fraction in the sextant.
+   real(R8P)             :: p      !< Low channel.
+   real(R8P)             :: q      !< Falling channel.
+   real(R8P)             :: t      !< Rising channel.
+   integer(I4P)          :: i      !< Sextant.
+
+   if (hsv(2) == 0.0_R8P) then
+      f = hsv(3)
+      return
+   endif
+   h = hsv(1) * 6.0_R8P
+   i = floor(h, I4P)
+   r = h - real(i, R8P)
+   p = hsv(3) * (1.0_R8P - hsv(2))
+   q = hsv(3) * (1.0_R8P - hsv(2) * r)
+   t = hsv(3) * (1.0_R8P - hsv(2) * (1.0_R8P - r))
+   select case (modulo(i, 6_I4P))
+   case (0_I4P)
+      f = [hsv(3), t, p]
+   case (1_I4P)
+      f = [q, hsv(3), p]
+   case (2_I4P)
+      f = [p, hsv(3), t]
+   case (3_I4P)
+      f = [p, q, hsv(3)]
+   case (4_I4P)
+      f = [t, p, hsv(3)]
+   case default
+      f = [hsv(3), p, q]
+   endselect
+   endfunction hsv_rgb
 
    pure function hex_color(c) result(hex)
    !< `#rrggbb` of the 8-bit channels `c`.
@@ -324,12 +364,18 @@ contains
             return
          endif
          palette%maxcolors = int(v, I4P)
-      case ('model')
+      case ('model', 'mode')
+         ! gnuplot also reads `mode` (its demo colorwheel); RGB or HSV (CMY, XYZ, YIQ not supported)
          call next(w)
-         if (w /= 'RGB') then
-            bad = 'model '//w//' (only RGB is supported)'
+         select case (w)
+         case ('RGB', 'rgb')
+            palette%hsv = .false.
+         case ('HSV', 'hsv')
+            palette%hsv = .true.
+         case default
+            bad = 'model '//w//' (RGB and HSV are supported)'
             return
-         endif
+         endselect
       case default
          k = colormap_id(w)
          if (k == 0_I4P) then
@@ -400,6 +446,8 @@ contains
       integer(I4P)                  :: comma !< Item end.
       integer(I4P)                  :: blank !< Value end.
       logical                       :: known !< Color known.
+      logical                       :: triple !< Three numbers.
+      real(R8P)                     :: rgb3(3) !< The three components, 0..1.
 
       if (len(list) < 2) then
          bad = 'defined (a list (v1 "color1", v2 "color2", ...) is expected)'
@@ -427,19 +475,39 @@ contains
             if ((color(1:1) == '"' .or. color(1:1) == "'") .and. color(len(color):len(color)) == color(1:1)) &
                color = color(2:len(color) - 1)
          endif
-         call named_color(color, c, known)
+         ! `v r g b`: the three components, 0 to 1 (hue, saturation, value in model HSV), as gnuplot
+         triple = components(color, rgb3)
+         known = triple
+         if (.not. triple) call named_color(color, c, known)
          if (.not. ok .or. .not. known) then
-            bad = 'defined item "'//item//'" (a value and a color, #rrggbb or a name, are expected)'
+            bad = 'defined item "'//item//'" (a value and a color, #rrggbb, a name or r g b, are expected)'
             return
          endif
          pos = [pos, v]
+         if (.not. triple) rgb3 = real(c, R8P) / 255.0_R8P
          ! grown into `grown`: nvfortran 26.9 -O2 zeroes `col = reshape([col, ...], ...)`
-         grown = reshape([col, real(c, R8P) / 255.0_R8P], [3, size(pos)])
+         grown = reshape([col, rgb3], [3, size(pos)])
          call move_alloc(grown, col)
       enddo
       call palette_gradient(palette, pos, col, bad)
       if (len(bad) > 0) bad = 'defined ('//bad//')'
       endsubroutine defined_list
+
+      function components(text, f) result(yes)
+      !< Whether `text` is three numbers (`r g b`), returned clamped to 0..1 in `f`.
+      character(len=*), intent(in)  :: text !< Color text.
+      real(R8P),        intent(out) :: f(3) !< Components.
+      logical                       :: yes  !< Three numbers.
+      integer(I4P)                  :: ios  !< Read status.
+
+      f = 0.0_R8P
+      yes = .false.
+      if (len_trim(text) == 0 .or. scan(text, '"#'//"'") > 0) return
+      if (verify(trim(text), '0123456789.+-eE ') /= 0) return
+      read(text, *, iostat=ios) f
+      yes = ios == 0_I4P
+      if (yes) f = min(1.0_R8P, max(0.0_R8P, f))
+      endfunction components
    endsubroutine palette_words
 
    pure subroutine palette_gradient(palette, positions, colors, bad)
