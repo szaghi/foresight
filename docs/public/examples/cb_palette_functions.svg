@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
+<rect x="0" y="0" width="560" height="320" fill="#f3ede1" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="42.4 487.6 16 289" data-x="0 1e1" data-y="-6e-1 1e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,289 42.4,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="131.44,289 131.44,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="220.48,289 220.48,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="309.52,289 309.52,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="398.56,289 398.56,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="487.6,289 487.6,16"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,289 487.6,289"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,254.88 487.6,254.88"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,220.75 487.6,220.75"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,186.63 487.6,186.63"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,152.5 487.6,152.5"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,118.38 487.6,118.38"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,84.25 487.6,84.25"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,50.13 487.6,50.13"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,16 487.6,16"/>
+</g>
+<svg class="fs-plot" x="42.4" y="16" width="445.2" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#7ff230" fill="none" stroke="none" d="M0,0.625"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#51f230" fill="none" stroke="none" d="M0.008403,0.573089"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f23d" fill="none" stroke="none" d="M0.016807,0.522625"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f268" fill="none" stroke="none" d="M0.02521,0.473937"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f291" fill="none" stroke="none" d="M0.033613,0.427332"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b8" fill="none" stroke="none" d="M0.042017,0.383098"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2dd" fill="none" stroke="none" d="M0.05042,0.3415"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30e5f2" fill="none" stroke="none" d="M0.058823,0.302777"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30c6f2" fill="none" stroke="none" d="M0.067227,0.267145"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30a9f2" fill="none" stroke="none" d="M0.07563,0.234791"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#308ff2" fill="none" stroke="none" d="M0.084034,0.205879"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3079f2" fill="none" stroke="none" d="M0.092437,0.180539"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3066f2" fill="none" stroke="none" d="M0.10084,0.15888"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3056f2" fill="none" stroke="none" d="M0.109244,0.140976"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3049f2" fill="none" stroke="none" d="M0.117647,0.126879"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3040f2" fill="none" stroke="none" d="M0.12605,0.116607"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#303bf2" fill="none" stroke="none" d="M0.134454,0.110154"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3038f2" fill="none" stroke="none" d="M0.142857,0.107488"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3039f2" fill="none" stroke="none" d="M0.151261,0.108548"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#303df2" fill="none" stroke="none" d="M0.159664,0.113249"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3045f2" fill="none" stroke="none" d="M0.168067,0.121482"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#304ff2" fill="none" stroke="none" d="M0.176471,0.133116"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#305cf2" fill="none" stroke="none" d="M0.184874,0.147996"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#306cf2" fill="none" stroke="none" d="M0.193277,0.16595"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#307ef2" fill="none" stroke="none" d="M0.201681,0.186788"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3093f2" fill="none" stroke="none" d="M0.210084,0.210299"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30aaf2" fill="none" stroke="none" d="M0.218487,0.236264"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30c3f2" fill="none" stroke="none" d="M0.226891,0.264446"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30def2" fill="none" stroke="none" d="M0.235294,0.2946"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2ea" fill="none" stroke="none" d="M0.243697,0.326471"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2cd" fill="none" stroke="none" d="M0.252101,0.359796"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2ae" fill="none" stroke="none" d="M0.260504,0.394309"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f28f" fill="none" stroke="none" d="M0.268908,0.429742"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f26f" fill="none" stroke="none" d="M0.277311,0.465823"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f24f" fill="none" stroke="none" d="M0.285714,0.502282"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#33f230" fill="none" stroke="none" d="M0.294118,0.538854"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#53f230" fill="none" stroke="none" d="M0.302521,0.575277"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#73f230" fill="none" stroke="none" d="M0.310924,0.611295"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#92f230" fill="none" stroke="none" d="M0.319328,0.646662"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#b0f230" fill="none" stroke="none" d="M0.327731,0.68114"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#cef230" fill="none" stroke="none" d="M0.336134,0.714503"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#eaf230" fill="none" stroke="none" d="M0.344538,0.746537"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2df30" fill="none" stroke="none" d="M0.352941,0.777043"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2c630" fill="none" stroke="none" d="M0.361345,0.805837"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2ae30" fill="none" stroke="none" d="M0.369748,0.832749"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f29830" fill="none" stroke="none" d="M0.378151,0.857629"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f28430" fill="none" stroke="none" d="M0.386555,0.880341"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f27230" fill="none" stroke="none" d="M0.394958,0.90077"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f26230" fill="none" stroke="none" d="M0.403361,0.918818"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f25430" fill="none" stroke="none" d="M0.411765,0.934407"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f24830" fill="none" stroke="none" d="M0.420168,0.947478"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23f30" fill="none" stroke="none" d="M0.428571,0.957989"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23830" fill="none" stroke="none" d="M0.436975,0.965919"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23330" fill="none" stroke="none" d="M0.445378,0.971267"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23130" fill="none" stroke="none" d="M0.453782,0.974048"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23030" fill="none" stroke="none" d="M0.462185,0.974295"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23230" fill="none" stroke="none" d="M0.470588,0.972059"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23730" fill="none" stroke="none" d="M0.478992,0.967408"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f23d30" fill="none" stroke="none" d="M0.487395,0.960426"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f24530" fill="none" stroke="none" d="M0.495798,0.951209"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f24f30" fill="none" stroke="none" d="M0.504202,0.93987"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f25b30" fill="none" stroke="none" d="M0.512605,0.926533"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f26830" fill="none" stroke="none" d="M0.521008,0.911335"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f27730" fill="none" stroke="none" d="M0.529412,0.894422"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f28830" fill="none" stroke="none" d="M0.537815,0.875949"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f29930" fill="none" stroke="none" d="M0.546218,0.856081"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2ac30" fill="none" stroke="none" d="M0.554622,0.834987"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2bf30" fill="none" stroke="none" d="M0.563025,0.812841"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2d430" fill="none" stroke="none" d="M0.571429,0.789824"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#f2e930" fill="none" stroke="none" d="M0.579832,0.766116"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#e6f230" fill="none" stroke="none" d="M0.588235,0.741901"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#d1f230" fill="none" stroke="none" d="M0.596639,0.717359"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#bbf230" fill="none" stroke="none" d="M0.605042,0.692673"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#a5f230" fill="none" stroke="none" d="M0.613445,0.668019"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#8ff230" fill="none" stroke="none" d="M0.621849,0.643573"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#7af230" fill="none" stroke="none" d="M0.630252,0.619504"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#65f230" fill="none" stroke="none" d="M0.638655,0.595974"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#51f230" fill="none" stroke="none" d="M0.647059,0.573139"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#3df230" fill="none" stroke="none" d="M0.655462,0.551146"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f236" fill="none" stroke="none" d="M0.663866,0.530135"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f248" fill="none" stroke="none" d="M0.672269,0.510233"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f258" fill="none" stroke="none" d="M0.680672,0.491559"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f268" fill="none" stroke="none" d="M0.689076,0.47422"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f276" fill="none" stroke="none" d="M0.697479,0.458311"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f282" fill="none" stroke="none" d="M0.705882,0.443914"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f28e" fill="none" stroke="none" d="M0.714286,0.431102"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f298" fill="none" stroke="none" d="M0.722689,0.419931"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2a0" fill="none" stroke="none" d="M0.731092,0.410447"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2a7" fill="none" stroke="none" d="M0.739496,0.402682"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2ac" fill="none" stroke="none" d="M0.747899,0.396655"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b0" fill="none" stroke="none" d="M0.756303,0.392373"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b2" fill="none" stroke="none" d="M0.764706,0.389831"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b3" fill="none" stroke="none" d="M0.773109,0.389009"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b2" fill="none" stroke="none" d="M0.781513,0.389878"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2b0" fill="none" stroke="none" d="M0.789916,0.392396"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2ac" fill="none" stroke="none" d="M0.798319,0.396513"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2a7" fill="none" stroke="none" d="M0.806723,0.402164"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f2a1" fill="none" stroke="none" d="M0.815126,0.409278"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f29a" fill="none" stroke="none" d="M0.823529,0.417774"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f291" fill="none" stroke="none" d="M0.831933,0.427564"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f287" fill="none" stroke="none" d="M0.840336,0.438551"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f27c" fill="none" stroke="none" d="M0.848739,0.450632"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f271" fill="none" stroke="none" d="M0.857143,0.463698"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f265" fill="none" stroke="none" d="M0.865546,0.477637"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f258" fill="none" stroke="none" d="M0.87395,0.492331"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f24a" fill="none" stroke="none" d="M0.882353,0.507661"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#30f23c" fill="none" stroke="none" d="M0.890756,0.523504"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#33f230" fill="none" stroke="none" d="M0.89916,0.539738"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#42f230" fill="none" stroke="none" d="M0.907563,0.556239"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#51f230" fill="none" stroke="none" d="M0.915966,0.572885"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#5ff230" fill="none" stroke="none" d="M0.92437,0.589554"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#6ef230" fill="none" stroke="none" d="M0.932773,0.606129"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#7df230" fill="none" stroke="none" d="M0.941176,0.622492"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#8bf230" fill="none" stroke="none" d="M0.94958,0.638533"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#99f230" fill="none" stroke="none" d="M0.957983,0.654145"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#a6f230" fill="none" stroke="none" d="M0.966387,0.669225"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#b3f230" fill="none" stroke="none" d="M0.97479,0.683679"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#bff230" fill="none" stroke="none" d="M0.983193,0.697415"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#caf230" fill="none" stroke="none" d="M0.991597,0.710353"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#d5f230" fill="none" stroke="none" d="M1,0.722416"/>
+</g>
+</svg>
+<svg class="fs-marks" x="42.4" y="16" width="445.2" height="273" viewBox="0 0 445.2 273" overflow="visible">
+<path data-series="1" fill="#7ff230" stroke="#7ff230" stroke-width="1" d="M-5.4,170.63A5.4,5.4 0 1 0 5.4,170.63A5.4,5.4 0 1 0 -5.4,170.63Z"/>
+<path data-series="1" fill="#51f230" stroke="#51f230" stroke-width="1" d="M-1.66,156.45A5.4,5.4 0 1 0 9.14,156.45A5.4,5.4 0 1 0 -1.66,156.45Z"/>
+<path data-series="1" fill="#30f23d" stroke="#30f23d" stroke-width="1" d="M2.08,142.68A5.4,5.4 0 1 0 12.88,142.68A5.4,5.4 0 1 0 2.08,142.68Z"/>
+<path data-series="1" fill="#30f268" stroke="#30f268" stroke-width="1" d="M5.82,129.38A5.4,5.4 0 1 0 16.62,129.38A5.4,5.4 0 1 0 5.82,129.38Z"/>
+<path data-series="1" fill="#30f291" stroke="#30f291" stroke-width="1" d="M9.56,116.66A5.4,5.4 0 1 0 20.36,116.66A5.4,5.4 0 1 0 9.56,116.66Z"/>
+<path data-series="1" fill="#30f2b8" stroke="#30f2b8" stroke-width="1" d="M13.31,104.59A5.4,5.4 0 1 0 24.11,104.59A5.4,5.4 0 1 0 13.31,104.59Z"/>
+<path data-series="1" fill="#30f2dd" stroke="#30f2dd" stroke-width="1" d="M17.05,93.23A5.4,5.4 0 1 0 27.85,93.23A5.4,5.4 0 1 0 17.05,93.23Z"/>
+<path data-series="1" fill="#30e5f2" stroke="#30e5f2" stroke-width="1" d="M20.79,82.66A5.4,5.4 0 1 0 31.59,82.66A5.4,5.4 0 1 0 20.79,82.66Z"/>
+<path data-series="1" fill="#30c6f2" stroke="#30c6f2" stroke-width="1" d="M24.53,72.93A5.4,5.4 0 1 0 35.33,72.93A5.4,5.4 0 1 0 24.53,72.93Z"/>
+<path data-series="1" fill="#30a9f2" stroke="#30a9f2" stroke-width="1" d="M28.27,64.1A5.4,5.4 0 1 0 39.07,64.1A5.4,5.4 0 1 0 28.27,64.1Z"/>
+<path data-series="1" fill="#308ff2" stroke="#308ff2" stroke-width="1" d="M32.01,56.2A5.4,5.4 0 1 0 42.81,56.2A5.4,5.4 0 1 0 32.01,56.2Z"/>
+<path data-series="1" fill="#3079f2" stroke="#3079f2" stroke-width="1" d="M35.75,49.29A5.4,5.4 0 1 0 46.55,49.29A5.4,5.4 0 1 0 35.75,49.29Z"/>
+<path data-series="1" fill="#3066f2" stroke="#3066f2" stroke-width="1" d="M39.49,43.37A5.4,5.4 0 1 0 50.29,43.37A5.4,5.4 0 1 0 39.49,43.37Z"/>
+<path data-series="1" fill="#3056f2" stroke="#3056f2" stroke-width="1" d="M43.24,38.49A5.4,5.4 0 1 0 54.04,38.49A5.4,5.4 0 1 0 43.24,38.49Z"/>
+<path data-series="1" fill="#3049f2" stroke="#3049f2" stroke-width="1" d="M46.98,34.64A5.4,5.4 0 1 0 57.78,34.64A5.4,5.4 0 1 0 46.98,34.64Z"/>
+<path data-series="1" fill="#3040f2" stroke="#3040f2" stroke-width="1" d="M50.72,31.83A5.4,5.4 0 1 0 61.52,31.83A5.4,5.4 0 1 0 50.72,31.83Z"/>
+<path data-series="1" fill="#303bf2" stroke="#303bf2" stroke-width="1" d="M54.46,30.07A5.4,5.4 0 1 0 65.26,30.07A5.4,5.4 0 1 0 54.46,30.07Z"/>
+<path data-series="1" fill="#3038f2" stroke="#3038f2" stroke-width="1" d="M58.2,29.34A5.4,5.4 0 1 0 69,29.34A5.4,5.4 0 1 0 58.2,29.34Z"/>
+<path data-series="1" fill="#3039f2" stroke="#3039f2" stroke-width="1" d="M61.94,29.63A5.4,5.4 0 1 0 72.74,29.63A5.4,5.4 0 1 0 61.94,29.63Z"/>
+<path data-series="1" fill="#303df2" stroke="#303df2" stroke-width="1" d="M65.68,30.92A5.4,5.4 0 1 0 76.48,30.92A5.4,5.4 0 1 0 65.68,30.92Z"/>
+<path data-series="1" fill="#3045f2" stroke="#3045f2" stroke-width="1" d="M69.42,33.16A5.4,5.4 0 1 0 80.22,33.16A5.4,5.4 0 1 0 69.42,33.16Z"/>
+<path data-series="1" fill="#304ff2" stroke="#304ff2" stroke-width="1" d="M73.16,36.34A5.4,5.4 0 1 0 83.96,36.34A5.4,5.4 0 1 0 73.16,36.34Z"/>
+<path data-series="1" fill="#305cf2" stroke="#305cf2" stroke-width="1" d="M76.91,40.4A5.4,5.4 0 1 0 87.71,40.4A5.4,5.4 0 1 0 76.91,40.4Z"/>
+<path data-series="1" fill="#306cf2" stroke="#306cf2" stroke-width="1" d="M80.65,45.3A5.4,5.4 0 1 0 91.45,45.3A5.4,5.4 0 1 0 80.65,45.3Z"/>
+<path data-series="1" fill="#307ef2" stroke="#307ef2" stroke-width="1" d="M84.39,50.99A5.4,5.4 0 1 0 95.19,50.99A5.4,5.4 0 1 0 84.39,50.99Z"/>
+<path data-series="1" fill="#3093f2" stroke="#3093f2" stroke-width="1" d="M88.13,57.41A5.4,5.4 0 1 0 98.93,57.41A5.4,5.4 0 1 0 88.13,57.41Z"/>
+<path data-series="1" fill="#30aaf2" stroke="#30aaf2" stroke-width="1" d="M91.87,64.5A5.4,5.4 0 1 0 102.67,64.5A5.4,5.4 0 1 0 91.87,64.5Z"/>
+<path data-series="1" fill="#30c3f2" stroke="#30c3f2" stroke-width="1" d="M95.61,72.19A5.4,5.4 0 1 0 106.41,72.19A5.4,5.4 0 1 0 95.61,72.19Z"/>
+<path data-series="1" fill="#30def2" stroke="#30def2" stroke-width="1" d="M99.35,80.43A5.4,5.4 0 1 0 110.15,80.43A5.4,5.4 0 1 0 99.35,80.43Z"/>
+<path data-series="1" fill="#30f2ea" stroke="#30f2ea" stroke-width="1" d="M103.09,89.13A5.4,5.4 0 1 0 113.89,89.13A5.4,5.4 0 1 0 103.09,89.13Z"/>
+<path data-series="1" fill="#30f2cd" stroke="#30f2cd" stroke-width="1" d="M106.84,98.22A5.4,5.4 0 1 0 117.64,98.22A5.4,5.4 0 1 0 106.84,98.22Z"/>
+<path data-series="1" fill="#30f2ae" stroke="#30f2ae" stroke-width="1" d="M110.58,107.65A5.4,5.4 0 1 0 121.38,107.65A5.4,5.4 0 1 0 110.58,107.65Z"/>
+<path data-series="1" fill="#30f28f" stroke="#30f28f" stroke-width="1" d="M114.32,117.32A5.4,5.4 0 1 0 125.12,117.32A5.4,5.4 0 1 0 114.32,117.32Z"/>
+<path data-series="1" fill="#30f26f" stroke="#30f26f" stroke-width="1" d="M118.06,127.17A5.4,5.4 0 1 0 128.86,127.17A5.4,5.4 0 1 0 118.06,127.17Z"/>
+<path data-series="1" fill="#30f24f" stroke="#30f24f" stroke-width="1" d="M121.8,137.12A5.4,5.4 0 1 0 132.6,137.12A5.4,5.4 0 1 0 121.8,137.12Z"/>
+<path data-series="1" fill="#33f230" stroke="#33f230" stroke-width="1" d="M125.54,147.11A5.4,5.4 0 1 0 136.34,147.11A5.4,5.4 0 1 0 125.54,147.11Z"/>
+<path data-series="1" fill="#53f230" stroke="#53f230" stroke-width="1" d="M129.28,157.05A5.4,5.4 0 1 0 140.08,157.05A5.4,5.4 0 1 0 129.28,157.05Z"/>
+<path data-series="1" fill="#73f230" stroke="#73f230" stroke-width="1" d="M133.02,166.88A5.4,5.4 0 1 0 143.82,166.88A5.4,5.4 0 1 0 133.02,166.88Z"/>
+<path data-series="1" fill="#92f230" stroke="#92f230" stroke-width="1" d="M136.76,176.54A5.4,5.4 0 1 0 147.56,176.54A5.4,5.4 0 1 0 136.76,176.54Z"/>
+<path data-series="1" fill="#b0f230" stroke="#b0f230" stroke-width="1" d="M140.51,185.95A5.4,5.4 0 1 0 151.31,185.95A5.4,5.4 0 1 0 140.51,185.95Z"/>
+<path data-series="1" fill="#cef230" stroke="#cef230" stroke-width="1" d="M144.25,195.06A5.4,5.4 0 1 0 155.05,195.06A5.4,5.4 0 1 0 144.25,195.06Z"/>
+<path data-series="1" fill="#eaf230" stroke="#eaf230" stroke-width="1" d="M147.99,203.8A5.4,5.4 0 1 0 158.79,203.8A5.4,5.4 0 1 0 147.99,203.8Z"/>
+<path data-series="1" fill="#f2df30" stroke="#f2df30" stroke-width="1" d="M151.73,212.13A5.4,5.4 0 1 0 162.53,212.13A5.4,5.4 0 1 0 151.73,212.13Z"/>
+<path data-series="1" fill="#f2c630" stroke="#f2c630" stroke-width="1" d="M155.47,219.99A5.4,5.4 0 1 0 166.27,219.99A5.4,5.4 0 1 0 155.47,219.99Z"/>
+<path data-series="1" fill="#f2ae30" stroke="#f2ae30" stroke-width="1" d="M159.21,227.34A5.4,5.4 0 1 0 170.01,227.34A5.4,5.4 0 1 0 159.21,227.34Z"/>
+<path data-series="1" fill="#f29830" stroke="#f29830" stroke-width="1" d="M162.95,234.13A5.4,5.4 0 1 0 173.75,234.13A5.4,5.4 0 1 0 162.95,234.13Z"/>
+<path data-series="1" fill="#f28430" stroke="#f28430" stroke-width="1" d="M166.69,240.33A5.4,5.4 0 1 0 177.49,240.33A5.4,5.4 0 1 0 166.69,240.33Z"/>
+<path data-series="1" fill="#f27230" stroke="#f27230" stroke-width="1" d="M170.44,245.91A5.4,5.4 0 1 0 181.24,245.91A5.4,5.4 0 1 0 170.44,245.91Z"/>
+<path data-series="1" fill="#f26230" stroke="#f26230" stroke-width="1" d="M174.18,250.84A5.4,5.4 0 1 0 184.98,250.84A5.4,5.4 0 1 0 174.18,250.84Z"/>
+<path data-series="1" fill="#f25430" stroke="#f25430" stroke-width="1" d="M177.92,255.09A5.4,5.4 0 1 0 188.72,255.09A5.4,5.4 0 1 0 177.92,255.09Z"/>
+<path data-series="1" fill="#f24830" stroke="#f24830" stroke-width="1" d="M181.66,258.66A5.4,5.4 0 1 0 192.46,258.66A5.4,5.4 0 1 0 181.66,258.66Z"/>
+<path data-series="1" fill="#f23f30" stroke="#f23f30" stroke-width="1" d="M185.4,261.53A5.4,5.4 0 1 0 196.2,261.53A5.4,5.4 0 1 0 185.4,261.53Z"/>
+<path data-series="1" fill="#f23830" stroke="#f23830" stroke-width="1" d="M189.14,263.7A5.4,5.4 0 1 0 199.94,263.7A5.4,5.4 0 1 0 189.14,263.7Z"/>
+<path data-series="1" fill="#f23330" stroke="#f23330" stroke-width="1" d="M192.88,265.16A5.4,5.4 0 1 0 203.68,265.16A5.4,5.4 0 1 0 192.88,265.16Z"/>
+<path data-series="1" fill="#f23130" stroke="#f23130" stroke-width="1" d="M196.62,265.91A5.4,5.4 0 1 0 207.42,265.91A5.4,5.4 0 1 0 196.62,265.91Z"/>
+<path data-series="1" fill="#f23030" stroke="#f23030" stroke-width="1" d="M200.36,265.98A5.4,5.4 0 1 0 211.16,265.98A5.4,5.4 0 1 0 200.36,265.98Z"/>
+<path data-series="1" fill="#f23230" stroke="#f23230" stroke-width="1" d="M204.11,265.37A5.4,5.4 0 1 0 214.91,265.37A5.4,5.4 0 1 0 204.11,265.37Z"/>
+<path data-series="1" fill="#f23730" stroke="#f23730" stroke-width="1" d="M207.85,264.1A5.4,5.4 0 1 0 218.65,264.1A5.4,5.4 0 1 0 207.85,264.1Z"/>
+<path data-series="1" fill="#f23d30" stroke="#f23d30" stroke-width="1" d="M211.59,262.2A5.4,5.4 0 1 0 222.39,262.2A5.4,5.4 0 1 0 211.59,262.2Z"/>
+<path data-series="1" fill="#f24530" stroke="#f24530" stroke-width="1" d="M215.33,259.68A5.4,5.4 0 1 0 226.13,259.68A5.4,5.4 0 1 0 215.33,259.68Z"/>
+<path data-series="1" fill="#f24f30" stroke="#f24f30" stroke-width="1" d="M219.07,256.58A5.4,5.4 0 1 0 229.87,256.58A5.4,5.4 0 1 0 219.07,256.58Z"/>
+<path data-series="1" fill="#f25b30" stroke="#f25b30" stroke-width="1" d="M222.81,252.94A5.4,5.4 0 1 0 233.61,252.94A5.4,5.4 0 1 0 222.81,252.94Z"/>
+<path data-series="1" fill="#f26830" stroke="#f26830" stroke-width="1" d="M226.55,248.79A5.4,5.4 0 1 0 237.35,248.79A5.4,5.4 0 1 0 226.55,248.79Z"/>
+<path data-series="1" fill="#f27730" stroke="#f27730" stroke-width="1" d="M230.29,244.18A5.4,5.4 0 1 0 241.09,244.18A5.4,5.4 0 1 0 230.29,244.18Z"/>
+<path data-series="1" fill="#f28830" stroke="#f28830" stroke-width="1" d="M234.04,239.13A5.4,5.4 0 1 0 244.84,239.13A5.4,5.4 0 1 0 234.04,239.13Z"/>
+<path data-series="1" fill="#f29930" stroke="#f29930" stroke-width="1" d="M237.78,233.71A5.4,5.4 0 1 0 248.58,233.71A5.4,5.4 0 1 0 237.78,233.71Z"/>
+<path data-series="1" fill="#f2ac30" stroke="#f2ac30" stroke-width="1" d="M241.52,227.95A5.4,5.4 0 1 0 252.32,227.95A5.4,5.4 0 1 0 241.52,227.95Z"/>
+<path data-series="1" fill="#f2bf30" stroke="#f2bf30" stroke-width="1" d="M245.26,221.91A5.4,5.4 0 1 0 256.06,221.91A5.4,5.4 0 1 0 245.26,221.91Z"/>
+<path data-series="1" fill="#f2d430" stroke="#f2d430" stroke-width="1" d="M249,215.62A5.4,5.4 0 1 0 259.8,215.62A5.4,5.4 0 1 0 249,215.62Z"/>
+<path data-series="1" fill="#f2e930" stroke="#f2e930" stroke-width="1" d="M252.74,209.15A5.4,5.4 0 1 0 263.54,209.15A5.4,5.4 0 1 0 252.74,209.15Z"/>
+<path data-series="1" fill="#e6f230" stroke="#e6f230" stroke-width="1" d="M256.48,202.54A5.4,5.4 0 1 0 267.28,202.54A5.4,5.4 0 1 0 256.48,202.54Z"/>
+<path data-series="1" fill="#d1f230" stroke="#d1f230" stroke-width="1" d="M260.22,195.84A5.4,5.4 0 1 0 271.02,195.84A5.4,5.4 0 1 0 260.22,195.84Z"/>
+<path data-series="1" fill="#bbf230" stroke="#bbf230" stroke-width="1" d="M263.96,189.1A5.4,5.4 0 1 0 274.76,189.1A5.4,5.4 0 1 0 263.96,189.1Z"/>
+<path data-series="1" fill="#a5f230" stroke="#a5f230" stroke-width="1" d="M267.71,182.37A5.4,5.4 0 1 0 278.51,182.37A5.4,5.4 0 1 0 267.71,182.37Z"/>
+<path data-series="1" fill="#8ff230" stroke="#8ff230" stroke-width="1" d="M271.45,175.7A5.4,5.4 0 1 0 282.25,175.7A5.4,5.4 0 1 0 271.45,175.7Z"/>
+<path data-series="1" fill="#7af230" stroke="#7af230" stroke-width="1" d="M275.19,169.12A5.4,5.4 0 1 0 285.99,169.12A5.4,5.4 0 1 0 275.19,169.12Z"/>
+<path data-series="1" fill="#65f230" stroke="#65f230" stroke-width="1" d="M278.93,162.7A5.4,5.4 0 1 0 289.73,162.7A5.4,5.4 0 1 0 278.93,162.7Z"/>
+<path data-series="1" fill="#51f230" stroke="#51f230" stroke-width="1" d="M282.67,156.47A5.4,5.4 0 1 0 293.47,156.47A5.4,5.4 0 1 0 282.67,156.47Z"/>
+<path data-series="1" fill="#3df230" stroke="#3df230" stroke-width="1" d="M286.41,150.46A5.4,5.4 0 1 0 297.21,150.46A5.4,5.4 0 1 0 286.41,150.46Z"/>
+<path data-series="1" fill="#30f236" stroke="#30f236" stroke-width="1" d="M290.15,144.73A5.4,5.4 0 1 0 300.95,144.73A5.4,5.4 0 1 0 290.15,144.73Z"/>
+<path data-series="1" fill="#30f248" stroke="#30f248" stroke-width="1" d="M293.89,139.29A5.4,5.4 0 1 0 304.69,139.29A5.4,5.4 0 1 0 293.89,139.29Z"/>
+<path data-series="1" fill="#30f258" stroke="#30f258" stroke-width="1" d="M297.64,134.2A5.4,5.4 0 1 0 308.44,134.2A5.4,5.4 0 1 0 297.64,134.2Z"/>
+<path data-series="1" fill="#30f268" stroke="#30f268" stroke-width="1" d="M301.38,129.46A5.4,5.4 0 1 0 312.18,129.46A5.4,5.4 0 1 0 301.38,129.46Z"/>
+<path data-series="1" fill="#30f276" stroke="#30f276" stroke-width="1" d="M305.12,125.12A5.4,5.4 0 1 0 315.92,125.12A5.4,5.4 0 1 0 305.12,125.12Z"/>
+<path data-series="1" fill="#30f282" stroke="#30f282" stroke-width="1" d="M308.86,121.19A5.4,5.4 0 1 0 319.66,121.19A5.4,5.4 0 1 0 308.86,121.19Z"/>
+<path data-series="1" fill="#30f28e" stroke="#30f28e" stroke-width="1" d="M312.6,117.69A5.4,5.4 0 1 0 323.4,117.69A5.4,5.4 0 1 0 312.6,117.69Z"/>
+<path data-series="1" fill="#30f298" stroke="#30f298" stroke-width="1" d="M316.34,114.64A5.4,5.4 0 1 0 327.14,114.64A5.4,5.4 0 1 0 316.34,114.64Z"/>
+<path data-series="1" fill="#30f2a0" stroke="#30f2a0" stroke-width="1" d="M320.08,112.05A5.4,5.4 0 1 0 330.88,112.05A5.4,5.4 0 1 0 320.08,112.05Z"/>
+<path data-series="1" fill="#30f2a7" stroke="#30f2a7" stroke-width="1" d="M323.82,109.93A5.4,5.4 0 1 0 334.62,109.93A5.4,5.4 0 1 0 323.82,109.93Z"/>
+<path data-series="1" fill="#30f2ac" stroke="#30f2ac" stroke-width="1" d="M327.56,108.29A5.4,5.4 0 1 0 338.36,108.29A5.4,5.4 0 1 0 327.56,108.29Z"/>
+<path data-series="1" fill="#30f2b0" stroke="#30f2b0" stroke-width="1" d="M331.31,107.12A5.4,5.4 0 1 0 342.11,107.12A5.4,5.4 0 1 0 331.31,107.12Z"/>
+<path data-series="1" fill="#30f2b2" stroke="#30f2b2" stroke-width="1" d="M335.05,106.42A5.4,5.4 0 1 0 345.85,106.42A5.4,5.4 0 1 0 335.05,106.42Z"/>
+<path data-series="1" fill="#30f2b3" stroke="#30f2b3" stroke-width="1" d="M338.79,106.2A5.4,5.4 0 1 0 349.59,106.2A5.4,5.4 0 1 0 338.79,106.2Z"/>
+<path data-series="1" fill="#30f2b2" stroke="#30f2b2" stroke-width="1" d="M342.53,106.44A5.4,5.4 0 1 0 353.33,106.44A5.4,5.4 0 1 0 342.53,106.44Z"/>
+<path data-series="1" fill="#30f2b0" stroke="#30f2b0" stroke-width="1" d="M346.27,107.12A5.4,5.4 0 1 0 357.07,107.12A5.4,5.4 0 1 0 346.27,107.12Z"/>
+<path data-series="1" fill="#30f2ac" stroke="#30f2ac" stroke-width="1" d="M350.01,108.25A5.4,5.4 0 1 0 360.81,108.25A5.4,5.4 0 1 0 350.01,108.25Z"/>
+<path data-series="1" fill="#30f2a7" stroke="#30f2a7" stroke-width="1" d="M353.75,109.79A5.4,5.4 0 1 0 364.55,109.79A5.4,5.4 0 1 0 353.75,109.79Z"/>
+<path data-series="1" fill="#30f2a1" stroke="#30f2a1" stroke-width="1" d="M357.49,111.73A5.4,5.4 0 1 0 368.29,111.73A5.4,5.4 0 1 0 357.49,111.73Z"/>
+<path data-series="1" fill="#30f29a" stroke="#30f29a" stroke-width="1" d="M361.24,114.05A5.4,5.4 0 1 0 372.04,114.05A5.4,5.4 0 1 0 361.24,114.05Z"/>
+<path data-series="1" fill="#30f291" stroke="#30f291" stroke-width="1" d="M364.98,116.73A5.4,5.4 0 1 0 375.78,116.73A5.4,5.4 0 1 0 364.98,116.73Z"/>
+<path data-series="1" fill="#30f287" stroke="#30f287" stroke-width="1" d="M368.72,119.72A5.4,5.4 0 1 0 379.52,119.72A5.4,5.4 0 1 0 368.72,119.72Z"/>
+<path data-series="1" fill="#30f27c" stroke="#30f27c" stroke-width="1" d="M372.46,123.02A5.4,5.4 0 1 0 383.26,123.02A5.4,5.4 0 1 0 372.46,123.02Z"/>
+<path data-series="1" fill="#30f271" stroke="#30f271" stroke-width="1" d="M376.2,126.59A5.4,5.4 0 1 0 387,126.59A5.4,5.4 0 1 0 376.2,126.59Z"/>
+<path data-series="1" fill="#30f265" stroke="#30f265" stroke-width="1" d="M379.94,130.39A5.4,5.4 0 1 0 390.74,130.39A5.4,5.4 0 1 0 379.94,130.39Z"/>
+<path data-series="1" fill="#30f258" stroke="#30f258" stroke-width="1" d="M383.68,134.41A5.4,5.4 0 1 0 394.48,134.41A5.4,5.4 0 1 0 383.68,134.41Z"/>
+<path data-series="1" fill="#30f24a" stroke="#30f24a" stroke-width="1" d="M387.42,138.59A5.4,5.4 0 1 0 398.22,138.59A5.4,5.4 0 1 0 387.42,138.59Z"/>
+<path data-series="1" fill="#30f23c" stroke="#30f23c" stroke-width="1" d="M391.16,142.92A5.4,5.4 0 1 0 401.96,142.92A5.4,5.4 0 1 0 391.16,142.92Z"/>
+<path data-series="1" fill="#33f230" stroke="#33f230" stroke-width="1" d="M394.91,147.35A5.4,5.4 0 1 0 405.71,147.35A5.4,5.4 0 1 0 394.91,147.35Z"/>
+<path data-series="1" fill="#42f230" stroke="#42f230" stroke-width="1" d="M398.65,151.85A5.4,5.4 0 1 0 409.45,151.85A5.4,5.4 0 1 0 398.65,151.85Z"/>
+<path data-series="1" fill="#51f230" stroke="#51f230" stroke-width="1" d="M402.39,156.4A5.4,5.4 0 1 0 413.19,156.4A5.4,5.4 0 1 0 402.39,156.4Z"/>
+<path data-series="1" fill="#5ff230" stroke="#5ff230" stroke-width="1" d="M406.13,160.95A5.4,5.4 0 1 0 416.93,160.95A5.4,5.4 0 1 0 406.13,160.95Z"/>
+<path data-series="1" fill="#6ef230" stroke="#6ef230" stroke-width="1" d="M409.87,165.47A5.4,5.4 0 1 0 420.67,165.47A5.4,5.4 0 1 0 409.87,165.47Z"/>
+<path data-series="1" fill="#7df230" stroke="#7df230" stroke-width="1" d="M413.61,169.94A5.4,5.4 0 1 0 424.41,169.94A5.4,5.4 0 1 0 413.61,169.94Z"/>
+<path data-series="1" fill="#8bf230" stroke="#8bf230" stroke-width="1" d="M417.35,174.32A5.4,5.4 0 1 0 428.15,174.32A5.4,5.4 0 1 0 417.35,174.32Z"/>
+<path data-series="1" fill="#99f230" stroke="#99f230" stroke-width="1" d="M421.09,178.58A5.4,5.4 0 1 0 431.89,178.58A5.4,5.4 0 1 0 421.09,178.58Z"/>
+<path data-series="1" fill="#a6f230" stroke="#a6f230" stroke-width="1" d="M424.84,182.7A5.4,5.4 0 1 0 435.64,182.7A5.4,5.4 0 1 0 424.84,182.7Z"/>
+<path data-series="1" fill="#b3f230" stroke="#b3f230" stroke-width="1" d="M428.58,186.64A5.4,5.4 0 1 0 439.38,186.64A5.4,5.4 0 1 0 428.58,186.64Z"/>
+<path data-series="1" fill="#bff230" stroke="#bff230" stroke-width="1" d="M432.32,190.39A5.4,5.4 0 1 0 443.12,190.39A5.4,5.4 0 1 0 432.32,190.39Z"/>
+<path data-series="1" fill="#caf230" stroke="#caf230" stroke-width="1" d="M436.06,193.93A5.4,5.4 0 1 0 446.86,193.93A5.4,5.4 0 1 0 436.06,193.93Z"/>
+<path data-series="1" fill="#d5f230" stroke="#d5f230" stroke-width="1" d="M439.8,197.22A5.4,5.4 0 1 0 450.6,197.22A5.4,5.4 0 1 0 439.8,197.22Z"/>
+</svg>
+<rect x="42.4" y="16" width="445.2" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,289 42.4,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,16 42.4,22"/>
+<text x="42.4" y="307" text-anchor="middle">0</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="131.44,289 131.44,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="131.44,16 131.44,22"/>
+<text x="131.44" y="307" text-anchor="middle">2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="220.48,289 220.48,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="220.48,16 220.48,22"/>
+<text x="220.48" y="307" text-anchor="middle">4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="309.52,289 309.52,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="309.52,16 309.52,22"/>
+<text x="309.52" y="307" text-anchor="middle">6</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="398.56,289 398.56,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="398.56,16 398.56,22"/>
+<text x="398.56" y="307" text-anchor="middle">8</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,289 487.6,283"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,16 487.6,22"/>
+<text x="487.6" y="307" text-anchor="middle">10</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,289 48.4,289"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,289 481.6,289"/>
+<text x="36.4" y="293.2" text-anchor="end">-0.6</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,254.88 48.4,254.88"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,254.88 481.6,254.88"/>
+<text x="36.4" y="259.08" text-anchor="end">-0.4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,220.75 48.4,220.75"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,220.75 481.6,220.75"/>
+<text x="36.4" y="224.95" text-anchor="end">-0.2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,186.63 48.4,186.63"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,186.63 481.6,186.63"/>
+<text x="36.4" y="190.83" text-anchor="end">0</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,152.5 48.4,152.5"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,152.5 481.6,152.5"/>
+<text x="36.4" y="156.7" text-anchor="end">0.2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,118.38 48.4,118.38"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,118.38 481.6,118.38"/>
+<text x="36.4" y="122.58" text-anchor="end">0.4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,84.25 48.4,84.25"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,84.25 481.6,84.25"/>
+<text x="36.4" y="88.45" text-anchor="end">0.6</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,50.13 48.4,50.13"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,50.13 481.6,50.13"/>
+<text x="36.4" y="54.33" text-anchor="end">0.8</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="42.4,16 48.4,16"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="487.6,16 481.6,16"/>
+<text x="36.4" y="20.2" text-anchor="end">1</text>
+</g>
+<g class="fs-colorbox">
+<image x="493.6" y="16" width="18" height="273" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAFC0lEQVR4AQEABf/6ADA68v8AMD3y/wAwQPL/ADBD8v8AMEby/wAwSfL/ADBM8v8AME/y/wAwUvL/ADBV8v8AMFjy/wAwW/L/ADBe8v8AMGHy/wAwZPL/ADBn8v8AMGry/wAwbfL/ADBw8v8AMHPy/wAwdvL/ADB58v8AMHzy/wAwf/L/ADCC8v8AMIXy/wAwiPL/ADCL8v8AMI7y/wAwkfL/ADCU8v8AMJfy/wAwmvL/ADCd8v8AMKDy/wAwo/L/ADCm8v8AMKny/wAwrPL/ADCv8v8AMLLy/wAwtfL/ADC48v8AMLvy/wAwvvL/ADDB8v8AMMTy/wAwx/L/ADDK8v8AMM3y/wAw0PL/ADDT8v8AMNby/wAw2fL/ADDc8v8AMN/y/wAw4vL/ADDl8v8AMOjy/wAw6/L/ADDu8v8AMPHy/wAw8vH/ADDy7v8AMPLr/wAw8uj/ADDy5f8AMPLi/wAw8t//ADDy3P8AMPLZ/wAw8tb/ADDy0/8AMPLQ/wAw8s3/ADDyyv8AMPLH/wAw8sT/ADDywf8AMPK+/wAw8rv/ADDyuP8AMPK1/wAw8rL/ADDyr/8AMPKs/wAw8qn/ADDypv8AMPKj/wAw8qD/ADDynf8AMPKa/wAw8pf/ADDylP8AMPKR/wAw8o7/ADDyi/8AMPKI/wAw8oX/ADDygv8AMPJ//wAw8nz/ADDyef8AMPJ2/wAw8nP/ADDycP8AMPJt/wAw8mr/ADDyZ/8AMPJk/wAw8mH/ADDyXv8AMPJb/wAw8lj/ADDyVf8AMPJS/wAw8k//ADDyTP8AMPJJ/wAw8kb/ADDyQ/8AMPJA/wAw8j3/ADDyOv8AMPI3/wAw8jT/ADDyMf8AM/Iw/wA28jD/ADnyMP8APPIw/wA/8jD/AELyMP8ARfIw/wBI8jD/AEvyMP8ATvIw/wBR8jD/AFTyMP8AV/Iw/wBa8jD/AF3yMP8AYPIw/wBj8jD/AGbyMP8AafIw/wBs8jD/AG/yMP8AcvIw/wB18jD/AHjyMP8Ae/Iw/wB+8jD/AIHyMP8AhPIw/wCH8jD/AIryMP8AjfIw/wCQ8jD/AJPyMP8AlvIw/wCZ8jD/AJzyMP8An/Iw/wCi8jD/AKXyMP8AqPIw/wCr8jD/AK7yMP8AsfIw/wC08jD/ALfyMP8AuvIw/wC98jD/AMDyMP8Aw/Iw/wDG8jD/AMnyMP8AzPIw/wDP8jD/ANLyMP8A1fIw/wDY8jD/ANvyMP8A3vIw/wDh8jD/AOTyMP8A5/Iw/wDq8jD/AO3yMP8A8PIw/wDy8jD/APLvMP8A8uww/wDy6TD/APLmMP8A8uMw/wDy4DD/APLdMP8A8tow/wDy1zD/APLUMP8A8tEw/wDyzjD/APLLMP8A8sgw/wDyxTD/APLCMP8A8r8w/wDyvDD/APK5MP8A8rYw/wDyszD/APKwMP8A8q0w/wDyqjD/APKnMP8A8qQw/wDyoTD/APKeMP8A8psw/wDymDD/APKVMP8A8pIw/wDyjzD/APKMMP8A8okw/wDyhjD/APKDMP8A8oAw/wDyfTD/APJ6MP8A8ncw/wDydDD/APJxMP8A8m4w/wDyazD/APJoMP8A8mUw/wDyYjD/APJfMP8A8lww/wDyWTD/APJWMP8A8lMw/wDyUDD/APJNMP8A8kow/wDyRzD/APJEMP8A8kEw/wDyPjD/API7MP8A8jgw/wDyNTD/APIyMP/mPLOX8VmvPQAAAABJRU5ErkJggg=="/>
+<rect x="493.6" y="16" width="18" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,257.73 505.6,257.73"/>
+<text x="517.6" y="261.93">-0.4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,218.36 505.6,218.36"/>
+<text x="517.6" y="222.56">-0.2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,178.99 505.6,178.99"/>
+<text x="517.6" y="183.19">0</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,139.62 505.6,139.62"/>
+<text x="517.6" y="143.82">0.2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,100.25 505.6,100.25"/>
+<text x="517.6" y="104.45">0.4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,60.88 505.6,60.88"/>
+<text x="517.6" y="65.08">0.6</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="511.6,21.52 505.6,21.52"/>
+<text x="517.6" y="25.72">0.8</text>
+</g>
+</g>
+</svg>

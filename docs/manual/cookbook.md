@@ -412,6 +412,17 @@ wider. See [Margins](/guide/gnuplot-subset#margins).
 `set multiplot layout R,C columnsfirst upwards` fills the grid column by column from the bottom row (`rowsfirst` and
 `downwards` are the defaults). See [Multiplot](/guide/gnuplot-subset#multiplot).
 
+
+### Panels with margins and spacing
+
+<<< @/examples/snippets/cb_multiplot_margins.gp{gnuplot}
+
+<Plot name="cb_multiplot_margins" svg :width="560" :height="400" />
+
+`margins L,R,B,T` puts the plot areas of the layout in that box of the page (screen fractions, or characters after
+`char`), `spacing X,Y` apart: the plot areas line up whatever the tick labels. See
+[Multiplot](/guide/gnuplot-subset#multiplot).
+
 ## Lines, points and error bars
 
 ### Special functions
@@ -422,6 +433,17 @@ wider. See [Margins](/guide/gnuplot-subset#margins).
 
 gnuplot's Bessel, gamma, error, normal, Lambert W and Airy functions, by its own algorithms: the values are gnuplot's.
 Γ is undefined at the poles, a gap. See [Special functions](/guide/gnuplot-subset#special-functions).
+
+
+### Complex numbers
+
+<<< @/examples/snippets/cb_complex.gp{gnuplot}
+
+<Plot name="cb_complex" svg :width="560" :height="320" />
+
+Values are complex, as gnuplot's: `I` is `{0,1}` (or write `{0,1}`), `abs` and `arg` give the gain and the phase of
+a transfer function; a plotted value with an imaginary part is undefined. See
+[Expressions](/guide/gnuplot-subset#expressions-in-using).
 
 ### Labels and arrows in a loop
 
@@ -450,6 +472,17 @@ and the range ends take expressions. See [User variables and functions](/guide/g
 `sum [k=a:b] term` adds the term for each k (integers stay integers); a plot item may be an assignment, done in its
 turn, so each `square(x)` is drawn with the `n` set before it. See
 [Expressions](/guide/gnuplot-subset#functions) and [Plot items](/guide/gnuplot-subset#plot-items).
+
+
+### Assignments inside expressions
+
+<<< @/examples/snippets/cb_running_mean.gp{gnuplot}
+
+<Plot name="cb_running_mean" svg :width="560" :height="320" />
+
+`name = value` is an operator and `(a, b)` evaluates both, the last the value, as gnuplot: an expression of a
+`using` field runs on each row, so `s` sums along the file and `shift5` keeps the last five values in `b1` ...
+`b5`. See [Expressions](/guide/gnuplot-subset#expressions-in-using).
 
 ### Recursive functions
 
@@ -587,6 +620,16 @@ drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 
 `steps` goes horizontally then vertically, `fsteps` the other way round, `histeps` draws a step around each point
 (edges halfway to the neighbours) from and back to 0. An adaptive time step reads best as steps.
+
+
+### Filled steps
+
+<<< @/examples/snippets/cb_fillsteps.gp{gnuplot}
+
+<Plot name="cb_fillsteps" svg :width="560" :height="320" />
+
+`with fillsteps` fills the area under the steps down to y = 0 in the fill style, as gnuplot. See
+[Lines, steps and impulses](/guide/gnuplot-subset#lines-steps-and-impulses).
 
 ### A spectrum: impulses and dots
 
@@ -823,6 +866,17 @@ iterations): a box between open and close, whiskers to low and high, `whiskerbar
 falling candle (close below open) is filled, as gnuplot: a converging run fills them all. `financebars` draw the same
 as a line with an open tick on the left and a close tick on the right.
 
+
+### Candles colored by a column
+
+<<< @/examples/snippets/cb_lc_styles.gp{gnuplot}
+
+<Plot name="cb_lc_styles" svg :width="560" :height="320" />
+
+`lc variable` takes the linetype of each candle from the last `using` column: here 2 (green) when the price closes
+up, 7 (red) when down. It also colors histograms, boxxyerror rectangles, filled curves and polygons. See
+[Colors](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+
 ### A swarm of points
 
 <<< @/examples/snippets/cb_jitter.gp{gnuplot}
@@ -851,6 +905,16 @@ the x axis. `set style boxplot` sets the whisker range, outliers, sorting.
 <Plot name="cb_filledcurves" svg :width="560" :height="320" />
 
 `x:y1:y2` fills between two columns; `filledcurves y=0` fills down to a line.
+
+
+### A transparent fill color
+
+<<< @/examples/snippets/cb_fill_color.gp{gnuplot}
+
+<Plot name="cb_fill_color" svg :width="560" :height="320" />
+
+`fc` is the fill's own color, here gnuplot's `#AARRGGBB` with an alpha channel, read from a string variable after
+`rgb`; the line keeps `lc`. See [Plot items](/guide/gnuplot-subset#plot-items).
 
 ### Fill above and below a line
 
@@ -961,6 +1025,16 @@ Positions mix data (`first`), plot area (`graph`) and page (`screen`) coordinate
 whole height behind the grid, the polygon is in front of the curve. In the HTML page the objects zoom with the data.
 See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
+
+### Boxed labels
+
+<<< @/examples/snippets/cb_boxed_labels.gp{gnuplot}
+
+<Plot name="cb_boxed_labels" svg :width="560" :height="320" />
+
+`with labels boxed` writes each text on the background, over the line, when the text box style is opaque or has a
+border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+
 ### Arrow styles and dashed objects
 
 <<< @/examples/snippets/cb_arrow_styles.gp{gnuplot}
@@ -1007,6 +1081,16 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 `set palette model HSV` reads the palette's three components as hue (0 to 1), saturation and value; `defined (v h s
 v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-palettes).
+
+
+### A palette of functions
+
+<<< @/examples/snippets/cb_palette_functions.gp{gnuplot}
+
+<Plot name="cb_palette_functions" svg :width="560" :height="320" />
+
+`set palette functions R, G, B` gives the three components as expressions of `gray`, here hue, saturation and value
+(`model HSV`). See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 ### A log color axis
 
@@ -1068,6 +1152,17 @@ for fractions), without palette nor color box.
 
 A probe's directivity against a cardioid model, theta in degrees, in gnuplot's round idiom: square plot, polar border
 and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+
+
+### Named angles on a polar plot
+
+<<< @/examples/snippets/cb_polar_labels.gp{gnuplot}
+
+<Plot name="cb_polar_labels" svg :width="480" :height="420" />
+
+`set ttics add` names angles (here in radians, with Unicode), `set mttics` adds minor ticks on the polar border and
+`set grid r polar 45` draws the rings of the r ticks and spokes every 45 degrees. See
+[Polar plots](/guide/gnuplot-subset#polar-plots).
 
 ### A level in decibels
 

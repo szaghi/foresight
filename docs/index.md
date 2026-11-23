@@ -209,15 +209,18 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
   <Plot name="cb_margins" svg :width="560" :height="360" caption="panels lined up (margins)" />
   <Plot name="cb_multiplot_order" svg :width="560" :height="360" caption="panels column by column (columnsfirst upwards)" />
+  <Plot name="cb_multiplot_margins" svg :width="560" :height="400" caption="panels with margins and spacing" />
 </div>
 
 ### Lines, points and error bars
 
 <div class="fs-gallery">
   <Plot name="cb_special_functions" svg :width="720" :height="480" caption="special functions" />
+  <Plot name="cb_complex" svg :width="560" :height="320" caption="complex numbers" />
   <Plot name="cb_set_for" svg :width="560" :height="320" caption="labels and arrows in a loop (set for)" />
   <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_sums" svg :width="560" :height="320" caption="sums, and assignments in a plot" />
+  <Plot name="cb_running_mean" svg :width="560" :height="320" caption="assignments inside expressions" />
   <Plot name="cb_recursion" svg :width="560" :height="320" caption="recursive functions" />
   <Plot name="cb_function_blocks" svg :width="560" :height="320" caption="function blocks" />
   <Plot name="cb_bitwise" svg :width="560" :height="320" caption="bit flags" />
@@ -226,6 +229,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_point_types" svg :width="640" :height="300" caption="point and dash types" />
   <Plot name="cb_dashes" svg :width="560" :height="320" caption="dash patterns of your own" />
   <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />
+  <Plot name="cb_lc_styles" svg :width="560" :height="320" caption="candles colored by a column" />
   <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
   <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
   <Plot name="cb_errorbars" svg :width="560" :height="320" caption="error bars" />
@@ -233,6 +237,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
   <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
   <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
+  <Plot name="cb_fillsteps" svg :width="560" :height="320" caption="filled steps (fillsteps)" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
   <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />
@@ -270,6 +275,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_filledcurves" svg :width="560" :height="320" caption="a band around a curve" />
+  <Plot name="cb_fill_color" svg :width="560" :height="320" caption="a transparent fill color (fc)" />
   <Plot name="cb_fill_above" svg :width="560" :height="320" caption="fill above and below a line" />
   <Plot name="cb_boxxyerror" svg :width="560" :height="320" caption="rectangles" />
   <Plot name="cb_circles" svg :width="560" :height="320" caption="a bubble chart" />
@@ -282,6 +288,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_function_fills" svg :width="560" :height="320" caption="functions filled" />
   <Plot name="cb_lc_shapes" svg :width="560" :height="320" caption="a color per shape (lc variable)" />
   <Plot name="cb_annotations" svg :width="640" :height="400" caption="labels, arrows and objects" />
+  <Plot name="cb_boxed_labels" svg :width="560" :height="320" caption="boxed labels" />
   <Plot name="cb_arrow_styles" svg :width="560" :height="360" caption="arrow styles, dashed objects" />
 </div>
 
@@ -292,6 +299,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_matrix" svg :width="560" :height="400" caption="a matrix file" />
   <Plot name="cb_palettes" svg :width="760" :height="560" caption="palettes" />
   <Plot name="cb_palette_hsv" svg :width="560" :height="360" caption="a palette in hue, saturation and value" />
+  <Plot name="cb_palette_functions" svg :width="560" :height="320" caption="a palette of functions" />
   <Plot name="cb_logcb" svg :width="560" :height="400" caption="a log color axis" />
   <Plot name="cb_colorbox" svg :width="760" :height="320" caption="color box placement" />
   <Plot name="cb_palette_file" svg :width="560" :height="400" caption="a palette from a file" />
@@ -303,6 +311,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_polar" svg :width="520" :height="400" caption="a polar plot" />
+  <Plot name="cb_polar_labels" svg :width="480" :height="420" caption="named angles on a polar plot" />
   <Plot name="cb_polar_db" svg :width="520" :height="400" caption="a polar level in decibels (rrange, trange)" />
   <Plot name="cb_windrose" svg :width="520" :height="420" caption="a wind rose of sectors" />
   <Plot name="cb_radar" svg :width="480" :height="320" caption="a radar" />
