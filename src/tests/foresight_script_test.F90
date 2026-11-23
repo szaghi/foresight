@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(148)                           !< Per-check outcome.
+logical                       :: test_passed(149)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -757,7 +757,7 @@ if (test_passed(67)) test_passed(67) = interpreter%figure%panels(1)%series(1)%st
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w yerrorl", iostat, iomsg)
 test_passed(68) = iostat /= 0_I4P .and. index(iomsg, 'yerrorlines needs using x:y:delta') > 0
 call interpreter%run_text("plot x w xyerrorlines", iostat, iomsg)
-test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'impulses, steps, fsteps, histeps or dots') > 0
+test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'histeps, dots, boxes or filledcurves') > 0
 call interpreter%run_text("plot x w hi", iostat, iomsg)
 test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported style "hi"') > 0
 open(newunit=unit, file=scratch)
@@ -3170,6 +3170,24 @@ test_passed(148) = test_passed(148) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 open(newunit=unit, file='foresight_script_test_labels.svg')
 close(unit, status='delete')
 
+! functions filled as gnuplot 6.0: with boxes, with filledcurves (closed, x1, y=V base after sampling)
+call interpreter%init(scratch)
+call interpreter%run_text('set samples 3; plot [0:2] x with boxes fs solid, x**2 with filledcurves y=1, '// &
+                          'x with filledcurves x1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(149) = iostat == 0_I4P
+if (test_passed(149)) test_passed(149) = interpreter%figure%panels(1)%series(1)%style%with == WITH_BOXES .and. &
+                                       all(interpreter%figure%panels(1)%series(1)%y == [0.0_R8P, 1.0_R8P, 2.0_R8P]) .and. &
+                                       interpreter%figure%panels(1)%series(2)%style%with == WITH_FILLEDCURVES .and. &
+                                       allocated(interpreter%figure%panels(1)%series(2)%ylow)
+if (test_passed(149)) test_passed(149) = size(interpreter%figure%panels(1)%series(2)%ylow) == 3 .and. &
+                                       all(interpreter%figure%panels(1)%series(2)%ylow == 1.0_R8P) .and. &
+                                       interpreter%figure%panels(1)%series(3)%curve_to == 1_I4P
+call interpreter%run_text('plot x with filledcurves above', iostat, iomsg)
+test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'need y=V for a function') > 0
+call interpreter%run_text('plot x with yerrorbars', iostat, iomsg)
+test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes or filledcurves') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3178,7 +3196,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,148L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,149L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

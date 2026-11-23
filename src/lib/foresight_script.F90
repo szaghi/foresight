@@ -102,7 +102,7 @@ module foresight_script
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
                            spider_words, POLAR_STYLES
@@ -147,7 +147,8 @@ character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb vari
 character(len=12), parameter :: LC_PALETTE_Z    = '*palettez'    !< `lc palette [z]` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_CB   = '*palettecb'   !< `lc palette cb V` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_FRAC = '*palettefrac' !< `lc palette frac F` marker in a line color.
-character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps or dots' !< Styles
+character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
+                                                  'boxes or filledcurves' !< Styles
                                                  !< drawing functions.
 
 type :: line_style_object
@@ -2408,6 +2409,8 @@ contains
    real(R8P),        allocatable                :: own_range(:,:) !< Sampling range of each function, `plot f(x),
                                                                   !< [A:B] g(x)` (`own_set` the ends given).
    logical,          allocatable                :: own_set(:,:) !< Ends of `own_range` given.
+   real(R8P),        allocatable                :: own_base(:) !< `filledcurves y=V` base of each function, NaN if
+                                                               !< none.
    real(R8P)                                    :: item_range(2) !< Sampling range of the current item.
    logical                                      :: item_set(2) !< Ends of `item_range` given.
    character(len=:), allocatable                :: item_prefix !< The item's range as written, for its title.
@@ -2415,7 +2418,7 @@ contains
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
-   allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0))
+   allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0))
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
@@ -3134,12 +3137,40 @@ contains
                deallocate(line%lc)
             endif
          endif
-         call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
-                               dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
+         if (with == 'boxes' .or. with == 'filledcurves') then
+            ! gnuplot fills functions too: the boxes or the curve of the samples (a y=V base filled after sampling)
+            if (allocated(fs)) then
+               if (.not. fill_ok(fs)) return
+            endif
+            if (len(curve) > 0) then
+               if ((index(curve, 'x') > 0 .or. index(curve, ' y') > 0) .and. allocated(base)) then
+                  call fail('plot: filledcurves x1, x2, y1, y2, x=V, xy= fill to the plot, a line or a point: not '// &
+                            'with y=V', iostat, iomsg)
+                  return
+               endif
+               if ((index(curve, 'above') > 0 .or. index(curve, 'below') > 0) .and. .not. allocated(base)) then
+                  call fail('plot: filledcurves above and below need y=V for a function', iostat, iomsg)
+                  return
+               endif
+               call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, &
+                                     lw=line%lw, dt=line%dt, axes=axes, base=base, fs=fs, curve=curve)
+            else
+               call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, &
+                                     lw=line%lw, dt=line%dt, axes=axes, base=base, fs=fs)
+            endif
+         else
+            call self%figure%plot([real(R8P) ::], [real(R8P) ::], title=title, with=with, lc=line%lc, lw=line%lw, &
+                                  dt=line%dt, ps=line%ps, axes=axes, pt=line%pt)
+         endif
          if (len(palette_lc) > 0) call paint_last
          call mark_last
          call push(functions, func)
          if (self%parametric) call push(yfunctions, yfunc)
+         if (allocated(base)) then
+            own_base = [own_base, base]
+         else
+            own_base = [own_base, ieee_value(1.0_R8P, ieee_quiet_nan)]
+         endif
          own_range = reshape([own_range, item_range], [2, size(functions)])
          own_set = reshape([own_set, item_set], [2, size(functions)])
          ! associate alias: see the gfortran 16 -fcheck=bounds workaround in foresight_figure
@@ -3789,7 +3820,24 @@ contains
       if (i > size(tokens, kind=I4P)) exit
       i = i + 1_I4P
    enddo
-   if (size(functions) > 0) call sample_functions
+   if (size(functions) > 0) then
+      call sample_functions
+      ! the `filledcurves y=V` base of the filled functions, one per sample
+      block
+         integer(I4P) :: k !< Function.
+
+         do k = 1_I4P, size(functions, kind=I4P)
+            if (ieee_is_nan(own_base(k))) cycle
+            associate(series => self%figure%panels(self%figure%current)%series(slots(k)))
+               if (allocated(series%x)) then
+                  if (allocated(series%ylow)) deallocate(series%ylow)
+                  allocate(series%ylow(size(series%x)))
+                  series%ylow = own_base(k)
+               endif
+            endassociate
+         enddo
+      endblock
+   endif
    if (self%table) then
       ! `set table`: the points as text, nothing drawn
       call self%write_table(iostat, iomsg)
@@ -4649,8 +4697,7 @@ contains
                   ys(j) = yfunctions(f)%value_at(xs(j))
                   xs(j) = functions(f)%value_at(xs(j))
                enddo
-               panel%series(slots(f))%x = xs
-               panel%series(slots(f))%y = ys
+               call panel%resample(slots(f), xs, ys)
             enddo
             return
          endif
@@ -4669,8 +4716,7 @@ contains
                do j = 1_I4P, n
                   ys(j) = functions(f)%value_at(xs(j))
                enddo
-               panel%series(slots(f))%x = xs
-               panel%series(slots(f))%y = ys
+               call panel%resample(slots(f), xs, ys)
             enddo
             return
          endif
@@ -4704,9 +4750,8 @@ contains
                      do j = 1_I4P, n
                         ys(j) = functions(f)%value_at(grid(j))
                      enddo
-                     series%x = grid
+                     call panel%resample(slots(f), grid, ys)
                   endblock
-                  series%y = ys
                   cycle
                endif
                ! a log axis on a non-positive range is reported by the rendering
@@ -4719,11 +4764,10 @@ contains
                   endif
                enddo
                if (series%x2) then
-                  series%x = xs2
+                  call panel%resample(slots(f), xs2, ys)
                else
-                  series%x = xs
+                  call panel%resample(slots(f), xs, ys)
                endif
-               series%y = ys
             endassociate
          enddo
       endassociate
@@ -10870,7 +10914,7 @@ contains
    character(len=*), intent(in) :: with !< Full style name.
    logical                      :: yes  !< Usable for functions.
 
-   yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots')
+   yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots boxes filledcurves')
    endfunction function_drawable
 
    pure function is_item_option(word) result(is)

@@ -318,6 +318,7 @@ type :: axes_object
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: drop_last        !< Forget the last series.
+      procedure, pass(self) :: resample         !< Samples of a function series.
       procedure, pass(self) :: last_drawable    !< Whether the last series has a valid point.
       procedure, pass(self) :: data_extent                 !< Extent of the placeable data.
       procedure, pass(self) :: series_extent               !< Extent of a series on its axes.
@@ -1135,72 +1136,25 @@ contains
       enddo
       endfunction spacing_of
       pure subroutine histep_edges(left, right)
-      !< Edges of the steps of `histeps`: halfway to the neighbours, the end steps symmetric (gnuplot), in data space.
+      !< Edges of the steps of `histeps` (see `histep_edges_of`).
       real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
       real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
-      integer(I4P)                        :: n        !< Points.
 
-      n = size(x, kind=I4P)
-      allocate(left(n), right(n))
-      if (n == 0_I4P) return
-      if (n == 1_I4P) then
-         left = x - 0.5_R8P
-         right = x + 0.5_R8P
-         return
-      endif
-      left(2:n) = 0.5_R8P * (x(1:n - 1) + x(2:n))
-      right(1:n - 1) = left(2:n)
-      left(1) = x(1) - (left(2) - x(1))
-      right(n) = x(n) + (x(n) - right(n - 1))
+      call histep_edges_of(x, left, right)
       endsubroutine histep_edges
 
       pure subroutine box_edges(left, right)
-      !< Box edges: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a relative
-      !< `boxwidth`; or `boxwidth` itself; or the box's own `width`.
+      !< Box edges (see `box_edges_of`), or the box's own `width` where given.
       real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
       real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
-      real(R8P)                           :: dl       !< Distance to the previous point.
-      real(R8P)                           :: dr       !< Distance to the next point.
-      integer(I4P)                        :: n        !< Points.
       integer(I4P)                        :: i        !< Counter.
 
-      n = size(x, kind=I4P)
-      allocate(left(n), right(n))
-      do i = 1_I4P, n
-         dl = huge(1.0_R8P)
-         dr = huge(1.0_R8P)
-         if (i > 1_I4P) then
-            if (ieee_is_finite(x(i - 1_I4P)) .and. ieee_is_finite(x(i))) dl = x(i) - x(i - 1_I4P)
-         endif
-         if (i < n) then
-            if (ieee_is_finite(x(i + 1_I4P)) .and. ieee_is_finite(x(i))) dr = x(i + 1_I4P) - x(i)
-         endif
-         if (dl == huge(1.0_R8P)) dl = dr
-         if (dr == huge(1.0_R8P)) dr = dl
-         ! a single box: unit width
-         if (dl == huge(1.0_R8P)) then
-            dl = 1.0_R8P
-            dr = 1.0_R8P
-         endif
-         dl = 0.5_R8P * dl
-         dr = 0.5_R8P * dr
-         if (self%boxwidth > 0.0_R8P) then
-            if (self%boxwidth_relative) then
-               dl = self%boxwidth * dl
-               dr = self%boxwidth * dr
-            else
-               dl = 0.5_R8P * self%boxwidth
-               dr = dl
-            endif
-         endif
-         if (present(width)) then
-            if (ieee_is_finite(width(i))) then
-               dl = 0.5_R8P * width(i)
-               dr = dl
-            endif
-         endif
-         left(i) = x(i) - dl
-         right(i) = x(i) + dr
+      call box_edges_of(x, self%boxwidth, self%boxwidth_relative, left, right)
+      if (.not. present(width)) return
+      do i = 1_I4P, size(x, kind=I4P)
+         if (.not. ieee_is_finite(width(i))) cycle
+         left(i) = x(i) - 0.5_R8P * width(i)
+         right(i) = x(i) + 0.5_R8P * width(i)
       enddo
       endsubroutine box_edges
    endsubroutine add_series
@@ -2908,6 +2862,40 @@ contains
       endif
    endif
    endfunction key_place
+
+   subroutine resample(self, s, x, y)
+   !< The samples (`x`, `y`) of the function series `s`, and what its style derives from them: the box and step edges
+   !< and the y = 0 base of boxes, impulses and histeps (sized by the samples, not by the empty series of the plot).
+   class(axes_object), intent(inout) :: self !< Panel.
+   integer(I4P),       intent(in)    :: s    !< Series.
+   real(R8P),          intent(in)    :: x(:) !< Abscissae.
+   real(R8P),          intent(in)    :: y(:) !< Ordinates.
+
+   self%series(s)%x = x
+   self%series(s)%y = y
+   select case (self%series(s)%style%with)
+   case (WITH_BOXES)
+      call box_edges_of(x, self%boxwidth, self%boxwidth_relative, self%series(s)%xlow, self%series(s)%xhigh)
+      call zero_base
+   case (WITH_HISTEPS)
+      call histep_edges_of(x, self%series(s)%xlow, self%series(s)%xhigh)
+      call zero_base
+   case (WITH_IMPULSES)
+      call zero_base
+   case (WITH_FILLEDCURVES)
+      ! a y=V base is set by the caller, for these samples
+      if (allocated(self%series(s)%ylow)) then
+         if (size(self%series(s)%ylow) /= size(x)) deallocate(self%series(s)%ylow)
+      endif
+   endselect
+   contains
+      subroutine zero_base
+      !< The y = 0 base, one per sample.
+      if (allocated(self%series(s)%ylow)) deallocate(self%series(s)%ylow)
+      allocate(self%series(s)%ylow(size(x)))
+      self%series(s)%ylow = 0.0_R8P
+      endsubroutine zero_base
+   endsubroutine resample
 
    subroutine drop_last(self)
    !< Forget the last series (gnuplot's unbounded iteration ends on an empty item, not drawn).
@@ -6087,4 +6075,73 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_axes
+   pure subroutine histep_edges_of(x, left, right)
+   !< Edges of the steps of `histeps` through `x`: halfway to the neighbours, the end steps symmetric (gnuplot), in data
+   !< space.
+   real(R8P),              intent(in)  :: x(:)     !< Abscissae.
+   real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
+   real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
+   integer(I4P)                        :: n        !< Points.
+
+   n = size(x, kind=I4P)
+   allocate(left(n), right(n))
+   if (n == 0_I4P) return
+   if (n == 1_I4P) then
+      left = x - 0.5_R8P
+      right = x + 0.5_R8P
+      return
+   endif
+   left(2:n) = 0.5_R8P * (x(1:n - 1) + x(2:n))
+   right(1:n - 1) = left(2:n)
+   left(1) = x(1) - (left(2) - x(1))
+   right(n) = x(n) + (x(n) - right(n - 1))
+   endsubroutine histep_edges_of
+
+   pure subroutine box_edges_of(x, boxwidth, relative, left, right)
+   !< Edges of the boxes at `x`: halfway to the neighbours (gnuplot's auto width, the end boxes symmetric), scaled by a
+   !< relative `boxwidth`; or `boxwidth` itself (positive, not `relative`).
+   real(R8P),              intent(in)  :: x(:)     !< Abscissae.
+   real(R8P),              intent(in)  :: boxwidth !< `set boxwidth`, not positive if unset.
+   logical,                intent(in)  :: relative !< `boxwidth` relative to the auto width.
+   real(R8P), allocatable, intent(out) :: left(:)  !< Left edges.
+   real(R8P), allocatable, intent(out) :: right(:) !< Right edges.
+   real(R8P)                           :: dl       !< Distance to the previous point.
+   real(R8P)                           :: dr       !< Distance to the next point.
+   integer(I4P)                        :: n        !< Points.
+   integer(I4P)                        :: i        !< Counter.
+
+   n = size(x, kind=I4P)
+   allocate(left(n), right(n))
+   do i = 1_I4P, n
+      dl = huge(1.0_R8P)
+      dr = huge(1.0_R8P)
+      if (i > 1_I4P) then
+         if (ieee_is_finite(x(i - 1_I4P)) .and. ieee_is_finite(x(i))) dl = x(i) - x(i - 1_I4P)
+      endif
+      if (i < n) then
+         if (ieee_is_finite(x(i + 1_I4P)) .and. ieee_is_finite(x(i))) dr = x(i + 1_I4P) - x(i)
+      endif
+      if (dl == huge(1.0_R8P)) dl = dr
+      if (dr == huge(1.0_R8P)) dr = dl
+      ! a single box: unit width
+      if (dl == huge(1.0_R8P)) then
+         dl = 1.0_R8P
+         dr = 1.0_R8P
+      endif
+      dl = 0.5_R8P * dl
+      dr = 0.5_R8P * dr
+      if (boxwidth > 0.0_R8P) then
+         if (relative) then
+            dl = boxwidth * dl
+            dr = boxwidth * dr
+         else
+            dl = 0.5_R8P * boxwidth
+            dr = dl
+         endif
+      endif
+      left(i) = x(i) - dl
+      right(i) = x(i) + dr
+   enddo
+   endsubroutine box_edges_of
+
 endmodule foresight_axes
