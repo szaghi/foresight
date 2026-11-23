@@ -40,7 +40,7 @@
 <line x1="217" y1="36" x2="229" y2="36" stroke="red" stroke-width="1"/>
 </g>
 </svg>
-<svg class="fs-marks" x="42.4" y="37" width="267.6" height="252" viewBox="0 0 267.6 252" overflow="hidden">
+<svg class="fs-marks" x="42.4" y="37" width="267.6" height="252" viewBox="0 0 267.6 252" overflow="visible">
 <path data-series="1" fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M-4.5,252A4.5,4.5 0 1 0 4.5,252A4.5,4.5 0 1 0 -4.5,252ZM84.7,108A4.5,4.5 0 1 0 93.7,108A4.5,4.5 0 1 0 84.7,108ZM173.9,108A4.5,4.5 0 1 0 182.9,108A4.5,4.5 0 1 0 173.9,108ZM263.1,0A4.5,4.5 0 1 0 272.1,0A4.5,4.5 0 1 0 263.1,0Z"/>
 </svg>
 <rect x="42.4" y="37" width="267.6" height="252" fill="none" stroke="black" stroke-width="1"/>

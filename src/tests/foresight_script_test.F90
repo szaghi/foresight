@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(143)                           !< Per-check outcome.
+logical                       :: test_passed(144)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3049,6 +3049,29 @@ test_passed(143) = test_passed(143) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 open(newunit=unit, file='foresight_script_test_jitter.svg')
 close(unit, status='delete')
 
+! markers drawn whole: a marker crossing the border lets its overlay overflow; centres out of the plot area not drawn
+call interpreter%init(scratch)
+call interpreter%run_text('$M << EOD'//new_line('a')//'0 0'//new_line('a')//'5 5'//new_line('a')//'20 5'//new_line('a')// &
+                          'EOD'//new_line('a')//'set term svg; set output "foresight_script_test_marks.svg"'// &
+                          new_line('a')//'set xrange [0:10]; set yrange [0:10]; plot $M w p pt 4 notitle', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+block
+   character(len=:), allocatable :: svg    !< Output.
+   character(len=:), allocatable :: centres !< The fs-pts path.
+
+   svg = text_of_file('foresight_script_test_marks.svg')
+   centres = svg(index(svg, 'class="fs-pts"'):)
+   centres = centres(:index(centres, '/>'))
+   test_passed(144) = iostat == 0_I4P .and. index(svg(index(svg, 'class="fs-marks"'):), 'overflow="visible"') > 0 .and. &
+                     count([(centres(i:i) == 'M', i=1, len(centres))]) == 2
+   call interpreter%run_text('set xrange [-1:11]; set yrange [-1:11]; replot', iostat, iomsg)
+   svg = text_of_file('foresight_script_test_marks.svg')
+   test_passed(144) = test_passed(144) .and. iostat == 0_I4P .and. &
+                     index(svg(index(svg, 'class="fs-marks"'):), 'overflow="hidden"') > 0
+endblock
+open(newunit=unit, file='foresight_script_test_marks.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3057,7 +3080,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,143L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,144L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

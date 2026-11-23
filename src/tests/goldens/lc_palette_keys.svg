@@ -103,7 +103,7 @@
 <polyline fill="none" stroke="#e48300" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.055556,0.90625 0.333333,0.90625"/>
 </g>
 </svg>
-<svg class="fs-marks" x="29.2" y="16" width="417.2" height="273" viewBox="0 0 417.2 273" overflow="hidden">
+<svg class="fs-marks" x="29.2" y="16" width="417.2" height="273" viewBox="0 0 417.2 273" overflow="visible">
 <path data-series="2" fill="#000000" stroke="#000000" stroke-width="1" d="M250.46,136.5A4.5,4.5 0 1 0 259.46,136.5A4.5,4.5 0 1 0 250.46,136.5Z"/>
 <path data-series="2" fill="#510096" stroke="#510096" stroke-width="1" d="M263.42,148.53A4.5,4.5 0 1 0 272.42,148.53A4.5,4.5 0 1 0 263.42,148.53Z"/>
 <path data-series="2" fill="#7202f3" stroke="#7202f3" stroke-width="1" d="M240.98,166.41A4.5,4.5 0 1 0 249.98,166.41A4.5,4.5 0 1 0 240.98,166.41Z"/>

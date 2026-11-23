@@ -2885,6 +2885,7 @@ contains
    integer(I4P)                         :: i1       !< First point of a run.
    integer(I4P)                         :: i2       !< Last point of a run.
    integer(I4P)                         :: i        !< Point counter.
+   real(R8P), parameter                 :: CENTRE_TOL = 1.0e-9_R8P !< Rounding allowance at the border [unit].
 
    associate(series => self%series(s))
       n = size(series%x, kind=I4P)
@@ -2960,6 +2961,9 @@ contains
                                                                   i1 = 1_I4P, n)]
          ! gnuplot `set jitter`: the overlapping markers of `with points` spread out
          if (self%jitter_spread > 0.0_R8P .and. series%style%with == WITH_POINTS) call jitter
+         ! markers are drawn whole (gnuplot `unset clip points`), those centred out of the plot area not at all
+         marked = marked .and. u >= -CENTRE_TOL .and. u <= 1.0_R8P + CENTRE_TOL .and. &
+                  v >= -CENTRE_TOL .and. v <= 1.0_R8P + CENTRE_TOL
          ! gnuplot `set clip points`: no marker crossing the border
          if (self%clip_points) then
             do i1 = 1_I4P, n

@@ -1265,6 +1265,7 @@
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.marks = group.querySelector(".fs-marks");
+    this.marksOverflow = this.marks ? this.marks.getAttribute("overflow") : "hidden";
     this.heads = group.querySelector(".fs-heads");
     this.vectors = readVectors(group);
     this.labels = group.querySelector(".fs-labels");
@@ -1422,7 +1423,10 @@
       this.yticks.innerHTML = this.original[2];
       if (this.caps) this.caps.innerHTML = this.original[3];
       if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
-      if (this.marks) this.marks.innerHTML = this.original[5];
+      if (this.marks) {
+        this.marks.innerHTML = this.original[5];
+        this.marks.setAttribute("overflow", this.marksOverflow);
+      }
       if (this.heads) this.heads.innerHTML = this.original[6];
       if (this.labels) this.labels.innerHTML = this.original[7];
       if (this.x2ticks) this.x2ticks.innerHTML = this.original[8];
@@ -1461,13 +1465,15 @@
     var w = this.right - this.left, h = this.bottom - this.top;
     if (!this.marks) return;
     clear(this.marks);
+    this.marks.setAttribute("overflow", "visible");
     this.points.forEach(function (p) {
       var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
       if (self.hidden[p.series]) return;
       var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
       p.centres.forEach(function (c) {
         var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
-        if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
+        // drawn whole (the overlay overflows), only those centred in the plot area
+        if (x >= 0 && x <= w && y >= 0 && y <= h) d.push(markerPath(x, y, r, shape));
       });
       element(self.marks, "path", {"data-series": p.series, fill: filled ? p.color : "none",
         stroke: p.color, "stroke-width": p.lw, d: d.join("")});

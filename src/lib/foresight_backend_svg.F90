@@ -45,6 +45,7 @@ type, extends(backend_object) :: backend_svg
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
    character(len=:), allocatable :: caps          !< Error bar caps of the current plot area, pixel overlay.
    character(len=:), allocatable :: marks         !< Point type markers of the current plot area, pixel overlay.
+   logical                       :: spill = .false. !< A marker of the current plot area crosses its border.
    character(len=:), allocatable :: heads         !< Arrowheads of the current plot area, pixel overlay.
    character(len=:), allocatable :: labels        !< Text labels of the data of the current plot area, pixel overlay.
    integer(I4P)                  :: patterns = 0_I4P !< Fill pattern definitions written.
@@ -326,6 +327,7 @@ contains
    self%area = [x, y, width, height]
    self%caps = ''
    self%marks = ''
+   self%spill = .false.
    self%heads = ''
    self%labels = ''
    ! the glow is applied in page pixels, around the plot area and its overlays: inside, the unit square would scale it
@@ -356,9 +358,11 @@ contains
       character(len=*), intent(in) :: content !< Elements.
 
       if (len(content) == 0) return
+      ! markers are drawn whole across the border (gnuplot `unset clip points`): only their overlay overflows
       call self%put('<svg class="'//name//'" x="'//px(self%area(1))//'" y="'//px(self%area(2))//'" width="'// &
                     px(self%area(3))//'" height="'//px(self%area(4))//'" viewBox="0 0 '//px(self%area(3))//' '// &
-                    px(self%area(4))//'" overflow="hidden">')
+                    px(self%area(4))//'" overflow="'//trim(merge('visible', 'hidden ', &
+                    name == 'fs-marks' .and. self%spill))//'">')
       call self%put(content//'</svg>')
       endsubroutine overlay
    endsubroutine end_plot_area
@@ -403,6 +407,9 @@ contains
                                                '" data-color="'//self%theme%map(color)//'" fill="none" stroke="none" d="'
          call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, 'M', '')
          call self%put('"/>')
+         ! the widest marker (the diamond) reaches 1.414 half widths from its centre, plus half its line
+         if (any(min(x, 1.0_R8P - x) * self%area(3) < 0.71_R8P * diameter + 0.5_R8P * width .or. &
+                 min(y, 1.0_R8P - y) * self%area(4) < 0.71_R8P * diameter + 0.5_R8P * width)) self%spill = .true.
          self%marks = self%marks//marker_element(x * self%area(3), (1.0_R8P - y) * self%area(4), &
                                                  self%theme%map(color), diameter, &
                                                  pt, width, self%series)//new_line('a')

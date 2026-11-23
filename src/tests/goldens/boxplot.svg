@@ -285,7 +285,7 @@
 <line x1="235.56" y1="128.15" x2="241.56" y2="128.15" stroke="#9400d3" stroke-width="1"/>
 </g>
 </svg>
-<svg class="fs-marks" x="29.2" y="296" width="340.8" height="233" viewBox="0 0 340.8 233" overflow="hidden">
+<svg class="fs-marks" x="29.2" y="296" width="340.8" height="233" viewBox="0 0 340.8 233" overflow="visible">
 <path data-series="1" fill="#9400d3" stroke="#9400d3" stroke-width="1" d="M235.56,0A3,3 0 1 0 241.56,0A3,3 0 1 0 235.56,0Z"/>
 </svg>
 <rect x="29.2" y="296" width="340.8" height="233" fill="none" stroke="black" stroke-width="1"/>

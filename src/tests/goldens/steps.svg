@@ -121,7 +121,7 @@
 <path class="fs-pts" data-pt="0" data-size="9" data-lw="1" data-color="#009e73" fill="none" stroke="none" d="M0,0.285714 M0.25,0.428571 M0.75,0 M1,0.571429"/>
 </g>
 </svg>
-<svg class="fs-marks" x="385.8" y="16" width="304.2" height="203" viewBox="0 0 304.2 203" overflow="hidden">
+<svg class="fs-marks" x="385.8" y="16" width="304.2" height="203" viewBox="0 0 304.2 203" overflow="visible">
 <path data-series="2" fill="#009e73" stroke="#009e73" stroke-width="1" d="M-0.5,58A0.5,0.5 0 1 0 0.5,58A0.5,0.5 0 1 0 -0.5,58ZM75.55,87A0.5,0.5 0 1 0 76.55,87A0.5,0.5 0 1 0 75.55,87ZM227.65,0A0.5,0.5 0 1 0 228.65,0A0.5,0.5 0 1 0 227.65,0ZM303.7,116A0.5,0.5 0 1 0 304.7,116A0.5,0.5 0 1 0 303.7,116Z"/>
 </svg>
 <rect x="385.8" y="16" width="304.2" height="203" fill="none" stroke="black" stroke-width="1"/>
