@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(150)                           !< Per-check outcome.
+logical                       :: test_passed(151)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3210,6 +3210,31 @@ endif
 call interpreter%run_text('plot $C using 1:2:3 with candlesticks lc variable', iostat, iomsg)
 test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'circles, ellipses and boxes') > 0
 
+! set key columns N (gnuplot's user columns: N columns, filled top down), maxcol and maxrow abbreviations
+call interpreter%init(scratch)
+call interpreter%run_text('set key columns 2; set key maxcol 3 maxrow 4', iostat, iomsg)
+test_passed(151) = iostat == 0_I4P .and. interpreter%figure%panels(1)%key_columns == 2_I4P .and. &
+                  interpreter%figure%panels(1)%key_maxcols == 3_I4P .and. interpreter%figure%panels(1)%key_maxrows == 4_I4P
+call interpreter%run_text('set key default', iostat, iomsg)
+test_passed(151) = test_passed(151) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%key_columns == 0_I4P
+call interpreter%run_text('set term svg; set output "foresight_script_test_keycols.svg"; set key columns 2; '// &
+                          'plot x t "a", 2*x t "b", 3*x t "c"', iostat, iomsg)
+block
+   character(len=:), allocatable :: svg !< Output.
+   integer(I4P)                  :: ya  !< Position of a.
+   integer(I4P)                  :: yc  !< Position of c.
+
+   svg = text_of_file('foresight_script_test_keycols.svg')
+   ! a and c side by side in the first row: the same baseline
+   ya = index(svg, '>a</text>')
+   yc = index(svg, '>c</text>')
+   test_passed(151) = test_passed(151) .and. iostat == 0_I4P .and. ya > 0 .and. yc > 0
+   if (test_passed(151)) test_passed(151) = baseline(svg, ya) == baseline(svg, yc) .and. &
+                                          baseline(svg, index(svg, '>b</text>')) > baseline(svg, ya)
+endblock
+open(newunit=unit, file='foresight_script_test_keycols.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3218,7 +3243,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,150L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,151L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -3226,6 +3251,25 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function baseline(svg, at) result(y)
+   !< The `y` attribute of the SVG `<text>` element holding position `at` of `svg`.
+   character(len=*), intent(in) :: svg  !< SVG.
+   integer(I4P),     intent(in) :: at   !< Position inside the element.
+   real(R8P)                    :: y    !< Baseline.
+   integer(I4P)                 :: open !< Element start.
+   integer(I4P)                 :: q    !< Value start.
+   integer(I4P)                 :: ios  !< Read status.
+
+   y = -1.0_R8P
+   open = index(svg(:at), '<text', back=.true.)
+   if (open == 0_I4P) return
+   q = index(svg(open:at), ' y="')
+   if (q == 0_I4P) return
+   q = open + q + 3_I4P
+   read(svg(q:q + index(svg(q:), '"') - 2), *, iostat=ios) y
+   if (ios /= 0_I4P) y = -1.0_R8P
+   endfunction baseline
+
    function text_of_file(file) result(text)
    !< The whole text of `file`, its lines joined.
    character(len=*), intent(in)  :: file !< File.

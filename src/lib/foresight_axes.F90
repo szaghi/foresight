@@ -210,6 +210,8 @@ type :: axes_object
                                                              !< column (gnuplot `maxrows`).
    integer(I4P)                     :: key_maxcols = 0_I4P !< Most columns of a horizontal key, 0 for as many as fit
                                                              !< (gnuplot `maxcols`).
+   integer(I4P)                     :: key_columns = 0_I4P !< Columns of the key, 0 for the automatic layout
+                                                             !< (gnuplot `columns N`).
    character(len=24)                :: key_tc = '' !< Title color: blank the frame's, `variable` each series' (`textcolor`).
    character(len=24)                :: key_box_lc = '' !< Box line color, the frame's if blank (`box lc`).
    real(R8P)                        :: key_box_lw = 1.0_R8P !< Box line width [px] (`box lw`).
@@ -2815,7 +2817,10 @@ contains
    endif
    ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
    entry = entry + font_size + GAP + self%key_sample(font_size) + GAP + self%key_extra * CHAR_WIDTH * font_size
-   if (self%key_horizontal .and. grid(1) > 0_I4P) then
+   if (self%key_columns > 0_I4P .and. grid(1) > 0_I4P) then
+      ! gnuplot `columns N`: N columns, whatever fits
+      grid(2) = min(grid(1), self%key_columns)
+   elseif (self%key_horizontal .and. grid(1) > 0_I4P) then
       ! as many columns as fit, at most `maxcols`
       grid(2) = max(1_I4P, min(grid(1), int((room + GAP) / entry, I4P)))
       if (self%key_maxcols > 0_I4P) grid(2) = min(grid(2), self%key_maxcols)

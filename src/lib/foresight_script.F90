@@ -7406,7 +7406,7 @@ contains
             endif
          case ('noautotitle')
             self%autotitle = 'none'
-         case ('columnhead', 'columnheader', 'column')
+         case ('columnhead', 'columnheader')
             if (i == 2_I4P) then
                call fail('set key: columnhead goes after autotitle', iostat, iomsg)
                return
@@ -7491,6 +7491,7 @@ contains
                panel%key_height = 0.0_R8P
                panel%key_maxrows = 0_I4P
                panel%key_maxcols = 0_I4P
+               panel%key_columns = 0_I4P
                panel%key_tc = ''
                panel%key_box_lc = ''
                panel%key_box_lw = 1.0_R8P
@@ -7504,16 +7505,21 @@ contains
             ! characters added to the key height
             if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
             self%figure%panels(self%figure%current)%key_height = v
-         case ('maxrows', 'maxcols', 'maxcolumns')
+         case ('col', 'cols', 'colu', 'colum', 'column', 'columns')
+            ! gnuplot `columns N`: the key in N columns, filled top down
+            if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+            self%figure%panels(self%figure%current)%key_columns = min(100_I4P, max(0_I4P, nint(v, I4P)))
+         case ('maxrow', 'maxrows', 'maxcol', 'maxcols', 'maxcolu', 'maxcolum', 'maxcolumn', 'maxcolumns')
             ! the most rows of a vertical key, the most columns of a horizontal one; `auto` as many as fit
             block
                integer(I4P)                  :: most  !< Rows or columns, 0 for auto.
                character(len=:), allocatable :: which !< The option word.
 
                which = tokens(i)%text
+               if (which == 'maxrow') which = 'maxrows'
                most = 0_I4P
                if (i < size(tokens, kind=I4P)) then
-                  if (tokens(i + 1_I4P)%text == 'auto') then
+                  if (keyword(tokens(i + 1_I4P)%text, 'automatic', 1_I4P)) then
                      i = i + 1_I4P
                   else
                      if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
@@ -7583,7 +7589,7 @@ contains
             call fail('set key: unsupported option "'//tokens(i)%text//'" (supported: on, off, left, right, center, '// &
                       'top, bottom, box, nobox, inside, outside, below, above, lmargin, rmargin, tmargin, bmargin, '// &
                       'at, horizontal, vertical, reverse, Left, Right, invert, opaque, samplen, spacing, width, height, '// &
-                      'maxrows, maxcols, offset, title, font, textcolor, lt, lw, lc, dt, ls, noenhanced, default, '// &
+                      'columns, maxrows, maxcols, offset, title, font, textcolor, lt, lw, lc, dt, ls, noenhanced, default, '// &
                       'autotitle [columnhead], noautotitle)', iostat, iomsg)
             return
          endselect
