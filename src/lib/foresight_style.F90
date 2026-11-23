@@ -179,37 +179,114 @@ contains
    !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot 6.0 reads it (its `plotstyle_tbl`, searched
    !< in order, `$` marking the shortest abbreviation: `l`, `line`, `p`, `lp`, `i`, `st`, `fs`, `his`, `e`, `ye`,
    !< `yerrorl`, ...), or foresight's `readout`, `pie`, `gauge`, `radar`, `rose` (full words only); empty if
-   !< unsupported. As gnuplot, `his` is histeps and histograms need `hist`.
+   !< unsupported (gnuplot styles foresight lacks included). As gnuplot, `his` is histeps and histograms need `hist`.
+   !<
+   !< A chain of tests, not a table: nvfortran 26.9 misreads a 2-D character parameter built by `reshape` here.
    character(len=*), intent(in)  :: word !< Style word.
    character(len=:), allocatable :: name !< Full style name.
-   ! gnuplot's table, in its order, and foresight's name of each style (blank: unsupported)
-   character(len=*), parameter :: TABLE(2, 50) = reshape([character(len=16) :: &
-      'l$ines',          'lines',           'i$mpulses',       'impulses',        'p$oints',         'points',          &
-      'linesp$oints',    'linespoints',     'lp',              'linespoints',     'd$ots',           'dots',            &
-      'yerrorl$ines',    'yerrorlines',     'errorl$ines',     'yerrorlines',     'xerrorl$ines',    'xerrorlines',     &
-      'xyerrorl$ines',   'xyerrorlines',    'ye$rrorbars',     'yerrorbars',      'e$rrorbars',      'yerrorbars',      &
-      'xe$rrorbars',     'xerrorbars',      'xye$rrorbars',    'xyerrorbars',     'boxes',           'boxes',           &
-      'hist$ograms',     'histograms',      'isosurface',      '',                'filledc$urves',   'filledcurves',    &
-      'boxer$rorbars',   'boxerrorbars',    'boxx$yerrorbars', 'boxxyerror',      'st$eps',          'steps',           &
-      'fillst$eps',      '',                'fs$teps',         'fsteps',          'his$teps',        'histeps',         &
-      'vec$tors',        'vectors',         'arrow$s',         'arrows',          'fin$ancebars',    'financebars',     &
-      'can$dlesticks',   'candlesticks',    'boxplot',         'boxplot',         'pm$3d',           '',                &
-      'poly$gons',       'polygons',        'labels',          'labels',          'ima$ge',          'image',           &
-      'rgbima$ge',       'rgbimage',        'rgba$lpha',       'rgbalpha',        'cir$cles',        'circles',         &
-      'sec$tors',        'sectors',         'ell$ipses',       'ellipses',        'sur$face',        '',                &
-      'parallel$axes',   'parallelaxes',    'spider$plot',     'spiderplot',      'table',           '',                &
-      'zerror$fill',     '',                'mask',            '',                'contourfill',     '',                &
-      'readout',         'readout',         'pie',             'pie',             'gauge',           'gauge',           &
-      'radar',           'radar',           'rose',            'rose'], [2, 50])
-   integer :: k !< Table entry.
-
-   name = ''
-   do k = 1, size(TABLE, 2)
-      if (gnuplot_abbreviates(word, trim(TABLE(1, k)))) then
-         name = trim(TABLE(2, k))
-         return
-      endif
-   enddo
+   if (gnuplot_abbreviates(word, 'l$ines')) then
+      name = 'lines'
+   elseif (gnuplot_abbreviates(word, 'i$mpulses')) then
+      name = 'impulses'
+   elseif (gnuplot_abbreviates(word, 'p$oints')) then
+      name = 'points'
+   elseif (gnuplot_abbreviates(word, 'linesp$oints')) then
+      name = 'linespoints'
+   elseif (gnuplot_abbreviates(word, 'lp')) then
+      name = 'linespoints'
+   elseif (gnuplot_abbreviates(word, 'd$ots')) then
+      name = 'dots'
+   elseif (gnuplot_abbreviates(word, 'yerrorl$ines')) then
+      name = 'yerrorlines'
+   elseif (gnuplot_abbreviates(word, 'errorl$ines')) then
+      name = 'yerrorlines'
+   elseif (gnuplot_abbreviates(word, 'xerrorl$ines')) then
+      name = 'xerrorlines'
+   elseif (gnuplot_abbreviates(word, 'xyerrorl$ines')) then
+      name = 'xyerrorlines'
+   elseif (gnuplot_abbreviates(word, 'ye$rrorbars')) then
+      name = 'yerrorbars'
+   elseif (gnuplot_abbreviates(word, 'e$rrorbars')) then
+      name = 'yerrorbars'
+   elseif (gnuplot_abbreviates(word, 'xe$rrorbars')) then
+      name = 'xerrorbars'
+   elseif (gnuplot_abbreviates(word, 'xye$rrorbars')) then
+      name = 'xyerrorbars'
+   elseif (gnuplot_abbreviates(word, 'boxes')) then
+      name = 'boxes'
+   elseif (gnuplot_abbreviates(word, 'hist$ograms')) then
+      name = 'histograms'
+   elseif (gnuplot_abbreviates(word, 'isosurface')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'filledc$urves')) then
+      name = 'filledcurves'
+   elseif (gnuplot_abbreviates(word, 'boxer$rorbars')) then
+      name = 'boxerrorbars'
+   elseif (gnuplot_abbreviates(word, 'boxx$yerrorbars')) then
+      name = 'boxxyerror'
+   elseif (gnuplot_abbreviates(word, 'st$eps')) then
+      name = 'steps'
+   elseif (gnuplot_abbreviates(word, 'fillst$eps')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'fs$teps')) then
+      name = 'fsteps'
+   elseif (gnuplot_abbreviates(word, 'his$teps')) then
+      name = 'histeps'
+   elseif (gnuplot_abbreviates(word, 'vec$tors')) then
+      name = 'vectors'
+   elseif (gnuplot_abbreviates(word, 'arrow$s')) then
+      name = 'arrows'
+   elseif (gnuplot_abbreviates(word, 'fin$ancebars')) then
+      name = 'financebars'
+   elseif (gnuplot_abbreviates(word, 'can$dlesticks')) then
+      name = 'candlesticks'
+   elseif (gnuplot_abbreviates(word, 'boxplot')) then
+      name = 'boxplot'
+   elseif (gnuplot_abbreviates(word, 'pm$3d')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'poly$gons')) then
+      name = 'polygons'
+   elseif (gnuplot_abbreviates(word, 'labels')) then
+      name = 'labels'
+   elseif (gnuplot_abbreviates(word, 'ima$ge')) then
+      name = 'image'
+   elseif (gnuplot_abbreviates(word, 'rgbima$ge')) then
+      name = 'rgbimage'
+   elseif (gnuplot_abbreviates(word, 'rgba$lpha')) then
+      name = 'rgbalpha'
+   elseif (gnuplot_abbreviates(word, 'cir$cles')) then
+      name = 'circles'
+   elseif (gnuplot_abbreviates(word, 'sec$tors')) then
+      name = 'sectors'
+   elseif (gnuplot_abbreviates(word, 'ell$ipses')) then
+      name = 'ellipses'
+   elseif (gnuplot_abbreviates(word, 'sur$face')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'parallel$axes')) then
+      name = 'parallelaxes'
+   elseif (gnuplot_abbreviates(word, 'spider$plot')) then
+      name = 'spiderplot'
+   elseif (gnuplot_abbreviates(word, 'table')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'zerror$fill')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'mask')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'contourfill')) then
+      name = ''
+   elseif (gnuplot_abbreviates(word, 'readout')) then
+      name = 'readout'
+   elseif (gnuplot_abbreviates(word, 'pie')) then
+      name = 'pie'
+   elseif (gnuplot_abbreviates(word, 'gauge')) then
+      name = 'gauge'
+   elseif (gnuplot_abbreviates(word, 'radar')) then
+      name = 'radar'
+   elseif (gnuplot_abbreviates(word, 'rose')) then
+      name = 'rose'
+   else
+      name = ''
+   endif
    endfunction style_name
 
    pure function gnuplot_abbreviates(word, pattern) result(match)

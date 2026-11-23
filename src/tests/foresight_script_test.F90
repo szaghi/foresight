@@ -3058,12 +3058,17 @@ if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 block
    character(len=:), allocatable :: svg    !< Output.
    character(len=:), allocatable :: centres !< The fs-pts path.
+   integer                       :: moves   !< Markers in it.
 
    svg = text_of_file('foresight_script_test_marks.svg')
    centres = svg(index(svg, 'class="fs-pts"'):)
    centres = centres(:index(centres, '/>'))
+   moves = 0
+   do i = 1, len(centres)
+      if (centres(i:i) == 'M') moves = moves + 1
+   enddo
    test_passed(144) = iostat == 0_I4P .and. index(svg(index(svg, 'class="fs-marks"'):), 'overflow="visible"') > 0 .and. &
-                     count([(centres(i:i) == 'M', i=1, len(centres))]) == 2
+                     moves == 2
    call interpreter%run_text('set xrange [-1:11]; set yrange [-1:11]; replot', iostat, iomsg)
    svg = text_of_file('foresight_script_test_marks.svg')
    test_passed(144) = test_passed(144) .and. iostat == 0_I4P .and. &
