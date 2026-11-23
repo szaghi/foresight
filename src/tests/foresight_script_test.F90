@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(145)                           !< Per-check outcome.
+logical                       :: test_passed(146)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3081,6 +3081,28 @@ call interpreter%run_text('reset session', iostat, iomsg)
 test_passed(145) = test_passed(145) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%lt_lw(1) < 0.0_R8P .and. &
                   .not. allocated(interpreter%figure%panels(1)%linecolors)
 
+! gnuplot's keyword tables, abbreviations in order: style data line/point, with e (yerrorbars), smooth freq/mcs/cum
+call interpreter%init(scratch)
+call interpreter%run_text('set style data line', iostat, iomsg)
+test_passed(146) = iostat == 0_I4P .and. interpreter%data_style == 'lines'
+call interpreter%run_text('set style data point', iostat, iomsg)
+test_passed(146) = test_passed(146) .and. iostat == 0_I4P .and. interpreter%data_style == 'points'
+call interpreter%run_text('set style data e', iostat, iomsg)
+test_passed(146) = test_passed(146) .and. iostat == 0_I4P .and. interpreter%data_style == 'yerrorbars'
+call interpreter%run_text('set style data errorl', iostat, iomsg)
+test_passed(146) = test_passed(146) .and. iostat == 0_I4P .and. interpreter%data_style == 'yerrorlines'
+call interpreter%run_text('set style data his', iostat, iomsg)
+test_passed(146) = test_passed(146) .and. iostat == 0_I4P .and. interpreter%data_style == 'histeps'
+call interpreter%run_text('$F << EOD'//new_line('a')//'1'//new_line('a')//'1'//new_line('a')//'2'//new_line('a')// &
+                          'EOD'//new_line('a')//'plot $F u 1:(1) smooth freq w l, $F u 1:(1) smooth cum w l, '// &
+                          '$F u 1:1 smooth mcs w l', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(146) = test_passed(146) .and. iostat == 0_I4P
+if (test_passed(146)) test_passed(146) = all(interpreter%figure%panels(1)%series(1)%y == [2.0_R8P, 1.0_R8P]) .and. &
+                                       all(interpreter%figure%panels(1)%series(2)%y == [2.0_R8P, 3.0_R8P])
+call interpreter%run_text('set style data linesx', iostat, iomsg)
+test_passed(146) = test_passed(146) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3089,7 +3111,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,145L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,146L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

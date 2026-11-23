@@ -18,6 +18,7 @@ public :: sequence_colors
 public :: fill_style
 public :: style_object
 public :: style_name
+public :: gnuplot_abbreviates
 public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
@@ -175,70 +176,60 @@ contains
    endsubroutine sequence_colors
 
    pure function style_name(word) result(name)
-   !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot accepts it (`l`, `p`, `lp`, `i`, `st`, `fs`,
-   !< `his`, `d`, `yerr`, `yerrorl`, ...), or foresight's `readout`, `pie`, `gauge`, `radar`, `rose` (full words only);
-   !< empty if unsupported. As gnuplot, `his` is histeps and histograms need `hist`.
+   !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot 6.0 reads it (its `plotstyle_tbl`, searched
+   !< in order, `$` marking the shortest abbreviation: `l`, `line`, `p`, `lp`, `i`, `st`, `fs`, `his`, `e`, `ye`,
+   !< `yerrorl`, ...), or foresight's `readout`, `pie`, `gauge`, `radar`, `rose` (full words only); empty if
+   !< unsupported. As gnuplot, `his` is histeps and histograms need `hist`.
    character(len=*), intent(in)  :: word !< Style word.
    character(len=:), allocatable :: name !< Full style name.
+   ! gnuplot's table, in its order, and foresight's name of each style (blank: unsupported)
+   character(len=*), parameter :: TABLE(2, 50) = reshape([character(len=16) :: &
+      'l$ines',          'lines',           'i$mpulses',       'impulses',        'p$oints',         'points',          &
+      'linesp$oints',    'linespoints',     'lp',              'linespoints',     'd$ots',           'dots',            &
+      'yerrorl$ines',    'yerrorlines',     'errorl$ines',     'yerrorlines',     'xerrorl$ines',    'xerrorlines',     &
+      'xyerrorl$ines',   'xyerrorlines',    'ye$rrorbars',     'yerrorbars',      'e$rrorbars',      'yerrorbars',      &
+      'xe$rrorbars',     'xerrorbars',      'xye$rrorbars',    'xyerrorbars',     'boxes',           'boxes',           &
+      'hist$ograms',     'histograms',      'isosurface',      '',                'filledc$urves',   'filledcurves',    &
+      'boxer$rorbars',   'boxerrorbars',    'boxx$yerrorbars', 'boxxyerror',      'st$eps',          'steps',           &
+      'fillst$eps',      '',                'fs$teps',         'fsteps',          'his$teps',        'histeps',         &
+      'vec$tors',        'vectors',         'arrow$s',         'arrows',          'fin$ancebars',    'financebars',     &
+      'can$dlesticks',   'candlesticks',    'boxplot',         'boxplot',         'pm$3d',           '',                &
+      'poly$gons',       'polygons',        'labels',          'labels',          'ima$ge',          'image',           &
+      'rgbima$ge',       'rgbimage',        'rgba$lpha',       'rgbalpha',        'cir$cles',        'circles',         &
+      'sec$tors',        'sectors',         'ell$ipses',       'ellipses',        'sur$face',        '',                &
+      'parallel$axes',   'parallelaxes',    'spider$plot',     'spiderplot',      'table',           '',                &
+      'zerror$fill',     '',                'mask',            '',                'contourfill',     '',                &
+      'readout',         'readout',         'pie',             'pie',             'gauge',           'gauge',           &
+      'radar',           'radar',           'rose',            'rose'], [2, 50])
+   integer :: k !< Table entry.
 
-   select case (word)
-   case ('l', 'lines')
-      name = 'lines'
-   case ('p', 'points')
-      name = 'points'
-   case ('lp', 'linespoints')
-      name = 'linespoints'
-   case ('yerr', 'yerrorbars')
-      name = 'yerrorbars'
-   case ('xerr', 'xerrorbars')
-      name = 'xerrorbars'
-   case ('xyerr', 'xyerrorbars')
-      name = 'xyerrorbars'
-   case ('his', 'histe', 'histep', 'histeps')
-      name = 'histeps'
-   case ('hist', 'histo', 'histog', 'histogr', 'histogra', 'histogram', 'histograms')
-      name = 'histograms'
-   case ('filledc', 'filledcu', 'filledcur', 'filledcurv', 'filledcurve', 'filledcurves')
-      name = 'filledcurves'
-   case ('ima', 'imag', 'image')
-      name = 'image'
-   case ('cir', 'circ', 'circl', 'circle', 'circles')
-      name = 'circles'
-   case ('boxes', 'boxplot', 'arrows', 'labels', 'rgbimage', 'readout', 'pie', 'gauge', 'radar', 'rose')
-      name = word
-   case default
-      name = ''
-      if (abbreviates(word, 'impulses', 1)) name = 'impulses'
-      if (abbreviates(word, 'steps', 2)) name = 'steps'
-      if (abbreviates(word, 'fsteps', 2)) name = 'fsteps'
-      if (abbreviates(word, 'dots', 1)) name = 'dots'
-      if (abbreviates(word, 'yerrorlines', 7)) name = 'yerrorlines'
-      if (abbreviates(word, 'xerrorlines', 7)) name = 'xerrorlines'
-      if (abbreviates(word, 'xyerrorlines', 8)) name = 'xyerrorlines'
-      if (abbreviates(word, 'boxerrorbars', 5)) name = 'boxerrorbars'
-      if (abbreviates(word, 'boxxyerror', 4)) name = 'boxxyerror'
-      if (abbreviates(word, 'candlesticks', 3)) name = 'candlesticks'
-      if (abbreviates(word, 'financebars', 3)) name = 'financebars'
-      if (abbreviates(word, 'vectors', 3)) name = 'vectors'
-      if (abbreviates(word, 'ellipses', 3)) name = 'ellipses'
-      if (abbreviates(word, 'polygons', 4)) name = 'polygons'
-      if (abbreviates(word, 'sectors', 3)) name = 'sectors'
-      if (abbreviates(word, 'rgbalpha', 4)) name = 'rgbalpha'
-      if (abbreviates(word, 'parallelaxes', 8)) name = 'parallelaxes'
-      if (abbreviates(word, 'spiderplot', 6)) name = 'spiderplot'
-   endselect
-   contains
-      pure function abbreviates(w, full, minimum) result(match)
-      !< Whether `w` abbreviates `full` with at least `minimum` characters.
-      character(len=*), intent(in) :: w       !< Word.
-      character(len=*), intent(in) :: full    !< Full name.
-      integer,          intent(in) :: minimum !< Shortest abbreviation.
-      logical                      :: match   !< Match.
-
-      match = len(w) >= minimum .and. len(w) <= len(full)
-      if (match) match = full(1:len(w)) == w
-      endfunction abbreviates
+   name = ''
+   do k = 1, size(TABLE, 2)
+      if (gnuplot_abbreviates(word, trim(TABLE(1, k)))) then
+         name = trim(TABLE(2, k))
+         return
+      endif
+   enddo
    endfunction style_name
+
+   pure function gnuplot_abbreviates(word, pattern) result(match)
+   !< Whether `word` is the keyword `pattern` as gnuplot's `almost_equals` reads it: the whole of it, or, if it holds a
+   !< `$`, any abbreviation at least as long as the part before the `$`.
+   character(len=*), intent(in) :: word    !< Word.
+   character(len=*), intent(in) :: pattern !< Keyword, `$` before its optional part.
+   logical                      :: match   !< Match.
+   integer                      :: dollar  !< Position of `$`.
+   character(len=:), allocatable :: full   !< Keyword without `$`.
+
+   dollar = index(pattern, '$')
+   if (dollar == 0) then
+      match = word == pattern
+      return
+   endif
+   full = pattern(1:dollar - 1)//pattern(dollar + 1:)
+   match = len(word) >= dollar - 1 .and. len(word) <= len(full)
+   if (match) match = full(1:len(word)) == word
+   endfunction gnuplot_abbreviates
 
    function style_with(name) result(with)
    !< Plotting style code of a gnuplot `with` keyword, full or abbreviated (see `style_name`).

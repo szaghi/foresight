@@ -121,7 +121,7 @@ use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
-use foresight_style, only : default_color, fill_style, sequence_colors, style_name, style_object, style_with, &
+use foresight_style, only : default_color, fill_style, gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
                             FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
@@ -2783,6 +2783,7 @@ contains
                i = i + 1_I4P
                cycle
             endif
+            filter = smooth_name(filter)
             if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES))) then
                call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES//')', &
                          iostat, iomsg)
@@ -10127,6 +10128,26 @@ contains
 
    code = style_with(name)
    endfunction style_code
+
+   pure function smooth_name(word) result(name)
+   !< Full name of the `smooth` filter `word`, full or abbreviated as gnuplot 6.0 reads it (its `plot_smooth_tbl`, in
+   !< order: `f` frequency, `cum` cumulative, `mcs` mcsplines, `fnor` fnormal, ...); `word` itself if no filter.
+   character(len=*), intent(in)  :: word !< Filter word.
+   character(len=:), allocatable :: name !< Full filter name.
+   character(len=*), parameter :: TABLE(15) = [character(len=12) :: 'a$csplines', 'bins', 'b$ezier', 'c$splines', &
+                                               's$bezier', 'u$nique', 'unwrap', 'f$requency', 'cum$ulative', &
+                                               'k$density', 'cn$ormal', 'mcs$plines', 'fnor$mal', 'z$sort', 'path']
+   integer :: k !< Table entry.
+
+   name = word
+   do k = 1, size(TABLE)
+      if (gnuplot_abbreviates(word, trim(TABLE(k)))) then
+         name = TABLE(k)(1:index(TABLE(k), '$') - 1)//TABLE(k)(index(TABLE(k), '$') + 1:)
+         name = trim(name)
+         return
+      endif
+   enddo
+   endfunction smooth_name
 
    pure function canonical_style(word) result(style)
    !< Full gnuplot style name of `word` (full or abbreviated), empty if unsupported.
