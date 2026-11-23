@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(188)                           !< Per-check outcome.
+logical                       :: test_passed(189)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1218,7 +1218,8 @@ call interpreter%run_text('set ytics out; set y2tics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%yaxis%tics%out .and. &
                   interpreter%figure%panels(1)%y2axis%tics%out
 call interpreter%run_text('set ytics rotate', iostat, iomsg)
-test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'rotate is supported on xtics and x2tics only') > 0
+test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. &
+                  index(iomsg, 'rotate is supported on xtics, x2tics and rtics only') > 0
 call interpreter%run_text('set cbtics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'in and out are supported on xtics') > 0
 call interpreter%run_text('set xtics right', iostat, iomsg)
@@ -1368,7 +1369,7 @@ test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. &
                   interpreter%figure%panels(1)%x2axis%tics%anchor() == 'end'
 call interpreter%run_text('set y2tics rotate', iostat, iomsg)
 test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. &
-                  index(iomsg, 'rotate is supported on xtics and x2tics only') > 0
+                  index(iomsg, 'rotate is supported on xtics, x2tics and rtics only') > 0
 
 ! the identity themes washi and night; a default theme given to init (foresight --theme), which a script overrides
 call interpreter%init(scratch, theme='night')
@@ -4190,6 +4191,47 @@ if (test_passed(188)) then
    test_passed(188) = iostat /= 0_I4P .and. index(iomsg, 'no dataset of that name') > 0
 endif
 
+! set logscale r: the pole at the r axis start, the radius log10(r / rmin), points below it undefined; impulses on a
+! polar panel from the pole; set rtics rotate; set noxtics as unset xtics, set view read and ignored
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg size 500,500; set output "foresight_script_test_logr.svg"'//new_line('a')// &
+                          '$D << EOD'//new_line('a')//'0 1'//new_line('a')//'90 10'//new_line('a')//'180 100'// &
+                          new_line('a')//'270 0.1'//new_line('a')//'EOD'//new_line('a')// &
+                          'set polar; set angles degrees; set logscale r 10; set rrange [1:100]; set rtics rotate by 90; '// &
+                          'set noxtics; set view equal xy; plot $D with impulses', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(189) = iostat == 0_I4P
+if (test_passed(189)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(189) = panel%raxis%log .and. panel%xaxis%tics%mode == TICS_NONE .and. &
+                        abs(panel%raxis%tics%rotate - 90.0_R8P) < 1.0e-12_R8P .and. panel%raxis%lo == 1.0_R8P .and. &
+                        panel%raxis%hi == 100.0_R8P
+   endassociate
+   ! the r labels 1, 10, 100 turned, a decade apart on the page (log r)
+   block
+      character(len=:), allocatable :: svg  !< Output.
+      real(R8P)                     :: x(3) !< Label anchors.
+      integer(I4P)                  :: p    !< Position.
+      integer(I4P)                  :: k    !< Label counter.
+
+      svg = text_of_file('foresight_script_test_logr.svg')
+      p = 0_I4P
+      do k = 1_I4P, 3_I4P
+         if (index(svg(p + 1:), 'rotate(-90 ') == 0) exit
+         p = p + index(svg(p + 1:), 'rotate(-90 ') + 10
+         read(svg(p + 1:index(svg(p + 1:), ' ') + p - 1), *) x(k)
+      enddo
+      test_passed(189) = test_passed(189) .and. k == 4_I4P
+      if (test_passed(189)) test_passed(189) = abs((x(3) - x(2)) - (x(2) - x(1))) < 0.2_R8P
+   endblock
+endif
+if (test_passed(189)) then
+   call interpreter%run_text('unset logscale r; plot $D with impulses', iostat, iomsg)
+   test_passed(189) = iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%raxis%log
+endif
+open(newunit=unit, file='foresight_script_test_logr.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4198,7 +4240,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,188L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,189L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

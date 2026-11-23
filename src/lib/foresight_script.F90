@@ -3441,7 +3441,8 @@ contains
       endif
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
-            polar_ok = is_word(with, 'lines points linespoints filledcurves sectors readout') .and. .not. allocated(base)
+            polar_ok = is_word(with, 'lines points linespoints impulses filledcurves sectors readout') .and. &
+                       .not. allocated(base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
             if (.not. polar_ok) then
                call fail('plot: '//POLAR_STYLES, iostat, iomsg)
@@ -7136,6 +7137,17 @@ contains
       return
    endif
    option = tokens(1)%text
+   ! gnuplot's old `set noxtics`, `set nokey`, ...: the unset of the option
+   if (is_word(option, 'noxtics noytics nox2tics noy2tics nocbtics nomxtics nomytics nokey nogrid noborder')) then
+      block
+         type(token_object), allocatable :: words(:) !< The option without its `no`.
+
+         words = tokens
+         words(1)%text = option(3:)
+         call self%unset_command(words, iostat, iomsg)
+      endblock
+      return
+   endif
    if (keyword(option, 'title', 3_I4P)) then
       call title_option
    elseif (keyword(option, 'xlabel', 2_I4P)) then
@@ -7232,6 +7244,19 @@ contains
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
                         reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
+   elseif (keyword(option, 'logscale', 3_I4P) .and. r_axis_named()) then
+      ! gnuplot `set logscale r [10]`: the radial axis of the polar panels
+      if (size(tokens) > 3) then
+         call fail('set logscale r: a base 10 at most is expected', iostat, iomsg)
+         return
+      endif
+      if (size(tokens) == 3) then
+         if (tokens(3)%text /= '10') then
+            call fail('set logscale r: log bases other than 10 are not supported', iostat, iomsg)
+            return
+         endif
+      endif
+      self%figure%panels(self%figure%current)%raxis%log = .true.
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_logscale(text)
@@ -7701,8 +7726,8 @@ contains
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       ! the surfaces' (splot, not in foresight); M the v samples of the `'++'` pseudo-file
       call samples_option(.false.)
-   elseif (keyword(option, 'xyplane', 3_I4P)) then
-      ! splot's base plane: read and ignored
+   elseif (keyword(option, 'xyplane', 3_I4P) .or. option == 'view') then
+      ! splot's base plane and view (`set view map|equal xy|...`): read and ignored, as in gnuplot's 2D plots
       continue
    elseif (keyword(option, 'zrange', 2_I4P) .or. keyword(option, 'urange', 2_I4P) .or. &
            keyword(option, 'vrange', 2_I4P)) then
@@ -10296,9 +10321,10 @@ contains
       i = 2_I4P
       do while (i <= size(toks, kind=I4P))
          if (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['in      ', 'out     ', 'rotate  ', 'norotate'])) then
-            if (.not. (keyword(option, 'xtics', 3_I4P) .or. keyword(option, 'x2tics', 4_I4P)) .and. &
+            if (.not. (keyword(option, 'xtics', 3_I4P) .or. keyword(option, 'x2tics', 4_I4P) .or. &
+                       keyword(option, 'rtics', 3_I4P)) .and. &
                 (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
-               call fail('set '//option//': rotate is supported on xtics and x2tics only', iostat, iomsg)
+               call fail('set '//option//': rotate is supported on xtics, x2tics and rtics only', iostat, iomsg)
                return
             endif
             if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P), &
@@ -10784,6 +10810,14 @@ contains
       endif
       endsubroutine samples_option
 
+      function r_axis_named() result(yes)
+      !< Whether the option names the r axis alone (`logscale r [base]`).
+      logical :: yes !< The r axis.
+
+      yes = .false.
+      if (size(tokens) >= 2) yes = tokens(2)%text == 'r'
+      endfunction r_axis_named
+
       function integer_expression(n) result(ok)
       !< The expression from token `i` (left on its last token) truncated to an integer, as gnuplot's int_expression.
       integer(I4P), intent(out) :: n  !< Value.
@@ -11237,6 +11271,14 @@ contains
          endif
          call self%figure%set_paxis(int(v, I4P), tics=.false.)
       endblock
+      return
+   elseif (keyword(option, 'logscale', 3_I4P) .and. size(tokens) == 2) then
+      if (tokens(2)%text == 'r') then
+         self%figure%panels(self%figure%current)%raxis%log = .false.
+         return
+      endif
+      if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
+      call self%figure%unset_logscale(axes)
       return
    elseif (keyword(option, 'logscale', 3_I4P)) then
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return

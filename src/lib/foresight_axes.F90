@@ -119,8 +119,8 @@ character(len=*), parameter :: GRID_DASHES   = '2,3'     !< Grid line dash array
 character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill: the page background.
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
-character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, closed filledcurves, '// &
-                                               'sectors and readouts, on the first axes' !< Styles of a polar panel.
+character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, closed '// &
+                                               'filledcurves, sectors and readouts, on the first axes' !< Polar styles.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
 
@@ -1468,7 +1468,7 @@ contains
       call backend%end_group
    enddo
    if (self%polar) then
-      associate(radius => self%raxis%hi - self%raxis%lo)
+      associate(radius => polar_rho(self%raxis, self%raxis%hi))
          if (self%border_polar) call backend%data_polyline(circle_u(radius), circle_v(radius), FRAME_COLOR, 1.0_R8P, '')
          ! the r axis towards the right of the page, as gnuplot
          if (self%raxis_on) call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius]), &
@@ -2292,10 +2292,10 @@ contains
    integer(I4P)                         :: k       !< Vertex or spoke counter.
 
    turn = [(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P), k = 0_I4P, CIRCLE_SIDES)]
-   radius = self%raxis%hi - self%raxis%lo
+   radius = polar_rho(self%raxis, self%raxis%hi)
    do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
       if (.not. self%raxis%ticks(t)%major) cycle
-      rho = self%raxis%ticks(t)%value - self%raxis%lo
+      rho = polar_rho(self%raxis, self%raxis%ticks(t)%value)
       if (rho <= 0.0_R8P .or. rho > radius * (1.0_R8P + 1.0e-9_R8P)) cycle
       call backend%data_polyline(self%xaxis%to_unit(rho * cos(turn)), self%yaxis%to_unit(rho * sin(turn)), GRID_COLOR, &
                                  0.5_R8P, GRID_DASHES)
@@ -2341,14 +2341,20 @@ contains
       sx = (right - left) / (self%xaxis%hi - self%xaxis%lo)
       sy = (bottom - top) / (self%yaxis%hi - self%yaxis%lo)
    endassociate
-   radius = self%raxis%hi - self%raxis%lo
+   radius = polar_rho(self%raxis, self%raxis%hi)
    if (self%raxis_on) then
       do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
-         p = cx + (self%raxis%ticks(t)%value - self%raxis%lo) * sx
+         p = cx + polar_rho(self%raxis, self%raxis%ticks(t)%value) * sx
          length = tick_length(self%raxis%tics, self%raxis%ticks(t)%major)
          call backend%polyline([p, p], [cy, cy - length], FRAME_COLOR, 1.0_R8P, '')
-         if (self%raxis%ticks(t)%major) call backend%text(p, cy + GAP + font_size, self%raxis%ticks(t)%label, &
-                                                          'middle', sup=self%raxis%ticks(t)%sup)
+         if (.not. self%raxis%ticks(t)%major) cycle
+         if (self%raxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+            ! gnuplot `set rtics rotate by A`: right-justified at the tick, turned by A (counterclockwise)
+            call backend%text(p + 0.325_R8P * font_size, cy + 0.45_R8P * font_size, self%raxis%ticks(t)%label, 'end', &
+                              sup=self%raxis%ticks(t)%sup, rotate=-self%raxis%tics%rotate)
+         else
+            call backend%text(p, cy + GAP + font_size, self%raxis%ticks(t)%label, 'middle', sup=self%raxis%ticks(t)%sup)
+         endif
       enddo
    endif
    if (self%ttics%mode == TICS_NONE) return
@@ -3801,17 +3807,22 @@ contains
       real(R8P)    :: v0 !< Unit ordinate of y = 0.
       integer(I4P) :: i  !< Point counter.
 
+      real(R8P)    :: u0 !< Unit abscissa of the foot (the pole on a polar panel).
+
       v0 = -1.0_R8P
       if (yaxis%accepts(0.0_R8P)) v0 = yaxis%to_unit(0.0_R8P)
       associate(series => self%series(s))
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
+            ! on a polar panel, from the pole, as gnuplot
+            u0 = u(i)
+            if (self%polar) u0 = xaxis%to_unit(0.0_R8P)
             if (allocated(series%colors)) then
                if (series%colors(i) == 'none') cycle
-               call backend%data_polyline([u(i), u(i)], [v0, v(i)], trim(series%colors(i)), series%style%linewidth, &
+               call backend%data_polyline([u0, u(i)], [v0, v(i)], trim(series%colors(i)), series%style%linewidth, &
                                           series%style%dasharray())
             else
-               call backend%data_polyline([u(i), u(i)], [v0, v(i)], series%style%color, series%style%linewidth, &
+               call backend%data_polyline([u0, u(i)], [v0, v(i)], series%style%color, series%style%linewidth, &
                                           series%style%dasharray())
             endif
          enddo
@@ -4803,6 +4814,39 @@ contains
    enddo
    endsubroutine polar_extent
 
+   pure subroutine polar_positive_min(all, rmin)
+   !< Smallest positive r of the points of the series `all` (theta:r), readouts aside; 0 if none.
+   type(series_object), intent(in)  :: all(:) !< Series, theta:r.
+   real(R8P),           intent(out) :: rmin   !< Smallest positive r.
+   integer(I4P)                     :: s      !< Series counter.
+   integer(I4P)                     :: i      !< Point counter.
+
+   rmin = huge(1.0_R8P)
+   do s = 1_I4P, size(all, kind=I4P)
+      if (all(s)%style%with == WITH_READOUT) cycle
+      do i = 1_I4P, size(all(s)%x, kind=I4P)
+         if (.not. (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i)))) cycle
+         if (all(s)%y(i) > 0.0_R8P) rmin = min(rmin, all(s)%y(i))
+      enddo
+   enddo
+   if (rmin == huge(1.0_R8P)) rmin = 0.0_R8P
+   endsubroutine polar_positive_min
+
+   pure function polar_rho(raxis, r) result(rho)
+   !< Distance from the pole of the radius `r` on the r axis `raxis` [r units]: r - rmin, or log10(r / rmin) on a log
+   !< axis (`set logscale r`).
+   type(axis_object), intent(in) :: raxis !< Radial axis.
+   real(R8P),         intent(in) :: r     !< Radius.
+   real(R8P)                     :: rho   !< Distance.
+
+   if (raxis%log) then
+      rho = -huge(1.0_R8P)
+      if (r > 0.0_R8P .and. raxis%lo > 0.0_R8P) rho = log10(r / raxis%lo)
+   else
+      rho = r - raxis%lo
+   endif
+   endfunction polar_rho
+
    pure subroutine polar_window(all, fixed, ends)
    !< Make undefined the points of the series `all` (theta:r) whose theta lies outside the fixed ends of the theta range
    !< (gnuplot `set trange`, which excludes them from polar data plots); an autoscaled end excludes nothing. Readouts
@@ -4833,10 +4877,10 @@ contains
    enddo
    endsubroutine polar_window
 
-   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise)
+   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise, logr)
    !< Project the series `all` from theta:r to x:y about the pole at r = `rmin`, as gnuplot: x = (r - rmin) cos(phi),
-   !< y = (r - rmin) sin(phi), phi the page angle of theta; with `cut` (a fixed `rmin`) a point with r below `rmin` is
-   !< undefined, else it lies across the pole. Readouts kept.
+   !< y = (r - rmin) sin(phi), phi the page angle of theta (`logr`: log10(r / rmin) for r - rmin); with `cut` (a fixed
+   !< `rmin`) a point with r below `rmin` is undefined, else it lies across the pole. Readouts kept.
    !< (A module procedure, not a binding: gfortran 16 debug builds misread the components of `self%series` reached
    !< through the class dummy after their reallocation.)
    type(series_object), intent(inout) :: all(:)    !< Series: theta:r in, x:y out.
@@ -4845,6 +4889,7 @@ contains
    logical,             intent(in)    :: degrees   !< Theta in degrees, else radians.
    real(R8P),           intent(in)    :: origin    !< Page angle of theta = 0 [deg].
    logical,             intent(in)    :: clockwise !< Theta grows clockwise.
+   logical,             intent(in)    :: logr      !< Log r axis.
    real(R8P)                          :: nan       !< Undefined value.
    real(R8P)                          :: phi       !< Page angle [rad].
    real(R8P)                          :: rho       !< Distance from the pole [r units].
@@ -4861,7 +4906,11 @@ contains
                if (degrees) phi = phi * (PI_R8 / 180.0_R8P)
                if (clockwise) phi = -phi
                phi = phi + origin * (PI_R8 / 180.0_R8P)
-               rho = all(s)%y(i) - rmin
+               if (logr) then
+                  rho = log10(all(s)%y(i) / rmin)
+               else
+                  rho = all(s)%y(i) - rmin
+               endif
                all(s)%x(i) = rho * cos(phi)
                all(s)%y(i) = rho * sin(phi)
                cycle
@@ -5242,7 +5291,7 @@ contains
    logical                         :: ok     !< Polar series.
 
    select case (series%style%with)
-   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS)
+   case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES)
       ok = .true.
    case (WITH_FILLEDCURVES)
       ok = .not. allocated(series%ylow)
@@ -5979,12 +6028,19 @@ contains
                         [self%taxis%min_user, self%taxis%max_user])
       call polar_extent(self%series, rmax, any_r)
       rmin = 0.0_R8P
+      if (self%raxis%log) then
+         ! gnuplot `set logscale r`: the pole at the r axis start, the radius log10(r / rmin); without a set start, the
+         ! smallest positive r
+         call polar_positive_min(self%series, rmin)
+         if (.not. rmin > 0.0_R8P) rmin = 1.0_R8P
+      endif
       if (self%raxis%min_fixed) rmin = self%raxis%min_user
-      if (.not. any_r .or. .not. rmax > rmin) rmax = rmin + 1.0_R8P
-      call self%raxis%setup(0.0_R8P, rmax, .true., 0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
-      radius = self%raxis%hi - self%raxis%lo
-      call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed, self%degrees, self%theta_origin, &
-                         self%theta_clockwise)
+      if (.not. any_r .or. .not. rmax > rmin) rmax = merge(rmin * 10.0_R8P, rmin + 1.0_R8P, self%raxis%log)
+      call self%raxis%setup(merge(rmin, 0.0_R8P, self%raxis%log), rmax, .true., &
+                            0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
+      radius = polar_rho(self%raxis, self%raxis%hi)
+      call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed .or. self%raxis%log, self%degrees, &
+                         self%theta_origin, self%theta_clockwise, self%raxis%log)
       xmin(1) = -radius
       xmax(1) = radius
       found = [.true., .false.]

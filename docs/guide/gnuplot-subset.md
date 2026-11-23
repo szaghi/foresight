@@ -70,7 +70,7 @@ that did what it says.
 | **poi**ntsize `S` | the point size of the items without their own (`ps`), see [Point types](#point-types) | 1 |
 | **linet**ype `N` [`lc`] [`lw`] [`dt`] [`pt`] [`ps`]\|`cycle N` | redefine linetype N, see [Styles](#styles); its color may have an alpha channel (`"#80bb33bb"`) | — |
 | **jit**ter [`overlap` [`first`] `N`] [`spread S`] [`wrap W`] [`swarm`\|`square`\|`vertical`] | overlapping points spread out, see [Point types](#point-types) | no jitter |
-| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent | linear axes |
+| **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent; `r` alone the [polar](#polar-plots) radius | linear axes |
 | **gr**id [[`no`][`m`]`x`\|`y`\|`x2`\|`y2`[`tics`]]... [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|`r`\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` or `lt black` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit; a `STEP` beyond a full turn of radians is in degrees, as gnuplot) instead; `r` the rings alone (with `polar`, as `polar`), `nor` none | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t` | x:y coordinates |
 | **an**gles `degrees`\|`radians` | unit of theta, of `t` and of the trigonometric functions (radians by default) | — |
@@ -106,7 +106,8 @@ that did what it says.
 | **dataf**ile **columnhead**ers \| **nocolumnhead**ers | the first row of each dataset is a header, in plots, `stats` and `fit` (other datafile options may follow) | not a header |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored; expressions truncated to integers, as gnuplot | 100 |
 | **ov**erflow [`float`\|`undefined`\|`NaN`] | an integer overflow of `+ - * **` gives a real (the default), an undefined value or NaN, see [Expressions](#expressions-in-using) | `+` and `-` wrap around (two's complement), `*` and `**` give a real, as gnuplot |
-| **iso**samples, **mou**se, **mac**ros, `pointintervalbox`, **zr**ange, **ur**ange, **vr**ange, **xyp**lane, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's 2D svg output (surfaces, interactive terminals, macros always on, `pointinterval` gaps, `splot`); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`) | the same |
+| **iso**samples, **mou**se, **mac**ros, `pointintervalbox`, **zr**ange, **xyp**lane, `view`, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's 2D svg output (surfaces, interactive terminals, macros always on, `pointinterval` gaps, `splot`); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`); `isosamples` (its second value) and **ur**ange, **vr**ange also set the grid of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | the same |
+| `noxtics`, `noytics`, `nox2tics`, `noy2tics`, `nocbtics`, `nomxtics`, `nomytics`, `nokey`, `nogrid`, `noborder` | gnuplot's old forms of `unset xtics`, ... | — |
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
@@ -2040,8 +2041,11 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
 - `set grid polar` draws rings at the r ticks and spokes (`set grid r` the rings alone), `set border polar` the circle
   of rmax, `set ttics` the theta labels outside it (always in degrees; `set ttics add ("π" 180)` names an angle),
   `set mttics N` minor ticks on that circle, `set size square` keeps the circle round;
-- the items are `lines`, `points`, `linespoints`, closed `filledcurves` (`using theta:r`) or readouts (of r), on the
-  first axes; x and y stay linear.
+- `set logscale r` (base 10) places r at log10(r / rmin) from the pole, rmin the `rrange` start (else the smallest
+  positive r), the points below it undefined; the rings and the r ticks follow, `set rtics rotate by A` turns their
+  labels, as gnuplot;
+- the items are `lines`, `points`, `linespoints`, `impulses` (from the pole), closed `filledcurves` (`using theta:r`)
+  or readouts (of r), on the first axes; x and y stay linear.
 
 In the HTML page a polar panel zooms as any other: the curves, rings, spokes and border are data, the r tick labels
 and theta labels are hidden while zoomed. Unlike gnuplot, points beyond rmax are clipped at the plot area as the lines
@@ -2089,7 +2093,7 @@ text). Zooming magnifies the cells with the data.
 
 Inline ranges in polar mode, `set link x2|y2`, `splot`,
 `fit` beyond [its subset](#fit), log bases other than 10, a negative `set size ratio`; `set rlabel`,
-`set logscale r`, the `rtics` placement options; in `set xtics`, positions and a list together
+the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `axis` of the
 x2 and y2 ticks, `log`/`nolog`; the complex forms of the functions but `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
 `exp`, `log`, `log10`, `sin`, `cos`, `tan`, `sinh`, `cosh` (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
