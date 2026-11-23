@@ -122,9 +122,9 @@ type :: series_object
                                                              !< with `point`); else the library's line.
    logical                       :: fill_border = .false. !< `filledcurves`: the fill style's border, never drawn by the
                                                           !< library (see `fill_edges`).
-   integer(I4P)                  :: fill_edges = 0_I4P !< `filledcurves`: where that border is drawn, as gnuplot 6.0 (a
-                                                       !< script's): 0 nowhere (the library's), 1 around the key
-                                                       !< sample, 2 around the key sample and along the curve.
+   integer(I4P)                  :: fill_edges = 0_I4P !< `filledcurves`: where that border is drawn: 0 nowhere (the
+                                                       !< library's), 1 as gnuplot 6.0 (a script's): around the key
+                                                       !< sample, and along a closed curve (not its closing side).
    logical                       :: blank_ticks = .false. !< A blank text label is a tick too (a script's `xtic("")`,
                                                           !< the rug, as gnuplot); else no tick (the library's).
    integer(I4P)                  :: spider_group = 0_I4P !< Spider plot group (gnuplot `newspiderplot`), 0 the first:

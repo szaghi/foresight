@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(216)                           !< Per-check outcome.
+logical                       :: test_passed(217)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4874,7 +4874,7 @@ if (test_passed(214)) then
    associate(panel => interpreter%figure%panels(1))
       test_passed(214) = panel%series(1)%gnuplot_sample .and. panel%series(2)%fill_edges == 1_I4P .and. &
                         panel%series(2)%fill_border .and. trim(panel%series(3)%style%color) == 'none' .and. &
-                        panel%series(4)%fill_edges == 2_I4P .and. trim(panel%key_title_anchor) == 'start'
+                        panel%series(4)%fill_edges == 1_I4P .and. trim(panel%key_title_anchor) == 'start'
    endassociate
 endif
 call interpreter%run_text('set key title "K" right; set style fill solid noborder; '// &
@@ -4939,6 +4939,33 @@ if (test_passed(216)) then
    close(unit, status='delete')
 endif
 
+! the fill border of filledcurves where gnuplot 6.0 draws it: around every key sample, along a closed curve only (not
+! along a fill to y=0); one red stroke for each: the closed curve, its sample, the y=0 sample
+call interpreter%init(scratch)
+call interpreter%run_text('$C << EOD'//new_line('a')//'0 0.2'//new_line('a')//'1 0.6'//new_line('a')//'2 0.5'// &
+                          new_line('a')//'EOD'//new_line('a')//'set output "foresight_script_test_edges.svg"; '// &
+                          'set style fill solid 0.3 border lc "red"; plot $C using 1:2 with filledcurves closed, '// &
+                          '$C using 1:2 with filledcurves y=0', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(217) = iostat == 0_I4P
+if (test_passed(217)) then
+   block
+      character(len=1000) :: line !< SVG line.
+      integer(I4P)        :: ios  !< Read status.
+      integer(I4P)        :: n    !< Red strokes.
+
+      n = 0_I4P
+      open(newunit=unit, file='foresight_script_test_edges.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, 'stroke="#ff0000"') > 0) n = n + 1_I4P
+      enddo
+      close(unit, status='delete')
+      test_passed(217) = n == 3_I4P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4947,7 +4974,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,216L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,217L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

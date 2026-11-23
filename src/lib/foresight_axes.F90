@@ -4293,12 +4293,13 @@ contains
                else
                   call backend%data_polygon(u(a:b), v(a:b), fill, series%style%density, 'none', &
                                             0.0_R8P)
-               endif
-               if (series%fill_edges == 2_I4P .and. series%fill_border) then
-                  ! a script's plot item with its own fill border: the curve drawn along, as gnuplot 6.0
-                  row = series%style
-                  row%border = .true.
-                  call backend%data_polyline(u(a:b), v(a:b), row%stroke_color(), row%linewidth, '')
+                  if (series%fill_edges > 0_I4P .and. series%fill_border) then
+                     ! a script's closed curve with a fill border: the curve drawn along (not its closing side), as
+                     ! gnuplot 6.0
+                     row = series%style
+                     row%border = .true.
+                     call backend%data_polyline(u(a:b), v(a:b), row%stroke_color(), row%linewidth, '')
+                  endif
                endif
             endif
             a = b + 1_I4P

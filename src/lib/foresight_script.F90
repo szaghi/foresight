@@ -5108,9 +5108,9 @@ contains
 
       subroutine fill_last
       !< The fill color of the item (`fc`) on its series; a filledcurves fill border where gnuplot 6.0 draws it: around
-      !< the key sample, and along the curve too with the item's own `fs`.
+      !< the key sample, and along a closed curve.
       associate(panel => self%figure%panels(self%figure%current))
-         if (with == 'filledcurves') panel%series(size(panel%series))%fill_edges = merge(2_I4P, 1_I4P, allocated(fs))
+         if (with == 'filledcurves') panel%series(size(panel%series))%fill_edges = 1_I4P
          if (allocated(fill_rgb)) panel%series(size(panel%series))%style%fill_rgb = fill_rgb
       endassociate
       endsubroutine fill_last
