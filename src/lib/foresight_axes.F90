@@ -319,6 +319,8 @@ type :: axes_object
    character(len=:), allocatable    :: grid_lc  !< Grid line color, unallocated for the theme's.
    real(R8P)                        :: grid_lw = 0.5_R8P !< Grid line width [px].
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
+   logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
+   logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: drop_last        !< Forget the last series.
@@ -1763,6 +1765,7 @@ contains
       if (.not. (lo <= hi)) cycle
       u = self%xaxis%to_unit(0.5_R8P * (lo + hi))
       if (u < 0.0_R8P .or. u > 1.0_R8P) cycle
+      backend%boxed = self%hist_title_boxed
       if (allocated(self%hist_title_color)) then
          call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
                            baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle', &
@@ -1771,6 +1774,7 @@ contains
          call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
                            baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle')
       endif
+      backend%boxed = .false.
    enddo
    call backend%end_group
    endsubroutine draw_group_titles
@@ -2028,6 +2032,7 @@ contains
          ! gnuplot `set title offset X,Y`: characters, y up
          ! `set title left|right`: the anchor at the same centre, as gnuplot
          backend%literal = self%title_plain
+         backend%boxed = self%title_boxed
          if (len_trim(self%title_color) > 0) then
             call backend%text(0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
                               title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
@@ -2037,6 +2042,7 @@ contains
                               title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor))
          endif
          backend%literal = .false.
+         backend%boxed = .false.
       endif
    endassociate
    contains

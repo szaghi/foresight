@@ -56,7 +56,7 @@ that did what it says.
 
 | Option | `set` | `unset` |
 |---|---|---|
-| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] | panel title, shifted by `offset` characters (y up); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` read and ignored; `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text) | no title |
+| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] [`boxed`] | panel title, shifted by `offset` characters (y up); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` read and ignored; `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text); `boxed` on the background (text box style 0) | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
@@ -106,7 +106,7 @@ that did what it says.
 | **dataf**ile **columnhead**ers \| **nocolumnhead**ers | the first row of each dataset is a header, in plots, `stats` and `fit` (other datafile options may follow) | not a header |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored; expressions truncated to integers, as gnuplot | 100 |
 | **ov**erflow [`float`\|`undefined`\|`NaN`] | an integer overflow of `+ - * **` gives a real (the default), an undefined value or NaN, see [Expressions](#expressions-in-using) | `+` and `-` wrap around (two's complement), `*` and `**` give a real, as gnuplot |
-| **iso**samples, **mou**se, **mac**ros, `pointintervalbox`, **zr**ange, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's 2D svg output (surfaces, interactive terminals, macros always on, `pointinterval` gaps, `splot`); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`) | the same |
+| **iso**samples, **mou**se, **mac**ros, `pointintervalbox`, **zr**ange, **ur**ange, **vr**ange, **xyp**lane, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's 2D svg output (surfaces, interactive terminals, macros always on, `pointinterval` gaps, `splot`); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`) | the same |
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
 | **st**yle **l**ine `N` [`lc` ...] [`lt N`] [`lw W`] [`dt N`] [`pt N`] [`ps S`] | line style `N`, used by `ls N` | — |
@@ -124,7 +124,7 @@ that did what it says.
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle `boxplot` [`range R`\|`fraction F`] [`outliers`\|`nooutliers`] [`pointtype P`] [`candlesticks`\|`financebars`] [`medianlinewidth W`] [`separation S`] [`labels off`\|`auto`\|`x`] [`sorted`\|`unsorted`] | layout of the [boxplots](#box-finance-and-boxplot-styles) plotted next | — |
 | **st**yle **textbox** [`N`] [`opaque`\|`transparent`] [`fc C`] [`border` [`lc C`] [`lw W`]\|`noborder`] [`margins X,Y`] | text box style `N` (0 to 3) of the `boxed` labels; as gnuplot's svg terminal, an opaque or bordered style puts the text on the background (no border, no margin drawn) | — |
-| **st**yle **hist**ogram `clustered` [`gap G`]\|`errorbars` [`gap G`] [`lw W`]\|`rowstacked`\|`columnstacked` [`title` [`tc C`] [`offset X,Y`]] [`nokeyseparators`] | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default; the look of the group titles | — |
+| **st**yle **hist**ogram `clustered` [`gap G`]\|`errorbars` [`gap G`] [`lw W`]\|`rowstacked`\|`columnstacked` [`title` [`tc C`] [`offset X,Y`] [`boxed`]] [`nokeyseparators`] | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default; the look of the group titles (`boxed`: on the background, text box style 0) | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-` | — |
 | **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`enhanced`\|`noenhanced`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period, [enhanced text](#enhanced-text) on (the default) or off; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
@@ -186,6 +186,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
+| `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; with the styles of functions |
 | **fc** / **fillc**olor `COLOR` | the fill's own color (styles with a fill), the line and border keeping `lc`: `with filledcurves fc rgb "#80e0a080"` |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, see [below](#smoothing); `bins` see [Bins](#bins) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table) |
@@ -1444,7 +1445,8 @@ set label 'note' at character 2, 1                  # 2 cells from the left, 1 u
 
 <Plot name="cb_arrow_styles" svg :width="560" :height="360" />
 
-`set label ... boxed [bs N]` and `with labels boxed [bs N]` draw the text on the background when the
+`set label ... boxed [bs N]`, `with labels boxed [bs N]` (and `set title ... boxed`, `set style histogram ... title
+boxed`) draw the text on the background when the
 [textbox style](#set-unset-options) `N` (0 by default) is opaque or has a border, as gnuplot's svg terminal (a filter
 flooding the text's bounding box; no border, no margin). An arrow takes `fill` for `filled` and `ls N` (the color, width and dashes of line style N).
 
@@ -2036,5 +2038,6 @@ gnuplot's `geographic` formats; `set datafile` options other than `separator`, `
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options; two tick
 label fields in one `using` (`xtic(1):ytic(2)`); `set multiplot` `scale`, `offset`; palette
-models other than RGB and HSV; `set ttics rotate`; `plot '+'` and `'++'`, `sample`; `title at`; `keyentry`;
+models other than RGB and HSV; `set ttics rotate`; `plot '+'` and `'++'`, `sample`; `title at`; `keyentry` with
+other styles than those of functions; `with vectors as N`;
 `fillsteps` options (`above`, `below`, `y=`); `set minussign` and `set micro` with `set encoding utf8`.

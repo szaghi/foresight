@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(175)                           !< Per-check outcome.
+logical                       :: test_passed(176)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3850,6 +3850,23 @@ if (test_passed(175)) test_passed(175) = interpreter%figure%panels(1)%notes(1)%b
                                        .not. interpreter%figure%panels(1)%notes(2)%boxed .and. &
                                        .not. interpreter%figure%panels(1)%notes(3)%boxed
 
+
+! keyentry (a key entry only, untitled unless titled), set urange/vrange/xyplane read and ignored, noenh, rangelimit,
+! boxed titles and histogram group titles, an empty tick list `set xtics ()`
+call interpreter%init(scratch)
+call interpreter%run_text('set urange [0:1]; set xyplane 0; set label 1 "x_1" at 0,0 noenh; set tics rangelimit; '// &
+                          'set title "T" boxed; set style histogram clustered title boxed; set xtics (); '// &
+                          'plot x, keyentry with boxes lc "red" title "legend", keyentry with boxes', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(176) = iostat == 0_I4P
+if (test_passed(176)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(176) = size(panel%series) == 3 .and. panel%series(2)%title == 'legend' .and. &
+                        panel%series(3)%title == '' .and. panel%notes(1)%plain .and. panel%xaxis%tics%rangelimited &
+                        .and. panel%title_boxed .and. panel%hist_title_boxed .and. .not. panel%xaxis%tics%series
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3858,7 +3875,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,175L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,176L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -2411,6 +2411,7 @@ contains
    character(len=:), allocatable                :: loaded    !< File in `data`.
    character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
    logical                                      :: head_skipped !< `notitle columnhead`: the first row a header.
+   logical                                      :: keyentry  !< The item is gnuplot's `keyentry`.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -2661,6 +2662,7 @@ contains
          endblock
       endif
       is_function = tokens(i)%kind == TOKEN_WORD
+      keyentry = .false.
       quote = ' '
       ! a word joined to strings or substrings is a string expression, a file name: d[1:3] . "x.dat"
       if (is_function) is_function = all(tokens(i:expression_end(tokens, i))%kind == TOKEN_WORD)
@@ -2676,6 +2678,11 @@ contains
          file = tokens(i)%text
          written = file
          self%previous_file = file
+      elseif (is_function .and. tokens(i)%text == 'keyentry') then
+         ! gnuplot 6.0's keyentry: a key entry only, no point; the function NaN, untitled unless titled
+         is_function = .true.
+         written = 'NaN'
+         keyentry = .true.
       elseif (is_function) then
          ! the expression runs up to the first item option: blanks may separate its words, `x * 2`
          head = i
@@ -3282,7 +3289,7 @@ contains
       endif
       if (is_function) then
          ! sampled at the end; gnuplot: the expression as written is the title
-         if (.not. has_title .and. self%autotitle /= 'none') then
+         if (.not. has_title .and. self%autotitle /= 'none' .and. .not. keyentry) then
             ! the expression as it is, not enhanced text
             title = item_prefix//written
             auto_title = .true.
@@ -5776,7 +5783,8 @@ contains
       yes = is_word(w, 'at from to rto left center centre right rotate norotate front back behind tc textcolor '// &
                     'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
                     'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
-                    'backhead heads filled empty nofilled noborder clip noclip default units boxed noboxed as arrowstyle')
+                    'backhead heads filled empty nofilled noborder clip noclip default units boxed noboxed as arrowstyle '// &
+                    'noenh noenha noenhan noenhanc noenhance enh enha enhan enhanc enhance')
       endfunction is_annotation_word
 
       subroutine position(q)
@@ -5922,8 +5930,9 @@ contains
          elseif (word == 'font') then
             ! the font is the page's: the name is read and ignored
             i = i + 1_I4P
-         elseif (is_word(word, 'noenhanced enhanced')) then
-            label%plain = word == 'noenhanced'
+         elseif (keyword(word, 'noenhanced', 5_I4P) .or. keyword(word, 'enhanced', 3_I4P)) then
+            ! gnuplot's noenh$anced, enh$anced
+            label%plain = word(1:2) == 'no'
          else
             call fail('set label: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -6968,8 +6977,12 @@ contains
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       ! surfaces only (splot and the `++` special file, neither in foresight): checked and ignored
       call samples_option(.false.)
-   elseif (keyword(option, 'zrange', 2_I4P)) then
-      ! the z axis is splot's: checked and ignored
+   elseif (keyword(option, 'xyplane', 3_I4P)) then
+      ! splot's base plane: read and ignored
+      continue
+   elseif (keyword(option, 'zrange', 2_I4P) .or. keyword(option, 'urange', 2_I4P) .or. &
+           keyword(option, 'vrange', 2_I4P)) then
+      ! the z axis and the u, v ranges are splot's (and the `++` file's): checked and ignored
       block
          logical   :: fixed(2) !< Bound given.
          real(R8P) :: bound(2) !< Bounds.
@@ -7250,6 +7263,10 @@ contains
                s = s + 2_I4P
             elseif (is_word(tokens(s + 1_I4P)%text, 'enhanced noenhanced')) then
                s = s + 1_I4P
+            elseif (is_word(tokens(s + 1_I4P)%text, 'boxed noboxed')) then
+               ! the group titles on the background when text box style 0 is drawn (gnuplot's svg textbox)
+               s = s + 1_I4P
+               panel%hist_title_boxed = tokens(s)%text == 'boxed' .and. self%textbox_drawn(0)
             else
                exit
             endif
@@ -7802,12 +7819,13 @@ contains
       logical   :: plain     !< `noenhanced`: the title as it is.
       character(len=6)  :: anchor !< Justification.
       character(len=24) :: color  !< Color.
+      logical           :: boxed  !< `boxed`.
 
       j = size(tokens, kind=I4P) + 1_I4P
       do i = 2_I4P, size(tokens, kind=I4P)
          if (tokens(i)%kind /= TOKEN_WORD) cycle
          if (is_word(tokens(i)%text, 'offset font noenhanced noenh enhanced enh left right center centre tc '// &
-                     'textcolor textc textco textcol textcolo')) then
+                     'textcolor textc textco textcol textcolo boxed noboxed')) then
             j = i
             exit
          endif
@@ -7816,6 +7834,7 @@ contains
       offset = self%figure%panels(self%figure%current)%title_offset
       anchor = self%figure%panels(self%figure%current)%title_anchor
       color = self%figure%panels(self%figure%current)%title_color
+      boxed = .false.
       plain = .false.
       i = j
       do while (i <= size(tokens, kind=I4P))
@@ -7853,14 +7872,20 @@ contains
                iomsg = 'set title: '//iomsg
                return
             endif
+         case ('boxed')
+            ! on the background when text box style 0 is drawn (gnuplot's svg textbox)
+            boxed = self%textbox_drawn(0)
+         case ('noboxed')
+            boxed = .false.
          case default
             call fail('set title: unexpected "'//tokens(i)%text//'" (offset, font, left, center, right, tc, '// &
-                      'noenhanced)', iostat, iomsg)
+                      'noenhanced, boxed)', iostat, iomsg)
             return
          endselect
          i = i + 1_I4P
       enddo
       call self%figure%set_title(text, offset=offset)
+      self%figure%panels(self%figure%current)%title_boxed = boxed
       self%figure%panels(self%figure%current)%title_plain = plain
       self%figure%panels(self%figure%current)%title_anchor = anchor
       self%figure%panels(self%figure%current)%title_color = color
@@ -9239,12 +9264,13 @@ contains
                ! on the zero axes, or on the border
                panel%xaxis%tics%on_axis = toks(i)%text == 'axis'
                panel%yaxis%tics%on_axis = toks(i)%text == 'axis'
-            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'rangelimited norangelimit')) then
-               ! the ticks (and the border sides) within the data ranges
-               panel%xaxis%tics%rangelimited = toks(i)%text == 'rangelimited'
-               panel%yaxis%tics%rangelimited = toks(i)%text == 'rangelimited'
-               panel%x2axis%tics%rangelimited = toks(i)%text == 'rangelimited'
-               panel%y2axis%tics%rangelimited = toks(i)%text == 'rangelimited'
+            elseif (toks(i)%kind == TOKEN_WORD .and. (keyword(toks(i)%text, 'rangelimited', 10_I4P) .or. &
+                                                      keyword(toks(i)%text, 'norangelimited', 12_I4P))) then
+               ! the ticks (and the border sides) within the data ranges; gnuplot's rangelimit$ed
+               panel%xaxis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
+               panel%yaxis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
+               panel%x2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
+               panel%y2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
             elseif (label_option(toks, i, labels, fmt)) then
                if (iostat /= 0_I4P) return
                styled = .true.
@@ -9520,9 +9546,10 @@ contains
          elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'axis border')) then
             ! on the zero axis of the other coordinate, or on the border
             tics%on_axis = toks(i)%text == 'axis'
-         elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'rangelimited norangelimit')) then
-            ! the ticks (and the border side) within the data range
-            tics%rangelimited = toks(i)%text == 'rangelimited'
+         elseif (toks(i)%kind == TOKEN_WORD .and. (keyword(toks(i)%text, 'rangelimited', 10_I4P) .or. &
+                                                   keyword(toks(i)%text, 'norangelimited', 12_I4P))) then
+            ! the ticks (and the border side) within the data range; gnuplot's rangelimit$ed
+            tics%rangelimited = toks(i)%text(1:2) /= 'no'
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text(1:min(1, len(toks(i)%text))) == '(') then
             if (len(list) > 0) then
                call fail('set '//option//': one list of ticks is expected', iostat, iomsg)
@@ -9710,6 +9737,8 @@ contains
          return
       endif
       body = text(2:len(text) - 1)
+      ! `()`: an empty list, no ticks (gnuplot's `set xtics ()`)
+      if (len_trim(body) == 0) return
       quote = ' '
       depth = 0_I4P
       start = 1_I4P
