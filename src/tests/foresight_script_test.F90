@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(156)                           !< Per-check outcome.
+logical                       :: test_passed(157)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3352,6 +3352,32 @@ if (test_passed(156)) test_passed(156) = interpreter%figure%panels(1)%series(1)%
 call interpreter%run_text('plot $L using 2:xticlabelsx(1)', iostat, iomsg)
 test_passed(156) = test_passed(156) .and. iostat /= 0_I4P
 
+! custom dash types as gnuplot 6.0 (dt "-", dt (50,6,2,6), a string variable; half the line width per unit as its svg
+! terminal) and the special colors bgnd, nodraw, black (lc and lt)
+call interpreter%init(scratch)
+call interpreter%run_text('set term svg; set output "foresight_script_test_dash.svg"; new = "..- "; '// &
+                          'plot x dt "-" lw 2, 2*x dt (50,6,2,6), 3*x dt new, 4*x lc bgnd, 5*x lt nodraw, 6*x lt -1', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(157) = iostat == 0_I4P
+if (test_passed(157)) then
+   block
+      character(len=:), allocatable :: svg !< Output.
+
+      svg = text_of_file('foresight_script_test_dash.svg')
+      test_passed(157) = index(svg, 'stroke-dasharray="10,10"') > 0 .and. &
+                        index(svg, 'stroke-dasharray="25,3,1,3"') > 0 .and. &
+                        index(svg, 'stroke-dasharray="1,2.5,1,2.5,5,10"') > 0 .and. &
+                        interpreter%figure%panels(1)%series(4)%style%color == '#ffffff' .and. &
+                        interpreter%figure%panels(1)%series(5)%style%color == 'none' .and. &
+                        interpreter%figure%panels(1)%series(6)%style%color == '#000000'
+   endblock
+endif
+call interpreter%run_text('plot x dt "-x"', iostat, iomsg)
+test_passed(157) = test_passed(157) .and. iostat /= 0_I4P .and. index(iomsg, 'a dash pattern') > 0
+open(newunit=unit, file='foresight_script_test_dash.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3360,7 +3386,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,156L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,157L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

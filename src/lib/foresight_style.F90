@@ -19,6 +19,8 @@ public :: fill_style
 public :: style_object
 public :: style_name
 public :: gnuplot_abbreviates
+public :: custom_dashtype
+public :: CUSTOM_DASH_BASE
 public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
@@ -31,6 +33,12 @@ public :: FILL_EMPTY, FILL_PATTERN, FILL_SOLID
 public :: pattern_parts
 public :: PATTERNS
 
+integer(I4P), parameter :: CUSTOM_DASH_BASE = 1000_I4P !< Dash types above it are custom patterns (`custom_dashtype`).
+integer(I4P), parameter :: MAX_CUSTOM_DASHES = 256_I4P  !< Custom dash patterns kept.
+! the custom dash patterns of the session (gnuplot `dt "-."`, `dt (a,b,...)`): solid and empty lengths at line width
+! 1 in gnuplot's units, comma separated; dash type CUSTOM_DASH_BASE + k is pattern k
+character(len=160), save :: custom_dashes(MAX_CUSTOM_DASHES) = '' !< Patterns.
+integer(I4P),       save :: custom_dash_count = 0_I4P             !< Patterns kept.
 integer(I4P), parameter :: WITH_LINES       = 1_I4P !< gnuplot `with lines`.
 integer(I4P), parameter :: WITH_POINTS      = 2_I4P !< gnuplot `with points`.
 integer(I4P), parameter :: WITH_LINESPOINTS = 3_I4P !< gnuplot `with linespoints`.
@@ -174,6 +182,95 @@ contains
       enddo
    endselect
    endsubroutine sequence_colors
+
+   function custom_dashtype(spec, ok) result(dt)
+   !< The dash type of gnuplot's custom pattern `spec`: a dash string (`.` dot and short gap, `-` dash and gap, `_` long
+   !< dash and gap, a blank lengthening the last gap) or the lengths `(solid, empty, ...)` at line width 1; kept for the
+   !< session (a pattern seen before gets its number back). `ok` false for a malformed one; 1 (solid) for an empty one.
+   character(len=*), intent(in)  :: spec !< Pattern: a dash string, or the lengths in parentheses.
+   logical,          intent(out) :: ok   !< Well formed.
+   integer(I4P)                  :: dt   !< Dash type.
+   character(len=:), allocatable :: lengths !< Comma separated lengths.
+   real(R8P)                     :: v(64) !< Lengths.
+   integer(I4P)                  :: n    !< Lengths read.
+   integer(I4P)                  :: lead !< Leading blanks.
+   integer(I4P)                  :: k    !< Counter.
+   integer(I4P)                  :: ios  !< Read status.
+
+   dt = 1_I4P
+   ok = .true.
+   n = 0_I4P
+   lead = 0_I4P
+   if (len_trim(spec) > 0 .and. spec(1:1) == '(') then
+      ! (a, b, c, d): solid and empty lengths in pairs
+      if (spec(len_trim(spec):len_trim(spec)) /= ')') then
+         ok = .false.
+         return
+      endif
+      lengths = spec(2:len_trim(spec) - 1)
+      n = 1_I4P
+      do k = 1_I4P, len(lengths, kind=I4P)
+         if (lengths(k:k) == ',') n = n + 1_I4P
+      enddo
+      if (n > 64_I4P .or. mod(n, 2_I4P) /= 0_I4P) then
+         ok = .false.
+         return
+      endif
+      read(lengths, *, iostat=ios) v(1:n)
+      if (ios /= 0_I4P) then
+         ok = .false.
+         return
+      endif
+   else
+      do k = 1_I4P, len(spec, kind=I4P)
+         if (n + 2_I4P > 64_I4P) exit
+         select case (spec(k:k))
+         case ('.')
+            v(n + 1_I4P:n + 2_I4P) = [2.0_R8P, 5.0_R8P]
+            n = n + 2_I4P
+         case ('-')
+            v(n + 1_I4P:n + 2_I4P) = [10.0_R8P, 10.0_R8P]
+            n = n + 2_I4P
+         case ('_')
+            v(n + 1_I4P:n + 2_I4P) = [20.0_R8P, 10.0_R8P]
+            n = n + 2_I4P
+         case (' ')
+            if (n == 0_I4P) then
+               lead = lead + 1_I4P
+            else
+               v(n) = v(n) + 10.0_R8P
+            endif
+         case default
+            ok = .false.
+            return
+         endselect
+      enddo
+      if (n == 0_I4P) return
+      v(n) = v(n) + 10.0_R8P * real(lead, R8P)
+   endif
+   if (any(v(1:n) < 0.0_R8P)) then
+      ok = .false.
+      return
+   endif
+   lengths = ''
+   do k = 1_I4P, n
+      if (k > 1_I4P) lengths = lengths//','
+      lengths = lengths//fixed(v(k), 4_I4P)
+   enddo
+   do k = 1_I4P, custom_dash_count
+      if (trim(custom_dashes(k)) == lengths) then
+         dt = CUSTOM_DASH_BASE + k
+         return
+      endif
+   enddo
+   if (custom_dash_count >= MAX_CUSTOM_DASHES .or. len(lengths) > len(custom_dashes(1))) then
+      ok = .false.
+      return
+   endif
+   custom_dash_count = custom_dash_count + 1_I4P
+   custom_dashes(custom_dash_count) = lengths
+   dt = CUSTOM_DASH_BASE + custom_dash_count
+   endfunction custom_dashtype
 
    pure function style_name(word) result(name)
    !< Full name of the gnuplot style `word`, full or abbreviated as gnuplot 6.0 reads it (its `plotstyle_tbl`, searched
@@ -400,6 +497,11 @@ contains
    class(style_object), intent(in) :: self   !< Style.
    character(len=:), allocatable   :: dashes !< Dash array.
 
+   if (self%dashtype > CUSTOM_DASH_BASE .and. self%dashtype <= CUSTOM_DASH_BASE + custom_dash_count) then
+      ! a custom pattern, scaled as gnuplot's svg terminal: half the line width per unit
+      dashes = custom(trim(custom_dashes(self%dashtype - CUSTOM_DASH_BASE)))
+      return
+   endif
    select case (modulo(self%dashtype - 1_I4P, 5_I4P) + 1_I4P)
    case (2_I4P)
       dashes = scaled([8.0_R8P, 4.0_R8P])
@@ -413,6 +515,32 @@ contains
       dashes = ''
    endselect
    contains
+      pure function custom(pattern) result(str)
+      !< The comma separated `pattern` scaled by half the line width.
+      character(len=*), intent(in)  :: pattern !< Lengths at line width 1.
+      character(len=:), allocatable :: str     !< Dash array.
+      real(R8P)                     :: v       !< A length.
+      integer(I4P)                  :: a       !< Element start.
+      integer(I4P)                  :: b       !< Element end.
+      integer(I4P)                  :: ios     !< Read status.
+
+      str = ''
+      a = 1_I4P
+      do while (a <= len(pattern, kind=I4P))
+         b = index(pattern(a:), ',', kind=I4P)
+         if (b == 0_I4P) then
+            b = len(pattern, kind=I4P)
+         else
+            b = a + b - 2_I4P
+         endif
+         read(pattern(a:b), *, iostat=ios) v
+         if (ios /= 0_I4P) v = 0.0_R8P
+         if (len(str) > 0) str = str//','
+         str = str//fixed(0.5_R8P * v * self%linewidth, 2_I4P)
+         a = b + 2_I4P
+      enddo
+      endfunction custom
+
       pure function scaled(pattern) result(str)
       !< Comma separated pattern scaled by the line width.
       real(R8P), intent(in)         :: pattern(:) !< Dash pattern at unit line width [px].

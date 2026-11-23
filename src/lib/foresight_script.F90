@@ -121,7 +121,8 @@ use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, smooth, smooth_curve, SMOOTH_MODES
 use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
-use foresight_style, only : default_color, fill_style, gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
+use foresight_style, only : custom_dashtype, default_color, fill_style, &
+                            gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
                             FILL_SOLID, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
@@ -11077,6 +11078,21 @@ contains
         .or. word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)
    endfunction is_line_option
 
+   pure function special_color(word) result(color)
+   !< SVG color of gnuplot's special linetypes: `black`, `nodraw` (nothing drawn), `bgnd` (the background, white).
+   character(len=*), intent(in)  :: word  !< Special name.
+   character(len=:), allocatable :: color !< SVG color.
+
+   select case (word)
+   case ('nodraw')
+      color = 'none'
+   case ('bgnd', 'background')
+      color = '#ffffff'
+   case default
+      color = '#000000'
+   endselect
+   endfunction special_color
+
    function line_option(tokens, i, line, iostat, iomsg, colors, symbols) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
    !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lc palette [z|cb V|frac F]` (markers,
@@ -11146,20 +11162,69 @@ contains
          endif
       elseif (tokens(i)%kind == TOKEN_STRING) then
          line%lc = tokens(i)%text
+      elseif (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'bgnd background nodraw black')) then
+         line%lc = special_color(tokens(i)%text)
       else
          i = i - 1_I4P
          ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
          if (ok) line%lc = default_color(number, colors)
       endif
    elseif (word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) then
+      ! gnuplot's special linetypes: black (-1), nodraw (-2), bgnd (-3)
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. is_word(tokens(i + 1_I4P)%text, 'bgnd background nodraw black')) then
+            i = i + 1_I4P
+            line%lc = special_color(tokens(i)%text)
+            return
+         endif
+      endif
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
-      if (ok) line%lc = default_color(number, colors)
+      if (ok) then
+         select case (number)
+         case (-1_I4P)
+            line%lc = special_color('black')
+         case (-2_I4P)
+            line%lc = special_color('nodraw')
+         case (-3_I4P)
+            line%lc = special_color('bgnd')
+         case default
+            line%lc = default_color(number, colors)
+         endselect
+      endif
    elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then
       ok = next_real(tokens, i, value, iostat, iomsg, symbols)
       if (ok) line%lw = value
    elseif (word == 'dt' .or. keyword(word, 'dashtype', 5_I4P)) then
-      ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
-      if (ok) line%dt = number
+      ! a number, a dash string (`dt "-."`, or a string variable, `dt new`) or the lengths (`dt (50,6,2,6)`)
+      block
+         character(len=:), allocatable :: spec    !< Custom pattern.
+         character(len=:), allocatable :: message !< Not a string.
+         integer(I4P)                  :: status  !< String status.
+         logical                       :: is_string !< A string.
+
+         spec = ''
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%kind == TOKEN_STRING) then
+               spec = tokens(i + 1_I4P)%text
+               if (len(spec) == 0) spec = ' '
+            elseif (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text(1:1) == '(') then
+               spec = tokens(i + 1_I4P)%text
+            elseif (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. present(symbols)) then
+               call symbols%text_of(tokens(i + 1_I4P)%text, spec, is_string, status, message)
+               if (status /= 0_I4P .or. .not. is_string) spec = ''
+               if (status == 0_I4P .and. is_string .and. len(spec) == 0) spec = ' '
+            endif
+         endif
+         if (len(spec) > 0) then
+            i = i + 1_I4P
+            line%dt = custom_dashtype(spec, ok)
+            if (.not. ok) call fail('dt: a dash pattern of . - _ and blanks, or (solid, empty, ...) lengths, is '// &
+                                    'expected, found "'//tokens(i)%text//'"', iostat, iomsg)
+         else
+            ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
+            if (ok) line%dt = number
+         endif
+      endblock
    elseif (word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)) then
       ! a point every N (gnuplot's negative N, the line broken around the points, draws the points every |N|)
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
