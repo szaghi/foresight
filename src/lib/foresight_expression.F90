@@ -32,7 +32,8 @@ module foresight_expression
 !< value), `gprintf`, `strlen`, `substr`, `strstrt`, `words`, `word`, `trim`; `value("name")`, `exists("name")`
 !< (quoted names only). Arrays (`symbols_object%declare_array`): `A[i]` an element (an index known now resolved now,
 !< else on each row), `|A|` the size, `index(A, value)`; datablocks (string variables named `$NAME`): `$NAME[i]` a
-!< line, `|$NAME|` their number. Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
+!< line, `|$NAME|` their number; gnuplot 6.0's `split(s [, sep])` (an array: assigned, printed, sized `|split(s)|`, in
+!< `index` and `join`) and `join(A, sep)`, their arguments known when compiled. Arithmetic and `==` read a string's leading number (`"3" + 1` is 4); a string as a condition,
 !< or where a number cannot be read, is an error of a constant expression and a gap on a data row.
 !<
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
@@ -1061,12 +1062,31 @@ contains
             return
          endif
          if (name == 'index' .and. kind == T_NAME) then
+            if (token == 'split') then
+               block
+                  type(value_list) :: list !< Its elements.
+
+                  call split_call(list)
+                  if (iostat /= 0_I4P) return
+                  call array_find(list, at, named=.false.)
+               endblock
+               return
+            endif
             if (present(symbols)) then
                if (symbols%array_index(token) > 0_I4P) then
                   call array_find(symbols%arrays(symbols%array_index(token))%list, at)
                   return
                endif
             endif
+         endif
+         if (name == 'join') then
+            call join_call(at)
+            return
+         endif
+         if (name == 'split') then
+            call syntax('split() is an array: assign it (A = split(s)), print it, size it |split(s)|, or pass it to '// &
+                        'index() or join()', at)
+            return
          endif
          if (name == 'column' .and. kind == T_STRING) then
             if (present(variable)) then
@@ -1223,6 +1243,19 @@ contains
       at = start
       name = token
       n = -1_I4P
+      if (kind == T_NAME .and. token == 'split') then
+         ! the size of gnuplot's split(), |split(s)|
+         block
+            type(value_list) :: list !< Its elements.
+
+            call split_call(list)
+            if (iostat /= 0_I4P) return
+            call expect('|')
+            if (iostat /= 0_I4P) return
+            call emit(OP_CONSTANT, v=int_value(int(size(list%items), I8P)))
+         endblock
+         return
+      endif
       if (kind == T_NAME .and. present(symbols)) then
          if (symbols%is_array(token)) then
             n = symbols%array_size(token)
@@ -1261,16 +1294,96 @@ contains
       call emit(OP_CONSTANT, v=int_value(int(n, I8P)))
       endsubroutine cardinality
 
-      recursive subroutine array_find(list, at)
-      !< `index(A, value)`: the first element of `list` equal to the value (numbers by value, strings by text), 0 if
-      !< none; the current token is the array name, the value a constant.
-      type(value_list), intent(in) :: list  !< Array elements.
-      integer(I4P),     intent(in) :: at    !< Call position.
-      integer(I4P)                 :: last  !< Last instruction.
-      integer(I4P)                 :: k     !< Element counter.
-      integer(I8P)                 :: found !< Index found.
+      recursive subroutine split_call(list)
+      !< gnuplot 6.0 `split(string [, separator])`, its arguments known now: the current token is `split`, left after the
+      !< closing parenthesis.
+      type(value_list), intent(out) :: list  !< The pieces.
+      type(value_object)            :: text  !< String.
+      type(value_object)            :: sep   !< Separator.
+      integer(I4P)                  :: first !< First instruction of an argument.
+      integer(I4P)                  :: at    !< Call position.
 
+      allocate(list%items(0), list%set(0))
+      at = start
       call next
+      call expect('(')
+      first = size(self%code, kind=I4P) + 1_I4P
+      call parse_ternary
+      call fold(first, text)
+      sep = string_value(' ')
+      if (accept(',')) then
+         first = size(self%code, kind=I4P) + 1_I4P
+         call parse_ternary
+         call fold(first, sep)
+      endif
+      call expect(')')
+      if (iostat /= 0_I4P) return
+      if (.not. (text%is_string .and. sep%is_string)) then
+         call syntax('split takes strings: split("string" [, "separator"])', at)
+         return
+      endif
+      list = split_list(text%s, sep%s)
+      endsubroutine split_call
+
+      recursive subroutine join_call(at)
+      !< gnuplot 6.0 `join(A, separator)` (A an array or `split(...)`, the separator known now): the text of the string
+      !< elements, the separator between every two elements (other elements add none), a constant; the current token
+      !< follows the parenthesis.
+      integer(I4P), intent(in)      :: at    !< Call position.
+      type(value_list)              :: list  !< Elements.
+      type(value_object)            :: sep   !< Separator.
+      integer(I4P)                  :: first !< First instruction of the separator.
+      integer(I4P)                  :: k     !< Element counter.
+      character(len=:), allocatable :: text  !< Joined text.
+
+      if (kind == T_NAME .and. token == 'split') then
+         call split_call(list)
+      elseif (kind == T_NAME .and. present(symbols)) then
+         if (symbols%array_index(token) == 0_I4P) then
+            call syntax('join: expecting join(array, "separator")', at)
+            return
+         endif
+         list = symbols%arrays(symbols%array_index(token))%list
+         call next
+      else
+         call syntax('join: expecting join(array, "separator")', at)
+         return
+      endif
+      call expect(',')
+      first = size(self%code, kind=I4P) + 1_I4P
+      call parse_ternary
+      call fold(first, sep)
+      call expect(')')
+      if (iostat /= 0_I4P) return
+      if (.not. sep%is_string) then
+         call syntax('join: expecting join(array, "separator")', at)
+         return
+      endif
+      text = ''
+      do k = 1_I4P, size(list%items, kind=I4P)
+         if (list%set(k)) then
+            if (list%items(k)%is_string) text = text//list%items(k)%s
+         endif
+         if (k < size(list%items, kind=I4P)) text = text//sep%s
+      enddo
+      call emit(OP_CONSTANT, v=string_value(text))
+      endsubroutine join_call
+
+      recursive subroutine array_find(list, at, named)
+      !< `index(A, value)`: the first element of `list` equal to the value (numbers by value, strings by text), 0 if
+      !< none; the current token is the array name (after it with `named` false: `split(...)` read), the value a constant.
+      type(value_list), intent(in)           :: list  !< Array elements.
+      integer(I4P),     intent(in)           :: at    !< Call position.
+      logical,          intent(in), optional :: named !< The current token is the array name.
+      integer(I4P)                           :: last  !< Last instruction.
+      integer(I4P)                           :: k     !< Element counter.
+      integer(I8P)                           :: found !< Index found.
+
+      if (.not. present(named)) then
+         call next
+      elseif (named) then
+         call next
+      endif
       call expect(',')
       call parse_ternary
       call expect(')')
@@ -2578,6 +2691,35 @@ contains
    t = trim(adjustl(text))
    if (len(t) == 0) return
    e = verify(t, NAME_CHARS, kind=I4P)
+   if (e > 0_I4P) then
+      if (t(1:e - 1_I4P) == 'split' .and. t(e:e) == '(' .and. t(len(t):len(t)) == ')' .and. &
+          closing(t, e) == len(t, kind=I4P)) then
+         ! gnuplot 6.0 split("string" [, "separator"]), its arguments known now
+         block
+            type(value_object) :: args(2) !< String and separator.
+            integer(I4P)       :: comma   !< The top-level comma, 0 if none.
+
+            comma = top_comma(t(e + 1_I4P:len(t) - 1))
+            args(2) = string_value(' ')
+            if (comma == 0_I4P) then
+               call self%evaluate_constant(t(e + 1_I4P:len(t) - 1), args(1), iostat, iomsg, degrees=degrees)
+            else
+               call self%evaluate_constant(t(e + 1_I4P:e + comma - 1_I4P), args(1), iostat, iomsg, degrees=degrees)
+               if (iostat == 0_I4P) call self%evaluate_constant(t(e + comma + 1_I4P:len(t) - 1), args(2), iostat, &
+                                                                iomsg, degrees=degrees)
+            endif
+            if (iostat /= 0_I4P) return
+            if (.not. (args(1)%is_string .and. args(2)%is_string)) then
+               iostat = 1_I4P
+               iomsg = 'split takes strings: split("string" [, "separator"])'
+               return
+            endif
+            list = split_list(args(1)%s, args(2)%s)
+            found = .true.
+         endblock
+         return
+      endif
+   endif
    if (e == 0_I4P) then
       k = self%array_index(t)
       if (k == 0_I4P) return
@@ -3838,6 +3980,107 @@ contains
    if (odd) z = -z
    endsubroutine safe_power
 
+   pure function closing(text, open) result(k)
+   !< Position of the parenthesis closing the one at `open` in `text` (quotes skipped), 0 if none.
+   character(len=*), intent(in) :: text  !< Text.
+   integer(I4P),     intent(in) :: open  !< Opening parenthesis.
+   integer(I4P)                 :: k     !< Closing parenthesis.
+   integer(I4P)                 :: nest  !< Nesting.
+   character(len=1)             :: quote !< Open quote, blank if none.
+
+   nest = 0_I4P
+   quote = ' '
+   do k = open, len(text, kind=I4P)
+      if (quote /= ' ') then
+         if (text(k:k) == quote) quote = ' '
+         cycle
+      endif
+      select case (text(k:k))
+      case ('"', "'")
+         quote = text(k:k)
+      case ('(', '[', '{')
+         nest = nest + 1_I4P
+      case (')', ']', '}')
+         nest = nest - 1_I4P
+         if (nest == 0_I4P) return
+      endselect
+   enddo
+   k = 0_I4P
+   endfunction closing
+
+   pure function top_comma(text) result(k)
+   !< Position of the first comma of `text` outside quotes and brackets, 0 if none.
+   character(len=*), intent(in) :: text  !< Text.
+   integer(I4P)                 :: k     !< Comma.
+   integer(I4P)                 :: nest  !< Nesting.
+   character(len=1)             :: quote !< Open quote, blank if none.
+
+   nest = 0_I4P
+   quote = ' '
+   do k = 1_I4P, len(text, kind=I4P)
+      if (quote /= ' ') then
+         if (text(k:k) == quote) quote = ' '
+         cycle
+      endif
+      select case (text(k:k))
+      case ('"', "'")
+         quote = text(k:k)
+      case ('(', '[', '{')
+         nest = nest + 1_I4P
+      case (')', ']', '}')
+         nest = nest - 1_I4P
+      case (',')
+         if (nest == 0_I4P) return
+      endselect
+   enddo
+   k = 0_I4P
+   endfunction top_comma
+
+   pure function split_list(string, sep) result(list)
+   !< gnuplot 6.0's split: the pieces of `string` between occurrences of `sep` (each kept, blanks too), or its words
+   !< for a blank or empty `sep` (runs of white space between them); none for an empty `string`.
+   character(len=*), intent(in)    :: string   !< String.
+   character(len=*), intent(in)    :: sep      !< Separator.
+   type(value_list)                :: list     !< Pieces, strings.
+   character(len=*), parameter     :: WHITE = ' '//achar(9)//achar(10)//achar(11)//achar(12)//achar(13) !< isspace.
+   type(value_object), allocatable :: items(:) !< Pieces.
+   integer(I4P)                    :: i        !< Position.
+   integer(I4P)                    :: j        !< End of a piece.
+
+   allocate(items(0))
+   i = 1_I4P
+   if (len(string) > 0) then
+      if (len(sep) == 0 .or. sep == ' ') then
+         do
+            j = verify(string(i:), WHITE, kind=I4P)
+            if (j == 0_I4P) exit
+            i = i + j - 1_I4P
+            j = scan(string(i:), WHITE, kind=I4P)
+            if (j == 0_I4P) then
+               call push_value(items, string_value(string(i:)))
+               exit
+            endif
+            call push_value(items, string_value(string(i:i + j - 2_I4P)))
+            i = i + j - 1_I4P
+         enddo
+      else
+         do
+            j = index(string(i:), sep, kind=I4P)
+            if (j == 0_I4P) then
+               call push_value(items, string_value(string(i:)))
+               exit
+            endif
+            call push_value(items, string_value(string(i:i + j - 2_I4P)))
+            i = i + j - 1_I4P + len(sep, kind=I4P)
+            if (i > len(string, kind=I4P)) exit
+         enddo
+      endif
+   endif
+   allocate(list%set(size(items)))
+   list%set = .true.
+   call move_alloc(items, list%items)
+   endfunction split_list
+
    pure function string_value(text) result(a)
    !< String value.
    character(len=*), intent(in) :: text !< Text.
@@ -4700,6 +4943,21 @@ contains
       if (list(k)%text == name) yes = .true.
    enddo
    endfunction any_name
+
+   pure subroutine push_value(list, item)
+   !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
+   type(value_object), allocatable, intent(inout) :: list(:)  !< List.
+   type(value_object),              intent(in)    :: item     !< New item.
+   type(value_object), allocatable                :: grown(:) !< List, one more.
+   integer(I4P)                                   :: n        !< Items before the push.
+
+   n = 0_I4P
+   if (allocated(list)) n = size(list, kind=I4P)
+   allocate(grown(n + 1_I4P))
+   if (n > 0_I4P) grown(1_I4P:n) = list
+   grown(n + 1_I4P) = item
+   call move_alloc(grown, list)
+   endsubroutine push_value
 
    pure subroutine push_name(list, item)
    !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(160)                           !< Per-check outcome.
+logical                       :: test_passed(161)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3483,6 +3483,37 @@ test_passed(160) = test_passed(160) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 call interpreter%run_text('print (1 = 2)', iostat, iomsg)
 test_passed(160) = test_passed(160) .and. iostat /= 0_I4P
 
+
+! gnuplot 6.0 split() and join(): words on white space, pieces on a separator (empty ones kept, none after a last one)
+call interpreter%init(scratch)
+call interpreter%run_text('A = split("a  b c"); n = |split("x y")|; s = join(split("a b"), "-"); '// &
+                          'B = split("a,b,,c,", ","); m = |B|; i = index(split("p q r"), "q"); '// &
+                          'array C[3]; C[1] = "p"; C[2] = 2; t = join(C, "+")', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(161) = iostat == 0_I4P
+if (test_passed(161)) then
+   block
+      character(len=:), allocatable :: text !< A string.
+      logical                       :: found !< Found.
+      real(R8P)                     :: v(3)  !< n, m, i.
+
+      call interpreter%symbols%constant('n', v(1), iostat, iomsg)
+      call interpreter%symbols%constant('m', v(2), iostat, iomsg)
+      call interpreter%symbols%constant('i', v(3), iostat, iomsg)
+      test_passed(161) = all(v == [2.0_R8P, 4.0_R8P, 2.0_R8P]) .and. interpreter%symbols%array_size('A') == 3_I4P
+      call interpreter%symbols%string_of('s', text, found)
+      test_passed(161) = test_passed(161) .and. found .and. text == 'a-b'
+      call interpreter%symbols%string_of('t', text, found)
+      test_passed(161) = test_passed(161) .and. found .and. text == 'p++'
+      call interpreter%symbols%text_of('B[3]', text, found, iostat, iomsg)
+      test_passed(161) = test_passed(161) .and. iostat == 0_I4P .and. found .and. text == ''
+   endblock
+endif
+call interpreter%run_text('x = split("a b") + 1', iostat, iomsg)
+test_passed(161) = test_passed(161) .and. iostat /= 0_I4P .and. index(iomsg, 'split() is an array') > 0
+call interpreter%run_text('y = join(3, "-")', iostat, iomsg)
+test_passed(161) = test_passed(161) .and. iostat /= 0_I4P .and. index(iomsg, 'join: expecting') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3491,7 +3522,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,160L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,161L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
