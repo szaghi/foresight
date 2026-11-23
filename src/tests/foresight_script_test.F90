@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(201)                           !< Per-check outcome.
+logical                       :: test_passed(202)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4574,6 +4574,31 @@ if (test_passed(201)) then
    endassociate
 endif
 
+! negative r with a fixed r range, as gnuplot 6.0's polar_to_xy: r >= rmin at r - rmin; r < -rmin (rmin >= 0) across
+! the pole at r + rmin; between them undefined
+block
+   character(len=*), parameter :: RANGES(3) = ['[0:2]  ', '[0.5:2]', '[-1:2] '] !< r ranges.
+   character(len=*), parameter :: PATHS(3) = [character(len=48) :: 'd="M0.25,0.5 M0.5,0.625 M0.676777,0.323223"', &
+                                              'd="M0.333333,0.5 M0.617851,0.382149"', &
+                                              'd="M0.5,0.5 M0.5,0.416667 M0.735702,0.264298"'] !< Unit points.
+   character(len=:), allocatable :: svg !< Output.
+   integer                       :: k   !< Counter.
+
+   test_passed(202) = .true.
+   do k = 1, 3
+      call interpreter%init(scratch)
+      call interpreter%run_text('$R << EOD'//new_line('a')//'0 -1'//new_line('a')//'90 -0.5'//new_line('a')//'45 1'// &
+                                new_line('a')//'EOD'//new_line('a')//'set term svg size 400,400; '// &
+                                'set output "foresight_script_test_negative_r.svg"; set polar; set angles degrees; '// &
+                                'unset key; set rrange '//trim(RANGES(k))//'; plot $R with points pt 7', iostat, iomsg)
+      if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+      svg = text_of_file('foresight_script_test_negative_r.svg')
+      test_passed(202) = test_passed(202) .and. iostat == 0_I4P .and. index(svg, trim(PATHS(k))) > 0
+   enddo
+   open(newunit=unit, file='foresight_script_test_negative_r.svg')
+   close(unit, status='delete')
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4582,7 +4607,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,201L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,202L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

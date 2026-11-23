@@ -5140,24 +5140,9 @@ contains
          all(s)%radial_bars = .true.
       endif
       do i = 1_I4P, size(all(s)%x, kind=I4P)
-         if (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i))) then
-            if (all(s)%y(i) >= rmin .or. .not. cut) then
-               phi = all(s)%x(i)
-               if (degrees) phi = phi * (PI_R8 / 180.0_R8P)
-               if (clockwise) phi = -phi
-               phi = phi + origin * (PI_R8 / 180.0_R8P)
-               if (logr) then
-                  rho = log10(all(s)%y(i) / rmin)
-               else
-                  rho = all(s)%y(i) - rmin
-               endif
-               all(s)%x(i) = rho * cos(phi)
-               all(s)%y(i) = rho * sin(phi)
-               cycle
-            endif
-         endif
-         all(s)%x(i) = nan
-         all(s)%y(i) = nan
+         phi = all(s)%x(i)
+         r = all(s)%y(i)
+         call project(phi, r, all(s)%x(i), all(s)%y(i))
       enddo
    enddo
    contains
@@ -5173,16 +5158,20 @@ contains
       px = nan
       py = nan
       if (.not. (ieee_is_finite(theta) .and. ieee_is_finite(r))) return
-      if (r < rmin .and. cut) return
       a = theta
       if (degrees) a = a * (PI_R8 / 180.0_R8P)
       if (clockwise) a = -a
       a = a + origin * (PI_R8 / 180.0_R8P)
       if (logr) then
-         if (.not. r > 0.0_R8P) return
+         if (.not. (r > 0.0_R8P .and. r >= rmin)) return
          d = log10(r / rmin)
-      else
+      elseif (.not. cut .or. r >= rmin) then
          d = r - rmin
+      elseif (rmin >= 0.0_R8P .and. r < -rmin) then
+         ! a fixed start: a negative r beyond -rmin across the pole, at |r| - rmin, as gnuplot's polar_to_xy
+         d = r + rmin
+      else
+         return
       endif
       px = d * cos(a)
       py = d * sin(a)
