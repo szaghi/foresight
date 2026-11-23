@@ -89,7 +89,8 @@ module foresight_script
 !< - datablocks `$NAME << WORD` (the lines up to one starting with WORD) plotted, fitted, stated as a file (`plot $D`),
 !<   `print $NAME`, `load FILE`, `call FILE ARG1 ...` (ARG0..ARG9, ARGC, restored after it), `eval STRING`, macros
 !<   `@name` (a string variable's value), `undefine NAME|NAME*|$NAME`; `$NAME[i]` a line of a datablock, `|$NAME|`
-!<   their number;
+!<   their number; inline data `'-'` of plot, replot, fit and stats (the lines after the statement up to one starting
+!<   with `e`, one block per item);
 !< - arrays: `array A[N]`, `array A[N] = [E1, ...]`, `array A = [E1, ...]` (elements of any type, some possibly without
 !<   a value), `A[i] = E`, `A[i]` and `|A|` in expressions (an index of a data row resolved on each row), `index(A, V)`,
 !<   `print A`, `plot A` and `stats A` (the index and the value of each element, as a file), `ARGV` (the arguments of
@@ -622,6 +623,13 @@ contains
    character(len=:), allocatable                       :: here_text  !< Its lines.
    integer(I4P)                                        :: here_line  !< Its first line.
    logical                                             :: here_function !< A function block, not a datablock.
+   character(len=:), allocatable                       :: inline_quotes !< Quotes of the inline data items (`'-'`) of
+                                                                        !< the pending line, empty if none.
+   character(len=:), allocatable                       :: inline_text   !< Lines of the inline data being read.
+   character(len=:), allocatable                       :: pending       !< Line run once its inline data are read.
+   character(len=:), allocatable                       :: data_line     !< An inline data line, blanks skipped.
+   integer(I4P)                                        :: inline_k      !< Inline data item being read.
+   integer(I4P)                                        :: pending_line  !< First line of the pending line.
 
    active => self
    ! after quit (or exit status N), nothing more runs
@@ -629,6 +637,11 @@ contains
    here_function = .false.
    iostat = 0_I4P
    iomsg = ''
+   inline_quotes = ''
+   inline_text = ''
+   pending = ''
+   inline_k = 0_I4P
+   pending_line = 0_I4P
    here_name = ''
    here_end = ''
    here_text = ''
@@ -650,6 +663,34 @@ contains
          finish = start + finish - 2_I4P
       endif
       lineno = lineno + 1_I4P
+      if (len(inline_quotes) > 0) then
+         ! inline data of the pending line (gnuplot's '-'): the lines up to one starting with `e`, blanks skipped
+         line = text(start:finish)
+         start = finish + 2_I4P
+         if (len(line) > 0) then
+            if (line(len(line):len(line)) == achar(13)) line = line(1:len(line) - 1)
+         endif
+         data_line = trim(adjustl(line))
+         if (len(data_line) > 0) then
+            if (data_line(1:1) == 'e') then
+               call self%symbols%set_string(inline_name(inline_quotes(inline_k:inline_k), inline_k), inline_text)
+               inline_text = ''
+               inline_k = inline_k + 1_I4P
+               line = ''
+               if (inline_k > len(inline_quotes, kind=I4P)) then
+                  inline_quotes = ''
+                  first_line = pending_line
+                  call take(pending)
+                  if (iostat /= 0_I4P) return
+                  if (self%loop_signal >= 3_I4P) exit
+               endif
+               cycle
+            endif
+         endif
+         inline_text = inline_text//line//new_line('a')
+         line = ''
+         cycle
+      endif
       if (len(here_name) > 0) then
          ! a datablock line, as it is (a carriage return dropped)
          line = text(start:finish)
@@ -702,6 +743,17 @@ contains
          line = ''
          cycle
       endif
+      if (len(block) == 0) then
+         ! a plot of inline data ('-'): run once the data lines after it are read
+         call inline_items(line, pending, inline_quotes)
+         if (len(inline_quotes) > 0) then
+            inline_k = 1_I4P
+            inline_text = ''
+            pending_line = first_line
+            line = ''
+            cycle
+         endif
+      endif
       call take(line)
       if (iostat /= 0_I4P) return
       line = ''
@@ -723,6 +775,10 @@ contains
    if (len(here_name) > 0) then
       call fail('datablock '//here_name//': no line "'//here_end//'" ends it', iostat, iomsg)
       iomsg = name//':'//int_str(int(here_line, I8P))//': '//iomsg
+   endif
+   if (len(inline_quotes) > 0) then
+      call fail("inline data '-': no line ""e"" ends it", iostat, iomsg)
+      iomsg = name//':'//int_str(int(pending_line, I8P))//': '//iomsg
    endif
    contains
       recursive subroutine take(logical_line)
@@ -4246,6 +4302,9 @@ contains
          case ('file')
             ! gnuplot: the item as written, '' included, as it is (not enhanced text)
             title = trim(quote)//written//trim(quote)
+            ! inline data, as written: '-' or "-"
+            if (index(written, '$FS_INLINE_S') == 1) title = "'-'"
+            if (index(written, '$FS_INLINE_D') == 1) title = '"-"'
             if (len(spec) > 0) title = title//' '//using//' '//spec
             auto_title = .true.
          endselect
@@ -12736,6 +12795,137 @@ contains
    if (e == 0_I4P) e = len(t, kind=I4P) + 1_I4P
    word = t(1:e - 1_I4P)
    endfunction leading_word
+
+   pure function inline_name(quote, n) result(name)
+   !< The datablock of the `n`-th inline data item `'-'` of a line: `$FS_INLINE_S<n>` quoted by `'`, `$FS_INLINE_D<n>`
+   !< by `"` (the auto title written back as the item was).
+   character(len=1), intent(in)  :: quote !< Quote of the item.
+   integer(I4P),     intent(in)  :: n     !< Item order.
+   character(len=:), allocatable :: name  !< Datablock name.
+
+   name = '$FS_INLINE_D'
+   if (quote == "'") name = '$FS_INLINE_S'
+   name = name//int_str(int(n, I8P))
+   endfunction inline_name
+
+   pure subroutine inline_items(line, rewritten, quotes)
+   !< The inline data items `'-'` of the plot, replot, fit and stats statements of a line: `rewritten` with each one as
+   !< its datablock (`inline_name`), `quotes` the quote of each (one character per item, empty if none), in order.
+   character(len=*),              intent(in)  :: line      !< Logical line.
+   character(len=:), allocatable, intent(out) :: rewritten !< Line with the datablock names.
+   character(len=:), allocatable, intent(out) :: quotes    !< Quote of each item.
+   character(len=:), allocatable              :: part      !< A statement rewritten.
+   character(len=1)                           :: quote     !< Open quote, blank if none.
+   integer(I4P)                               :: a         !< Statement start.
+   integer(I4P)                               :: i         !< Character counter.
+   integer(I4P)                               :: depth     !< Bracket depth.
+
+   rewritten = ''
+   quotes = ''
+   if (index(line, '-') == 0) then
+      rewritten = line
+      return
+   endif
+   quote = ' '
+   depth = 0_I4P
+   a = 1_I4P
+   do i = 1_I4P, len(line, kind=I4P) + 1_I4P
+      if (i <= len(line, kind=I4P)) then
+         if (quote /= ' ') then
+            if (line(i:i) == quote) quote = ' '
+            cycle
+         endif
+         select case (line(i:i))
+         case ("'", '"')
+            quote = line(i:i)
+            cycle
+         case ('(', '[', '{')
+            depth = depth + 1_I4P
+            cycle
+         case (')', ']', '}')
+            depth = depth - 1_I4P
+            cycle
+         case (';')
+            if (depth /= 0_I4P) cycle
+         case default
+            cycle
+         endselect
+      endif
+      ! a statement ends at i
+      call inline_statement(line(a:i - 1_I4P), quotes, part)
+      rewritten = rewritten//part
+      if (i <= len(line, kind=I4P)) rewritten = rewritten//';'
+      a = i + 1_I4P
+   enddo
+   endsubroutine inline_items
+
+   pure subroutine inline_statement(line, quotes, rewritten)
+   !< The inline data items of a plot, replot, fit or stats statement, `quotes` extended with theirs (see
+   !< `inline_items`). An item is `'-'` or `"-"` where a file is expected: first, or after a comma, past inline ranges
+   !< and `for [...]`; for fit, after a blank.
+   character(len=*),              intent(in)    :: line      !< Statement.
+   character(len=:), allocatable, intent(inout) :: quotes    !< Quote of each item.
+   character(len=:), allocatable, intent(out)   :: rewritten !< Statement with the datablock names.
+   character(len=:), allocatable              :: word      !< Command word.
+   integer(I4P)                               :: i         !< Character counter.
+   integer(I4P)                               :: e         !< Closing bracket or quote.
+   integer(I4P)                               :: depth     !< Parentheses depth.
+   logical                                    :: expect    !< A file item may start here.
+
+   rewritten = line
+   if (index(line, '-') == 0) return
+   word = leading_word(line)
+   if (len(word) == 0) return
+   if (.not. (keyword(word, 'plot', 1_I4P) .or. keyword(word, 'replot', 3_I4P) .or. word == 'fit' .or. &
+              keyword(word, 'stats', 2_I4P))) return
+   i = index(line, word, kind=I4P) + len(word, kind=I4P)
+   rewritten = line(1:i - 1)
+   expect = .true.
+   depth = 0_I4P
+   do while (i <= len(line, kind=I4P))
+      associate(c => line(i:i))
+         if (c == ' ' .or. c == achar(9)) then
+            rewritten = rewritten//c
+            ! fit's file follows its function, a blank apart
+            if (word == 'fit' .and. depth == 0_I4P) expect = .true.
+         elseif (c == '[' .and. expect) then
+            ! an inline range or the iteration of `for`
+            e = matching(line, i)
+            if (e == 0_I4P) e = len(line, kind=I4P)
+            rewritten = rewritten//line(i:e)
+            i = e
+         elseif (expect .and. i + 2_I4P <= len(line, kind=I4P) .and. index(line(i:), 'for') == 1) then
+            rewritten = rewritten//'for'
+            i = i + 2_I4P
+         elseif ((c == "'" .or. c == '"') .and. expect .and. i + 2_I4P <= len(line, kind=I4P)) then
+            expect = .false.
+            if (line(i + 1_I4P:i + 2_I4P) == '-'//c) then
+               quotes = quotes//c
+               rewritten = rewritten//inline_name(c, len(quotes, kind=I4P))
+               i = i + 2_I4P
+            else
+               e = i + index(line(i + 1_I4P:), c, kind=I4P)
+               if (e == i) e = len(line, kind=I4P)
+               rewritten = rewritten//line(i:e)
+               i = e
+            endif
+         elseif (c == "'" .or. c == '"') then
+            ! a string: skipped whole
+            e = i + index(line(i + 1_I4P:), c, kind=I4P)
+            if (e == i) e = len(line, kind=I4P)
+            rewritten = rewritten//line(i:e)
+            i = e
+         else
+            expect = .false.
+            if (c == '(' .or. c == '[' .or. c == '{') depth = depth + 1_I4P
+            if (c == ')' .or. c == ']' .or. c == '}') depth = depth - 1_I4P
+            if (c == ',' .and. depth == 0_I4P) expect = .true.
+            rewritten = rewritten//c
+         endif
+      endassociate
+      i = i + 1_I4P
+   enddo
+   endsubroutine inline_statement
 
    pure function matching(text, open) result(close)
    !< Position of the bracket closing the one at `open` (`(`, `[` or `{`), quotes and nesting respected; 0 if none.

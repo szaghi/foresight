@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(214)                           !< Per-check outcome.
+logical                       :: test_passed(215)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4886,6 +4886,37 @@ if (test_passed(214)) then
    endassociate
 endif
 
+! inline data '-', as gnuplot 6.0: the lines after the plot up to one starting with `e` (blanks skipped), one block per
+! item, the auto titles as written; fit and stats of '-'; a missing `e` an error
+call interpreter%init(scratch)
+call interpreter%run_text("plot '-' using 1:2 with lines, ""-"" with points"//new_line('a')//'1 2'//new_line('a')// &
+                          '3 4'//new_line('a')//'e'//new_line('a')//'5 6'//new_line('a')//'  e  '//new_line('a')// &
+                          "f(x) = a*x; a = 1; fit f(x) '-' using 1:2 via a"//new_line('a')//'1 2'//new_line('a')// &
+                          '2 4'//new_line('a')//'3 6.1'//new_line('a')//'e'//new_line('a')// &
+                          "stats [0:10] '-' using 1 nooutput"//new_line('a')//'4'//new_line('a')//'6'//new_line('a')// &
+                          'e', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(215) = iostat == 0_I4P
+if (test_passed(215)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(215) = size(panel%series) == 2 .and. size(panel%series(1)%x) == 2 .and. &
+                        size(panel%series(2)%x) == 1
+      if (test_passed(215)) test_passed(215) = trim(panel%series(1)%title) == "'-' using 1:2" .and. &
+                                             trim(panel%series(2)%title) == '"-"' .and. panel%series(2)%y(1) == 6.0_R8P
+   endassociate
+   block
+      real(R8P) :: v(2)  !< Values.
+      logical   :: found !< Found.
+
+      call interpreter%symbols%value_of('a', v(1), found)
+      test_passed(215) = test_passed(215) .and. found .and. abs(v(1) - 2.02142857142857_R8P) < 1.0e-6_R8P
+      call interpreter%symbols%value_of('STATS_mean', v(2), found)
+      test_passed(215) = test_passed(215) .and. found .and. v(2) == 5.0_R8P
+   endblock
+endif
+call interpreter%run_text("plot '-'"//new_line('a')//'1 2', iostat, iomsg)
+test_passed(215) = test_passed(215) .and. iostat /= 0_I4P .and. index(iomsg, 'no line "e" ends it') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4894,7 +4925,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,214L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,215L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
