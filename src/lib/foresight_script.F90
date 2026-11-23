@@ -8036,8 +8036,17 @@ contains
          return
       endif
       if (.not. to_number(tokens(2)%text, v)) then
-         call fail('set paxis: an axis number is expected, found "'//tokens(2)%text//'"', iostat, iomsg)
-         return
+         ! a constant expression: `set for [i=1:5] paxis i tics`
+         block
+            character(len=:), allocatable :: message !< Not a constant.
+            integer(I4P)                  :: status  !< Constant status.
+
+            call self%symbols%constant(trim(tokens(2)%text), v, status, message)
+            if (status /= 0_I4P) then
+               call fail('set paxis: an axis number is expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+               return
+            endif
+         endblock
       endif
       if (v < 1.0_R8P .or. v > 1000.0_R8P .or. v /= aint(v)) then
          call fail('set paxis: the axis number is 1 to 1000', iostat, iomsg)
@@ -8272,25 +8281,43 @@ contains
       endsubroutine theta_option
 
       subroutine ttics_option
-      !< `set ttics [[START,]STEP] [format "fmt"]`: theta labels [deg]; no step: every 45 degrees.
+      !< `set ttics [[START,]STEP] [format FMT] [font F]`: theta labels [deg]; no step: every 45 degrees; FMT a string
+      !< expression; the font read and ignored.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Format problem.
       real(R8P)                     :: v(2)    !< Start, step.
       integer(I4P)                  :: n       !< Position tokens.
+      integer(I4P)                  :: last    !< Last token before `font`.
+      integer(I4P)                  :: j       !< Format expression end.
+      integer(I4P)                  :: k       !< Token counter.
 
-      n = size(tokens, kind=I4P) - 1_I4P
-      if (n >= 2_I4P) then
-         if (keyword(tokens(n)%text, 'format', 1_I4P) .and. tokens(n)%kind == TOKEN_WORD .and. &
-             tokens(n + 1_I4P)%kind == TOKEN_STRING) then
-            format = tokens(n + 1_I4P)%text
+      last = size(tokens, kind=I4P)
+      ! `font F` at the end: one font in foresight, read and ignored
+      if (last >= 3_I4P) then
+         if (tokens(last - 1_I4P)%kind == TOKEN_WORD .and. tokens(last - 1_I4P)%text == 'font') last = last - 2_I4P
+      endif
+      ! `format EXPRESSION`, a string expression (`"%g".GPVAL_DEGREE_SIGN`)
+      n = last - 1_I4P
+      do k = 2_I4P, last - 1_I4P
+         if (tokens(k)%kind == TOKEN_WORD .and. keyword(tokens(k)%text, 'format', 1_I4P)) then
+            j = k + 1_I4P
+            if (.not. self%string_expression(tokens(1:last), j, format, iostat, iomsg)) then
+               iomsg = 'set ttics: format: '//iomsg
+               return
+            endif
+            if (j /= last) then
+               call fail('set ttics: unexpected "'//tokens(j + 1_I4P)%text//'" after the format', iostat, iomsg)
+               return
+            endif
             message = format_check(format)
             if (len(message) > 0) then
                call fail('set ttics: '//message, iostat, iomsg)
                return
             endif
-            n = n - 2_I4P
+            n = k - 2_I4P
+            exit
          endif
-      endif
+      enddo
       select case (n)
       case (0_I4P)
          call self%figure%set_ttics(format=format)
@@ -8929,6 +8956,24 @@ contains
          call tics%enable
          return
       endif
+      ! an expression written with blanks is several words: one argument (`set ytics 0, ymax / 10.0, ymax`)
+      block
+         type(token_object), allocatable :: merged(:) !< Arguments, the words between commas joined.
+         integer(I4P)                    :: a         !< Argument counter.
+
+         allocate(merged(0))
+         do a = 1_I4P, n
+            if (size(merged) > 0 .and. args(a)%kind == TOKEN_WORD) then
+               if (merged(size(merged))%kind == TOKEN_WORD) then
+                  merged(size(merged))%text = merged(size(merged))%text//' '//args(a)%text
+                  cycle
+               endif
+            endif
+            call push(merged, args(a))
+         enddo
+         args = merged
+         n = size(args, kind=I4P)
+      endblock
       ok = mod(n, 2_I4P) == 1_I4P .and. n <= 5_I4P
       if (ok) ok = all(args(1:n:2)%kind == TOKEN_WORD .or. args(1:n:2)%kind == TOKEN_STRING)
       if (ok .and. n > 1_I4P) ok = all(args(2:n:2)%kind == TOKEN_COMMA)
@@ -8953,6 +8998,12 @@ contains
                integer(I4P) :: de !< Exponent.
 
                call decimal_of(v, dn, de)
+               ! a computed value to 12 significant digits: start, step and end then share one exact scale (mantissas
+               ! below 1e15) even a decade or more apart (`set ytics 0, ymax / 10.0, ymax`)
+               do while (abs(dn) >= 1000000000000_I8P)
+                  dn = (dn + sign(5_I8P, dn)) / 10_I8P
+                  de = de + 1_I4P
+               enddo
                args(k)%text = decimal_str(dn, -de)
             endblock
          endif
