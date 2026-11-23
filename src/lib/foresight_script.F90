@@ -2455,6 +2455,8 @@ contains
    type(expression_object), allocatable         :: yfunctions(:) !< y(t) of the parametric functions, in their order.
    type(expression_object)                      :: yfunc     !< Current y(t) of a parametric pair.
    integer(I4P),            allocatable         :: slots(:)  !< Series index of each function.
+   logical,                 allocatable         :: sharpens(:) !< Each function sharpened (gnuplot `sharpen`).
+   logical                                      :: sharpen_item !< The item is sharpened.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
@@ -2593,7 +2595,7 @@ contains
    iomsg = ''
    loaded = ''
    loaded_skip = 0_I4P
-   allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0))
+   allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0), sharpens(0))
    call self%figure%clear
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
@@ -2944,6 +2946,7 @@ contains
       if (allocated(whisker)) deallocate(whisker)
       heads = ''
       arrow_var = .false.
+      sharpen_item = .false.
       polar_base = .false.
       rotate_var = .false.
       ellipse_units = 'xy'
@@ -3406,6 +3409,9 @@ contains
                   if (.not. title_place()) return
                endif
             endif
+         elseif (word == 'sharpen') then
+            ! gnuplot's sharpen: the extrema of a function found between its samples (data: ignored, as gnuplot)
+            sharpen_item = is_function
          elseif (keyword(word, 'notitle', 3_I4P)) then
             title = ''
             has_title = .true.
@@ -3620,6 +3626,7 @@ contains
          call mark_last
          call fill_last
          call push(functions, func)
+         sharpens = [sharpens, sharpen_item]
          if (self%parametric) call push(yfunctions, yfunc)
          if (allocated(base)) then
             own_base = [own_base, base]
@@ -5969,7 +5976,19 @@ contains
                      ys(j) = functions(f)%value_at(xs(j))
                   endif
                enddo
-               if (series%x2) then
+               if (sharpens(f)) then
+                  block
+                     real(R8P), allocatable :: sx(:) !< Sharpened abscissae.
+                     real(R8P), allocatable :: sy(:) !< Sharpened values.
+
+                     if (series%x2) then
+                        call sharpened(functions(f), xs2, ys, sx, sy)
+                     else
+                        call sharpened(functions(f), xs, ys, sx, sy)
+                     endif
+                     call panel%resample(slots(f), sx, sy)
+                  endblock
+               elseif (series%x2) then
                   call panel%resample(slots(f), xs2, ys)
                else
                   call panel%resample(slots(f), xs, ys)
@@ -7988,8 +8007,9 @@ contains
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       ! the surfaces' (splot, not in foresight); M the v samples of the `'++'` pseudo-file
       call samples_option(.false.)
-   elseif (keyword(option, 'xyplane', 3_I4P) .or. option == 'view') then
-      ! splot's base plane and view (`set view map|equal xy|...`): read and ignored, as in gnuplot's 2D plots
+   elseif (keyword(option, 'xyplane', 3_I4P) .or. option == 'view' .or. option == 'ticslevel') then
+      ! splot's base plane (`set ticslevel`, its old name) and view (`set view map|equal xy|...`): read and ignored, as
+      ! in gnuplot's 2D plots
       continue
    elseif (keyword(option, 'zrange', 2_I4P) .or. keyword(option, 'urange', 2_I4P) .or. &
            keyword(option, 'vrange', 2_I4P)) then
@@ -13124,7 +13144,8 @@ contains
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
-        .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced'
+        .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
+        word == 'sharpen'
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)
@@ -13535,6 +13556,146 @@ contains
    call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
    ok = len(names) > 0 .and. len(bad) == 0
    endfunction valid_axes
+
+   subroutine sharpened(func, x, y, sx, sy)
+   !< gnuplot 6.0's sharpen filter: the samples `x`, `y` of `func` with the truncated extrema added, found by a
+   !< golden section search between the neighbours of a sample lower (higher) than the two on each side where the
+   !< 5-term Savitzky-Golay second derivative two samples away is negative (positive), as gnuplot (filters.c).
+   type(expression_object), intent(inout)            :: func  !< Function.
+   real(R8P),               intent(in)               :: x(:)  !< Sample abscissae.
+   real(R8P),               intent(in)               :: y(:)  !< Sample values.
+   real(R8P), allocatable,  intent(out)              :: sx(:) !< Abscissae, ascending.
+   real(R8P), allocatable,  intent(out)              :: sy(:) !< Values.
+   real(R8P), parameter                              :: BIG = 1.0e300_R8P !< gnuplot's VERYLARGE stand-in.
+   real(R8P), allocatable                            :: p(:)  !< Values for the search: infinities large, other
+                                                              !< undefined values 0.
+   logical,   allocatable                            :: undefined(:) !< Undefined samples.
+   real(R8P)                                         :: hx    !< Extremum abscissa.
+   real(R8P)                                         :: hy    !< Extremum value.
+   real(R8P)                                         :: t     !< Swap buffer.
+   integer(I4P)                                      :: n     !< Samples.
+   integer(I4P)                                      :: i     !< Sample counter.
+   integer(I4P)                                      :: k     !< Sort counter.
+   integer(I4P)                                      :: pass  !< 1 minima, 2 maxima.
+
+   sx = x
+   sy = y
+   n = size(x, kind=I4P)
+   if (n < 9_I4P) return
+   p = y
+   allocate(undefined(n))
+   undefined = .not. ieee_is_finite(y)
+   do i = 1_I4P, n
+      if (ieee_is_nan(y(i))) then
+         p(i) = 0.0_R8P
+      elseif (.not. ieee_is_finite(y(i))) then
+         p(i) = sign(BIG, y(i))
+         undefined(i) = .false.
+      endif
+   enddo
+   do pass = 1_I4P, 2_I4P
+      do i = 5_I4P, n - 4_I4P
+         if (pass == 1_I4P) then
+            if (.not. (fpp(i - 2_I4P) < 0.0_R8P .or. fpp(i + 2_I4P) < 0.0_R8P)) cycle
+            if (.not. (p(i) <= p(i - 1_I4P) .and. p(i) <= p(i + 1_I4P) .and. p(i) <= p(i - 2_I4P) .and. &
+                       p(i) <= p(i + 2_I4P))) cycle
+         else
+            if (any(undefined(i - 1_I4P:i + 1_I4P))) cycle
+            if (.not. (fpp(i - 2_I4P) > 0.0_R8P .or. fpp(i + 2_I4P) > 0.0_R8P)) cycle
+            if (.not. (p(i) >= p(i - 1_I4P) .and. p(i) >= p(i + 1_I4P) .and. p(i) >= p(i - 2_I4P) .and. &
+                       p(i) >= p(i + 2_I4P))) cycle
+         endif
+         hx = x(i)
+         hy = p(i)
+         call golden(pass == 2_I4P, x(i - 1_I4P), x(i + 1_I4P), hx, hy)
+         sx = [sx, hx]
+         sy = [sy, hy]
+      enddo
+   enddo
+   ! in order
+   do i = 2_I4P, size(sx, kind=I4P)
+      k = i
+      do while (k > 1_I4P)
+         if (sx(k - 1_I4P) <= sx(k)) exit
+         t = sx(k)
+         sx(k) = sx(k - 1_I4P)
+         sx(k - 1_I4P) = t
+         t = sy(k)
+         sy(k) = sy(k - 1_I4P)
+         sy(k - 1_I4P) = t
+         k = k - 1_I4P
+      enddo
+   enddo
+   contains
+      function fpp(c) result(d)
+      !< Second derivative at sample `c` (5-term Savitzky-Golay, not normalized), 0 at an undefined sample.
+      integer(I4P), intent(in) :: c !< Centre sample.
+      real(R8P)                :: d !< Second derivative.
+
+      d = 0.0_R8P
+      if (undefined(c)) return
+      d = (2.0_R8P * p(c - 2_I4P) - p(c - 1_I4P) - 2.0_R8P * p(c) - p(c + 1_I4P) + 2.0_R8P * p(c + 2_I4P)) / 7.0_R8P
+      endfunction fpp
+
+      subroutine golden(maximize, xlow, xhigh, xhit, yhit)
+      !< Golden section search of the minimum (maximum) of `func` in [xlow, xhigh] from `xhit`, as gnuplot's
+      !< bisect_hit.
+      logical,   intent(in)    :: maximize !< Search a maximum.
+      real(R8P), intent(in)    :: xlow     !< Interval start.
+      real(R8P), intent(in)    :: xhigh    !< Interval end.
+      real(R8P), intent(inout) :: xhit     !< Start, then the extremum abscissa.
+      real(R8P), intent(inout) :: yhit     !< Its value.
+      real(R8P), parameter     :: PHIM1 = 0.618034_R8P !< gnuplot's golden ratio - 1.
+      real(R8P), parameter     :: EPSILON = 1.0e-14_R8P !< Relative tolerance.
+      real(R8P)                :: x0, x1, x2, x3 !< Bracket.
+      real(R8P)                :: f1, f2         !< Values at x1, x2.
+      logical                  :: left           !< Move the bracket right.
+      integer(I4P)             :: it             !< Iteration guard.
+
+      x0 = xlow
+      x3 = xhigh
+      if (abs(xhigh - xhit) > abs(xhit - xlow)) then
+         x1 = xhit
+         x2 = xhit + (1.0_R8P - PHIM1) * (xhigh - xhit)
+      else
+         x2 = xhit
+         x1 = xhit - (1.0_R8P - PHIM1) * (xhit - xlow)
+      endif
+      f1 = func%value_at(x1)
+      f2 = func%value_at(x2)
+      it = 0_I4P
+      do while (abs(x3 - x0) > EPSILON * (abs(x1) + abs(x2)) .and. it < 500_I4P)
+         it = it + 1_I4P
+         if (maximize) then
+            left = f2 > f1
+         else
+            left = f2 < f1
+         endif
+         if (left) then
+            x0 = x1
+            x1 = x2
+            x2 = PHIM1 * x2 + (1.0_R8P - PHIM1) * x3
+            f1 = f2
+            f2 = func%value_at(x2)
+         else
+            x3 = x2
+            x2 = x1
+            x1 = PHIM1 * x1 + (1.0_R8P - PHIM1) * x0
+            f2 = f1
+            f1 = func%value_at(x1)
+         endif
+         if (abs(x1) + abs(x2) < EPSILON) exit
+      enddo
+      ! as gnuplot: the better of the last two
+      if (maximize .eqv. (f1 > f2)) then
+         xhit = x1
+         yhit = f1
+      else
+         xhit = x2
+         yhit = f2
+      endif
+      endsubroutine golden
+   endsubroutine sharpened
 
    subroutine above_below_base(curve, base, band)
    !< gnuplot's `filledcurves above|below` without y=V nor a band: above or below y = 0; with an axis (`above x1`)
