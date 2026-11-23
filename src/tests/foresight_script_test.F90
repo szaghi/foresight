@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(174)                           !< Per-check outcome.
+logical                       :: test_passed(175)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3839,6 +3839,17 @@ close(unit, status='delete')
 call interpreter%run_text('set style textbox 4 opaque', iostat, iomsg)
 test_passed(174) = test_passed(174) .and. iostat /= 0_I4P .and. index(iomsg, 'styles are 0 to 3') > 0
 
+
+! set label ... boxed [bs N]: on the background when that text box style is drawn
+call interpreter%init(scratch)
+call interpreter%run_text('set style textbox 1 transparent noborder; set label 1 "a" at 0,0 boxed; '// &
+                          'set label 2 "b" at 1,1 boxed bs 1; set label 3 "c" at 2,2', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(175) = iostat == 0_I4P
+if (test_passed(175)) test_passed(175) = interpreter%figure%panels(1)%notes(1)%boxed .and. &
+                                       .not. interpreter%figure%panels(1)%notes(2)%boxed .and. &
+                                       .not. interpreter%figure%panels(1)%notes(3)%boxed
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3847,7 +3858,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,174L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,175L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

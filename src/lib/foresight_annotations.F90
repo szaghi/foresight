@@ -61,6 +61,7 @@ type :: label_object
    integer(I4P)                  :: pt = 1_I4P           !< Point type.
    real(R8P)                     :: ps = 1.0_R8P         !< Point size.
    real(R8P)                     :: offset(2) = 0.0_R8P  !< Text offset [characters, y upward].
+   logical                       :: boxed = .false.      !< On the background (gnuplot `boxed`, a drawn text box style).
 endtype label_object
 
 type :: arrow_object
@@ -220,6 +221,7 @@ contains
                                                 0.6_R8P * labels(k)%ps * font_size, pt=labels(k)%pt, line_width=1.0_R8P)
          ! the offset in characters (0.6 of the font size wide, 1 high), the baseline a third of the size down
          t = xy + [labels(k)%offset(1) * 0.6_R8P * font_size, -labels(k)%offset(2) * font_size + 0.35_R8P * font_size]
+         backend%boxed = labels(k)%boxed
          if (labels(k)%rotate /= 0.0_R8P .and. backend%rotates_text()) then
             backend%literal = labels(k)%plain
             call backend%text(t(1), t(2), labels(k)%text, anchor_of(labels(k)%justify), rotate=-labels(k)%rotate, &
@@ -230,6 +232,7 @@ contains
          endif
       enddo
       backend%literal = .false.
+      backend%boxed = .false.
       call backend%end_group
    enddo
    endsubroutine draw_labels

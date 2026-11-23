@@ -5776,7 +5776,7 @@ contains
       yes = is_word(w, 'at from to rto left center centre right rotate norotate front back behind tc textcolor '// &
                     'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
                     'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
-                    'backhead heads filled empty nofilled noborder clip noclip default units boxed as arrowstyle')
+                    'backhead heads filled empty nofilled noborder clip noclip default units boxed noboxed as arrowstyle')
       endfunction is_annotation_word
 
       subroutine position(q)
@@ -5892,6 +5892,26 @@ contains
             if (allocated(line%ps)) label%ps = line%ps
          elseif (word == 'nopoint') then
             label%point = .false.
+         elseif (word == 'boxed' .and. option == 'label') then
+            ! in text box style 0, or `bs N`: on the background when that style is drawn (gnuplot's svg)
+            block
+               integer(I4P) :: bs !< Text box style.
+
+               bs = 0_I4P
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%text == 'bs') then
+                     i = i + 1_I4P
+                     if (.not. next_integer(tokens, i, bs, iostat, iomsg, self%symbols)) return
+                     if (bs < 0_I4P .or. bs > 3_I4P) then
+                        call fail('set label: boxed bs N: N from 0 to 3', iostat, iomsg)
+                        return
+                     endif
+                  endif
+               endif
+               label%boxed = self%textbox_drawn(bs)
+            endblock
+         elseif (word == 'noboxed' .and. option == 'label') then
+            label%boxed = .false.
          elseif (word == 'offset') then
             block
                character(len=9) :: system !< Offset system (characters only).

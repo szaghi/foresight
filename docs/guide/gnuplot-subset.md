@@ -1444,11 +1444,11 @@ set label 'note' at character 2, 1                  # 2 cells from the left, 1 u
 
 <Plot name="cb_arrow_styles" svg :width="560" :height="360" />
 
-`with labels boxed [bs N]` draws each text on the background when the [textbox style](#set-unset-options) `N` (0
-by default) is opaque or has a border, as gnuplot's svg terminal (a filter flooding the text's bounding box; no
-border, no margin). An arrow takes `fill` for `filled` and `ls N` (the color, width and dashes of line style N).
+`set label ... boxed [bs N]` and `with labels boxed [bs N]` draw the text on the background when the
+[textbox style](#set-unset-options) `N` (0 by default) is opaque or has a border, as gnuplot's svg terminal (a filter
+flooding the text's bounding box; no border, no margin). An arrow takes `fill` for `filled` and `ls N` (the color, width and dashes of line style N).
 
-Not supported: `boxed` on `set label` and on axis labels, `hypertext`, `set style circle|ellipse`, `units xx|yy`.
+Not supported: `boxed` on axis labels, `hypertext`, `set style circle|ellipse`, `units xx|yy`.
 
 ## Enhanced text
 
