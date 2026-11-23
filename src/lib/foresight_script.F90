@@ -687,8 +687,9 @@ contains
       integer(I4P)                    :: e             !< Last statement of an old if's line.
 
       call split_statements(logical_line, statements)
-      ! gnuplot's GPVAL_LINENO: the line of the statement in its file
-      call self%symbols%set_value('GPVAL_LINENO', real(at, R8P), is_int=.true.)
+      ! gnuplot's GPVAL_LINENO: the last line read of the statement in its file (a continued line's last, the line
+      ! closing a block for the statements in it)
+      call self%symbols%set_value('GPVAL_LINENO', real(max(at, lineno), R8P), is_int=.true.)
       s = 1_I4P
       do while (s <= size(statements, kind=I4P))
          if (old_if(statements(s)%text)) then
@@ -4912,18 +4913,23 @@ contains
    recursive subroutine call_command(self, tokens, is_call, iostat, iomsg)
    !< gnuplot `load FILE` and `call FILE [ARG1 ... ARG9]`: run the script FILE (a string expression), ARG0 its name
    !< and, for `call`, ARGC the number of arguments and ARG1 to ARG9 their texts (a quoted string as it is, a number
-   !< as written, a variable or a parenthesized expression its value: a string as it is, a number as `%g`); those
-   !< variables are restored after it, as gnuplot's. The script is watched as a data file is.
+   !< as written, a variable or a parenthesized expression its value: a string as it is, an integer as it is, a real
+   !< as `%g`; any other word as it is, gnuplot's `call "f" sub1`), ARGV their values (numbers for the numbers, as
+   !< gnuplot's prepare_call); those variables are restored after it. The script is watched as a data file is.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Statement tokens, the command first.
    logical,                       intent(in)    :: is_call   !< `call`, else `load`.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    character(len=*), parameter                  :: DIGITS = '0123456789' !< Argument numbers.
+   character(len=*), parameter                  :: NAME_CHARS = &
+                                                   'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789' !< Names.
    type(saved_variable)                         :: saved(11) !< ARG0 to ARG9 and ARGC before the call.
    type(saved_array)                            :: saved_argv !< ARGV before the call.
    type(token_object), allocatable              :: args(:)   !< Argument texts.
    type(token_object)                           :: arg       !< One argument.
+   type(value_object), allocatable              :: values(:) !< Argument values (ARGV).
+   type(value_object)                           :: typed     !< One argument value.
    character(len=:), allocatable                :: file      !< Script.
    character(len=:), allocatable                :: command   !< `load` or `call`.
    character(len=:), allocatable                :: value     !< Value of an argument.
@@ -4946,7 +4952,7 @@ contains
       iomsg = command//': '//iomsg
       return
    endif
-   allocate(args(0))
+   allocate(args(0), values(0))
    do while (i < size(tokens, kind=I4P))
       i = i + 1_I4P
       if (.not. is_call) then
@@ -4955,34 +4961,45 @@ contains
       endif
       if (tokens(i)%kind == TOKEN_STRING) then
          arg%text = tokens(i)%text
+         ! by components: nvfortran 26.9 miscompiles constructors of types with deferred-length components
+         typed = value_object()
+         typed%is_string = .true.
+         typed%s = arg%text
       elseif (tokens(i)%kind /= TOKEN_WORD) then
          call fail('call: unexpected "'//tokens(i)%text//'"', iostat, iomsg)
          return
       elseif (to_number(tokens(i)%text, number)) then
+         ! a number as written; its value in ARGV
          arg%text = tokens(i)%text
+         typed = value_object()
+         typed%r = number
+      elseif (verify(tokens(i)%text, NAME_CHARS) == 0 .and. .not. self%symbols%defined(tokens(i)%text)) then
+         ! a word that names no variable: the word itself, gnuplot's pre-version 5 wrapping
+         arg%text = tokens(i)%text
+         typed = value_object()
+         typed%is_string = .true.
+         typed%s = arg%text
       else
-         call self%symbols%text_of(tokens(i)%text, value, is_string, iostat, iomsg, &
-                                   degrees=self%figure%panels(self%figure%current)%degrees)
+         call self%symbols%evaluate_constant(tokens(i)%text, typed, iostat, iomsg, &
+                                             degrees=self%figure%panels(self%figure%current)%degrees)
          if (iostat /= 0_I4P) then
             iomsg = 'call: '//iomsg
             return
          endif
-         if (.not. is_string) then
-            call self%symbols%constant(tokens(i)%text, number, iostat, iomsg, &
-                                       degrees=self%figure%panels(self%figure%current)%degrees)
-            if (iostat /= 0_I4P) then
-               iomsg = 'call: '//iomsg
-               return
-            endif
-            value = c_real('', 0_I4P, -1_I4P, 'g', number)
+         if (typed%is_string) then
+            arg%text = typed%s
+         elseif (typed%is_int) then
+            arg%text = int_str(typed%i)
+         else
+            arg%text = c_real('', 0_I4P, -1_I4P, 'g', typed%r)
          endif
-         arg%text = value
       endif
       if (size(args) == 9) then
          call fail('call: at most 9 arguments', iostat, iomsg)
          return
       endif
       call push(args, arg)
+      call push(values, typed)
    enddo
    do k = 0_I4P, 9_I4P
       call self%symbols%save_variable('ARG'//DIGITS(k + 1_I4P:k + 1_I4P), saved(k + 1_I4P))
@@ -5000,18 +5017,13 @@ contains
       enddo
       call self%symbols%set_value('ARGC', real(size(args), R8P), is_int=.true.)
       block
-         character(len=:), allocatable :: texts(:) !< Argument texts.
-         integer(I4P)                  :: width    !< Longest.
+         type(value_list) :: argv !< The argument values.
 
-         width = 1_I4P
-         do k = 1_I4P, size(args, kind=I4P)
-            width = max(width, len(args(k)%text, kind=I4P))
-         enddo
-         allocate(character(len=width) :: texts(size(args)))
-         do k = 1_I4P, size(args, kind=I4P)
-            texts(k) = args(k)%text
-         enddo
-         call self%symbols%set_array('ARGV', texts)
+         allocate(argv%set(size(values)))
+         argv%set = .true.
+         call move_alloc(values, argv%items)
+         call self%symbols%store_array('ARGV', argv, iostat, iomsg)
+         if (iostat /= 0_I4P) return
       endblock
    endif
    call self%register_file(file)

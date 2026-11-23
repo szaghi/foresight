@@ -81,6 +81,7 @@ interface push
    module procedure push_instruction
    module procedure push_array
    module procedure push_list
+   module procedure push_value
 endinterface push
 
 ! operation codes
@@ -294,6 +295,7 @@ type :: symbols_object
       procedure, pass(self) :: store_array !< Set an array to elements.
       procedure, pass(self) :: declare_array !< `array name[N] [= [...]]`, `array name = [...]`.
       procedure, pass(self) :: is_array !< Whether a name is an array.
+      procedure, pass(self) :: defined  !< Whether a name is a variable, an array or `pi`, `NaN`.
       procedure, pass(self) :: datablock_names !< Names of the datablocks.
       procedure, pass(self) :: array_size !< Size of an array.
       procedure, pass(self) :: set_array !< Set an array to strings (ARGV).
@@ -2789,6 +2791,15 @@ contains
    if (.not. allocated(self%arrays)) allocate(self%arrays(0))
    call push(self%arrays, a)
    endsubroutine store_array
+
+   pure function defined(self, name) result(yes)
+   !< Whether `name` is a user variable, an array, or one of gnuplot's predefined `pi` and `NaN`.
+   class(symbols_object), intent(in) :: self !< Symbols.
+   character(len=*),      intent(in) :: name !< Name.
+   logical                           :: yes  !< Defined.
+
+   yes = self%variable_index(name) > 0_I4P .or. self%array_index(name) > 0_I4P .or. name == 'pi' .or. name == 'NaN'
+   endfunction defined
 
    pure function array_data(self, name) result(text)
    !< The array `name` as data lines (gnuplot's `plot A`): the index, then the value (a string quoted, `NaN` for an

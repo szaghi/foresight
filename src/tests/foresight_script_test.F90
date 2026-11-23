@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(161)                           !< Per-check outcome.
+logical                       :: test_passed(162)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3514,6 +3514,44 @@ test_passed(161) = test_passed(161) .and. iostat /= 0_I4P .and. index(iomsg, 'sp
 call interpreter%run_text('y = join(3, "-")', iostat, iomsg)
 test_passed(161) = test_passed(161) .and. iostat /= 0_I4P .and. index(iomsg, 'join: expecting') > 0
 
+
+! call arguments as gnuplot 6.0's prepare_call: a number as written (its value in ARGV), a word naming no variable as
+! it is, an integer value as an integer, a real one as %g; GPVAL_LINENO the last line read (a block's closing line)
+open(newunit=unit, file='foresight_script_test_call.gp')
+write(unit, '(A)') 'r1 = ARG1; r3 = ARG3; r4 = ARG4; r6 = ARG6; r7 = ARG7; v1 = ARGV[1]; v4 = ARGV[4]; n = ARGC'
+close(unit)
+call interpreter%init(scratch)
+call interpreter%run_text('BAZ = 5.67; S = "a b"; call "foresight_script_test_call.gp" 1.23e4 "s" FOO BAZ "x" S '// &
+                          '(1+3+4) pi'//new_line('a')//'if (1) {'//new_line('a')//'k = 1'//new_line('a')// &
+                          'm = GPVAL_LINENO'//new_line('a')//'}', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(162) = iostat == 0_I4P
+if (test_passed(162)) then
+   block
+      character(len=:), allocatable :: text(:) !< r1, r3, r4, r6, r7.
+      character(len=:), allocatable :: t       !< One.
+      logical                       :: found   !< Found.
+      real(R8P)                     :: v(4)    !< v1, v4, n, m.
+      integer(I4P)                  :: j       !< Counter.
+      character(len=2), parameter   :: NAMES(5) = ['r1', 'r3', 'r4', 'r6', 'r7'] !< Texts.
+      character(len=6), parameter   :: EXPECTED(5) = ['1.23e4', 'FOO   ', '5.67  ', 'a b   ', '8     '] !< Values.
+
+      allocate(character(len=6) :: text(5))
+      do j = 1_I4P, 5_I4P
+         call interpreter%symbols%string_of(NAMES(j), t, found)
+         test_passed(162) = test_passed(162) .and. found
+         if (found) test_passed(162) = test_passed(162) .and. t == trim(EXPECTED(j))
+      enddo
+      call interpreter%symbols%constant('v1', v(1), iostat, iomsg)
+      call interpreter%symbols%constant('v4', v(2), iostat, iomsg)
+      call interpreter%symbols%constant('n', v(3), iostat, iomsg)
+      call interpreter%symbols%constant('m', v(4), iostat, iomsg)
+      test_passed(162) = test_passed(162) .and. all(v == [12300.0_R8P, 5.67_R8P, 8.0_R8P, 5.0_R8P])
+   endblock
+endif
+open(newunit=unit, file='foresight_script_test_call.gp')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3522,7 +3560,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,161L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,162L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
