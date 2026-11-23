@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(159)                           !< Per-check outcome.
+logical                       :: test_passed(160)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3450,6 +3450,39 @@ test_passed(159) = test_passed(159) .and. iostat == 0_I4P .and. interpreter%figu
 call interpreter%run_text('unset mttics', iostat, iomsg)
 test_passed(159) = test_passed(159) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%minor == 0_I4P
 
+
+! assignments inside expressions and gnuplot's serial evaluation (a, b), as gnuplot 6.0: run when evaluated, on each
+! data row in using, the variables of a function body read at run time wherever compiled; `name=value 'file'`, an
+! assignment the item follows without a comma
+call interpreter%init(scratch)
+call interpreter%run_text('a = (b = 2, b + 1); c = d = 4; f(x) = (n = x * 2, n + 1); e = f(3); g = n'// &
+                          new_line('a')//'$D << EOD'//new_line('a')//'1 10'//new_line('a')//'2 20'//new_line('a')//'3 30'// &
+                          new_line('a')//'EOD'//new_line('a')// &
+                          'plot s = 0, $D using 1:(s = s + $2, s), t=100 $D using 1:(t = t + 1)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(160) = iostat == 0_I4P
+if (test_passed(160)) then
+   block
+      real(R8P) :: v(8) !< a, b, c, d, e, g, s, t.
+
+      call interpreter%symbols%constant('a', v(1), iostat, iomsg)
+      call interpreter%symbols%constant('b', v(2), iostat, iomsg)
+      call interpreter%symbols%constant('c', v(3), iostat, iomsg)
+      call interpreter%symbols%constant('d', v(4), iostat, iomsg)
+      call interpreter%symbols%constant('e', v(5), iostat, iomsg)
+      call interpreter%symbols%constant('g', v(6), iostat, iomsg)
+      call interpreter%symbols%constant('s', v(7), iostat, iomsg)
+      call interpreter%symbols%constant('t', v(8), iostat, iomsg)
+      test_passed(160) = all(v == [3.0_R8P, 2.0_R8P, 4.0_R8P, 4.0_R8P, 7.0_R8P, 6.0_R8P, 60.0_R8P, 103.0_R8P])
+   endblock
+endif
+if (test_passed(160)) test_passed(160) = all(interpreter%figure%panels(1)%series(1)%y == [10.0_R8P, 30.0_R8P, 60.0_R8P]) &
+                                       .and. all(interpreter%figure%panels(1)%series(2)%y == [101.0_R8P, 102.0_R8P, 103.0_R8P])
+call interpreter%run_text('h(x) = (unknown_k + x, unknown_k = 1); print h(1)', iostat, iomsg)
+test_passed(160) = test_passed(160) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable') > 0
+call interpreter%run_text('print (1 = 2)', iostat, iomsg)
+test_passed(160) = test_passed(160) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3458,7 +3491,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,159L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,160L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

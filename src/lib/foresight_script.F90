@@ -112,7 +112,8 @@ use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
                            spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : block_hook, expression_object, list_text, push, saved_array, saved_variable, &
+use foresight_expression, only : block_hook, fetch_hook, store_hook, expression_object, list_text, push, &
+                                 saved_array, saved_variable, &
                                  symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
                                  OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
 use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
@@ -356,6 +357,8 @@ contains
    endif
    call gnuplot_values(self)
    block_hook => run_block
+   store_hook => store_variable
+   fetch_hook => fetch_variable
    call default_styles(self)
    endsubroutine init
 
@@ -384,6 +387,26 @@ contains
    if (text(len(text):len(text)) == new_line('a')) text = text(1:len(text) - 1)
    call self%symbols%set_string('GPVAL_MACHINE', text)
    endsubroutine gnuplot_values
+
+   subroutine store_variable(name, v)
+   !< An assignment run by an expression (foresight_expression's `store_hook`), `(a = 2, a + 1)`: the variable of the
+   !< active interpreter set.
+   character(len=*),   intent(in) :: name !< Variable name.
+   type(value_object), intent(in) :: v    !< Value.
+
+   if (associated(active)) call active%symbols%put(name, v)
+   endsubroutine store_variable
+
+   subroutine fetch_variable(name, v, found)
+   !< The value of a variable an expression assigns, read when it runs (foresight_expression's `fetch_hook`).
+   character(len=*),   intent(in)  :: name  !< Variable name.
+   type(value_object), intent(out) :: v     !< Value.
+   logical,            intent(out) :: found !< A variable of that name.
+
+   v = value_object()
+   found = .false.
+   if (associated(active)) call active%symbols%get(name, v, found)
+   endsubroutine fetch_variable
 
    recursive subroutine run_block(name, args, result, ok, message)
    !< gnuplot 6.0 function block `name` called on `args` (foresight_expression's `block_hook`): its body run by the
@@ -2560,7 +2583,24 @@ contains
                if (tokens(last + 1_I4P)%kind == TOKEN_COMMA) exit
                last = last + 1_I4P
             enddo
-            if (index(text(tokens(i)%first:tokens(last)%last), '=') > 0) then
+            ! an assignment the item follows without a comma, gnuplot's `plot ysum=0 '' using ...`
+            if (expression_end(tokens, i) < last) then
+               if (index(text(tokens(i)%first:tokens(expression_end(tokens, i))%last), '=') > 0 .and. &
+                   tokens(expression_end(tokens, i) + 1_I4P)%kind /= TOKEN_RANGE) then
+                  if (self%assignment(text(tokens(i)%first:tokens(expression_end(tokens, i))%last), status, &
+                                      message)) then
+                     if (status /= 0_I4P) then
+                        call fail('plot: '//message, iostat, iomsg)
+                        return
+                     endif
+                     i = expression_end(tokens, i) + 1_I4P
+                     last = i - 1_I4P
+                  endif
+               endif
+            endif
+            if (last < i) then
+               continue
+            elseif (index(text(tokens(i)%first:tokens(last)%last), '=') > 0) then
                if (self%assignment(text(tokens(i)%first:tokens(last)%last), status, message)) then
                   if (status /= 0_I4P) then
                      call fail('plot: '//message, iostat, iomsg)

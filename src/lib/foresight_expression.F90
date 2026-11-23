@@ -59,6 +59,10 @@ public :: value_list
 public :: value_object
 public :: block_hook
 public :: block_call_interface
+public :: store_hook
+public :: fetch_hook
+public :: store_interface
+public :: fetch_interface
 public :: push
 public :: overflow_mode
 public :: OVERFLOW_IGNORE
@@ -130,6 +134,10 @@ integer(I4P), parameter :: OP_BLOCK        = 47_I4P !< Call the function block `
 integer(I4P), parameter :: OP_RAND         = 48_I4P !< gnuplot's rand(x) of the top: the next pseudo-random number.
 integer(I4P), parameter :: OP_SPECIAL      = 49_I4P !< A special function `MATH_FUNCTIONS(arg)` (foresight_mathlib) of
                                                     !< its `MATH_ARGS(arg)` arguments.
+integer(I4P), parameter :: OP_ASSIGN       = 50_I4P !< `name = value` inside an expression: the top stored in the user
+                                                    !< variable `stores(arg)` (`store_hook`), and kept.
+integer(I4P), parameter :: OP_FETCH        = 51_I4P !< Push the user variable `stores(arg)` as it is now (`fetch_hook`),
+                                                    !< `v` its value when compiled if none (`calls` 1 when it had one).
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -168,6 +176,7 @@ integer(I4P), parameter :: E_UNDEF      = 12_I4P !< The value is gnuplot's undef
 integer(I4P), parameter :: E_UNINIT     = 13_I4P !< An operation on gnuplot's undefined value.
 integer(I4P), parameter :: E_SEED       = 14_I4P !< rand(x): x not an integer seed.
 integer(I4P), parameter :: E_ORDER      = 15_I4P !< A real order of besjn, besyn, besin or expint (`order_message`).
+integer(I4P), parameter :: E_NOVAR      = 16_I4P !< A variable assigned by an expression read before it has a value.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
@@ -270,8 +279,12 @@ type :: symbols_object
    type(user_array),    allocatable, private :: arrays(:)    !< Arrays, gnuplot `array A[N]`.
    character(len=:),    allocatable          :: timefmt      !< Time format of `timecolumn(N)` (gnuplot `set timefmt`),
                                                              !< `%d/%m/%y,%H:%M` if unallocated.
+   type(name_object),   allocatable, private :: assigned(:)  !< Variables a user function body assigns (`f(x) = (a = x,
+                                                             !< a)`): read at run time wherever compiled.
    contains
       procedure, pass(self) :: assign   !< `name = expression`.
+      procedure, pass(self) :: put      !< Set a variable to a typed value (an assignment run by an expression).
+      procedure, pass(self) :: get      !< Typed value of a variable.
       procedure, pass(self) :: assign_element !< `name[index] = expression`.
       procedure, pass(self) :: evaluate_constant !< Typed value of a constant expression.
       procedure, pass(self) :: array_data !< An array as the lines of a data file (index and value).
@@ -318,6 +331,8 @@ type :: expression_object
                                                           !< column then reads a time with it.
    type(value_list),         allocatable :: lists(:)      !< Arrays and datablocks indexed at run time (`A[$1]`).
    type(name_object),        allocatable :: blocks(:)     !< Function blocks called (OP_BLOCK).
+   type(name_object),        allocatable :: stores(:)     !< User variables assigned or read at run time (OP_ASSIGN,
+                                                          !< OP_FETCH).
    contains
       procedure, pass(self) :: compile      !< Compile an expression.
       procedure, pass(self) :: set_time     !< Read a plain column as a time.
@@ -347,9 +362,26 @@ abstract interface
    logical,                       intent(out) :: ok      !< A value returned.
    character(len=:), allocatable, intent(out) :: message !< Error, empty if none.
    endsubroutine block_call_interface
+
+   subroutine store_interface(name, v)
+   !< Set the user variable `name` to `v` (an assignment inside an expression, gnuplot's `(a = 2, a + 1)`).
+   import :: value_object
+   character(len=*),   intent(in) :: name !< Variable name.
+   type(value_object), intent(in) :: v    !< Value.
+   endsubroutine store_interface
+
+   subroutine fetch_interface(name, v, found)
+   !< Value of the user variable `name` now, `found` false if none.
+   import :: value_object
+   character(len=*),   intent(in)  :: name  !< Variable name.
+   type(value_object), intent(out) :: v     !< Value.
+   logical,            intent(out) :: found !< A variable of that name.
+   endsubroutine fetch_interface
 endinterface
 
 procedure(block_call_interface), pointer :: block_hook => null() !< The interpreter's runner of function blocks.
+procedure(store_interface),      pointer :: store_hook => null() !< The interpreter's store of a user variable.
+procedure(fetch_interface),      pointer :: fetch_hook => null() !< The interpreter's value of a user variable.
 integer(I8P), save :: rand_seeds(2) = 1234567890_I8P !< gnuplot's rand seeds (L'Ecuyer's combined generator).
 character(len=:), allocatable :: block_message                   !< Message of the last function block failure.
 
@@ -416,6 +448,8 @@ contains
    if (allocated(self%lists)) deallocate(self%lists)
    if (allocated(self%blocks)) deallocate(self%blocks)
    allocate(self%blocks(0))
+   if (allocated(self%stores)) deallocate(self%stores)
+   allocate(self%stores(0))
    self%depth = 0_I4P
    self%recursive = .false.
    self%degrees = .false.
@@ -686,8 +720,8 @@ contains
             token = src(pos:pos)
             pos = pos + 1_I4P
             select case (token)
-            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']', '|', '&', '^', '~')
-               ! `|` a bitwise or, and around an array or a datablock, `|A|`
+            case ('+', '-', '*', '/', '%', '!', '<', '>', '?', ':', '(', ')', ',', '.', '[', ']', '|', '&', '^', '~', '=')
+               ! `|` a bitwise or, and around an array or a datablock, `|A|`; `=` an assignment, `a = 2`
             case default
                call syntax('unexpected "'//token//'"')
             endselect
@@ -757,7 +791,7 @@ contains
       call push(self%code, instruction)
       if (present(k)) k = size(self%code, kind=I4P)
       select case (op)
-      case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD)
+      case (OP_CONSTANT, OP_COLUMN, OP_COLUMN_NAMED, OP_LOAD, OP_FETCH)
          depth = depth + 1_I4P
       case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP)
          ! the conditional jumps pop on the path that falls through
@@ -802,6 +836,31 @@ contains
       nesting = nesting + 1_I4P
       if (nesting > MAX_NESTING) call syntax('expression nested too deeply')
       if (iostat /= 0_I4P) return
+      if (assignment_ahead()) then
+         ! `name = value`, gnuplot's assignment operator (right associative, its value the value): stored when run
+         block
+            character(len=:), allocatable :: name !< Variable.
+            integer(I4P)                  :: at   !< Its position.
+            integer(I4P)                  :: slot !< Its run time slot.
+
+            name = token
+            at = start
+            call next
+            call next
+            call check_name(name, iostat, iomsg)
+            if (iostat /= 0_I4P) then
+               iostat = 0_I4P
+               call syntax(iomsg, at)
+               return
+            endif
+            ! known before the value is compiled: `s = s + $2` reads the variable when run
+            slot = store_slot(name)
+            call parse_ternary
+            call emit(OP_ASSIGN, arg=slot)
+         endblock
+         nesting = nesting - 1_I4P
+         return
+      endif
       call parse_binary(1_I4P)
       if (accept('?')) then
          call emit(OP_JUMP_UNLESS, k=skip_a)
@@ -815,6 +874,57 @@ contains
       endif
       nesting = nesting - 1_I4P
       endsubroutine parse_ternary
+
+      function assignment_ahead() result(yes)
+      !< Whether the current token is a name followed by `=` (not `==`): an assignment.
+      logical      :: yes !< An assignment.
+      integer(I4P) :: j   !< Character counter.
+
+      yes = .false.
+      if (kind /= T_NAME) return
+      if (token(1:1) == '$') return
+      j = pos
+      do while (j <= len(src, kind=I4P))
+         if (src(j:j) /= ' ' .and. src(j:j) /= achar(9)) exit
+         j = j + 1_I4P
+      enddo
+      if (j > len(src, kind=I4P)) return
+      if (src(j:j) /= '=') return
+      yes = .true.
+      if (j < len(src, kind=I4P)) yes = src(j + 1_I4P:j + 1_I4P) /= '='
+      endfunction assignment_ahead
+
+      function store_slot(name) result(k)
+      !< Index of `name` among the variables assigned or read at run time (`stores`), added if new.
+      character(len=*), intent(in) :: name !< Variable.
+      integer(I4P)                 :: k    !< Index.
+      type(name_object)            :: item !< New name.
+
+      do k = 1_I4P, size(self%stores, kind=I4P)
+         if (self%stores(k)%text == name) return
+      enddo
+      ! by components: nvfortran 26.9 miscompiles constructors of types with allocatable components
+      item%text = name
+      call push_name(self%stores, item)
+      k = size(self%stores, kind=I4P)
+      endfunction store_slot
+
+      function run_time_name(name) result(yes)
+      !< Whether `name` is assigned by this expression so far, or by a user function body: read when run.
+      character(len=*), intent(in) :: name !< Variable.
+      logical                      :: yes  !< Read at run time.
+      integer(I4P)                 :: k    !< Counter.
+
+      yes = .false.
+      do k = 1_I4P, size(self%stores, kind=I4P)
+         if (self%stores(k)%text == name) yes = .true.
+      enddo
+      if (yes .or. .not. present(symbols)) return
+      if (.not. allocated(symbols%assigned)) return
+      do k = 1_I4P, size(symbols%assigned, kind=I4P)
+         if (symbols%assigned(k)%text == name) yes = .true.
+      enddo
+      endfunction run_time_name
 
       recursive subroutine parse_binary(level)
       !< Left associative binary operators of `level` and tighter levels.
@@ -1082,6 +1192,12 @@ contains
       case (T_OPERATOR)
          if (accept('(')) then
             call parse_ternary
+            ! gnuplot's serial evaluation `(a, b)`: each evaluated, the last the value
+            do while (accept(','))
+               call parse_ternary
+               call emit(OP_COLLAPSE, arg=1_I4P)
+               depth = depth - 1_I4P
+            enddo
             call expect(')')
          elseif (accept('|')) then
             call cardinality
@@ -1314,6 +1430,7 @@ contains
       part%degrees = self%degrees
       if (allocated(self%lists)) part%lists = self%lists
       allocate(part%names(0))
+      part%stores = self%stores
       call run(part, [real(R8P) ::], 0_I4P, v, defined, error)
       if (.not. defined) call syntax(error_text(error))
       depth = depth - 1_I4P
@@ -1510,6 +1627,19 @@ contains
          return
       endif
       if (present(symbols)) k = symbols%variable_index(name)
+      if (run_time_name(name)) then
+         ! a variable an expression assigns: its value when run (its value now if the store has none)
+         block
+            type(value_object) :: now   !< Value now.
+            integer(I4P)       :: index !< Instruction index.
+
+            now = value_object()
+            if (k > 0_I4P) now = symbols%variables(k)%v
+            call emit(OP_FETCH, arg=store_slot(name), v=now, k=index)
+            self%code(index)%calls = merge(1_I4P, 0_I4P, k > 0_I4P)
+         endblock
+         return
+      endif
       if (k > 0_I4P .and. name(1:1) == '$' .and. kind == T_OPERATOR .and. token == '[') then
          ! a datablock line, `$D[i]`
          if (symbols%variables(k)%v%is_string) then
@@ -1839,6 +1969,13 @@ contains
       iomsg = 'in function '//name//': '//iomsg
       return
    endif
+   ! the variables the body assigns are read at run time wherever compiled from now on
+   if (.not. allocated(self%assigned)) allocate(self%assigned(0))
+   if (allocated(e%stores)) then
+      do k = 1_I4P, size(e%stores, kind=I4P)
+         if (.not. any_name(self%assigned, e%stores(k)%text)) call push_name(self%assigned, e%stores(k))
+      enddo
+   endif
    ! by components: nvfortran 26.9 blanks `body` in user_function(name=name, params=names, body=body)
    fn%name = name
    fn%params = names
@@ -1938,6 +2075,7 @@ contains
    if (allocated(self%variables)) deallocate(self%variables)
    if (allocated(self%functions)) deallocate(self%functions)
    if (allocated(self%arrays)) deallocate(self%arrays)
+   if (allocated(self%assigned)) deallocate(self%assigned)
    endsubroutine clear
 
    pure subroutine set_value(self, name, v, is_int)
@@ -2065,6 +2203,29 @@ contains
    found = self%variables(k)%v%is_string
    if (found) text = self%variables(k)%v%s
    endsubroutine string_of
+
+   pure subroutine put(self, name, v)
+   !< Set the variable `name` to the typed value `v`, creating it: an assignment run by an expression (`store_hook`).
+   class(symbols_object), intent(inout) :: self !< Symbols.
+   character(len=*),      intent(in)    :: name !< Variable name.
+   type(value_object),    intent(in)    :: v    !< Value.
+
+   call self%store(name, v)
+   endsubroutine put
+
+   pure subroutine get(self, name, v, found)
+   !< Typed value of the variable `name`, `found` false (and `v` empty) if none.
+   class(symbols_object), intent(in)  :: self  !< Symbols.
+   character(len=*),      intent(in)  :: name  !< Variable name.
+   type(value_object),    intent(out) :: v     !< Value.
+   logical,               intent(out) :: found !< A variable of that name.
+   integer(I4P)                       :: k     !< Index.
+
+   v = value_object()
+   k = self%variable_index(name)
+   found = k > 0_I4P
+   if (found) v = self%variables(k)%v
+   endsubroutine get
 
    pure subroutine store(self, name, v)
    !< Set the variable `name` to `v`, creating it (by components: nvfortran 26.9 corrupts constructors of types holding
@@ -2937,6 +3098,23 @@ contains
          case (OP_COLLAPSE)
             stack(sp - instruction%arg) = stack(sp)
             sp = sp - instruction%arg
+         case (OP_ASSIGN)
+            if (associated(store_hook)) call store_hook(self%stores(instruction%arg)%text, stack(sp))
+         case (OP_FETCH)
+            sp = sp + 1_I4P
+            block
+               logical :: found !< The variable has a value.
+
+               found = .false.
+               if (associated(fetch_hook)) call fetch_hook(self%stores(instruction%arg)%text, stack(sp), found)
+               if (.not. found) then
+                  stack(sp) = instruction%v
+                  if (instruction%calls == 0_I4P) then
+                     ok = .false.
+                     err = E_NOVAR
+                  endif
+               endif
+            endblock
          endselect
       endassociate
       if (.not. ok) then
@@ -3820,6 +3998,8 @@ contains
       text = 'Illegal seed value'
    case (E_ORDER)
       text = 'the order of besjn, besyn, besin and expint must be an integer'
+   case (E_NOVAR)
+      text = 'undefined variable'
    case default
       text = 'undefined value'
    endselect
@@ -4507,6 +4687,19 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_list
+
+   pure function any_name(list, name) result(yes)
+   !< Whether `list` holds `name`.
+   type(name_object), intent(in) :: list(:) !< List.
+   character(len=*),  intent(in) :: name    !< Name.
+   logical                       :: yes     !< Found.
+   integer(I4P)                  :: k       !< Counter.
+
+   yes = .false.
+   do k = 1_I4P, size(list, kind=I4P)
+      if (list(k)%text == name) yes = .true.
+   enddo
+   endfunction any_name
 
    pure subroutine push_name(list, item)
    !< Append `item` to `list` (an unallocated `list` is empty), through a temporary: see `push`.
