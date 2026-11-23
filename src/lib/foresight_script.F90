@@ -117,7 +117,8 @@ use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
 use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
                            spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
-use foresight_expression, only : block_hook, fetch_hook, store_hook, expression_object, list_text, push, &
+use foresight_expression, only : block_hook, element_fetch_hook, element_hook, fetch_hook, store_hook, expression_object, &
+                                 list_text, push, &
                                  saved_array, saved_variable, &
                                  symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
                                  OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
@@ -383,6 +384,8 @@ contains
    call gnuplot_values(self)
    block_hook => run_block
    store_hook => store_variable
+   element_hook => store_element
+   element_fetch_hook => fetch_element
    fetch_hook => fetch_variable
    call default_styles(self)
    endsubroutine init
@@ -421,6 +424,33 @@ contains
 
    if (associated(active)) call active%symbols%put(name, v)
    endsubroutine store_variable
+
+   subroutine store_element(name, i, v, ok)
+   !< An array element assigned by an expression (foresight_expression's `element_hook`), `(A[$0+1] = $2)`: the element
+   !< of the active interpreter's array set, `ok` false if out of range.
+   character(len=*),   intent(in)  :: name !< Array name.
+   integer(I8P),       intent(in)  :: i    !< Element.
+   type(value_object), intent(in)  :: v    !< Value.
+   logical,            intent(out) :: ok   !< Stored.
+
+   ok = .false.
+   if (associated(active)) call active%symbols%set_element(name, i, v, ok)
+   endsubroutine store_element
+
+   subroutine fetch_element(name, i, v, found, set)
+   !< An array element read when an expression runs that assigns elements of it (foresight_expression's
+   !< `element_fetch_hook`): the element of the active interpreter's array.
+   character(len=*),   intent(in)  :: name  !< Array name.
+   integer(I8P),       intent(in)  :: i     !< Element.
+   type(value_object), intent(out) :: v     !< Value.
+   logical,            intent(out) :: found !< In range.
+   logical,            intent(out) :: set   !< With a value.
+
+   v = value_object()
+   found = .false.
+   set = .false.
+   if (associated(active)) call active%symbols%get_element(name, i, v, found, set)
+   endsubroutine fetch_element
 
    subroutine fetch_variable(name, v, found)
    !< The value of a variable an expression assigns, read when it runs (foresight_expression's `fetch_hook`).

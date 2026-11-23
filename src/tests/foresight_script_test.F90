@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(191)                           !< Per-check outcome.
+logical                       :: test_passed(192)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4288,6 +4288,32 @@ endif
 open(newunit=unit, file='foresight_script_test_ttics_rotate.svg')
 close(unit, status='delete')
 
+! array elements assigned inside expressions, gnuplot's `stats FILE using (A[int($0+1)] = $2)`: stored when the row is
+! read, the value of the assignment the value; reads of an array the expression assigns are read when run
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'1 10'//new_line('a')//'2 20'//new_line('a')//'3 30'// &
+                          new_line('a')//'EOD'//new_line('a')//'array A[3]; '// &
+                          'stats $D using (A[int($0+1)] = $2) nooutput; x = A[1] + A[2] + A[3]; '// &
+                          'y = (A[1] = 7, A[1] + 1); stats $D using (A[2] = A[2] + $2) nooutput; z = A[2]', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(192) = iostat == 0_I4P
+if (test_passed(192)) then
+   block
+   real(R8P) :: v     !< Value.
+   logical   :: found !< Found.
+
+   call interpreter%symbols%value_of('x', v, found)
+   test_passed(192) = found .and. v == 60.0_R8P
+   call interpreter%symbols%value_of('y', v, found)
+   test_passed(192) = test_passed(192) .and. found .and. v == 8.0_R8P
+   call interpreter%symbols%value_of('z', v, found)
+   test_passed(192) = test_passed(192) .and. found .and. v == 80.0_R8P
+   endblock
+endif
+! out of range: an error
+call interpreter%run_text('w = (A[4] = 1)', iostat, iomsg)
+test_passed(192) = test_passed(192) .and. iostat /= 0_I4P .and. index(iomsg, 'out of range') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4296,7 +4322,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,191L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,192L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

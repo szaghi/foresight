@@ -67,6 +67,8 @@ public :: value_object
 public :: block_hook
 public :: block_call_interface
 public :: store_hook
+public :: element_hook
+public :: element_fetch_hook
 public :: fetch_hook
 public :: store_interface
 public :: fetch_interface
@@ -146,6 +148,11 @@ integer(I4P), parameter :: OP_ASSIGN       = 50_I4P !< `name = value` inside an 
                                                     !< variable `stores(arg)` (`store_hook`), and kept.
 integer(I4P), parameter :: OP_FETCH        = 51_I4P !< Push the user variable `stores(arg)` as it is now (`fetch_hook`),
                                                     !< `v` its value when compiled if none (`calls` 1 when it had one).
+integer(I4P), parameter :: OP_ASSIGN_ELEMENT = 52_I4P !< `name[i] = value` inside an expression: the top stored in
+                                                      !< element i (below it) of the array `stores(arg)`
+                                                      !< (`element_hook`); the index dropped, the value kept.
+integer(I4P), parameter :: OP_FETCH_ELEMENT = 53_I4P !< Replace the top (an index) with that element of the array
+                                                     !< `stores(arg)` as it is now (`element_fetch_hook`).
 
 ! functions of the data row: `strcol(N)` and `stringcolumn(N)` the text of a column, `columnhead(N)` and
 ! `columnheader(N)` the header text of a column (OP_STRCOL, OP_COLUMNHEAD)
@@ -297,6 +304,8 @@ type :: symbols_object
       procedure, pass(self) :: put      !< Set a variable to a typed value (an assignment run by an expression).
       procedure, pass(self) :: get      !< Typed value of a variable.
       procedure, pass(self) :: assign_element !< `name[index] = expression`.
+      procedure, pass(self) :: set_element    !< Set an array element to a typed value.
+      procedure, pass(self) :: get_element    !< Typed value of an array element.
       procedure, pass(self) :: evaluate_constant !< Typed value of a constant expression.
       procedure, pass(self) :: array_data !< An array as the lines of a data file (index and value).
       procedure, pass(self) :: array_text !< An array as gnuplot's `print` shows it.
@@ -382,6 +391,27 @@ abstract interface
    type(value_object), intent(in) :: v    !< Value.
    endsubroutine store_interface
 
+   subroutine element_store_interface(name, i, v, ok)
+   !< Set element `i` of the user array `name` to `v` (`(A[i] = $2)` inside an expression), `ok` false if `i` is out
+   !< of range.
+   import :: I8P, value_object
+   character(len=*),   intent(in)  :: name !< Array name.
+   integer(I8P),       intent(in)  :: i    !< Element.
+   type(value_object), intent(in)  :: v    !< Value.
+   logical,            intent(out) :: ok   !< Stored.
+   endsubroutine element_store_interface
+
+   subroutine element_fetch_interface(name, i, v, found, set)
+   !< Element `i` of the user array `name` now, `found` false if no such array or `i` is out of range, `set` false if
+   !< it has no value.
+   import :: I8P, value_object
+   character(len=*),   intent(in)  :: name  !< Array name.
+   integer(I8P),       intent(in)  :: i     !< Element.
+   type(value_object), intent(out) :: v     !< Value.
+   logical,            intent(out) :: found !< In range.
+   logical,            intent(out) :: set   !< With a value.
+   endsubroutine element_fetch_interface
+
    subroutine fetch_interface(name, v, found)
    !< Value of the user variable `name` now, `found` false if none.
    import :: value_object
@@ -394,6 +424,8 @@ endinterface
 procedure(block_call_interface), pointer :: block_hook => null() !< The interpreter's runner of function blocks.
 procedure(store_interface),      pointer :: store_hook => null() !< The interpreter's store of a user variable.
 procedure(fetch_interface),      pointer :: fetch_hook => null() !< The interpreter's value of a user variable.
+procedure(element_store_interface), pointer :: element_hook => null() !< The interpreter's store of an array element.
+procedure(element_fetch_interface), pointer :: element_fetch_hook => null() !< The interpreter's array element now.
 integer(I8P), save :: rand_seeds(2) = 1234567890_I8P !< gnuplot's rand seeds (L'Ecuyer's combined generator).
 character(len=:), allocatable :: block_message                   !< Message of the last function block failure.
 
@@ -851,6 +883,8 @@ contains
          depth = depth - 1_I4P
       case (OP_SUBSTRING)
          depth = depth - 2_I4P
+      case (OP_ASSIGN_ELEMENT)
+         depth = depth - 1_I4P
       case (OP_CALL, OP_RECURSE, OP_BLOCK)
          depth = depth - (int(instruction%v%i, I4P) - 1_I4P)
       endselect
@@ -889,6 +923,24 @@ contains
       nesting = nesting + 1_I4P
       if (nesting > MAX_NESTING) call syntax('expression nested too deeply')
       if (iostat /= 0_I4P) return
+      if (element_assignment_ahead()) then
+         ! `name[i] = value`, an element of a user array set when run (gnuplot's `(A[$0+1] = $2)`); its value the value
+         block
+            character(len=:), allocatable :: name !< Array.
+
+            name = token
+            call next
+            call next
+            call parse_ternary
+            call expect(']')
+            call expect('=')
+            if (iostat /= 0_I4P) return
+            call parse_ternary
+            call emit(OP_ASSIGN_ELEMENT, arg=store_slot(name))
+         endblock
+         nesting = nesting - 1_I4P
+         return
+      endif
       if (assignment_ahead()) then
          ! `name = value`, gnuplot's assignment operator (right associative, its value the value): stored when run
          block
@@ -946,6 +998,107 @@ contains
       yes = .true.
       if (j < len(src, kind=I4P)) yes = src(j + 1_I4P:j + 1_I4P) /= '='
       endfunction assignment_ahead
+
+      function element_assignment_ahead() result(yes)
+      !< Whether the current token is an array of `symbols` followed by `[...]` and `=` (not `==`): an element assigned.
+      logical      :: yes   !< An element assignment.
+      integer(I4P) :: j     !< Character counter.
+      integer(I4P) :: level !< Bracket nesting.
+      character    :: quote !< Open quote, blank if none.
+
+      yes = .false.
+      if (kind /= T_NAME .or. .not. present(symbols)) return
+      if (token(1:1) == '$') return
+      if (symbols%array_index(token) == 0_I4P) return
+      yes = indexed_assignment_at(pos)
+      endfunction element_assignment_ahead
+
+      function indexed_assignment_at(from) result(yes)
+      !< Whether `src` from `from` (after a name) is blanks, `[...]`, blanks and `=` (not `==`).
+      integer(I4P), intent(in) :: from  !< Start.
+      logical                  :: yes   !< `[...] =` follows.
+      integer(I4P)             :: j     !< Character counter.
+      integer(I4P)             :: level !< Bracket nesting.
+      character                :: quote !< Open quote, blank if none.
+
+      yes = .false.
+      j = skip_blanks(from)
+      if (j > len(src, kind=I4P)) return
+      if (src(j:j) /= '[') return
+      level = 0_I4P
+      quote = ' '
+      do while (j <= len(src, kind=I4P))
+         if (quote /= ' ') then
+            if (src(j:j) == quote) quote = ' '
+         elseif (src(j:j) == '"' .or. src(j:j) == "'") then
+            quote = src(j:j)
+         elseif (src(j:j) == '[') then
+            level = level + 1_I4P
+         elseif (src(j:j) == ']') then
+            level = level - 1_I4P
+            if (level == 0_I4P) exit
+         endif
+         j = j + 1_I4P
+      enddo
+      if (j > len(src, kind=I4P)) return
+      j = skip_blanks(j + 1_I4P)
+      if (j > len(src, kind=I4P)) return
+      if (src(j:j) /= '=') return
+      yes = .true.
+      if (j < len(src, kind=I4P)) yes = src(j + 1_I4P:j + 1_I4P) /= '='
+      endfunction indexed_assignment_at
+
+      function element_assigned(name) result(yes)
+      !< Whether the expression assigns an element of the array `name` anywhere (`name[i] = v`, outside quotes): its
+      !< elements are then read when run.
+      character(len=*), intent(in) :: name  !< Array name.
+      logical                      :: yes   !< An element assigned.
+      integer(I4P)                 :: j     !< Character counter.
+      integer(I4P)                 :: n     !< Name length.
+      character                    :: quote !< Open quote, blank if none.
+
+      yes = .false.
+      n = len(name, kind=I4P)
+      quote = ' '
+      j = 1_I4P
+      do while (j <= len(src, kind=I4P) - n + 1_I4P)
+         if (quote /= ' ') then
+            if (src(j:j) == quote) quote = ' '
+         elseif (src(j:j) == '"' .or. src(j:j) == "'") then
+            quote = src(j:j)
+         elseif (src(j:j + n - 1_I4P) == name) then
+            if (name_boundary(j - 1_I4P) .and. name_boundary(j + n)) then
+               if (indexed_assignment_at(j + n)) then
+                  yes = .true.
+                  return
+               endif
+            endif
+         endif
+         j = j + 1_I4P
+      enddo
+      endfunction element_assigned
+
+      function name_boundary(j) result(yes)
+      !< Whether `src(j:j)` is not part of a name (or `j` is outside `src`).
+      integer(I4P), intent(in) :: j   !< Position.
+      logical                  :: yes !< Not a name character.
+
+      yes = .true.
+      if (j < 1_I4P .or. j > len(src, kind=I4P)) return
+      yes = .not. (verify(src(j:j), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$') == 0)
+      endfunction name_boundary
+
+      function skip_blanks(from) result(j)
+      !< The first character of `src` from `from` that is not a blank.
+      integer(I4P), intent(in) :: from !< Start.
+      integer(I4P)             :: j    !< Character counter.
+
+      j = from
+      do while (j <= len(src, kind=I4P))
+         if (src(j:j) /= ' ' .and. src(j:j) /= achar(9)) exit
+         j = j + 1_I4P
+      enddo
+      endfunction skip_blanks
 
       function store_slot(name) result(k)
       !< Index of `name` among the variables assigned or read at run time (`stores`), added if new.
@@ -1513,6 +1666,11 @@ contains
       endif
       call expect(']')
       if (iostat /= 0_I4P) return
+      if (element_assigned(name)) then
+         ! an array this expression assigns elements of: read when run
+         call emit(OP_FETCH_ELEMENT, arg=store_slot(name))
+         return
+      endif
       last = size(self%code, kind=I4P)
       if (self%code(last)%op == OP_CONSTANT) then
          call index_of(self%code(last)%v, i, found)
@@ -2611,6 +2769,44 @@ contains
    self%arrays(k)%list%set(i) = .true.
    endsubroutine assign_element
 
+   pure subroutine set_element(self, name, i, v, ok)
+   !< Set element `i` of the array `name` to the typed value `v`, `ok` false if no such array or `i` is out of range.
+   class(symbols_object), intent(inout) :: self !< Symbols.
+   character(len=*),      intent(in)    :: name !< Array name.
+   integer(I8P),          intent(in)    :: i    !< Element.
+   type(value_object),    intent(in)    :: v    !< Value.
+   logical,               intent(out)   :: ok   !< Set.
+   integer(I4P)                         :: k    !< Array index.
+
+   k = self%array_index(name)
+   ok = k > 0_I4P
+   if (ok) ok = i >= 1_I8P .and. i <= size(self%arrays(k)%list%items, kind=I8P)
+   if (.not. ok) return
+   self%arrays(k)%list%items(i) = v
+   self%arrays(k)%list%set(i) = .true.
+   endsubroutine set_element
+
+   pure subroutine get_element(self, name, i, v, found, set)
+   !< Typed value of element `i` of the array `name`, `found` false if no such array or `i` is out of range, `set`
+   !< false if the element has no value.
+   class(symbols_object), intent(in)  :: self  !< Symbols.
+   character(len=*),      intent(in)  :: name  !< Array name.
+   integer(I8P),          intent(in)  :: i     !< Element.
+   type(value_object),    intent(out) :: v     !< Value.
+   logical,               intent(out) :: found !< In range.
+   logical,               intent(out) :: set   !< With a value.
+   integer(I4P)                       :: k     !< Array index.
+
+   v = value_object()
+   set = .false.
+   k = self%array_index(name)
+   found = k > 0_I4P
+   if (found) found = i >= 1_I8P .and. i <= size(self%arrays(k)%list%items, kind=I8P)
+   if (.not. found) return
+   set = self%arrays(k)%list%set(i)
+   if (set) v = self%arrays(k)%list%items(i)
+   endsubroutine get_element
+
    recursive subroutine evaluate_constant(self, text, v, iostat, iomsg, degrees, undefined)
    !< Typed value of the constant expression `text`: columns, undefined values and type errors are errors; with
    !< `undefined` gnuplot's undefined value is not (`v%is_undef`, a function block's `return A[9]`).
@@ -3354,6 +3550,36 @@ contains
             sp = sp - instruction%arg
          case (OP_ASSIGN)
             if (associated(store_hook)) call store_hook(self%stores(instruction%arg)%text, stack(sp))
+         case (OP_FETCH_ELEMENT)
+            call index_of(stack(sp), c, ok)
+            if (.not. ok) then
+               err = E_NONNUMERIC
+            else
+               block
+                  logical :: set !< With a value.
+
+                  set = .false.
+                  if (associated(element_fetch_hook)) &
+                     call element_fetch_hook(self%stores(instruction%arg)%text, c, stack(sp), ok, set)
+                  if (.not. ok) then
+                     err = E_INDEX
+                  elseif (.not. set) then
+                     stack(sp) = undefined_value()
+                  endif
+               endblock
+            endif
+         case (OP_ASSIGN_ELEMENT)
+            call index_of(stack(sp - 1_I4P), c, ok)
+            if (.not. ok) then
+               err = E_NONNUMERIC
+            else
+               if (associated(element_hook)) call element_hook(self%stores(instruction%arg)%text, c, stack(sp), ok)
+               if (.not. ok) err = E_INDEX
+            endif
+            if (ok) then
+               stack(sp - 1_I4P) = stack(sp)
+               sp = sp - 1_I4P
+            endif
          case (OP_FETCH)
             sp = sp + 1_I4P
             block
@@ -4519,7 +4745,7 @@ contains
 
    select case (op)
    case (OP_COLUMN_OF, OP_STRCOL, OP_COLUMNHEAD, OP_NEGATE, OP_NOT, OP_TRUTH, OP_FUNCTION, OP_JUMP_UNLESS, &
-         OP_AND_JUMP, OP_OR_JUMP, OP_ELEMENT, OP_BNOT, OP_RAND)
+         OP_AND_JUMP, OP_OR_JUMP, OP_ELEMENT, OP_BNOT, OP_RAND, OP_FETCH_ELEMENT)
       n = 1_I4P
    case (OP_TIMECOLUMN, OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR)
       n = 2_I4P
