@@ -1336,16 +1336,19 @@ contains
       type(value_object)            :: sep   !< Separator.
       integer(I4P)                  :: first !< First instruction of the separator.
       integer(I4P)                  :: k     !< Element counter.
+      integer(I4P)                  :: a     !< Array index.
       character(len=:), allocatable :: text  !< Joined text.
 
       if (kind == T_NAME .and. token == 'split') then
          call split_call(list)
       elseif (kind == T_NAME .and. present(symbols)) then
-         if (symbols%array_index(token) == 0_I4P) then
+         a = symbols%array_index(token)
+         if (a == 0_I4P) then
             call syntax('join: expecting join(array, "separator")', at)
             return
          endif
-         list = symbols%arrays(symbols%array_index(token))%list
+         ! through an index variable: nvfortran 26.9 stops ("bad dtype") on the array indexed by the function result
+         list = symbols%arrays(a)%list
          call next
       else
          call syntax('join: expecting join(array, "separator")', at)
