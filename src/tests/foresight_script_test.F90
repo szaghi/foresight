@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(169)                           !< Per-check outcome.
+logical                       :: test_passed(170)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3728,6 +3728,28 @@ if (test_passed(169)) then
    endassociate
 endif
 
+
+! set datafile columnheaders (the first row of each dataset a header, plot and stats; with other options after it) and
+! `lt rgb COLOR`, a line color given after lt (set style line 1 lt rgb "red")
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'h1 h2'//new_line('a')//'1 2'//new_line('a')//'3 4'// &
+                          new_line('a')//'EOD'//new_line('a')//'set datafile columnheaders separator whitespace; '// &
+                          'plot $D using 1:2; stats $D using 1 nooutput; set style line 1 lt rgb "red" lw 3; '// &
+                          'plot $D using 1:2 ls 1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(170) = iostat == 0_I4P .and. interpreter%column_headers
+if (test_passed(170)) then
+   block
+      real(R8P) :: n !< STATS_records.
+
+      call interpreter%symbols%constant('STATS_records', n, iostat, iomsg)
+      test_passed(170) = n == 2.0_R8P .and. size(interpreter%figure%panels(1)%series(1)%x) == 2 .and. &
+                        interpreter%figure%panels(1)%series(1)%style%color == '#ff0000'
+   endblock
+endif
+call interpreter%run_text('unset datafile columnheaders', iostat, iomsg)
+test_passed(170) = test_passed(170) .and. iostat == 0_I4P .and. .not. interpreter%column_headers
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3736,7 +3758,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,169L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,170L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

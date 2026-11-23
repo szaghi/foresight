@@ -210,6 +210,8 @@ type :: script_object
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    character(len=:), allocatable   :: missing                  !< Missing data string, empty for none.
    character(len=:), allocatable   :: comments                 !< Characters starting a comment in data files.
+   logical                         :: column_headers = .false. !< `set datafile columnheaders`: the first row of each
+                                                               !< dataset is a header.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
@@ -322,6 +324,7 @@ contains
    self%separator = ''
    self%missing = ''
    self%comments = '#'
+   self%column_headers = .false.
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
    ! a new session: gnuplot's program settings at start
@@ -1706,7 +1709,7 @@ contains
    ! the point number as a last field: NaN only on the rows the table inserts at block breaks, not records
    call point%set_column(0_I4P)
    call push(fields, point)
-   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P))
+   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P) .or. self%column_headers)
    ! the variables of an earlier stats with this prefix are forgotten first, as gnuplot
    do k = 1_I4P, size(BASES, kind=I4P)
       call self%symbols%remove(prefix//trim(BASES(k)))
@@ -2188,7 +2191,7 @@ contains
       iomsg = 'fit: '//iomsg
       return
    endif
-   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P))
+   call data%table(fields, set_index, every, values, header=any(fields%name_count() > 0_I4P) .or. self%column_headers)
    allocate(use(size(values, 1)))
    use = ieee_is_finite(values(:, 1)) .and. ieee_is_finite(values(:, 2))
    if (weighted) use = use .and. ieee_is_finite(values(:, 3))
@@ -3614,7 +3617,8 @@ contains
          endselect
       endif
       ! the first row of each dataset is a header as soon as one is used, as gnuplot
-      headed = title_column >= 0_I4P .or. self%autotitle == 'columnhead' .or. any(fields%name_count() > 0_I4P)
+      headed = title_column >= 0_I4P .or. self%autotitle == 'columnhead' .or. any(fields%name_count() > 0_I4P) .or. &
+               self%column_headers
       if (headed) then
          missing = data%missing_name(fields, set_index)
          if (len(missing) > 0) then
@@ -5275,6 +5279,7 @@ contains
    self%separator = ''
    self%missing = ''
    self%comments = '#'
+   self%column_headers = .false.
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
    self%timefmt = '%d/%m/%y,%H:%M'
@@ -6286,7 +6291,7 @@ contains
    call self%figure%set_refresh(refresh)
    endsubroutine save_output
 
-   subroutine set_command(self, tokens, iostat, iomsg)
+   recursive subroutine set_command(self, tokens, iostat, iomsg)
    !< `set` options.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Option tokens.
@@ -6733,6 +6738,15 @@ contains
    elseif (keyword(option, 'mcbtics', 4_I4P)) then
       call minor_option(self%figure%panels(self%figure%current)%cbaxis%tics)
    elseif (keyword(option, 'datafile', 5_I4P)) then
+      ! `columnheaders` (or `nocolumnheaders`) first, the other options after it as their own setting
+      if (size(tokens) > 1) then
+         if (keyword(tokens(2)%text, 'columnheaders', 7_I4P) .or. keyword(tokens(2)%text, 'nocolumnheaders', 9_I4P)) &
+            then
+            self%column_headers = tokens(2)%text(1:2) /= 'no'
+            if (size(tokens) > 2) call self%set_command([tokens(1), tokens(3:)], iostat, iomsg)
+            return
+         endif
+      endif
       call datafile_option
    elseif (option == 'fit') then
       call fit_option
@@ -10190,9 +10204,11 @@ contains
             self%missing = ''
          elseif (keyword(tokens(2)%text, 'commentschars', 3_I4P)) then
             self%comments = '#'
+         elseif (keyword(tokens(2)%text, 'columnheaders', 7_I4P)) then
+            self%column_headers = .false.
          else
-            call fail('unset datafile: unsupported option "'//tokens(2)%text//'" (separator, missing and '// &
-                      'commentschars are)', iostat, iomsg)
+            call fail('unset datafile: unsupported option "'//tokens(2)%text//'" (separator, missing, '// &
+                      'commentschars and columnheaders are)', iostat, iomsg)
             return
          endif
          if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
@@ -10201,6 +10217,7 @@ contains
       self%separator = ''
       self%missing = ''
       self%comments = '#'
+      self%column_headers = .false.
       return
    endif
    ! labels, arrows, objects take a tag (handled below)
@@ -11663,6 +11680,13 @@ contains
    iostat = 0_I4P
    iomsg = ''
    ok = .true.
+   ! `lt rgb COLOR` (and `lt palette`): gnuplot's line color given after lt
+   if (word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) then
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. (keyword(tokens(i + 1_I4P)%text, 'rgbcolor', 3_I4P) .or. &
+                                                        keyword(tokens(i + 1_I4P)%text, 'palette', 3_I4P))) word = 'lc'
+      endif
+   endif
    if (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P)) then
       i = i + 1_I4P
       rgb = .false.
