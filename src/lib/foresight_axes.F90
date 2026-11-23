@@ -71,8 +71,8 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
                             WITH_PARALLELAXES, WITH_SPIDERPLOT
-use foresight_ticks, only : labels_attribute, linear_ticks, merge_list, MINOR_DEFAULT, push, tick_object, tics_object, &
-                            TICS_FIXED, &
+use foresight_ticks, only : labels_attribute, linear_ticks, merge_list, MINOR_DEFAULT, push, tic_item, tick_object, &
+                            tics_object, TICS_AUTO, TICS_FIXED, &
                            TICS_NONE
 use penf, only : I4P, I8P, R8P
 
@@ -6693,8 +6693,9 @@ contains
 
    subroutine linked_axis(second, first, maps, k, npx)
    !< The secondary axis `second` linked to `first` (gnuplot `set link`): the same range; with `maps` (`maps(k)`
-   !< forward, `k + 1` inverse) its ticks are made over the forward range in its own units (its tics settings) and placed
-   !< at their inverse, the labels its values. A module procedure: as an internal one of setup_axes, given a component of
+   !< forward, `k + 1` inverse) its automatic ticks are those of the primary range, labelled by their mapped values (as
+   !< gnuplot 6.0), its other ticks (a step, a list) made over the forward range in its own units and placed at their
+   !< inverse, the labels its values. A module procedure: as an internal one of setup_axes, given a component of
    !< its host's panel, nvfortran 26.9 stopped with an internal compiler error.
    type(axis_object), intent(inout) :: second !< Secondary axis.
    type(axis_object), intent(in)    :: first  !< Primary axis.
@@ -6702,6 +6703,8 @@ contains
    integer(I4P),      intent(in)    :: k      !< Forward map index.
    real(R8P),         intent(in)    :: npx    !< Axis length [px].
    type(axis_object)                :: probe  !< Secondary axis over the mapped range.
+   type(axis_object)                :: labeller !< Secondary axis labelling the mapped primary ticks.
+   type(tic_item), allocatable      :: items(:) !< The mapped primary ticks.
    real(R8P)                        :: a      !< Mapped start.
    real(R8P)                        :: b      !< Mapped end.
    real(R8P)                        :: v      !< A tick at its primary value.
@@ -6721,6 +6724,41 @@ contains
    probe = second
    probe%tight = .true.
    probe%log = .false.
+   if (second%tics%mode == TICS_AUTO .and. second%tics%series .and. .not. second%tics%has_list() .and. &
+       .not. first%log) then
+      ! automatic ticks, as gnuplot 6.0: at the automatic ticks of the primary range (whatever its own tics), each
+      ! labelled by its mapped value in the secondary axis' format
+      call probe%setup(min(first%lo, first%hi), max(first%lo, first%hi), .true., npx)
+      if (allocated(second%ticks)) deallocate(second%ticks)
+      allocate(second%ticks(0))
+      if (.not. allocated(probe%ticks)) return
+      allocate(items(0))
+      do t = 1_I4P, size(probe%ticks, kind=I4P)
+         if (.not. probe%ticks(t)%major) cycle
+         v = maps(k)%value_at(probe%ticks(t)%value)
+         if (.not. ieee_is_finite(v)) cycle
+         items = [items, tic_item(value=v, major=.true., labelled=.false., label='')]
+      enddo
+      if (size(items) == 0) return
+      labeller = second
+      labeller%tight = .true.
+      labeller%log = .false.
+      labeller%tics%series = .false.
+      labeller%tics%list = items
+      call labeller%setup(min(a, b), max(a, b), .true., npx)
+      if (.not. allocated(labeller%ticks)) return
+      do t = 1_I4P, size(probe%ticks, kind=I4P)
+         if (probe%ticks(t)%major) cycle
+         call push(second%ticks, tick_object(value=probe%ticks(t)%value, major=.false., label='', sup=''))
+      enddo
+      do t = 1_I4P, size(labeller%ticks, kind=I4P)
+         v = maps(k + 1_I4P)%value_at(labeller%ticks(t)%value)
+         if (.not. ieee_is_finite(v)) cycle
+         call push(second%ticks, tick_object(value=v, major=.true., label=labeller%ticks(t)%label, &
+                                             sup=labeller%ticks(t)%sup))
+      enddo
+      return
+   endif
    call probe%setup(min(a, b), max(a, b), .true., npx)
    if (allocated(second%ticks)) deallocate(second%ticks)
    allocate(second%ticks(0))

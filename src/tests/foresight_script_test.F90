@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(215)                           !< Per-check outcome.
+logical                       :: test_passed(216)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4917,6 +4917,28 @@ endif
 call interpreter%run_text("plot '-'"//new_line('a')//'1 2', iostat, iomsg)
 test_passed(215) = test_passed(215) .and. iostat /= 0_I4P .and. index(iomsg, 'no line "e" ends it') > 0
 
+! a linked x2 axis' automatic ticks at the primary's automatic ones, labelled by the mapped values (gnuplot 6.0: 1e4/x
+! over [2:20] reads 5000, 2500, 1666.67, ...); a keyentry without a style draws no sample
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_link.svg"; set link x2 via 1e4/x inverse 1e4/x; '// &
+                          'set xrange [2:20]; set x2tics; set xtics 3; plot x, keyentry title "k"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(216) = iostat == 0_I4P
+if (test_passed(216)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(216) = trim(panel%series(2)%style%color) == 'none'
+      if (allocated(panel%x2axis%ticks)) then
+         test_passed(216) = test_passed(216) .and. count(panel%x2axis%ticks%major) == 10
+         if (test_passed(216)) test_passed(216) = abs(panel%x2axis%ticks(3)%value - 6.0_R8P) < 1.0e-9_R8P .and. &
+                                                panel%x2axis%ticks(3)%label == '1666.67'
+      else
+         test_passed(216) = .false.
+      endif
+   endassociate
+   open(newunit=unit, file='foresight_script_test_link.svg')
+   close(unit, status='delete')
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4925,7 +4947,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,215L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,216L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

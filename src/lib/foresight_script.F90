@@ -2746,7 +2746,9 @@ contains
    character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
    logical                                      :: head_skipped !< `notitle columnhead`: the first row a header.
    logical                                      :: keyentry  !< The item is gnuplot's `keyentry`.
-   logical                                      :: keyentry_blank !< A keyentry without sample (`with labels`).
+   logical                                      :: keyentry_blank !< A keyentry without sample (`with labels`, or
+                                                                  !< no `with`).
+   logical                                      :: with_given !< The item has its `with`.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -3223,6 +3225,7 @@ contains
       skip = 0_I4P
       with = self%data_style
       if (is_function) with = self%function_style
+      with_given = .false.
       has_table_if = .false.
       has_title = .false.
       auto_title = .false.
@@ -3369,6 +3372,7 @@ contains
          elseif (keyword(word, 'with', 1_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             with = canonical_style(word)
+            with_given = .true.
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
                return
@@ -5372,7 +5376,8 @@ contains
          panel%series(last)%ellipse_units = ellipse_units
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
-         if (keyentry_blank) panel%series(last)%style%color = 'none'
+         ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0
+         if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
          panel%series(last)%gnuplot_sample = .true.
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_at = title_at
