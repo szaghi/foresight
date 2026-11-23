@@ -99,7 +99,10 @@ module foresight_script
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
-!< - read and ignored, as they leave gnuplot's 2D svg output unchanged: `set|unset isosamples` (surfaces), `set|unset
+!< - the pseudo-files `'+'` (samples of a variable, column 1) and `'++'` (a u, v grid, columns 1 and 2), `plot sample
+!<   [t=a:b:step] '+' using (t):(f(t))`, an item's `[name=a:b:step]`; `set urange`, `set vrange`, `set isosamples` (the
+!<   `'++'` grid; surfaces otherwise), `unset trange|rrange|urange|vrange`.
+!< - read and ignored, as they leave gnuplot's 2D svg output unchanged: `set|unset
 !<   mouse`, `set|unset macros` (macros always on), `set pointintervalbox`, `set zrange`, `set|unset minussign` and
 !<   `set|unset micro` with the default encoding (rejected with utf8, where gnuplot changes the signs); `refresh` is
 !<   `replot` without new items; `set|unset overflow [float|undefined|NaN]` (integer overflow, see
@@ -246,6 +249,9 @@ type :: script_object
    integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
    character(len=:), allocatable   :: dummy                    !< `set dummy NAME`: the functions' variable, empty for
                                                                !< gnuplot's (x, t in polar mode).
+   integer(I4P)                    :: isosamples = 10_I4P      !< `set isosamples N,M`: M, the v samples of `'++'`.
+   real(R8P)                       :: uv_range(2, 2) = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
+                                                               !< `set urange`, `set vrange` (columns u, v).
    contains
       procedure, pass(self) :: execute                !< Execute one statement.
       procedure, pass(self) :: init                   !< Reset the interpreter.
@@ -329,6 +335,8 @@ contains
    self%comments = '#'
    self%column_headers = .false.
    self%samples = 100_I4P
+   self%isosamples = 10_I4P
+   self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    ! a new session: gnuplot's program settings at start
    overflow_mode = OVERFLOW_FLOAT
@@ -2506,6 +2514,15 @@ contains
    real(R8P)                                    :: item_range(2) !< Sampling range of the current item.
    logical                                      :: item_set(2) !< Ends of `item_range` given.
    character(len=:), allocatable                :: item_prefix !< The item's range as written, for its title.
+   character(len=32)                            :: sample_names(2) !< Variables named by the item's sampling ranges.
+   real(R8P)                                    :: sample_range(2, 2) !< Ends of the item's sampling ranges.
+   logical                                      :: sample_set(2, 2) !< Ends given.
+   real(R8P)                                    :: sample_step(2) !< Sampling intervals given, 0 for none.
+   integer(I4P)                                 :: nsample   !< Sampling ranges of the item.
+   integer(I4P)                                 :: pseudo    !< Pseudo-file: 1 `'+'`, 2 `'++'`, 0 none.
+   character(len=:), allocatable                :: sampled   !< Its sample variables.
+   character(len=:), allocatable                :: item_dummy !< The dummy variable of the item's function.
+   logical                                      :: sample_first !< `plot sample [...] ...`: no plot range.
 
    iostat = 0_I4P
    iomsg = ''
@@ -2520,10 +2537,17 @@ contains
    ! gnuplot's dummy variable is t in polar and parametric modes
    dummy = merge('t', 'x', self%figure%panels(self%figure%current)%polar .or. self%parametric)
    if (len(self%dummy) > 0) dummy = self%dummy
-   ! inline ranges, [x] then [y], for this plot only: plot [0:2*pi] [-1:1] sin(x), plot [t=0:1] t**2
+   ! inline ranges, [x] then [y], for this plot only: plot [0:2*pi] [-1:1] sin(x), plot [t=0:1] t**2; after the
+   ! `sample` keyword, the first item's sampling ranges
    i = 1_I4P
    nranges = 0_I4P
+   sample_first = .false.
+   if (size(tokens) >= 2) then
+      if (tokens(1)%kind == TOKEN_WORD .and. tokens(2)%kind == TOKEN_RANGE) sample_first = tokens(1)%text == 'sample'
+   endif
+   if (sample_first) i = 2_I4P
    do while (i <= size(tokens, kind=I4P))
+      if (sample_first) exit
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
       if (nranges > merge(3_I4P, 2_I4P, self%parametric)) then
@@ -2590,26 +2614,27 @@ contains
       item_set = .false.
       item_range = 0.0_R8P
       item_prefix = ''
-      if (tokens(i)%kind == TOKEN_RANGE) then
-         item_prefix = '['//tokens(i)%text//'] '
-         block
-            integer(I4P) :: colon !< Separator.
-
-            colon = top_colon(tokens(i)%text)
-            if (colon == 0_I4P .or. index(tokens(i)%text, '=') > 0) then
-               call fail('plot: a sampling range [min:max] is expected, found "['//tokens(i)%text//']"', iostat, iomsg)
-               return
-            endif
-            call inline_end(tokens(i)%text(1:colon - 1_I4P), item_set(1), item_range(1))
-            if (iostat == 0_I4P) call inline_end(tokens(i)%text(colon + 1_I4P:), item_set(2), item_range(2))
-            if (iostat /= 0_I4P) return
-         endblock
+      sample_names = ''
+      sample_range = 0.0_R8P
+      sample_set = .false.
+      sample_step = 0.0_R8P
+      nsample = 0_I4P
+      ! [min:max], [name=min:max], [name=min:max:step]; two for `'++'` (u then v)
+      do while (tokens(i)%kind == TOKEN_RANGE .and. nsample < 2_I4P)
+         nsample = nsample + 1_I4P
+         item_prefix = item_prefix//'['//tokens(i)%text//'] '
+         call sampling_range(tokens(i)%text, nsample)
+         if (iostat /= 0_I4P) return
          i = i + 1_I4P
          if (i > size(tokens, kind=I4P)) then
             call fail('plot: missing item after "'//trim(item_prefix)//'"', iostat, iomsg)
             return
          endif
-      endif
+      enddo
+      item_set = sample_set(:, 1)
+      item_range = sample_range(:, 1)
+      item_dummy = dummy
+      if (len_trim(sample_names(1)) > 0) item_dummy = trim(sample_names(1))
       ! gnuplot: an item may be an assignment or a function definition, done in its turn (`plot s=.1, c(t), s=.3,
       ! c(t)`): the functions after it are compiled with it
       if (tokens(i)%kind == TOKEN_WORD) then
@@ -2713,7 +2738,7 @@ contains
          endblock
          if (is_function) then
             associate(panel => self%figure%panels(self%figure%current))
-               call func%compile(written, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
+               call func%compile(written, iostat, iomsg, variable=item_dummy, degrees=panel%degrees, &
                                  symbols=self%symbols)
             endassociate
             if (iostat /= 0_I4P) then
@@ -2747,7 +2772,7 @@ contains
                   enddo
                   written2 = text(tokens(head2)%first:tokens(i)%last)
                   associate(panel => self%figure%panels(self%figure%current))
-                     call yfunc%compile(written2, iostat, iomsg, variable=dummy, degrees=panel%degrees, &
+                     call yfunc%compile(written2, iostat, iomsg, variable=item_dummy, degrees=panel%degrees, &
                                         symbols=self%symbols)
                   endassociate
                   if (iostat /= 0_I4P) then
@@ -2790,7 +2815,30 @@ contains
          endif
          self%previous_file = file
       endif
-      if (len(item_prefix) > 0 .and. .not. is_function) then
+      ! gnuplot's pseudo-files: '+' samples a variable (column 1), '++' a grid of two (columns 1 and 2)
+      pseudo = 0_I4P
+      sampled = ''
+      if (.not. is_function .and. quote /= ' ') then
+         if (file == '+' .or. file == '++') pseudo = len(file, kind=I4P)
+      endif
+      if (pseudo == 1_I4P) then
+         sampled = dummy
+         if (len_trim(sample_names(1)) > 0) sampled = trim(sample_names(1))
+      elseif (pseudo == 2_I4P) then
+         sampled = 'u v'
+         if (len_trim(sample_names(1)) > 0) sampled = trim(sample_names(1))//' v'
+         if (len_trim(sample_names(2)) > 0) sampled = sampled(1:index(sampled, ' '))//trim(sample_names(2))
+      endif
+      if (nsample == 2_I4P .and. pseudo /= 2_I4P) then
+         call fail('plot: two sampling ranges apply to the ''++'' pseudo-file only', iostat, iomsg)
+         return
+      endif
+      if (is_function .and. sample_step(1) /= 0.0_R8P) then
+         call fail('plot: a sampling interval applies to the ''+'' and ''++'' pseudo-files, not to functions', &
+                   iostat, iomsg)
+         return
+      endif
+      if (len(item_prefix) > 0 .and. .not. is_function .and. pseudo == 0_I4P) then
          write(error_unit, '(A)') 'foresight: warning: ignoring sample range in non-sampled data plot'
          item_set = .false.
       endif
@@ -2854,7 +2902,13 @@ contains
             if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
             call split_xtic(spec, label_col, iostat, iomsg, keyed, label_field, label_axis)
             if (iostat /= 0_I4P) return
-            call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+            if (pseudo > 0_I4P) then
+               call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                                self%symbols, sampled=sampled)
+            else
+               call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                                self%symbols)
+            endif
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'matrix', 3_I4P)) then
             if (is_function) then
@@ -3423,7 +3477,18 @@ contains
       time_axis(2) = merge(self%time_data(3), self%time_data(2), axes(4:4) == '2')
       needs_text = label_col > 0_I4P .or. any(time_axis) .or. with == 'table'
       if (allocated(fields)) needs_text = needs_text .or. any(fields%uses_text())
-      if (file /= loaded .or. (needs_text .and. .not. data%has_text) .or. skip /= loaded_skip) then
+      if (pseudo > 0_I4P) then
+         ! generated for each item: its rows follow the ranges and samples now
+         block
+            character(len=:), allocatable :: rows !< Generated rows.
+
+            call pseudo_rows(rows)
+            if (iostat /= 0_I4P) return
+            call self%load_data(data, file, iostat, iomsg, keep_text=needs_text, content=rows)
+            if (iostat /= 0_I4P) return
+         endblock
+         loaded = ''
+      elseif (file /= loaded .or. (needs_text .and. .not. data%has_text) .or. skip /= loaded_skip) then
          call self%load_data(data, file, iostat, iomsg, keep_text=needs_text, skip=skip)
          if (iostat /= 0_I4P) return
          loaded = file
@@ -4609,6 +4674,168 @@ contains
       endif
       endsubroutine new_histogram
 
+      subroutine sampling_range(text, k)
+      !< The `k`-th sampling range of an item, `[min:max]`, `[name=min:max]` or `[name=min:max:step]` (`text` without
+      !< brackets); an empty or `*` end is not given.
+      character(len=*), intent(in)  :: text  !< Range text.
+      integer(I4P),     intent(in)  :: k     !< Range: 1 the first (u), 2 the second (v).
+      character(len=:), allocatable :: body  !< Range without the variable name.
+      character(len=:), allocatable :: rest  !< After the first colon.
+      integer(I4P)                  :: colon !< Separator.
+      integer(I4P)                  :: equal !< Variable name separator.
+      real(R8P)                     :: v     !< Interval.
+
+      body = text
+      equal = index(text, '=', kind=I4P)
+      colon = top_colon(text)
+      if (scan(text, '"'//"'") > 0 .and. equal > scan(text, '"'//"'")) equal = 0_I4P
+      if (equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
+         sample_names(k) = trim(adjustl(text(1:equal - 1_I4P)))
+         if (len_trim(sample_names(k)) == 0 .or. &
+             verify(trim(sample_names(k)), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_') /= 0 .or. &
+             verify(sample_names(k)(1:1), '0123456789') == 0) then
+            call fail('plot: bad sampling variable name in "['//text//']"', iostat, iomsg)
+            return
+         endif
+         body = text(equal + 1_I4P:)
+         colon = top_colon(body)
+      endif
+      if (colon == 0_I4P) then
+         call fail('plot: a sampling range [min:max] is expected, found "['//text//']"', iostat, iomsg)
+         return
+      endif
+      rest = body(colon + 1_I4P:)
+      call inline_end(body(1:colon - 1_I4P), sample_set(1, k), sample_range(1, k))
+      if (iostat /= 0_I4P) return
+      colon = top_colon(rest)
+      if (colon > 0_I4P) then
+         call inline_end(rest(1:colon - 1_I4P), sample_set(2, k), sample_range(2, k))
+         if (iostat /= 0_I4P) return
+         call self%range_value(trim(adjustl(rest(colon + 1_I4P:))), v, iostat, iomsg)
+         if (iostat /= 0_I4P) then
+            iomsg = 'plot: sampling interval: '//iomsg
+            return
+         endif
+         if (v == 0.0_R8P) then
+            call fail('plot: the sampling interval of "['//text//']" must not be 0', iostat, iomsg)
+            return
+         endif
+         sample_step(k) = v
+      else
+         call inline_end(rest, sample_set(2, k), sample_range(2, k))
+      endif
+      endsubroutine sampling_range
+
+      subroutine pseudo_rows(rows)
+      !< The rows of the item's pseudo-file, as gnuplot 6.0's: `'+'` samples t over the sampling range, else trange
+      !< (parametric and polar modes, or a set trange), else the x range (the data so far when autoscaled, [-10:10]
+      !< without), `set samples` of them or by the interval; `'++'` a grid over urange (`set samples`) and vrange
+      !< (`set isosamples`, the second value) or the ranges given, v from its maximum, scan lines apart.
+      character(len=:), allocatable, intent(out) :: rows  !< Rows.
+      real(R8P)                                  :: lo    !< First sample.
+      real(R8P)                                  :: hi    !< Last sample.
+      real(R8P)                                  :: step  !< Interval.
+      real(R8P)                                  :: t     !< Sample.
+      real(R8P)                                  :: ends(2, 2) !< u and v ranges.
+      real(R8P)                                  :: steps(2)   !< u and v intervals.
+      integer(I4P)                               :: counts(2)  !< u and v samples.
+      integer(I4P)                               :: j     !< Sample counter.
+      integer(I4P)                               :: jv    !< Scan line counter.
+      integer(I4P)                               :: c     !< Column.
+      logical                                    :: logx  !< Samples even on a log x axis.
+      integer(I4P), parameter                    :: MAX_ROWS = 1000000_I4P !< Bound of an explicit sampling.
+
+      rows = ''
+      if (pseudo == 1_I4P) then
+         logx = .false.
+         associate(panel => self%figure%panels(self%figure%current))
+            if (self%parametric .or. panel%polar) then
+               lo = merge(-5.0_R8P, 0.0_R8P, self%parametric .and. .not. panel%polar)
+               hi = merge(5.0_R8P, merge(360.0_R8P, 2.0_R8P * acos(-1.0_R8P), panel%degrees), &
+                          self%parametric .and. .not. panel%polar)
+               if (panel%taxis%min_fixed) lo = panel%taxis%min_user
+               if (panel%taxis%max_fixed) hi = panel%taxis%max_user
+            elseif (panel%taxis%min_fixed .and. panel%taxis%max_fixed) then
+               lo = panel%taxis%min_user
+               hi = panel%taxis%max_user
+            else
+               block
+                  real(R8P) :: x0(2)     !< Smallest abscissa, per x axis.
+                  real(R8P) :: x1(2)     !< Largest abscissa, per x axis.
+                  real(R8P) :: y0(2)     !< Smallest ordinate, per y axis.
+                  real(R8P) :: y1(2)     !< Largest ordinate, per y axis.
+                  logical   :: found(2)  !< Any point, per y axis.
+                  logical   :: xfound(2) !< Any point, per x axis.
+
+                  call panel%axes_extent(x0, x1, y0, y1, found, xfound)
+                  lo = -10.0_R8P
+                  hi = 10.0_R8P
+                  if (xfound(1)) then
+                     lo = x0(1)
+                     hi = x1(1)
+                  endif
+               endblock
+               if (panel%xaxis%min_fixed) lo = panel%xaxis%min_user
+               if (panel%xaxis%max_fixed) hi = panel%xaxis%max_user
+               if (panel%xaxis%plot_min_fixed) lo = panel%xaxis%plot_min
+               if (panel%xaxis%plot_max_fixed) hi = panel%xaxis%plot_max
+               logx = panel%xaxis%log .and. lo > 0.0_R8P .and. hi > 0.0_R8P
+            endif
+         endassociate
+         if (sample_set(1, 1)) lo = sample_range(1, 1)
+         if (sample_set(2, 1)) hi = sample_range(2, 1)
+         if (any(sample_set(:, 1)) .or. sample_step(1) /= 0.0_R8P) then
+            ! an explicit sampling range: from its start by the interval while inside it
+            logx = .false.
+            step = sample_step(1)
+            if (step == 0.0_R8P) step = (hi - lo) / real(self%samples - 1_I4P, R8P)
+            if (step == 0.0_R8P) step = 1.0_R8P
+            do j = 0_I4P, MAX_ROWS
+               t = lo + real(j, R8P) * step
+               if (t < min(lo, hi) .or. t > max(lo, hi)) exit
+               rows = rows//gnuplot_real(t)//new_line('a')
+            enddo
+         else
+            if (logx) then
+               lo = log10(lo)
+               hi = log10(hi)
+            endif
+            step = (hi - lo) / real(self%samples - 1_I4P, R8P)
+            if (step == 0.0_R8P) step = 1.0_R8P
+            do j = 0_I4P, self%samples - 1_I4P
+               t = lo + real(j, R8P) * step
+               if (logx) t = 10.0_R8P**t
+               rows = rows//gnuplot_real(t)//new_line('a')
+            enddo
+         endif
+      else
+         ends = self%uv_range
+         do c = 1_I4P, 2_I4P
+            if (sample_set(1, c)) ends(1, c) = sample_range(1, c)
+            if (sample_set(2, c)) ends(2, c) = sample_range(2, c)
+            if (sample_step(c) /= 0.0_R8P) then
+               steps(c) = sample_step(c)
+               counts(c) = max(1_I4P, int(floor((ends(2, c) - ends(1, c)) / steps(c)), I4P) + 1_I4P)
+            else
+               counts(c) = merge(self%samples, self%isosamples, c == 1_I4P)
+               steps(c) = (ends(2, c) - ends(1, c)) / real(counts(c) - 1_I4P, R8P)
+            endif
+         enddo
+         do jv = 0_I4P, counts(2) - 1_I4P
+            if (jv > 0_I4P) rows = rows//new_line('a')
+            t = ends(2, 2) - real(jv, R8P) * steps(2)
+            if (jv == counts(2) - 1_I4P) t = ends(1, 2)
+            do j = 0_I4P, counts(1) - 1_I4P
+               if (j == counts(1) - 1_I4P) then
+                  rows = rows//gnuplot_real(ends(2, 1))//' '//gnuplot_real(t)//new_line('a')
+               else
+                  rows = rows//gnuplot_real(ends(1, 1) + real(j, R8P) * steps(1))//' '//gnuplot_real(t)//new_line('a')
+               endif
+            enddo
+         enddo
+      endif
+      endsubroutine pseudo_rows
+
       subroutine inline_range(text, axis)
       !< An inline range `[min:max]` of the plot command (`text` without brackets): of x (`axis` 1), y (2) or t (3,
       !< the first range in parametric mode); `[name=min:max]` of x or t also names the dummy variable; an empty or `*`
@@ -5323,6 +5550,8 @@ contains
    self%comments = '#'
    self%column_headers = .false.
    self%samples = 100_I4P
+   self%isosamples = 10_I4P
+   self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
@@ -6309,9 +6538,9 @@ contains
    call self%figure%set_time_axes(trim(axis), on=on, timefmt=self%timefmt)
    endsubroutine set_time_data
 
-   subroutine load_data(self, data, file, iostat, iomsg, keep_text, skip)
+   subroutine load_data(self, data, file, iostat, iomsg, keep_text, skip, content)
    !< Load the data file `file`, or the datablock it names (`$DATA`), with the `set datafile` options; `skip` its first
-   !< lines not read (gnuplot `skip N`).
+   !< lines not read (gnuplot `skip N`); `content` the rows of a pseudo-file (`'+'`) instead.
    class(script_object),          intent(in)           :: self      !< Interpreter.
    type(datafile_object),         intent(inout)        :: data      !< Data.
    character(len=*),              intent(in)           :: file      !< File or datablock name.
@@ -6319,10 +6548,13 @@ contains
    character(len=:), allocatable, intent(out)          :: iomsg     !< Error message.
    logical,                       intent(in), optional :: keep_text !< Keep the cell texts.
    integer(I4P),                  intent(in), optional :: skip      !< First lines not read.
+   character(len=*),              intent(in), optional :: content   !< Rows of a pseudo-file.
    character(len=:), allocatable                       :: lines     !< Datablock lines.
    logical                                             :: found     !< Datablock found.
 
-   if (self%symbols%is_array(file)) then
+   if (present(content)) then
+      call data%load(file, iostat, iomsg, separator='', missing='', comments='#', keep_text=keep_text, content=content)
+   elseif (self%symbols%is_array(file)) then
       ! an array: the index and the value of each element, as gnuplot's `plot A`
       call data%load(file, iostat, iomsg, separator='', missing=self%missing, comments=self%comments, &
                      keep_text=keep_text, content=self%symbols%array_data(file), skip=skip)
@@ -6975,19 +7207,25 @@ contains
       self%multiplot = .true.
       self%advance_pending = .false.
    elseif (keyword(option, 'isosamples', 3_I4P)) then
-      ! surfaces only (splot and the `++` special file, neither in foresight): checked and ignored
+      ! the surfaces' (splot, not in foresight); M the v samples of the `'++'` pseudo-file
       call samples_option(.false.)
    elseif (keyword(option, 'xyplane', 3_I4P)) then
       ! splot's base plane: read and ignored
       continue
    elseif (keyword(option, 'zrange', 2_I4P) .or. keyword(option, 'urange', 2_I4P) .or. &
            keyword(option, 'vrange', 2_I4P)) then
-      ! the z axis and the u, v ranges are splot's (and the `++` file's): checked and ignored
+      ! the z axis is splot's (checked and ignored); u and v the ranges of the `'++'` pseudo-file
       block
          logical   :: fixed(2) !< Bound given.
          real(R8P) :: bound(2) !< Bounds.
+         integer(I4P) :: c     !< Column: 1 u, 2 v.
 
          call set_range(fixed(1), bound(1), fixed(2), bound(2))
+         if (iostat == 0_I4P .and. option(1:1) /= 'z') then
+            c = merge(1_I4P, 2_I4P, option(1:1) == 'u')
+            if (fixed(1)) self%uv_range(1, c) = bound(1)
+            if (fixed(2)) self%uv_range(2, c) = bound(2)
+         endif
       endblock
    elseif (keyword(option, 'mouse', 3_I4P)) then
       ! interactive terminals only: the options are not read
@@ -9964,7 +10202,11 @@ contains
          call fail('set '//option//': the sampling rate must be > 1', iostat, iomsg)
          return
       endif
-      if (store) self%samples = n
+      if (store) then
+         self%samples = n
+      else
+         self%isosamples = m
+      endif
       endsubroutine samples_option
 
       function integer_expression(n) result(ok)
@@ -10544,6 +10786,16 @@ contains
       call self%figure%set_y2range()
    elseif (keyword(option, 'x2range', 3_I4P)) then
       call self%figure%set_x2range()
+   elseif (keyword(option, 'trange', 2_I4P)) then
+      self%figure%panels(self%figure%current)%taxis%min_fixed = .false.
+      self%figure%panels(self%figure%current)%taxis%max_fixed = .false.
+   elseif (keyword(option, 'rrange', 2_I4P)) then
+      self%figure%panels(self%figure%current)%raxis%min_fixed = .false.
+      self%figure%panels(self%figure%current)%raxis%max_fixed = .false.
+   elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P) .or. &
+           keyword(option, 'zrange', 2_I4P)) then
+      if (option(1:1) == 'u') self%uv_range(:, 1) = [-5.0_R8P, 5.0_R8P]
+      if (option(1:1) == 'v') self%uv_range(:, 2) = [-5.0_R8P, 5.0_R8P]
    elseif (is_word(option, 'lmargin rmargin tmargin bmargin lmar rmar tmar bmar lmarg rmarg tmarg bmarg')) then
       call self%figure%set_margin(option(1:1))
    elseif (keyword(option, 'margins', 4_I4P)) then
@@ -10599,7 +10851,9 @@ contains
       self%figure%panels(self%figure%current)%errorbar_size = 0.0_R8P
    elseif (keyword(option, 'samples', 3_I4P)) then
       self%samples = 100_I4P
-   elseif (keyword(option, 'isosamples', 3_I4P) .or. keyword(option, 'mouse', 3_I4P) .or. &
+   elseif (keyword(option, 'isosamples', 3_I4P)) then
+      self%isosamples = 10_I4P
+   elseif (keyword(option, 'mouse', 3_I4P) .or. &
            keyword(option, 'macros', 3_I4P)) then
       ! surfaces, interactive terminals, macros always on: nothing to undo
       continue
@@ -11674,15 +11928,17 @@ contains
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
 
-   subroutine parse_using(spec, fields, iostat, iomsg, degrees, symbols)
+   subroutine parse_using(spec, fields, iostat, iomsg, degrees, symbols, sampled)
    !< `using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a
-   !< parenthesized expression (with the user variables and functions of `symbols`), as in gnuplot.
+   !< parenthesized expression (with the user variables and functions of `symbols`), as in gnuplot; `sampled` names the
+   !< sample variables of a pseudo-file (columns 1 and 2).
    character(len=*),                     intent(in)  :: spec      !< Specification.
    type(expression_object), allocatable, intent(out) :: fields(:) !< Fields.
    character(len=:), allocatable,        intent(out) :: iomsg     !< Error message.
    integer(I4P),                         intent(out) :: iostat    !< 0 on success.
    logical,                              intent(in)  :: degrees   !< Angles of the expressions in degrees.
    type(symbols_object),                 intent(in)  :: symbols   !< User variables and functions.
+   character(len=*),           optional, intent(in)  :: sampled   !< Sample variables of a pseudo-file.
    type(expression_object)                           :: field     !< Current field.
    character(len=:), allocatable                     :: text      !< Current field text (a copy: nvfortran 26.9
                                                                   !< blanks an associate name of a substring).
@@ -11722,7 +11978,7 @@ contains
          call field%set_name(text(2:len(text) - 1))
       elseif (text(1:min(1, len(text))) == '(') then
          ! compiled first, so that an unbalanced expression gets the precise syntax error
-         call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols)
+         call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols, sampled=sampled)
          if (iostat /= 0_I4P) then
             iomsg = 'using: '//iomsg
             return

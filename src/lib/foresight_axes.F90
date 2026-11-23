@@ -1201,6 +1201,7 @@ contains
    ymax = -huge(1.0_R8P)
    found = .false.
    xfound = .false.
+   if (.not. allocated(self%series)) return
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
       call self%series_extent(s, .false., xmin, xmax, ymin, ymax, found, xfound)

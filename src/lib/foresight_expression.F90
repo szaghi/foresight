@@ -398,13 +398,15 @@ integer(I8P), save :: rand_seeds(2) = 1234567890_I8P !< gnuplot's rand seeds (L'
 character(len=:), allocatable :: block_message                   !< Message of the last function block failure.
 
 contains
-   subroutine compile(self, text, iostat, iomsg, variable, degrees, symbols)
+   subroutine compile(self, text, iostat, iomsg, variable, degrees, symbols, sampled)
    !< Compile `text`; on error `iostat` is not 0 and `iomsg` names the problem and its position.
    !<
    !< With `variable` (gnuplot's dummy `x`) the expression is a function of it, evaluated by `value_at`; columns are
    !< then errors. The variable is held as the only cell of the row `evaluate` receives. With `degrees` true the
    !< trigonometric functions work in degrees. With `symbols`, user variables are constants of their current values
    !< and user functions are compiled inline (the dummy variable wins over a user variable of its name, as gnuplot).
+   !< With `sampled` (blank-separated names), each name reads the data column of its position, everywhere: gnuplot's
+   !< sample variables of the `'+'` and `'++'` pseudo-files (`plot sample [t=0:1] '+' using (t):(t**2)`).
    class(expression_object),      intent(inout)        :: self     !< Expression.
    character(len=*),              intent(in)           :: text     !< Source text.
    integer(I4P),                  intent(out)          :: iostat   !< 0 on success.
@@ -412,11 +414,14 @@ contains
    character(len=*),              intent(in), optional :: variable !< Dummy variable name, for a function.
    logical,                       intent(in), optional :: degrees  !< Angles in degrees.
    type(symbols_object),          intent(in), optional :: symbols  !< User variables and functions.
+   character(len=*),              intent(in), optional :: sampled  !< Sample variables, columns 1, 2, ...
 
-   call compile_expression(self, text, iostat, iomsg, variable=variable, degrees=degrees, symbols=symbols)
+   call compile_expression(self, text, iostat, iomsg, variable=variable, degrees=degrees, symbols=symbols, &
+                           sampled=sampled)
    endsubroutine compile
 
-   subroutine compile_expression(self, text, iostat, iomsg, variable, degrees, symbols, frame_name, parameters, lenient)
+   subroutine compile_expression(self, text, iostat, iomsg, variable, degrees, symbols, frame_name, parameters, lenient, &
+                                 sampled)
    !< `compile`, and the syntax check of a user function body: `parameters` of the function `frame_name` read the stack
    !< slots from 1, and with `lenient` unknown names and functions are accepted (resolved when called).
    !<
@@ -432,6 +437,7 @@ contains
    character(len=*),              intent(in), optional :: frame_name !< Function whose body `text` is.
    type(name_object),             intent(in), optional :: parameters(:) !< Its parameters.
    logical,                       intent(in), optional :: lenient    !< Unknown names accepted.
+   character(len=*),              intent(in), optional :: sampled    !< Sample variables, columns 1, 2, ...
    character(len=:), allocatable                :: src     !< Text being read (a body while compiled inline).
    type(frame_object), allocatable              :: frames(:) !< User functions being compiled inline, innermost last.
    logical                                      :: loose   !< Unknown names accepted.
@@ -1753,6 +1759,31 @@ contains
       yes = name == variable
       endfunction is_variable
 
+      function sampled_column(name) result(k)
+      !< Position of `name` among the sample variables (`sampled`), 0 if none.
+      character(len=*), intent(in)  :: name !< Name.
+      integer(I4P)                  :: k    !< Position.
+      character(len=:), allocatable :: rest !< Names not yet compared.
+      integer(I4P)                  :: w    !< Word counter.
+      integer(I4P)                  :: b    !< Blank after the word.
+
+      k = 0_I4P
+      if (.not. present(sampled)) return
+      rest = trim(adjustl(sampled))
+      w = 0_I4P
+      do while (len(rest) > 0)
+         w = w + 1_I4P
+         b = index(rest, ' ', kind=I4P)
+         if (b == 0_I4P) b = len(rest, kind=I4P) + 1_I4P
+         if (rest(1:b - 1_I4P) == name) then
+            k = w
+            return
+         endif
+         if (b > len(rest, kind=I4P)) exit
+         rest = trim(adjustl(rest(b:)))
+      enddo
+      endfunction sampled_column
+
       recursive subroutine name_value(name, at)
       !< A name alone: a parameter of the function being compiled inline, the dummy variable, a user variable, `pi`.
       character(len=*), intent(in) :: name !< Name.
@@ -1773,6 +1804,12 @@ contains
             if (frames(f)%name /= SUM_FRAME) exit
          enddo
       endblock
+      ! a sample variable of a pseudo-file, its column (gnuplot sets a user variable: seen in function bodies too)
+      k = sampled_column(name)
+      if (k > 0_I4P) then
+         call emit(OP_COLUMN, arg=k)
+         return
+      endif
       if (is_variable(name)) then
          call emit(OP_COLUMN, arg=1_I4P)
          return

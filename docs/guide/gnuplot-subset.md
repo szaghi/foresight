@@ -756,6 +756,28 @@ In the HTML page a zoom does not resample: the samples are those of the original
 On a [polar](#polar-plots) panel a function is r of `t`, sampled over `trange` (a full turn by default) as gnuplot:
 `plot 1 + cos(t)`.
 
+### Sampled pseudo-files `'+'` and `'++'`
+
+```gnuplot
+plot '+' using 1:(sin($1)):(sin($1)+0.3) with filledcurves
+plot sample [t=0:2*pi:0.25] '+' using (3*cos(t)):(sin(t)) with linespoints
+set urange [-2:2]; set vrange [-2:2]
+plot '++' using 1:2:($2*0.4):(-$1*0.4) with vectors
+```
+
+As gnuplot 6.0, the pseudo-file `'+'` is a data file of one column, the samples of a variable: `set samples` values
+evenly over the item's sampling range, else over `trange` in parametric and polar modes or when it is set, else over
+the x range (the `xrange` ends where set, else the extent of the data plotted before it in the same command, else
+[-10:10]; evenly in log x on a log x axis). The variable is the dummy (`x`, or the one of `set dummy`), and its value
+is that of column 1 in the `using` expressions: `'+' using 1:(f(x))`. An item's sampling range names it and may give
+the interval: `[t=-3:25:1.5] '+' using (t):(f(t))` samples from -3 by 1.5 while inside the range. Before the first
+item the range follows the keyword `sample`, else it would be the plot's x range: `plot sample [i=1:10:1] '+' ...`.
+
+`'++'` is a grid of two columns, u and v: `set samples` values over `urange`, by `set isosamples` (its second value)
+values over `vrange` (both [-5:5] by default), v from its maximum down, the scan lines apart (a blank line). The
+variables are `u` and `v`, or those its two ranges name: `sample [a=0:2:0.5][b=-1:1:0.5] '++' using (a):(b):(a*b)`.
+`unset urange`, `unset vrange` and `unset trange` restore the defaults.
+
 ## Parametric plots
 
 ```gnuplot
@@ -2038,6 +2060,6 @@ gnuplot's `geographic` formats; `set datafile` options other than `separator`, `
 `unwrap`, `path`, the `kdensity` `period` option and smoothing on log axes in log space; the `block` character sets `dot`, `octants`, `sextpua`,
 `octpua`, and its `optimize`, `attributes`, `charpoints`, `gppoints`, `animate` options; two tick
 label fields in one `using` (`xtic(1):ytic(2)`); `set multiplot` `scale`, `offset`; palette
-models other than RGB and HSV; `set ttics rotate`; `plot '+'` and `'++'`, `sample`; `title at`; `keyentry` with
+models other than RGB and HSV; `set ttics rotate`; `title at`; `keyentry` with
 other styles than those of functions; `with vectors as N`;
 `fillsteps` options (`above`, `below`, `y=`); `set minussign` and `set micro` with `set encoding utf8`.

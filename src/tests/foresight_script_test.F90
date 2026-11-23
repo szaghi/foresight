@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(176)                           !< Per-check outcome.
+logical                       :: test_passed(178)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3867,6 +3867,58 @@ if (test_passed(176)) then
    endassociate
 endif
 
+! the '+' pseudo-file: set samples over the x range ([-10:10] autoscaled without data), the dummy x its value;
+! `sample [i=a:b:step]` names the variable and the interval, a later item's [t=a:b:step] its own
+call interpreter%init(scratch)
+call interpreter%run_text('set samples 5; f(x) = 2*x; plot sample [i=5:20:5] ''+'' using (i):(cos(i)), '// &
+                          '[t=-3:3:1.5] ''+'' using (t):(t); plot ''+'' using 1:(f(x))', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(177) = iostat == 0_I4P
+if (test_passed(177)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(177) = size(series) == 1
+      if (test_passed(177)) test_passed(177) = &
+         all(abs(series(1)%x - [-10.0_R8P, -5.0_R8P, 0.0_R8P, 5.0_R8P, 10.0_R8P]) < 1.0e-12_R8P) .and. &
+         all(abs(series(1)%y - 2.0_R8P * series(1)%x) < 1.0e-12_R8P)
+   endassociate
+endif
+if (test_passed(177)) then
+   call interpreter%init(scratch)
+   call interpreter%run_text('set samples 5; plot sample [i=5:20:5] ''+'' using (i):(cos(i)), '// &
+                             '[t=-3:3:1.5] ''+'' using (t):(t)', iostat, iomsg)
+   test_passed(177) = iostat == 0_I4P
+   if (test_passed(177)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(177) = all(abs(series(1)%x - [5.0_R8P, 10.0_R8P, 15.0_R8P, 20.0_R8P]) < 1.0e-12_R8P) .and. &
+                            abs(series(1)%y(2) - cos(10.0_R8P)) < 1.0e-12_R8P .and. &
+                            all(abs(series(2)%x - [-3.0_R8P, -1.5_R8P, 0.0_R8P, 1.5_R8P, 3.0_R8P]) < 1.0e-12_R8P)
+      endassociate
+   endif
+endif
+
+! the '++' pseudo-file: urange by set samples, vrange by the second set isosamples value, v from its maximum, scan lines
+! apart; [u=a:b:step][v=a:b:step] an item's own grid; set trange the '+' samples
+call interpreter%init(scratch)
+call interpreter%run_text('set samples 3; set isosamples 2; set urange [0:1]; set vrange [10:20]; '// &
+                          'plot ''++'' using 1:2, [u=0:2:1][v=5:6:1] ''++'' using (u):(u*v)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(178) = iostat == 0_I4P
+if (test_passed(178)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(178) = size(series) == 2
+      if (test_passed(178)) test_passed(178) = &
+         abs(series(1)%x(1)) < 1.0e-12_R8P .and. abs(series(1)%x(2) - 0.5_R8P) < 1.0e-12_R8P .and. &
+         abs(series(1)%y(1) - 20.0_R8P) < 1.0e-12_R8P .and. abs(series(1)%y(size(series(1)%y)) - 10.0_R8P) < 1.0e-12_R8P &
+         .and. abs(series(2)%y(3) - 12.0_R8P) < 1.0e-12_R8P .and. abs(series(2)%y(size(series(2)%y)) - 10.0_R8P) < 1.0e-12_R8P
+   endassociate
+endif
+if (test_passed(178)) then
+   call interpreter%init(scratch)
+   call interpreter%run_text('set samples 5; set trange [0:1]; plot ''+'' using 1:1', iostat, iomsg)
+   test_passed(178) = iostat == 0_I4P
+   if (test_passed(178)) test_passed(178) = abs(interpreter%figure%panels(1)%series(1)%x(2) - 0.25_R8P) < 1.0e-12_R8P
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3875,7 +3927,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,176L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,178L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
