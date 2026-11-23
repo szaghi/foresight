@@ -4755,7 +4755,7 @@ contains
    !< gnuplot `reset [session|errors|bind]`: the plot settings back to their defaults, as gnuplot 6.0 keeps the
    !< terminal, the output, `set fit`, `set print`, `set table`, the multiplot, the linetypes (`set colorsequence`) and,
    !< a quirk kept, `set style data`. `reset session` also forgets the user variables, functions and arrays (the
-   !< script arguments kept); `reset errors` and `reset bind` do nothing here.
+   !< script arguments kept) and restores the default linetypes; `reset errors` and `reset bind` do nothing here.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens after `reset`.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
@@ -4800,12 +4800,14 @@ contains
    if (allocated(kept%series)) self%figure%panels(self%figure%current)%series = kept%series
    self%figure%panels(self%figure%current)%origin = kept%origin
    self%figure%panels(self%figure%current)%size = kept%size
-   if (allocated(kept%linecolors)) self%figure%panels(self%figure%current)%linecolors = kept%linecolors
-   ! gnuplot's linetypes are persistent
-   self%figure%panels(self%figure%current)%lt_lw = kept%lt_lw
-   self%figure%panels(self%figure%current)%lt_dt = kept%lt_dt
-   self%figure%panels(self%figure%current)%lt_pt = kept%lt_pt
-   self%figure%panels(self%figure%current)%lt_ps = kept%lt_ps
+   ! gnuplot's linetypes (and `set colorsequence`) survive `reset`, not `reset session`
+   if (size(tokens) == 0) then
+      if (allocated(kept%linecolors)) self%figure%panels(self%figure%current)%linecolors = kept%linecolors
+      self%figure%panels(self%figure%current)%lt_lw = kept%lt_lw
+      self%figure%panels(self%figure%current)%lt_dt = kept%lt_dt
+      self%figure%panels(self%figure%current)%lt_pt = kept%lt_pt
+      self%figure%panels(self%figure%current)%lt_ps = kept%lt_ps
+   endif
    self%function_style = 'lines'
    self%autotitle = 'file'
    if (allocated(self%line_styles)) deallocate(self%line_styles)

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(144)                           !< Per-check outcome.
+logical                       :: test_passed(145)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3072,6 +3072,15 @@ endblock
 open(newunit=unit, file='foresight_script_test_marks.svg')
 close(unit, status='delete')
 
+! reset keeps the linetypes (set linetype, set colorsequence), reset session restores gnuplot's
+call interpreter%init(scratch)
+call interpreter%run_text('set linetype 1 lw 3; set colorsequence podo; reset', iostat, iomsg)
+test_passed(145) = iostat == 0_I4P .and. interpreter%figure%panels(1)%lt_lw(1) == 3.0_R8P .and. &
+                  allocated(interpreter%figure%panels(1)%linecolors)
+call interpreter%run_text('reset session', iostat, iomsg)
+test_passed(145) = test_passed(145) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%lt_lw(1) < 0.0_R8P .and. &
+                  .not. allocated(interpreter%figure%panels(1)%linecolors)
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3080,7 +3089,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,144L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,145L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
