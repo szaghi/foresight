@@ -99,6 +99,11 @@ module foresight_script
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
 !<   extension to the ticks, the data extent, or [-10:10] with neither; evenly in log x on a log axis.
+!< - read and ignored, as they leave gnuplot's 2D svg output unchanged: `set|unset isosamples` (surfaces), `set|unset
+!<   mouse`, `set|unset macros` (macros always on), `set pointintervalbox`, `set zrange`, `set|unset minussign` and
+!<   `set|unset micro` with the default encoding (rejected with utf8, where gnuplot changes the signs); `refresh` is
+!<   `replot` without new items; `set|unset overflow [float|undefined|NaN]` (integer overflow, see
+!<   `foresight_expression`), `set|unset mttics [N]` (minor ticks on the polar border), `unset samples` (100).
 !<
 !< Anything else is an error naming the command, never silently ignored. Errors are returned (`iostat`, `iomsg` with
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
@@ -108,7 +113,8 @@ use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style
                            spider_words, POLAR_STYLES
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : block_hook, expression_object, list_text, push, saved_array, saved_variable, &
-                                 symbols_object, value_list, value_object
+                                 symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
+                                 OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
 use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
@@ -227,6 +233,8 @@ type :: script_object
    type(value_object)              :: return_value             !< That value.
    type(local_state), allocatable  :: locals(:)                !< Variables made `local` by the running blocks.
    character(len=:), allocatable   :: encoding                 !< `set encoding`: GPVAL_ENCODING, `default` or `utf8`.
+   logical                         :: minus_sign = .false.     !< `set minussign`: no effect with the default encoding.
+   logical                         :: micro = .false.          !< `set micro`: no effect with the default encoding.
    character(len=:), allocatable   :: term_name                !< The terminal: GPVAL_TERM.
    integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
    character(len=:), allocatable   :: dummy                    !< `set dummy NAME`: the functions' variable, empty for
@@ -314,6 +322,10 @@ contains
    self%comments = '#'
    self%samples = 100_I4P
    self%rgbmax = 255.0_R8P
+   ! a new session: gnuplot's program settings at start
+   overflow_mode = OVERFLOW_FLOAT
+   self%minus_sign = .false.
+   self%micro = .false.
    call self%symbols%clear
    call self%symbols%set_value('ARGC', 0.0_R8P, is_int=.true.)
    call self%symbols%set_array('ARGV', [character(len=1) ::])
@@ -901,6 +913,18 @@ contains
          return
       endif
       if (size(tokens) > 1) self%last_plot = self%last_plot//', '//after_command(statement)
+      call tokenize(self%last_plot, tokens, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call resolve_colors(tokens, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call self%plot_command(tokens, self%last_plot, iostat, iomsg)
+   elseif (keyword(command, 'refresh', 3_I4P)) then
+      ! gnuplot redraws the last plot from its stored data: the data are read again here, the same files
+      if (len(self%last_plot) == 0) then
+         call fail('refresh: no previous plot', iostat, iomsg)
+         return
+      endif
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
       call tokenize(self%last_plot, tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
       call resolve_colors(tokens, iostat, iomsg)
@@ -5073,6 +5097,10 @@ contains
       call self%symbols%restore_array(argv)
       ! gnuplot's own variables stay
       call gnuplot_values(self)
+      ! program settings `reset` leaves, as gnuplot's session start
+      overflow_mode = OVERFLOW_FLOAT
+      self%minus_sign = .false.
+      self%micro = .false.
    endif
    ! the current panel: its plot, place and linetypes kept
    kept = self%figure%panels(self%figure%current)
@@ -6122,6 +6150,7 @@ contains
    integer(I4P)                                 :: cols      !< Multiplot columns.
    logical                                      :: columns_first !< Multiplot `columnsfirst`.
    logical                                      :: upwards   !< Multiplot `upwards`.
+   integer(I4P)                                 :: last      !< Last token of an expression.
 
    iostat = 0_I4P
    iomsg = ''
@@ -6347,6 +6376,11 @@ contains
                    iostat, iomsg)
          return
       endif
+      if (text == 'utf8' .and. (self%minus_sign .or. self%micro)) then
+         call fail('set encoding utf8: set minussign and set micro are not supported with it (unset them first)', &
+                   iostat, iomsg)
+         return
+      endif
       self%encoding = text
       call self%symbols%set_string('GPVAL_ENCODING', text)
    elseif (keyword(option, 'terminal', 2_I4P)) then
@@ -6544,7 +6578,7 @@ contains
    elseif (keyword(option, 'errorbars', 6_I4P) .or. keyword(option, 'bars', 3_I4P)) then
       call errorbars_option
    elseif (keyword(option, 'samples', 3_I4P)) then
-      call samples_option
+      call samples_option(.true.)
    elseif (keyword(option, 'format', 3_I4P)) then
       call format_option
    elseif (keyword(option, 'origin', 2_I4P)) then
@@ -6623,6 +6657,81 @@ contains
       endif
       self%multiplot = .true.
       self%advance_pending = .false.
+   elseif (keyword(option, 'isosamples', 3_I4P)) then
+      ! surfaces only (splot and the `++` special file, neither in foresight): checked and ignored
+      call samples_option(.false.)
+   elseif (keyword(option, 'zrange', 2_I4P)) then
+      ! the z axis is splot's: checked and ignored
+      block
+         logical   :: fixed(2) !< Bound given.
+         real(R8P) :: bound(2) !< Bounds.
+
+         call set_range(fixed(1), bound(1), fixed(2), bound(2))
+      endblock
+   elseif (keyword(option, 'mouse', 3_I4P)) then
+      ! interactive terminals only: the options are not read
+      continue
+   elseif (keyword(option, 'macros', 3_I4P)) then
+      ! macros are always on, as gnuplot 6.0's (the command is kept for old scripts)
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+   elseif (option == 'pointintervalbox') then
+      ! the blank around the points of `pointinterval` lines, not drawn by foresight: checked and ignored
+      block
+         real(R8P) :: v !< Box size.
+
+         i = 2_I4P
+         if (i > size(tokens, kind=I4P)) return
+         last = expression_end(tokens, i)
+         call self%symbols%constant(expression_source(tokens(i:last)), v, iostat, iomsg, &
+                                    degrees=self%figure%panels(self%figure%current)%degrees)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set pointintervalbox: '//iomsg
+            return
+         endif
+         if (.not. no_more(tokens, last + 1_I4P, iostat, iomsg)) return
+      endblock
+   elseif (keyword(option, 'minussign', 5_I4P) .or. keyword(option, 'minus_sign', 5_I4P) .or. &
+           keyword(option, 'micro', 3_I4P)) then
+      ! gnuplot's minus sign (U+2212) and micro sign: only for an encoding that has them, not the default one
+      if (self%encoding == 'utf8') then
+         call fail('set '//option//': not supported with set encoding utf8 (the default encoding has no such sign)', &
+                   iostat, iomsg)
+         return
+      endif
+      if (keyword(option, 'micro', 3_I4P)) then
+         ! `set micro "string"`: the sign to use, read
+         if (size(tokens) > 1) then
+            i = 2_I4P
+            if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+               iomsg = 'set micro: '//iomsg
+               return
+            endif
+            if (.not. no_more(tokens, i + 1_I4P, iostat, iomsg)) return
+         endif
+         self%micro = .true.
+      else
+         if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+         self%minus_sign = .true.
+      endif
+   elseif (keyword(option, 'overflow', 3_I4P)) then
+      ! integer overflow of + - * **: float (default), undefined or NaN (gnuplot 6.0)
+      if (size(tokens) == 1) then
+         overflow_mode = OVERFLOW_FLOAT
+      elseif (tokens(2)%text == 'float') then
+         overflow_mode = OVERFLOW_FLOAT
+      elseif (tokens(2)%text == 'undefined') then
+         overflow_mode = OVERFLOW_UNDEFINED
+      elseif (tokens(2)%text == 'NaN' .or. tokens(2)%text == 'nan') then
+         overflow_mode = OVERFLOW_NAN
+      else
+         call fail('set overflow: float, undefined or NaN expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+         return
+      endif
+      if (size(tokens) > 2) then
+         if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+      endif
+   elseif (keyword(option, 'mttics', 3_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%ttics)
    else
       call fail('unsupported option "set '//option//'"', iostat, iomsg)
    endif
@@ -9262,35 +9371,61 @@ contains
       endif
       endsubroutine datafile_option
 
-      subroutine samples_option
-      !< `set samples N[,M]`: N function samples, M (for surfaces) checked and ignored.
-      integer(I4P) :: n !< Samples.
-      integer(I4P) :: m !< Second sampling rate.
+      subroutine samples_option(store)
+      !< `set samples N[,M]` (`store`) and `set isosamples N[,M]`: N function samples, M (for surfaces) checked and
+      !< ignored; N and M expressions truncated to integers, as gnuplot's.
+      logical, intent(in) :: store !< `set samples`, else checked only.
+      integer(I4P)        :: n     !< Samples.
+      integer(I4P)        :: m     !< Second sampling rate.
 
-      i = 1_I4P
-      if (.not. next_integer(tokens, i, n, iostat, iomsg)) then
-         iomsg = 'set samples: '//iomsg
-         return
-      endif
+      i = 2_I4P
+      if (.not. integer_expression(n)) return
       m = n
       if (size(tokens, kind=I4P) > i) then
          i = i + 1_I4P
          if (tokens(i)%kind /= TOKEN_COMMA) then
-            call fail('set samples: N or N,M expected', iostat, iomsg)
+            call fail('set '//option//': N or N,M expected', iostat, iomsg)
             return
          endif
-         if (.not. next_integer(tokens, i, m, iostat, iomsg)) then
-            iomsg = 'set samples: '//iomsg
-            return
-         endif
+         i = i + 1_I4P
+         if (.not. integer_expression(m)) return
          if (.not. no_more(tokens, i + 1_I4P, iostat, iomsg)) return
       endif
       if (n < 2_I4P .or. m < 2_I4P) then
-         call fail('set samples: the sampling rate must be > 1', iostat, iomsg)
+         call fail('set '//option//': the sampling rate must be > 1', iostat, iomsg)
          return
       endif
-      self%samples = n
+      if (store) self%samples = n
       endsubroutine samples_option
+
+      function integer_expression(n) result(ok)
+      !< The expression from token `i` (left on its last token) truncated to an integer, as gnuplot's int_expression.
+      integer(I4P), intent(out) :: n  !< Value.
+      logical                   :: ok !< Success.
+      real(R8P)                 :: v  !< Value, real.
+
+      n = 0_I4P
+      ok = i <= size(tokens, kind=I4P)
+      if (.not. ok) then
+         call fail('set '//option//': a number is expected', iostat, iomsg)
+         return
+      endif
+      last = expression_end(tokens, i)
+      call self%symbols%constant(expression_source(tokens(i:last)), v, iostat, iomsg, &
+                                 degrees=self%figure%panels(self%figure%current)%degrees)
+      ok = iostat == 0_I4P
+      if (.not. ok) then
+         iomsg = 'set '//option//': '//iomsg
+         return
+      endif
+      ok = abs(v) < 2.0e9_R8P
+      if (.not. ok) then
+         call fail('set '//option//': the sampling rate is too large', iostat, iomsg)
+         return
+      endif
+      n = int(v, I4P)
+      i = last
+      endfunction integer_expression
 
       subroutine format_option
       !< `set format [x|y|y2|cb|x2|xy...] ["format"] [timedate|numeric]` (all axes by default): no format restores the
@@ -9830,6 +9965,21 @@ contains
    elseif (keyword(option, 'errorbars', 6_I4P) .or. keyword(option, 'bars', 3_I4P)) then
       ! no crossbars, as gnuplot's unset errorbars
       self%figure%panels(self%figure%current)%errorbar_size = 0.0_R8P
+   elseif (keyword(option, 'samples', 3_I4P)) then
+      self%samples = 100_I4P
+   elseif (keyword(option, 'isosamples', 3_I4P) .or. keyword(option, 'mouse', 3_I4P) .or. &
+           keyword(option, 'macros', 3_I4P)) then
+      ! surfaces, interactive terminals, macros always on: nothing to undo
+      continue
+   elseif (keyword(option, 'minussign', 5_I4P) .or. keyword(option, 'minus_sign', 5_I4P)) then
+      self%minus_sign = .false.
+   elseif (keyword(option, 'micro', 3_I4P)) then
+      self%micro = .false.
+   elseif (keyword(option, 'overflow', 3_I4P)) then
+      ! `+` and `-` wrap around as two's complement, gnuplot's `unset overflow`
+      overflow_mode = OVERFLOW_IGNORE
+   elseif (keyword(option, 'mttics', 3_I4P)) then
+      self%figure%panels(self%figure%current)%ttics%minor = MINOR_NONE
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif

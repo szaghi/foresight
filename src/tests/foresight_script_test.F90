@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(158)                           !< Per-check outcome.
+logical                       :: test_passed(159)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3391,6 +3391,65 @@ test_passed(158) = test_passed(158) .and. iostat == 0_I4P .and. .not. interprete
 call interpreter%run_text('set palette model CMY', iostat, iomsg)
 test_passed(158) = test_passed(158) .and. iostat /= 0_I4P .and. index(iomsg, 'RGB and HSV are supported') > 0
 
+
+! settings that leave gnuplot's 2D svg unchanged (isosamples, mouse, macros, pointintervalbox, zrange, minussign with
+! the default encoding), refresh, unset samples, set samples EXPR, and the integer overflow modes as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text('set isosamples 3.9, 4; set mouse mouseformat 6; unset mouse; set macros; unset macros; '// &
+                          'set pointintervalbox 1.5; set zrange [-1:2]; set minussign; set micro; unset minus; '// &
+                          'a = 3; set samples (a*4.5), 2*a', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(159) = iostat == 0_I4P .and. interpreter%samples == 13_I4P
+call interpreter%run_text('unset samples; set xrange [0:1]; plot x; set xrange [0:2]; refresh', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat == 0_I4P .and. interpreter%samples == 100_I4P
+if (test_passed(159)) test_passed(159) = maxval(interpreter%figure%panels(1)%series(1)%x) == 2.0_R8P
+call interpreter%run_text('set encoding utf8', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat /= 0_I4P .and. index(iomsg, 'unset them first') > 0
+call interpreter%run_text('unset micro; set encoding utf8; set minussign', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat /= 0_I4P .and. index(iomsg, 'not supported with set encoding utf8') > 0
+call interpreter%run_text('A = 2**62; unset overflow; b = A + A; c = -3*A; d = -A - A - A; set overflow NaN; e = A + A; '// &
+                          'set overflow; f = A + A; g = int(1e19); h = floor(2.**52 * 1.5)', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(159) = test_passed(159) .and. iostat == 0_I4P
+if (test_passed(159)) then
+   block
+      real(R8P) :: v(6) !< b, c, d, e, f, g.
+      real(R8P) :: h    !< floor of 1.5 * 2**52.
+
+      call interpreter%symbols%constant('b', v(1), iostat, iomsg)
+      call interpreter%symbols%constant('c', v(2), iostat, iomsg)
+      call interpreter%symbols%constant('d', v(3), iostat, iomsg)
+      call interpreter%symbols%constant('e', v(4), iostat, iomsg)
+      call interpreter%symbols%constant('f', v(5), iostat, iomsg)
+      call interpreter%symbols%constant('g', v(6), iostat, iomsg)
+      call interpreter%symbols%constant('h', h, iostat, iomsg)
+      test_passed(159) = v(1) == -9223372036854775808.0_R8P .and. v(2) == -3.0_R8P * 2.0_R8P**62 .and. &
+                        v(3) == 2.0_R8P**62 .and. ieee_is_nan(v(4)) .and. v(5) == 2.0_R8P**63 .and. &
+                        ieee_is_nan(v(6)) .and. ieee_is_nan(h)
+   endblock
+endif
+call interpreter%run_text('set overflow undefined; i = 2**64', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat /= 0_I4P
+call interpreter%run_text('set overflow wrap', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat /= 0_I4P .and. index(iomsg, 'float, undefined or NaN') > 0
+call interpreter%run_text('reset session; j = 2**62 + 2**62', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat == 0_I4P
+if (test_passed(159)) then
+   block
+      real(R8P) :: j !< Overflowed sum.
+
+      call interpreter%symbols%constant('j', j, iostat, iomsg)
+      test_passed(159) = j == 2.0_R8P**63
+   endblock
+endif
+! set mttics: minor ticks on the polar border, unlabelled
+call interpreter%init(scratch)
+call interpreter%run_text('set polar; set ttics 0,90; set mttics 3; set border polar; set rrange [0:1]; plot 1', &
+                          iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%minor == 3_I4P
+call interpreter%run_text('unset mttics', iostat, iomsg)
+test_passed(159) = test_passed(159) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%minor == 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -3399,7 +3458,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,158L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,159L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

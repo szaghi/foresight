@@ -2298,7 +2298,8 @@ contains
    subroutine draw_polar_axes(self, backend, area, font_size)
    !< Draw the ticks of the radial axis (a line from the pole to the largest r towards the right of the page whatever
    !< the theta origin, drawn with the data) and their labels below it, as gnuplot; and the theta labels (`ttics`)
-   !< outside the largest r, with ticks on the polar border. Page geometry: hidden by the viewer while zoomed.
+   !< outside the largest r, with ticks on the polar border (minor ones too, `set mttics`). Page geometry: hidden by
+   !< the viewer while zoomed.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
@@ -2346,9 +2347,12 @@ contains
       ! a full turn names the start direction again
       if (thetas(t)%value >= 360.0_R8P - 1.0e-9_R8P .and. any(thetas%value <= 1.0e-9_R8P)) cycle
       a = self%page_angle(thetas(t)%value)
-      if (self%border_polar) call backend%polyline([cx + radius * sx * cos(a), cx + (radius * sx - TICK_MAJOR) * cos(a)], &
-                                                   [cy - radius * sy * sin(a), cy - (radius * sy - TICK_MAJOR) * sin(a)], &
+      ! the minor ticks (`set mttics`) only on the polar border, unlabelled, as gnuplot's
+      length = merge(TICK_MAJOR, TICK_MINOR, thetas(t)%major)
+      if (self%border_polar) call backend%polyline([cx + radius * sx * cos(a), cx + (radius * sx - length) * cos(a)], &
+                                                   [cy - radius * sy * sin(a), cy - (radius * sy - length) * sin(a)], &
                                                    FRAME_COLOR, 1.0_R8P, '')
+      if (.not. thetas(t)%major) cycle
       anchor = 'middle'
       if (cos(a) > 0.3_R8P) anchor = 'start'
       if (cos(a) < -0.3_R8P) anchor = 'end'

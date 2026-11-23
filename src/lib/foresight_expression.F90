@@ -18,7 +18,9 @@ module foresight_expression
 !<   code, run on a call stack: past 251 nested calls, gnuplot's `recursion depth limit exceeded`), as gnuplot's
 !<   `a = 2` and `f(x) = a*sin(x)`;
 !< - integer constants are integers: `1/2` is 0, `-5/2` is -2, `7/2.` is 3.5; an integer overflow gives a real;
-!<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers;
+!<   columns are real; `floor`, `ceil`, `int`, `sgn`, comparisons and logical operators give integers; an integer
+!<   overflow of `+`, `-`, `*` and `**` follows `overflow_mode` (gnuplot `set|unset overflow`, global as gnuplot's):
+!<   a real (default), wrapped (`+` and `-` only, `unset overflow`), NaN or undefined;
 !< - a missing cell, a division by zero, a domain error (`sqrt(-1)`, `log(0)`) or an overflow make the whole value
 !<   undefined: NaN, a gap in the plot, as gnuplot's `1/0`;
 !< - compiled with `degrees` (gnuplot `set angles degrees`), `sin`, `cos`, `tan` take degrees and `asin`, `acos`,
@@ -58,6 +60,11 @@ public :: value_object
 public :: block_hook
 public :: block_call_interface
 public :: push
+public :: overflow_mode
+public :: OVERFLOW_IGNORE
+public :: OVERFLOW_FLOAT
+public :: OVERFLOW_UNDEFINED
+public :: OVERFLOW_NAN
 
 interface push
    !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` (and any `list = f(list)`)
@@ -170,10 +177,17 @@ integer(I4P), parameter :: MAX_NESTING = 256_I4P                     !< Deepest 
 integer(I4P), parameter :: MAX_CALLS   = 251_I4P                     !< Most nested user function calls (gnuplot's).
 integer(I8P), parameter :: MOST        = huge(1_I8P)                 !< Largest integer.
 integer(I8P), parameter :: LEAST       = -MOST - 1_I8P               !< Smallest integer.
+integer(I4P), parameter :: OVERFLOW_IGNORE    = 0_I4P !< `unset overflow`: `+` and `-` wrap, `*` and `**` give a real.
+integer(I4P), parameter :: OVERFLOW_FLOAT     = 1_I4P !< `set overflow [float]`: a real (gnuplot's default).
+integer(I4P), parameter :: OVERFLOW_UNDEFINED = 2_I4P !< `set overflow undefined`: the value is undefined.
+integer(I4P), parameter :: OVERFLOW_NAN       = 3_I4P !< `set overflow NaN`: NaN.
+integer(I4P), save      :: overflow_mode = OVERFLOW_FLOAT !< Integer overflow handling, gnuplot's global setting.
 real(R8P),    parameter :: HUGE_REAL   = huge(1.0_R8P)               !< Largest real.
 real(R8P),    parameter :: LOG_HUGE    = log(HUGE_REAL) - 1.0e-6_R8P !< Largest safe `exp` argument.
 real(R8P),    parameter :: LOG_TINY    = -745.0_R8P                  !< `exp` of less is 0.
 real(R8P),    parameter :: INT_LIMIT   = 2.0_R8P**63                 !< Reals from here on are not I8P integers.
+real(R8P),    parameter :: INT_GUARANTEED = 9.22337203685477478e+18_R8P !< gnuplot's LARGEST_GUARANTEED_NONOVERFLOW: int().
+real(R8P),    parameter :: EXACT_HALF  = 2.0_R8P**52                 !< gnuplot's LARGEST_EXACT_INT/2: floor(), ceil().
 real(R8P),    parameter :: PI          = acos(-1.0_R8P)              !< pi.
 
 type :: value_object
@@ -3364,17 +3378,34 @@ contains
       else
          done = i >= LEAST - j
       endif
-      if (done) c = int_value(i + j)
+      if (done) then
+         c = int_value(i + j)
+      elseif (j > 0_I8P) then
+         ! wrapped as two's complement: each term moved by 2**63, the sum in range
+         call overflowed(c, done, ok, (i + LEAST) + (j + LEAST))
+      else
+         call overflowed(c, done, ok, (i - LEAST) + (j - LEAST))
+      endif
    case (OP_SUBTRACT)
       if (j < 0_I8P) then
          done = i <= MOST + j
       else
          done = i >= LEAST + j
       endif
-      if (done) c = int_value(i - j)
+      if (done) then
+         c = int_value(i - j)
+      elseif (j < 0_I8P) then
+         call overflowed(c, done, ok, (i + LEAST) - (j - LEAST))
+      else
+         call overflowed(c, done, ok, (i - LEAST) - (j + LEAST))
+      endif
    case (OP_MULTIPLY)
       done = fits_product(i, j)
-      if (done) c = int_value(i * j)
+      if (done) then
+         c = int_value(i * j)
+      else
+         call overflowed(c, done, ok)
+      endif
    case (OP_DIVIDE, OP_MODULO)
       if (j == 0_I8P) then
          ok = .false.
@@ -3409,7 +3440,11 @@ contains
             if (done) base = base * base
          endif
       enddo
-      if (done) c = int_value(p)
+      if (done) then
+         c = int_value(p)
+      else
+         call overflowed(c, done, ok)
+      endif
    case (OP_ATAN2)
       done = .false.
    case (OP_LT)
@@ -3425,6 +3460,29 @@ contains
    case (OP_NE)
       c = logical_value(i /= j)
    endselect
+   contains
+      pure subroutine overflowed(c, done, ok, wrapped)
+      !< An integer overflow, after `overflow_mode`: `wrapped` (`+`, `-`; absent: a real, as gnuplot's `*` and `**`),
+      !< a real (`done` false), NaN or undefined (`ok` false).
+      type(value_object),     intent(inout) :: c       !< Result.
+      logical,                intent(inout) :: done    !< Result computed.
+      logical,                intent(inout) :: ok      !< Defined.
+      integer(I8P), optional, intent(in)    :: wrapped !< Two's complement result.
+
+      done = .false.
+      select case (overflow_mode)
+      case (OVERFLOW_IGNORE)
+         if (present(wrapped)) then
+            c = int_value(wrapped)
+            done = .true.
+         endif
+      case (OVERFLOW_NAN)
+         c = value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan))
+         done = .true.
+      case (OVERFLOW_UNDEFINED)
+         ok = .false.
+      endselect
+      endsubroutine overflowed
    endsubroutine integer_binary
 
    pure function fits_product(i, j) result(yes)
@@ -3486,6 +3544,12 @@ contains
    case ('int', 'floor', 'ceil')
       if (a%is_int) then
          c = a
+      elseif (ieee_is_nan(x)) then
+         ok = .false.
+      elseif (abs(x) >= merge(INT_GUARANTEED, EXACT_HALF, name == 'int')) then
+         ! beyond the integers gnuplot trusts the double to hold: NaN (undefined with `set overflow undefined`)
+         c%r = ieee_value(1.0_R8P, ieee_quiet_nan)
+         ok = overflow_mode /= OVERFLOW_UNDEFINED
       elseif (abs(x) < INT_LIMIT) then
          select case (name)
          case ('int')
