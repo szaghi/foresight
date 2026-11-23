@@ -1616,11 +1616,12 @@ contains
    endassociate
    endsubroutine set_theta
 
-   subroutine set_key_style(self, reverse, left, invert, opaque, samplen, width, title, offset)
+   subroutine set_key_style(self, reverse, left, invert, opaque, samplen, width, title, offset, title_justify)
    !< Key layout of the current panel, as gnuplot `set key`: `reverse` the samples left of the titles, `left` the titles
    !< left-justified (`Left`), `invert` the entries in reverse order, `opaque` the key area painted over the plot,
    !< `samplen` the sample length [character widths; negative: foresight's], `width` character widths added to the
-   !< titles, `title` a row above the entries (empty: none), `offset` a shift [characters, y up]. Apart from `set_key`:
+   !< titles, `title` a row above the entries (empty: none), `offset` a shift [characters, y up], `title_justify` the
+   !< title's justification (`left`, `center` or `right`, as gnuplot `set key title "T" left`). Apart from `set_key`:
    !< nvfortran 26.9 -O2 loses `present(at)` there with these optional arguments after it.
    class(figure_object), intent(inout)        :: self      !< Figure.
    logical,              intent(in), optional :: reverse   !< Samples left of the titles.
@@ -1631,6 +1632,7 @@ contains
    real(R8P),            intent(in), optional :: width     !< Width added to the titles [character widths].
    character(len=*),     intent(in), optional :: title     !< Key title.
    real(R8P),            intent(in), optional :: offset(2) !< Key shift [characters].
+   character(len=*),     intent(in), optional :: title_justify !< Key title justification.
 
    call self%ensure_panels
    associate(panel => self%panels(self%current))
@@ -1642,6 +1644,18 @@ contains
       if (present(width)) panel%key_extra = width
       if (present(title)) panel%key_title = title
       if (present(offset)) panel%key_offset = offset
+      if (present(title_justify)) then
+         select case (title_justify)
+         case ('left')
+            panel%key_title_anchor = 'start'
+         case ('center', 'centre')
+            panel%key_title_anchor = 'middle'
+         case ('right')
+            panel%key_title_anchor = 'end'
+         case default
+            error stop 'foresight: set_key_style: title justification "'//title_justify//'" (left, center or right)'
+         endselect
+      endif
    endassociate
    endsubroutine set_key_style
 

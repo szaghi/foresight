@@ -231,6 +231,8 @@ type :: axes_object
    real(R8P)                        :: key_box_lw = 1.0_R8P !< Box line width [px] (`box lw`).
    integer(I4P)                     :: key_box_dt = 1_I4P !< Box dash type (`box dt`), 1 solid.
    character(len=:), allocatable    :: key_title !< Key title, a row above the entries (gnuplot `set key title`).
+   character(len=6)                 :: key_title_anchor = 'middle' !< Its anchor: `start` (gnuplot `left`), `middle`
+                                                                 !< or `end` (`right`).
    real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
    character(len=6)                 :: title_anchor = 'middle' !< Title justification, `set title left|right`:
                                                                !< start, middle or end, at the centre.
@@ -737,9 +739,10 @@ contains
          series%texts = labels
       endif
    case (WITH_FILLEDCURVES)
-      ! gnuplot fills a curve even with an empty fill style, and never draws its border
+      ! gnuplot fills a curve even with an empty fill style; the border kept apart (`fill_edges`)
       if (series%style%fill == FILL_EMPTY) series%style%density = 1.0_R8P
       if (series%style%fill /= FILL_PATTERN) series%style%fill = FILL_SOLID
+      series%fill_border = series%style%border
       series%style%border = .false.
       if (present(base) .and. present(ylow)) error stop 'foresight: plot: a fill takes base or ylow, not both'
       if (present(base)) then
@@ -2565,7 +2568,16 @@ contains
       if (allocated(self%key_title)) then
          if (len(self%key_title) > 0) then
             backend%literal = self%key_plain
-            call backend%text(left + 0.5_R8P * width, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, 'middle')
+            ! gnuplot `set key title "T" left|center|right`: at the left of the key, its middle or its right
+            select case (trim(self%key_title_anchor))
+            case ('start')
+               call backend%text(left, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, 'start')
+            case ('end')
+               call backend%text(left + width, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, 'end')
+            case default
+               call backend%text(left + 0.5_R8P * width, top + 0.85_R8P * LINE_HEIGHT * font_size, self%key_title, &
+                                 'middle')
+            endselect
             backend%literal = .false.
             top = top + LINE_HEIGHT * font_size
          endif
@@ -2708,12 +2720,35 @@ contains
    real(R8P),             intent(in)    :: yc        !< Row centre [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    character(len=:), allocatable        :: sample    !< Color of the point sample.
+   type(style_object)                   :: edged     !< Style of the fill sample.
 
-   if (series%style%fills()) &
+   if (series%style%fills()) then
+      edged = series%style
+      ! a script's filledcurves: its fill border around the sample, as gnuplot 6.0
+      if (series%fill_edges > 0_I4P) edged%border = series%fill_border
       call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
                            [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
-                            yc - 0.35_R8P * font_size], series%style%fill_color(), series%style%density, &
-                           series%style%stroke_color(), series%style%linewidth)
+                            yc - 0.35_R8P * font_size], edged%fill_color(), edged%density, &
+                           edged%stroke_color(), edged%linewidth)
+   endif
+   if (series%style%with == WITH_LABELS .and. series%gnuplot_sample) then
+      ! no sample, the point of `labels point` alone, as gnuplot 6.0
+      if (.not. series%text_point) return
+      sample = FRAME_COLOR
+      if (allocated(series%text_color)) sample = series%text_color
+      call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
+                        pt=series%style%pointtype, line_width=series%style%linewidth)
+      return
+   endif
+   if ((series%style%with == WITH_VECTORS .or. series%style%with == WITH_ARROWS) .and. series%gnuplot_sample) then
+      ! the sample an arrow, its head at the right end, as gnuplot 6.0
+      if (trim(series%style%color) == 'none') return
+      call backend%polyline(xs, [yc, yc], series%style%color, series%style%linewidth, series%style%dasharray())
+      call backend%polyline([xs(2) - 0.6_R8P * font_size, xs(2), xs(2) - 0.6_R8P * font_size], &
+                            [yc + 0.16_R8P * font_size, yc, yc - 0.16_R8P * font_size], series%style%color, &
+                            series%style%linewidth, '')
+      return
+   endif
    if ((series%style%draws_lines() .or. any(series%style%with == [WITH_IMPULSES, WITH_FINANCEBARS, WITH_VECTORS, &
                                                                   WITH_ARROWS])) .and. trim(series%style%color) /= 'none') &
       call backend%polyline(xs, [yc, yc], series%style%color, series%style%linewidth, series%style%dasharray())
@@ -4258,6 +4293,12 @@ contains
                else
                   call backend%data_polygon(u(a:b), v(a:b), fill, series%style%density, 'none', &
                                             0.0_R8P)
+               endif
+               if (series%fill_edges == 2_I4P .and. series%fill_border) then
+                  ! a script's plot item with its own fill border: the curve drawn along, as gnuplot 6.0
+                  row = series%style
+                  row%border = .true.
+                  call backend%data_polyline(u(a:b), v(a:b), row%stroke_color(), row%linewidth, '')
                endif
             endif
             a = b + 1_I4P

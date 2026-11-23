@@ -117,6 +117,14 @@ type :: series_object
    character(len=9), allocatable :: arrow_systems(:) !< System of each head length, as `head_system`.
    character(len=LABEL_LEN), allocatable :: xlabels2(:) !< Text labels of a second axis (`xtic(..):ytic(..)`).
    character(len=2)              :: label_axis2 = 'y' !< Axis of those labels.
+   logical                       :: gnuplot_sample = .false. !< A script's key sample, as gnuplot 6.0: an arrow for
+                                                             !< vectors and arrows, none for labels (their point
+                                                             !< with `point`); else the library's line.
+   logical                       :: fill_border = .false. !< `filledcurves`: the fill style's border, never drawn by the
+                                                          !< library (see `fill_edges`).
+   integer(I4P)                  :: fill_edges = 0_I4P !< `filledcurves`: where that border is drawn, as gnuplot 6.0 (a
+                                                       !< script's): 0 nowhere (the library's), 1 around the key
+                                                       !< sample, 2 around the key sample and along the curve.
    logical                       :: blank_ticks = .false. !< A blank text label is a tick too (a script's `xtic("")`,
                                                           !< the rug, as gnuplot); else no tick (the library's).
    integer(I4P)                  :: spider_group = 0_I4P !< Spider plot group (gnuplot `newspiderplot`), 0 the first:

@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(213)                           !< Per-check outcome.
+logical                       :: test_passed(214)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4859,6 +4859,33 @@ endif
 call interpreter%run_text('set ytics 10 nologscale', iostat, iomsg)
 test_passed(213) = test_passed(213) .and. iostat /= 0_I4P
 
+! key samples as gnuplot 6.0: vectors an arrow (gnuplot_sample), keyentry with labels none, the fill border of
+! filledcurves around the key sample (the global fill style) and along the curve (the item's own fs), the key title
+! justification
+call interpreter%init(scratch)
+call interpreter%run_text('$V << EOD'//new_line('a')//'1 1 1 0.5'//new_line('a')//'2 2 1 -0.5'//new_line('a')// &
+                          'EOD'//new_line('a')//'set key title "K" left; set style fill solid 0.3 border lc "red"; '// &
+                          'plot $V using 1:2:3:4 with vectors title "v", $V using 1:2 with filledcurves y=0, '// &
+                          'keyentry with labels title "kl", $V using 1:2 with filledcurves fs solid 0.5 border', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(214) = iostat == 0_I4P
+if (test_passed(214)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(214) = panel%series(1)%gnuplot_sample .and. panel%series(2)%fill_edges == 1_I4P .and. &
+                        panel%series(2)%fill_border .and. trim(panel%series(3)%style%color) == 'none' .and. &
+                        panel%series(4)%fill_edges == 2_I4P .and. trim(panel%key_title_anchor) == 'start'
+   endassociate
+endif
+call interpreter%run_text('set key title "K" right; set style fill solid noborder; '// &
+                          'plot $V using 1:2 with filledcurves y=0', iostat, iomsg)
+test_passed(214) = test_passed(214) .and. iostat == 0_I4P
+if (test_passed(214)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(214) = .not. panel%series(1)%fill_border .and. trim(panel%key_title_anchor) == 'end'
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4867,7 +4894,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,213L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,214L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

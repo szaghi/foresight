@@ -2690,6 +2690,7 @@ contains
    character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
    logical                                      :: head_skipped !< `notitle columnhead`: the first row a header.
    logical                                      :: keyentry  !< The item is gnuplot's `keyentry`.
+   logical                                      :: keyentry_blank !< A keyentry without sample (`with labels`).
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -2995,6 +2996,7 @@ contains
       endif
       is_function = tokens(i)%kind == TOKEN_WORD
       keyentry = .false.
+      keyentry_blank = .false.
       quote = ' '
       ! a word joined to strings or substrings is a string expression, a file name: d[1:3] . "x.dat"
       if (is_function) is_function = all(tokens(i:expression_end(tokens, i))%kind == TOKEN_WORD)
@@ -3358,6 +3360,10 @@ contains
                   with = 'filledcurves'
                elseif (is_word(with, 'xerrorlines yerrorlines xyerrorlines')) then
                   with = 'linespoints'
+               elseif (with == 'labels') then
+                  ! no sample, as gnuplot 6.0
+                  with = 'lines'
+                  keyentry_blank = .true.
                else
                   with = 'lines'
                endif
@@ -5038,10 +5044,11 @@ contains
       endfunction variable_lc
 
       subroutine fill_last
-      !< The fill color of the item (`fc`) on its series.
-      if (.not. allocated(fill_rgb)) return
+      !< The fill color of the item (`fc`) on its series; a filledcurves fill border where gnuplot 6.0 draws it: around
+      !< the key sample, and along the curve too with the item's own `fs`.
       associate(panel => self%figure%panels(self%figure%current))
-         panel%series(size(panel%series))%style%fill_rgb = fill_rgb
+         if (with == 'filledcurves') panel%series(size(panel%series))%fill_edges = merge(2_I4P, 1_I4P, allocated(fs))
+         if (allocated(fill_rgb)) panel%series(size(panel%series))%style%fill_rgb = fill_rgb
       endassociate
       endsubroutine fill_last
 
@@ -5306,6 +5313,8 @@ contains
          panel%series(last)%ellipse_units = ellipse_units
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
+         if (keyentry_blank) panel%series(last)%style%color = 'none'
+         panel%series(last)%gnuplot_sample = .true.
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_at = title_at
          panel%series(last)%title_xy = title_xy
@@ -9579,11 +9588,13 @@ contains
                      iomsg = 'set key title: '//iomsg
                      return
                   endif
-                  call self%figure%set_key_style(title=text)
-                  ! `left|center|right` right after the title: its justification (read and ignored, the title is
-                  ! centred over the key), not the key's place
+                  call self%figure%set_key_style(title=text, title_justify='center')
+                  ! `left|center|right` right after the title: its justification, not the key's place
                   if (i < size(tokens, kind=I4P)) then
-                     if (is_word(tokens(i + 1_I4P)%text, 'left center centre right')) i = i + 1_I4P
+                     if (is_word(tokens(i + 1_I4P)%text, 'left center centre right')) then
+                        i = i + 1_I4P
+                        call self%figure%set_key_style(title_justify=tokens(i)%text)
+                     endif
                   endif
                   cycle
                endif
