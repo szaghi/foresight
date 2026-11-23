@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(193)                           !< Per-check outcome.
+logical                       :: test_passed(194)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -465,8 +465,8 @@ call interpreter%run_text("plot '"//data_file//"' w l fs solid", iostat, iomsg)
 test_passed(50) = iostat /= 0_I4P .and. index(iomsg, 'the box styles and the panel charts only') > 0
 call interpreter%run_text("set style fill pattern 2.5", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'the pattern is a whole number') > 0
-call interpreter%run_text("plot '"//data_file//"' w filledcurves above", iostat, iomsg)
-test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'above and below need y=V or a band') > 0
+call interpreter%run_text("plot '"//data_file//"' w filledcurves above x=1", iostat, iomsg)
+test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'above and below apply to y=V and bands') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3:3 w boxes", iostat, iomsg)
 test_passed(50) = test_passed(50) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes needs using x:y or x:y:width') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:3 w filledcurves y=0", iostat, iomsg)
@@ -3187,7 +3187,7 @@ if (test_passed(149)) test_passed(149) = interpreter%figure%panels(1)%series(1)%
 if (test_passed(149)) test_passed(149) = size(interpreter%figure%panels(1)%series(2)%ylow) == 3 .and. &
                                        all(interpreter%figure%panels(1)%series(2)%ylow == 1.0_R8P) .and. &
                                        interpreter%figure%panels(1)%series(3)%curve_to == 1_I4P
-call interpreter%run_text('plot x with filledcurves above', iostat, iomsg)
+call interpreter%run_text('plot x with filledcurves above x=1', iostat, iomsg)
 test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'need y=V for a function') > 0
 call interpreter%run_text('plot x with yerrorbars', iostat, iomsg)
 test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes or filledcurves') > 0
@@ -4348,6 +4348,29 @@ close(unit, status='delete')
 call interpreter%run_text('plot $V using 1:2:3:4 with vectors as variable', iostat, iomsg)
 test_passed(193) = test_passed(193) .and. iostat /= 0_I4P .and. index(iomsg, 'style[:z]') > 0
 
+! filledcurves above|below without y=V nor a band: above or below y = 0; with an axis word (`above x1`) the words
+! dropped, as gnuplot 6.0; the rgbform abbreviation; fc palette cb V; image pixels; `set key title "T" left` a title
+! justification, not the key's place
+call interpreter%init(scratch)
+call interpreter%run_text('$D << EOD'//new_line('a')//'-1 -1'//new_line('a')//'1 1'//new_line('a')//'EOD'// &
+                          new_line('a')//'set palette rgbform -7,2,-7; set key outside right center; '// &
+                          'set key title "Outcomes" left; '// &
+                          'plot x with filledcurves above, $D with filledcurves below, $D with filledcurves above x1, '// &
+                          'keyentry with boxes fc palette cb 1 title "one"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(194) = iostat == 0_I4P
+if (test_passed(194)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(194) = all(panel%palette%formulae == [-7_I4P, 2_I4P, -7_I4P]) .and. panel%key_h == 'right' .and. &
+                        panel%key_outside
+      test_passed(194) = test_passed(194) .and. panel%series(1)%curve_side == 1_I4P .and. &
+                        panel%series(2)%curve_side == -1_I4P .and. panel%series(2)%curve_to == 0_I4P .and. &
+                        all(panel%series(2)%ylow == 0.0_R8P)
+      test_passed(194) = test_passed(194) .and. panel%series(3)%curve_side == 0_I4P .and. panel%series(3)%curve_to == 1_I4P
+      test_passed(194) = test_passed(194) .and. panel%series(4)%palette_mode == 2_I4P
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4356,7 +4379,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,193L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,194L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -3255,11 +3255,17 @@ contains
                   return
                endif
                if (allocated(probe%lc)) then
-                  if (index(probe%lc, '*') == 1) then
-                     call fail('plot: fc: variable and palette colors are not supported', iostat, iomsg)
+                  if (index(probe%lc, '*palette') == 1 .and. probe%lc /= LC_PALETTE_Z) then
+                     ! `fc palette cb V|frac F`: one palette color, the item's (fill and line), as gnuplot's keyentry
+                     line%lc = probe%lc
+                     line%palette = probe%palette
+                  elseif (index(probe%lc, '*') == 1) then
+                     call fail('plot: fc: variable and palette z colors are not supported (lc variable, lc palette '// &
+                               'z color the fills)', iostat, iomsg)
                      return
+                  else
+                     fill_rgb = probe%lc
                   endif
-                  fill_rgb = probe%lc
                endif
             endblock
          elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
@@ -3411,6 +3417,9 @@ contains
                call fail('plot: font needs a "name,size"', iostat, iomsg)
                return
             endif
+         elseif (word == 'pixels' .and. (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha')) then
+            ! gnuplot draws the image as a rectangle per pixel: foresight's images are drawn so anyway
+            continue
          elseif (arrow_word(word)) then
             ! arrow words among the other options of vectors and arrows, as gnuplot (`with vectors lt 4 filled`)
             if (is_word(word, 'head heads nohead backhead filled empty nofilled')) then
@@ -3552,6 +3561,7 @@ contains
                if (.not. fill_ok(fs)) return
             endif
             if (len(curve) > 0) then
+               call above_below_base(curve, base, .false.)
                if ((index(curve, 'x') > 0 .or. index(curve, ' y') > 0) .and. allocated(base)) then
                   call fail('plot: filledcurves x1, x2, y1, y2, x=V, xy= fill to the plot, a line or a point: not '// &
                             'with y=V', iostat, iomsg)
@@ -4222,6 +4232,7 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         call above_below_base(curve, base, allocated(ylow))
          ! the library stops on these: a script fails gracefully
          if ((index(curve, 'x') > 0 .or. index(curve, ' y') > 0) .and. (allocated(base) .or. allocated(ylow))) then
             call fail('plot: filledcurves x1, x2, y1, y2, x=V, xy= fill to the plot, a line or a point: not with y=V '// &
@@ -6825,7 +6836,8 @@ contains
 
       subroutine arrow_words
       !< The words of `set arrow`.
-      real(R8P) :: size2(2) !< Head length and angle.
+      real(R8P)        :: size2(2) !< Head length and angle.
+      character(len=9) :: second   !< System of the angle (ignored).
 
       do while (i <= size(tokens, kind=I4P))
          word = tokens(i)%text
@@ -6839,8 +6851,20 @@ contains
             arrow%head = merge(0_I4P, merge(1_I4P, merge(2_I4P, 3_I4P, word == 'backhead'), word == 'head'), &
                                word == 'nohead')
          elseif (word == 'size') then
+            ! `[SYS] L,A`, as pair reads it: written out here, since nvfortran 26.9 -O2 skipped the angle read
+            ! through pair in this procedure (bug 24, depending on unrelated procedures of the module)
             arrow%length_system = 'first'
-            call pair(size2, arrow%length_system)
+            size2 = 0.0_R8P
+            call coordinate(size2(1), arrow%length_system)
+            if (iostat /= 0_I4P) return
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+                  i = i + 1_I4P
+                  second = arrow%length_system
+                  call coordinate(size2(2), second)
+                  if (iostat /= 0_I4P) return
+               endif
+            endif
             arrow%length = size2(1)
             if (size2(2) /= 0.0_R8P) arrow%angle = size2(2)
             ! a back angle is read and ignored
@@ -8967,6 +8991,11 @@ contains
                      return
                   endif
                   call self%figure%set_key_style(title=text)
+                  ! `left|center|right` right after the title: its justification (read and ignored, the title is
+                  ! centred over the key), not the key's place
+                  if (i < size(tokens, kind=I4P)) then
+                     if (is_word(tokens(i + 1_I4P)%text, 'left center centre right')) i = i + 1_I4P
+                  endif
                   cycle
                endif
             endif
@@ -13392,6 +13421,49 @@ contains
    call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
    ok = len(names) > 0 .and. len(bad) == 0
    endfunction valid_axes
+
+   subroutine above_below_base(curve, base, band)
+   !< gnuplot's `filledcurves above|below` without y=V nor a band: above or below y = 0; with an axis (`above x1`)
+   !< the words are dropped, the curve filled to the axis (gnuplot 6.0 ignores them there).
+   character(len=:), allocatable, intent(inout) :: curve !< Curve words.
+   real(R8P),        allocatable, intent(inout) :: base  !< Base line.
+   logical,                       intent(in)    :: band  !< A band x:y1:y2.
+   character(len=:), allocatable                :: rest  !< Words not read.
+   character(len=:), allocatable                :: word  !< Current word.
+   character(len=:), allocatable                :: kept  !< Curve words kept.
+   integer(I4P)                                 :: b     !< Blank after the word.
+   logical                                      :: axis  !< An axis word.
+   logical                                      :: side  !< `above` or `below`.
+
+   if (.not. allocated(curve)) return
+   axis = .false.
+   side = .false.
+   rest = trim(adjustl(curve))
+   do while (len(rest) > 0)
+      b = index(rest, ' ', kind=I4P)
+      if (b == 0_I4P) b = len(rest, kind=I4P) + 1_I4P
+      word = rest(1:b - 1_I4P)
+      rest = trim(adjustl(rest(min(b, len(rest, kind=I4P) + 1_I4P):)))
+      if (is_word(word, 'x1 x2 y1 y2 y')) axis = .true.
+      if (is_word(word, 'above below')) side = .true.
+      if (index(word, '=') > 0) return
+   enddo
+   if (.not. side) return
+   if (axis) then
+      kept = ''
+      rest = trim(adjustl(curve))
+      do while (len(rest) > 0)
+         b = index(rest, ' ', kind=I4P)
+         if (b == 0_I4P) b = len(rest, kind=I4P) + 1_I4P
+         word = rest(1:b - 1_I4P)
+         rest = trim(adjustl(rest(min(b, len(rest, kind=I4P) + 1_I4P):)))
+         if (.not. is_word(word, 'above below')) kept = kept//' '//word
+      enddo
+      curve = kept
+   elseif (.not. band .and. .not. allocated(base)) then
+      allocate(base, source=0.0_R8P)
+   endif
+   endsubroutine above_below_base
 
    subroutine filled_options(text, curve, base, bad)
    !< The filledcurves options of `text` (words blank separated, `xy=X,Y` one word) as a plot item reads them: the

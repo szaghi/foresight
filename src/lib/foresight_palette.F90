@@ -328,6 +328,10 @@ contains
    endif
    do while (len(rest) > 0)
       call next(w)
+      ! gnuplot's abbreviations of rgbformulae: rgb, rgbf, ..., rgbform
+      if (len(w) > 3 .and. len(w) < 11) then
+         if (w == 'rgbformulae'(1:len(w))) w = 'rgbformulae'
+      endif
       select case (w)
       case ('rgbformulae', 'rgb')
          do k = 1_I4P, 3_I4P
