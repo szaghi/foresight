@@ -332,9 +332,10 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
    logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
-   type(colormap_object), allocatable :: colormaps(:) !< Named colormaps of the series (`colormap` index).
    integer(I4P)                     :: label_boxed = 0_I4P !< Axis labels on the background (`set xlabel boxed`):
                                                          !< bit k-1 for label k (x, y, y2, x2).
+   ! last: with a component after it, nvfortran 26.9 -O2 crashed the copies of the panels (multiplot, scripts)
+   type(colormap_object), allocatable :: colormaps(:) !< Named colormaps of the series (`colormap` index).
    contains
       procedure, pass(self) :: add_series                  !< Add a data series.
       procedure, pass(self) :: drop_last        !< Forget the last series.
