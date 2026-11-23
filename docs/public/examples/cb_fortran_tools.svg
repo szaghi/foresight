@@ -25,7 +25,7 @@
 <polyline fill="none" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" stroke-dasharray="8,4" points="1,0.167326 0.849485,0.32222 0.69897,0.477114 0.548455,0.632008 0.39794,0.786902 0.247425,0.941796"/>
 </g>
 </svg>
-<svg class="fs-marks" x="55.6" y="37" width="312.85" height="252" viewBox="0 0 312.85 252" overflow="hidden">
+<svg class="fs-marks" x="55.6" y="37" width="312.85" height="252" viewBox="0 0 312.85 252" overflow="visible">
 <path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M308.35,42.16A4.5,4.5 0 1 0 317.35,42.16A4.5,4.5 0 1 0 308.35,42.16ZM261.26,81.46A4.5,4.5 0 1 0 270.26,81.46A4.5,4.5 0 1 0 261.26,81.46ZM214.17,118.29A4.5,4.5 0 1 0 223.17,118.29A4.5,4.5 0 1 0 214.17,118.29ZM167.08,156.76A4.5,4.5 0 1 0 176.08,156.76A4.5,4.5 0 1 0 167.08,156.76ZM120,193.61A4.5,4.5 0 1 0 129,193.61A4.5,4.5 0 1 0 120,193.61ZM72.91,232.9A4.5,4.5 0 1 0 81.91,232.9A4.5,4.5 0 1 0 72.91,232.9Z"/>
 </svg>
 <rect x="55.6" y="37" width="312.85" height="252" fill="none" stroke="#1d1b18" stroke-width="1"/>

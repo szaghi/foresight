@@ -22,7 +22,7 @@
 <path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M0,0.92 M0.2,0.56 M0.4,0.68 M0.6,0.2 M0.8,0.36 M1,0.04"/>
 </g>
 </svg>
-<svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="hidden">
+<svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="visible">
 <path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M-4.5,251.16A4.5,4.5 0 1 0 4.5,251.16A4.5,4.5 0 1 0 -4.5,251.16ZM98.34,152.88A4.5,4.5 0 1 0 107.34,152.88A4.5,4.5 0 1 0 98.34,152.88ZM201.18,185.64A4.5,4.5 0 1 0 210.18,185.64A4.5,4.5 0 1 0 201.18,185.64ZM304.02,54.6A4.5,4.5 0 1 0 313.02,54.6A4.5,4.5 0 1 0 304.02,54.6ZM406.86,98.28A4.5,4.5 0 1 0 415.86,98.28A4.5,4.5 0 1 0 406.86,98.28ZM509.7,10.92A4.5,4.5 0 1 0 518.7,10.92A4.5,4.5 0 1 0 509.7,10.92Z"/>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>

@@ -30,7 +30,7 @@
 <path class="fs-pts" data-pt="9" data-size="9" data-lw="1" data-color="#6cb6ff" fill="none" stroke="none" d="M0,1 M0.25,0.833333 M0.5,0.6 M0.75,0.483333 M1,0.45"/>
 </g>
 </svg>
-<svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="hidden">
+<svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="visible">
 <path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M-4.5,268.5L4.5,268.5L4.5,277.5L-4.5,277.5ZM124.05,172.95L133.05,172.95L133.05,181.95L124.05,181.95ZM252.6,95.6L261.6,95.6L261.6,104.6L252.6,104.6ZM381.15,54.65L390.15,54.65L390.15,63.65L381.15,63.65ZM509.7,31.9L518.7,31.9L518.7,40.9L509.7,40.9Z"/>
 <path data-series="2" fill="#6cb6ff" stroke="#6cb6ff" stroke-width="1" d="M0,267.02L-5.99,276.02L5.99,276.02ZM128.55,221.51L122.57,230.51L134.54,230.51ZM257.1,157.82L251.12,166.82L263.09,166.82ZM385.65,125.96L379.67,134.96L391.64,134.96ZM514.2,116.87L508.22,125.87L520.19,125.87Z"/>
 </svg>

@@ -358,6 +358,16 @@ key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot
 `maxrows 3` starts a column every 3 entries, `tc variable` writes each title in its series' color, `lt 4 lw 1.5` styles
 the box. See [Key](/guide/gnuplot-subset#key).
 
+### Key columns, label offsets, a title on the right
+
+<<< @/examples/snippets/cb_key_options.gp{gnuplot}
+
+<Plot name="cb_key_options" svg :width="560" :height="320" />
+
+`set key columns N` lays the key out in N columns; `set ylabel "..." offset X,Y tc COLOR` moves (in characters) and
+colors a label; `set title "..." right` justifies the title about its centre, as gnuplot. See
+[Key](/guide/gnuplot-subset#key) and [Titles and labels](/guide/gnuplot-subset#set-unset-options).
+
 ### Enhanced text: sub and superscripts, Greek letters
 
 <<< @/examples/snippets/cb_enhanced.gp{gnuplot}
@@ -393,6 +403,15 @@ the border only, outward ticks longer than the default, x ends at the data (`set
 The same left and right borders at screen fractions line up the two panels, although the log labels of the first are
 wider. See [Margins](/guide/gnuplot-subset#margins).
 
+### Panels column by column
+
+<<< @/examples/snippets/cb_multiplot_order.gp{gnuplot}
+
+<Plot name="cb_multiplot_order" svg :width="560" :height="360" />
+
+`set multiplot layout R,C columnsfirst upwards` fills the grid column by column from the bottom row (`rowsfirst` and
+`downwards` are the defaults). See [Multiplot](/guide/gnuplot-subset#multiplot).
+
 ## Lines, points and error bars
 
 ### Special functions
@@ -421,6 +440,16 @@ gnuplot's Bessel, gamma, error, normal, Lambert W and Airy functions, by its own
 
 `name = value` and `name(t) = expression` as in gnuplot: the functions read the variables when the plot is drawn,
 and the range ends take expressions. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+
+### Sums and assignments in a plot
+
+<<< @/examples/snippets/cb_sums.gp{gnuplot}
+
+<Plot name="cb_sums" svg :width="560" :height="320" />
+
+`sum [k=a:b] term` adds the term for each k (integers stay integers); a plot item may be an assignment, done in its
+turn, so each `square(x)` is drawn with the `n` set before it. See
+[Expressions](/guide/gnuplot-subset#functions) and [Plot items](/guide/gnuplot-subset#plot-items).
 
 ### Recursive functions
 
@@ -475,6 +504,16 @@ points without their own. See [Styles](/guide/gnuplot-subset#styles).
 
 The 16 point types (`pt 0` a dot, odd ones from 5 filled) and the 5 dash types, for picking one; a one-line datablock
 gives the point its place, `plot for` repeats it.
+
+### Dash patterns of your own
+
+<<< @/examples/snippets/cb_dashes.gp{gnuplot}
+
+<Plot name="cb_dashes" svg :width="560" :height="320" />
+
+`dt "string"` draws gnuplot's custom patterns: `.` a dot, `-` a dash, `_` a long dash, a blank a longer gap; `dt
+(solid, empty, ...)` gives the lengths; both scale with the line width. `lc bgnd`, `lt nodraw` and `lt -1` are the
+background, nothing and black. See [Line properties](/guide/gnuplot-subset#styles).
 
 ### A color per point
 
@@ -893,6 +932,25 @@ regions, outlines.
 `y1` fills across to the left border, `y2` to the right one, `x=5` to the vertical line x = 5, as gnuplot 6.0. See
 [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
 
+### Functions filled
+
+<<< @/examples/snippets/cb_function_fills.gp{gnuplot}
+
+<Plot name="cb_function_fills" svg :width="560" :height="320" />
+
+A function takes `with filledcurves` (to a level `y=V`, closed, `x1`, ...) and `with boxes` as data does, its samples
+filled; a range before an item, `[0:4] 0.6*x`, samples that function alone over it. See
+[Filled curves](/guide/gnuplot-subset#boxes-and-filled-curves) and [Plot items](/guide/gnuplot-subset#plot-items).
+
+### A color per shape
+
+<<< @/examples/snippets/cb_lc_shapes.gp{gnuplot}
+
+<Plot name="cb_lc_shapes" svg :width="560" :height="320" />
+
+`lc variable` colors each box, circle or ellipse by the last `using` column, a linetype number (`lc rgb variable`: a
+24-bit color). See [Colors](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+
 ### Labels, arrows and objects
 
 <<< @/examples/snippets/cb_annotations.gp{gnuplot}
@@ -940,6 +998,15 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 `set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `cubehelix [start S]
 [cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
+### A palette in hue, saturation and value
+
+<<< @/examples/snippets/cb_palette_hsv.gp{gnuplot}
+
+<Plot name="cb_palette_hsv" svg :width="560" :height="360" />
+
+`set palette model HSV` reads the palette's three components as hue (0 to 1), saturation and value; `defined (v h s
+v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-palettes).
 
 ### A log color axis
 

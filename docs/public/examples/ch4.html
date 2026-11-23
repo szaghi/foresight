@@ -70,7 +70,7 @@
 M0.508333,0.535714 M0.575,0.592857 M0.641667,0.65 M0.708333,0.707143 M0.775,0.764286 M0.841667,0.821429 M0.908333,0.878571 M0.975,0.935714"/>
 </g>
 </svg>
-<svg class="fs-marks" x="60.1" y="37" width="569.9" height="291" viewBox="0 0 569.9 291" overflow="hidden">
+<svg class="fs-marks" x="60.1" y="37" width="569.9" height="291" viewBox="0 0 569.9 291" overflow="visible">
 <path data-series="3" fill="#2e7d4f" stroke="#2e7d4f" stroke-width="1" d="M0.25,31.18A4.5,4.5 0 1 0 9.25,31.18A4.5,4.5 0 1 0 0.25,31.18ZM38.24,47.81A4.5,4.5 0 1 0 47.24,47.81A4.5,4.5 0 1 0 38.24,47.81ZM76.24,64.44A4.5,4.5 0 1 0 85.24,64.44A4.5,4.5 0 1 0 76.24,64.44ZM114.23,81.06A4.5,4.5 0 1 0 123.23,81.06A4.5,4.5 0 1 0 114.23,81.06ZM152.22,97.69A4.5,4.5 0 1 0 161.22,97.69A4.5,4.5 0 1 0 152.22,97.69ZM190.22,114.32A4.5,4.5 0 1 0 199.22,114.32A4.5,4.5 0 1 0 190.22,114.32ZM228.21,130.95A4.5,4.5 0 1 0 237.21,130.95A4.5,4.5 0 1 0 228.21,130.95ZM266.2,147.58A4.5,4.5 0 1 0 275.2,147.58A4.5,4.5 0 1 0 266.2,147.58ZM285.2,155.89A4.5,4.5 0 1 0 294.2,155.89A4.5,4.5 0 1 0 285.2,155.89ZM323.19,172.52A4.5,4.5 0 1 0 332.19,172.52A4.5,4.5 0 1 0 323.19,172.52ZM361.19,189.15A4.5,4.5 0 1 0 370.19,189.15A4.5,4.5 0 1 0 361.19,189.15ZM399.18,205.78A4.5,4.5 0 1 0 408.18,205.78A4.5,4.5 0 1 0 399.18,205.78ZM437.17,222.41A4.5,4.5 0 1 0 446.17,222.41A4.5,4.5 0 1 0 437.17,222.41ZM475.17,239.04A4.5,4.5 0 1 0 484.17,239.04A4.5,4.5 0 1 0 475.17,239.04ZM513.16,255.66A4.5,4.5 0 1 0 522.16,255.66A4.5,4.5 0 1 0 513.16,255.66ZM551.15,272.29A4.5,4.5 0 1 0 560.15,272.29A4.5,4.5 0 1 0 551.15,272.29Z"/>
 </svg>
 <rect x="60.1" y="37" width="569.9" height="291" fill="none" stroke="#1d1b18" stroke-width="1"/>
@@ -1521,6 +1521,7 @@ M0.508333,0.535714 M0.575,0.592857 M0.641667,0.65 M0.708333,0.707143 M0.775,0.76
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.marks = group.querySelector(".fs-marks");
+    this.marksOverflow = this.marks ? this.marks.getAttribute("overflow") : "hidden";
     this.heads = group.querySelector(".fs-heads");
     this.vectors = readVectors(group);
     this.labels = group.querySelector(".fs-labels");
@@ -1678,7 +1679,10 @@ M0.508333,0.535714 M0.575,0.592857 M0.641667,0.65 M0.708333,0.707143 M0.775,0.76
       this.yticks.innerHTML = this.original[2];
       if (this.caps) this.caps.innerHTML = this.original[3];
       if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
-      if (this.marks) this.marks.innerHTML = this.original[5];
+      if (this.marks) {
+        this.marks.innerHTML = this.original[5];
+        this.marks.setAttribute("overflow", this.marksOverflow);
+      }
       if (this.heads) this.heads.innerHTML = this.original[6];
       if (this.labels) this.labels.innerHTML = this.original[7];
       if (this.x2ticks) this.x2ticks.innerHTML = this.original[8];
@@ -1717,13 +1721,15 @@ M0.508333,0.535714 M0.575,0.592857 M0.641667,0.65 M0.708333,0.707143 M0.775,0.76
     var w = this.right - this.left, h = this.bottom - this.top;
     if (!this.marks) return;
     clear(this.marks);
+    this.marks.setAttribute("overflow", "visible");
     this.points.forEach(function (p) {
       var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
       if (self.hidden[p.series]) return;
       var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
       p.centres.forEach(function (c) {
         var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
-        if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
+        // drawn whole (the overlay overflows), only those centred in the plot area
+        if (x >= 0 && x <= w && y >= 0 && y <= h) d.push(markerPath(x, y, r, shape));
       });
       element(self.marks, "path", {"data-series": p.series, fill: filled ? p.color : "none",
         stroke: p.color, "stroke-width": p.lw, d: d.join("")});

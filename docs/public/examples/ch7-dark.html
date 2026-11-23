@@ -359,7 +359,7 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
 <line x1="384.66" y1="223.13" x2="390.66" y2="223.13" stroke="#ff7092" stroke-width="1"/>
 </g>
 </svg>
-<svg class="fs-marks" x="492.4" y="68" width="397.6" height="341" viewBox="0 0 397.6 341" overflow="hidden">
+<svg class="fs-marks" x="492.4" y="68" width="397.6" height="341" viewBox="0 0 397.6 341" overflow="visible">
 <path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M1.06,47.84A2.25,2.25 0 1 0 5.56,47.84A2.25,2.25 0 1 0 1.06,47.84ZM14.32,123.04A2.25,2.25 0 1 0 18.82,123.04A2.25,2.25 0 1 0 14.32,123.04ZM27.57,217.98A2.25,2.25 0 1 0 32.07,217.98A2.25,2.25 0 1 0 27.57,217.98ZM40.82,290.54A2.25,2.25 0 1 0 45.32,290.54A2.25,2.25 0 1 0 40.82,290.54ZM54.08,318.78A2.25,2.25 0 1 0 58.58,318.78A2.25,2.25 0 1 0 54.08,318.78ZM67.33,303.92A2.25,2.25 0 1 0 71.83,303.92A2.25,2.25 0 1 0 67.33,303.92ZM80.58,263.51A2.25,2.25 0 1 0 85.08,263.51A2.25,2.25 0 1 0 80.58,263.51ZM93.84,220.17A2.25,2.25 0 1 0 98.34,220.17A2.25,2.25 0 1 0 93.84,220.17ZM107.09,191.47A2.25,2.25 0 1 0 111.59,191.47A2.25,2.25 0 1 0 107.09,191.47ZM120.34,184.5A2.25,2.25 0 1 0 124.84,184.5A2.25,2.25 0 1 0 120.34,184.5ZM133.6,196.01A2.25,2.25 0 1 0 138.1,196.01A2.25,2.25 0 1 0 133.6,196.01ZM146.85,216.48A2.25,2.25 0 1 0 151.35,216.48A2.25,2.25 0 1 0 146.85,216.48ZM160.1,235.54A2.25,2.25 0 1 0 164.6,235.54A2.25,2.25 0 1 0 160.1,235.54ZM173.36,246.21A2.25,2.25 0 1 0 177.86,246.21A2.25,2.25 0 1 0 173.36,246.21ZM186.61,246.66A2.25,2.25 0 1 0 191.11,246.66A2.25,2.25 0 1 0 186.61,246.66ZM199.86,239.51A2.25,2.25 0 1 0 204.36,239.51A2.25,2.25 0 1 0 199.86,239.51ZM213.12,229.61A2.25,2.25 0 1 0 217.62,229.61A2.25,2.25 0 1 0 213.12,229.61ZM226.37,221.54A2.25,2.25 0 1 0 230.87,221.54A2.25,2.25 0 1 0 226.37,221.54ZM239.62,217.92A2.25,2.25 0 1 0 244.12,217.92A2.25,2.25 0 1 0 239.62,217.92ZM252.88,218.93A2.25,2.25 0 1 0 257.38,218.93A2.25,2.25 0 1 0 252.88,218.93ZM266.13,222.92A2.25,2.25 0 1 0 270.63,222.92A2.25,2.25 0 1 0 266.13,222.92ZM279.38,227.52A2.25,2.25 0 1 0 283.88,227.52A2.25,2.25 0 1 0 279.38,227.52ZM292.64,230.79A2.25,2.25 0 1 0 297.14,230.79A2.25,2.25 0 1 0 292.64,230.79ZM305.89,231.83A2.25,2.25 0 1 0 310.39,231.83A2.25,2.25 0 1 0 305.89,231.83ZM319.14,230.84A2.25,2.25 0 1 0 323.64,230.84A2.25,2.25 0 1 0 319.14,230.84ZM332.4,228.77A2.25,2.25 0 1 0 336.9,228.77A2.25,2.25 0 1 0 332.4,228.77ZM345.65,226.71A2.25,2.25 0 1 0 350.15,226.71A2.25,2.25 0 1 0 345.65,226.71ZM358.9,225.46A2.25,2.25 0 1 0 363.4,225.46A2.25,2.25 0 1 0 358.9,225.46ZM372.16,225.27A2.25,2.25 0 1 0 376.66,225.27A2.25,2.25 0 1 0 372.16,225.27ZM385.41,225.93A2.25,2.25 0 1 0 389.91,225.93A2.25,2.25 0 1 0 385.41,225.93Z"/>
 </svg>
 <rect x="492.4" y="68" width="397.6" height="341" fill="none" stroke="#e8ecf0" stroke-width="1"/>
@@ -1694,6 +1694,7 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     this.caps = group.querySelector(".fs-caps");
     this.bars = readBars(group);
     this.marks = group.querySelector(".fs-marks");
+    this.marksOverflow = this.marks ? this.marks.getAttribute("overflow") : "hidden";
     this.heads = group.querySelector(".fs-heads");
     this.vectors = readVectors(group);
     this.labels = group.querySelector(".fs-labels");
@@ -1851,7 +1852,10 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
       this.yticks.innerHTML = this.original[2];
       if (this.caps) this.caps.innerHTML = this.original[3];
       if (this.y2ticks) this.y2ticks.innerHTML = this.original[4];
-      if (this.marks) this.marks.innerHTML = this.original[5];
+      if (this.marks) {
+        this.marks.innerHTML = this.original[5];
+        this.marks.setAttribute("overflow", this.marksOverflow);
+      }
       if (this.heads) this.heads.innerHTML = this.original[6];
       if (this.labels) this.labels.innerHTML = this.original[7];
       if (this.x2ticks) this.x2ticks.innerHTML = this.original[8];
@@ -1890,13 +1894,15 @@ M0.808333,0.676953 M0.841667,0.670878 M0.875,0.664838 M0.908333,0.66116 M0.94166
     var w = this.right - this.left, h = this.bottom - this.top;
     if (!this.marks) return;
     clear(this.marks);
+    this.marks.setAttribute("overflow", "visible");
     this.points.forEach(function (p) {
       var r = p.size / 2, shape = p.pt > 0 ? modulo(p.pt - 1, 15) + 1 : 0, d = [];
       if (self.hidden[p.series]) return;
       var filled = shape === 0 || (shape >= 5 && shape % 2 === 1);
       p.centres.forEach(function (c) {
         var x = (c[0] - v.u0) / (v.u1 - v.u0) * w, y = (c[1] - (1 - v.v1)) / (v.v1 - v.v0) * h;
-        if (x >= -r && x <= w + r && y >= -r && y <= h + r) d.push(markerPath(x, y, r, shape));
+        // drawn whole (the overlay overflows), only those centred in the plot area
+        if (x >= 0 && x <= w && y >= 0 && y <= h) d.push(markerPath(x, y, r, shape));
       });
       element(self.marks, "path", {"data-series": p.series, fill: filled ? p.color : "none",
         stroke: p.color, "stroke-width": p.lw, d: d.join("")});
