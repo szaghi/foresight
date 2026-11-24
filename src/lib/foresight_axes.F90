@@ -1809,7 +1809,9 @@ contains
       if (any(self%x2axis%ticks%major)) room = room + GAP + merge(self%x2_rise, LINE_HEIGHT * font_size, &
                                                                    self%x2_rise > 0.0_R8P)
    endif
-   if (self%x2axis%has_label()) room = room + LINE_HEIGHT * font_size + GAP
+   ! the x2 label's row, more for an offset up, as gnuplot's boundary
+   if (self%x2axis%has_label()) room = room + max(0.0_R8P, LINE_HEIGHT * font_size + GAP + self%label_offset(2, 4) * &
+                                                  font_size)
    endfunction x2_room
 
    pure function stacked_column(self, s) result(yes)
@@ -6674,7 +6676,9 @@ contains
    elseif (self%xaxis%tics%out .and. size(self%xaxis%ticks) > 0) then
       margins(4) = margins(4) + tick_length(self%xaxis%tics, .true.)
    endif
-   if (self%xaxis%has_label()) margins(4) = margins(4) + LINE_HEIGHT * font_size + GAP
+   ! the x label's row, less its offset up (more for an offset down), as gnuplot's boundary
+   if (self%xaxis%has_label()) margins(4) = margins(4) + max(0.0_R8P, LINE_HEIGHT * font_size + GAP - &
+                                                              self%label_offset(2, 1) * font_size)
    if (self%polar .and. self%ttics%mode /= TICS_NONE) then
       ! theta labels outside the disc, as wide as "360"
       margins(1:2) = max(margins(1:2), PAD + GAP + backend%text_width('360', '', font_size))

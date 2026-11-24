@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(236)                           !< Per-check outcome.
+logical                       :: test_passed(237)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5820,6 +5820,30 @@ if (test_passed(236)) then
    endblock
 endif
 
+! an x label offset down widens the bottom margin, up narrows it, as gnuplot's boundary (histograms.dem: the key under
+! the plot below its offset label)
+block
+   character(len=:), allocatable :: svg     !< Rendered SVG.
+   real(R8P)                     :: tall(3) !< Plot area heights: no offset, offset down, offset up.
+   integer(I4P)                  :: k       !< Case counter.
+   integer(I4P)                  :: at      !< Position in the SVG.
+   character(len=12)             :: offsets(3) = [character(len=12) :: '0,0', '0,-2', '0,1']
+
+   test_passed(237) = .true.
+   do k = 1_I4P, 3_I4P
+      call interpreter%init(scratch)
+      call interpreter%run_text("set terminal svg; set output 'foresight_script_test_offset.svg'; "// &
+                                "set xlabel 'x' offset "//trim(offsets(k))//"; plot x notitle", iostat, iomsg)
+      test_passed(237) = test_passed(237) .and. iostat == 0_I4P
+      if (.not. test_passed(237)) exit
+      svg = read_text('foresight_script_test_offset.svg')
+      at = index(svg, 'class="fs-plot"')
+      at = at + index(svg(at:), 'height="') + 7
+      read(svg(at:at + index(svg(at:), '"') - 2), *) tall(k)
+   enddo
+   if (test_passed(237)) test_passed(237) = tall(2) < tall(1) .and. tall(3) > tall(1)
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5828,7 +5852,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,236L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,237L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
