@@ -4277,7 +4277,41 @@ contains
                endif
             enddo
          enddo
-         call backend%data_image(minval(u), minval(w), maxval(u), maxval(w), rgba)
+         if (allocated(xaxis%map_x) .or. allocated(yaxis%map_x)) then
+            ! a nonlinear axis (`set nonlinear`): each pixel a rectangle of mapped edges, as gnuplot's `pixels`
+            block
+               real(R8P)        :: xe(2)  !< Pixel edges [data].
+               real(R8P)        :: ye(2)  !< Pixel edges [data].
+               real(R8P)        :: pu(4)  !< Corners [unit].
+               real(R8P)        :: pv(4)  !< Corners [unit].
+               character(len=7) :: color  !< Pixel color.
+               integer(I4P)     :: c(4)   !< Its RGBA.
+               integer(I4P)     :: nx, ny !< Pixels.
+
+               nx = size(series%grid, 1, kind=I4P)
+               ny = size(series%grid, 2, kind=I4P)
+               do j = 1_I4P, ny
+                  ye = series%y(1) + (series%y(2) - series%y(1)) * real([j - 1_I4P, j], R8P) / real(ny, R8P)
+                  do i = 1_I4P, nx
+                     xe = series%x(1) + (series%x(2) - series%x(1)) * real([i - 1_I4P, i], R8P) / real(nx, R8P)
+                     ii = i
+                     if (u(1) > u(2)) ii = nx - i + 1_I4P
+                     jj = ny - j + 1_I4P
+                     if (w(1) > w(2)) jj = j
+                     c = rgba(:, ii, jj)
+                     if (c(4) == 0_I4P) cycle
+                     pu = xaxis%to_unit([xe(1), xe(2), xe(2), xe(1)])
+                     pv = yaxis%to_unit([ye(1), ye(1), ye(2), ye(2)])
+                     if (.not. all(ieee_is_finite(pu)) .or. .not. all(ieee_is_finite(pv))) cycle
+                     write(color, '("#",3Z2.2)') c(1:3)
+                     ! stroked in its own color: no seam between the pixels (gnuplot's crisp edges)
+                     call backend%data_polygon(pu, pv, color, real(c(4), R8P) / 255.0_R8P, color, 0.5_R8P)
+                  enddo
+               enddo
+            endblock
+         else
+            call backend%data_image(minval(u), minval(w), maxval(u), maxval(w), rgba)
+         endif
       endassociate
       endsubroutine draw_image
 

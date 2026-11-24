@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(229)                           !< Per-check outcome.
+logical                       :: test_passed(230)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5582,6 +5582,46 @@ test_passed(229) = test_passed(229) .and. iostat == 0_I4P .and. interpreter%figu
 call interpreter%run_text('plot $P using 1:2:3 with surface', iostat, iomsg)
 test_passed(229) = test_passed(229) .and. iostat /= 0_I4P .and. index(iomsg, 'set polar') > 0
 
+
+! gnuplot binary arrays (probably_tux, nonlinear3): 'file' binary array=(W,H) format='%uchar' flipy dx= origin=, the
+! fields of each pixel then its x:y, the item's using after them
+block
+   integer :: k !< Byte.
+
+   open(newunit=unit, file='foresight_script_test_binary.rgb', access='stream', form='unformatted', status='replace')
+   write(unit) [(achar(k), k = 10, 21)]
+   close(unit)
+endblock
+call interpreter%init(scratch)
+call interpreter%run_text("plot 'foresight_script_test_binary.rgb' binary array=(2,2) format='%uchar' with rgbimage", &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(230) = iostat == 0_I4P
+if (test_passed(230)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      ! pixel (1,1) the first 3 bytes, (2,1) the next, the second scan line above
+      test_passed(230) = allocated(series%channels) .and. size(series%grid, 1) == 2 .and. size(series%grid, 2) == 2
+      if (test_passed(230)) test_passed(230) = all(nint(series%channels(1:3, 1, 1)) == [10, 11, 12]) .and. &
+                                              all(nint(series%channels(1:3, 2, 1)) == [13, 14, 15]) .and. &
+                                              all(nint(series%channels(1:3, 1, 2)) == [16, 17, 18])
+   endassociate
+endif
+call interpreter%run_text("plot 'foresight_script_test_binary.rgb' binary array=(2,2) flipy dx=2 origin=(10,0) "// &
+                          "format='%uchar%uchar%uchar' using ($1+$2+$3) with image", iostat, iomsg)
+test_passed(230) = test_passed(230) .and. iostat == 0_I4P
+if (test_passed(230)) then
+   associate(series => interpreter%figure%panels(1)%series(1))
+      ! flipy: the first scan line on top; dx=2 from x=10
+      test_passed(230) = size(series%grid, 1) == 2 .and. size(series%grid, 2) == 2
+      if (test_passed(230)) test_passed(230) = nint(series%grid(1, 2)) == 33 .and. nint(series%grid(1, 1)) == 51 .and. &
+                                              minval(series%x) <= 10.0_R8P .and. maxval(series%x) >= 12.0_R8P
+   endassociate
+endif
+call interpreter%run_text("plot 'foresight_script_test_binary.rgb' binary filetype=png with rgbimage", iostat, iomsg)
+test_passed(230) = test_passed(230) .and. iostat /= 0_I4P .and. index(iomsg, 'filetype') > 0
+open(newunit=unit, file='foresight_script_test_binary.rgb')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5590,7 +5630,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,229L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,230L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

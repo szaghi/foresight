@@ -148,7 +148,7 @@ use foresight_hulls, only : concave_hull, convex_hull, delaunay_triangles, expan
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD, UNAME_CHARS, UNAME_START
-use penf, only : I4P, I8P, R8P
+use penf, only : I4P, I8P, R4P, R8P
 
 implicit none
 private
@@ -250,6 +250,7 @@ type :: script_object
                                                                !< dataset is a header.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
+   integer(I4P)                    :: binary_count = 0_I4P     !< Datablocks made of binary files (`$__binaryN`).
    real(R8P)                       :: chi_fraction = 0.6_R8P   !< Default concave hull length, a fraction of the longest
                                                                !< convex hull edge (`set chi_shape fraction`).
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
@@ -298,6 +299,8 @@ type :: script_object
       procedure, pass(self) :: run_text               !< Run script text.
       procedure, pass(self), private :: assignment    !< `a = 2`, `f(x) = ...`.
       procedure, pass(self), private :: plot_command  !< `plot`.
+      procedure, pass(self), private :: plot_items    !< `plot` items, binary files as datablocks.
+      procedure, pass(self), private :: binary_items  !< Binary files of `plot` items as datablocks.
       procedure, pass(self), private :: reset_command !< `reset`.
       procedure, pass(self), private :: pause_command !< `pause`.
       procedure, pass(self), private :: write_table   !< The points of a plot as text (`set table`).
@@ -2743,7 +2746,332 @@ contains
    endif
    endfunction assignment
 
+   subroutine binary_items(self, tokens, items, iostat, iomsg)
+   !< The `plot` tokens with each gnuplot binary array (`'file' binary array=(W,H)|WxH [record=...] [format='%uchar...']
+   !< [flipx] [flipy] [flip=x|y] [dx=DX] [dy=DY] [origin=(X,Y)] [skip=N] [endian=little|big]`) read into a datablock,
+   !< one line per pixel: its fields (as the format: one specifier for every field, else one per field) then x and y
+   !< (pixel i, j at origin + (i dx, j dy), the first scan line at the bottom unless flipped); the item's `using`
+   !< prefixed by these x:y columns, or `using x:y:1:...:N` (N fields: rgbimage 3, rgbalpha 4, else the format's).
+   class(script_object),            intent(inout) :: self      !< Interpreter.
+   type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
+   type(token_object), allocatable, intent(out)   :: items(:)  !< Tokens, binary files as datablocks.
+   integer(I4P),                    intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable,   intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                  :: word      !< Option word.
+   character(len=:), allocatable                  :: value     !< Option value.
+   character(len=:), allocatable                  :: format    !< Field formats.
+   character(len=:), allocatable                  :: lines     !< Datablock text.
+   character(len=:), allocatable                  :: bytes     !< File content.
+   character(len=:), allocatable                  :: name      !< Datablock name.
+   character(len=:), allocatable                  :: style     !< The item's style.
+   character(len=8)                               :: kinds(64) !< Field types.
+   real(R8P)                                      :: step(2)   !< Pixel size.
+   real(R8P)                                      :: origin(2) !< First pixel position.
+   real(R8P)                                      :: v         !< A value read.
+   integer(I4P)                                   :: shape(2)  !< Pixels across and up.
+   integer(I4P)                                   :: nkinds    !< Field types given.
+   integer(I4P)                                   :: nfields   !< Fields per pixel.
+   integer(I4P)                                   :: skip      !< Header bytes.
+   integer(I4P)                                   :: pos       !< Byte position.
+   integer(I4P)                                   :: k, j, q, f, c !< Counters.
+   integer(I4P)                                   :: last      !< Item end.
+   integer(I4P)                                   :: u         !< File unit.
+   integer(I4P)                                   :: nbytes    !< File size.
+   logical                                        :: flip(2)   !< Flipped x, y.
+   logical                                        :: big       !< Big endian.
+   logical                                        :: has_using !< The item has its using.
+   type(token_object)                             :: t         !< New token.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(items(0))
+   k = 1_I4P
+   do while (k <= size(tokens, kind=I4P))
+      if (.not. (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'binary' .and. size(items) > 0)) then
+         call push(items, tokens(k))
+         k = k + 1_I4P
+         cycle
+      endif
+      ! the options
+      shape = 0_I4P
+      step = 1.0_R8P
+      origin = 0.0_R8P
+      flip = .false.
+      big = .false.
+      skip = 0_I4P
+      format = ''
+      k = k + 1_I4P
+      do while (k <= size(tokens, kind=I4P))
+         if (tokens(k)%kind /= TOKEN_WORD) exit
+         word = tokens(k)%text
+         value = ''
+         if (index(word, '=') > 0) then
+            value = word(index(word, '=') + 1:)
+            word = word(1:index(word, '=') - 1)
+         endif
+         select case (word)
+         case ('array', 'record')
+            ! (W,H) or WxH, or W alone (one line)
+            value = strip_parentheses(value)
+            do q = 1_I4P, len(value, kind=I4P)
+               if (value(q:q) == 'x' .or. value(q:q) == ',' .or. value(q:q) == ':') value(q:q) = ' '
+            enddo
+            shape = 1_I4P
+            if (index(trim(adjustl(value)), ' ') > 0) then
+               read(value, *, iostat=iostat) shape
+            else
+               read(value, *, iostat=iostat) shape(1)
+            endif
+            if (iostat /= 0_I4P .or. any(shape < 1_I4P)) then
+               call fail('plot: binary '//word//'=(W,H) expected', iostat, iomsg)
+               return
+            endif
+         case ('format')
+            format = value
+            if (len(format) > 1) then
+               if (scan(format(1:1), '"'//"'") > 0) format = format(2:len(format) - 1)
+            endif
+         case ('flipx', 'flipy')
+            flip(merge(1, 2, word == 'flipx')) = .true.
+         case ('flip')
+            if (index(value, 'x') > 0) flip(1) = .true.
+            if (index(value, 'y') > 0) flip(2) = .true.
+         case ('dx', 'dy')
+            if (.not. to_number(value, v)) then
+               call fail('plot: binary '//word//'=D expected', iostat, iomsg)
+               return
+            endif
+            step(merge(1, 2, word == 'dx')) = v
+         case ('origin')
+            value = strip_parentheses(value)
+            read(value, *, iostat=iostat) origin
+            if (iostat /= 0_I4P) then
+               call fail('plot: binary origin=(X,Y) expected', iostat, iomsg)
+               return
+            endif
+         case ('skip')
+            read(value, *, iostat=iostat) skip
+            if (iostat /= 0_I4P) then
+               call fail('plot: binary skip=N expected', iostat, iomsg)
+               return
+            endif
+         case ('endian')
+            big = value == 'big' .or. value == 'swap'
+         case ('filetype')
+            call fail('plot: binary filetype='//value//' is not supported (raw arrays only)', iostat, iomsg)
+            return
+         case default
+            exit
+         endselect
+         k = k + 1_I4P
+      enddo
+      if (any(shape < 1_I4P)) then
+         call fail('plot: binary needs array=(W,H) (raw arrays only)', iostat, iomsg)
+         return
+      endif
+      ! the item: its style and using, up to the next comma
+      last = k - 1_I4P
+      has_using = .false.
+      style = ''
+      do q = k, size(tokens, kind=I4P)
+         if (tokens(q)%kind == TOKEN_COMMA) exit
+         last = q
+         if (tokens(q)%kind == TOKEN_WORD .and. keyword(tokens(q)%text, 'using', 1_I4P)) has_using = .true.
+         if (tokens(q)%kind == TOKEN_WORD .and. keyword(tokens(q)%text, 'with', 1_I4P) .and. &
+             q < size(tokens, kind=I4P)) style = style_name(tokens(q + 1_I4P)%text)
+      enddo
+      ! the field types: %type each (one for every field)
+      nkinds = 0_I4P
+      q = 1_I4P
+      do while (q <= len(format, kind=I4P) .and. nkinds < size(kinds, kind=I4P))
+         if (format(q:q) /= '%') then
+            q = q + 1_I4P
+            cycle
+         endif
+         j = q + 1_I4P
+         do while (j <= len(format, kind=I4P))
+            if (format(j:j) == '%') exit
+            j = j + 1_I4P
+         enddo
+         nkinds = nkinds + 1_I4P
+         kinds(nkinds) = format(q + 1:j - 1)
+         q = j
+      enddo
+      if (nkinds == 0_I4P) then
+         ! gnuplot's default: floats
+         nkinds = 1_I4P
+         kinds(1) = 'float'
+      endif
+      nfields = nkinds
+      if (nkinds == 1_I4P) then
+         select case (style)
+         case ('rgbimage')
+            nfields = 3_I4P
+         case ('rgbalpha')
+            nfields = 4_I4P
+         case default
+            nfields = 1_I4P
+         endselect
+      endif
+      ! the bytes
+      open(newunit=u, file=items(size(items))%text, access='stream', form='unformatted', action='read', &
+           status='old', iostat=iostat)
+      if (iostat /= 0_I4P) then
+         call fail('plot: cannot open "'//items(size(items))%text//'"', iostat, iomsg)
+         return
+      endif
+      inquire(unit=u, size=nbytes)
+      allocate(character(len=max(nbytes, 0)) :: bytes)
+      if (nbytes > 0) read(u, iostat=iostat) bytes
+      close(u)
+      pos = skip + 1_I4P
+      lines = ''
+      block
+         character(len=32) :: cell !< A value written.
+         integer(I4P)      :: row  !< Scan line.
+         integer(I4P)      :: col  !< Pixel in it.
+
+         do row = 0_I4P, shape(2) - 1_I4P
+            do col = 0_I4P, shape(1) - 1_I4P
+               do f = 1_I4P, nfields
+                  c = min(f, nkinds)
+                  call read_field(trim(kinds(c)), v)
+                  if (iostat /= 0_I4P) return
+                  write(cell, '(ES24.16E3)') v
+                  lines = lines//trim(adjustl(cell))//' '
+               enddo
+               write(cell, '(ES24.16E3)') origin(1) + step(1) * real(merge(shape(1) - 1_I4P - col, col, flip(1)), R8P)
+               lines = lines//trim(adjustl(cell))//' '
+               write(cell, '(ES24.16E3)') origin(2) + step(2) * real(merge(shape(2) - 1_I4P - row, row, flip(2)), R8P)
+               lines = lines//trim(adjustl(cell))//new_line('a')
+            enddo
+         enddo
+      endblock
+      deallocate(bytes)
+      ! the datablock, named for this item
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__binary'//int_str(int(self%binary_count, I8P))
+      call self%symbols%set_string(name, lines)
+      items(size(items))%kind = TOKEN_WORD
+      items(size(items))%text = name
+      ! the item's using after the x:y columns of the pixels, or every field
+      t%kind = TOKEN_WORD
+      if (.not. has_using) then
+         t%text = 'using'
+         call push(items, t)
+         t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))
+         do f = 1_I4P, nfields
+            t%text = t%text//':'//int_str(int(f, I8P))
+         enddo
+         call push(items, t)
+      endif
+      do q = k, last
+         call push(items, tokens(q))
+         if (q > k) then
+            if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P)) &
+               items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
+                                         int_str(int(nfields + 2_I4P, I8P))//':'//tokens(q)%text
+         endif
+      enddo
+      k = last + 1_I4P
+   enddo
+   contains
+      pure function strip_parentheses(text) result(inner)
+      !< `text` without its surrounding parentheses.
+      character(len=*), intent(in)  :: text  !< Text.
+      character(len=:), allocatable :: inner !< Inside.
+
+      inner = trim(adjustl(text))
+      if (len(inner) > 0) then
+         if (inner(1:1) == '(') inner = inner(2:)
+      endif
+      if (index(inner, ')') > 0) inner = inner(1:index(inner, ')') - 1)
+      endfunction strip_parentheses
+
+      subroutine read_field(kind, value)
+      !< The next field of type `kind` from the bytes (gnuplot's %char, %uchar, %short, %ushort, %int, %uint, %long,
+      !< %ulong, %float, %double and their sized names), little endian unless big.
+      character(len=*), intent(in)  :: kind  !< Type.
+      real(R8P),        intent(out) :: value !< Value.
+      integer(I4P)                  :: n     !< Bytes.
+      character(len=8)              :: b     !< The field's bytes, little endian.
+      integer(I4P)                  :: q     !< Byte.
+
+      value = 0.0_R8P
+      select case (kind)
+      case ('char', 'uchar', 'int8', 'uint8')
+         n = 1_I4P
+      case ('short', 'ushort', 'int16', 'uint16')
+         n = 2_I4P
+      case ('int', 'uint', 'int32', 'uint32', 'float', 'float32')
+         n = 4_I4P
+      case ('long', 'ulong', 'int64', 'uint64', 'double', 'float64')
+         n = 8_I4P
+      case default
+         call fail('plot: binary format: unsupported type "%'//kind//'"', iostat, iomsg)
+         return
+      endselect
+      if (pos + n - 1_I4P > len(bytes, kind=I4P)) then
+         call fail('plot: binary: the file is shorter than its array', iostat, iomsg)
+         return
+      endif
+      b = repeat(achar(0), 8)
+      do q = 1_I4P, n
+         if (big) then
+            b(q:q) = bytes(pos + n - q:pos + n - q)
+         else
+            b(q:q) = bytes(pos + q - 1_I4P:pos + q - 1_I4P)
+         endif
+      enddo
+      pos = pos + n
+      select case (kind)
+      case ('uchar', 'uint8')
+         value = real(iachar(b(1:1)), R8P)
+      case ('char', 'int8')
+         value = real(iachar(b(1:1)), R8P)
+         if (value > 127.0_R8P) value = value - 256.0_R8P
+      case ('short', 'int16', 'ushort', 'uint16')
+         value = real(iachar(b(1:1)), R8P) + 256.0_R8P * real(iachar(b(2:2)), R8P)
+         if (value > 32767.0_R8P .and. (kind == 'short' .or. kind == 'int16')) value = value - 65536.0_R8P
+      case ('int', 'int32', 'uint', 'uint32')
+         value = real(iachar(b(1:1)), R8P) + 256.0_R8P * (real(iachar(b(2:2)), R8P) + 256.0_R8P * &
+                 (real(iachar(b(3:3)), R8P) + 256.0_R8P * real(iachar(b(4:4)), R8P)))
+         if (value > 2147483647.0_R8P .and. (kind == 'int' .or. kind == 'int32')) value = value - 4294967296.0_R8P
+      case ('long', 'int64', 'ulong', 'uint64')
+         value = real(transfer(b(1:8), 0_I8P), R8P)
+      case ('float', 'float32')
+         value = real(transfer(b(1:4), 0.0_R4P), R8P)
+      case default
+         value = transfer(b(1:8), 0.0_R8P)
+      endselect
+      endsubroutine read_field
+   endsubroutine binary_items
+
    subroutine plot_command(self, tokens, text, iostat, iomsg)
+   !< `plot` (plot_items), gnuplot's binary arrays (`'file' binary array=...`) first read into datablocks.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Items tokens.
+   character(len=*),              intent(in)    :: text      !< Text the tokens come from, for function titles.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(token_object), allocatable              :: items(:)  !< Tokens, binary files as datablocks.
+   integer(I4P)                                 :: k         !< Token counter.
+   logical                                      :: binary    !< A binary file among the items.
+
+   binary = .false.
+   do k = 2_I4P, size(tokens, kind=I4P)
+      if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'binary') binary = .true.
+   enddo
+   if (.not. binary) then
+      call self%plot_items(tokens, text, iostat, iomsg)
+      return
+   endif
+   call self%binary_items(tokens, items, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   call self%plot_items(items, text, iostat, iomsg)
+   endsubroutine plot_command
+
+   subroutine plot_items(self, tokens, text, iostat, iomsg)
    !< `plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
    !< renders it.
    !<
@@ -6946,7 +7274,7 @@ contains
       xs(1) = lo
       xs(m) = hi
       endsubroutine sample_grid
-   endsubroutine plot_command
+   endsubroutine plot_items
 
    recursive subroutine call_command(self, tokens, is_call, iostat, iomsg)
    !< gnuplot `load FILE` and `call FILE [ARG1 ... ARG9]`: run the script FILE (a string expression), ARG0 its name
