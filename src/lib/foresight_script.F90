@@ -10560,6 +10560,7 @@ contains
       logical, allocatable          :: box    !< Box, unallocated if not given.
       real(R8P), allocatable        :: at(:)  !< Key position, unallocated if not given.
       character(len=6)              :: sys(2) !< Coordinate systems of the position.
+      logical                       :: placed !< A coordinate read.
       real(R8P)                     :: v      !< A number.
       real(R8P)                     :: xy(2)  !< An offset.
 
@@ -10571,7 +10572,8 @@ contains
          select case (tokens(i)%text)
          case ('at')
             allocate(at(2))
-            if (.not. key_coordinate(at(1), sys(1), 'first ')) return
+            call key_coordinate(tokens, i, at(1), sys(1), 'first ', placed)
+            if (.not. placed) return
             if (i >= size(tokens, kind=I4P)) then
                call fail('set key at: X, Y expected', iostat, iomsg)
                return
@@ -10581,7 +10583,8 @@ contains
                call fail('set key at: X, Y expected', iostat, iomsg)
                return
             endif
-            if (.not. key_coordinate(at(2), sys(2), sys(1))) return
+            call key_coordinate(tokens, i, at(2), sys(2), sys(1), placed)
+            if (.not. placed) return
          case ('autotitle', 'auto')
             self%autotitle = 'file'
             if (i < size(tokens, kind=I4P)) then
@@ -10838,40 +10841,43 @@ contains
       endif
       endsubroutine key_option
 
-      function key_coordinate(v, system, default) result(ok)
-      !< The coordinate after token `i` of `set key at`, `[SYSTEM] NUMBER`, advancing `i` to its number; `system` the
-      !< one given, else `default`. Fails the command if malformed.
-      real(R8P),        intent(out) :: v       !< Coordinate.
-      character(len=6), intent(out) :: system  !< Its coordinate system.
-      character(len=6), intent(in)  :: default !< System if none is given.
-      logical                       :: ok      !< Read.
+      subroutine key_coordinate(toks, k, v, system, default, ok)
+      !< The coordinate after token `k` of `toks` (`set key at`), `[SYSTEM] NUMBER`, advancing `k` to its number;
+      !< `system` the one given, else `default`. Fails the command if malformed. The tokens and their counter passed,
+      !< not host associated: called from key_option, nvfortran 26.9 gave it the host's `tokens` with size 1.
+      type(token_object), intent(in)    :: toks(:) !< Option tokens.
+      integer(I4P),       intent(inout) :: k       !< Token counter.
+      real(R8P),          intent(out)   :: v       !< Coordinate.
+      character(len=6),   intent(out)   :: system  !< Its coordinate system.
+      character(len=6),   intent(in)    :: default !< System if none is given.
+      logical,            intent(out)   :: ok      !< Read.
 
       ok = .false.
       v = 0.0_R8P
       system = default
-      if (i >= size(tokens, kind=I4P)) then
+      if (k >= size(toks, kind=I4P)) then
          call fail('set key at: X, Y expected', iostat, iomsg)
          return
       endif
-      if (is_word(tokens(i + 1_I4P)%text, 'first second graph screen')) then
-         i = i + 1_I4P
-         system = tokens(i)%text
-      elseif (keyword(tokens(i + 1_I4P)%text, 'character', 4_I4P) .or. tokens(i + 1_I4P)%text == 'polar') then
-         call fail('set key at: '//tokens(i + 1_I4P)%text//' coordinates are not supported (first, second, graph, '// &
+      if (is_word(toks(k + 1_I4P)%text, 'first second graph screen')) then
+         k = k + 1_I4P
+         system = toks(k)%text
+      elseif (keyword(toks(k + 1_I4P)%text, 'character', 4_I4P) .or. toks(k + 1_I4P)%text == 'polar') then
+         call fail('set key at: '//toks(k + 1_I4P)%text//' coordinates are not supported (first, second, graph, '// &
                    'screen are)', iostat, iomsg)
          return
       endif
-      if (i >= size(tokens, kind=I4P)) then
+      if (k >= size(toks, kind=I4P)) then
          call fail('set key at: X, Y expected', iostat, iomsg)
          return
       endif
-      i = i + 1_I4P
-      if (.not. to_number(tokens(i)%text, v)) then
-         call fail('set key at: a number is expected, found "'//tokens(i)%text//'"', iostat, iomsg)
+      k = k + 1_I4P
+      if (.not. to_number(toks(k)%text, v)) then
+         call fail('set key at: a number is expected, found "'//toks(k)%text//'"', iostat, iomsg)
          return
       endif
       ok = .true.
-      endfunction key_coordinate
+      endsubroutine key_coordinate
 
       subroutine colorbox_option
       !< `set colorbox [vertical|horizontal] [default|user] [origin X,Y] [size W,H] [border|bdefault|noborder]

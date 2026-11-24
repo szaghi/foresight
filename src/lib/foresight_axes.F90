@@ -418,6 +418,82 @@ contains
    shift = merge(tick_length(tics, .true.), 0.0_R8P, tics%out)
    endfunction out_shift
 
+   subroutine ellipse_shapes(series, x, y, bad, angle, major, minor)
+   !< Ellipse diameters and angles of `series` at (`x`, `y`): `major` alone for both diameters, a negative one (or none)
+   !< for the default size; the extents of the sized ones widen the autoscale; `bad` the error, empty if none. A module
+   !< procedure: as an internal one of add_series, reading its optional dummies, nvfortran 26.9 filled the diameters
+   !< with garbage once a module it uses changed (foresight_mathlib, 2026-11-24).
+   type(series_object),           intent(inout)        :: series   !< Series.
+   real(R8P),                     intent(in)           :: x(:)     !< Abscissae.
+   real(R8P),                     intent(in)           :: y(:)     !< Ordinates.
+   character(len=:), allocatable, intent(out)          :: bad      !< Error, empty if none.
+   real(R8P),                     intent(in), optional :: angle(:) !< Angles [deg].
+   real(R8P),                     intent(in), optional :: major(:) !< Major diameters [x units].
+   real(R8P),                     intent(in), optional :: minor(:) !< Minor diameters [y units].
+   real(R8P) :: a  !< Semi-major axis.
+   real(R8P) :: b  !< Semi-minor axis.
+   real(R8P) :: c  !< Angle cosine.
+   real(R8P) :: sn !< Angle sine.
+   integer(I4P) :: i !< Point counter.
+
+   bad = ''
+   allocate(series%shape(3, size(x)))
+   series%shape = ieee_value(1.0_R8P, ieee_quiet_nan)
+   series%shape(3, :) = 0.0_R8P
+   if (present(angle)) then
+      if (size(angle) /= size(x)) then
+         bad = 'angle and x have different sizes'
+         return
+      endif
+      series%shape(3, :) = angle
+   endif
+   if (present(minor) .and. .not. present(major)) then
+      bad = 'ellipses take minor with major'
+      return
+   endif
+   if (.not. present(major)) return
+   if (size(major) /= size(x)) then
+      bad = 'major and x have different sizes'
+      return
+   endif
+   series%shape(1, :) = major
+   series%shape(2, :) = major
+   if (present(minor)) then
+      if (size(minor) /= size(x)) then
+         bad = 'minor and x have different sizes'
+         return
+      endif
+      series%shape(2, :) = minor
+   endif
+   allocate(series%xlow(size(x)), series%xhigh(size(x)), series%ylow(size(x)), series%yhigh(size(x)))
+   do i = 1_I4P, size(x, kind=I4P)
+      ! a negative (or undefined) diameter: the default size, out of the autoscale
+      if (.not. (ieee_is_finite(series%shape(1, i)) .and. ieee_is_finite(series%shape(2, i)) .and. &
+                 ieee_is_finite(series%shape(3, i)))) then
+         series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         if (.not. ieee_is_finite(series%shape(3, i))) series%shape(3, i) = 0.0_R8P
+      elseif (series%shape(1, i) < 0.0_R8P .or. series%shape(2, i) < 0.0_R8P) then
+         series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+      endif
+      if (.not. ieee_is_finite(series%shape(1, i))) then
+         series%xlow(i) = series%shape(1, i)
+         series%xhigh(i) = series%shape(1, i)
+         series%ylow(i) = series%shape(1, i)
+         series%yhigh(i) = series%shape(1, i)
+         cycle
+      endif
+      a = 0.5_R8P * series%shape(1, i)
+      b = 0.5_R8P * series%shape(2, i)
+      c = cos(series%shape(3, i) * (PI_R8 / 180.0_R8P))
+      sn = sin(series%shape(3, i) * (PI_R8 / 180.0_R8P))
+      ! the bounding box of the rotated ellipse (NaN for the default size: not counted)
+      series%xlow(i) = x(i) - sqrt((a * c)**2 + (b * sn)**2)
+      series%xhigh(i) = x(i) + sqrt((a * c)**2 + (b * sn)**2)
+      series%ylow(i) = y(i) - sqrt((a * sn)**2 + (b * c)**2)
+      series%yhigh(i) = y(i) + sqrt((a * sn)**2 + (b * c)**2)
+   enddo
+   endsubroutine ellipse_shapes
+
    subroutine add_series(self, x, y, title, with, lc, lw, dt, ps, xlow, xhigh, ylow, yhigh, axes, pt, format, width, &
                          base, fs, xlabels, z, radius, angles, donut, scale, linear, close, whiskerbars, factors, dx, dy, &
                          length, angle, major, minor, labels, label, head, origins, curve, channels, at, colors, &
@@ -699,7 +775,7 @@ contains
       series%tips(1, :) = length
       series%tips(2, :) = angle
    case (WITH_ELLIPSES)
-      call ellipse_shapes
+      call ellipse_shapes(series, x, y, bad, angle, major, minor)
       if (len(bad) > 0) error stop 'foresight: plot: '//bad
    case (WITH_LABELS)
       if (.not. present(labels)) error stop 'foresight: plot: labels need their texts'
@@ -834,72 +910,6 @@ contains
                                                                      self%histogram_gap, self%boxwidth, &
                                                                      self%linecolors)
    contains
-      subroutine ellipse_shapes
-      !< Ellipse diameters and angles: `major` alone for both diameters, a negative one (or none) for the default size;
-      !< the extents of the sized ones widen the autoscale.
-      real(R8P) :: a  !< Semi-major axis.
-      real(R8P) :: b  !< Semi-minor axis.
-      real(R8P) :: c  !< Angle cosine.
-      real(R8P) :: sn !< Angle sine.
-      integer(I4P) :: i !< Point counter.
-
-      bad = ''
-      allocate(series%shape(3, size(x)))
-      series%shape = ieee_value(1.0_R8P, ieee_quiet_nan)
-      series%shape(3, :) = 0.0_R8P
-      if (present(angle)) then
-         if (size(angle) /= size(x)) then
-            bad = 'angle and x have different sizes'
-            return
-         endif
-         series%shape(3, :) = angle
-      endif
-      if (present(minor) .and. .not. present(major)) then
-         bad = 'ellipses take minor with major'
-         return
-      endif
-      if (.not. present(major)) return
-      if (size(major) /= size(x)) then
-         bad = 'major and x have different sizes'
-         return
-      endif
-      series%shape(1, :) = major
-      series%shape(2, :) = major
-      if (present(minor)) then
-         if (size(minor) /= size(x)) then
-            bad = 'minor and x have different sizes'
-            return
-         endif
-         series%shape(2, :) = minor
-      endif
-      allocate(series%xlow(size(x)), series%xhigh(size(x)), series%ylow(size(x)), series%yhigh(size(x)))
-      do i = 1_I4P, size(x, kind=I4P)
-         ! a negative (or undefined) diameter: the default size, out of the autoscale
-         if (.not. (ieee_is_finite(series%shape(1, i)) .and. ieee_is_finite(series%shape(2, i)) .and. &
-                    ieee_is_finite(series%shape(3, i)))) then
-            series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
-            if (.not. ieee_is_finite(series%shape(3, i))) series%shape(3, i) = 0.0_R8P
-         elseif (series%shape(1, i) < 0.0_R8P .or. series%shape(2, i) < 0.0_R8P) then
-            series%shape(1:2, i) = ieee_value(1.0_R8P, ieee_quiet_nan)
-         endif
-         if (.not. ieee_is_finite(series%shape(1, i))) then
-            series%xlow(i) = series%shape(1, i)
-            series%xhigh(i) = series%shape(1, i)
-            series%ylow(i) = series%shape(1, i)
-            series%yhigh(i) = series%shape(1, i)
-            cycle
-         endif
-         a = 0.5_R8P * series%shape(1, i)
-         b = 0.5_R8P * series%shape(2, i)
-         c = cos(series%shape(3, i) * (PI_R8 / 180.0_R8P))
-         sn = sin(series%shape(3, i) * (PI_R8 / 180.0_R8P))
-         ! the bounding box of the rotated ellipse (NaN for the default size: not counted)
-         series%xlow(i) = x(i) - sqrt((a * c)**2 + (b * sn)**2)
-         series%xhigh(i) = x(i) + sqrt((a * c)**2 + (b * sn)**2)
-         series%ylow(i) = y(i) - sqrt((a * sn)**2 + (b * c)**2)
-         series%yhigh(i) = y(i) + sqrt((a * sn)**2 + (b * c)**2)
-      enddo
-      endsubroutine ellipse_shapes
 
       subroutine sector_vertices
       !< The outline of each sector as a run of vertices (runs separated by NaN): the arc at the outer radius from the
