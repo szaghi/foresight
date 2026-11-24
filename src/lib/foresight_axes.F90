@@ -5146,6 +5146,9 @@ contains
    if (raxis%log) then
       rho = -huge(1.0_R8P)
       if (r > 0.0_R8P .and. raxis%lo > 0.0_R8P) rho = log10(r / raxis%lo)
+   elseif (raxis%hi < raxis%lo) then
+      ! a reversed r axis (gnuplot `set rrange [90:0]`): its start at the pole, r growing towards it
+      rho = raxis%lo - r
    else
       rho = r - raxis%lo
    endif
@@ -5181,7 +5184,7 @@ contains
    enddo
    endsubroutine polar_window
 
-   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise, logr)
+   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise, logr, reversed)
    !< Project the series `all` from theta:r to x:y about the pole at r = `rmin`, as gnuplot: x = (r - rmin) cos(phi),
    !< y = (r - rmin) sin(phi), phi the page angle of theta (`logr`: log10(r / rmin) for r - rmin); with `cut` (a fixed
    !< `rmin`) a point with r below `rmin` is undefined, else it lies across the pole. Readouts kept.
@@ -5194,6 +5197,8 @@ contains
    real(R8P),           intent(in)    :: origin    !< Page angle of theta = 0 [deg].
    logical,             intent(in)    :: clockwise !< Theta grows clockwise.
    logical,             intent(in)    :: logr      !< Log r axis.
+   logical,             intent(in)    :: reversed  !< A reversed r axis: r = `rmin` at the pole, smaller r outwards;
+                                                   !< a larger r undefined.
    real(R8P)                          :: nan       !< Undefined value.
    real(R8P)                          :: phi       !< Page angle [rad].
    real(R8P)                          :: rho       !< Distance from the pole [r units].
@@ -5243,6 +5248,9 @@ contains
       if (logr) then
          if (.not. (r > 0.0_R8P .and. r >= rmin)) return
          d = log10(r / rmin)
+      elseif (reversed) then
+         if (r > rmin) return
+         d = rmin - r
       elseif (.not. cut .or. r >= rmin) then
          d = r - rmin
       elseif (rmin >= 0.0_R8P .and. r < -rmin) then
@@ -6603,12 +6611,19 @@ contains
          if (.not. rmin > 0.0_R8P) rmin = 1.0_R8P
       endif
       if (self%raxis%min_fixed) rmin = self%raxis%min_user
-      if (.not. any_r .or. .not. rmax > rmin) rmax = merge(rmin * 10.0_R8P, rmin + 1.0_R8P, self%raxis%log)
-      call self%raxis%setup(merge(rmin, 0.0_R8P, self%raxis%log), rmax, .true., &
-                            0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
+      if (self%raxis%min_fixed .and. self%raxis%max_fixed .and. self%raxis%min_user > self%raxis%max_user .and. &
+          .not. self%raxis%log) then
+         ! a reversed r axis: the start at the pole, the end on the rim
+         call self%raxis%setup(self%raxis%max_user, self%raxis%min_user, .true., &
+                               0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
+      else
+         if (.not. any_r .or. .not. rmax > rmin) rmax = merge(rmin * 10.0_R8P, rmin + 1.0_R8P, self%raxis%log)
+         call self%raxis%setup(merge(rmin, 0.0_R8P, self%raxis%log), rmax, .true., &
+                               0.5_R8P * min(area(2) - area(1), area(4) - area(3)))
+      endif
       radius = polar_rho(self%raxis, self%raxis%hi)
       call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed .or. self%raxis%log, self%degrees, &
-                         self%theta_origin, self%theta_clockwise, self%raxis%log)
+                         self%theta_origin, self%theta_clockwise, self%raxis%log, self%raxis%hi < self%raxis%lo)
       xmin(1) = -radius
       xmax(1) = radius
       found = [.true., .false.]

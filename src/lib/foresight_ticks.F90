@@ -83,6 +83,8 @@ integer(I4P), parameter :: MINOR_NONE    = 0_I4P  !< No minor ticks, `unset mxti
 type :: tics_object
    !< User tick settings of an axis, gnuplot `set xtics` and `set format`.
    integer(I4P)                  :: mode = TICS_AUTO !< TICS_AUTO, TICS_FIXED or TICS_NONE.
+   logical                       :: additive = .false. !< A fixed step added on a log axis too (gnuplot `nologscale`),
+                                                       !< not a factor.
    logical                       :: plain = .false.  !< The labels as they are, not enhanced text (`noenhanced`).
    real(R8P)                     :: offset(2) = 0.0_R8P !< Label shift [characters, x right, y up], gnuplot `offset`.
    character(len=24)             :: color = ''       !< Label color, the frame's if blank (gnuplot `textcolor`).
@@ -1004,6 +1006,10 @@ contains
    if (present(tics)) then
       if (tics%mode == TICS_NONE) then
          allocate(ticks(0))
+         return
+      elseif (tics%mode == TICS_FIXED .and. tics%additive) then
+         ! gnuplot `set ytics 0.1 nologscale`: start + k * step over the range, placed on the log axis
+         call fixed_linear_ticks(lo, hi, .false., .false., tics, ticks)
          return
       elseif (tics%mode == TICS_FIXED) then
          call fixed_log_ticks(lo, hi, tics, ticks)

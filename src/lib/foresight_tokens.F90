@@ -19,6 +19,7 @@ public :: strip_comment
 public :: token_object
 public :: tokenize
 public :: TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
+public :: UNAME_CHARS, UNAME_START
 public :: push
 
 interface push
@@ -27,6 +28,11 @@ interface push
    module procedure push_token
 endinterface push
 
+integer :: k_ !< Implied-do variable of the parameters below.
+character(len=128), parameter :: HIGH_BYTES = transfer([(char(k_), k_ = 128, 255)], repeat(' ', 128)) !< Bytes 128-255.
+!> The first character of a user name: a letter, `_`, or a byte of a UTF-8 character (gnuplot's `π = pi`).
+character(len=*), parameter :: UNAME_START = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'//HIGH_BYTES
+character(len=*), parameter :: UNAME_CHARS = UNAME_START//'0123456789' !< The characters of a user name.
 integer(I4P), parameter :: TOKEN_WORD   = 1_I4P !< Bare word: keyword, number, column spec.
 integer(I4P), parameter :: TOKEN_STRING = 2_I4P !< Quoted string, quotes removed.
 integer(I4P), parameter :: TOKEN_COMMA  = 3_I4P !< Comma.

@@ -51,6 +51,7 @@ use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_che
                              gnuplot_real, int_str, real_from_decimal
 use foresight_mathlib, only : MATH_ARGS, MATH_FUNCTIONS, math_function, math_order
 use foresight_sys, only : command_output
+use foresight_tokens, only : UNAME_CHARS, UNAME_START
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
 
@@ -641,7 +642,7 @@ contains
       subroutine next
       !< Read the next token.
       character(len=*), parameter :: DIGITS = '0123456789'
-      character(len=*), parameter :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+      character(len=*), parameter :: LETTERS = UNAME_START
       integer(I4P)                :: n       !< Text length.
       integer(I4P)                :: ios     !< Conversion status.
       logical                     :: is_real !< Number with a point or an exponent.
@@ -1086,7 +1087,7 @@ contains
 
       yes = .true.
       if (j < 1_I4P .or. j > len(src, kind=I4P)) return
-      yes = .not. (verify(src(j:j), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$') == 0)
+      yes = .not. (verify(src(j:j), UNAME_CHARS//'$') == 0)
       endfunction name_boundary
 
       function skip_blanks(from) result(j)
@@ -2136,7 +2137,7 @@ contains
       integer(I4P)                  :: j        !< Character counter.
       logical                       :: found    !< A numeric end.
       type(name_object)             :: param(1) !< VAR, as a parameter (components, not a constructor: nvfortran).
-      character(len=*), parameter   :: NAME_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789'
+      character(len=*), parameter   :: NAME_CHARS = UNAME_CHARS
 
       if (in_procedure) then
          call syntax('sum is not supported inside a function block')
@@ -2163,7 +2164,7 @@ contains
          call syntax('expecting sum [<var> = <start>:<end>] <expression>')
          return
       endif
-      if (src(j:j) /= '=' .or. scan(var(1:1), NAME_CHARS(1:53)) == 0) then
+      if (src(j:j) /= '=' .or. scan(var(1:1), UNAME_START) == 0) then
          call syntax('expecting sum [<var> = <start>:<end>] <expression>')
          return
       endif
@@ -2980,7 +2981,7 @@ contains
    character(len=:), allocatable, intent(out)          :: iomsg   !< Error message.
    logical,                       intent(in), optional :: degrees !< Angles in degrees.
    character(len=*), parameter   :: NAME_CHARS = &
-                                    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789' !< Name characters.
+                                    UNAME_CHARS !< Name characters.
    character(len=:), allocatable :: t      !< Text, trimmed.
    character(len=:), allocatable :: inner  !< Between the brackets.
    character(len=:), allocatable :: part   !< An end.
@@ -3874,13 +3875,13 @@ contains
    character(len=*),              intent(in)  :: name   !< Name.
    integer(I4P),                  intent(out) :: iostat !< 0 if valid.
    character(len=:), allocatable, intent(out) :: iomsg  !< Error message.
-   character(len=*), parameter :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=*), parameter :: LETTERS = UNAME_START
 
    iostat = 0_I4P
    iomsg = ''
    if (len(name) == 0) then
       iostat = 1_I4P
-   elseif (scan(name(1:1), LETTERS) == 0 .or. verify(name, LETTERS//'0123456789') > 0) then
+   elseif (scan(name(1:1), LETTERS) == 0 .or. verify(name, UNAME_CHARS) > 0) then
       iostat = 1_I4P
    endif
    if (iostat /= 0_I4P) iomsg = 'invalid name "'//name//'"'
@@ -4222,6 +4223,11 @@ contains
    c = value_object()
    x = real_of(a)
    name = trim(FUNCTIONS(f))
+   ! an undefined argument: an undefined value, no comparison of it (a NaN compared traps in debug builds)
+   if (ieee_is_nan(x) .or. ieee_is_nan(a%im)) then
+      c%r = ieee_value(1.0_R8P, ieee_quiet_nan)
+      return
+   endif
    if (a%im /= 0.0_R8P .or. (x < 0.0_R8P .and. (name == 'sqrt' .or. name == 'log' .or. name == 'log10'))) then
       ! a complex argument, or a negative one of sqrt and log: gnuplot's complex result
       call complex_unary(name, a, c, ok)

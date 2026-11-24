@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(218)                           !< Per-check outcome.
+logical                       :: test_passed(219)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -719,8 +719,8 @@ call interpreter%run_text("plot '"//data_file//"' u 1:2 axes x1y2", iostat, ioms
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'a polar panel takes') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:2:(2*$2) w filledcurves", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'a polar panel takes') > 0
-call interpreter%run_text("set rrange [3:1]", iostat, iomsg)
-test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'max must exceed min') > 0
+call interpreter%run_text("set rrange [3:3]", iostat, iomsg)
+test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'an empty range') > 0
 call interpreter%run_text("set ttics 0,-30", iostat, iomsg)
 test_passed(66) = test_passed(66) .and. iostat /= 0_I4P .and. index(iomsg, 'set ttics: supported forms') > 0
 call interpreter%run_text("set size ratio square", iostat, iomsg)
@@ -4857,7 +4857,7 @@ if (test_passed(213)) then
    endblock
 endif
 call interpreter%run_text('set ytics 10 nologscale', iostat, iomsg)
-test_passed(213) = test_passed(213) .and. iostat /= 0_I4P
+test_passed(213) = test_passed(213) .and. iostat == 0_I4P
 
 ! key samples as gnuplot 6.0: vectors an arrow (gnuplot_sample), keyentry with labels none, the fill border of
 ! filledcurves around the key sample (the global fill style) and along the curve (the item's own fs), the key title
@@ -4996,6 +4996,53 @@ test_passed(218) = test_passed(218) .and. iostat /= 0_I4P
 open(newunit=unit, file='foresight_script_test_nonlinear.svg')
 close(unit, status='delete')
 
+! parser forms of the demos, as gnuplot 6.0: using "NAME" alone, definitions before an iterated item run on each pass,
+! an assignment glued to its item in the title, label at x, y, z, ls (expr), index expr, a trailing comma, set terminal
+! push|pop, set rrange [90:0] (reversed r), UTF-8 names (π = pi), ttics list then font, ytics nologscale (an additive
+! step on a log axis)
+call interpreter%init(scratch)
+call interpreter%run_text('$H << EOD'//new_line('a')//'x A B'//new_line('a')//'1 2 3'//new_line('a')//'2 4 5'// &
+                          new_line('a')//''//new_line('a')//''//new_line('a')//'3 1 1'//new_line('a')//'EOD'// &
+                          new_line('a')//'set terminal push; set terminal pop; π = pi; φ(λ) = 2*λ; '// &
+                          'set label 1 "a" at graph 0.5, 0.85, 0 center; array r[2] = [1, 2]; set style line 2 lc "red"; '// &
+                          'plot $H u "A" t col, ysum=0 $H u 1:(ysum=ysum+$2, ysum), '// &
+                          'for [i = 1:2] k = r[i], m = φ(i), k*x+m title sprintf("%d", m), $H index (2-1) ls (1+1),', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(219) = iostat == 0_I4P
+if (test_passed(219)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(219) = size(panel%series) == 5
+      if (test_passed(219)) test_passed(219) = panel%series(1)%y(2) == 4.0_R8P .and. &
+         trim(panel%series(2)%title) == 'ysum=0 $H u 1:(ysum=ysum+$2, ysum)' .and. &
+         trim(panel%series(3)%title) == '2' .and. trim(panel%series(4)%title) == '4' .and. &
+         size(panel%series(5)%x) == 1 .and. trim(panel%series(5)%style%color) == '#ff0000'
+   endassociate
+   block
+      real(R8P) :: v     !< Value.
+      logical   :: found !< Found.
+
+      call interpreter%symbols%value_of('π', v, found)
+      test_passed(219) = test_passed(219) .and. found .and. abs(v - acos(-1.0_R8P)) < 1.0e-15_R8P
+   endblock
+endif
+call interpreter%run_text('set output "foresight_script_test_rr.svg"; set polar; set rrange [90:0]; '// &
+                          'set ttics add ("N" 0) font ":Bold"; plot 60', iostat, iomsg)
+test_passed(219) = test_passed(219) .and. iostat == 0_I4P
+if (test_passed(219)) then
+   associate(panel => interpreter%figure%panels(1))
+      ! a [90:0] r axis: 90 at the pole, 0 on the rim
+      test_passed(219) = panel%raxis%lo == 90.0_R8P .and. panel%raxis%hi == 0.0_R8P
+   endassociate
+endif
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_rr.svg"; set log y; set yrange [0.1:1]; '// &
+                          'set ytics 0.1 nolog; plot x', iostat, iomsg)
+test_passed(219) = test_passed(219) .and. iostat == 0_I4P
+if (test_passed(219)) test_passed(219) = count(interpreter%figure%panels(1)%yaxis%ticks%major) == 10
+open(newunit=unit, file='foresight_script_test_rr.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5004,7 +5051,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,218L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,219L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

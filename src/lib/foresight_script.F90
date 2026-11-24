@@ -144,7 +144,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
-                             TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
+                             TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD, UNAME_CHARS, UNAME_START
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -928,7 +928,7 @@ contains
 
             local_name = text
             if (leading_word(local_name) == 'array') local_name = trim(adjustl(local_name(6:)))
-            e = verify(local_name, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789', kind=I4P)
+            e = verify(local_name, UNAME_CHARS, kind=I4P)
             if (e > 0_I4P) local_name = local_name(1:e - 1_I4P)
             if (len(local_name) == 0) then
                call fail('local: a variable name is expected', iostat, iomsg)
@@ -1059,7 +1059,7 @@ contains
             call fail('undefine: not a variable name: "'//text//'"', iostat, iomsg)
             return
          endif
-         if (scan(text(1:1), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$') == 0) then
+         if (scan(text(1:1), UNAME_START//'$') == 0) then
             call fail('undefine: not a variable name: "'//text//'"', iostat, iomsg)
             return
          endif
@@ -1427,7 +1427,7 @@ contains
          v = v + range(3)
       enddo
    endif
-   if (len(var) == 0 .or. verify(var, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
+   if (len(var) == 0 .or. verify(var, UNAME_CHARS) > 0) then
       call fail('invalid loop variable "'//var//'"', iostat, iomsg)
    endif
    endsubroutine for_values
@@ -1782,7 +1782,7 @@ contains
             return
          endif
          if (len(prefix) == 0 .or. scan(prefix(1:1), '0123456789') > 0 .or. &
-             verify(prefix, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') > 0) then
+             verify(prefix, UNAME_CHARS) > 0) then
             call fail('stats: illegal prefix "'//prefix//'"', iostat, iomsg)
             return
          endif
@@ -2343,7 +2343,7 @@ contains
          call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
          if (iostat /= 0_I4P) return
       elseif (keyword(word, 'index', 1_I4P)) then
-         if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
+         if (.not. next_integer(tokens, i, set_index, iostat, iomsg, self%symbols)) return
       elseif (keyword(word, 'every', 2_I4P)) then
          if (.not. next_word(tokens, i, word, iostat, iomsg)) return
          call parse_every(word, every, iostat, iomsg, self%symbols)
@@ -2631,7 +2631,7 @@ contains
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    logical                                      :: done      !< An assignment or a definition.
-   character(len=*), parameter   :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=*), parameter   :: LETTERS = UNAME_START
    character(len=:), allocatable :: s       !< Statement, leading blanks removed.
    character(len=:), allocatable :: name    !< Symbol name.
    character(len=:), allocatable :: list    !< Parameter list.
@@ -2652,7 +2652,7 @@ contains
    s = trim(adjustl(statement))
    if (len(s) == 0) return
    if (scan(s(1:1), LETTERS) == 0) return
-   e = verify(s, LETTERS//'0123456789', kind=I4P)
+   e = verify(s, UNAME_CHARS, kind=I4P)
    if (e == 0_I4P) return
    name = s(1:e - 1_I4P)
    k = e
@@ -2871,6 +2871,8 @@ contains
    real(R8P)                                    :: item_range(2) !< Sampling range of the current item.
    logical                                      :: item_set(2) !< Ends of `item_range` given.
    character(len=:), allocatable                :: item_prefix !< The item's range as written, for its title.
+   character(len=:), allocatable                :: item_glued  !< An assignment the item follows without a comma, as
+                                                               !< written (`ysum=0 `), for its title.
    character(len=32)                            :: sample_names(2) !< Variables named by the item's sampling ranges.
    real(R8P)                                    :: sample_range(2, 2) !< Ends of the item's sampling ranges.
    logical                                      :: sample_set(2, 2) !< Ends given.
@@ -2931,8 +2933,9 @@ contains
    endif
    allocate(levels(0))
    do
-      ! data file or function
+      ! data file or function; a comma ending the plot ends it, as gnuplot
       if (i > size(tokens, kind=I4P)) then
+         if (size(levels) == 0 .and. tokens(size(tokens))%kind == TOKEN_COMMA) exit
          call fail('plot: missing item after ","', iostat, iomsg)
          return
       endif
@@ -2983,6 +2986,7 @@ contains
       item_set = .false.
       item_range = 0.0_R8P
       item_prefix = ''
+      item_glued = ''
       sample_names = ''
       sample_range = 0.0_R8P
       sample_set = .false.
@@ -3027,6 +3031,7 @@ contains
                         call fail('plot: '//message, iostat, iomsg)
                         return
                      endif
+                     item_glued = text(tokens(i)%first:tokens(expression_end(tokens, i))%last)//' '
                      i = expression_end(tokens, i) + 1_I4P
                      last = i - 1_I4P
                   endif
@@ -3041,6 +3046,12 @@ contains
                      return
                   endif
                   i = last + 1_I4P
+                  ! gnuplot: definitions before an iterated item are its own, run on each pass (`for [i=1:3] k = r[i],
+                  ! f(x, k)`): the item after them is still iterated
+                  if (size(levels) > 0 .and. i < size(tokens, kind=I4P)) then
+                     i = i + 1_I4P
+                     cycle
+                  endif
                   if (size(levels) > 0) then
                      if (next_values()) then
                         i = item_start
@@ -3295,7 +3306,17 @@ contains
             return
          elseif (keyword(word, 'using', 1_I4P)) then
             using = word
-            if (.not. next_word(tokens, i, spec, iostat, iomsg)) return
+            ! a header name alone, quoted (`using "Denmark"`), as gnuplot
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_STRING) then
+                  i = i + 1_I4P
+                  spec = '"'//tokens(i)%text//'"'
+               elseif (.not. next_word(tokens, i, spec, iostat, iomsg)) then
+                  return
+               endif
+            elseif (.not. next_word(tokens, i, spec, iostat, iomsg)) then
+               return
+            endif
             ! a spec broken after a colon (`using 2:1:\` and the next line), or written with blanks around its colons
             ! (`using (T(2)) : ($0) : 1`): its fields joined, as gnuplot
             do while (i < size(tokens, kind=I4P))
@@ -3360,7 +3381,7 @@ contains
             set_index = named_index(tokens(i)%text)
             if (iostat /= 0_I4P) return
          elseif (keyword(word, 'index', 1_I4P)) then
-            if (.not. next_integer(tokens, i, set_index, iostat, iomsg)) return
+            if (.not. next_integer(tokens, i, set_index, iostat, iomsg, self%symbols)) return
          elseif (keyword(word, 'every', 2_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             call parse_every(word, every, iostat, iomsg, self%symbols)
@@ -3765,7 +3786,16 @@ contains
             ! the title as it is, or as enhanced text
             plain_item = word == 'noenhanced'
          elseif (word == 'ls' .or. keyword(word, 'linestyle', 5_I4P)) then
-            if (.not. next_integer(tokens, i, number, iostat, iomsg)) return
+            ! a number or an expression (`ls (i+1)`), as gnuplot
+            block
+               real(R8P) :: v !< Style number.
+
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'plot: ls: '//iomsg
+                  return
+               endif
+               number = nint(v, I4P)
+            endblock
             call apply_line_style(self%line_styles, number, line, self%figure%panels(self%figure%current)%linecolors)
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
@@ -3932,7 +3962,7 @@ contains
          ! sampled at the end; gnuplot: the expression as written is the title
          if (.not. has_title .and. self%autotitle /= 'none' .and. .not. keyentry) then
             ! the expression as it is, not enhanced text
-            title = item_prefix//written
+            title = item_glued//item_prefix//written
             auto_title = .true.
          endif
          palette_lc = ''
@@ -4308,10 +4338,10 @@ contains
             title_column = 0_I4P
          case ('file')
             ! gnuplot: the item as written, '' included, as it is (not enhanced text)
-            title = trim(quote)//written//trim(quote)
+            title = item_glued//trim(quote)//written//trim(quote)
             ! inline data, as written: '-' or "-"
-            if (index(written, '$FS_INLINE_S') == 1) title = "'-'"
-            if (index(written, '$FS_INLINE_D') == 1) title = '"-"'
+            if (index(written, '$FS_INLINE_S') == 1) title = item_glued//"'-'"
+            if (index(written, '$FS_INLINE_D') == 1) title = item_glued//'"-"'
             if (len(spec) > 0) title = title//' '//using//' '//spec
             auto_title = .true.
          endselect
@@ -5790,7 +5820,7 @@ contains
       if (equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
          sample_names(k) = trim(adjustl(text(1:equal - 1_I4P)))
          if (len_trim(sample_names(k)) == 0 .or. &
-             verify(trim(sample_names(k)), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_') /= 0 .or. &
+             verify(trim(sample_names(k)), UNAME_CHARS) /= 0 .or. &
              verify(sample_names(k)(1:1), '0123456789') == 0) then
             call fail('plot: bad sampling variable name in "['//text//']"', iostat, iomsg)
             return
@@ -5957,7 +5987,7 @@ contains
             call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
             return
          endif
-         if (verify(dummy, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_') /= 0 .or. &
+         if (verify(dummy, UNAME_CHARS) /= 0 .or. &
              verify(dummy(1:1), '0123456789') == 0) then
             call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
             return
@@ -6530,7 +6560,7 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    character(len=*), parameter                  :: DIGITS = '0123456789' !< Argument numbers.
    character(len=*), parameter                  :: NAME_CHARS = &
-                                                   'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789' !< Names.
+                                                   UNAME_CHARS !< Names.
    type(saved_variable)                         :: saved(11) !< ARG0 to ARG9 and ARGC before the call.
    type(saved_array)                            :: saved_argv !< ARGV before the call.
    type(token_object), allocatable              :: args(:)   !< Argument texts.
@@ -7009,7 +7039,7 @@ contains
    character(len=:), allocatable, intent(out) :: expanded  !< Statement after substitution.
    integer(I4P),                  intent(out) :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out) :: iomsg     !< Error message.
-   character(len=*), parameter    :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_' !< Name start.
+   character(len=*), parameter    :: LETTERS = UNAME_START !< Name start.
    character(len=:), allocatable  :: value     !< Variable value.
    character(len=1)               :: quote     !< Open quote, blank if none.
    integer(I4P)                   :: i         !< Character counter.
@@ -7042,7 +7072,7 @@ contains
             return
          elseif (c == '@' .and. i < len(statement)) then
             if (scan(statement(i + 1_I4P:i + 1_I4P), LETTERS) > 0) then
-               e = verify(statement(i + 1_I4P:), LETTERS//'0123456789', kind=I4P)
+               e = verify(statement(i + 1_I4P:), UNAME_CHARS, kind=I4P)
                if (e == 0_I4P) then
                   e = len(statement, kind=I4P)
                else
@@ -7340,6 +7370,20 @@ contains
       endif
       i = i + 1_I4P
       call coordinate(q%y, q%sy)
+      if (iostat /= 0_I4P) return
+      ! a third coordinate (gnuplot's z, for splot): read and ignored
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+            block
+               real(R8P)        :: z  !< Ignored.
+               character(len=9) :: sz !< Its system.
+
+               sz = q%sy
+               i = i + 1_I4P
+               call coordinate(z, sz)
+            endblock
+         endif
+      endif
       endsubroutine position
 
       subroutine coordinate(value, system)
@@ -8165,7 +8209,8 @@ contains
       associate(axis => self%figure%panels(self%figure%current)%raxis)
          call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
          if (iostat == 0_I4P .and. axis%min_fixed .and. axis%max_fixed) then
-            if (.not. axis%max_user > axis%min_user) call fail('set rrange: max must exceed min', iostat, iomsg)
+            ! [90:0]: a reversed r axis, as gnuplot (not on a log r axis)
+            if (axis%max_user == axis%min_user) call fail('set rrange: an empty range', iostat, iomsg)
          endif
       endassociate
    elseif (keyword(option, 'trange', 2_I4P)) then
@@ -8258,6 +8303,12 @@ contains
          return
       endif
       text = tokens(2)%text
+      ! gnuplot's terminal stack: foresight keeps its one terminal (a script pushes before a printing terminal and pops
+      ! after it)
+      if (text == 'push' .or. text == 'pop') then
+         if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+         return
+      endif
       select case (text)
       case ('svg', 'html')
       case ('dumb', 'block')
@@ -8372,7 +8423,7 @@ contains
          self%dummy = ''
    self%dummies = ''
       elseif (tokens(2)%kind /= TOKEN_WORD .or. &
-              verify(tokens(2)%text, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') /= 0 .or. &
+              verify(tokens(2)%text, UNAME_CHARS) /= 0 .or. &
               scan(tokens(2)%text(1:1), '0123456789') > 0) then
          call fail('set dummy: a variable name is expected, found "'//tokens(2)%text//'"', iostat, iomsg)
          return
@@ -10892,6 +10943,10 @@ contains
             at = merge(3_I4P, 2_I4P, add)
             if (at <= last) then
                if (tokens(at)%text(1:min(1, len(tokens(at)%text))) == '(') then
+                  ! `font F` after the list: read and ignored (one font), as the other tics options
+                  if (at + 2_I4P == last) then
+                     if (tokens(at + 1_I4P)%text == 'font') last = at
+                  endif
                   if (at /= last) then
                      call fail('set ttics: unexpected "'//tokens(at + 1_I4P)%text//'" after the list', iostat, iomsg)
                      return
@@ -11486,7 +11541,9 @@ contains
       integer(I4P)                     :: n       !< Position tokens.
       integer(I4P)                     :: k       !< Position counter.
       real(R8P)                        :: v       !< Position value.
+      integer(I4P)                     :: additive !< `nologscale` 1, `logscale` 0, neither -1.
 
+      additive = -1_I4P
       if (present(words)) then
          toks = words
       else
@@ -11550,12 +11607,12 @@ contains
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
-         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'logscale') then
-            ! gnuplot's logscale tic series: the step a factor on a log axis, foresight's own
-            continue
-         elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'nologscale') then
-            call fail('set '//option//': nologscale (an additive step on a log axis) is not supported', iostat, iomsg)
-            return
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'logscale', 3_I4P)) then
+            ! gnuplot's logscale tic series: the step a factor on a log axis (the default)
+            additive = 0_I4P
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nologscale', 5_I4P)) then
+            ! an additive step on a log axis
+            additive = 1_I4P
          elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'add') then
             add = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'noenhanced enhanced')) then
@@ -11604,6 +11661,7 @@ contains
          if (allocated(mirror)) tics%mirror = mirror
          return
       endif
+      if (additive >= 0_I4P) tics%additive = additive == 1_I4P
       if (n == 0_I4P) then
          if (allocated(mirror)) tics%mirror = mirror
          call tics%enable
@@ -12775,11 +12833,11 @@ contains
    !< Whether `word` names a datablock: `$`, then a letter or `_`, then letters, digits, `_` (gnuplot `$DATA`).
    character(len=*), intent(in) :: word !< Word.
    logical                      :: yes  !< A datablock name.
-   character(len=*), parameter  :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=*), parameter  :: LETTERS = UNAME_START
 
    yes = len(word) >= 2
    if (yes) yes = word(1:1) == '$' .and. scan(word(2:2), LETTERS) > 0
-   if (yes) yes = verify(word(2:), LETTERS//'0123456789') == 0
+   if (yes) yes = verify(word(2:), UNAME_CHARS) == 0
    endfunction is_datablock
 
    pure function string_variable_of(symbols, name) result(yes)
@@ -12891,7 +12949,7 @@ contains
    e = scan(rest, ' #'//achar(9), kind=I4P) - 1_I4P
    if (e < 0_I4P) e = len(rest, kind=I4P)
    if (e == 0_I4P) return
-   if (verify(rest(1:e), 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') /= 0) return
+   if (verify(rest(1:e), UNAME_CHARS) /= 0) return
    name = trim(t(1:k - 1_I4P))
    terminator = rest(1:e)
    yes = .true.
@@ -12921,7 +12979,7 @@ contains
    integer(I4P)                  :: e    !< First character after the word.
 
    t = trim(adjustl(text))
-   e = verify(t, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_', kind=I4P)
+   e = verify(t, UNAME_START, kind=I4P)
    if (e == 0_I4P) e = len(t, kind=I4P) + 1_I4P
    word = t(1:e - 1_I4P)
    endfunction leading_word
@@ -13179,7 +13237,7 @@ contains
    character(len=*), intent(in) :: text !< Text.
    character(len=*), intent(in) :: name !< Identifier.
    logical                      :: yes  !< Mentioned.
-   character(len=*), parameter  :: WORD = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789'
+   character(len=*), parameter  :: WORD = UNAME_CHARS
    integer(I4P)                 :: k    !< Occurrence.
    integer(I4P)                 :: from !< Search start.
 
@@ -13271,7 +13329,7 @@ contains
    logical,                       intent(in)    :: degrees  !< Angles in degrees.
    integer(I4P),                  intent(out)   :: iostat   !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg    !< Error message.
-   character(len=*), parameter   :: LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+   character(len=*), parameter   :: LETTERS = UNAME_START
    character(len=:), allocatable :: s        !< Text, blanks around removed.
    character(len=:), allocatable :: name     !< Array name.
    character(len=:), allocatable :: size_text !< Size expression.
@@ -13288,7 +13346,7 @@ contains
    s = trim(adjustl(text))
    e = 0_I4P
    if (len(s) > 0) then
-      if (scan(s(1:1), LETTERS) > 0) e = verify(s, LETTERS//'0123456789', kind=I4P)
+      if (scan(s(1:1), LETTERS) > 0) e = verify(s, UNAME_CHARS, kind=I4P)
    endif
    if (len(s) == 0 .or. e == 1_I4P .or. (e == 0_I4P .and. scan(s(1:1), LETTERS) == 0)) then
       call fail('array: a name is expected, array NAME[N] or array NAME = [...]', iostat, iomsg)
@@ -14536,7 +14594,7 @@ contains
    if (token%text(n - 2_I4P:n) /= 'sum') return
    yes = n == 3_I4P
    if (.not. yes) yes = scan(token%text(n - 3_I4P:n - 3_I4P), &
-                             'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789$') == 0
+                             UNAME_CHARS//'$') == 0
    endfunction sum_head
 
    function expression_end(tokens, first) result(last)
