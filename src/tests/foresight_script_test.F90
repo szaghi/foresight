@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(233)                           !< Per-check outcome.
+logical                       :: test_passed(234)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5767,6 +5767,25 @@ if (test_passed(233)) then
    endblock
 endif
 
+! an autoscaled linear color axis extended to its ticks, as gnuplot 6.0 (data 0.13..0.87: 0.1..0.9), images included;
+! noextend and set autoscale cbfix keep the data (a log one is never extended, check 79)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0.13', '1 0 0.5', '', '0 1 0.6', '1 1 0.87'
+close(unit)
+test_passed(234) = colorbox_labels("", ['0.1', '0.9'], ['1.0'])
+associate(panel => interpreter%figure%panels(1))
+   test_passed(234) = test_passed(234) .and. abs(panel%cbaxis%lo - 0.1_R8P) < 1.0e-12_R8P .and. &
+                     abs(panel%cbaxis%hi - 0.9_R8P) < 1.0e-12_R8P
+endassociate
+test_passed(234) = test_passed(234) .and. colorbox_labels("set cbrange [*:*] noextend", ['0.2'], ['0.1'])
+associate(panel => interpreter%figure%panels(1))
+   test_passed(234) = test_passed(234) .and. panel%cbaxis%lo == 0.13_R8P .and. panel%cbaxis%hi == 0.87_R8P
+endassociate
+test_passed(234) = test_passed(234) .and. colorbox_labels("set autoscale cbfix", ['0.2'], ['0.1'])
+associate(panel => interpreter%figure%panels(1))
+   test_passed(234) = test_passed(234) .and. panel%cbaxis%lo == 0.13_R8P .and. panel%cbaxis%hi == 0.87_R8P
+endassociate
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5775,7 +5794,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,233L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,234L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

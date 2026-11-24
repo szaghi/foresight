@@ -6991,8 +6991,8 @@ contains
       endsubroutine setup_polar
 
       subroutine setup_colors
-      !< The color axis over the finite values of the images (the positive ones on a log axis; or `cbrange`), never
-      !< extended.
+      !< The color axis over the finite values of the images (the positive ones on a log axis; or `cbrange`), a linear
+      !< one extended to its ticks as gnuplot 6.0 (not a log one, nor with `noextend` or `set autoscale cbfix`).
       real(R8P) :: zmin  !< Smallest value.
       real(R8P) :: zmax  !< Largest value.
       logical   :: any_z !< Any finite value.
@@ -7005,6 +7005,7 @@ contains
       else
          npx = merge(area(2) - area(1), area(4) - area(3), self%cbox%horizontal)
       endif
+      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend
       call self%cbaxis%setup(zmin, zmax, any_z, npx)
       endsubroutine setup_colors
 
