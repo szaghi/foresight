@@ -1,9 +1,10 @@
 !< foresight_series, a plotted data series.
 module foresight_series
 !< foresight_series, a plotted data series.
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use penf, only : I4P, R8P
 use foresight_axis, only : axis_object
-use foresight_style, only : style_object, WITH_HISTOGRAMS, WITH_VECTORS
+use foresight_style, only : style_object, WITH_ELLIPSES, WITH_HISTOGRAMS, WITH_VECTORS
 
 implicit none
 private
@@ -38,6 +39,8 @@ type :: series_object
                                                      !< abscissae, `y` (`ytic`), `y2` (`y2tic`) at the ordinates.
    integer(I4P)                  :: pointinterval = 1_I4P !< A point marker every N points, the first one included
                                                           !< (gnuplot `pointinterval`).
+   character(len=24), allocatable :: own_colors(:) !< A histogram's colors per row (`lc variable`), kept through its
+                                                   !< layouts (which rebuild `colors`).
    character(len=24), allocatable :: colors(:) !< Color of each point (gnuplot `lc variable`), unallocated for none;
                                                !< of `lc palette z`, set at each rendering.
    integer(I4P)                  :: palette_mode = 0_I4P !< Color from the palette (gnuplot `lc palette`): 0 none, 1 a
@@ -225,6 +228,33 @@ contains
       call widen(ends, xaxis, xmin, xmax)
       ends = self%tips(2, :)
       call widen(ends, yaxis, ymin, ymax)
+   endif
+   if (self%style%with == WITH_ELLIPSES .and. allocated(self%shape)) then
+      ! an ellipse's bounding box, its axes in their axis units (gnuplot's autoscale of ellipses)
+      do i = 1_I4P, min(size(self%x, kind=I4P), size(self%shape, 2, kind=I4P))
+         if (.not. (xaxis%accepts(self%x(i)) .and. yaxis%accepts(self%y(i)))) cycle
+         if (.not. all(ieee_is_finite(self%shape(:, i)))) cycle
+         if (present(xwindow)) then
+            if (self%x(i) < minval(xwindow) .or. self%x(i) > maxval(xwindow)) cycle
+         endif
+         block
+            real(R8P) :: a  !< Semi-major axis.
+            real(R8P) :: b  !< Semi-minor axis.
+            real(R8P) :: t  !< Angle [rad].
+            real(R8P) :: hx !< Half width.
+            real(R8P) :: hy !< Half height.
+
+            a = 0.5_R8P * abs(self%shape(1, i))
+            b = 0.5_R8P * abs(self%shape(2, i))
+            t = self%shape(3, i) * acos(-1.0_R8P) / 180.0_R8P
+            hx = sqrt((a * cos(t))**2 + (b * sin(t))**2)
+            hy = sqrt((a * sin(t))**2 + (b * cos(t))**2)
+            if (xaxis%accepts(self%x(i) - hx)) xmin = min(xmin, self%x(i) - hx)
+            if (xaxis%accepts(self%x(i) + hx)) xmax = max(xmax, self%x(i) + hx)
+            if (yaxis%accepts(self%y(i) - hy)) ymin = min(ymin, self%y(i) - hy)
+            if (yaxis%accepts(self%y(i) + hy)) ymax = max(ymax, self%y(i) + hy)
+         endblock
+      enddo
    endif
    if (allocated(self%outliers)) then
       do i = 1_I4P, size(self%outliers, 2, kind=I4P)

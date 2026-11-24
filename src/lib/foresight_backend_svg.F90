@@ -614,6 +614,7 @@ contains
    real(R8P),          intent(in)    :: dx     !< Horizontal offset [px].
    real(R8P),          intent(in)    :: dy     !< Vertical offset [px, downward].
    character(len=:), allocatable     :: line   !< Element.
+   character(len=:), allocatable     :: runs   !< Enhanced text runs.
    real(R8P)                         :: p(2)   !< Text position [px in the overlay].
 
    p = [x * self%area(3) + dx, (1.0_R8P - y) * self%area(4) + dy]
@@ -625,7 +626,15 @@ contains
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (rotate /= 0.0_R8P) line = line//' data-rotate="'//px(-rotate)//'" transform="rotate('//px(-rotate)//' '// &
                                  px(p(1))//' '//px(p(2))//')"'
-   line = line//' fill="'//self%theme%map(color)//'">'//xml_escape(string)//'</text>'
+   line = line//' fill="'//self%theme%map(color)//'"'
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
+      ! gnuplot's enhanced text, as `text` (cities.dem's `{/=3 Arras}`)
+      runs = markup_svg(string, self%text_size)
+      if (index(runs, '<tspan') > 0) line = line//' xml:space="preserve"'
+      line = line//'>'//runs//'</text>'
+   else
+      line = line//'>'//xml_escape(string)//'</text>'
+   endif
    self%labels = self%labels//line//new_line('a')
    endsubroutine data_label
 

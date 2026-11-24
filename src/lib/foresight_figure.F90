@@ -2171,8 +2171,29 @@ contains
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
    top = 0.0_R8P
    if (len(self%title) > 0) then
-      call backend%text(0.5_R8P * self%width, PAD + self%font_size, self%title, 'middle')
-      top = PAD + LINE_HEIGHT * self%font_size + GAP
+      ! lines apart at each new line (`"a\nb"`, a last one empty included), as gnuplot
+      block
+         integer(I4P) :: a    !< Line start.
+         integer(I4P) :: e    !< Line end.
+         integer(I4P) :: line !< Line counter.
+
+         a = 1_I4P
+         line = 0_I4P
+         do
+            e = index(self%title(a:), new_line('a'), kind=I4P)
+            if (e == 0_I4P) then
+               e = len(self%title, kind=I4P)
+            else
+               e = a + e - 2_I4P
+            endif
+            if (e >= a) call backend%text(0.5_R8P * self%width, PAD + self%font_size + &
+                                          real(line, R8P) * LINE_HEIGHT * self%font_size, self%title(a:e), 'middle')
+            line = line + 1_I4P
+            a = e + 2_I4P
+            if (a > len(self%title, kind=I4P) + 1_I4P) exit
+         enddo
+         top = PAD + real(line, R8P) * LINE_HEIGHT * self%font_size + GAP
+      endblock
    endif
    cell = [self%width / real(self%cols, R8P), (self%height - top) / real(self%rows, R8P)]
    do p = 1_I4P, size(self%panels, kind=I4P)

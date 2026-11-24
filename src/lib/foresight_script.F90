@@ -5455,6 +5455,8 @@ contains
             if (size(point_colors) /= size(last%x)) return
             last%colors = point_colors
             if (size(point_colors) > 0) last%style%color = trim(point_colors(1))
+            ! a histogram rebuilds its colors at every layout: its own kept apart
+            if (last%style%with == WITH_HISTOGRAMS) last%own_colors = point_colors
          endassociate
       endassociate
       endsubroutine color_last
@@ -14534,6 +14536,8 @@ contains
       endif
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok) then
+         ! the special linetypes are solid: no dashes of the item's default linetype (gnuplot)
+         if (number < 0_I4P .and. number >= -3_I4P) line%dt = 1_I4P
          select case (number)
          case (-1_I4P)
             line%lc = special_color('black')
@@ -14589,13 +14593,13 @@ contains
          endif
       endblock
    elseif (word == 'pi' .or. keyword(word, 'pointinterval', 6_I4P)) then
-      ! a point every N (gnuplot's negative N, the line broken around the points, draws the points every |N|)
+      ! a point every |N|, a negative N with the line blanked under the points (gnuplot)
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)
       if (ok .and. number == 0_I4P) then
          call fail('pointinterval: N not 0 is expected', iostat, iomsg)
          ok = .false.
       endif
-      if (ok) line%pi = abs(number)
+      if (ok) line%pi = number
    elseif (word == 'pn' .or. keyword(word, 'pointnumber', 6_I4P)) then
       ! about N points evenly spread (the negative N's line gap not drawn), as gnuplot
       ok = next_integer(tokens, i, number, iostat, iomsg, symbols)

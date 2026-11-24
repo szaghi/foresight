@@ -3285,8 +3285,8 @@ contains
       if (series%style%draws_points() .and. any(valid)) then
          ! `pointinterval N`: a marker on the first point and every N-th after it
          marked = valid
-         if (series%pointinterval > 1_I4P) marked = valid .and. [(mod(i1 - 1_I4P, series%pointinterval) == 0_I4P, &
-                                                                  i1 = 1_I4P, n)]
+         if (abs(series%pointinterval) > 1_I4P) &
+            marked = valid .and. [(mod(i1 - 1_I4P, abs(series%pointinterval)) == 0_I4P, i1 = 1_I4P, n)]
          ! gnuplot `pointnumber N`: over N placeable points, every (count-1)/(N-1)-th, the start shifted by the plot's
          ! number (plot_points)
          if (series%pointnumber > 0_I4P .and. count(valid) > series%pointnumber) then
@@ -3317,6 +3317,10 @@ contains
                marked(i1) = inside_marker(u(i1), v(i1), 0.5_R8P * series%style%point_diameter())
             enddo
          endif
+         ! gnuplot `pointinterval -N`: the line blanked under each marker (a disk of the background)
+         if (series%pointinterval < 0_I4P .and. any(marked)) &
+            call backend%data_dots(pack(u, marked), pack(v, marked), WINDOW_FILL, 1.2_R8P * series%style%point_diameter(), &
+                                   pt=7_I4P, line_width=0.0_R8P)
          if (char_points()) then
             ! gnuplot `pt "c"`: the character centred on each point, in the point's color, as text (literal)
             block
@@ -4657,8 +4661,19 @@ contains
             series%xlow(r) = series%x(r) - 0.5_R8P * scale
             series%xhigh(r) = series%x(r) + 0.5_R8P * scale
             series%colors(r) = default_color(r, linecolors)
+            ! `lc variable`: the row's own color
+            if (allocated(series%own_colors)) then
+               if (r <= size(series%own_colors, kind=I4P)) series%colors(r) = series%own_colors(r)
+            endif
             call stack(series, r, 1_I4P)
          enddo
+         ! the stack named under it by its title (gnuplot's columnstacked tic labels), unless labelled
+         if (.not. allocated(series%xlabels) .and. len(series%title) > 0 .and. m > 0_I4P) then
+            allocate(series%xlabels(m))
+            series%xlabels = ''
+            series%xlabels(1) = series%title
+            series%label_axis = 'x'
+         endif
       case default
          centre = (real(j, R8P) - 0.5_R8P * real(k + 1_I4P, R8P)) * slot
          do r = 1_I4P, m
@@ -4669,6 +4684,10 @@ contains
             series%y(r) = series%values(r)
          enddo
       endselect
+      ! rowstacked and clustered bars in their own colors (`lc variable`)
+      if (mode /= HIST_COLUMNSTACKED .and. allocated(series%own_colors)) then
+         if (size(series%own_colors) == m) series%colors = series%own_colors
+      endif
       endsubroutine lay
 
       subroutine stack(series, r, p)

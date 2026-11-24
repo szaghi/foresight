@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(222)                           !< Per-check outcome.
+logical                       :: test_passed(223)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2327,7 +2327,7 @@ test_passed(114) = iostat == 0_I4P
 if (test_passed(114)) then
    associate(panel => interpreter%figure%panels(1))
       test_passed(114) = panel%series(1)%label_axis == 'y' .and. panel%series(1)%pointinterval == 2_I4P .and. &
-                         panel%series(2)%pointinterval == 2_I4P .and. panel%series(3)%label_axis == 'x2' .and. &
+                         panel%series(2)%pointinterval == -2_I4P .and. panel%series(3)%label_axis == 'x2' .and. &
                          panel%errorbar_size == 2.0_R8P .and. panel%errorbar_color == '#ff0000' .and. &
                          panel%errorbar_lw == 2.0_R8P .and. panel%hist_title_color == '#0000ff' .and. &
                          all(panel%hist_title_offset == [1.0_R8P, -0.5_R8P])
@@ -5186,6 +5186,58 @@ if (test_passed(222)) then
    endblock
 endif
 
+! fidelity to gnuplot 6.0's renders: column-stacked histograms with lc variable colors and their titles under the
+! stacks, a multiplot title on several lines, enhanced data labels, an ellipse's extent in the autoscale, pointinterval
+! -N (the sign kept, the line blanked under the points), lt -1 solid
+call interpreter%init(scratch)
+call interpreter%run_text('$S1 << EOD'//new_line('a')//'A 15'//new_line('a')//'B 21'//new_line('a')//'EOD'// &
+                          new_line('a')//'set style data histogram; set style histogram columns; '// &
+                          'set linetype 101 lc "red"; set linetype 102 lc "blue"; '// &
+                          'plot $S1 using 2:(100 + strstrt("AB", strcol(1))) lc variable title "First"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(223) = iostat == 0_I4P
+if (test_passed(223)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(223) = allocated(panel%series(1)%colors) .and. allocated(panel%series(1)%xlabels)
+      if (test_passed(223)) test_passed(223) = trim(panel%series(1)%colors(1)) == '#ff0000' .and. &
+                                             trim(panel%series(1)%colors(2)) == '#0000ff' .and. &
+                                             trim(panel%series(1)%xlabels(1)) == 'First'
+   endassociate
+endif
+call interpreter%init(scratch)
+call interpreter%run_text('$E << EOD'//new_line('a')//'0 10 10 6 90'//new_line('a')//'EOD'//new_line('a')// &
+                          'set output "foresight_script_test_fid6.svg"; set multiplot layout 1,2 title "M1\nM2"; '// &
+                          'plot $E using 1:2:3:4:5 with ellipses; plot sin(x) lt -1 pi -4 with lp, '// &
+                          '$E using 1:2:("{/=8 Small}") with labels', iostat, iomsg)
+test_passed(223) = test_passed(223) .and. iostat == 0_I4P
+if (test_passed(223)) then
+   associate(panel => interpreter%figure%panels(1))
+      ! the ellipse 10 tall (turned by 90 degrees) about y = 10: the y range reaches 15
+      test_passed(223) = panel%yaxis%hi >= 15.0_R8P
+   endassociate
+   associate(panel => interpreter%figure%panels(2))
+      test_passed(223) = test_passed(223) .and. panel%series(1)%pointinterval == -4_I4P
+   endassociate
+   call interpreter%run_text('unset multiplot', iostat, iomsg)
+   block
+      character(len=1000) :: line  !< SVG line.
+      integer(I4P)        :: ios   !< Read status.
+      integer(I4P)        :: n     !< Findings.
+
+      n = 0_I4P
+      open(newunit=unit, file='foresight_script_test_fid6.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '>M1</text>') > 0 .or. index(line, '>M2</text>') > 0) n = n + 1_I4P
+         if (index(line, 'font-size="8">Small') > 0) n = n + 1_I4P
+         if (index(line, 'stroke-dasharray') > 0 .and. index(line, 'fs-series') > 0) n = n - 10_I4P
+      enddo
+      close(unit, status='delete')
+      test_passed(223) = test_passed(223) .and. n == 3_I4P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5194,7 +5246,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,222L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,223L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
