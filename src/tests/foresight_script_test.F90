@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(237)                           !< Per-check outcome.
+logical                       :: test_passed(238)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5844,6 +5844,22 @@ block
    if (test_passed(237)) test_passed(237) = tall(2) < tall(1) .and. tall(3) > tall(1)
 endblock
 
+! the cells of a polar gridded surface with crisp edges, no seams between them, as gnuplot's svg; other polygons not
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg; set output 'foresight_script_test_crisp.svg'; set polar"// &
+                          new_line('a')//"$P << EOD"//new_line('a')//"0 1 1"//new_line('a')//"90 2 2"//new_line('a')//"180 1 3"// &
+                          new_line('a')//"270 2 4"//new_line('a')//"EOD"//new_line('a')// &
+                          "plot $P using 1:2:3 with surface notitle", iostat, iomsg)
+test_passed(238) = iostat == 0_I4P
+if (test_passed(238)) test_passed(238) = index(read_text('foresight_script_test_crisp.svg'), &
+                                              '<g class="fs-crisp" shape-rendering="crispEdges">') > 0
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg; set output 'foresight_script_test_crisp.svg'"// &
+                          new_line('a')//"$Q << EOD"//new_line('a')//"0 0"//new_line('a')//"1 0"//new_line('a')//"1 1"// &
+                          new_line('a')//"EOD"//new_line('a')//"plot $Q with polygons notitle", iostat, iomsg)
+test_passed(238) = test_passed(238) .and. iostat == 0_I4P
+if (test_passed(238)) test_passed(238) = index(read_text('foresight_script_test_crisp.svg'), 'crispEdges') == 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5852,7 +5868,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,237L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,238L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

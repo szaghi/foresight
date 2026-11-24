@@ -108,6 +108,8 @@ type :: series_object
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
    logical                       :: key_mid_palette = .false. !< Key sample in the palette's middle color (gnuplot's
                                                               !< polar gridded surface).
+   logical                       :: crisp = .false. !< Polygons drawn with crisp edges, no antialiased seams between
+                                                    !< them (gnuplot's svg cells of a polar gridded surface).
    real(R8P),        allocatable :: point_sizes(:)  !< Each point's size (gnuplot `ps variable`), else the style's.
    logical                       :: hypertext = .false. !< Labels shown on mouse-over of their points (`hypertext`).
    character(len=:), allocatable :: point_color     !< Color of the points of labels (their `lc`), black if unset.

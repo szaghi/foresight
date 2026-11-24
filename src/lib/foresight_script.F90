@@ -5962,6 +5962,7 @@ contains
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%noautoscale = item_noauto
          panel%series(last)%key_mid_palette = surface_item
+         panel%series(last)%crisp = surface_item
          if (allocated(point_sizes)) then
             if (size(point_sizes) == size(panel%series(last)%x)) panel%series(last)%point_sizes = point_sizes
          endif

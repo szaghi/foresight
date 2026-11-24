@@ -2181,8 +2181,8 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
   centre of a polar grid of T x R cells (24 x 10 by default) by its polar distance d: 1/d^Q (qnorm, Q 1 by default),
   exp(-(d/S)^2), 1/(1+(d/S)^2), exp(-d/S), or 1 within S (box); a cell takes the weighted mean, or with `kdensity` the
   sum; r runs from 0 to the largest r plus a quarter segment. Each cell is a polygon of its 4 corners in the palette
-  color of its value, clipped to the r range, the `r` limits and the `theta` wedge (an end below 0 a turn later);
-  the color range covers the whole grid, the key sample is the palette's middle. `unset polar grid` restores the
+  color of its value, clipped to the r range, the `r` limits and the `theta` wedge (an end below 0 a turn later), drawn
+  with crisp edges (no seams between cells, as gnuplot's svg); the color range covers the whole grid, the key sample is the palette's middle. `unset polar grid` restores the
   defaults.
 
 In the HTML page a polar panel zooms as any other: the curves, rings, spokes and border are data, the r tick labels

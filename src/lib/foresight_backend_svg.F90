@@ -175,7 +175,7 @@ contains
 
    subroutine begin_group(self, name, visible, series)
    !< Open the group of class `name`; hidden with `display="none"` when `visible` is false; a series group carries its
-   !< number as `data-series`, as do its overlay markers and caps.
+   !< number as `data-series`, as do its overlay markers and caps; `fs-crisp` draws its shapes with crisp edges.
    class(backend_svg), intent(inout)        :: self    !< Device.
    character(len=*),   intent(in)           :: name    !< Group name.
    logical,            intent(in), optional :: visible !< Group shown.
@@ -183,6 +183,8 @@ contains
    character(len=:), allocatable            :: line    !< Output line.
 
    line = '<g class="'//name//'"'
+   ! filled cells side by side: no antialiased seams between them (gnuplot's svg)
+   if (name == 'fs-crisp') line = line//' shape-rendering="crispEdges"'
    if (present(visible)) then
       if (.not. visible) line = line//' display="none"'
    endif

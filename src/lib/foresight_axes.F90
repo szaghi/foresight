@@ -3898,6 +3898,8 @@ contains
       type(style_object) :: row !< Style of a polygon.
 
       associate(series => self%series(s))
+         ! the cells of a polar gridded surface with crisp edges, no seams between them, as gnuplot's svg
+         if (series%crisp) call backend%begin_group('fs-crisp')
          i1 = 1_I4P
          do while (i1 <= n)
             if (.not. valid(i1)) then
@@ -3917,6 +3919,7 @@ contains
                                                          row%stroke_color(), row%linewidth)
             i1 = i2 + 1_I4P
          enddo
+         if (series%crisp) call backend%end_group
       endassociate
       endsubroutine draw_polygons
 
