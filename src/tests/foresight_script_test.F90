@@ -63,7 +63,7 @@ script = "set terminal svg size 500,350"//new_line('a')// &
          "set logscale y"//new_line('a')// &
          "set grid"//new_line('a')// &
          "plot '"//data_file//"' u 1:2 w l t 'continuity', \"//new_line('a')// &
-         "     '' u 1:3 w lp lw 2 ps 0.8 lc rgb '#e51e10' notitle"//new_line('a')
+         "     '' u 1:3 w lp lw 2 ps 0.75 lc rgb '#e51e10' notitle"//new_line('a')
 call interpreter%init('foresight_script_test.html')
 call interpreter%run_text(script, iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
