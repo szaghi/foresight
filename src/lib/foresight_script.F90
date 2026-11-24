@@ -139,7 +139,8 @@ use foresight_theme, only : THEMES
 use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
-                            FILL_SOLID, FILL_PATTERN, WITH_BOXES, WITH_FILLEDCURVES, WITH_LABELS, WITH_XERRORBARS, &
+                            FILL_SOLID, FILL_PATTERN, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_LABELS, &
+                            WITH_XERRORBARS, &
                             WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
@@ -6972,6 +6973,11 @@ contains
                    series%title//'"'//new_line('a')//'# '//names//new_line('a')
             do p = 1_I4P, size(series%x, kind=I4P)
                row = number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)
+               ! a histogram: its own values, not the stacked tops (gnuplot)
+               if (series%style%with == WITH_HISTOGRAMS .and. allocated(series%values)) then
+                  if (p <= size(series%values, kind=I4P)) &
+                     row = number(series%x(p), xfmt)//' '//number(series%values(p), yfmt)
+               endif
                select case (names)
                case ('x y label type')
                   row = row//' "'//trim(series%texts(p))//'"'
@@ -14251,7 +14257,17 @@ contains
       if (allocated(styles(s)%pn)) line%pn = styles(s)%pn
       return
    enddo
-   line%lc = default_color(id, colors)
+   ! gnuplot's special linetypes: black (-1), nodraw (-2), bgnd (-3)
+   select case (id)
+   case (-1_I4P)
+      line%lc = special_color('black')
+   case (-2_I4P)
+      line%lc = special_color('nodraw')
+   case (-3_I4P)
+      line%lc = special_color('bgnd')
+   case default
+      line%lc = default_color(id, colors)
+   endselect
    endsubroutine apply_line_style
 
    function columnhead_title(word, column) result(ok)
@@ -14381,6 +14397,28 @@ contains
    endselect
    endfunction special_color
 
+   pure function argb_color(v) result(color)
+   !< The SVG color of gnuplot's number 0xAARRGGBB: `#rrggbb`, or `#rrggbbaa` with the opacity 255 - AA (AA the
+   !< transparency, 0 opaque).
+   real(R8P), intent(in)         :: v     !< Color number.
+   character(len=:), allocatable :: color !< SVG color.
+   character(len=*), parameter   :: HEX = '0123456789abcdef' !< Digits.
+   integer(I8P)                  :: code  !< RGB, then opacity.
+   integer(I4P)                  :: d     !< Digit counter.
+   integer(I4P)                  :: digit !< A digit.
+
+   color = '#000000'
+   if (.not. ieee_is_finite(v)) return
+   code = iand(int(v, I8P), int(z'FFFFFF', I8P))
+   do d = 5_I4P, 0_I4P, -1_I4P
+      digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
+      color(7 - d:7 - d) = HEX(digit + 1:digit + 1)
+   enddo
+   code = 255_I8P - iand(ishft(int(v, I8P), -24_I4P), 255_I8P)
+   if (code < 255_I8P) color = color//HEX(code / 16_I8P + 1_I8P:code / 16_I8P + 1_I8P)// &
+                               HEX(mod(code, 16_I8P) + 1_I8P:mod(code, 16_I8P) + 1_I8P)
+   endfunction argb_color
+
    function line_option(tokens, i, line, iostat, iomsg, colors, symbols) result(ok)
    !< Parse the line property at `tokens(i)` and its value into `line`, leaving `i` on the value's last token:
    !< `lc [rgb] "color"`, `lc N`, `lc [rgb] variable` (the color column marker), `lc palette [z|cb V|frac F]` (markers,
@@ -14459,6 +14497,15 @@ contains
          line%lc = tokens(i)%text
       elseif (tokens(i)%kind == TOKEN_WORD .and. is_word(tokens(i)%text, 'bgnd background nodraw black')) then
          line%lc = special_color(tokens(i)%text)
+      elseif (rgb) then
+         ! `lc rgb 0xAARRGGBB`: a number (an expression), the color itself, as gnuplot (colornames)
+         block
+            real(R8P) :: v !< Color number.
+
+            i = i - 1_I4P
+            ok = next_real(tokens, i, v, iostat, iomsg, symbols)
+            if (ok) line%lc = argb_color(v)
+         endblock
       else
          i = i - 1_I4P
          ok = next_integer(tokens, i, number, iostat, iomsg, symbols)

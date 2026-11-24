@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(220)                           !< Per-check outcome.
+logical                       :: test_passed(221)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5090,6 +5090,57 @@ if (test_passed(220)) then
    endassociate
 endif
 
+! fidelity to gnuplot 6.0's renders: lc rgb 0xAARRGGBB numbers, ls -1 black, rowstacked histograms on their row
+! numbers (a missing value keeps the rows of the next ones), their table values, a tall key wrapped into columns,
+! labels on several lines
+call interpreter%init(scratch)
+call interpreter%run_text('set datafile missing "-"'//new_line('a')//'$D << EOD'//new_line('a')//'r1 1 - 2'// &
+                          new_line('a')//'r2 1 1 1'//new_line('a')//'EOD'//new_line('a')// &
+                          'set style data histograms; set style histogram rowstacked; '// &
+                          'plot $D using 2:xtic(1) lc rgb 0xcdc0b0, "" using 3 lc rgb 0x80ff0000, "" using 4 ls -1', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(221) = iostat == 0_I4P
+if (test_passed(221)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(221) = trim(panel%series(1)%style%color) == '#cdc0b0' .and. &
+                        trim(panel%series(2)%style%color) == '#ff00007f' .and. &
+                        trim(panel%series(3)%style%color) == '#000000'
+      ! row r1: 1 then 2 on it (the second series has no r1), top 3
+      if (test_passed(221)) test_passed(221) = panel%series(3)%y(1) == 3.0_R8P .and. panel%series(3)%ylow(1) == 1.0_R8P
+   endassociate
+endif
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_wrap.svg"; set terminal svg size 400,200; '// &
+                          'set label 1 "a\nb" at 1, 1; plot for [i=1:30] i*x title sprintf("%d", i)', iostat, iomsg)
+test_passed(221) = test_passed(221) .and. iostat == 0_I4P
+if (test_passed(221)) then
+   block
+      character(len=1000) :: line !< SVG line.
+      integer(I4P)        :: ios  !< Read status.
+      integer(I4P)        :: n    !< Label lines.
+      real(R8P)           :: xs(2) !< Abscissae of the titles "1" and "30".
+      integer(I4P)        :: k    !< Position.
+
+      n = 0_I4P
+      xs = 0.0_R8P
+      open(newunit=unit, file='foresight_script_test_wrap.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '>a</text>') > 0 .or. index(line, '>b</text>') > 0) n = n + 1_I4P
+         k = index(line, '<text x="')
+         if (k > 0 .and. index(line, '>1</text>') > 0 .and. index(line, 'text-anchor="end"') > 0) &
+            read(line(k + 9:index(line(k + 9:), '"') + k + 7), *) xs(1)
+         if (k > 0 .and. index(line, '>30</text>') > 0 .and. index(line, 'text-anchor="end"') > 0) &
+            read(line(k + 9:index(line(k + 9:), '"') + k + 7), *) xs(2)
+      enddo
+      close(unit, status='delete')
+      ! the label on two lines; the 30 entries in more than one column
+      test_passed(221) = n == 2_I4P .and. xs(2) > xs(1)
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5098,7 +5149,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,220L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,221L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

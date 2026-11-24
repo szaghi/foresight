@@ -234,7 +234,28 @@ contains
                               color=color_of(labels(k)%color))
          else
             backend%literal = labels(k)%plain
-            call backend%text(t(1), t(2), labels(k)%text, anchor_of(labels(k)%justify), color=color_of(labels(k)%color))
+            ! a text on several lines (`"a\nb"`): the first at the position, the next ones below, as gnuplot
+            block
+               integer(I4P) :: a    !< Line start.
+               integer(I4P) :: e    !< Line end.
+               integer(I4P) :: line !< Line counter.
+
+               a = 1_I4P
+               line = 0_I4P
+               do
+                  e = index(labels(k)%text(a:), new_line('a'), kind=I4P)
+                  if (e == 0_I4P) then
+                     e = len(labels(k)%text, kind=I4P)
+                  else
+                     e = a + e - 2_I4P
+                  endif
+                  call backend%text(t(1), t(2) + line * 1.25_R8P * font_size, labels(k)%text(a:e), &
+                                    anchor_of(labels(k)%justify), color=color_of(labels(k)%color))
+                  a = e + 2_I4P
+                  line = line + 1_I4P
+                  if (a > len(labels(k)%text, kind=I4P)) exit
+               enddo
+            endblock
          endif
       enddo
       backend%literal = .false.

@@ -224,6 +224,8 @@ type :: axes_object
                                                              !< column (gnuplot `maxrows`).
    integer(I4P)                     :: key_maxcols = 0_I4P !< Most columns of a horizontal key, 0 for as many as fit
                                                              !< (gnuplot `maxcols`).
+   logical                          :: key_wrap = .false. !< A vertical key taller than the panel wraps into columns
+                                                         !< (gnuplot's, the scripts'); the library's stays one column.
    integer(I4P)                     :: key_columns = 0_I4P !< Columns of the key, 0 for the automatic layout
                                                              !< (gnuplot `columns N`).
    character(len=24)                :: key_tc = '' !< Title color: blank the frame's, `variable` each series' (`textcolor`).
@@ -1378,7 +1380,8 @@ contains
    ! an outside key takes its side of the panel box; above the plot it goes below the title, as gnuplot
    box = [x0, y0, width, height]
    above = 0.0_R8P
-   call self%key_layout(backend, font_size, width - 2.0_R8P * PAD, grid, key)
+   call self%key_layout(backend, font_size, width - 2.0_R8P * PAD, grid, key, &
+                        tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    if (self%key .and. grid(1) > 0_I4P) then
       select case (self%key_place())
       case ('left')
@@ -3012,13 +3015,14 @@ contains
       endsubroutine bound
    endsubroutine draw_readouts
 
-   pure subroutine key_layout(self, backend, font_size, room, grid, extent)
+   pure subroutine key_layout(self, backend, font_size, room, grid, extent, tall)
    !< Key grid and size: entries (titled series), columns (1, or as many as `room` holds when horizontal) and rows;
    !< each entry is the widest title, a gap and the sample, with a gap between entries.
    class(axes_object),    intent(in)  :: self      !< Panel.
    class(backend_object), intent(in)  :: backend   !< Output device, for text widths.
    real(R8P),             intent(in)  :: font_size !< Font size [px].
    real(R8P),             intent(in)  :: room      !< Width available to a row of entries [px].
+   real(R8P),             intent(in), optional :: tall !< Height available to a vertical key [px] (`key_wrap`).
    integer(I4P),          intent(out) :: grid(3)   !< Entries, columns, rows.
    real(R8P),             intent(out) :: extent(2) !< Key width and height [px].
    real(R8P)                          :: entry     !< Entry width, spacing included [px].
@@ -3055,6 +3059,10 @@ contains
    elseif (self%key_maxrows > 0_I4P .and. grid(1) > self%key_maxrows) then
       ! a vertical key of `maxrows` rows: as many columns as needed, filled top down
       grid(2) = (grid(1) + self%key_maxrows - 1_I4P) / self%key_maxrows
+   elseif (self%key_wrap .and. present(tall) .and. grid(1) > 0_I4P) then
+      ! gnuplot: a vertical key taller than the room wraps into columns, filled top down
+      k = max(1_I4P, int(tall / (self%key_spacing * LINE_HEIGHT * font_size), I4P))
+      if (grid(1) > k) grid(2) = (grid(1) + k - 1_I4P) / k
    endif
    grid(3) = (grid(1) + grid(2) - 1_I4P) / grid(2)
    extent = [real(grid(2), R8P) * entry - GAP, real(grid(3), R8P) * self%key_spacing * LINE_HEIGHT * font_size + &
@@ -3750,16 +3758,16 @@ contains
             if (allocated(series%colors)) then
                if (i <= size(series%colors, kind=I4P)) then
                   if (series%colors(i) == 'none') cycle
-                  call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
-                                          label_angle(i), trim(series%colors(i)), &
-                                          series%text_offset(1) * 0.6_R8P * font_size, &
-                                          -series%text_offset(2) * font_size + 0.35_R8P * font_size)
+                  call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
+                                        label_angle(i), trim(series%colors(i)), &
+                                        series%text_offset(1) * 0.6_R8P * font_size, &
+                                        -series%text_offset(2) * font_size + 0.35_R8P * font_size, font_size)
                   cycle
                endif
             endif
-            call backend%data_label(u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), label_angle(i), &
-                                    color, series%text_offset(1) * 0.6_R8P * font_size, &
-                                    -series%text_offset(2) * font_size + 0.35_R8P * font_size)
+            call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
+                                  label_angle(i), color, series%text_offset(1) * 0.6_R8P * font_size, &
+                                  -series%text_offset(2) * font_size + 0.35_R8P * font_size, font_size)
          enddo
          backend%boxed = .false.
       endassociate
@@ -4552,7 +4560,8 @@ contains
          start = 0.0_R8P
       endif
       if (allocated(up)) deallocate(up, down)
-      allocate(up(n), down(n))
+      ! a stack per row number: a series without some rows (missing values) still stacks on its own rows
+      allocate(up(max(n, int(rows, I4P) + 1_I4P)), down(max(n, int(rows, I4P) + 1_I4P)))
       up = 0.0_R8P
       down = 0.0_R8P
       slot = 1.0_R8P / (real(k, R8P) + gap)
@@ -4598,7 +4607,13 @@ contains
             series%x(r) = start + series%rows(r)
             series%xlow(r) = series%x(r) - 0.5_R8P * scale
             series%xhigh(r) = series%x(r) + 0.5_R8P * scale
-            call stack(series, r, r)
+            ! the stack of its row number (rows 0, 1, ...), as gnuplot
+            if (ieee_is_finite(series%rows(r)) .and. series%rows(r) >= 0.0_R8P .and. &
+                series%rows(r) < real(size(up), R8P)) then
+               call stack(series, r, nint(series%rows(r), I4P) + 1_I4P)
+            else
+               call stack(series, r, r)
+            endif
          enddo
       case (HIST_COLUMNSTACKED)
          ! one stack, each row in the color of its linetype
@@ -6997,6 +7012,43 @@ contains
    ! only the ticks the map places
    if (size(axis%ticks) > 0) axis%ticks = pack(axis%ticks, ieee_is_finite(axis%to_unit(axis%ticks%value)))
    endsubroutine nonlinear_axis
+
+   subroutine data_label_lines(backend, x, y, text, anchor, angle, color, dx, dy, font_size)
+   !< A data label (`with labels`) on several lines (`"a\nb"`): the first at the point, the next ones below it, as
+   !< gnuplot; rotated, one line.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: x         !< Anchor abscissa [unit].
+   real(R8P),             intent(in)    :: y         !< Anchor ordinate [unit].
+   character(len=*),      intent(in)    :: text      !< Text.
+   character(len=*),      intent(in)    :: anchor    !< Horizontal anchor.
+   real(R8P),             intent(in)    :: angle     !< Rotation [deg].
+   character(len=*),      intent(in)    :: color     !< Color.
+   real(R8P),             intent(in)    :: dx        !< Horizontal offset [px].
+   real(R8P),             intent(in)    :: dy        !< Vertical offset [px, down].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   integer(I4P)                         :: a         !< Line start.
+   integer(I4P)                         :: e         !< Line end.
+   integer(I4P)                         :: line      !< Line counter.
+
+   if (angle /= 0.0_R8P .or. index(text, new_line('a')) == 0) then
+      call backend%data_label(x, y, text, anchor, angle, color, dx, dy)
+      return
+   endif
+   a = 1_I4P
+   line = 0_I4P
+   do
+      e = index(text(a:), new_line('a'), kind=I4P)
+      if (e == 0_I4P) then
+         e = len(text, kind=I4P)
+      else
+         e = a + e - 2_I4P
+      endif
+      call backend%data_label(x, y, text(a:e), anchor, angle, color, dx, dy + line * LINE_HEIGHT * font_size)
+      a = e + 2_I4P
+      line = line + 1_I4P
+      if (a > len(text, kind=I4P)) exit
+   enddo
+   endsubroutine data_label_lines
 
    subroutine plain_ticks(self)
    !< On an enhanced text device, the tick labels of the `noenhanced` axes escaped, read as they are (their widths
