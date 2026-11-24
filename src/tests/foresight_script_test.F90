@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(242)                           !< Per-check outcome.
+logical                       :: test_passed(243)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5980,6 +5980,23 @@ block
    test_passed(242) = test_passed(242) .and. iostat /= 0_I4P .and. index(iomsg, 'font needs') > 0
 endblock
 
+! fonts of the theta labels (set ttics font), the timestamp and the histogram group titles, as gnuplot 6.0
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg; set output 'foresight_script_test_fonts2.svg'; set polar; "// &
+                          "set ttics 0, 90 font ',7'; set timestamp font ':Italic'; plot 1 notitle", iostat, iomsg)
+test_passed(243) = iostat == 0_I4P
+if (test_passed(243)) test_passed(243) = interpreter%figure%panels(1)%ttics%font%size == 7.0_R8P .and. &
+                                       index(read_text('foresight_script_test_fonts2.svg'), 'font-size="7"') > 0 .and. &
+                                       index(read_text('foresight_script_test_fonts2.svg'), 'font-style="italic"') > 0
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg; set output 'foresight_script_test_fonts2.svg'"//new_line('a')// &
+                          "$H << EOD"//new_line('a')//"a 1"//new_line('a')//"b 2"//new_line('a')//"EOD"// &
+                          new_line('a')//"set style data histograms; set style histogram clustered title font ',9'"// &
+                          new_line('a')//"plot newhistogram 'G', $H using 2:xtic(1) notitle", iostat, iomsg)
+test_passed(243) = test_passed(243) .and. iostat == 0_I4P
+if (test_passed(243)) test_passed(243) = index(read_text('foresight_script_test_fonts2.svg'), &
+                                              'font-size="9" text-anchor="middle">G<') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5988,7 +6005,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,242L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,243L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

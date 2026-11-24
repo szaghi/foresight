@@ -209,6 +209,7 @@ type :: axes_object
    logical                          :: stamp_top = .false.    !< In the top margin, else the bottom one.
    logical                          :: stamp_rotate = .false. !< Reading upward, in the left margin.
    real(R8P)                        :: stamp_offset(2) = 0.0_R8P !< Shift [characters, y up].
+   type(font_object)                :: stamp_font                !< Font (`set timestamp font`).
    character(len=24)                :: stamp_color = ''       !< Text color, the frame's if blank.
    character(len=128)               :: stamp_format = '%a %b %d %H:%M:%S %Y' !< Time format (gnuplot's asctime).
    ! gnuplot `set clip`: the line segments with one or both ends out of the plot area drawn (their visible part), the
@@ -279,6 +280,7 @@ type :: axes_object
    character(len=:), allocatable    :: hist_title_color  !< Color of the histogram group titles (`set style histogram
                                                          !< title tc`), the frame's if unallocated.
    real(R8P)                        :: hist_title_offset(2) = 0.0_R8P !< Their offset [characters, y upward].
+   type(font_object)                :: hist_title_font                !< Their font (`title font "..."`).
    character(len=:), allocatable    :: errorbar_color    !< Error bar color (`set errorbars lc`), the series' if
                                                          !< unallocated.
    real(R8P)                        :: errorbar_lw = 0.0_R8P !< Error bar width [px] (`set errorbars lw`), 0: the
@@ -1903,6 +1905,7 @@ contains
       u = self%xaxis%to_unit(0.5_R8P * (lo + hi))
       if (u < 0.0_R8P .or. u > 1.0_R8P) cycle
       backend%boxed = self%hist_title_boxed
+      backend%font = self%hist_title_font
       if (allocated(self%hist_title_color)) then
          call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
                            baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle', &
@@ -1912,6 +1915,7 @@ contains
                            baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle')
       endif
       backend%boxed = .false.
+      backend%font = font_object()
    enddo
    call backend%end_group
    endsubroutine draw_group_titles
@@ -7718,6 +7722,7 @@ contains
    endif
    x = x + self%stamp_offset(1) * CHAR_WIDTH * font_size
    y = y - self%stamp_offset(2) * font_size
+   backend%font = self%stamp_font
    if (self%stamp_rotate .and. len_trim(self%stamp_color) > 0) then
       call backend%text(x, y, text, anchor, rotate=-90.0_R8P, color=trim(self%stamp_color))
    elseif (self%stamp_rotate) then
@@ -7727,6 +7732,7 @@ contains
    else
       call backend%text(x, y, text, anchor)
    endif
+   backend%font = font_object()
    endsubroutine draw_stamp
 
    pure function on_zero(tics, other) result(yes)

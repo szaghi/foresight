@@ -10104,8 +10104,12 @@ contains
                endif
                panel%hist_title_offset = v
             elseif (tokens(s + 1_I4P)%text == 'font') then
-               ! the font is the page's: the name is read and ignored
-               s = s + 2_I4P
+               ! the group titles' font
+               s = s + 1_I4P
+               if (.not. font_spec(self, tokens, s, panel%hist_title_font, iostat, iomsg)) then
+                  iomsg = 'set style histogram: title: '//iomsg
+                  return
+               endif
             elseif (is_word(tokens(s + 1_I4P)%text, 'enhanced noenhanced')) then
                s = s + 1_I4P
             elseif (is_word(tokens(s + 1_I4P)%text, 'boxed noboxed')) then
@@ -10407,8 +10411,10 @@ contains
                endif
                panel%stamp_offset = v
             elseif (tokens(i)%text == 'font') then
-               ! one font in foresight: the name is read and ignored
-               if (i < size(tokens, kind=I4P)) i = i + 1_I4P
+               if (.not. font_spec(self, tokens, i, panel%stamp_font, iostat, iomsg)) then
+                  iomsg = 'set timestamp: '//iomsg
+                  return
+               endif
             else
                copy = tokens
                copy(i)%text = 'lc'
@@ -12218,9 +12224,17 @@ contains
             at = merge(3_I4P, 2_I4P, add)
             if (at <= last) then
                if (tokens(at)%text(1:min(1, len(tokens(at)%text))) == '(') then
-                  ! `font F` after the list: read and ignored (one font), as the other tics options
+                  ! `font F` after the list: the labels' font, as the other tics options
                   if (at + 2_I4P == last) then
-                     if (tokens(at + 1_I4P)%text == 'font') last = at
+                     if (tokens(at + 1_I4P)%text == 'font') then
+                        j = at + 1_I4P
+                        if (.not. font_spec(self, tokens, j, self%figure%panels(self%figure%current)%ttics%font, &
+                                            iostat, iomsg)) then
+                           iomsg = 'set ttics: '//iomsg
+                           return
+                        endif
+                        last = at
+                     endif
                   endif
                   if (at /= last) then
                      call fail('set ttics: unexpected "'//tokens(at + 1_I4P)%text//'" after the list', iostat, iomsg)
@@ -12237,9 +12251,17 @@ contains
             endif
          endblock
       endif
-      ! `font F` at the end: one font in foresight, read and ignored
+      ! `font F` at the end: the labels' font
       if (last >= 3_I4P) then
-         if (tokens(last - 1_I4P)%kind == TOKEN_WORD .and. tokens(last - 1_I4P)%text == 'font') last = last - 2_I4P
+         if (tokens(last - 1_I4P)%kind == TOKEN_WORD .and. tokens(last - 1_I4P)%text == 'font') then
+            j = last - 1_I4P
+            if (.not. font_spec(self, tokens, j, self%figure%panels(self%figure%current)%ttics%font, iostat, &
+                                iomsg)) then
+               iomsg = 'set ttics: '//iomsg
+               return
+            endif
+            last = last - 2_I4P
+         endif
       endif
       ! `format EXPRESSION`, a string expression (`"%g".GPVAL_DEGREE_SIGN`)
       n = last - 1_I4P

@@ -1606,8 +1606,8 @@ plot 'run.dat' using 1:2:3 with labels font ",8"  # data labels
 
 A font is gnuplot's `"family:Bold:Italic,size"`, each part optional, as gnuplot 6.0's svg terminal: the size in pixels
 (`",8"`), `:Bold` and `:Italic` (or ` bold`, ` italic`), the family (`"serif"`, `"Times"`, `"Lucida Sans"`). Fonts
-apply to the title, the multiplot title, the axis labels (x, y, x2, y2, r, cb), the tick labels of each axis, the key,
-`set label`, the data labels and the page (`set terminal ... font`, `set termoption font`). The layout grows as
+apply to the title, the multiplot title, the axis labels (x, y, x2, y2, r, cb), the tick labels of each axis (theta's
+too), the key, `set label`, the data labels, the histogram group titles, the timestamp and the page (`set terminal ... font`, `set termoption font`). The layout grows as
 gnuplot's: the title, the multiplot title and the x2 label take rows of their size, the key its size; the tick labels
 and the other axis labels are placed as the page's text, only their glyphs change. A family is written to the SVG as
 given, the page's after it as fallback: the reader's fonts draw it, while foresight measures every text as its own
@@ -1763,7 +1763,7 @@ set timestamp rotate offset 1,0 tc "gray40" # reading upward on the left
 `set timestamp` writes the date and time in the bottom left margin, as gnuplot (`top`: the top left one; `rotate`:
 reading upward along the left side), in its format (gnuplot's asctime, `"%a %b %d %H:%M:%S %Y"`, by default; the
 conversions of [time data](#time-data)), the plot area a row (or a column) smaller; `offset` moves it in characters,
-`font` is read and ignored. The time is the local wall clock, or `SOURCE_DATE_EPOCH` (seconds since 1970) when that
+`font` its [font](#fonts). The time is the local wall clock, or `SOURCE_DATE_EPOCH` (seconds since 1970) when that
 variable is set, for reproducible pages: beyond gnuplot, which ignores it. `unset timestamp` removes it.
 
 ## Multiplot
@@ -1906,7 +1906,7 @@ plot newhistogram 'CPU', 'cpu.dat' u 2:xtic(1) t 'mesh', '' u 3 t 'solve', \
   their fill `FILL`. The gap and the bar widths are those of each group (`1/(k + gap)` for its k items).
 
 `set style histogram ... title [tc C] [offset X,Y]` colors and moves the group titles (`offset` in characters; a
-`font` is read and ignored); `nokeyseparators` is accepted, foresight drawing no blank key row between the groups
+`font` their [font](#fonts)); `nokeyseparators` is accepted, foresight drawing no blank key row between the groups
 where gnuplot does by default. `set errorbars` sets the [caps](#error-bar-caps) of the error bars.
 
 The rows of a histogram are its abscissae as given (the point numbers from a script): a header row that is not a
