@@ -19,6 +19,7 @@ public :: strip_comment
 public :: token_object
 public :: tokenize
 public :: TOKEN_COMMA, TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD
+public :: gnuplot_escape
 public :: UNAME_CHARS, UNAME_START
 public :: push
 
@@ -48,6 +49,52 @@ type :: token_object
 endtype token_object
 
 contains
+   pure subroutine gnuplot_escape(src, pos, text)
+   !< gnuplot's escape (parse_esc) in a double-quoted string, `src(pos:pos)` the character after the backslash, appended
+   !< to `text`, `pos` then after it: \n, \t and \r; octal \ooo a byte (up to 4 digits after a 0, else 3); \U+ kept
+   !< with its backslash for the enhanced text; another character as it is (\\ a backslash, \" a quote).
+   character(len=*),              intent(in)    :: src  !< Text.
+   integer(I4P),                  intent(inout) :: pos  !< Escaped character, then the next one.
+   character(len=:), allocatable, intent(inout) :: text !< Text read.
+   integer(I4P)                                 :: digits !< Octal digits read.
+   integer(I4P)                                 :: limit  !< Most octal digits.
+   integer(I4P)                                 :: code   !< Their value.
+   character(len=1)                             :: byte   !< The octal byte (a variable: nvfortran 26.9 misreads
+                                                          !< achar of a variable in a concatenation).
+
+   select case (src(pos:pos))
+   case ('n')
+      text = text//achar(10)
+   case ('t')
+      text = text//achar(9)
+   case ('r')
+      text = text//achar(13)
+   case ('0':'7')
+      digits = 0_I4P
+      code = 0_I4P
+      limit = 3_I4P
+      if (src(pos:pos) == '0') limit = 4_I4P
+      do while (digits < limit)
+         if (pos > len(src, kind=I4P)) exit
+         if (scan(src(pos:pos), '01234567') == 0) exit
+         code = 8_I4P * code + (iachar(src(pos:pos), kind=I4P) - 48_I4P)
+         digits = digits + 1_I4P
+         pos = pos + 1_I4P
+      enddo
+      byte = achar(mod(code, 256_I4P))
+      text = text//byte
+      return
+   case ('U')
+      if (pos < len(src, kind=I4P)) then
+         if (src(pos + 1_I4P:pos + 1_I4P) == '+') text = text//'\'
+      endif
+      text = text//src(pos:pos)
+   case default
+      text = text//src(pos:pos)
+   endselect
+   pos = pos + 1_I4P
+   endsubroutine gnuplot_escape
+
    subroutine split_statements(line, statements)
    !< Split `line` at `;` (and new lines) outside quotes and braces, dropping the `#` comment; blank statements are
    !< skipped. A block `do for [...] { ...; ... }` is one statement. Each statement's `first` and `last` are its
@@ -229,16 +276,8 @@ contains
             if (statement(i:i) == '"') exit
             if (statement(i:i) == '\' .and. i < n) then
                i = i + 1_I4P
-               if (statement(i:i) == 't' .or. statement(i:i) == 'n') then
-                  ! if/else, not merge(achar(9), achar(10), ...): ifx 2026.2 aborts on that (internal error #5623)
-                  if (statement(i:i) == 't') then
-                     token%text = token%text//achar(9)
-                  else
-                     token%text = token%text//achar(10)
-                  endif
-                  i = i + 1_I4P
-                  cycle
-               endif
+               call gnuplot_escape(statement, i, token%text)
+               cycle
             endif
             token%text = token%text//statement(i:i)
             i = i + 1_I4P

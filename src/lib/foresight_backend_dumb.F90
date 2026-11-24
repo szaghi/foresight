@@ -29,6 +29,7 @@ module foresight_backend_dumb
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : arrow_head, axes_view, backend_object
 use foresight_enhanced, only : has_markup, markup_plain
+use foresight_format, only : latin1_utf8
 use foresight_style, only : pattern_parts
 use foresight_theme, only : theme_object
 use foresight_sys, only : rename_file
@@ -89,6 +90,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: polygon
       procedure, pass(self) :: image
       procedure, pass(self) :: text
+      procedure, pass(self) :: text_raw !< text without the ISO 8859-1 conversion.
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
@@ -103,6 +105,7 @@ type, extends(backend_object) :: backend_dumb
       procedure, pass(self) :: readout_extent
       procedure, pass(self) :: data_arrows
       procedure, pass(self) :: data_label
+      procedure, pass(self) :: data_label_raw !< data_label without the ISO 8859-1 conversion.
       ! building blocks for finer devices
       procedure, pass(self) :: cell         !< Text of a cell.
       procedure, pass(self) :: clear        !< Blank a box.
@@ -365,6 +368,24 @@ contains
    endsubroutine image
 
    subroutine text(self, x, y, string, anchor, sup, rotate, color)
+   !< Text (`text_raw`), ISO 8859-1 texts in UTF-8 first (`latin1`).
+   class(backend_dumb), intent(inout)        :: self   !< Device.
+   real(R8P),          intent(in)           :: x      !< Anchor abscissa [px].
+   real(R8P),          intent(in)           :: y      !< Anchor ordinate (baseline) [px].
+   character(len=*),   intent(in)           :: string !< Text.
+   character(len=*),   intent(in)           :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   character(len=*),   intent(in), optional :: sup    !< Superscript appended to `string`.
+   real(R8P),          intent(in), optional :: rotate !< Rotation.
+   character(len=*),   intent(in), optional :: color  !< Text color.
+
+   if (self%latin1) then
+      call self%text_raw(x, y, latin1_utf8(string), anchor, sup, rotate, color)
+   else
+      call self%text_raw(x, y, string, anchor, sup, rotate, color)
+   endif
+   endsubroutine text
+
+   subroutine text_raw(self, x, y, string, anchor, sup, rotate, color)
    !< Text in the row of its baseline; superscripts appended after `^`; rotated text written top to bottom; the color
    !< is not drawn.
    class(backend_dumb), intent(inout)        :: self   !< Device.
@@ -407,7 +428,7 @@ contains
    do k = 1_I4P, n
       call self%put(c + k - 1_I4P, r, full(k:k))
    enddo
-   endsubroutine text
+   endsubroutine text_raw
 
    subroutine begin_plot_area(self, x, y, width, height)
    !< Remember the plot area, where unit-square coordinates map.
@@ -472,6 +493,25 @@ contains
    endsubroutine data_arrows
 
    subroutine data_label(self, x, y, string, anchor, rotate, color, dx, dy)
+   !< Text at a data point (`data_label_raw`), ISO 8859-1 texts in UTF-8 first (`latin1`).
+   class(backend_dumb), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Anchor abscissa [unit].
+   real(R8P),          intent(in)    :: y      !< Anchor ordinate [unit].
+   character(len=*),   intent(in)    :: string !< Text.
+   character(len=*),   intent(in)    :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   real(R8P),          intent(in)    :: rotate !< Rotation [deg, counterclockwise].
+   character(len=*),   intent(in)    :: color  !< Text color.
+   real(R8P),          intent(in)    :: dx     !< Horizontal offset [px].
+   real(R8P),          intent(in)    :: dy     !< Vertical offset [px, downward].
+
+   if (self%latin1) then
+      call self%data_label_raw(x, y, latin1_utf8(string), anchor, rotate, color, dx, dy)
+   else
+      call self%data_label_raw(x, y, string, anchor, rotate, color, dx, dy)
+   endif
+   endsubroutine data_label
+
+   subroutine data_label_raw(self, x, y, string, anchor, rotate, color, dx, dy)
    !< Text at a data point [unit square] inside the plot area, moved by the offset; unrotated in text.
    class(backend_dumb), intent(inout) :: self   !< Device.
    real(R8P),           intent(in)    :: x      !< Anchor abscissa [unit].
@@ -486,7 +526,7 @@ contains
    if (self%hidden) return
    if (x < 0.0_R8P .or. x > 1.0_R8P .or. y < 0.0_R8P .or. y > 1.0_R8P) return
    call self%text(self%area(1) + x * self%area(3) + dx, self%area(2) + (1.0_R8P - y) * self%area(4) + dy, string, anchor)
-   endsubroutine data_label
+   endsubroutine data_label_raw
 
    subroutine data_polyline(self, x, y, color, line_width, dasharray)
    !< Polyline [unit square] drawn with the color symbol, clipped to the plot area; grid lines (the polar grid) with

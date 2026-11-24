@@ -10,7 +10,7 @@ module foresight_backend_svg
 !< attributes only when active or not the default, so a plain panel reads the same as before them.
 use foresight_backend, only : arrow_head, axes_view, backend_object, sized_head
 use foresight_enhanced, only : has_markup, markup_svg, markup_width
-use foresight_format, only : fixed, int_str, real_str, xml_escape
+use foresight_format, only : fixed, int_str, latin1_utf8, real_str, xml_escape
 use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
@@ -66,6 +66,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: polygon
       procedure, pass(self) :: image
       procedure, pass(self) :: text
+      procedure, pass(self) :: text_raw !< text without the ISO 8859-1 conversion.
       procedure, pass(self) :: begin_plot_area
       procedure, pass(self) :: end_plot_area
       procedure, pass(self) :: data_polyline
@@ -79,6 +80,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_arrows
       procedure, pass(self), private :: pattern_fill !< Fill of a polygon, a pattern defined if needed.
       procedure, pass(self) :: data_label
+      procedure, pass(self) :: data_label_raw !< data_label without the ISO 8859-1 conversion.
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
       procedure, pass(self) :: open_file   !< Open the stream on `<file>.tmp`.
@@ -287,6 +289,24 @@ contains
    endsubroutine image
 
    subroutine text(self, x, y, string, anchor, sup, rotate, color)
+   !< Text (`text_raw`), ISO 8859-1 texts in UTF-8 first (`latin1`).
+   class(backend_svg), intent(inout)        :: self   !< Device.
+   real(R8P),          intent(in)           :: x      !< Anchor abscissa [px].
+   real(R8P),          intent(in)           :: y      !< Anchor ordinate (baseline) [px].
+   character(len=*),   intent(in)           :: string !< Text.
+   character(len=*),   intent(in)           :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   character(len=*),   intent(in), optional :: sup    !< Superscript appended to `string`.
+   real(R8P),          intent(in), optional :: rotate !< Rotation.
+   character(len=*),   intent(in), optional :: color  !< Text color.
+
+   if (self%latin1) then
+      call self%text_raw(x, y, latin1_utf8(string), anchor, sup, rotate, color)
+   else
+      call self%text_raw(x, y, string, anchor, sup, rotate, color)
+   endif
+   endsubroutine text
+
+   subroutine text_raw(self, x, y, string, anchor, sup, rotate, color)
    !< Text whose baseline passes through the anchor point (`x`, `y`) [px], in `color` if given.
    class(backend_svg), intent(inout)        :: self   !< Device.
    real(R8P),          intent(in)           :: x      !< Anchor abscissa [px].
@@ -316,7 +336,7 @@ contains
       if (len(sup) > 0) line = line//'<tspan dy="-0.45em" font-size="0.75em">'//xml_escape(sup)//'</tspan>'
    endif
    call self%put(line//'</text>')
-   endsubroutine text
+   endsubroutine text_raw
 
    subroutine begin_plot_area(self, x, y, width, height)
    !< Open the clipped plot area; its user space is the unit square, y upward.
@@ -601,6 +621,25 @@ contains
    endsubroutine data_arrows
 
    subroutine data_label(self, x, y, string, anchor, rotate, color, dx, dy)
+   !< Text at a data point (`data_label_raw`), ISO 8859-1 texts in UTF-8 first (`latin1`).
+   class(backend_svg), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Anchor abscissa [unit].
+   real(R8P),          intent(in)    :: y      !< Anchor ordinate [unit].
+   character(len=*),   intent(in)    :: string !< Text.
+   character(len=*),   intent(in)    :: anchor !< Horizontal anchor: `start`, `middle` or `end`.
+   real(R8P),          intent(in)    :: rotate !< Rotation [deg, counterclockwise].
+   character(len=*),   intent(in)    :: color  !< Text color.
+   real(R8P),          intent(in)    :: dx     !< Horizontal offset [px].
+   real(R8P),          intent(in)    :: dy     !< Vertical offset [px, downward].
+
+   if (self%latin1) then
+      call self%data_label_raw(x, y, latin1_utf8(string), anchor, rotate, color, dx, dy)
+   else
+      call self%data_label_raw(x, y, string, anchor, rotate, color, dx, dy)
+   endif
+   endsubroutine data_label
+
+   subroutine data_label_raw(self, x, y, string, anchor, rotate, color, dx, dy)
    !< Text anchored at a data point [unit square], queued for the pixel overlay of the labels: each `fs-label` text
    !< carries its anchor (`data-u`, `data-v`, unit square, y downward) and offset (`data-dx`, `data-dy`) for the
    !< interactive viewer to move it after a zoom.
@@ -636,7 +675,7 @@ contains
       line = line//'>'//xml_escape(string)//'</text>'
    endif
    self%labels = self%labels//line//new_line('a')
-   endsubroutine data_label
+   endsubroutine data_label_raw
 
    function textbox_attribute(self) result(attribute)
    !< The filter attribute of a boxed text, gnuplot's svg textbox: the background flooding the text's bounding box (no

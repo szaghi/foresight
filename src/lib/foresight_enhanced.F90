@@ -9,11 +9,13 @@ module foresight_enhanced
 !< one after it written over it, as `a@^b_c`); `&` makes the next element invisible, keeping its room; `~a{.8-}`
 !< overprints the second element on the first, raised by the fraction of the size; `\` makes the next character
 !< literal. Widths are estimated as the SVG backend's: 0.55 font sizes per character.
-use foresight_format, only : escape => xml_escape
+use foresight_format, only : escape => xml_escape, utf8_char
 use penf, only : I4P, R8P
 
 implicit none
 private
+
+character(len=*), parameter :: HEX = '0123456789abcdefABCDEF' !< Hexadecimal digits.
 public :: enhanced_run
 public :: enhanced_runs
 public :: has_markup
@@ -104,6 +106,25 @@ contains
 
    select case (text(pos:pos))
    case ('\')
+      ! gnuplot's \U+hhhh: the character of that code point (its hex digits read greedily, as gnuplot)
+      if (pos + 2_I4P < len(text, kind=I4P)) then
+         if (text(pos + 1_I4P:pos + 2_I4P) == 'U+' .and. scan(text(pos + 3_I4P:pos + 3_I4P), HEX) > 0) then
+            block
+               integer(I4P) :: code !< Code point.
+
+               pos = pos + 3_I4P
+               code = 0_I4P
+               do while (pos <= len(text, kind=I4P))
+                  if (scan(text(pos:pos), HEX) == 0) exit
+                  if (code < 16777216_I4P) code = 16_I4P * code + (index(HEX, text(pos:pos)) - 1_I4P) - &
+                                                  merge(6_I4P, 0_I4P, index(HEX, text(pos:pos)) > 16_I4P)
+                  pos = pos + 1_I4P
+               enddo
+               call put(utf8_char(code), state, runs)
+            endblock
+            return
+         endif
+      endif
       ! the next character as it is (a lone backslash at the end too)
       if (pos < len(text, kind=I4P)) pos = pos + 1_I4P
       call put(text(pos:pos + utf8_length(text(pos:pos)) - 1_I4P), state, runs)
@@ -383,7 +404,8 @@ contains
    endfunction shown
 
    pure function greek(text) result(g)
-   !< The letters of `text` as the Greek letters of the Symbol font (Adobe's encoding), in UTF-8; others as they are.
+   !< The letters of `text` as the Greek letters of the Symbol font (Adobe's encoding), in UTF-8, and the characters
+   !< 160-255 as its symbols (\362 the integral, \245 infinity); others as they are.
    character(len=*), intent(in)  :: text !< Latin letters.
    character(len=:), allocatable :: g    !< Greek letters.
    character(len=*), parameter   :: LATIN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ' !< Letters.
@@ -391,14 +413,40 @@ contains
                                                  957, 959, 960, 952, 961, 963, 964, 965, 982, 969, 958, 968, 950, &
                                                  913, 914, 935, 916, 917, 934, 915, 919, 921, 977, 922, 923, 924, &
                                                  925, 927, 928, 920, 929, 931, 932, 933, 962, 937, 926, 936, 918] !< Code points.
+   integer, parameter            :: HIGH(0:95) = [8364, 978, 8242, 8804, 8260, 8734, 402, 9827, 9830, 9829, 9824, &
+                                                 8596, 8592, 8593, 8594, 8595, 176, 177, 8243, 8805, 215, 8733, &
+                                                 8706, 8226, 247, 8800, 8801, 8776, 8230, 9168, 9135, 8629, 8501, &
+                                                 8465, 8476, 8472, 8855, 8853, 8709, 8745, 8746, 8835, 8839, 8836, &
+                                                 8834, 8838, 8712, 8713, 8736, 8711, 174, 169, 8482, 8719, 8730, &
+                                                 8901, 172, 8743, 8744, 8660, 8656, 8657, 8658, 8659, 9674, 9001, &
+                                                 174, 169, 8482, 8721, 9115, 9116, 9117, 9121, 9122, 9123, 9127, &
+                                                 9128, 9129, 9130, 0, 9002, 8747, 8992, 9134, 8993, 9118, 9119, &
+                                                 9120, 9124, 9125, 9126, 9131, 9132, 9133, 0] !< Code points of 160-255.
    character(len=2 * len(text))  :: buffer !< Bytes (nvfortran 26.9 pads `g = g//achar(...)`: a fixed buffer).
+   character(len=:), allocatable :: glyph  !< A symbol in UTF-8.
    integer(I4P)                  :: k      !< Counter.
    integer(I4P)                  :: c      !< Letter index.
    integer(I4P)                  :: n      !< Bytes written.
+   integer(I4P)                  :: code   !< Latin-1 code of a two-byte character.
 
    n = 0_I4P
-   do k = 1_I4P, len(text, kind=I4P)
+   k = 0_I4P
+   do while (k < len(text, kind=I4P))
+      k = k + 1_I4P
       c = index(LATIN, text(k:k), kind=I4P)
+      ! the upper half of the Symbol encoding (a Latin-1 character in UTF-8: `set encoding iso_8859_1`, or written so)
+      if (c == 0_I4P .and. k < len(text, kind=I4P) .and. (text(k:k) == achar(194) .or. text(k:k) == achar(195))) then
+         code = 64_I4P * (iachar(text(k:k), kind=I4P) - 192_I4P) + iachar(text(k + 1_I4P:k + 1_I4P), kind=I4P) - 128_I4P
+         if (code >= 160_I4P .and. code <= 255_I4P) then
+            if (HIGH(code - 160_I4P) > 0) then
+               glyph = utf8_char(int(HIGH(code - 160_I4P), I4P))
+               buffer(n + 1_I4P:n + len(glyph, kind=I4P)) = glyph
+               n = n + len(glyph, kind=I4P)
+               k = k + 1_I4P
+               cycle
+            endif
+         endif
+      endif
       if (c == 0_I4P) then
          buffer(n + 1_I4P:n + 1_I4P) = text(k:k)
          n = n + 1_I4P

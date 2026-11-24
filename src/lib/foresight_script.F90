@@ -8510,7 +8510,7 @@ contains
       self%output = text
       self%output_set = .true.
    elseif (keyword(option, 'encoding', 3_I4P)) then
-      ! gnuplot's encodings foresight writes faithfully: default (bytes as they are) and utf8 (locale, here)
+      ! gnuplot's encodings foresight writes faithfully: default (bytes as they are), utf8 (locale, here) and iso_8859_1
       text = 'default'
       if (size(tokens) >= 2) then
          if (tokens(2)%kind == TOKEN_WORD .and. is_word(tokens(2)%text, 'default utf8 locale')) then
@@ -8528,11 +8528,13 @@ contains
          endif
       endif
       if (text == 'locale') text = 'utf8'
-      if (.not. is_word(text, 'default utf8')) then
-         call fail('set encoding: only default, utf8 and locale are supported (the output is UTF-8), not "'//text//'"', &
-                   iostat, iomsg)
+      if (.not. is_word(text, 'default utf8 iso_8859_1')) then
+         call fail('set encoding: only default, utf8, locale and iso_8859_1 are supported (the output is UTF-8), not "'// &
+                   text//'"', iostat, iomsg)
          return
       endif
+      ! ISO 8859-1: its texts written in UTF-8 (gnuplot declares the encoding of its output instead)
+      self%figure%latin1 = text == 'iso_8859_1'
       if (text == 'utf8' .and. (self%minus_sign .or. self%micro)) then
          call fail('set encoding utf8: set minussign and set micro are not supported with it (unset them first)', &
                    iostat, iomsg)

@@ -51,7 +51,7 @@ use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_che
                              gnuplot_real, int_str, real_from_decimal
 use foresight_mathlib, only : MATH_ARGS, MATH_FUNCTIONS, math_function, math_order
 use foresight_sys, only : command_output
-use foresight_tokens, only : UNAME_CHARS, UNAME_START
+use foresight_tokens, only : gnuplot_escape, UNAME_CHARS, UNAME_START
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
 
@@ -736,7 +736,7 @@ contains
          read(token(2:), *, iostat=ios) number%i
          if (ios /= 0_I4P .or. number%i > huge(1_I4P)) call syntax('column number too large')
       elseif (src(pos:pos) == '"' .or. src(pos:pos) == "'") then
-         ! single quotes literal, double quotes with gnuplot's escapes \t, \n and \ taking the next character
+         ! single quotes literal, double quotes with gnuplot's escapes (gnuplot_escape)
          kind = T_STRING
          quote = src(pos:pos)
          token = ''
@@ -747,14 +747,8 @@ contains
             if (src(pos:pos) == quote) exit
             if (quote == '"' .and. src(pos:pos) == '\' .and. pos < n) then
                pos = pos + 1_I4P
-               select case (src(pos:pos))
-               case ('t')
-                  token = token//achar(9)
-               case ('n')
-                  token = token//new_line('a')
-               case default
-                  token = token//src(pos:pos)
-               endselect
+               call gnuplot_escape(src, pos, token)
+               cycle
             else
                token = token//src(pos:pos)
             endif

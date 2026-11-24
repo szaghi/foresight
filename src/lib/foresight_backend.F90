@@ -62,6 +62,7 @@ type, abstract :: backend_object
    !< Abstract output device.
    type(theme_object) :: theme !< Output theme: colors the layout's ones are mapped to (foresight_theme).
    logical            :: enhanced = .false. !< Texts read as gnuplot's enhanced text (foresight_enhanced).
+   logical            :: latin1 = .false.   !< Texts in ISO 8859-1, written in UTF-8 (`set encoding iso_8859_1`).
    logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
    real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
    logical            :: boxed = .false.     !< The texts written now are boxed (gnuplot's textbox): on the background.

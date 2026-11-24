@@ -39,6 +39,8 @@ public :: parse_decimal
 public :: real_from_decimal
 public :: real_str
 public :: split_format
+public :: latin1_utf8
+public :: utf8_char
 public :: xml_escape
 
 integer(I8P), parameter :: LIMB = 1000000000_I8P !< Base of the exact decimal digits.
@@ -164,6 +166,57 @@ contains
    str = digits//'e'//int_str(int(e, I8P))
    if (v < 0.0_R8P) str = '-'//str
    endfunction real_str
+
+   pure function latin1_utf8(text) result(utf8)
+   !< `text` read as ISO 8859-1 (gnuplot's `set encoding iso_8859_1`), in UTF-8: each byte from 128 a two-byte character.
+   character(len=*), intent(in)  :: text !< ISO 8859-1 text.
+   character(len=:), allocatable :: utf8 !< UTF-8 text.
+   integer(I4P)                  :: i    !< Byte counter.
+   integer(I4P)                  :: b    !< Byte value.
+
+   utf8 = ''
+   do i = 1_I4P, len(text, kind=I4P)
+      b = iachar(text(i:i), kind=I4P)
+      if (b < 128_I4P) then
+         utf8 = utf8//text(i:i)
+      else
+         utf8 = utf8//utf8_char(b)
+      endif
+   enddo
+   endfunction latin1_utf8
+
+   pure function utf8_char(code) result(text)
+   !< UTF-8 encoding of the code point `code` (at most U+10FFFF; beyond, U+FFFD).
+   integer(I4P), intent(in)      :: code  !< Code point.
+   character(len=:), allocatable :: text  !< Encoded bytes.
+   character(len=4)              :: bytes !< Encoded bytes, the first `n` (a fixed buffer: nvfortran 26.9 misreads
+                                          !< achar of a variable in a concatenation).
+   integer(I4P)                  :: c     !< Code point encoded.
+   integer(I4P)                  :: n     !< Bytes.
+
+   c = code
+   if (c < 0_I4P .or. c > 1114111_I4P) c = 65533_I4P
+   if (c < 128_I4P) then
+      n = 1_I4P
+      bytes(1:1) = achar(c)
+   elseif (c < 2048_I4P) then
+      n = 2_I4P
+      bytes(1:1) = achar(192_I4P + c / 64_I4P)
+      bytes(2:2) = achar(128_I4P + mod(c, 64_I4P))
+   elseif (c < 65536_I4P) then
+      n = 3_I4P
+      bytes(1:1) = achar(224_I4P + c / 4096_I4P)
+      bytes(2:2) = achar(128_I4P + mod(c / 64_I4P, 64_I4P))
+      bytes(3:3) = achar(128_I4P + mod(c, 64_I4P))
+   else
+      n = 4_I4P
+      bytes(1:1) = achar(240_I4P + c / 262144_I4P)
+      bytes(2:2) = achar(128_I4P + mod(c / 4096_I4P, 64_I4P))
+      bytes(3:3) = achar(128_I4P + mod(c / 64_I4P, 64_I4P))
+      bytes(4:4) = achar(128_I4P + mod(c, 64_I4P))
+   endif
+   text = bytes(1:n)
+   endfunction utf8_char
 
    pure function xml_escape(text) result(escaped)
    !< Escape the XML special characters `&`, `<`, `>` and `"`, and new lines (`&#10;`: an attribute keeps them).

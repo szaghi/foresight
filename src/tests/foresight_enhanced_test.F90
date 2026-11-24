@@ -8,7 +8,7 @@ use foresight_enhanced, only : has_markup, markup_literal, markup_plain, markup_
 use penf, only : R8P
 
 implicit none
-logical :: test_passed(9) !< Per-check outcome.
+logical :: test_passed(10) !< Per-check outcome.
 
 ! superscript and subscript: 0.8 of the size, up half the current size, down 0.3 of it; nested ones apply again
 test_passed(1) = svg_is('x^{a^b}', '<tspan>x</tspan><tspan font-size="9.6" dy="-6">a</tspan>'// &
@@ -46,8 +46,13 @@ test_passed(8) = abs(markup_width('x^2', 12.0_R8P) - 11.88_R8P) < 1.0e-9_R8P .an
                  abs(markup_width('a\_1', 12.0_R8P) - 19.8_R8P) < 1.0e-9_R8P
 ! the markup characters
 test_passed(9) = has_markup('x^2') .and. has_markup('a\b') .and. .not. has_markup('x**2 + 1 (m/s)')
+! gnuplot's \U+hhhh (hex digits read greedily) and the Symbol font's upper half (a Latin-1 character in UTF-8): the
+! integral (U+222B) and infinity (U+221E) for \362 and \245
+test_passed(10) = svg_is('a\U+2192 b', 'a'//char(226)//char(134)//char(146)//' b') .and. &
+                  svg_is('{/Symbol '//char(195)//char(178)//char(194)//char(165)//'}', &
+                         char(226)//char(136)//char(171)//char(226)//char(136)//char(158))
 
-write(output_unit, '(A,9L2)') 'foresight enhanced checks:', test_passed
+write(output_unit, '(A,10L2)') 'foresight enhanced checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 contains

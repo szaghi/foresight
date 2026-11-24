@@ -8,6 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
+use foresight_expression, only : value_object
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
 use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, WITH_FILLSTEPS, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
@@ -39,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(227)                           !< Per-check outcome.
+logical                       :: test_passed(228)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2597,8 +2598,8 @@ test_passed(122) = test_passed(122) .and. iostat == 0_I4P .and. interpreter%exit
 call interpreter%init(scratch)
 call interpreter%run_text('exit error "boom"', iostat, iomsg)
 test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'boom') > 0
-call interpreter%run_text('set encoding iso_8859_1', iostat, iomsg)
-test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'only default, utf8 and locale') > 0
+call interpreter%run_text('set encoding cp1252', iostat, iomsg)
+test_passed(122) = test_passed(122) .and. iostat /= 0_I4P .and. index(iomsg, 'only default, utf8, locale and iso_8859_1') > 0
 open(newunit=unit, file='foresight_script_test_gpval.txt')
 close(unit, status='delete')
 
@@ -5451,6 +5452,54 @@ if (test_passed(227)) then
    endblock
 endif
 
+
+! gnuplot's string escapes (parse_esc): octal bytes (up to 4 digits after a 0, else 3), \r, \U+ kept for the enhanced
+! text (there the character of that code point), another character as it is; set encoding iso_8859_1: the bytes
+! written in UTF-8 (enhancedtext.dem's "\362" and "\245")
+call interpreter%init(scratch)
+call interpreter%run_text('a = "[\101\1010\0101\7\q\"\\]"; b = "\U+2192"; c = strlen("\362")', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(228) = iostat == 0_I4P
+if (test_passed(228)) then
+   block
+      type(value_object) :: v      !< Value read back.
+      real(R8P)          :: n      !< strlen.
+      logical            :: found  !< Defined.
+
+      call interpreter%symbols%get('a', v, found)
+      test_passed(228) = found .and. v%s == '[A'//'A0'//'A'//achar(7)//'q"\]'
+      call interpreter%symbols%get('b', v, found)
+      test_passed(228) = test_passed(228) .and. found .and. v%s == '\U+2192'
+      call interpreter%symbols%value_of('c', n, found)
+      test_passed(228) = test_passed(228) .and. n == 1.0_R8P
+   endblock
+endif
+call interpreter%run_text('set output "foresight_script_test_latin1.svg"; set encoding iso_8859_1; '// &
+                          'set label 1 "x\362y" at 0,0; set label 2 "p\U+2192q" at 0,0.5; plot x', iostat, iomsg)
+test_passed(228) = test_passed(228) .and. iostat == 0_I4P
+if (test_passed(228)) then
+   block
+      character(len=1000) :: line   !< SVG line.
+      integer(I4P)        :: ios    !< Read status.
+      logical             :: latin1 !< x, o grave (U+00F2 in UTF-8), y.
+      logical             :: arrow  !< p, U+2192 in UTF-8, q.
+
+      latin1 = .false.
+      arrow = .false.
+      open(newunit=unit, file='foresight_script_test_latin1.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '>x'//achar(195)//achar(178)//'y<') > 0) latin1 = .true.
+         if (index(line, '>p'//achar(226)//achar(134)//achar(146)//'q<') > 0) arrow = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(228) = latin1 .and. arrow
+   endblock
+endif
+call interpreter%run_text('set encoding default', iostat, iomsg)
+test_passed(228) = test_passed(228) .and. iostat == 0_I4P .and. .not. interpreter%figure%latin1
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5459,7 +5508,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,227L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,228L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -44,6 +44,8 @@ type :: figure_object
    real(R8P)                      :: width        = 600.0_R8P !< Page width [px], gnuplot svg terminal default.
    real(R8P)                      :: height       = 480.0_R8P !< Page height [px], gnuplot svg terminal default.
    real(R8P)                      :: font_size    = 12.0_R8P  !< Font size [px].
+   logical                        :: latin1       = .false.   !< Texts in ISO 8859-1, written in UTF-8 (scripts' `set
+                                                              !< encoding iso_8859_1`).
    logical                        :: enhanced     = .false.   !< Texts read as gnuplot's enhanced text (the scripts:
                                                               !< on, as gnuplot; the library: off unless set).
    integer(I4P)                   :: refresh      = 0_I4P     !< HTML page reload period [s], 0 for none.
@@ -2166,6 +2168,7 @@ contains
    integer(I4P)                         :: rc(2)   !< Row and column of a panel's cell, from 0.
 
    backend%enhanced = self%enhanced
+   backend%latin1 = self%latin1
    backend%text_size = self%font_size
    call backend%begin_page(file, self%width, self%height, self%font_size)
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)

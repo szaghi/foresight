@@ -180,6 +180,8 @@ check("enhanced fonts", spans("{/=8 s}{/*1.5 L}") ===
   "<tspan font-size=\"16\" font-weight=\"bold\">b</tspan>" &&
   spans("{/Helvetica:Italic h}") === "<tspan font-style=\"italic\" font-family=\"Helvetica\">h</tspan>" &&
   spans("{/Symbol abg}") === "\u03b1\u03b2\u03b3");
+check("enhanced unicode and symbols", spans("a\\U+2192b") === "a\u{2192b}" &&
+  spans("a\\U+2192 b") === "a\u2192 b" && spans("{/Symbol \u00f2\u00a5}") === "\u222b\u221e");
 check("enhanced escapes", spans("x\\^2") === "x^2" && spans("a\\_1") === "a_1" &&
   !viewer.hasMarkup("x**2 + 1 (m/s)") && viewer.hasMarkup("t_1"));
 check("tics noenhanced", viewer.readTics("noenhanced", "").plain === true &&
