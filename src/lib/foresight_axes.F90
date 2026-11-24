@@ -1540,9 +1540,6 @@ contains
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    ! the objects in data space, clipped and zoomed with the data, behind it
    call annotate('behind', .true.)
-   call annotate('back', .true.)
-   ! the zero axes, data geometry behind the series (gnuplot `set zeroaxis`)
-   if (any(self%zero_axes)) call self%draw_zero_axes(backend)
    ! the polar grid and border are data geometry, zoomed with the series
    ! `set grid polar`, or `set grid` on a polar panel (rings at the r ticks, spokes at the theta ticks, as gnuplot)
    if (self%polar .and. (self%grid_polar > 0.0_R8P .or. self%grid)) then
@@ -1550,6 +1547,10 @@ contains
       call self%draw_polar_grid(backend)
       call backend%end_group
    endif
+   ! the zero axes, data geometry behind the series (gnuplot `set zeroaxis`)
+   if (any(self%zero_axes)) call self%draw_zero_axes(backend)
+   ! the back objects over the grid and the zero axes, as gnuplot (windrose.dem: its centre disk)
+   call annotate('back', .true.)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
       call backend%begin_group('fs-series', series=s)

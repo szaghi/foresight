@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(235)                           !< Per-check outcome.
+logical                       :: test_passed(236)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5803,6 +5803,23 @@ test_passed(235) = iostat == 0_I4P .and. &
 call interpreter%run_text("x = weekdate_iso(2020, 54)", iostat, iomsg)
 test_passed(235) = test_passed(235) .and. iostat /= 0_I4P
 
+! back objects in data space over the polar grid and the zero axes, as gnuplot 6.0 (windrose.dem: its centre disk
+! covers the spokes)
+call interpreter%init(scratch)
+call interpreter%run_text("set terminal svg; set output 'foresight_script_test_layers.svg'; set polar; "// &
+                          "set grid polar; set xzeroaxis; set object 1 circle at 0,0 radius 0.2 fs solid fc 'white'; "// &
+                          "plot 1 notitle", iostat, iomsg)
+test_passed(236) = iostat == 0_I4P
+if (test_passed(236)) then
+   block
+      character(len=:), allocatable :: svg !< Rendered SVG.
+
+      svg = read_text('foresight_script_test_layers.svg')
+      test_passed(236) = index(svg, 'fs-pgrid') > 0 .and. index(svg, 'fs-objects') > index(svg, 'fs-pgrid') .and. &
+                        index(svg, 'fs-objects') < index(svg, 'fs-series')
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5811,7 +5828,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,235L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,236L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
