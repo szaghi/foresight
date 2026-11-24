@@ -301,7 +301,8 @@ contains
    !< `text` read with the time `format`, as gnuplot's `strptime`: `%d %m %H %M` (up to 2 digits), `%y` (2 digits, 69
    !< to 99 the 1900s, else the 2000s), `%Y` (up to 4), `%j` (up to 3), `%S` (seconds with a fraction), `%s` (seconds
    !< since the epoch), `%b %B` (month names or their 3 first letters), `%a %A` (weekday names, skipped), `%p` (`pm`
-   !< adds 12 hours), `%tH %tM %tS` (elapsed hours, minutes, seconds, signed, the last with a fraction); a blank
+   !< adds 12 hours), `%tH %tM %tS` (elapsed hours, minutes, seconds, signed, the last with a fraction), `%z` (a zone
+   !< offset, `Z` or [+-]hh[:]mm, taken off), `%Z` (a zone name, skipped); a blank
    !< matches any run of blanks, any other character itself. Fields not given are those of 1970-01-01 00:00:00, also
    !< those after the end of the text (gnuplot reads "1/6/93" with "%d/%m/%y %H%M").
    !< `ok` false (`t` NaN) if `text` does not match.
@@ -433,6 +434,47 @@ contains
          case default
             return
          endselect
+      case ('z')
+         ! a zone offset, `Z` or [+-]hh[:]mm, taken off (gnuplot: 12:24+01:00 is 11:24)
+         if (j > len(text)) return
+         if (text(j:j) == 'Z') then
+            j = j + 1_I4P
+         elseif (text(j:j) == '+' .or. text(j:j) == '-') then
+            block
+               real(R8P)    :: sgn  !< Sign of the offset.
+               integer(I4P) :: hh   !< Hours.
+               integer(I4P) :: mm   !< Minutes.
+               integer(I4P) :: ios  !< Read status.
+
+               sgn = merge(1.0_R8P, -1.0_R8P, text(j:j) == '+')
+               j = j + 1_I4P
+               if (j + 1_I4P > len(text)) return
+               if (verify(text(j:j + 1_I4P), '0123456789') /= 0) return
+               read(text(j:j + 1_I4P), '(I2)', iostat=ios) hh
+               if (ios /= 0) return
+               j = j + 2_I4P
+               mm = 0_I4P
+               if (j <= len(text)) then
+                  if (text(j:j) == ':') j = j + 1_I4P
+               endif
+               if (j + 1_I4P <= len(text)) then
+                  if (verify(text(j:j + 1_I4P), '0123456789') == 0) then
+                     read(text(j:j + 1_I4P), '(I2)', iostat=ios) mm
+                     if (ios /= 0) return
+                     j = j + 2_I4P
+                  endif
+               endif
+               offset = offset - sgn * (3600.0_R8P * hh + 60.0_R8P * mm)
+            endblock
+         else
+            return
+         endif
+      case ('Z')
+         ! a zone name: skipped, no offset (gnuplot)
+         do while (j <= len(text))
+            if (verify(text(j:j), 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') /= 0) exit
+            j = j + 1_I4P
+         enddo
       case ('%')
          if (j > len(text)) return
          if (text(j:j) /= '%') return
@@ -623,13 +665,14 @@ contains
    endfunction padded
 
    pure function decimals(fraction, prec) result(text)
-   !< `.` then the first `prec` decimals of `fraction` (in [0, 1)), truncated, as gnuplot's `%.NS`.
+   !< `.` then `prec` decimals of `fraction` (in [0, 1)), rounded and never carried (at most 0.99...), as gnuplot 6.0's
+   !< `%.NS` (time.c: floor(0.5 + 10**prec * fraction), capped).
    real(R8P),    intent(in)      :: fraction !< Fraction.
    integer(I4P), intent(in)      :: prec     !< Decimals.
    character(len=:), allocatable :: text     !< Text.
    integer(I8P)                  :: scaled   !< Decimals as an integer.
 
-   scaled = int(fraction * 10.0_R8P**prec, I8P)
+   scaled = min(int(floor(0.5_R8P + fraction * 10.0_R8P**prec), I8P), 10_I8P**prec - 1_I8P)
    text = '.'//padded(scaled, prec, '0')
    endfunction decimals
 

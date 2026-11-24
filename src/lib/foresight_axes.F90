@@ -1256,6 +1256,8 @@ contains
    integer(I4P)                      :: kx        !< x axis of the series: 1 or 2.
    integer(I4P)                      :: ky        !< y axis of the series: 1 or 2.
 
+   ! gnuplot `noautoscale`: the series out of the autoscaling
+   if (self%series(s)%noautoscale) return
    kx = merge(2_I4P, 1_I4P, self%series(s)%x2)
    ky = merge(2_I4P, 1_I4P, self%series(s)%y2)
    hit = .false.

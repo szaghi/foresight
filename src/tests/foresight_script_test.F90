@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(219)                           !< Per-check outcome.
+logical                       :: test_passed(220)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5043,6 +5043,53 @@ if (test_passed(219)) test_passed(219) = count(interpreter%figure%panels(1)%yaxi
 open(newunit=unit, file='foresight_script_test_rr.svg')
 close(unit, status='delete')
 
+! time and boxplot forms of the demos, as gnuplot 6.0: set xtics time (timedate), set mxtics time 5 min, labels with
+! tic labels, strptime %z and %Z, strftime %.3S rounded, boxplot factors in lc variable (lt N, N+1, ...), noautoscale
+call interpreter%init(scratch)
+call interpreter%run_text('$L << EOD'//new_line('a')//'1 A'//new_line('a')//'2 B'//new_line('a')//'EOD'// &
+                          new_line('a')//'set xtics time format "%H"; set mxtics time 5 min; '// &
+                          't1 = strptime("%d/%m/%y %H:%M%z", "18/02/19 12:24+01:00"); '// &
+                          't2 = strptime("%d/%m/%y %H:%M %Z", "18/02/19 13:24 CET"); '// &
+                          's = strftime("%H:%M:%.3S", 1390852607.1); '// &
+                          'plot $L using 1:1:(strcol(2)):xticlabels(2):yticlabels(2) with labels', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(220) = iostat == 0_I4P
+if (test_passed(220)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(220) = panel%xaxis%time .and. panel%xaxis%tics%minor_unit == 'minutes' .and. &
+                        panel%xaxis%tics%minor_count == 5_I4P .and. allocated(panel%series(1)%xlabels) .and. &
+                        allocated(panel%series(1)%xlabels2)
+      if (test_passed(220)) test_passed(220) = trim(panel%series(1)%texts(2)) == 'B' .and. &
+                                             trim(panel%series(1)%xlabels(1)) == 'A'
+   endassociate
+   block
+      real(R8P)                     :: v(2)  !< Values.
+      logical                       :: found !< Found.
+      character(len=:), allocatable :: text  !< String.
+
+      call interpreter%symbols%value_of('t1', v(1), found)
+      call interpreter%symbols%value_of('t2', v(2), found)
+      ! gnuplot 6.0: 1550489040 and 1550496240
+      test_passed(220) = test_passed(220) .and. v(1) == 1550489040.0_R8P .and. v(2) == 1550496240.0_R8P
+      call interpreter%symbols%string_of('s', text, found)
+      test_passed(220) = test_passed(220) .and. found .and. text == '19:56:47.100'
+   endblock
+endif
+call interpreter%init(scratch)
+call interpreter%run_text('$B << EOD'//new_line('a')//'1 A'//new_line('a')//'2 A'//new_line('a')//'3 B'//new_line('a')// &
+                          '5 B'//new_line('a')//'EOD'//new_line('a')//'set linetype 51 lc "red"; '// &
+                          'set linetype 52 lc "green"; set style data boxplot; '// &
+                          'plot $B using (1):1:(0):2 lt 51 lc variable, $B using (5):($1*100) w p noauto', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(220) = test_passed(220) .and. iostat == 0_I4P
+if (test_passed(220)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(220) = allocated(panel%series(1)%colors) .and. panel%series(2)%noautoscale
+      if (test_passed(220)) test_passed(220) = trim(panel%series(1)%colors(1)) == '#ff0000' .and. &
+                                             trim(panel%series(1)%colors(2)) == '#00ff00'
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5051,7 +5098,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,219L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,220L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

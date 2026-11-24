@@ -2765,6 +2765,9 @@ contains
    logical                                      :: binavg    !< `binvalue=avg`.
    real(R8P)                                    :: bin_edges(2) !< Outer edges of the bins.
    logical                                      :: lcvar     !< lc variable: the colors from the last using column.
+   logical                                      :: box_lcvar !< lc variable on boxplot factors: a linetype per factor.
+   integer(I4P)                                 :: item_lt   !< The item's `lt N`, 0 if not given.
+   logical                                      :: item_noauto !< The item out of the autoscaling (`noautoscale`).
    logical                                      :: lcz       !< lc palette z: the palette values from the last column.
    character(len=:), allocatable                :: palette_lc !< `lc palette` marker of the item, empty for none.
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
@@ -2819,6 +2822,10 @@ contains
    type(expression_object)                      :: label_field2 !< Its field.
    character(len=2)                             :: label_axis2  !< Its axis.
    character(len=:), allocatable                :: labels2(:)   !< Its text labels of the points.
+   integer(I4P)                                 :: tic_col  !< `labels` with tic labels (`xticlabels(2)`): the column of
+                                                            !< those, as label_col, 0 for none.
+   type(expression_object)                      :: tic_field !< Its field.
+   character(len=:), allocatable                :: ticlabels(:) !< Its text labels of the points.
    logical                                      :: one_field !< `using` gives one field (before the point number).
    logical                                      :: weight_one !< The single column is x, each point of weight 1.
    logical                                      :: is_matrix !< The item reads a `matrix` file.
@@ -3231,6 +3238,7 @@ contains
       spec = ''
       label_col = 0_I4P
       label_col2 = 0_I4P
+      tic_col = 0_I4P
       label_axis = 'x'
       is_matrix = .false.
       nonuniform = .false.
@@ -3256,6 +3264,9 @@ contains
       binwidth = -1.0_R8P
       binavg = .false.
       lcvar = .false.
+      box_lcvar = .false.
+      item_lt = 0_I4P
+      item_noauto = .false.
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
@@ -3800,6 +3811,11 @@ contains
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
                        keyword(word, 'linetype', 5_I4P))) shaping = word
+            ! the linetype number, for boxplot factors in lc variable (`lt 51 lc variable`)
+            if ((word == 'lt' .or. keyword(word, 'linetype', 5_I4P)) .and. i < size(tokens, kind=I4P)) then
+               if (verify(tokens(i + 1_I4P)%text, '0123456789') == 0 .and. len(tokens(i + 1_I4P)%text) <= 6) &
+                  read(tokens(i + 1_I4P)%text, *) item_lt
+            endif
             if (.not. line_option(tokens, i, line, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
                                   self%symbols)) then
                iomsg = 'plot: '//iomsg
@@ -3834,6 +3850,9 @@ contains
          elseif (word == 'volatile') then
             ! gnuplot's volatile (the data may change, for replot and the mouse): read and ignored
             continue
+         elseif (keyword(word, 'noautoscale', 6_I4P)) then
+            ! gnuplot `noautoscale` (`noauto`): the item out of the autoscaling
+            item_noauto = .true.
          elseif (word == 'pixels' .and. (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha')) then
             ! gnuplot draws the image as a rectangle per pixel: foresight's images are drawn so anyway
             continue
@@ -4044,8 +4063,10 @@ contains
       ! the text of labels (third using field, a plain column; 3 by default), read as the xtic labels are
       if (with == 'labels') then
          if (label_col > 0_I4P) then
-            call fail('plot: labels take their text column, not xtic()', iostat, iomsg)
-            return
+            ! tic labels too (`using 0:1:(text):xticlabels(2)`, gnuplot's timedat): kept apart from the text
+            tic_col = label_col
+            tic_field = label_field
+            label_col = 0_I4P
          endif
          if (.not. allocated(fields)) then
             label_col = 3_I4P
@@ -4198,6 +4219,14 @@ contains
       if (allocated(line%lc)) then
          lcvar = line%lc == LC_VARIABLE .or. line%lc == LC_RGB_VARIABLE
          lcz = line%lc == LC_PALETTE_Z
+      endif
+      ! boxplot factors in lc variable: each box in the linetype of its factor index from the item's (gnuplot 6.0), no
+      ! color column
+      box_lcvar = .false.
+      if (lcvar .and. with == 'boxplot' .and. label_col > 0_I4P) box_lcvar = line%lc == LC_VARIABLE
+      if (box_lcvar) then
+         lcvar = .false.
+         deallocate(line%lc)
       endif
       if (lcvar .or. lcz) then
          word = trim(merge('lc palette z', 'lc variable ', lcz))
@@ -4364,6 +4393,8 @@ contains
       if (label_col > 0_I4P) then
          if (label_col2 > 0_I4P) &
             call data%table(fields, set_index, every, values, header=headed, labels=labels2, label=label_field2)
+         if (tic_col > 0_I4P) &
+            call data%table(fields, set_index, every, values, header=headed, labels=ticlabels, label=tic_field)
          call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
       else
          call data%table(fields, set_index, every, values, header=headed)
@@ -4666,6 +4697,14 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
                                axes=axes, labels=xlabels, label=label_opts)
          if (lcvar) call color_last
+         if (tic_col > 0_I4P .and. allocated(ticlabels)) then
+            associate(panel => self%figure%panels(self%figure%current))
+               if (size(ticlabels) == size(panel%series(size(panel%series))%x)) then
+                  allocate(panel%series(size(panel%series))%xlabels(size(ticlabels)))
+                  panel%series(size(panel%series))%xlabels = ticlabels
+               endif
+            endassociate
+         endif
          if (rotate_var) then
             associate(panel => self%figure%panels(self%figure%current))
                panel%series(size(panel%series))%text_rotations = label_rotations
@@ -4701,6 +4740,41 @@ contains
          if (label_col > 0_I4P) then
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                   axes=axes, width=widths, fs=fs, factors=xlabels)
+            if (box_lcvar) then
+               associate(panel => self%figure%panels(self%figure%current))
+                  block
+                     integer(I4P) :: last !< The boxplot series.
+                     integer(I4P) :: base !< Linetype of the first factor.
+                     integer(I4P) :: k    !< Factor counter.
+                     integer(I4P) :: nf   !< Distinct factors.
+                     integer(I4P) :: j    !< Earlier label counter.
+                     logical      :: seen !< A label met before.
+
+                     ! the factors are the distinct labels in their order of appearance (the boxes, made later)
+                     nf = 0_I4P
+                     do k = 1_I4P, size(xlabels, kind=I4P)
+                        seen = .false.
+                        do j = 1_I4P, k - 1_I4P
+                           if (xlabels(j) == xlabels(k)) then
+                              seen = .true.
+                              exit
+                           endif
+                        enddo
+                        if (.not. seen) nf = nf + 1_I4P
+                     enddo
+                     last = size(panel%series, kind=I4P)
+                     base = last + panel%color_shift
+                     if (item_lt > 0_I4P) base = item_lt
+                     if (allocated(panel%series(last)%colors)) deallocate(panel%series(last)%colors)
+                     allocate(panel%series(last)%colors(nf))
+                     do k = 1_I4P, nf
+                        panel%series(last)%colors(k) = default_color(base + k - 1_I4P, &
+                                                                     self%figure%panels(self%figure%current)%linecolors)
+                     enddo
+                     if (nf > 0_I4P) panel%series(last)%style%color = trim(panel%series(last)%colors(1))
+                  endblock
+               endassociate
+            endif
          else
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ps=line%ps, &
                                   axes=axes, width=widths, fs=fs)
@@ -5409,6 +5483,7 @@ contains
          panel%series(last)%ellipse_units = ellipse_units
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
+         panel%series(last)%noautoscale = item_noauto
          ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0
          if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
          panel%series(last)%gnuplot_sample = .true.
@@ -11607,6 +11682,24 @@ contains
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
+         elseif (toks(i)%kind == TOKEN_WORD .and. (keyword(toks(i)%text, 'timedate', 4_I4P) .or. &
+                                                  toks(i)%text == 'numeric')) then
+            ! gnuplot `set xtics time|timedate|numeric`: the axis ticked and labelled in time units, or not (as `set
+            ! format x ... timedate`)
+            block
+               character(len=:), allocatable :: axis !< Axis name.
+
+               axis = ''
+               if (keyword(option, 'xtics', 3_I4P)) axis = 'x'
+               if (keyword(option, 'ytics', 3_I4P)) axis = 'y'
+               if (keyword(option, 'y2tics', 4_I4P)) axis = 'y2'
+               if (keyword(option, 'x2tics', 4_I4P)) axis = 'x2'
+               if (len(axis) == 0) then
+                  call fail('set '//option//': time and numeric apply to x, y, x2 and y2', iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_time_axes(axis, on=toks(i)%text /= 'numeric')
+            endblock
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'logscale', 3_I4P)) then
             ! gnuplot's logscale tic series: the step a factor on a log axis (the default)
             additive = 0_I4P
@@ -11765,8 +11858,26 @@ contains
             if (size(tokens) == 4) then
                if (verify(tokens(3)%text, '0123456789') == 0 .and. len(tokens(3)%text) <= 6) then
                   read(tokens(3)%text, *, iostat=ios) n
-                  unit = tokens(4)%text
-                  if (unit(len(unit):len(unit)) /= 's') unit = unit//'s'
+                  ! gnuplot's abbreviations: sec, min, hour, day, week, mon, year
+                  unit = ''
+                  if (len(tokens(4)%text) >= 3) then
+                     select case (tokens(4)%text(1:3))
+                     case ('sec')
+                        unit = 'seconds'
+                     case ('min')
+                        unit = 'minutes'
+                     case ('hou')
+                        unit = 'hours'
+                     case ('day')
+                        unit = 'days'
+                     case ('wee')
+                        unit = 'weeks'
+                     case ('mon')
+                        unit = 'months'
+                     case ('yea')
+                        unit = 'years'
+                     endselect
+                  endif
                   if (ios == 0_I4P .and. n >= 1_I4P .and. is_word(unit, 'seconds minutes hours days weeks months years')) &
                      then
                      tics%minor = MINOR_NONE
@@ -14240,7 +14351,7 @@ contains
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
-        word == 'sharpen' .or. word == 'volatile'
+        word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)
