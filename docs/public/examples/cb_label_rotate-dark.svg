@@ -23,7 +23,7 @@
 </g>
 </svg>
 <svg class="fs-labels" x="29.2" y="16" width="520.8" height="313" viewBox="0 0 520.8 313" overflow="hidden">
-<text class="fs-label" data-series="1" data-u="0.076923" data-v="0.923077" data-dx="0" data-dy="4.2" x="40.06" y="293.12" text-anchor="middle" data-rotate="30" transform="rotate(30 40.06 293.12)" fill="#e8ecf0">one</text>
+<text class="fs-label" data-series="1" data-u="0.076923" data-v="0.923077" data-dx="0" data-dy="4.2" x="40.06" y="293.12" text-anchor="middle" data-rotate="30" transform="rotate(30 40.06 293.12)" fill="#808080">one</text>
 <text class="fs-label" data-series="1" data-u="0.153846" data-v="0.846154" data-dx="0" data-dy="4.2" x="80.12" y="269.05" text-anchor="middle" data-rotate="60" transform="rotate(60 80.12 269.05)" fill="#ff7092">two</text>
 <text class="fs-label" data-series="1" data-u="0.230769" data-v="0.769231" data-dx="0" data-dy="4.2" x="120.18" y="244.97" text-anchor="middle" data-rotate="90" transform="rotate(90 120.18 244.97)" fill="#6cb6ff">three</text>
 <text class="fs-label" data-series="1" data-u="0.307692" data-v="0.692308" data-dx="0" data-dy="4.2" x="160.25" y="220.89" text-anchor="middle" data-rotate="120" transform="rotate(120 160.25 220.89)" fill="#6fd99a">four</text>

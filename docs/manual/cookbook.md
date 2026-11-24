@@ -342,6 +342,16 @@ The top border in another unit: the x2 axis takes the `x2range` given, here the 
 number. The points are the same peaks plotted `axes x2y1`, against x2: each lands on its impulse, the check that the
 two scales agree. Without a set `x2range`, items on x2 autoscale it on their own.
 
+### A broken axis
+
+<<< @/examples/snippets/cb_nonlinear_axis.gp{gnuplot}
+
+<Plot name="cb_nonlinear_axis" svg :width="560" :height="320" />
+
+`set nonlinear x via f(x) inverse g(x)` places the axis linearly in f: here f leaves out 100 to 500, a broken axis.
+Its automatic ticks sit at the hidden axis' ticks, a step or a list in the axis' own values. See
+[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+
 ### A top axis linked to the bottom one
 
 <<< @/examples/snippets/cb_linked_axes.gp{gnuplot}
@@ -549,6 +559,24 @@ a transfer function; a plotted value with an imaginary part is undefined. See
 `name = value` and `name(t) = expression` as in gnuplot: the functions read the variables when the plot is drawn,
 and the range ends take expressions. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
 
+### A family of curves from arrays
+
+<<< @/examples/snippets/cb_iterated_defs.gp{gnuplot}
+
+<Plot name="cb_iterated_defs" svg :width="560" :height="320" />
+
+Definitions written before an iterated item are run on each pass: `for [i = 1:4] k = shape[i], l = 1.0/rate[i],
+weibull(x, k, l)`. See [Iteration](/guide/gnuplot-subset#iteration).
+
+### Names as in the formulas
+
+<<< @/examples/snippets/cb_greek_names.gp{gnuplot}
+
+<Plot name="cb_greek_names" svg :width="560" :height="320" />
+
+Names may hold UTF-8 letters, as gnuplot: `ω`, `ζ`, `τ` in variables, functions and their dummies. See
+[User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+
 ### Sums and assignments in a plot
 
 <<< @/examples/snippets/cb_sums.gp{gnuplot}
@@ -634,6 +662,16 @@ points without their own. See [Styles](/guide/gnuplot-subset#styles).
 The 16 point types (`pt 0` a dot, odd ones from 5 filled) and the 5 dash types, for picking one; a one-line datablock
 gives the point its place, `plot for` repeats it.
 
+
+### Interrupted lines
+
+<<< @/examples/snippets/cb_interrupted_lines.gp{gnuplot}
+
+<Plot name="cb_interrupted_lines" svg :width="560" :height="320" />
+
+`pointinterval -N` (`pi -N`) marks every N-th point and blanks the line under the marker; `pi N` only marks.
+`lt -1` is solid black, whatever the dash type of the item's own linetype. See
+[`plot` items](/guide/gnuplot-subset#plot-items).
 
 ### Characters as points
 
@@ -985,6 +1023,16 @@ names the bars. See [Box, finance and boxplot styles](/guide/gnuplot-subset#box-
 `columnstacked` stacks each column: the rows in their linetype colors, named in the key by `key(1)`, the stacks named
 by the column headers (`title columnhead`).
 
+### Stacks colored by category
+
+<<< @/examples/snippets/cb_hist_colors.gp{gnuplot}
+
+<Plot name="cb_hist_colors" svg :width="560" :height="320" />
+
+Column-stacked histograms take `lc variable`: each row in the linetype a function of its category gives; the
+stacks are named by their titles and `keyentry` builds the key. See
+[Histograms](/guide/gnuplot-subset#histograms).
+
 ### Clustered bars with error bars
 
 <<< @/examples/snippets/cb_hist_errorbars.gp{gnuplot}
@@ -1242,6 +1290,16 @@ border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnupl
 `with labels rotate variable` turns each label by the fourth column, `tc variable` colors it by the last one. See
 [Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
 
+### Labels with tic labels
+
+<<< @/examples/snippets/cb_labels_tics.gp{gnuplot}
+
+<Plot name="cb_labels_tics" svg :width="560" :height="320" />
+
+`with labels` takes `xticlabels()` (and `yticlabels()`) besides its text column: the text at the point, the
+names under the axis. `%.3S` rounds the milliseconds, as gnuplot. See
+[Time data](/guide/gnuplot-subset#time-data).
+
 ### Arrow styles and dashed objects
 
 <<< @/examples/snippets/cb_arrow_styles.gp{gnuplot}
@@ -1361,6 +1419,15 @@ A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour m
 meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
 angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
 
+### Colors as numbers
+
+<<< @/examples/snippets/cb_rgb_numbers.gp{gnuplot}
+
+<Plot name="cb_rgb_numbers" svg :width="560" :height="360" />
+
+`lc rgb N` takes a number, 0xRRGGBB (0xAARRGGBB with a transparency): here an expression per entry; a key taller
+than the page wraps into columns, as gnuplot. See [Key](/guide/gnuplot-subset#key).
+
 ### Named colormaps
 
 <<< @/examples/snippets/cb_named_colormaps.gp{gnuplot}
@@ -1391,6 +1458,15 @@ for fractions), without palette nor color box.
 A probe's directivity against a cardioid model, theta in degrees, in gnuplot's round idiom: square plot, polar border
 and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subset#polar-plots).
 
+
+### A reversed r axis
+
+<<< @/examples/snippets/cb_reversed_r.gp{gnuplot}
+
+<Plot name="cb_reversed_r" svg :width="480" :height="420" />
+
+`set rrange [90:0]` puts 90 at the pole and 0 on the rim: an elevation, the horizon outside. The grid takes its line
+style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot-subset#polar-plots).
 
 ### Named angles on a polar plot
 

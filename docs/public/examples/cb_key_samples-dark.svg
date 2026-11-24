@@ -88,6 +88,7 @@
 </g>
 <rect x="361.2" y="19" width="184.8" height="66" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <text x="367.2" y="34.75">samples</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="361.2,38.2 546,38.2"/>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" points="504,44.5 540,44.5"/>
 <polyline fill="none" stroke="#ff7092" stroke-width="2" points="532.8,46.42 540,44.5 532.8,42.58"/>

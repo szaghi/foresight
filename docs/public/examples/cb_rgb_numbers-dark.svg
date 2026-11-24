@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="360" viewBox="0 0 560 360" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
+<rect x="0" y="0" width="560" height="360" fill="#130d0f" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="16 550 16 344" data-x="-1e1 1e1" data-y="-1e0 1e0" data-log="0 0" data-grid="0" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h">
+<g class="fs-grid" display="none">
+</g>
+<svg class="fs-plot" x="16" y="16" width="534" height="328" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<polyline fill="none" stroke="none" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0,0.5 0.010101,0.5 0.020202,0.5 0.030303,0.5 0.040404,0.5 0.050505,0.5 0.060606,0.5 0.070707,0.5
+0.080808,0.5 0.090909,0.5 0.10101,0.5 0.111111,0.5 0.121212,0.5 0.131313,0.5 0.141414,0.5 0.151515,0.5
+0.161616,0.5 0.171717,0.5 0.181818,0.5 0.191919,0.5 0.20202,0.5 0.212121,0.5 0.222222,0.5 0.232323,0.5
+0.242424,0.5 0.252525,0.5 0.262626,0.5 0.272727,0.5 0.282828,0.5 0.292929,0.5 0.30303,0.5 0.313131,0.5
+0.323232,0.5 0.333333,0.5 0.343434,0.5 0.353535,0.5 0.363636,0.5 0.373737,0.5 0.383838,0.5 0.393939,0.5
+0.40404,0.5 0.414141,0.5 0.424242,0.5 0.434343,0.5 0.444444,0.5 0.454545,0.5 0.464646,0.5 0.474747,0.5
+0.484848,0.5 0.494949,0.5 0.505051,0.5 0.515152,0.5 0.525253,0.5 0.535354,0.5 0.545455,0.5 0.555556,0.5
+0.565657,0.5 0.575758,0.5 0.585859,0.5 0.59596,0.5 0.606061,0.5 0.616162,0.5 0.626263,0.5 0.636364,0.5
+0.646465,0.5 0.656566,0.5 0.666667,0.5 0.676768,0.5 0.686869,0.5 0.69697,0.5 0.707071,0.5 0.717172,0.5
+0.727273,0.5 0.737374,0.5 0.747475,0.5 0.757576,0.5 0.767677,0.5 0.777778,0.5 0.787879,0.5 0.79798,0.5
+0.808081,0.5 0.818182,0.5 0.828283,0.5 0.838384,0.5 0.848485,0.5 0.858586,0.5 0.868687,0.5 0.878788,0.5
+0.888889,0.5 0.89899,0.5 0.909091,0.5 0.919192,0.5 0.929293,0.5 0.939394,0.5 0.949495,0.5 0.959596,0.5
+0.969697,0.5 0.979798,0.5 0.989899,0.5 1,0.5"/>
+</g>
+<g class="fs-series" data-series="2">
+</g>
+<g class="fs-series" data-series="3">
+</g>
+<g class="fs-series" data-series="4">
+</g>
+<g class="fs-series" data-series="5">
+</g>
+<g class="fs-series" data-series="6">
+</g>
+<g class="fs-series" data-series="7">
+</g>
+<g class="fs-series" data-series="8">
+</g>
+<g class="fs-series" data-series="9">
+</g>
+<g class="fs-series" data-series="10">
+</g>
+<g class="fs-series" data-series="11">
+</g>
+<g class="fs-series" data-series="12">
+</g>
+<g class="fs-series" data-series="13">
+</g>
+<g class="fs-series" data-series="14">
+</g>
+<g class="fs-series" data-series="15">
+</g>
+<g class="fs-series" data-series="16">
+</g>
+<g class="fs-series" data-series="17">
+</g>
+<g class="fs-series" data-series="18">
+</g>
+<g class="fs-series" data-series="19">
+</g>
+<g class="fs-series" data-series="20">
+</g>
+<g class="fs-series" data-series="21">
+</g>
+<g class="fs-series" data-series="22">
+</g>
+<g class="fs-series" data-series="23">
+</g>
+<g class="fs-series" data-series="24">
+</g>
+<g class="fs-series" data-series="25">
+</g>
+<g class="fs-series" data-series="26">
+</g>
+<g class="fs-series" data-series="27">
+</g>
+<g class="fs-series" data-series="28">
+</g>
+<g class="fs-series" data-series="29">
+</g>
+<g class="fs-series" data-series="30">
+</g>
+<g class="fs-series" data-series="31">
+</g>
+<g class="fs-series" data-series="32">
+</g>
+<g class="fs-series" data-series="33">
+</g>
+<g class="fs-series" data-series="34">
+</g>
+<g class="fs-series" data-series="35">
+</g>
+<g class="fs-series" data-series="36">
+</g>
+<g class="fs-series" data-series="37">
+</g>
+</svg>
+<g class="fs-xticks">
+</g>
+<g class="fs-yticks">
+</g>
+<g class="fs-key-entry" data-series="2">
+<path fill="#00ff80" stroke="#00ff80" stroke-width="1" stroke-linejoin="miter" d="M244,56.7 280,56.7 280,48.3 244,48.3Z"/>
+<text x="238" y="56.7" text-anchor="end">0x00ff80</text>
+</g>
+<g class="fs-key-entry" data-series="3">
+<path fill="#07f780" stroke="#07f780" stroke-width="1" stroke-linejoin="miter" d="M244,71.7 280,71.7 280,63.3 244,63.3Z"/>
+<text x="238" y="71.7" text-anchor="end">0x07f780</text>
+</g>
+<g class="fs-key-entry" data-series="4">
+<path fill="#0ef080" stroke="#0ef080" stroke-width="1" stroke-linejoin="miter" d="M244,86.7 280,86.7 280,78.3 244,78.3Z"/>
+<text x="238" y="86.7" text-anchor="end">0x0ef080</text>
+</g>
+<g class="fs-key-entry" data-series="5">
+<path fill="#15e980" stroke="#15e980" stroke-width="1" stroke-linejoin="miter" d="M244,101.7 280,101.7 280,93.3 244,93.3Z"/>
+<text x="238" y="101.7" text-anchor="end">0x15e980</text>
+</g>
+<g class="fs-key-entry" data-series="6">
+<path fill="#1de180" stroke="#1de180" stroke-width="1" stroke-linejoin="miter" d="M244,116.7 280,116.7 280,108.3 244,108.3Z"/>
+<text x="238" y="116.7" text-anchor="end">0x1de180</text>
+</g>
+<g class="fs-key-entry" data-series="7">
+<path fill="#24da80" stroke="#24da80" stroke-width="1" stroke-linejoin="miter" d="M244,131.7 280,131.7 280,123.3 244,123.3Z"/>
+<text x="238" y="131.7" text-anchor="end">0x24da80</text>
+</g>
+<g class="fs-key-entry" data-series="8">
+<path fill="#2bd380" stroke="#2bd380" stroke-width="1" stroke-linejoin="miter" d="M244,146.7 280,146.7 280,138.3 244,138.3Z"/>
+<text x="238" y="146.7" text-anchor="end">0x2bd380</text>
+</g>
+<g class="fs-key-entry" data-series="9">
+<path fill="#33cc80" stroke="#33cc80" stroke-width="1" stroke-linejoin="miter" d="M244,161.7 280,161.7 280,153.3 244,153.3Z"/>
+<text x="238" y="161.7" text-anchor="end">0x33cc80</text>
+</g>
+<g class="fs-key-entry" data-series="10">
+<path fill="#3ac480" stroke="#3ac480" stroke-width="1" stroke-linejoin="miter" d="M244,176.7 280,176.7 280,168.3 244,168.3Z"/>
+<text x="238" y="176.7" text-anchor="end">0x3ac480</text>
+</g>
+<g class="fs-key-entry" data-series="11">
+<path fill="#41bd80" stroke="#41bd80" stroke-width="1" stroke-linejoin="miter" d="M244,191.7 280,191.7 280,183.3 244,183.3Z"/>
+<text x="238" y="191.7" text-anchor="end">0x41bd80</text>
+</g>
+<g class="fs-key-entry" data-series="12">
+<path fill="#48b680" stroke="#48b680" stroke-width="1" stroke-linejoin="miter" d="M244,206.7 280,206.7 280,198.3 244,198.3Z"/>
+<text x="238" y="206.7" text-anchor="end">0x48b680</text>
+</g>
+<g class="fs-key-entry" data-series="13">
+<path fill="#50ae80" stroke="#50ae80" stroke-width="1" stroke-linejoin="miter" d="M244,221.7 280,221.7 280,213.3 244,213.3Z"/>
+<text x="238" y="221.7" text-anchor="end">0x50ae80</text>
+</g>
+<g class="fs-key-entry" data-series="14">
+<path fill="#57a780" stroke="#57a780" stroke-width="1" stroke-linejoin="miter" d="M244,236.7 280,236.7 280,228.3 244,228.3Z"/>
+<text x="238" y="236.7" text-anchor="end">0x57a780</text>
+</g>
+<g class="fs-key-entry" data-series="15">
+<path fill="#5ea080" stroke="#5ea080" stroke-width="1" stroke-linejoin="miter" d="M244,251.7 280,251.7 280,243.3 244,243.3Z"/>
+<text x="238" y="251.7" text-anchor="end">0x5ea080</text>
+</g>
+<g class="fs-key-entry" data-series="16">
+<path fill="#669980" stroke="#669980" stroke-width="1" stroke-linejoin="miter" d="M244,266.7 280,266.7 280,258.3 244,258.3Z"/>
+<text x="238" y="266.7" text-anchor="end">0x669980</text>
+</g>
+<g class="fs-key-entry" data-series="17">
+<path fill="#6d9180" stroke="#6d9180" stroke-width="1" stroke-linejoin="miter" d="M244,281.7 280,281.7 280,273.3 244,273.3Z"/>
+<text x="238" y="281.7" text-anchor="end">0x6d9180</text>
+</g>
+<g class="fs-key-entry" data-series="18">
+<path fill="#748a80" stroke="#748a80" stroke-width="1" stroke-linejoin="miter" d="M244,296.7 280,296.7 280,288.3 244,288.3Z"/>
+<text x="238" y="296.7" text-anchor="end">0x748a80</text>
+</g>
+<g class="fs-key-entry" data-series="19">
+<path fill="#7b8380" stroke="#7b8380" stroke-width="1" stroke-linejoin="miter" d="M244,311.7 280,311.7 280,303.3 244,303.3Z"/>
+<text x="238" y="311.7" text-anchor="end">0x7b8380</text>
+</g>
+<g class="fs-key-entry" data-series="20">
+<path fill="#837b80" stroke="#837b80" stroke-width="1" stroke-linejoin="miter" d="M356.8,56.7 392.8,56.7 392.8,48.3 356.8,48.3Z"/>
+<text x="350.8" y="56.7" text-anchor="end">0x837b80</text>
+</g>
+<g class="fs-key-entry" data-series="21">
+<path fill="#8a7480" stroke="#8a7480" stroke-width="1" stroke-linejoin="miter" d="M356.8,71.7 392.8,71.7 392.8,63.3 356.8,63.3Z"/>
+<text x="350.8" y="71.7" text-anchor="end">0x8a7480</text>
+</g>
+<g class="fs-key-entry" data-series="22">
+<path fill="#916d80" stroke="#916d80" stroke-width="1" stroke-linejoin="miter" d="M356.8,86.7 392.8,86.7 392.8,78.3 356.8,78.3Z"/>
+<text x="350.8" y="86.7" text-anchor="end">0x916d80</text>
+</g>
+<g class="fs-key-entry" data-series="23">
+<path fill="#996680" stroke="#996680" stroke-width="1" stroke-linejoin="miter" d="M356.8,101.7 392.8,101.7 392.8,93.3 356.8,93.3Z"/>
+<text x="350.8" y="101.7" text-anchor="end">0x996680</text>
+</g>
+<g class="fs-key-entry" data-series="24">
+<path fill="#a05e80" stroke="#a05e80" stroke-width="1" stroke-linejoin="miter" d="M356.8,116.7 392.8,116.7 392.8,108.3 356.8,108.3Z"/>
+<text x="350.8" y="116.7" text-anchor="end">0xa05e80</text>
+</g>
+<g class="fs-key-entry" data-series="25">
+<path fill="#a75780" stroke="#a75780" stroke-width="1" stroke-linejoin="miter" d="M356.8,131.7 392.8,131.7 392.8,123.3 356.8,123.3Z"/>
+<text x="350.8" y="131.7" text-anchor="end">0xa75780</text>
+</g>
+<g class="fs-key-entry" data-series="26">
+<path fill="#ae5080" stroke="#ae5080" stroke-width="1" stroke-linejoin="miter" d="M356.8,146.7 392.8,146.7 392.8,138.3 356.8,138.3Z"/>
+<text x="350.8" y="146.7" text-anchor="end">0xae5080</text>
+</g>
+<g class="fs-key-entry" data-series="27">
+<path fill="#b64880" stroke="#b64880" stroke-width="1" stroke-linejoin="miter" d="M356.8,161.7 392.8,161.7 392.8,153.3 356.8,153.3Z"/>
+<text x="350.8" y="161.7" text-anchor="end">0xb64880</text>
+</g>
+<g class="fs-key-entry" data-series="28">
+<path fill="#bd4180" stroke="#bd4180" stroke-width="1" stroke-linejoin="miter" d="M356.8,176.7 392.8,176.7 392.8,168.3 356.8,168.3Z"/>
+<text x="350.8" y="176.7" text-anchor="end">0xbd4180</text>
+</g>
+<g class="fs-key-entry" data-series="29">
+<path fill="#c43a80" stroke="#c43a80" stroke-width="1" stroke-linejoin="miter" d="M356.8,191.7 392.8,191.7 392.8,183.3 356.8,183.3Z"/>
+<text x="350.8" y="191.7" text-anchor="end">0xc43a80</text>
+</g>
+<g class="fs-key-entry" data-series="30">
+<path fill="#cc3380" stroke="#cc3380" stroke-width="1" stroke-linejoin="miter" d="M356.8,206.7 392.8,206.7 392.8,198.3 356.8,198.3Z"/>
+<text x="350.8" y="206.7" text-anchor="end">0xcc3380</text>
+</g>
+<g class="fs-key-entry" data-series="31">
+<path fill="#d32b80" stroke="#d32b80" stroke-width="1" stroke-linejoin="miter" d="M356.8,221.7 392.8,221.7 392.8,213.3 356.8,213.3Z"/>
+<text x="350.8" y="221.7" text-anchor="end">0xd32b80</text>
+</g>
+<g class="fs-key-entry" data-series="32">
+<path fill="#da2480" stroke="#da2480" stroke-width="1" stroke-linejoin="miter" d="M356.8,236.7 392.8,236.7 392.8,228.3 356.8,228.3Z"/>
+<text x="350.8" y="236.7" text-anchor="end">0xda2480</text>
+</g>
+<g class="fs-key-entry" data-series="33">
+<path fill="#e11d80" stroke="#e11d80" stroke-width="1" stroke-linejoin="miter" d="M356.8,251.7 392.8,251.7 392.8,243.3 356.8,243.3Z"/>
+<text x="350.8" y="251.7" text-anchor="end">0xe11d80</text>
+</g>
+<g class="fs-key-entry" data-series="34">
+<path fill="#e91580" stroke="#e91580" stroke-width="1" stroke-linejoin="miter" d="M356.8,266.7 392.8,266.7 392.8,258.3 356.8,258.3Z"/>
+<text x="350.8" y="266.7" text-anchor="end">0xe91580</text>
+</g>
+<g class="fs-key-entry" data-series="35">
+<path fill="#f00e80" stroke="#f00e80" stroke-width="1" stroke-linejoin="miter" d="M356.8,281.7 392.8,281.7 392.8,273.3 356.8,273.3Z"/>
+<text x="350.8" y="281.7" text-anchor="end">0xf00e80</text>
+</g>
+<g class="fs-key-entry" data-series="36">
+<path fill="#f70780" stroke="#f70780" stroke-width="1" stroke-linejoin="miter" d="M356.8,296.7 392.8,296.7 392.8,288.3 356.8,288.3Z"/>
+<text x="350.8" y="296.7" text-anchor="end">0xf70780</text>
+</g>
+<g class="fs-key-entry" data-series="37">
+<path fill="#ff0080" stroke="#ff0080" stroke-width="1" stroke-linejoin="miter" d="M356.8,311.7 392.8,311.7 392.8,303.3 356.8,303.3Z"/>
+<text x="350.8" y="311.7" text-anchor="end">0xff0080</text>
+</g>
+</g>
+</svg>

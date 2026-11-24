@@ -267,6 +267,14 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_smooth_band" svg :width="560" :height="320" caption="a smoothed band" />
   <Plot name="cb_gantt" svg :width="560" :height="320" caption="a Gantt chart" />
   <Plot name="cb_paxis_ranges" svg :width="560" :height="360" caption="parallel axes with their own ranges" />
+  <Plot name="cb_nonlinear_axis" svg :width="560" :height="320" caption="a broken axis" />
+  <Plot name="cb_reversed_r" svg :width="480" :height="420" caption="a reversed r axis" />
+  <Plot name="cb_greek_names" svg :width="560" :height="320" caption="names as in the formulas" />
+  <Plot name="cb_labels_tics" svg :width="560" :height="320" caption="labels with tic labels" />
+  <Plot name="cb_interrupted_lines" svg :width="560" :height="320" caption="interrupted lines" />
+  <Plot name="cb_hist_colors" svg :width="560" :height="320" caption="stacks colored by category" />
+  <Plot name="cb_rgb_numbers" svg :width="560" :height="360" caption="colors as numbers" />
+  <Plot name="cb_iterated_defs" svg :width="560" :height="320" caption="a family of curves from arrays" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
   <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />
