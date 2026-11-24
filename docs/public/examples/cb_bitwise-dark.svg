@@ -24,14 +24,14 @@
 0.888889,0.795739 1,1"/>
 </g>
 <g class="fs-series" data-series="2">
-<path class="fs-pts" data-pt="6" data-size="18" data-lw="1" data-color="#6cb6ff" fill="none" stroke="none" d="M0.333333,0.200687 M0.666667,0.407283"/>
+<path class="fs-pts" data-pt="6" data-size="18" data-lw="2" data-color="#6cb6ff" fill="none" stroke="none" d="M0.333333,0.200687 M0.666667,0.407283"/>
 </g>
 <g class="fs-series" data-series="3">
 <path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#6fd99a" fill="none" stroke="none" d="M0.555556,0.53993 M0.888889,0.795739"/>
 </g>
 </svg>
 <svg class="fs-marks" x="49" y="16" width="501" height="252" viewBox="0 0 501 252" overflow="hidden">
-<path data-series="2" fill="none" stroke="#6cb6ff" stroke-width="1" d="M158,50.57A9,9 0 1 0 176,50.57A9,9 0 1 0 158,50.57ZM325,102.64A9,9 0 1 0 343,102.64A9,9 0 1 0 325,102.64Z"/>
+<path data-series="2" fill="none" stroke="#6cb6ff" stroke-width="2" d="M158,50.57A9,9 0 1 0 176,50.57A9,9 0 1 0 158,50.57ZM325,102.64A9,9 0 1 0 343,102.64A9,9 0 1 0 325,102.64Z"/>
 <path data-series="3" fill="#6fd99a" stroke="#6fd99a" stroke-width="1" d="M273.83,136.06A4.5,4.5 0 1 0 282.83,136.06A4.5,4.5 0 1 0 273.83,136.06ZM440.83,200.53A4.5,4.5 0 1 0 449.83,200.53A4.5,4.5 0 1 0 440.83,200.53Z"/>
 </svg>
 <rect x="49" y="16" width="501" height="252" fill="none" stroke="#e8ecf0" stroke-width="1"/>
@@ -135,7 +135,7 @@
 <text x="498" y="33.7" text-anchor="end">residual</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="none" stroke="#6cb6ff" stroke-width="1" d="M513,44.5A9,9 0 1 0 531,44.5A9,9 0 1 0 513,44.5Z"/>
+<path fill="none" stroke="#6cb6ff" stroke-width="2" d="M513,44.5A9,9 0 1 0 531,44.5A9,9 0 1 0 513,44.5Z"/>
 <text x="498" y="48.7" text-anchor="end">restart (bit 2)</text>
 </g>
 <g class="fs-key-entry" data-series="3">

@@ -24,11 +24,11 @@
 <svg class="fs-plot" x="35.8" y="16" width="514.2" height="258" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.166667,0.733333 0.333333,0.533333 0.5,0.622222 0.666667,0.266667 0.833333,0.355556"/>
-<path class="fs-pts" data-pt="7" data-size="9" data-lw="2" data-color="#ff7092" fill="none" stroke="none" d="M0.166667,0.733333 M0.333333,0.533333 M0.5,0.622222 M0.666667,0.266667 M0.833333,0.355556"/>
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#ff7092" fill="none" stroke="none" d="M0.166667,0.733333 M0.333333,0.533333 M0.5,0.622222 M0.666667,0.266667 M0.833333,0.355556"/>
 </g>
 </svg>
 <svg class="fs-marks" x="35.8" y="16" width="514.2" height="258" viewBox="0 0 514.2 258" overflow="hidden">
-<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="2" d="M81.2,189.2A4.5,4.5 0 1 0 90.2,189.2A4.5,4.5 0 1 0 81.2,189.2ZM166.9,137.6A4.5,4.5 0 1 0 175.9,137.6A4.5,4.5 0 1 0 166.9,137.6ZM252.6,160.53A4.5,4.5 0 1 0 261.6,160.53A4.5,4.5 0 1 0 252.6,160.53ZM338.3,68.8A4.5,4.5 0 1 0 347.3,68.8A4.5,4.5 0 1 0 338.3,68.8ZM424,91.73A4.5,4.5 0 1 0 433,91.73A4.5,4.5 0 1 0 424,91.73Z"/>
+<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M81.2,189.2A4.5,4.5 0 1 0 90.2,189.2A4.5,4.5 0 1 0 81.2,189.2ZM166.9,137.6A4.5,4.5 0 1 0 175.9,137.6A4.5,4.5 0 1 0 166.9,137.6ZM252.6,160.53A4.5,4.5 0 1 0 261.6,160.53A4.5,4.5 0 1 0 252.6,160.53ZM338.3,68.8A4.5,4.5 0 1 0 347.3,68.8A4.5,4.5 0 1 0 338.3,68.8ZM424,91.73A4.5,4.5 0 1 0 433,91.73A4.5,4.5 0 1 0 424,91.73Z"/>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="258" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-xticks">
@@ -89,7 +89,7 @@
 <text x="7.2" y="315.2">plotted 2026-01-01</text>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" points="504,29.5 540,29.5"/>
-<path fill="#ff7092" stroke="#ff7092" stroke-width="2" d="M517.5,29.5A4.5,4.5 0 1 0 526.5,29.5A4.5,4.5 0 1 0 517.5,29.5Z"/>
+<path fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M517.5,29.5A4.5,4.5 0 1 0 526.5,29.5A4.5,4.5 0 1 0 517.5,29.5Z"/>
 <text x="498" y="33.7" text-anchor="end">runs</text>
 </g>
 </g>

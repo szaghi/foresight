@@ -14,7 +14,7 @@
 </g>
 <svg class="fs-plot" x="70" y="16" width="473.5" height="252" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
-<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M1,0.169445 M0.849485,0.318931 M0.69897,0.472353 M0.548455,0.619389 M0.39794,0.771547"/>
+<path class="fs-pts" data-pt="7" data-size="10.8" data-lw="1.2" data-color="#b3163f" fill="none" stroke="none" d="M1,0.169445 M0.849485,0.318931 M0.69897,0.472353 M0.548455,0.619389 M0.39794,0.771547"/>
 </g>
 <g class="fs-series" data-series="2">
 <polyline fill="none" stroke="#1f5f8b" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.39794,0.769007 0.404021,0.762951 0.410103,0.756895 0.416184,0.750838 0.422266,0.744782 0.428347,0.738726 0.434428,0.73267 0.44051,0.726613
@@ -33,7 +33,7 @@
 </g>
 </svg>
 <svg class="fs-marks" x="70" y="16" width="473.5" height="252" viewBox="0 0 473.5 252" overflow="visible">
-<path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M468.1,42.7A5.4,5.4 0 1 0 478.9,42.7A5.4,5.4 0 1 0 468.1,42.7ZM396.83,80.37A5.4,5.4 0 1 0 407.63,80.37A5.4,5.4 0 1 0 396.83,80.37ZM325.56,119.03A5.4,5.4 0 1 0 336.36,119.03A5.4,5.4 0 1 0 325.56,119.03ZM254.29,156.09A5.4,5.4 0 1 0 265.09,156.09A5.4,5.4 0 1 0 254.29,156.09ZM183.02,194.43A5.4,5.4 0 1 0 193.82,194.43A5.4,5.4 0 1 0 183.02,194.43Z"/>
+<path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1.2" d="M468.1,42.7A5.4,5.4 0 1 0 478.9,42.7A5.4,5.4 0 1 0 468.1,42.7ZM396.83,80.37A5.4,5.4 0 1 0 407.63,80.37A5.4,5.4 0 1 0 396.83,80.37ZM325.56,119.03A5.4,5.4 0 1 0 336.36,119.03A5.4,5.4 0 1 0 325.56,119.03ZM254.29,156.09A5.4,5.4 0 1 0 265.09,156.09A5.4,5.4 0 1 0 254.29,156.09ZM183.02,194.43A5.4,5.4 0 1 0 193.82,194.43A5.4,5.4 0 1 0 183.02,194.43Z"/>
 </svg>
 <rect x="70" y="16" width="473.5" height="252" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">
@@ -163,7 +163,7 @@
 <text x="306.75" y="307" text-anchor="middle">mesh size h</text>
 <text x="22" y="142" text-anchor="middle" transform="rotate(-90 22 142)">error</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M228.08,29.5A5.4,5.4 0 1 0 238.88,29.5A5.4,5.4 0 1 0 228.08,29.5Z"/>
+<path fill="#b3163f" stroke="#b3163f" stroke-width="1.2" d="M228.08,29.5A5.4,5.4 0 1 0 238.88,29.5A5.4,5.4 0 1 0 228.08,29.5Z"/>
 <text x="209.48" y="33.7" text-anchor="end">measured</text>
 </g>
 <g class="fs-key-entry" data-series="2">

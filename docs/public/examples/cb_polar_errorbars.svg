@@ -237,11 +237,11 @@
 <polyline fill="none" stroke="#b3163f" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.1875,1 0.0625,1"/>
 <polyline fill="none" stroke="#b3163f" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.1875,0.988764 0.1875,1.011236"/>
 <polyline fill="none" stroke="#b3163f" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.0625,0.988764 0.0625,1.011236"/>
-<path class="fs-pts" data-pt="1" data-size="9" data-lw="1.5" data-color="#b3163f" fill="none" stroke="none" d="M0.90625,1 M0.74357,0.7 M0.609375,0.595855 M0.5,0.333333 M0.328125,0.364915 M0.364684,0.833333 M0.125,1"/>
+<path class="fs-pts" data-pt="1" data-size="9" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M0.90625,1 M0.74357,0.7 M0.609375,0.595855 M0.5,0.333333 M0.328125,0.364915 M0.364684,0.833333 M0.125,1"/>
 </g>
 </svg>
 <svg class="fs-marks" x="16" y="46.5" width="534" height="267" viewBox="0 0 534 267" overflow="visible">
-<path data-series="1" fill="none" stroke="#b3163f" stroke-width="1.5" d="M479.44,267H488.44M483.94,262.5V271.5M392.57,186.9H401.57M397.07,182.4V191.4M320.91,159.09H329.91M325.41,154.59V163.59M262.5,89H271.5M267,84.5V93.5M170.72,97.43H179.72M175.22,92.93V101.93M190.24,222.5H199.24M194.74,218V227M62.25,267H71.25M66.75,262.5V271.5"/>
+<path data-series="1" fill="none" stroke="#b3163f" stroke-width="1" d="M479.44,267H488.44M483.94,262.5V271.5M392.57,186.9H401.57M397.07,182.4V191.4M320.91,159.09H329.91M325.41,154.59V163.59M262.5,89H271.5M267,84.5V93.5M170.72,97.43H179.72M175.22,92.93V101.93M190.24,222.5H199.24M194.74,218V227M62.25,267H71.25M66.75,262.5V271.5"/>
 </svg>
 <g class="fs-xticks">
 </g>
@@ -251,7 +251,7 @@
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#b3163f" stroke-width="1.5" points="522,55.2 522,64.8"/>
-<path fill="none" stroke="#b3163f" stroke-width="1.5" d="M517.5,60H526.5M522,55.5V64.5"/>
+<path fill="none" stroke="#b3163f" stroke-width="1" d="M517.5,60H526.5M522,55.5V64.5"/>
 <text x="498" y="64.2" text-anchor="end">polar error bars</text>
 </g>
 </g>

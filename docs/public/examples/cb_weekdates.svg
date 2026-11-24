@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
+<rect x="0" y="0" width="640" height="300" fill="#f3ede1" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="29.2 603.7 37 254" data-x="1.6063488e9 1.614816e9" data-y="1.5e1 6.5e1" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%d %b&#10;%Y" data-yformat="%h" data-xtime="%d/%m/%y,%H:%M" data-mirror="1 0 0">
+<g class="fs-grid" display="none">
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,254 29.2,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="111.27,254 111.27,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="193.34,254 193.34,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="275.41,254 275.41,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="357.49,254 357.49,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="439.56,254 439.56,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="521.63,254 521.63,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="603.7,254 603.7,37"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,254 603.7,254"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,232.3 603.7,232.3"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,210.6 603.7,210.6"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,188.9 603.7,188.9"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,167.2 603.7,167.2"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,145.5 603.7,145.5"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,123.8 603.7,123.8"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,102.1 603.7,102.1"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,80.4 603.7,80.4"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,58.7 603.7,58.7"/>
+<polyline fill="none" stroke="#a69a85" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,37 603.7,37"/>
+</g>
+<svg class="fs-plot" x="29.2" y="37" width="574.5" height="217" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<polyline fill="none" stroke="#b3163f" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.112245,0.68 0.183673,0.42 0.255102,0.26 0.326531,0.36 0.397959,0.08 0.469388,0.14 0.540816,0.32 0.612245,0.56
+0.683673,0.7 0.755102,0.86 0.826531,0.94 0.897959,1"/>
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M0.112245,0.68 M0.183673,0.42 M0.255102,0.26 M0.326531,0.36 M0.397959,0.08 M0.469388,0.14 M0.540816,0.32 M0.612245,0.56
+M0.683673,0.7 M0.755102,0.86 M0.826531,0.94 M0.897959,1"/>
+</g>
+</svg>
+<svg class="fs-marks" x="29.2" y="37" width="574.5" height="217" viewBox="0 0 574.5 217" overflow="visible">
+<path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M59.98,147.56A4.5,4.5 0 1 0 68.98,147.56A4.5,4.5 0 1 0 59.98,147.56ZM101.02,91.14A4.5,4.5 0 1 0 110.02,91.14A4.5,4.5 0 1 0 101.02,91.14ZM142.06,56.42A4.5,4.5 0 1 0 151.06,56.42A4.5,4.5 0 1 0 142.06,56.42ZM183.09,78.12A4.5,4.5 0 1 0 192.09,78.12A4.5,4.5 0 1 0 183.09,78.12ZM224.13,17.36A4.5,4.5 0 1 0 233.13,17.36A4.5,4.5 0 1 0 224.13,17.36ZM265.16,30.38A4.5,4.5 0 1 0 274.16,30.38A4.5,4.5 0 1 0 265.16,30.38ZM306.2,69.44A4.5,4.5 0 1 0 315.2,69.44A4.5,4.5 0 1 0 306.2,69.44ZM347.23,121.52A4.5,4.5 0 1 0 356.23,121.52A4.5,4.5 0 1 0 347.23,121.52ZM388.27,151.9A4.5,4.5 0 1 0 397.27,151.9A4.5,4.5 0 1 0 388.27,151.9ZM429.31,186.62A4.5,4.5 0 1 0 438.31,186.62A4.5,4.5 0 1 0 429.31,186.62ZM470.34,203.98A4.5,4.5 0 1 0 479.34,203.98A4.5,4.5 0 1 0 470.34,203.98ZM511.38,217A4.5,4.5 0 1 0 520.38,217A4.5,4.5 0 1 0 511.38,217Z"/>
+</svg>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,254 603.7,254"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,254 29.2,37"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,254 29.2,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,37 29.2,43"/>
+<text x="29.2" y="272" text-anchor="middle">26 Nov</text>
+<text x="29.2" y="287" text-anchor="middle">2020</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="111.27,254 111.27,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="111.27,37 111.27,43"/>
+<text x="111.27" y="272" text-anchor="middle">10 Dec</text>
+<text x="111.27" y="287" text-anchor="middle">2020</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="193.34,254 193.34,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="193.34,37 193.34,43"/>
+<text x="193.34" y="272" text-anchor="middle">24 Dec</text>
+<text x="193.34" y="287" text-anchor="middle">2020</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="275.41,254 275.41,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="275.41,37 275.41,43"/>
+<text x="275.41" y="272" text-anchor="middle">07 Jan</text>
+<text x="275.41" y="287" text-anchor="middle">2021</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="357.49,254 357.49,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="357.49,37 357.49,43"/>
+<text x="357.49" y="272" text-anchor="middle">21 Jan</text>
+<text x="357.49" y="287" text-anchor="middle">2021</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="439.56,254 439.56,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="439.56,37 439.56,43"/>
+<text x="439.56" y="272" text-anchor="middle">04 Feb</text>
+<text x="439.56" y="287" text-anchor="middle">2021</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="521.63,254 521.63,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="521.63,37 521.63,43"/>
+<text x="521.63" y="272" text-anchor="middle">18 Feb</text>
+<text x="521.63" y="287" text-anchor="middle">2021</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="603.7,254 603.7,248"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="603.7,37 603.7,43"/>
+<text x="603.7" y="272" text-anchor="middle">04 Mar</text>
+<text x="603.7" y="287" text-anchor="middle">2021</text>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,254 35.2,254"/>
+<text x="23.2" y="258.2" text-anchor="end">15</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,232.3 35.2,232.3"/>
+<text x="23.2" y="236.5" text-anchor="end">20</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,210.6 35.2,210.6"/>
+<text x="23.2" y="214.8" text-anchor="end">25</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,188.9 35.2,188.9"/>
+<text x="23.2" y="193.1" text-anchor="end">30</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,167.2 35.2,167.2"/>
+<text x="23.2" y="171.4" text-anchor="end">35</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,145.5 35.2,145.5"/>
+<text x="23.2" y="149.7" text-anchor="end">40</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,123.8 35.2,123.8"/>
+<text x="23.2" y="128" text-anchor="end">45</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,102.1 35.2,102.1"/>
+<text x="23.2" y="106.3" text-anchor="end">50</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,80.4 35.2,80.4"/>
+<text x="23.2" y="84.6" text-anchor="end">55</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,58.7 35.2,58.7"/>
+<text x="23.2" y="62.9" text-anchor="end">60</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="29.2,37 35.2,37"/>
+<text x="23.2" y="41.2" text-anchor="end">65</text>
+</g>
+<text x="316.45" y="22" text-anchor="middle">week 1 of 2021 starts on Mon 04 Jan (tm_week of 1 January 2021: 53)</text>
+</g>
+</svg>

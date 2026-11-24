@@ -19,11 +19,11 @@
 <svg class="fs-plot" x="42.4" y="16" width="507.6" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#b3163f" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="-0.166667,0.4 0.25,0.25 0.666667,0.3 1.25,0.2"/>
-<path class="fs-pts" data-pt="7" data-size="9" data-lw="2" data-color="#b3163f" fill="none" stroke="none" d="M0.25,0.25 M0.666667,0.3"/>
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M0.25,0.25 M0.666667,0.3"/>
 </g>
 </svg>
 <svg class="fs-marks" x="42.4" y="16" width="507.6" height="273" viewBox="0 0 507.6 273" overflow="hidden">
-<path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="2" d="M122.4,68.25A4.5,4.5 0 1 0 131.4,68.25A4.5,4.5 0 1 0 122.4,68.25ZM333.9,81.9A4.5,4.5 0 1 0 342.9,81.9A4.5,4.5 0 1 0 333.9,81.9Z"/>
+<path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M122.4,68.25A4.5,4.5 0 1 0 131.4,68.25A4.5,4.5 0 1 0 122.4,68.25ZM333.9,81.9A4.5,4.5 0 1 0 342.9,81.9A4.5,4.5 0 1 0 333.9,81.9Z"/>
 </svg>
 <rect x="42.4" y="16" width="507.6" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">
@@ -68,7 +68,7 @@
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#b3163f" stroke-width="2" points="504,29.5 540,29.5"/>
-<path fill="#b3163f" stroke="#b3163f" stroke-width="2" d="M517.5,29.5A4.5,4.5 0 1 0 526.5,29.5A4.5,4.5 0 1 0 517.5,29.5Z"/>
+<path fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M517.5,29.5A4.5,4.5 0 1 0 526.5,29.5A4.5,4.5 0 1 0 517.5,29.5Z"/>
 <text x="498" y="33.7" text-anchor="end">[0&lt;*:*&lt;12] x [*&lt;-1:1&lt;*]</text>
 </g>
 </g>

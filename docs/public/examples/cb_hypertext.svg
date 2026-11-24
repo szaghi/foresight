@@ -24,41 +24,41 @@
 </g>
 <svg class="fs-plot" x="29.2" y="16" width="520.8" height="273" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
-<path class="fs-pts" data-pt="7" data-size="35.08" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.54375,0.2675"/>
-<path class="fs-pts" data-pt="7" data-size="21.73" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.855,0.655"/>
-<path class="fs-pts" data-pt="7" data-size="26.08" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.92125,0.9625"/>
-<path class="fs-pts" data-pt="7" data-size="21.73" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.43,0.925"/>
-<path class="fs-pts" data-pt="7" data-size="17.05" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.6325,0.04625"/>
-<path class="fs-pts" data-pt="7" data-size="18.86" data-lw="1" data-color="#e0a020" fill="none" stroke="none" d="M0.05625,0.4725"/>
+<path class="fs-pts" data-pt="7" data-size="35.08" data-lw="3.89" data-color="#e0a020" fill="none" stroke="none" d="M0.54375,0.2675"/>
+<path class="fs-pts" data-pt="7" data-size="21.73" data-lw="2.41" data-color="#e0a020" fill="none" stroke="none" d="M0.855,0.655"/>
+<path class="fs-pts" data-pt="7" data-size="26.08" data-lw="2.89" data-color="#e0a020" fill="none" stroke="none" d="M0.92125,0.9625"/>
+<path class="fs-pts" data-pt="7" data-size="21.73" data-lw="2.41" data-color="#e0a020" fill="none" stroke="none" d="M0.43,0.925"/>
+<path class="fs-pts" data-pt="7" data-size="17.05" data-lw="1.89" data-color="#e0a020" fill="none" stroke="none" d="M0.6325,0.04625"/>
+<path class="fs-pts" data-pt="7" data-size="18.86" data-lw="2.09" data-color="#e0a020" fill="none" stroke="none" d="M0.05625,0.4725"/>
 </g>
 <g class="fs-series" data-series="2">
-<path class="fs-pts" data-pt="6" data-size="35.08" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.54375,0.2675"/>
-<path class="fs-pts" data-pt="6" data-size="21.73" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.855,0.655"/>
-<path class="fs-pts" data-pt="6" data-size="26.08" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.92125,0.9625"/>
-<path class="fs-pts" data-pt="6" data-size="21.73" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.43,0.925"/>
-<path class="fs-pts" data-pt="6" data-size="17.05" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.6325,0.04625"/>
-<path class="fs-pts" data-pt="6" data-size="18.86" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.05625,0.4725"/>
+<path class="fs-pts" data-pt="6" data-size="35.08" data-lw="3.89" data-color="#1d1b18" fill="none" stroke="none" d="M0.54375,0.2675"/>
+<path class="fs-pts" data-pt="6" data-size="21.73" data-lw="2.41" data-color="#1d1b18" fill="none" stroke="none" d="M0.855,0.655"/>
+<path class="fs-pts" data-pt="6" data-size="26.08" data-lw="2.89" data-color="#1d1b18" fill="none" stroke="none" d="M0.92125,0.9625"/>
+<path class="fs-pts" data-pt="6" data-size="21.73" data-lw="2.41" data-color="#1d1b18" fill="none" stroke="none" d="M0.43,0.925"/>
+<path class="fs-pts" data-pt="6" data-size="17.05" data-lw="1.89" data-color="#1d1b18" fill="none" stroke="none" d="M0.6325,0.04625"/>
+<path class="fs-pts" data-pt="6" data-size="18.86" data-lw="2.09" data-color="#1d1b18" fill="none" stroke="none" d="M0.05625,0.4725"/>
 </g>
 </svg>
 <svg class="fs-marks" x="29.2" y="16" width="520.8" height="273" viewBox="0 0 520.8 273" overflow="visible">
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M265.64,73.03A17.54,17.54 0 1 0 300.73,73.03A17.54,17.54 0 1 0 265.64,73.03Z"/>
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M434.42,178.82A10.86,10.86 0 1 0 456.15,178.82A10.86,10.86 0 1 0 434.42,178.82Z"/>
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M466.75,262.76A13.04,13.04 0 1 0 492.83,262.76A13.04,13.04 0 1 0 466.75,262.76Z"/>
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M213.08,252.52A10.86,10.86 0 1 0 234.81,252.52A10.86,10.86 0 1 0 213.08,252.52Z"/>
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M320.88,12.63A8.52,8.52 0 1 0 337.93,12.63A8.52,8.52 0 1 0 320.88,12.63Z"/>
-<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1" d="M19.87,128.99A9.43,9.43 0 1 0 38.72,128.99A9.43,9.43 0 1 0 19.87,128.99Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="3.89" d="M265.64,73.03A17.54,17.54 0 1 0 300.73,73.03A17.54,17.54 0 1 0 265.64,73.03Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="2.41" d="M434.42,178.82A10.86,10.86 0 1 0 456.15,178.82A10.86,10.86 0 1 0 434.42,178.82Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="2.89" d="M466.75,262.76A13.04,13.04 0 1 0 492.83,262.76A13.04,13.04 0 1 0 466.75,262.76Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="2.41" d="M213.08,252.52A10.86,10.86 0 1 0 234.81,252.52A10.86,10.86 0 1 0 213.08,252.52Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="1.89" d="M320.88,12.63A8.52,8.52 0 1 0 337.93,12.63A8.52,8.52 0 1 0 320.88,12.63Z"/>
+<path data-series="1" fill="#e0a020" stroke="#e0a020" stroke-width="2.09" d="M19.87,128.99A9.43,9.43 0 1 0 38.72,128.99A9.43,9.43 0 1 0 19.87,128.99Z"/>
 <circle class="fs-hover" cx="283.18" cy="73.03" r="17.54" fill="transparent"><title>Paris&#10;pop. 2.1 M</title></circle>
 <circle class="fs-hover" cx="445.28" cy="178.82" r="10.86" fill="transparent"><title>Lyon&#10;pop. 0.5 M</title></circle>
 <circle class="fs-hover" cx="479.79" cy="262.76" r="13.04" fill="transparent"><title>Marseille&#10;pop. 0.9 M</title></circle>
 <circle class="fs-hover" cx="223.94" cy="252.52" r="10.86" fill="transparent"><title>Toulouse&#10;pop. 0.5 M</title></circle>
 <circle class="fs-hover" cx="329.41" cy="12.63" r="8.52" fill="transparent"><title>Lille&#10;pop. 0.2 M</title></circle>
 <circle class="fs-hover" cx="29.29" cy="128.99" r="9.43" fill="transparent"><title>Nantes&#10;pop. 0.3 M</title></circle>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M265.64,73.03A17.54,17.54 0 1 0 300.73,73.03A17.54,17.54 0 1 0 265.64,73.03Z"/>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M434.42,178.82A10.86,10.86 0 1 0 456.15,178.82A10.86,10.86 0 1 0 434.42,178.82Z"/>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M466.75,262.76A13.04,13.04 0 1 0 492.83,262.76A13.04,13.04 0 1 0 466.75,262.76Z"/>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M213.08,252.52A10.86,10.86 0 1 0 234.81,252.52A10.86,10.86 0 1 0 213.08,252.52Z"/>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M320.88,12.63A8.52,8.52 0 1 0 337.93,12.63A8.52,8.52 0 1 0 320.88,12.63Z"/>
-<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1" d="M19.87,128.99A9.43,9.43 0 1 0 38.72,128.99A9.43,9.43 0 1 0 19.87,128.99Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="3.89" d="M265.64,73.03A17.54,17.54 0 1 0 300.73,73.03A17.54,17.54 0 1 0 265.64,73.03Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="2.41" d="M434.42,178.82A10.86,10.86 0 1 0 456.15,178.82A10.86,10.86 0 1 0 434.42,178.82Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="2.89" d="M466.75,262.76A13.04,13.04 0 1 0 492.83,262.76A13.04,13.04 0 1 0 466.75,262.76Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="2.41" d="M213.08,252.52A10.86,10.86 0 1 0 234.81,252.52A10.86,10.86 0 1 0 213.08,252.52Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="1.89" d="M320.88,12.63A8.52,8.52 0 1 0 337.93,12.63A8.52,8.52 0 1 0 320.88,12.63Z"/>
+<path data-series="2" fill="none" stroke="#1d1b18" stroke-width="2.09" d="M19.87,128.99A9.43,9.43 0 1 0 38.72,128.99A9.43,9.43 0 1 0 19.87,128.99Z"/>
 </svg>
 <rect x="29.2" y="16" width="520.8" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">

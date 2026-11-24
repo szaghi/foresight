@@ -25,12 +25,12 @@
 <path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#b3163f" fill="none" stroke="none" d="M0,1 M0.333333,0.571429 M0.666667,0.457143 M1,0.085714"/>
 </g>
 <g class="fs-series" data-series="2">
-<path class="fs-pts" data-pt="5" data-size="12.6" data-lw="1" data-color="#1f5f8b" fill="none" stroke="none" d="M0.166667,0.714286 M0.833333,0.4"/>
+<path class="fs-pts" data-pt="5" data-size="12.6" data-lw="1.4" data-color="#1f5f8b" fill="none" stroke="none" d="M0.166667,0.714286 M0.833333,0.4"/>
 </g>
 </svg>
 <svg class="fs-marks" x="35.8" y="16" width="514.2" height="273" viewBox="0 0 514.2 273" overflow="visible">
 <path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M-4.5,273A4.5,4.5 0 1 0 4.5,273A4.5,4.5 0 1 0 -4.5,273ZM166.9,156A4.5,4.5 0 1 0 175.9,156A4.5,4.5 0 1 0 166.9,156ZM338.3,124.8A4.5,4.5 0 1 0 347.3,124.8A4.5,4.5 0 1 0 338.3,124.8ZM509.7,23.4A4.5,4.5 0 1 0 518.7,23.4A4.5,4.5 0 1 0 509.7,23.4Z"/>
-<path data-series="2" fill="#1f5f8b" stroke="#1f5f8b" stroke-width="1" d="M79.4,188.7L92,188.7L92,201.3L79.4,201.3ZM422.2,102.9L434.8,102.9L434.8,115.5L422.2,115.5Z"/>
+<path data-series="2" fill="#1f5f8b" stroke="#1f5f8b" stroke-width="1.4" d="M79.4,188.7L92,188.7L92,201.3L79.4,201.3ZM422.2,102.9L434.8,102.9L434.8,115.5L422.2,115.5Z"/>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="273" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">
@@ -88,7 +88,7 @@
 <text x="137" y="33.7" text-anchor="end">first block</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#1f5f8b" stroke="#1f5f8b" stroke-width="1" d="M154.7,38.2L167.3,38.2L167.3,50.8L154.7,50.8Z"/>
+<path fill="#1f5f8b" stroke="#1f5f8b" stroke-width="1.4" d="M154.7,38.2L167.3,38.2L167.3,50.8L154.7,50.8Z"/>
 <text x="137" y="48.7" text-anchor="end">second block</text>
 </g>
 </g>

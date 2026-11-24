@@ -100,11 +100,11 @@
 <svg class="fs-plot" x="355.8" y="16" width="274.2" height="253" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.1,0.725 0.3,0.525 0.5,0.475 0.7,0.25 0.9,0.2"/>
-<path class="fs-pts" data-pt="7" data-size="9" data-lw="2" data-color="#ff7092" fill="none" stroke="none" d="M0.1,0.725 M0.3,0.525 M0.5,0.475 M0.7,0.25 M0.9,0.2"/>
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#ff7092" fill="none" stroke="none" d="M0.1,0.725 M0.3,0.525 M0.5,0.475 M0.7,0.25 M0.9,0.2"/>
 </g>
 </svg>
 <svg class="fs-marks" x="355.8" y="16" width="274.2" height="253" viewBox="0 0 274.2 253" overflow="hidden">
-<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="2" d="M22.92,183.43A4.5,4.5 0 1 0 31.92,183.43A4.5,4.5 0 1 0 22.92,183.43ZM77.76,132.83A4.5,4.5 0 1 0 86.76,132.83A4.5,4.5 0 1 0 77.76,132.83ZM132.6,120.18A4.5,4.5 0 1 0 141.6,120.18A4.5,4.5 0 1 0 132.6,120.18ZM187.44,63.25A4.5,4.5 0 1 0 196.44,63.25A4.5,4.5 0 1 0 187.44,63.25ZM242.28,50.6A4.5,4.5 0 1 0 251.28,50.6A4.5,4.5 0 1 0 242.28,50.6Z"/>
+<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M22.92,183.43A4.5,4.5 0 1 0 31.92,183.43A4.5,4.5 0 1 0 22.92,183.43ZM77.76,132.83A4.5,4.5 0 1 0 86.76,132.83A4.5,4.5 0 1 0 77.76,132.83ZM132.6,120.18A4.5,4.5 0 1 0 141.6,120.18A4.5,4.5 0 1 0 132.6,120.18ZM187.44,63.25A4.5,4.5 0 1 0 196.44,63.25A4.5,4.5 0 1 0 187.44,63.25ZM242.28,50.6A4.5,4.5 0 1 0 251.28,50.6A4.5,4.5 0 1 0 242.28,50.6Z"/>
 </svg>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="383.22,269 602.58,269"/>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="355.8,199.43 355.8,66.6"/>
@@ -130,7 +130,7 @@
 </g>
 <g class="fs-key-entry" data-series="1">
 <polyline fill="none" stroke="#ff7092" stroke-width="2" points="410.2,29.5 446.2,29.5"/>
-<path fill="#ff7092" stroke="#ff7092" stroke-width="2" d="M423.7,29.5A4.5,4.5 0 1 0 432.7,29.5A4.5,4.5 0 1 0 423.7,29.5Z"/>
+<path fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M423.7,29.5A4.5,4.5 0 1 0 432.7,29.5A4.5,4.5 0 1 0 423.7,29.5Z"/>
 <text x="404.2" y="33.7" text-anchor="end">runs</text>
 </g>
 </g>

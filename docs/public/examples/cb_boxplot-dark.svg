@@ -27,7 +27,7 @@
 <path fill="#ff7092" fill-opacity="0.3" stroke="#ff7092" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.714286,0.372813 0.857143,0.372813 0.857143,0.238437 0.714286,0.238437Z"/>
 <path class="fs-ybars" data-cap="6" fill="none" stroke="#ff7092" stroke-width="1" vector-effect="non-scaling-stroke" d="M0.785714,0.372813L0.785714,0.405M0.785714,0.238437L0.785714,0.0975"/>
 <polyline fill="none" stroke="#ff7092" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.714286,0.2775 0.857143,0.2775"/>
-<path class="fs-pts" data-pt="7" data-size="6" data-lw="1" data-color="#ff7092" fill="none" stroke="none" d="M0.5,0.3125"/>
+<path class="fs-pts" data-pt="7" data-size="6" data-lw="0.67" data-color="#ff7092" fill="none" stroke="none" d="M0.5,0.3125"/>
 </g>
 </svg>
 <svg class="fs-caps" x="50.2" y="16" width="490" height="273" viewBox="0 0 490 273" overflow="hidden">
@@ -51,7 +51,7 @@
 </g>
 </svg>
 <svg class="fs-marks" x="50.2" y="16" width="490" height="273" viewBox="0 0 490 273" overflow="hidden">
-<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M242,85.31A3,3 0 1 0 248,85.31A3,3 0 1 0 242,85.31Z"/>
+<path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="0.67" d="M242,85.31A3,3 0 1 0 248,85.31A3,3 0 1 0 242,85.31Z"/>
 </svg>
 <rect x="50.2" y="16" width="490" height="273" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-xticks">

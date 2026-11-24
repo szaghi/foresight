@@ -26,11 +26,11 @@
 <g class="fs-series" data-series="2">
 </g>
 <g class="fs-series" data-series="3">
-<path class="fs-pts" data-pt="7" data-size="18" data-lw="1" data-color="#6fd99a" fill="none" stroke="none" d="M0.9,0.162"/>
+<path class="fs-pts" data-pt="7" data-size="18" data-lw="2" data-color="#6fd99a" fill="none" stroke="none" d="M0.9,0.162"/>
 </g>
 </svg>
 <svg class="fs-marks" x="22.6" y="16" width="487.9" height="258" viewBox="0 0 487.9 258" overflow="hidden">
-<path data-series="3" fill="#6fd99a" stroke="#6fd99a" stroke-width="1" d="M430.11,41.8A9,9 0 1 0 448.11,41.8A9,9 0 1 0 430.11,41.8Z"/>
+<path data-series="3" fill="#6fd99a" stroke="#6fd99a" stroke-width="2" d="M430.11,41.8A9,9 0 1 0 448.11,41.8A9,9 0 1 0 430.11,41.8Z"/>
 </svg>
 <svg class="fs-labels" x="22.6" y="16" width="487.9" height="258" viewBox="0 0 487.9 258" overflow="hidden">
 <text class="fs-label" data-series="2" data-u="0.1" data-v="0.75" data-dx="0" data-dy="4.2" x="48.79" y="197.7" text-anchor="middle" fill="#e8ecf0">41 s</text>
@@ -87,7 +87,7 @@
 <text x="104" y="33.7" text-anchor="end">speedup</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<path fill="#6fd99a" stroke="#6fd99a" stroke-width="1" d="M119,44.5A9,9 0 1 0 137,44.5A9,9 0 1 0 119,44.5Z"/>
+<path fill="#6fd99a" stroke="#6fd99a" stroke-width="2" d="M119,44.5A9,9 0 1 0 137,44.5A9,9 0 1 0 119,44.5Z"/>
 <text x="104" y="48.7" text-anchor="end">multigrid</text>
 </g>
 </g>

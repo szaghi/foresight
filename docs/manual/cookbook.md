@@ -326,6 +326,17 @@ steps), or written by `set format x`; range ends are times. See [Time data](/gui
 `set mxtics time 10 minutes` (gnuplot 6.0) puts a minor tick at every 10 minutes of the clock, whatever the major
 step; `time 1 months` marks the first of every month.
 
+### Week dates
+
+<<< @/examples/snippets/cb_weekdates.gp{gnuplot}
+
+<Plot name="cb_weekdates" svg :width="640" :height="300" />
+
+`weekdate_iso(year, week [, day])` gives the time of an ISO 8601 week date (weeks from Monday, week 1 the one of the
+first Thursday: 2021-W01 starts on 4 January), `weekdate_cdc` the CDC epidemiological one (from Sunday), and
+`tm_week(t, 0|1)` the week of a time, as gnuplot 6.0; `tm_mday`, `tm_mon` and the other `tm_*` give its fields. See
+[Time data](/guide/gnuplot-subset#time-data).
+
 ### Two y axes
 
 <<< @/examples/snippets/cb_y2.gp{gnuplot}
