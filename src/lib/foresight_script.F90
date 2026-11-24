@@ -3094,6 +3094,9 @@ contains
    integer(I4P)                                 :: hull      !< `convexhull` 1, `concavehull` 2, `delaunay` 3, none 0.
    real(R8P)                                    :: hull_expand !< `expand D` of the hull, 0 for none.
    logical                                      :: surface_item !< A polar gridded surface (`with surface`).
+   logical                                      :: ps_var    !< `ps variable`: each point's size from a column.
+   logical                                      :: hypertext !< `with labels hypertext`: the texts on mouse-over.
+   real(R8P), allocatable                       :: point_sizes(:) !< The sizes of `ps variable`.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
@@ -3632,6 +3635,9 @@ contains
       hull = 0_I4P
       hull_expand = 0.0_R8P
       surface_item = .false.
+      ps_var = .false.
+      hypertext = .false.
+      if (allocated(point_sizes)) deallocate(point_sizes)
       band_smooth = .false.
       polar_base = .false.
       rotate_var = .false.
@@ -4031,6 +4037,9 @@ contains
                   endif
                endif
             endblock
+         elseif (with == 'labels' .and. word == 'hypertext') then
+            ! gnuplot's hypertext: the texts shown on mouse-over of their points, not drawn
+            hypertext = .true.
          elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
                                                 'tc textcolor boxed')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
@@ -4195,6 +4204,11 @@ contains
                number = nint(v, I4P)
             endblock
             call apply_line_style(self%line_styles, number, line, self%figure%panels(self%figure%current)%linecolors)
+         elseif ((word == 'ps' .or. keyword(word, 'pointsize', 6_I4P)) .and. i < size(tokens, kind=I4P) .and. &
+                 is_word(tokens(min(i + 1_I4P, size(tokens, kind=I4P)))%text, 'var variable')) then
+            ! gnuplot `ps variable`: each point's size from the column after the style's
+            ps_var = .true.
+            i = i + 1_I4P
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
                        keyword(word, 'linetype', 5_I4P))) shaping = word
@@ -4459,7 +4473,7 @@ contains
          if (.not. allocated(fields)) then
             label_col = 3_I4P
             call label_field%set_column(label_col)
-         elseif (size(fields) >= 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
+         elseif (size(fields) >= 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + merge(1_I4P, 0_I4P, ps_var) + &
                                    merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc())) then
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
             ! written as the text of the first column it reads, as gnuplot; the rotation (`rotate variable`) and the
@@ -4478,7 +4492,7 @@ contains
                label_field = fields(3)
             endif
             ! further columns read and ignored, as gnuplot (circles.dem's x:y:text:0)
-            kept = [fields(1:2), fields(4:3_I4P + merge(1_I4P, 0_I4P, rotate_var) + &
+            kept = [fields(1:2), fields(4:3_I4P + merge(1_I4P, 0_I4P, rotate_var) + merge(1_I4P, 0_I4P, ps_var) + &
                                              merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc()))]
             call move_alloc(kept, fields)
          else
@@ -4636,7 +4650,7 @@ contains
             return
          endif
       endif
-      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar .or. lcz)
+      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar .or. lcz) - merge(1_I4P, 0_I4P, ps_var)
       if (binned .and. nbar /= 0_I4P) then
          call fail('plot: bins need using X or X:Y', iostat, iomsg)
          return
@@ -4804,6 +4818,19 @@ contains
       if (weight_one) then
          values(:, 1) = values(:, 2)
          values(:, 2) = 1.0_R8P
+      endif
+      ! ps variable: the sizes column (the last, or before the color one) out of the values
+      if (ps_var .and. size(values, 2) >= 3) then
+         block
+            integer(I4P)              :: c    !< Sizes column.
+            integer(I4P), allocatable :: rest(:) !< The other columns.
+            integer(I4P)              :: k    !< Column counter.
+
+            c = size(values, 2, kind=I4P) - merge(1_I4P, 0_I4P, lcvar .or. lcz)
+            point_sizes = values(:, c)
+            rest = pack([(k, k = 1_I4P, size(values, 2, kind=I4P))], [(k /= c, k = 1_I4P, size(values, 2, kind=I4P))])
+            values = values(:, rest)
+         endblock
       endif
       if (hull > 0_I4P) call hull_filter
       if (with == 'surface') call surface_grid
@@ -5909,6 +5936,16 @@ contains
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%noautoscale = item_noauto
          panel%series(last)%key_mid_palette = surface_item
+         if (allocated(point_sizes)) then
+            if (size(point_sizes) == size(panel%series(last)%x)) panel%series(last)%point_sizes = point_sizes
+         endif
+         panel%series(last)%hypertext = hypertext
+         ! the points of labels in the item's lc, black without one (gnuplot); the text in its tc
+         if (panel%series(last)%style%with == WITH_LABELS .and. allocated(line%lc)) then
+            if (len(line%lc) > 0) then
+               if (line%lc(1:1) /= '*') panel%series(last)%point_color = line%lc
+            endif
+         endif
          ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0
          if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
          panel%series(last)%gnuplot_sample = .true.

@@ -108,6 +108,9 @@ type :: series_object
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
    logical                       :: key_mid_palette = .false. !< Key sample in the palette's middle color (gnuplot's
                                                               !< polar gridded surface).
+   real(R8P),        allocatable :: point_sizes(:)  !< Each point's size (gnuplot `ps variable`), else the style's.
+   logical                       :: hypertext = .false. !< Labels shown on mouse-over of their points (`hypertext`).
+   character(len=:), allocatable :: point_color     !< Color of the points of labels (their `lc`), black if unset.
    integer(I4P)                  :: title_justify = 0_I4P !< `title at beginning|end left|right`: 1 left, 2 right,
                                                           !< 0 the place's own (right before the first point).
    integer(I4P)                  :: pointnumber = 0_I4P !< About N point markers evenly spread, 0 for all (gnuplot

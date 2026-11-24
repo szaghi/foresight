@@ -80,6 +80,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_arrows
       procedure, pass(self), private :: pattern_fill !< Fill of a polygon, a pattern defined if needed.
       procedure, pass(self) :: data_label
+      procedure, pass(self) :: hover !< Text on mouse-over of a point: a transparent disk with its title.
       procedure, pass(self) :: data_label_raw !< data_label without the ISO 8859-1 conversion.
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
@@ -619,6 +620,23 @@ contains
       endif
       endsubroutine add_head
    endsubroutine data_arrows
+
+   subroutine hover(self, x, y, text, diameter)
+   !< gnuplot's hypertext: `text` shown on mouse-over of the point (`x`, `y`) [unit square], a transparent disk of
+   !< `diameter` [px] (at least 8) over the markers carrying it as its title (the browser's tooltip).
+   class(backend_svg), intent(inout) :: self     !< Device.
+   real(R8P),          intent(in)    :: x        !< Abscissa [unit].
+   real(R8P),          intent(in)    :: y        !< Ordinate [unit].
+   character(len=*),   intent(in)    :: text     !< Text.
+   real(R8P),          intent(in)    :: diameter !< Sensitive disk [px].
+   character(len=:), allocatable     :: plain    !< Text, ISO 8859-1 in UTF-8.
+
+   plain = text
+   if (self%latin1) plain = latin1_utf8(text)
+   self%marks = self%marks//'<circle class="fs-hover" cx="'//px(x * self%area(3))//'" cy="'// &
+                px((1.0_R8P - y) * self%area(4))//'" r="'//px(0.5_R8P * max(diameter, 8.0_R8P))// &
+                '" fill="transparent"><title>'//xml_escape(plain)//'</title></circle>'//new_line('a')
+   endsubroutine hover
 
    subroutine data_label(self, x, y, string, anchor, rotate, color, dx, dy)
    !< Text at a data point (`data_label_raw`), ISO 8859-1 texts in UTF-8 first (`latin1`).

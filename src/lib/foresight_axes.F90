@@ -3425,6 +3425,9 @@ contains
                enddo
                backend%literal = .false.
             endblock
+         elseif (allocated(series%point_sizes)) then
+            ! ps variable: each point its own size
+            call sized_dots(series%style%color, marked)
          elseif (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
             i1 = 1_I4P
@@ -3857,17 +3860,74 @@ contains
       endassociate
       endsubroutine draw_polygons
 
+      subroutine sized_dots(color, mask)
+      !< The markers of the points of `mask`, each its own size (gnuplot `ps variable`), in `color` (`lc variable`:
+      !< each its own).
+      character(len=*), intent(in) :: color   !< Marker color.
+      logical,          intent(in) :: mask(:) !< Points marked.
+      integer(I4P)                 :: i       !< Point counter.
+
+      associate(series => self%series(s))
+         do i = 1_I4P, n
+            if (.not. mask(i)) cycle
+            if (.not. point_size(i) > 0.0_R8P) cycle
+            if (allocated(series%colors)) then
+               if (i <= size(series%colors, kind=I4P)) then
+                  if (series%colors(i) == 'none') cycle
+                  call backend%data_dots(u(i:i), v(i:i), trim(series%colors(i)), point_size(i), &
+                                         pt=series%style%pointtype, line_width=series%style%linewidth)
+                  cycle
+               endif
+            endif
+            call backend%data_dots(u(i:i), v(i:i), color, point_size(i), pt=series%style%pointtype, &
+                                   line_width=series%style%linewidth)
+         enddo
+      endassociate
+      endsubroutine sized_dots
+
+      function point_size(i) result(diameter)
+      !< Marker width of point `i` [px]: its `ps variable` size, else the style's.
+      integer(I4P), intent(in) :: i        !< Point.
+      real(R8P)                :: diameter !< Width.
+      type(style_object)       :: one      !< The style at that size.
+
+      diameter = self%series(s)%style%point_diameter()
+      if (.not. allocated(self%series(s)%point_sizes)) return
+      if (i > size(self%series(s)%point_sizes, kind=I4P)) return
+      one = self%series(s)%style
+      one%pointsize = self%series(s)%point_sizes(i)
+      diameter = 0.0_R8P
+      if (ieee_is_finite(one%pointsize)) diameter = one%point_diameter()
+      endfunction point_size
+
       subroutine draw_labels
       !< The text of each placeable point at it, moved by the offset [characters]; its point marked if so set.
       character(len=:), allocatable :: color !< Text color.
       integer(I4P)                  :: i     !< Point counter.
 
       associate(series => self%series(s))
+         ! the points in the item's lc, black without one (gnuplot), each its own size with `ps variable`
+         color = FRAME_COLOR
+         if (allocated(series%point_color)) color = series%point_color
+         if (series%text_point .and. any(valid)) then
+            if (allocated(series%point_sizes)) then
+               call sized_dots(color, valid)
+            else
+               call backend%data_dots(pack(u, valid), pack(v, valid), color, series%style%point_diameter(), &
+                                      pt=series%style%pointtype, line_width=series%style%linewidth)
+            endif
+         endif
+         ! `hypertext`: each text shown on mouse-over of its point, none drawn
+         if (series%hypertext) then
+            do i = 1_I4P, n
+               if (.not. valid(i)) cycle
+               if (len_trim(series%texts(i)) == 0) cycle
+               call backend%hover(u(i), v(i), trim(series%texts(i)), point_size(i))
+            enddo
+            return
+         endif
          color = FRAME_COLOR
          if (allocated(series%text_color)) color = series%text_color
-         if (series%text_point .and. any(valid)) &
-            call backend%data_dots(pack(u, valid), pack(v, valid), color, series%style%point_diameter(), &
-                                   pt=series%style%pointtype, line_width=series%style%linewidth)
          ! `boxed`: each text on the background (gnuplot's svg textbox)
          backend%boxed = series%text_boxed
          do i = 1_I4P, n

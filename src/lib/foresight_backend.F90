@@ -95,6 +95,7 @@ type, abstract :: backend_object
       procedure(label_interface),           pass(self), deferred :: data_label      !< Text at a point [unit square].
       procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
+      procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
 endtype backend_object
 
 abstract interface
@@ -317,6 +318,17 @@ contains
 
    rotates = .true.
    endfunction rotates_text
+
+   subroutine hover(self, x, y, text, diameter)
+   !< `text` shown on mouse-over of the point (`x`, `y`) [unit square], a disk of `diameter` [px] (gnuplot's
+   !< hypertext): nothing on a device without a mouse.
+   class(backend_object), intent(inout) :: self     !< Device.
+   real(R8P),             intent(in)    :: x        !< Abscissa [unit].
+   real(R8P),             intent(in)    :: y        !< Ordinate [unit].
+   character(len=*),      intent(in)    :: text     !< Text.
+   real(R8P),             intent(in)    :: diameter !< Sensitive disk [px].
+
+   endsubroutine hover
 
    pure function row_height(self) result(height)
    !< Height of a text row of the device [px]: 0 on vector devices, where text sits anywhere.

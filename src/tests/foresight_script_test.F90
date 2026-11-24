@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(230)                           !< Per-check outcome.
+logical                       :: test_passed(231)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5622,6 +5622,47 @@ test_passed(230) = test_passed(230) .and. iostat /= 0_I4P .and. index(iomsg, 'fi
 open(newunit=unit, file='foresight_script_test_binary.rgb')
 close(unit, status='delete')
 
+
+! ps variable (each point's size from the column after the style's), with labels hypertext (the texts on mouse-over of
+! their points, a transparent disk with its title, none drawn), the points of labels in the item's lc (gnuplot 6.0)
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_hyper.svg"'//new_line('a')//'$C << EOD'//new_line('a')// &
+                          '1 1 Lyon 2'//new_line('a')//'2 3 Nice 0.5'//new_line('a')//'EOD'//new_line('a')// &
+                          "plot $C using 1:2:3:4 with labels hypertext point pt 7 ps var lc rgb '#ffee99', "// &
+                          "$C using 1:2:4 with points pt 6 ps variable lc rgb 'black'", iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(231) = iostat == 0_I4P
+if (test_passed(231)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(231) = series(1)%hypertext .and. allocated(series(1)%point_sizes) .and. &
+                        allocated(series(2)%point_sizes) .and. allocated(series(1)%point_color)
+      if (test_passed(231)) test_passed(231) = all(series(2)%point_sizes == [2.0_R8P, 0.5_R8P]) .and. &
+                                              series(1)%point_color == '#ffee99'
+   endassociate
+   block
+      character(len=1000) :: line  !< SVG line.
+      integer(I4P)        :: ios   !< Read status.
+      integer(I4P)        :: tips  !< Tooltips.
+      logical             :: text  !< A label drawn.
+      logical             :: big   !< The size 2 point (18 px).
+
+      tips = 0_I4P
+      text = .false.
+      big = .false.
+      open(newunit=unit, file='foresight_script_test_hyper.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, 'class="fs-hover"') > 0 .and. index(line, '<title>Lyon</title>') > 0) tips = tips + 1_I4P
+         if (index(line, 'class="fs-hover"') > 0 .and. index(line, '<title>Nice</title>') > 0) tips = tips + 1_I4P
+         if (index(line, '>Lyon</text>') > 0) text = .true.
+         if (index(line, 'data-pt="6" data-size="18"') > 0) big = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(231) = test_passed(231) .and. tips == 2_I4P .and. .not. text .and. big
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5630,7 +5671,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,230L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,231L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
