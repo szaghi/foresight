@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(223)                           !< Per-check outcome.
+logical                       :: test_passed(224)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5238,6 +5238,37 @@ if (test_passed(223)) then
    endblock
 endif
 
+! fidelity to gnuplot 6.0's renders: set title with options alone keeps its text (windrose's `set title offset 0,-2`),
+! the polar grid in the grid's line (`set grid polar lt -1 lw .5`: black, solid)
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_fid7.svg"; set title "TTT"; set title offset 0,-2; '// &
+                          'set polar; set grid polar lt -1 lw 0.5; plot 1', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(224) = iostat == 0_I4P
+if (test_passed(224)) then
+   block
+      character(len=1000) :: line  !< SVG line.
+      integer(I4P)        :: ios   !< Read status.
+      logical             :: title !< The title written.
+      logical             :: black !< A black grid line.
+      logical             :: dots  !< A dotted grid line.
+
+      title = .false.
+      black = .false.
+      dots = .false.
+      open(newunit=unit, file='foresight_script_test_fid7.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '>TTT</text>') > 0) title = .true.
+         if (index(line, 'stroke="black" stroke-width="0.5"') > 0) black = .true.
+         if (index(line, 'stroke="#a0a0a0"') > 0 .and. index(line, 'dasharray') > 0) dots = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(224) = title .and. black .and. .not. dots
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5246,7 +5277,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,223L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,224L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

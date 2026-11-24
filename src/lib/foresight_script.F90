@@ -9665,7 +9665,13 @@ contains
             exit
          endif
       enddo
-      if (.not. self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)) return
+      if (j == 2_I4P) then
+         ! options alone (`set title offset 0,-2`): the text kept, as gnuplot
+         text = ''
+         if (allocated(self%figure%panels(self%figure%current)%title)) text = self%figure%panels(self%figure%current)%title
+      elseif (.not. self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)) then
+         return
+      endif
       offset = self%figure%panels(self%figure%current)%title_offset
       anchor = self%figure%panels(self%figure%current)%title_anchor
       color = self%figure%panels(self%figure%current)%title_color

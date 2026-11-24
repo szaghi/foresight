@@ -2361,22 +2361,28 @@ contains
    real(R8P)                            :: turn(CIRCLE_SIDES + 1) !< Angles of the circle vertices [rad].
    integer(I4P)                         :: t       !< Tick counter.
    integer(I4P)                         :: k       !< Vertex or spoke counter.
+   character(len=:), allocatable        :: color   !< Line color.
+   character(len=:), allocatable        :: dashes  !< Dash array.
 
    turn = [(2.0_R8P * PI_R8 * real(k, R8P) / real(CIRCLE_SIDES, R8P), k = 0_I4P, CIRCLE_SIDES)]
    radius = polar_rho(self%raxis, self%raxis%hi)
+   ! the grid's line: its color, width and dash type (`set grid polar lt -1 lw .5`: black, solid), as the rectangular
+   color = GRID_COLOR
+   if (allocated(self%grid_lc)) color = self%grid_lc
+   dashes = self%grid_dash_array()
    do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
       if (.not. self%raxis%ticks(t)%major) cycle
       rho = polar_rho(self%raxis, self%raxis%ticks(t)%value)
       if (rho <= 0.0_R8P .or. rho > radius * (1.0_R8P + 1.0e-9_R8P)) cycle
-      call backend%data_polyline(self%xaxis%to_unit(rho * cos(turn)), self%yaxis%to_unit(rho * sin(turn)), GRID_COLOR, &
-                                 0.5_R8P, GRID_DASHES)
+      call backend%data_polyline(self%xaxis%to_unit(rho * cos(turn)), self%yaxis%to_unit(rho * sin(turn)), color, &
+                                 self%grid_lw, dashes)
    enddo
    k = 0_I4P
    ! a step of a full turn (`set grid r` alone): the rings only
    do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P .and. self%grid_polar < 360.0_R8P)
       a = self%page_angle(real(k, R8P) * self%grid_polar)
       call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius * cos(a)]), &
-                                 self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), GRID_COLOR, 0.5_R8P, GRID_DASHES)
+                                 self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), color, self%grid_lw, dashes)
       k = k + 1_I4P
    enddo
    endsubroutine draw_polar_grid
