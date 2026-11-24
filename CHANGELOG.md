@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.16.0] — 2026-11-24
+### Added
+- **expression**: Tm_sec ... tm_yday, tm_week and week dates, as gnuplot 6.0
+
+- **script**: Set pixmap, PNG images on the page, as gnuplot 6.0
+
+- **script**: Fonts of the title, labels, key and page, as gnuplot 6.0
+
+- **axes**: Fonts of the tick labels, as gnuplot 6.0
+
+- **script**: Fonts of theta labels, timestamp and group titles
+
+
+### Documentation
+- Week dates, and the examples redrawn for markers and color boxes
+
+- Fonts per text element
+
+
+### Fixed
+- **svg**: Marker lines as gnuplot's svg, whatever the line width
+
+- **axes**: Autoscaled linear color axis extended to its ticks, as gnuplot 6.0
+
+- **svg**: Front objects over the point markers, as gnuplot 6.0
+
+- **nvfortran**: Ellipse sizes and set key at, without host association
+
+- **axes**: Back objects over the polar grid and zero axes, as gnuplot 6.0
+
+- **axes**: X and x2 label offsets move their margins, as gnuplot 6.0
+
+- **svg**: Polar surface cells without seams, as gnuplot 6.0
+
+- **script**: A datablock after other commands on its line, as gnuplot 6.0
+
+- **expression**: Undefined variables in guarded operands, as gnuplot 6.0
+
+
 ## [0.15.0] — 2026-11-24
 ### Added
 - **script**: Set for [...] and unset for [...], as gnuplot 6.0
