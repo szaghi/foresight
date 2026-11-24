@@ -458,7 +458,8 @@ statement up to one starting with `e` (blanks before it skipped), one block per 
 the auto title is `'-'` as written. A missing `e` is an error.
 
 A datablock `$NAME << WORD` holds the lines after it, as they are (comments, blank lines and their dataset breaks
-included), up to the line starting with `WORD`. Wherever a data file goes (`plot`, `fit`, `stats`, `set palette file`)
+included), up to the line starting with `WORD`; it may end a line of other commands (`set polar; $P << EOD`), which
+run first. Wherever a data file goes (`plot`, `fit`, `stats`, `set palette file`)
 `$NAME` reads them instead; `exists("$NAME")` tells whether it is defined, `undefine $NAME` forgets it. A datablock is
 read outside blocks (`do for {...}`) only. `$NAME[i]` is its line `i` (a string, from 1) and `|$NAME|` the number
 of its lines, as gnuplot 6.0.

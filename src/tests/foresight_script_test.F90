@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(238)                           !< Per-check outcome.
+logical                       :: test_passed(239)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5860,6 +5860,24 @@ call interpreter%run_text("set terminal svg; set output 'foresight_script_test_c
 test_passed(238) = test_passed(238) .and. iostat == 0_I4P
 if (test_passed(238)) test_passed(238) = index(read_text('foresight_script_test_crisp.svg'), 'crispEdges') == 0
 
+! a datablock started after other commands on its line (`set polar; $P << EOD`), as gnuplot 6.0: the commands run
+! first; a `;` inside quotes does not split
+call interpreter%init(scratch)
+call interpreter%run_text("a = 'x;y'; set polar; $P << EOD"//new_line('a')//"0 1"//new_line('a')//"90 2"// &
+                          new_line('a')//"EOD"//new_line('a')//"n = |$P|; m = strlen(a)", iostat, iomsg)
+test_passed(239) = iostat == 0_I4P .and. interpreter%figure%panels(1)%polar
+if (test_passed(239)) then
+   block
+      real(R8P) :: v     !< Value.
+      logical   :: found !< Defined.
+
+      call interpreter%symbols%value_of('n', v, found)
+      test_passed(239) = found .and. v == 2.0_R8P
+      call interpreter%symbols%value_of('m', v, found)
+      test_passed(239) = test_passed(239) .and. found .and. v == 3.0_R8P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5868,7 +5886,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,238L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,239L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

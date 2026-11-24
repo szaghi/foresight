@@ -653,6 +653,7 @@ contains
    character(len=:), allocatable                       :: here_text  !< Its lines.
    integer(I4P)                                        :: here_line  !< Its first line.
    logical                                             :: here_function !< A function block, not a datablock.
+   integer(I4P)                                        :: semicolon     !< Last statement separator of the line.
    character(len=:), allocatable                       :: inline_quotes !< Quotes of the inline data items (`'-'`) of
                                                                         !< the pending line, empty if none.
    character(len=:), allocatable                       :: inline_text   !< Lines of the inline data being read.
@@ -772,6 +773,20 @@ contains
          here_line = first_line
          line = ''
          cycle
+      endif
+      if (len(block) == 0) then
+         ! `set polar; $P << EOD`: the commands before the datablock run, then its lines are read, as gnuplot
+         semicolon = last_semicolon(line)
+         if (semicolon > 0_I4P) then
+            if (heredoc(line(semicolon + 1_I4P:), here_name, here_end)) then
+               call take(line(1:semicolon - 1_I4P))
+               if (iostat /= 0_I4P) return
+               here_text = ''
+               here_line = first_line
+               line = ''
+               cycle
+            endif
+         endif
       endif
       if (len(block) == 0) then
          ! a plot of inline data ('-'): run once the data lines after it are read
@@ -14080,6 +14095,34 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_local
+
+   pure function last_semicolon(line) result(k)
+   !< Position of the last `;` of `line` outside quotes (a statement separator), 0 if none.
+   character(len=*), intent(in) :: line  !< Logical line.
+   integer(I4P)                 :: k     !< Position.
+   character                    :: quote !< Open quote, blank if none.
+   integer(I4P)                 :: i     !< Character counter.
+
+   k = 0_I4P
+   quote = ' '
+   i = 0_I4P
+   do while (i < len(line, kind=I4P))
+      i = i + 1_I4P
+      if (quote /= ' ') then
+         if (line(i:i) == '\' .and. quote == '"') then
+            i = i + 1_I4P
+         elseif (line(i:i) == quote) then
+            quote = ' '
+         endif
+      elseif (line(i:i) == '"' .or. line(i:i) == "'") then
+         quote = line(i:i)
+      elseif (line(i:i) == '#') then
+         exit
+      elseif (line(i:i) == ';') then
+         k = i
+      endif
+   enddo
+   endfunction last_semicolon
 
    function heredoc(line, name, terminator) result(yes)
    !< Whether `line` starts a datablock, `$NAME << WORD` (blanks optional around `<<`, a comment after WORD), giving
