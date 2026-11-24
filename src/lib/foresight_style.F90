@@ -362,6 +362,9 @@ contains
       name = 'circles'
    elseif (gnuplot_abbreviates(word, 'sec$tors')) then
       name = 'sectors'
+   elseif (gnuplot_abbreviates(word, 'sur$face')) then
+      ! gnuplot's polar gridded surface (`set polar grid`), drawn by scripts as polygons
+      name = 'surface'
    elseif (gnuplot_abbreviates(word, 'ell$ipses')) then
       name = 'ellipses'
    elseif (gnuplot_abbreviates(word, 'sur$face')) then

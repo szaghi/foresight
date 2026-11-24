@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(228)                           !< Per-check outcome.
+logical                       :: test_passed(229)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2626,7 +2626,10 @@ call interpreter%run_text('set tics; set output "foresight_script_test_tics.svg"
                           iostat, iomsg)
 test_passed(123) = test_passed(123) .and. iostat == 0_I4P .and. &
                    interpreter%figure%panels(1)%xaxis%tics%attribute() /= 'none'
+! set tics front: the grid over the data, as set grid front (gnuplot's grid_tics_in_front)
 call interpreter%run_text('set tics front', iostat, iomsg)
+test_passed(123) = test_passed(123) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%grid_front
+call interpreter%run_text('set tics bogus', iostat, iomsg)
 test_passed(123) = test_passed(123) .and. iostat /= 0_I4P .and. index(iomsg, 'supported options are mirror') > 0
 open(newunit=unit, file='foresight_script_test_tics.svg')
 close(unit, status='delete')
@@ -5500,6 +5503,85 @@ endif
 call interpreter%run_text('set encoding default', iostat, iomsg)
 test_passed(228) = test_passed(228) .and. iostat == 0_I4P .and. .not. interpreter%figure%latin1
 
+
+! set polar grid and with surface (gnuplot 6.0, polargrid.dem): theta:r:z weighted onto the polar grid, each cell a
+! polygon in the palette color of its value (the gray levels of gnuplot 6.0's svg for these points); the grid's
+! settings, its theta wedge, unset polar grid; set grid on a polar panel (rings and spokes at the theta ticks);
+! set ttics START,STEP,END; set rrange noextend; unset style fill
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_pgrid.svg"; set angles degrees; '// &
+                          'set polar grid 6,2 gauss scale 1; set palette gray; set cbrange [0:10]'//new_line('a')// &
+                          '$P << EOD'//new_line('a')//'0 1 2'//new_line('a')//'90 1.5 8'//new_line('a')// &
+                          '200 0.5 5'//new_line('a')//'300 2 1'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot $P using 1:2:3 with surface title "s"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(229) = iostat == 0_I4P
+if (test_passed(229)) then
+   associate(panel => interpreter%figure%panels(1), grid => interpreter%polar_grid)
+      test_passed(229) = panel%polar .and. grid%theta_segments == 6_I4P .and. grid%r_segments == 2_I4P .and. &
+                        grid%mode == 2_I4P .and. panel%series(1)%style%with == WITH_POLYGONS .and. &
+                        panel%series(1)%key_mid_palette .and. size(panel%series(1)%x) == 64
+   endassociate
+   block
+      character(len=1000) :: line   !< SVG line.
+      integer(I4P)        :: ios    !< Read status.
+      integer(I4P)        :: k      !< Position.
+      integer(I4P)        :: n      !< Cells.
+      integer(I4P)        :: g(12)  !< Their gray levels.
+      integer(I4P)        :: tmp    !< Swap.
+      integer(I4P)        :: a, b   !< Counters.
+
+      n = 0_I4P
+      g = 0_I4P
+      open(newunit=unit, file='foresight_script_test_pgrid.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         k = index(line, '<path fill="#')
+         if (k == 0 .or. index(line, 'stroke="none" vector-effect') == 0) cycle
+         n = n + 1_I4P
+         if (n <= 12_I4P) read(line(k + 13:k + 14), '(Z2)') g(n)
+      enddo
+      close(unit, status='delete')
+      do a = 1, 11
+         do b = a + 1, 12
+            if (g(b) < g(a)) then
+               tmp = g(a)
+               g(a) = g(b)
+               g(b) = tmp
+            endif
+         enddo
+      enddo
+      test_passed(229) = test_passed(229) .and. n == 12_I4P .and. &
+                        all(g == [75, 79, 114, 115, 130, 137, 156, 160, 165, 169, 183, 216])
+   endblock
+endif
+! the theta wedge: cells starting in it, clamped to its end
+call interpreter%run_text('set polar grid theta [0:90] qnorm 2 kdensity; plot $P using 1:2:3 with surface', &
+                          iostat, iomsg)
+test_passed(229) = test_passed(229) .and. iostat == 0_I4P
+if (test_passed(229)) then
+   associate(panel => interpreter%figure%panels(1), grid => interpreter%polar_grid)
+      test_passed(229) = size(panel%series(1)%x) == 24 .and. grid%mode == 1_I4P .and. grid%norm_q == 2_I4P .and. &
+                        grid%kdensity .and. grid%tmax == 90.0_R8P
+   endassociate
+endif
+call interpreter%run_text('unset polar grid; set polar; set ttics 0,30,330; set grid; set rrange [*:*] noextend; '// &
+                          'set style fill solid; unset style fill', iostat, iomsg)
+test_passed(229) = test_passed(229) .and. iostat == 0_I4P
+if (test_passed(229)) then
+   associate(panel => interpreter%figure%panels(1), grid => interpreter%polar_grid)
+      test_passed(229) = grid%theta_segments == 24_I4P .and. grid%tmax == 360.0_R8P .and. panel%raxis%noextend .and. &
+                        panel%ttics%mode == TICS_FIXED .and. panel%fill_default%fill == FILL_EMPTY
+   endassociate
+endif
+call interpreter%run_text('plot $P using 1:2 with points', iostat, iomsg)
+test_passed(229) = test_passed(229) .and. iostat == 0_I4P
+call interpreter%run_text('unset polar', iostat, iomsg)
+test_passed(229) = test_passed(229) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ttics%mode == TICS_NONE
+call interpreter%run_text('plot $P using 1:2:3 with surface', iostat, iomsg)
+test_passed(229) = test_passed(229) .and. iostat /= 0_I4P .and. index(iomsg, 'set polar') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5508,7 +5590,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,228L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,229L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

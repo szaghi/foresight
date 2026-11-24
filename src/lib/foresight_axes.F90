@@ -122,7 +122,8 @@ character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill:
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
 character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, yerrorbars, '// &
-                                               'labels, closed filledcurves, sectors and readouts, on the first axes' !<
+                                               'labels, closed filledcurves, sectors, polygons and readouts, on the '// &
+                                               'first axes' !<
                                                                                                               !< Polar styles.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
 real(R8P),        parameter :: PI_R8         = 4.0_R8P * atan(1.0_R8P) !< pi.
@@ -1522,7 +1523,8 @@ contains
    ! the zero axes, data geometry behind the series (gnuplot `set zeroaxis`)
    if (any(self%zero_axes)) call self%draw_zero_axes(backend)
    ! the polar grid and border are data geometry, zoomed with the series
-   if (self%polar .and. self%grid_polar > 0.0_R8P) then
+   ! `set grid polar`, or `set grid` on a polar panel (rings at the r ticks, spokes at the theta ticks, as gnuplot)
+   if (self%polar .and. (self%grid_polar > 0.0_R8P .or. self%grid)) then
       call backend%begin_group('fs-pgrid', visible=self%grid)
       call self%draw_polar_grid(backend)
       call backend%end_group
@@ -2380,12 +2382,39 @@ contains
    enddo
    k = 0_I4P
    ! a step of a full turn (`set grid r` alone): the rings only
-   do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P .and. self%grid_polar < 360.0_R8P)
+   do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P .and. self%grid_polar < 360.0_R8P .and. &
+             self%grid_polar > 0.0_R8P)
       a = self%page_angle(real(k, R8P) * self%grid_polar)
       call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius * cos(a)]), &
                                  self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), color, self%grid_lw, dashes)
       k = k + 1_I4P
    enddo
+   ! `set grid` without polar: the spokes at the theta ticks the user set (gnuplot's; none at the automatic ones)
+   if (self%grid_polar > 0.0_R8P .or. self%ttics%mode == TICS_NONE) return
+   if (self%ttics%mode /= TICS_FIXED .and. .not. allocated(self%ttics%list)) return
+   block
+      type(tick_object), allocatable :: thetas(:) !< Theta ticks.
+      type(tics_object)              :: tics      !< Their settings.
+      real(R8P)                      :: lo, hi    !< A turn [deg].
+
+      tics = self%ttics
+      lo = 0.0_R8P
+      hi = 360.0_R8P
+      if (allocated(tics%list)) tics%list%value = modulo(tics%list%value, 360.0_R8P)
+      if (tics%mode == TICS_FIXED .and. tics%series) then
+         call linear_ticks(lo, hi, 1.0_R8P, .false., .false., thetas, tics)
+      else
+         allocate(thetas(0))
+      endif
+      if (allocated(tics%list)) call merge_list(tics, lo, hi, thetas)
+      do k = 1_I4P, size(thetas, kind=I4P)
+         if (.not. thetas(k)%major) cycle
+         if (thetas(k)%value >= 360.0_R8P - 1.0e-9_R8P .and. any(thetas%value <= 1.0e-9_R8P)) cycle
+         a = self%page_angle(thetas(k)%value)
+         call backend%data_polyline(self%xaxis%to_unit([0.0_R8P, radius * cos(a)]), &
+                                    self%yaxis%to_unit([0.0_R8P, radius * sin(a)]), color, self%grid_lw, dashes)
+      enddo
+   endblock
    endsubroutine draw_polar_grid
 
    subroutine draw_polar_axes(self, backend, area, font_size)
@@ -5817,7 +5846,7 @@ contains
 
    select case (series%style%with)
    case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES, WITH_YERRORBARS, &
-         WITH_LABELS)
+         WITH_LABELS, WITH_POLYGONS)
       ! yerrorbars: radial bars, r low to r high at theta (gnuplot's polar error bars)
       ok = .true.
    case (WITH_FILLEDCURVES)
@@ -6316,6 +6345,8 @@ contains
             all(s)%colors(i) = cb_color(all(s)%zvalues(i))
          enddo
          if (size(all(s)%colors) > 0) all(s)%style%color = all(s)%colors(1)
+         ! a polar gridded surface: the key sample in the middle of the palette, as gnuplot
+         if (all(s)%key_mid_palette) all(s)%style%color = hex_color(p%rgb(0.5_R8P))
       case (2_I4P)
          all(s)%style%color = cb_color(all(s)%palette_value)
       case (3_I4P)
@@ -6814,6 +6845,8 @@ contains
          if (.not. rmin > 0.0_R8P) rmin = 1.0_R8P
       endif
       if (self%raxis%min_fixed) rmin = self%raxis%min_user
+      ! `set rrange [*:*] noextend`: the autoscaled r not extended to the ticks
+      self%raxis%tight = self%raxis%noextend
       if (self%raxis%min_fixed .and. self%raxis%max_fixed .and. self%raxis%min_user > self%raxis%max_user .and. &
           .not. self%raxis%log) then
          ! a reversed r axis: the start at the pole, the end on the rim

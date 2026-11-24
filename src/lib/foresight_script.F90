@@ -165,6 +165,7 @@ integer(I4P),      parameter :: FOREVER = 1000_I4P !< Values of an unbounded plo
 character(len=12), parameter :: LC_VARIABLE     = '*variable'    !< `lc variable` marker in a line color.
 character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb variable` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_Z    = '*palettez'    !< `lc palette [z]` marker in a line color.
+real(R8P),         parameter :: PI_SCRIPT       = 4.0_R8P * atan(1.0_R8P) !< pi.
 character(len=12), parameter :: LC_PALETTE_CB   = '*palettecb'   !< `lc palette cb V` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_FRAC = '*palettefrac' !< `lc palette frac F` marker in a line color.
 character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
@@ -186,6 +187,20 @@ type :: line_style_object
    character(len=:), allocatable :: colormap   !< A named colormap (`lc palette NAME`).
    integer(I4P)                  :: ptdef = 0_I4P !< Default point type from `lt N`/`ls N` (gnuplot), 0 if none.
 endtype line_style_object
+
+type :: polar_grid_type
+   !< gnuplot's `set polar grid`: the polar grid of `with surface` and the weighting of the data on it.
+   integer(I4P) :: theta_segments = 24_I4P      !< Angular segments.
+   integer(I4P) :: r_segments = 10_I4P          !< Radial segments.
+   integer(I4P) :: mode = 1_I4P                 !< Weighting: 1 qnorm, 2 gauss, 3 cauchy, 4 exp, 5 box.
+   integer(I4P) :: norm_q = 1_I4P               !< qnorm power.
+   logical      :: kdensity = .false.           !< Sums of weights (a kernel density), not weighted means.
+   real(R8P)    :: scale = 1.0_R8P              !< Distance scale of the kernels.
+   real(R8P)    :: rmin = 0.0_R8P               !< Radial clipping start (`r [min:max]`).
+   real(R8P)    :: rmax = huge(1.0_R8P)         !< Radial clipping end.
+   real(R8P)    :: tmin = 0.0_R8P               !< Angular clipping start [deg] (`theta [min:max]`).
+   real(R8P)    :: tmax = 360.0_R8P             !< Angular clipping end [deg].
+endtype polar_grid_type
 
 type :: loop_level
    !< One `for [...]` clause of a plot item: its variable, values, the value in use and the variable before the loop.
@@ -224,6 +239,7 @@ type :: script_object
    character(len=:), allocatable   :: autotitle                !< Untitled items: `file` (as written), `columnhead`,
                                                                 !< `none` (gnuplot `set key [no]autotitle`).
    type(line_style_object), allocatable :: line_styles(:)      !< `set style line` definitions.
+   type(polar_grid_type)           :: polar_grid               !< `set polar grid`.
    character(len=:), allocatable   :: separator                !< Data cell separators, empty for whitespace.
    character(len=:), allocatable   :: missing                  !< Missing data string, empty for none.
    character(len=:), allocatable   :: comments                 !< Characters starting a comment in data files.
@@ -370,6 +386,7 @@ contains
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    self%chi_fraction = 0.6_R8P
+   self%polar_grid = polar_grid_type()
    ! a new session: gnuplot's program settings at start
    overflow_mode = OVERFLOW_FLOAT
    self%minus_sign = .false.
@@ -2748,6 +2765,7 @@ contains
    logical                                      :: sharpen_item !< The item is sharpened.
    integer(I4P)                                 :: hull      !< `convexhull` 1, `concavehull` 2, `delaunay` 3, none 0.
    real(R8P)                                    :: hull_expand !< `expand D` of the hull, 0 for none.
+   logical                                      :: surface_item !< A polar gridded surface (`with surface`).
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
@@ -3285,6 +3303,7 @@ contains
       sharpen_item = .false.
       hull = 0_I4P
       hull_expand = 0.0_R8P
+      surface_item = .false.
       band_smooth = .false.
       polar_base = .false.
       rotate_var = .false.
@@ -3982,14 +4001,15 @@ contains
       endif
       if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
                                             'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors '// &
-                                            'fillsteps')) then
+                                            'fillsteps surface')) then
          call fail('plot: fs applies to boxes, filledcurves, histograms, circles, the box styles and the panel charts '// &
                    'only', iostat, iomsg)
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
-            polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars labels filledcurves sectors readout') &
+            polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars labels filledcurves sectors readout '// &
+                               'polygons surface') &
                        .and. &
                        (.not. allocated(base) .or. polar_base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
@@ -4351,6 +4371,17 @@ contains
             call fail('plot: sectors needs using azimuth:radius:angle:width[:x0:y0]', iostat, iomsg)
             return
          endif
+      case ('surface')
+         ! gnuplot's polar gridded surface: theta:r:z, polar only
+         if (.not. self%figure%panels(self%figure%current)%polar) then
+            call fail('plot: with surface needs set polar (gnuplot: for non-polar gridded surfaces use splot)', &
+                      iostat, iomsg)
+            return
+         endif
+         if (nbar /= 1_I4P) then
+            call fail('plot: surface needs using theta:r:z', iostat, iomsg)
+            return
+         endif
       case ('polygons', 'labels')
          if (nbar /= merge(1_I4P, 0_I4P, rotate_var .and. with == 'labels')) then
             call fail('plot: '//with//' needs using x:y'//trim(merge(':text_column', '            ', with == 'labels')), &
@@ -4387,8 +4418,10 @@ contains
             return
          endif
       case default
-         ! smooth acsplines: X:Y:WEIGHT, the weights read by the smoothing
-         if (nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines')) then
+         ! smooth acsplines: X:Y:WEIGHT, the weights read by the smoothing; polar theta:r:z data (gnuplot's polar grid
+         ! demos) drawn as points or lines, the z ignored as gnuplot
+         if (nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines') .and. .not. (nbar == 1_I4P .and. &
+             self%figure%panels(self%figure%current)%polar .and. is_word(with, 'points lines linespoints'))) then
             call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
             return
          endif
@@ -4445,6 +4478,7 @@ contains
          values(:, 2) = 1.0_R8P
       endif
       if (hull > 0_I4P) call hull_filter
+      if (with == 'surface') call surface_grid
       x = values(:, 1)
       y = values(:, 2)
       ! gnuplot `set link x2|y2`: values on the linked axis plotted on the first one (through `inverse`)
@@ -5546,6 +5580,7 @@ contains
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%noautoscale = item_noauto
+         panel%series(last)%key_mid_palette = surface_item
          ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0
          if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
          panel%series(last)%gnuplot_sample = .true.
@@ -5860,6 +5895,163 @@ contains
       endassociate
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
+
+      subroutine surface_grid
+      !< gnuplot's `with surface` in polar mode (grid_polar_data, plot_polar_grid): the points theta:r:z weighted onto
+      !< the polar grid of `set polar grid` (every point on every cell centre: qnorm 1/d^q, or a kernel of d/scale:
+      !< gauss, cauchy, exp, box; a weighted mean, or the sum with kdensity), r from 0 to the largest r (a quarter of a
+      !< segment more when autoscaled); each cell, clipped to the r range and the theta wedge of the grid, a polygon of
+      !< its 4 corners in the palette color of its value, filled, unbordered: the item becomes polygons with lc palette.
+      real(R8P),    allocatable :: th(:)    !< Data theta [rad, in 0..2pi].
+      real(R8P),    allocatable :: cells(:,:) !< Polygon rows: theta, r, z (5 per cell, the last undefined).
+      logical,      allocatable :: used(:)  !< Data point with theta and r.
+      real(R8P)                 :: to_rad   !< Radians per user angle unit.
+      real(R8P)                 :: rlo, rhi !< Grid r range.
+      real(R8P)                 :: dr, dt   !< Segment sizes [r, deg].
+      real(R8P)                 :: t, r     !< Cell corner [deg, r].
+      real(R8P)                 :: z, w     !< Weighted sum and weights.
+      real(R8P)                 :: d        !< Distance of a point to a cell centre.
+      real(R8P)                 :: dtheta   !< Angle between them [rad].
+      real(R8P)                 :: wt       !< A kernel weight.
+      real(R8P)                 :: cmin, cmax !< Radial clipping.
+      real(R8P)                 :: tmin, tmax !< Angular clipping [deg].
+      real(R8P)                 :: c(4)     !< Cell bounds: theta low, theta high, r low, r high.
+      real(R8P)                 :: zlo, zhi !< Values of the whole grid.
+      logical                   :: lo_in, hi_in !< Theta bounds within the wedge.
+      integer(I4P)              :: i, j, k  !< Counters.
+      integer(I4P)              :: m        !< Polygon rows.
+
+      associate(panel => self%figure%panels(self%figure%current), grid => self%polar_grid)
+         to_rad = merge(PI_SCRIPT / 180.0_R8P, 1.0_R8P, panel%degrees)
+         allocate(th(size(values, 1)), used(size(values, 1)))
+         used = ieee_is_finite(values(:, 1)) .and. ieee_is_finite(values(:, 2)) .and. ieee_is_finite(values(:, 3))
+         ! theta in 0..2pi (gnuplot's store_polar_point)
+         do i = 1_I4P, size(values, 1, kind=I4P)
+            th(i) = 0.0_R8P
+            if (.not. used(i)) cycle
+            th(i) = values(i, 1) * to_rad
+            if (th(i) >= -630.0_R8P) then
+               do while (th(i) < 0.0_R8P)
+                  th(i) = th(i) + 2.0_R8P * PI_SCRIPT
+               enddo
+            endif
+            if (th(i) <= 630.0_R8P) then
+               do while (th(i) > 2.0_R8P * PI_SCRIPT)
+                  th(i) = th(i) - 2.0_R8P * PI_SCRIPT
+               enddo
+            endif
+         enddo
+         rlo = 0.0_R8P
+         if (panel%raxis%log .and. panel%raxis%min_fixed) rlo = panel%raxis%min_user
+         if (panel%raxis%max_fixed) then
+            rhi = panel%raxis%max_user
+         else
+            rhi = -huge(1.0_R8P)
+            if (any(used)) rhi = maxval(values(:, 2), mask=used)
+            rhi = rhi + (rhi - rlo) / real(grid%r_segments, R8P) / 4.0_R8P
+         endif
+         dr = (rhi - rlo) / real(grid%r_segments, R8P)
+         dt = 360.0_R8P / real(grid%theta_segments, R8P)
+         ! clipping: the r range and the grid's r limits, the grid's theta wedge
+         cmin = max(merge(panel%raxis%min_user, rlo, panel%raxis%min_fixed), grid%rmin)
+         cmax = min(rhi, grid%rmax)
+         tmin = grid%tmin
+         tmax = grid%tmax
+         if (tmax - tmin >= 360.0_R8P) then
+            tmin = 0.0_R8P
+            tmax = 360.0_R8P
+         endif
+         allocate(cells(5 * grid%theta_segments * grid%r_segments + 4, 3))
+         cells = ieee_value(1.0_R8P, ieee_quiet_nan)
+         m = 0_I4P
+         zlo = huge(1.0_R8P)
+         zhi = -huge(1.0_R8P)
+         do i = 0_I4P, grid%r_segments - 1_I4P
+            r = rlo + real(i, R8P) * dr
+            do j = 0_I4P, grid%theta_segments - 1_I4P
+               t = real(j, R8P) * dt
+               z = 0.0_R8P
+               w = 0.0_R8P
+               do k = 1_I4P, size(values, 1, kind=I4P)
+                  if (.not. used(k)) cycle
+                  ! distance to the cell centre (gnuplot's polar_dist)
+                  dtheta = abs((t + 0.5_R8P * dt) * PI_SCRIPT / 180.0_R8P - th(k))
+                  if (dtheta > PI_SCRIPT) dtheta = 2.0_R8P * PI_SCRIPT - dtheta
+                  d = sqrt((r + 0.5_R8P * dr - values(k, 2) * cos(dtheta))**2 + (values(k, 2) * sin(dtheta))**2)
+                  if (grid%mode == 1_I4P) then
+                     if (grid%norm_q > 1_I4P) d = d**grid%norm_q
+                     if (d == 0.0_R8P) then
+                        z = values(k, 3)
+                        w = 1.0_R8P
+                        exit
+                     endif
+                     z = z + values(k, 3) / d
+                     w = w + 1.0_R8P / d
+                  else
+                     d = d / grid%scale
+                     select case (grid%mode)
+                     case (2_I4P)
+                        wt = exp(-d * d)
+                     case (3_I4P)
+                        wt = 1.0_R8P / (1.0_R8P + d * d)
+                     case (4_I4P)
+                        wt = exp(-d)
+                     case default
+                        wt = merge(1.0_R8P, 0.0_R8P, d < 1.0_R8P)
+                     endselect
+                     z = z + values(k, 3) * wt
+                     w = w + wt
+                  endif
+               enddo
+               if (.not. grid%kdensity) then
+                  if (w > 0.0_R8P) then
+                     z = z / w
+                  else
+                     z = ieee_value(1.0_R8P, ieee_quiet_nan)
+                  endif
+               endif
+               ! every cell counts for the color range, clipped or not (gnuplot autoscales z on the whole grid)
+               if (ieee_is_finite(z)) then
+                  zlo = min(zlo, z)
+                  zhi = max(zhi, z)
+               endif
+               c = [t, t + dt, r, r + dr]
+               if (c(4) < cmin .or. c(3) > cmax) cycle
+               c(3) = max(c(3), cmin)
+               c(4) = min(c(4), cmax)
+               lo_in = in_wedge(c(1), tmin, tmax)
+               hi_in = in_wedge(c(2), tmin, tmax)
+               if (lo_in) then
+                  if (.not. hi_in) c(2) = tmax
+               elseif (hi_in) then
+                  c(1) = tmin
+               else
+                  cycle
+               endif
+               cells(m + 1:m + 4, 1) = [c(1), c(2), c(2), c(1)] * (PI_SCRIPT / 180.0_R8P) / to_rad
+               cells(m + 1:m + 4, 2) = [c(3), c(3), c(4), c(4)]
+               cells(m + 1:m + 4, 3) = z
+               m = m + 5_I4P
+            enddo
+         enddo
+         ! two lone points, never drawn (a polygon needs 3): the whole grid's r end and z range for the autoscale, as
+         ! gnuplot's (the r axis up to the grid, the colors of the whole grid)
+         if (zlo <= zhi) then
+            cells(m + 1, :) = [0.0_R8P, rhi, zlo]
+            cells(m + 3, :) = [0.0_R8P, rhi, zhi]
+            m = m + 4_I4P
+         endif
+      endassociate
+      values = cells(1:m, :)
+      ! drawn as polygons in the palette colors of their value, filled solid and unbordered (gnuplot's quadrangles)
+      with = 'polygons'
+      surface_item = .true.
+      lcz = .true.
+      line%lc = LC_PALETTE_Z
+      if (.not. allocated(fs)) fs = 'solid 1.0'
+      fs = fs//' noborder'
+      if (allocated(xlabels)) deallocate(xlabels)
+      endsubroutine surface_grid
 
       subroutine hull_filter
       !< gnuplot's hull filters of the item's points, right after they are read: `convexhull` or `concavehull` (its
@@ -7028,6 +7220,7 @@ contains
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    self%chi_fraction = 0.6_R8P
+   self%polar_grid = polar_grid_type()
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
@@ -8425,7 +8618,14 @@ contains
          self%rgbmax = v
       endblock
    elseif (keyword(option, 'polar', 3_I4P)) then
-      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      if (size(tokens) >= 2) then
+         if (tokens(2)%text == 'grid') then
+            call polar_grid_option
+            if (iostat /= 0_I4P) return
+         elseif (.not. no_more(tokens, 2_I4P, iostat, iomsg)) then
+            return
+         endif
+      endif
       associate(panel => self%figure%panels(self%figure%current))
          if (allocated(panel%series)) then
             if (.not. all(polar_series(panel%series))) then
@@ -8450,7 +8650,7 @@ contains
       call theta_option
    elseif (keyword(option, 'rrange', 2_I4P)) then
       associate(axis => self%figure%panels(self%figure%current)%raxis)
-         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend)
          if (iostat == 0_I4P .and. axis%min_fixed .and. axis%max_fixed) then
             ! [90:0]: a reversed r axis, as gnuplot (not on a log r axis)
             if (axis%max_user == axis%min_user) call fail('set rrange: an empty range', iostat, iomsg)
@@ -9044,7 +9244,7 @@ contains
          select case (tokens(k)%text)
          case ('noextend', 'extend')
             if (.not. present(tight)) then
-               call fail('set '//option//': '//tokens(k)%text//' applies to x, y, x2, y2 and cb', iostat, iomsg)
+               call fail('set '//option//': '//tokens(k)%text//' applies to x, y, x2, y2, r and cb', iostat, iomsg)
                return
             endif
             tight = tokens(k)%text == 'noextend'
@@ -10924,6 +11124,98 @@ contains
       endassociate
       endsubroutine paxis_option
 
+      subroutine polar_grid_option
+      !< gnuplot `set polar grid [T[, R]] [qnorm [Q]|gauss|cauchy|exp|box [kdensity]] [scale S] [theta [MIN:MAX]]
+      !< [r [MIN:MAX]]`: the segments of the grid of `with surface` (T in 6..999, R in 2..100, others ignored), the
+      !< weighting of the data and the clipping of the grid; a theta end below 0 a turn later.
+      integer(I4P)                  :: k     !< Token.
+      integer(I4P)                  :: n     !< Number read.
+      real(R8P)                     :: v     !< Value read.
+      real(R8P)                     :: lim(2) !< Range limits.
+      character(len=:), allocatable :: part  !< A range limit as written.
+
+      k = 3_I4P
+      associate(grid => self%polar_grid)
+         if (k <= size(tokens, kind=I4P)) then
+            if (verify(tokens(k)%text(1:1), '0123456789') == 0) then
+               ! next_integer reads the token after its index
+               k = k - 1_I4P
+               if (.not. next_integer(tokens, k, n, iostat, iomsg, self%symbols)) return
+               if (n > 5_I4P .and. n < 1000_I4P) grid%theta_segments = n
+               if (k < size(tokens, kind=I4P)) then
+                  if (tokens(k + 1_I4P)%kind == TOKEN_COMMA) then
+                     k = k + 1_I4P
+                     if (.not. next_integer(tokens, k, n, iostat, iomsg, self%symbols)) return
+                     if (n > 1_I4P .and. n < 101_I4P) grid%r_segments = n
+                  endif
+               endif
+               k = k + 1_I4P
+            endif
+         endif
+         do while (k <= size(tokens, kind=I4P))
+            select case (tokens(k)%text)
+            case ('qnorm', 'gauss', 'cauchy', 'exp', 'box')
+               grid%mode = index('qgceb', tokens(k)%text(1:1), kind=I4P)
+               if (tokens(k)%text == 'qnorm' .and. k < size(tokens, kind=I4P)) then
+                  if (verify(tokens(k + 1_I4P)%text(1:1), '0123456789') == 0) then
+                     if (.not. next_integer(tokens, k, n, iostat, iomsg, self%symbols)) return
+                     if (n > 0_I4P .and. n < 25_I4P) grid%norm_q = n
+                  endif
+               endif
+               grid%kdensity = .false.
+               if (k < size(tokens, kind=I4P)) then
+                  if (tokens(k + 1_I4P)%text == 'kdensity') then
+                     grid%kdensity = .true.
+                     k = k + 1_I4P
+                  endif
+               endif
+            case ('scale')
+               if (.not. next_real(tokens, k, v, iostat, iomsg, self%symbols)) return
+               grid%scale = v
+               if (.not. grid%scale > 0.0_R8P) grid%scale = 1.0_R8P
+            case ('theta', 'r')
+               if (k == size(tokens, kind=I4P)) then
+                  call fail('set polar grid: '//tokens(k)%text//' [min:max] expected', iostat, iomsg)
+                  return
+               endif
+               if (tokens(k + 1_I4P)%kind /= TOKEN_RANGE .or. index(tokens(k + 1_I4P)%text, ':') == 0) then
+                  call fail('set polar grid: '//tokens(k)%text//' [min:max] expected', iostat, iomsg)
+                  return
+               endif
+               lim = merge([0.0_R8P, 360.0_R8P], [0.0_R8P, huge(1.0_R8P)], tokens(k)%text == 'theta')
+               do n = 1_I4P, 2_I4P
+                  if (n == 1_I4P) then
+                     part = trim(adjustl(tokens(k + 1_I4P)%text(1:index(tokens(k + 1_I4P)%text, ':') - 1)))
+                  else
+                     part = trim(adjustl(tokens(k + 1_I4P)%text(index(tokens(k + 1_I4P)%text, ':') + 1:)))
+                  endif
+                  if (len(part) == 0 .or. part == '*') cycle
+                  call self%symbols%constant(part, v, iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees)
+                  if (iostat /= 0_I4P) then
+                     iomsg = 'set polar grid: '//iomsg
+                     return
+                  endif
+                  lim(n) = v
+               enddo
+               if (tokens(k)%text == 'theta') then
+                  if (lim(2) < 0.0_R8P) lim(2) = lim(2) + 360.0_R8P
+                  grid%tmin = lim(1)
+                  grid%tmax = lim(2)
+               else
+                  grid%rmin = lim(1)
+                  grid%rmax = lim(2)
+               endif
+               k = k + 1_I4P
+            case default
+               call fail('set polar grid: unexpected "'//tokens(k)%text//'" (T,R, qnorm, gauss, cauchy, exp, box, '// &
+                         'kdensity, scale, theta [min:max], r [min:max])', iostat, iomsg)
+               return
+            endselect
+            k = k + 1_I4P
+         enddo
+      endassociate
+      endsubroutine polar_grid_option
+
       subroutine size_option
       !< `set size [square|nosquare|ratio R|noratio] [W,H]`: the plot area aspect, and the page fractions of the plot
       !< (no values restore 1,1).
@@ -11210,7 +11502,7 @@ contains
       type(token_object), intent(in) :: tokens(:) !< Option tokens.
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Format problem.
-      real(R8P)                     :: v(2)    !< Start, step.
+      real(R8P)                     :: v(3)    !< Start, step, end.
       integer(I4P)                  :: n       !< Position tokens.
       integer(I4P)                  :: last    !< Last token before `font`.
       integer(I4P)                  :: j       !< Format expression end.
@@ -11295,11 +11587,25 @@ contains
             if (.not. v(2) > 0.0_R8P) n = -1_I4P
          endif
          if (n > 0_I4P) call self%figure%set_ttics(step=v(2), start=v(1), format=format)
+      case (5_I4P)
+         ! START,STEP,END: the labels up to END
+         if (tokens(3)%kind /= TOKEN_COMMA .or. tokens(5)%kind /= TOKEN_COMMA .or. &
+             .not. to_number(tokens(2)%text, v(1)) .or. .not. to_number(tokens(4)%text, v(2)) .or. &
+             .not. to_number(tokens(6)%text, v(3))) n = -1_I4P
+         if (n > 0_I4P) then
+            if (.not. v(2) > 0.0_R8P) n = -1_I4P
+         endif
+         if (n > 0_I4P) then
+            call self%figure%set_ttics(step=v(2), start=v(1), format=format)
+            call self%figure%panels(self%figure%current)%ttics%set_fixed(tokens(4)%text, tokens(2)%text, &
+                                                                         tokens(6)%text, message)
+            if (len(message) > 0) n = -1_I4P
+         endif
       case default
          n = -1_I4P
       endselect
-      if (n < 0_I4P) call fail('set ttics: supported forms are STEP and START,STEP (degrees, step > 0), with '// &
-                               'format "fmt"', iostat, iomsg)
+      if (n < 0_I4P) call fail('set ttics: supported forms are STEP, START,STEP and START,STEP,END (degrees, step > '// &
+                               '0), with format "fmt"', iostat, iomsg)
       ! the label options survive the new positions
       associate(ttics => self%figure%panels(self%figure%current)%ttics)
          ttics%rotate = turned
@@ -11640,6 +11946,9 @@ contains
                panel%x2axis%tics%plain = toks(i)%text == 'noenhanced'
                panel%y2axis%tics%plain = toks(i)%text == 'noenhanced'
                panel%cbaxis%tics%plain = toks(i)%text == 'noenhanced'
+            elseif (toks(i)%kind == TOKEN_WORD .and. is_word(toks(i)%text, 'front back')) then
+               ! gnuplot's grid_tics_in_front: the grid (and ticks) over the data, as `set grid front`
+               panel%grid_front = toks(i)%text == 'front'
             elseif (toks(i)%kind == TOKEN_WORD .and. verify(toks(i)%text(1:1), '0123456789.') == 0) then
                ! gnuplot `set tics INCR`: the step of every axis, which axes show ticks unchanged
                block
@@ -12894,12 +13203,16 @@ contains
       return
    elseif (keyword(option, 'style', 2_I4P)) then
       ok = .false.
-      if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P) .or. keyword(tokens(2)%text, 'arrow', 3_I4P)
+      if (size(tokens) == 2) ok = keyword(tokens(2)%text, 'function', 1_I4P) .or. keyword(tokens(2)%text, 'arrow', 3_I4P) &
+                                  .or. keyword(tokens(2)%text, 'fill', 2_I4P)
       if (.not. ok) then
-         call fail('unset style: only "function" and "arrow" are supported', iostat, iomsg)
+         call fail('unset style: only "function", "arrow" and "fill" are supported', iostat, iomsg)
          return
       endif
-      if (keyword(tokens(2)%text, 'arrow', 3_I4P)) then
+      if (keyword(tokens(2)%text, 'fill', 2_I4P)) then
+         ! gnuplot's default fill: empty, bordered
+         self%figure%panels(self%figure%current)%fill_default = style_object()
+      elseif (keyword(tokens(2)%text, 'arrow', 3_I4P)) then
          if (allocated(self%arrow_styles)) deallocate(self%arrow_styles)
          allocate(self%arrow_styles(0))
       else
@@ -12934,7 +13247,14 @@ contains
    ! labels, arrows, objects take a tag (handled below)
    if (.not. (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. &
               keyword(option, 'object', 3_I4P) .or. option == 'link' .or. keyword(option, 'nonlinear', 4_I4P))) then
-      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      ! `unset polar grid` (gnuplot's grid settings)
+      if (keyword(option, 'polar', 3_I4P) .and. size(tokens) == 2) then
+         if (tokens(2)%text /= 'grid') then
+            if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+         endif
+      elseif (.not. no_more(tokens, 2_I4P, iostat, iomsg)) then
+         return
+      endif
    endif
    if (keyword(option, 'multiplot', 5_I4P)) then
       if (self%multiplot .and. self%output == '-') then
@@ -12961,6 +13281,14 @@ contains
    elseif (keyword(option, 'grid', 2_I4P)) then
       call self%figure%set_grid(.false., polar=0.0_R8P)
    elseif (keyword(option, 'polar', 3_I4P)) then
+      ! gnuplot: the angular clipping of the grid restored; `unset polar grid` the grid settings too
+      self%polar_grid%tmin = 0.0_R8P
+      self%polar_grid%tmax = 360.0_R8P
+      if (size(tokens) >= 2) then
+         if (tokens(2)%text == 'grid') self%polar_grid = polar_grid_type()
+      endif
+      ! gnuplot's unset polar clears the theta ticks too (unset_tics on its theta axis)
+      call self%figure%set_ttics(on=.false.)
       call self%figure%set_polar(.false.)
    elseif (option == 'rgbmax') then
       self%rgbmax = 255.0_R8P
@@ -14601,6 +14929,24 @@ contains
       endif
    enddo
    endfunction findloc_name
+
+   pure function in_wedge(t, tmin, tmax) result(inside)
+   !< Whether the angle `t` [deg] lies in the wedge from `tmin` to `tmax` [deg] (gnuplot's in_theta_wedge).
+   real(R8P), intent(in) :: t      !< Angle.
+   real(R8P), intent(in) :: tmin   !< Wedge start.
+   real(R8P), intent(in) :: tmax   !< Wedge end.
+   logical               :: inside !< Within.
+
+   inside = .true.
+   if (tmax - tmin >= 360.0_R8P) return
+   if (tmin >= 0.0_R8P .and. tmax <= 360.0_R8P) then
+      inside = tmin <= t .and. t <= tmax
+      return
+   endif
+   if (tmin < 0.0_R8P .and. (t < tmax .or. t > tmin + 360.0_R8P)) return
+   if (tmax > 360.0_R8P .and. (t > tmin .or. t < tmax - 360.0_R8P)) return
+   inside = .false.
+   endfunction in_wedge
 
    pure function is_item_option(word) result(is)
    !< Whether `word` is a plot item option: it ends a function expression.
