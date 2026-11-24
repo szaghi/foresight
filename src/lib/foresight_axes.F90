@@ -224,8 +224,9 @@ type :: axes_object
                                                              !< column (gnuplot `maxrows`).
    integer(I4P)                     :: key_maxcols = 0_I4P !< Most columns of a horizontal key, 0 for as many as fit
                                                              !< (gnuplot `maxcols`).
-   logical                          :: key_wrap = .false. !< A vertical key taller than the panel wraps into columns
-                                                         !< (gnuplot's, the scripts'); the library's stays one column.
+   logical                          :: gnuplot_key = .false. !< gnuplot's key rules (the scripts'): a vertical key taller
+                                                         !< than the panel wraps into columns, `samplen` adds a tick
+                                                         !< length; the library's: one column, `samplen` alone.
    integer(I4P)                     :: key_columns = 0_I4P !< Columns of the key, 0 for the automatic layout
                                                              !< (gnuplot `columns N`).
    character(len=24)                :: key_tc = '' !< Title color: blank the frame's, `variable` each series' (`textcolor`).
@@ -1355,6 +1356,18 @@ contains
          case (WITH_RADAR)
             call self%draw_radar(backend, area, font_size)
          case (WITH_PARALLELAXES)
+            ! lc palette z: the color box of the z range at the right, as gnuplot
+            if (self%colorbox .and. self%series(1)%palette_mode == 1_I4P .and. allocated(self%series(1)%zvalues)) then
+               if (any(ieee_is_finite(self%series(1)%zvalues))) then
+                  call self%cbaxis%setup(minval(self%series(1)%zvalues, mask=ieee_is_finite(self%series(1)%zvalues)), &
+                                         maxval(self%series(1)%zvalues, mask=ieee_is_finite(self%series(1)%zvalues)), &
+                                         .true., area(4) - area(3))
+                  area(2) = area(2) - self%colorbox_width(backend, font_size)
+                  call self%draw_parallel(backend, area, font_size)
+                  call self%draw_colorbox(backend, area, [x0, y0, x0 + width, y0 + height], font_size)
+                  return
+               endif
+            endif
             call self%draw_parallel(backend, area, font_size)
          case (WITH_SPIDERPLOT)
             call self%draw_spider(backend, area, font_size)
@@ -2588,6 +2601,17 @@ contains
             endselect
             backend%literal = .false.
             top = top + LINE_HEIGHT * font_size
+            ! a boxed key: a line under its title, as gnuplot (the scripts')
+            if (self%key_box .and. self%gnuplot_key) then
+               block
+                  character(len=:), allocatable :: bcolor !< Box color.
+
+                  bcolor = FRAME_COLOR
+                  if (len_trim(self%key_box_lc) > 0) bcolor = trim(self%key_box_lc)
+                  call backend%polyline([left - GAP, left + width + GAP], [top + 0.1_R8P * font_size, &
+                                        top + 0.1_R8P * font_size], bcolor, self%key_box_lw, '')
+               endblock
+            endif
          endif
       endif
    endassociate
@@ -3022,7 +3046,7 @@ contains
    class(backend_object), intent(in)  :: backend   !< Output device, for text widths.
    real(R8P),             intent(in)  :: font_size !< Font size [px].
    real(R8P),             intent(in)  :: room      !< Width available to a row of entries [px].
-   real(R8P),             intent(in), optional :: tall !< Height available to a vertical key [px] (`key_wrap`).
+   real(R8P),             intent(in), optional :: tall !< Height available to a vertical key [px] (`gnuplot_key`).
    integer(I4P),          intent(out) :: grid(3)   !< Entries, columns, rows.
    real(R8P),             intent(out) :: extent(2) !< Key width and height [px].
    real(R8P)                          :: entry     !< Entry width, spacing included [px].
@@ -3059,7 +3083,7 @@ contains
    elseif (self%key_maxrows > 0_I4P .and. grid(1) > self%key_maxrows) then
       ! a vertical key of `maxrows` rows: as many columns as needed, filled top down
       grid(2) = (grid(1) + self%key_maxrows - 1_I4P) / self%key_maxrows
-   elseif (self%key_wrap .and. present(tall) .and. grid(1) > 0_I4P) then
+   elseif (self%gnuplot_key .and. present(tall) .and. grid(1) > 0_I4P) then
       ! gnuplot: a vertical key taller than the room wraps into columns, filled top down
       k = max(1_I4P, int(tall / (self%key_spacing * LINE_HEIGHT * font_size), I4P))
       if (grid(1) > k) grid(2) = (grid(1) + k - 1_I4P) / k
@@ -3077,13 +3101,17 @@ contains
    endsubroutine key_layout
 
    pure function key_sample(self, font_size) result(length)
-   !< Length of a key sample [px]: `samplen` character widths, else 3 font sizes.
+   !< Length of a key sample [px]: `samplen` character widths (and a major tick length with `gnuplot_key`, gnuplot's
+   !< `samplen * h_char + h_tic`), else 3 font sizes.
    class(axes_object), intent(in) :: self      !< Panel.
    real(R8P),          intent(in) :: font_size !< Font size [px].
    real(R8P)                      :: length    !< Length.
 
    length = SAMPLE_LENGTH * font_size
-   if (self%key_samplen >= 0.0_R8P) length = self%key_samplen * CHAR_WIDTH * font_size
+   if (self%key_samplen >= 0.0_R8P) then
+      length = self%key_samplen * CHAR_WIDTH * font_size
+      if (self%gnuplot_key) length = length + TICK_MAJOR
+   endif
    endfunction key_sample
 
    pure function key_place(self) result(place)
@@ -3824,6 +3852,7 @@ contains
       real(R8P)                     :: mw      !< Median line width [px].
       real(R8P)                     :: density !< Box fill opacity.
       character(len=:), allocatable :: fill    !< Box fill color.
+      character(len=:), allocatable :: line_color !< Whisker and median color of a boxplot.
       logical                       :: finance !< Drawn as a finance bar.
       type(style_object)            :: row     !< Style of a candle (its color with `lc variable`).
       integer(I4P)                  :: i       !< Point counter.
@@ -3876,12 +3905,15 @@ contains
             call backend%data_polygon([ul, ur, ur, ul], [b(1), b(1), b(2), b(2)], fill, density, &
                                       row%stroke_color(), row%linewidth)
             if (row%with == WITH_BOXPLOT) then
-               ! capped whiskers, as gnuplot's boxplots
-               call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, row%color, &
+               ! capped whiskers and the median in the border color with a border, else the line color, as gnuplot's
+               ! boxplots (`set style fill solid border -1`: black)
+               line_color = row%color
+               if (row%border) line_color = row%stroke_color()
+               call backend%data_bars([u(i), u(i)], [minval(b), maxval(b)], [u(i), u(i)], wv, line_color, &
                                       row%linewidth, self%errorbar_size * CAP_LENGTH, .true.)
                mw = self%boxplot%median_width
                if (mw < 0.0_R8P) mw = row%linewidth
-               if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], row%color, mw, '')
+               if (mw > 0.0_R8P) call backend%data_polyline([ul, ur], [v(i), v(i)], line_color, mw, '')
             else
                call backend%data_polyline([u(i), u(i)], [minval(b), wv(1)], row%color, &
                                           row%linewidth, '')
@@ -5718,6 +5750,8 @@ contains
    integer(I4P)                         :: k         !< Axis counter.
    integer(I4P)                         :: j         !< Row counter.
    integer(I4P)                         :: t         !< Tick counter.
+   real(R8P)                            :: dlo       !< Smallest value of an axis.
+   real(R8P)                            :: dhi       !< Largest value of an axis.
 
    n = size(self%series, kind=I4P)
    area = [box(1) + 4.0_R8P * font_size, box(2) - 2.0_R8P * font_size, box(3) + 0.5_R8P * font_size, &
@@ -5736,7 +5770,9 @@ contains
    xhi = maxval(pos) + 1.0_R8P
    pos = area(1) + (pos - xlo) / (xhi - xlo) * (area(2) - area(1))
    call backend%begin_group('fs-parallel')
-   call backend%rect(area(1), area(3), area(2) - area(1), area(4) - area(3), FRAME_COLOR, 'none', 1.0_R8P)
+   ! the frame, unless `unset border` (`set border 0`), as gnuplot
+   if (iand(self%border, 15_I4P) /= 0_I4P) &
+      call backend%rect(area(1), area(3), area(2) - area(1), area(4) - area(3), FRAME_COLOR, 'none', 1.0_R8P)
    ! a line per row, broken at undefined values
    associate(first => self%series(1))
       do j = 1_I4P, m
@@ -5762,8 +5798,22 @@ contains
    endassociate
    ! the axes over the lines, as gnuplot's front parallel axis style
    do k = 1_I4P, n
-      call backend%polyline([pos(k), pos(k)], [area(4), area(3)], FRAME_COLOR, 2.0_R8P, '')
+      ! as gnuplot: the axis line and its ticks over the extent of its values (its range the scale)
+      associate(y => self%series(k)%y)
+         dlo = huge(1.0_R8P)
+         dhi = -huge(1.0_R8P)
+         do j = 1_I4P, size(y, kind=I4P)
+            if (.not. axes(k)%accepts(y(j))) cycle
+            dlo = min(dlo, y(j))
+            dhi = max(dhi, y(j))
+         enddo
+      endassociate
+      if (dlo > dhi) cycle
+      call backend%polyline([pos(k), pos(k)], area(4) - axes(k)%to_unit([dlo, dhi]) * (area(4) - area(3)), &
+                            FRAME_COLOR, 2.0_R8P, '')
       do t = 1_I4P, size(axes(k)%ticks, kind=I4P)
+         if (axes(k)%ticks(t)%value < dlo - 1.0e-9_R8P * abs(dhi - dlo) .or. &
+             axes(k)%ticks(t)%value > dhi + 1.0e-9_R8P * abs(dhi - dlo)) cycle
          p = area(4) - axes(k)%to_unit(axes(k)%ticks(t)%value) * (area(4) - area(3))
          call backend%polyline([pos(k), pos(k) + merge(TICK_MAJOR, TICK_MINOR, axes(k)%ticks(t)%major)], [p, p], &
                                FRAME_COLOR, 1.0_R8P, '')
@@ -5771,7 +5821,9 @@ contains
                                                        'end', sup=axes(k)%ticks(t)%sup)
       enddo
       associate(series => self%series(k))
-         if (len(series%title) > 0) call backend%text(pos(k), area(4) + GAP + font_size, series%title, 'middle')
+         ! named by an explicit title (a script's automatic title names no axis, as gnuplot)
+         if (len(series%title) > 0 .and. .not. series%title_auto) &
+            call backend%text(pos(k), area(4) + GAP + font_size, series%title, 'middle')
       endassociate
    enddo
    call backend%end_group

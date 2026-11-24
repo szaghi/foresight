@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(221)                           !< Per-check outcome.
+logical                       :: test_passed(222)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5141,6 +5141,51 @@ if (test_passed(221)) then
    endblock
 endif
 
+! fidelity to gnuplot 6.0's renders: fc colors a filled item's border (over lc), a boxplot's whiskers in the border
+! color, the key sample samplen + a tick, a boxed key's title line, parallel axes over their values, named by explicit
+! titles only, lc variable 0 gray, a palette color box, no frame without a border
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_fid.svg"; set style fill solid 0.5 border; '// &
+                          'set key box title "T" samplen 1; plot x with filledcurves fc "brown" lc "blue"', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(222) = iostat == 0_I4P
+if (test_passed(222)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(222) = panel%series(1)%style%border_color == '#a52a2a' .and. panel%gnuplot_key
+   endassociate
+endif
+call interpreter%init(scratch)
+call interpreter%run_text('$P << EOD'//new_line('a')//'2 30 0'//new_line('a')//'5 40 1'//new_line('a')//'EOD'// &
+                          new_line('a')//'set output "foresight_script_test_fid.svg"; unset border; '// &
+                          'set style data parallelaxes; set paxis 1 range [0:10]; set paxis 1 tics; '// &
+                          'plot $P using 1:3 lc variable, "" using 2 title "second"', iostat, iomsg)
+test_passed(222) = test_passed(222) .and. iostat == 0_I4P
+if (test_passed(222)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(222) = panel%series(1)%title_auto .and. .not. panel%series(2)%title_auto .and. &
+                        allocated(panel%series(1)%colors)
+      if (test_passed(222)) test_passed(222) = trim(panel%series(1)%colors(1)) == '#808080'
+   endassociate
+   block
+      character(len=1000) :: line   !< SVG line.
+      integer(I4P)        :: ios    !< Read status.
+      logical             :: frame  !< A frame rectangle.
+      logical             :: ten    !< The tick 10 (beyond the values of axis 1).
+
+      frame = .false.
+      ten = .false.
+      open(newunit=unit, file='foresight_script_test_fid.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '<rect') > 0 .and. index(line, 'fill="none"') > 0) frame = .true.
+         if (index(line, '>10</text>') > 0) ten = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(222) = test_passed(222) .and. .not. frame .and. .not. ten
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5149,7 +5194,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,221L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,222L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

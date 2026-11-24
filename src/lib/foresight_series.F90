@@ -117,6 +117,7 @@ type :: series_object
    character(len=9), allocatable :: arrow_systems(:) !< System of each head length, as `head_system`.
    character(len=LABEL_LEN), allocatable :: xlabels2(:) !< Text labels of a second axis (`xtic(..):ytic(..)`).
    character(len=2)              :: label_axis2 = 'y' !< Axis of those labels.
+   logical                       :: title_auto = .false. !< The title a script's automatic one (the item as written).
    logical                       :: noautoscale = .false. !< Out of the autoscaling of its axes (gnuplot `noautoscale`).
    logical                       :: gnuplot_sample = .false. !< A script's key sample, as gnuplot 6.0: an arrow for
                                                              !< vectors and arrows, none for labels (their point

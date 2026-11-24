@@ -5219,7 +5219,15 @@ contains
       !< the key sample, and along a closed curve.
       associate(panel => self%figure%panels(self%figure%current))
          if (with == 'filledcurves') panel%series(size(panel%series))%fill_edges = 1_I4P
-         if (allocated(fill_rgb)) panel%series(size(panel%series))%style%fill_rgb = fill_rgb
+         if (allocated(fill_rgb)) then
+            panel%series(size(panel%series))%style%fill_rgb = fill_rgb
+            ! the item's border in its fill color too, unless `fs border lc` gives one (gnuplot 6.0: fc over lc)
+            if (.not. allocated(panel%series(size(panel%series))%style%border_color)) then
+               panel%series(size(panel%series))%style%border_color = fill_rgb
+            elseif (len(panel%series(size(panel%series))%style%border_color) == 0) then
+               panel%series(size(panel%series))%style%border_color = fill_rgb
+            endif
+         endif
       endassociate
       endsubroutine fill_last
 
@@ -5489,6 +5497,7 @@ contains
          if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
          panel%series(last)%gnuplot_sample = .true.
          panel%series(last)%title_plain = auto_title .or. plain_item
+         panel%series(last)%title_auto = auto_title
          panel%series(last)%title_at = title_at
          panel%series(last)%title_xy = title_xy
          if (allocated(line%pt_char)) panel%series(last)%style%point_char = line%pt_char
@@ -5734,6 +5743,9 @@ contains
             if (code < 255_I8P .and. len(point_colors) >= 9) &
                point_colors(k)(8:9) = HEX(code / 16_I8P + 1_I8P:code / 16_I8P + 1_I8P)// &
                                       HEX(mod(code, 16_I8P) + 1_I8P:mod(code, 16_I8P) + 1_I8P)
+         elseif (int(c(k), I4P) == 0_I4P) then
+            ! linetype 0: gnuplot's gray
+            point_colors(k) = '#808080'
          else
             point_colors(k) = default_color(int(c(k), I4P), self%figure%panels(self%figure%current)%linecolors)
          endif

@@ -2190,7 +2190,7 @@ contains
             panel%cbaxis%tics%per_label = .true.
             panel%raxis%tics%per_label = .true.
             ! a vertical key taller than the panel wraps into columns, as gnuplot
-            panel%key_wrap = .true.
+            panel%gnuplot_key = .true.
          endif
          if (self%layout) then
             ! the grid cell of panel p: row by row (or column by column), from the top row (or the bottom one)
