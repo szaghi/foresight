@@ -240,7 +240,7 @@ contains
    character(len=*),   intent(in)           :: color      !< Fill color.
    real(R8P),          intent(in)           :: diameter   !< Dot diameter, or marker width [px].
    integer(I4P),       intent(in), optional :: pt         !< gnuplot point type; negative or absent: round dots.
-   real(R8P),          intent(in), optional :: line_width !< Marker line width [px].
+   real(R8P),          intent(in), optional :: line_width !< Marker line width [px], default gnuplot's (`marker_line`).
 
    if (present(pt)) then
       if (pt >= 0_I4P) then
@@ -418,12 +418,12 @@ contains
    character(len=*),   intent(in)           :: color      !< Fill color.
    real(R8P),          intent(in)           :: diameter   !< Dot diameter, or marker width [px].
    integer(I4P),       intent(in), optional :: pt         !< gnuplot point type; negative or absent: round dots.
-   real(R8P),          intent(in), optional :: line_width !< Marker line width [px].
+   real(R8P),          intent(in), optional :: line_width !< Marker line width [px], default gnuplot's (`marker_line`).
    real(R8P)                                :: width      !< Marker line width [px].
 
    if (present(pt)) then
       if (pt >= 0_I4P) then
-         width = 1.0_R8P
+         width = marker_line(diameter, pt)
          if (present(line_width)) width = line_width
          write(self%unit, '(A)', advance='no') '<path class="fs-pts" data-pt="'//int_str(int(pt, I8P))// &
                                                '" data-size="'//px(diameter)//'" data-lw="'//px(width)// &
@@ -937,7 +937,7 @@ contains
    character(len=*), intent(in)           :: color      !< Color.
    real(R8P),        intent(in)           :: width_px   !< Marker width [px].
    integer(I4P),     intent(in)           :: pt         !< gnuplot point type, >= 0.
-   real(R8P),        intent(in), optional :: line_width !< Line width [px], default 1.
+   real(R8P),        intent(in), optional :: line_width !< Line width [px], default gnuplot's (`marker_line`).
    integer(I4P),     intent(in), optional :: series     !< Series number, 0 or absent for none.
    character(len=:), allocatable          :: element    !< Path element.
    character(len=:), allocatable          :: d          !< Path data.
@@ -951,7 +951,7 @@ contains
    if (pt > 0_I4P) shape = modulo(pt - 1_I4P, 15_I4P) + 1_I4P
    fill = 'none'
    if (shape == 0_I4P .or. modulo(shape, 2_I4P) == 1_I4P .and. shape >= 5_I4P) fill = color
-   width = '1.00'
+   width = px(marker_line(width_px, pt))
    if (present(line_width)) width = px(line_width)
    ! grown by doubling: a marker per point, never quadratic
    allocate(character(len=256) :: d)
@@ -979,6 +979,17 @@ contains
       used = used + len(piece, kind=I4P)
       endsubroutine append
    endfunction marker_element
+
+   elemental function marker_line(width_px, pt) result(width)
+   !< gnuplot's svg marker line [px]: the symbols are drawn 0.222 of their half width wide whatever the line width
+   !< (about `ps` px), the dot (type 0) 0.5 px.
+   real(R8P),    intent(in) :: width_px !< Marker width [px].
+   integer(I4P), intent(in) :: pt       !< gnuplot point type, >= 0.
+   real(R8P)                :: width    !< Line width [px].
+
+   width = 0.5_R8P
+   if (pt > 0_I4P) width = 0.111_R8P * width_px
+   endfunction marker_line
 
    pure function marker_path(x, y, r, shape) result(d)
    !< Path data of a marker of half width `r` centred on (`x`, `y`) [px]: gnuplot's svg shapes, 1 plus, 2 cross, 3 star,

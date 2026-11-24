@@ -2874,7 +2874,7 @@ contains
       sample = FRAME_COLOR
       if (allocated(series%text_color)) sample = series%text_color
       call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
-                        pt=series%style%pointtype, line_width=series%style%linewidth)
+                        pt=series%style%pointtype)
       return
    endif
    if ((series%style%with == WITH_VECTORS .or. series%style%with == WITH_ARROWS) .and. series%gnuplot_sample) then
@@ -2913,7 +2913,7 @@ contains
          endif
       endif
       call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
-                        pt=series%style%pointtype, line_width=series%style%linewidth)
+                        pt=series%style%pointtype)
    endif
    endsubroutine key_sample_marks
 
@@ -3473,12 +3473,12 @@ contains
                if (any(marked(i1:i2)) .and. series%colors(i1) /= 'none') &
                   call backend%data_dots(pack(u(i1:i2), marked(i1:i2)), pack(v(i1:i2), marked(i1:i2)), &
                                          trim(series%colors(i1)), series%style%point_diameter(), &
-                                         pt=series%style%pointtype, line_width=series%style%linewidth)
+                                         pt=series%style%pointtype)
                i1 = i2 + 1_I4P
             enddo
          else
             call backend%data_dots(pack(u, marked), pack(v, marked), series%style%color, series%style%point_diameter(), &
-                                   pt=series%style%pointtype, line_width=series%style%linewidth)
+                                   pt=series%style%pointtype)
          endif
       endif
    endassociate
@@ -3908,12 +3908,11 @@ contains
                if (i <= size(series%colors, kind=I4P)) then
                   if (series%colors(i) == 'none') cycle
                   call backend%data_dots(u(i:i), v(i:i), trim(series%colors(i)), point_size(i), &
-                                         pt=series%style%pointtype, line_width=series%style%linewidth)
+                                         pt=series%style%pointtype)
                   cycle
                endif
             endif
-            call backend%data_dots(u(i:i), v(i:i), color, point_size(i), pt=series%style%pointtype, &
-                                   line_width=series%style%linewidth)
+            call backend%data_dots(u(i:i), v(i:i), color, point_size(i), pt=series%style%pointtype)
          enddo
       endassociate
       endsubroutine sized_dots
@@ -3947,7 +3946,7 @@ contains
                call sized_dots(color, valid)
             else
                call backend%data_dots(pack(u, valid), pack(v, valid), color, series%style%point_diameter(), &
-                                      pt=series%style%pointtype, line_width=series%style%linewidth)
+                                      pt=series%style%pointtype)
             endif
          endif
          ! `hypertext`: each text shown on mouse-over of its point, none drawn
@@ -4130,8 +4129,7 @@ contains
       if (.not. any(ok)) return
       associate(series => self%series(s))
          call backend%data_dots(xaxis%to_unit(pack(ox, ok)), yaxis%to_unit(pack(oy, ok)), series%style%color, &
-                                series%style%point_diameter(), pt=self%boxplot%pointtype, &
-                                line_width=series%style%linewidth)
+                                series%style%point_diameter(), pt=self%boxplot%pointtype)
       endassociate
       endsubroutine draw_outliers
 
@@ -6305,8 +6303,7 @@ contains
             if (self%series(lead)%spider_lw > 0.0_R8P) width = self%series(lead)%spider_lw
             call backend%polygon(rx, ry, inside, self%spider_style%density, edge, width)
             if (self%spider_style%pointtype >= 0_I4P) &
-               call backend%dots(rx, ry, tint, self%spider_style%point_diameter(), pt=self%spider_style%pointtype, &
-                                 line_width=self%spider_style%linewidth)
+               call backend%dots(rx, ry, tint, self%spider_style%point_diameter(), pt=self%spider_style%pointtype)
          endblock
       enddo
    enddo

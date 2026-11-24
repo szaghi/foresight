@@ -1674,7 +1674,7 @@ plot 'run.dat' u 1:2 w lp pt 7 t 'residual', '' u 1:3 w p pt 4 ps 1.5 t 'cd'
 
 The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3 star, 4 square, 6 circle,
 8 triangle, 10 inverted triangle, 12 diamond, 14 pentagon, each odd type from 5 the filled shape before it; beyond 15
-they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` an item draws the point type of its
+they cycle. A marker is 9 px wide at `ps 1`, its lines about `ps` px wide whatever `lw`, as gnuplot's svg (0.222 of the half width; the dot 0.5 px). Without `pt` an item draws the point type of its
 linetype, as gnuplot 6.0: the k-th item type k (cycling every 15), `lt N` of the eight predefined linetypes type N,
 `ls N` the point type of its style (of its `lt`, else type N up to 8, else 1); a keyentry does not use one up. The
 library's own `plot` keeps foresight's round dot, 6 px at `ps 1`, without `pt`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
