@@ -2925,12 +2925,17 @@ contains
       if (nbytes > 0) read(u, iostat=iostat) bytes
       close(u)
       pos = skip + 1_I4P
-      lines = ''
+      ! the text in a buffer sized for the widest numbers (a concatenation per value would be quadratic)
       block
-         character(len=32) :: cell !< A value written.
-         integer(I4P)      :: row  !< Scan line.
-         integer(I4P)      :: col  !< Pixel in it.
+         character(len=32)             :: cell   !< A value written.
+         character(len=:), allocatable :: buffer !< Datablock text.
+         integer(I4P)                  :: row    !< Scan line.
+         integer(I4P)                  :: col    !< Pixel in it.
+         integer(I4P)                  :: at     !< Characters written.
+         integer(I4P)                  :: w      !< Width of a value.
 
+         allocate(character(len=int(shape(1), I8P) * shape(2) * (nfields + 2_I4P) * 26_I8P) :: buffer)
+         at = 0_I4P
          do row = 0_I4P, shape(2) - 1_I4P
             do col = 0_I4P, shape(1) - 1_I4P
                do f = 1_I4P, nfields
@@ -2938,14 +2943,21 @@ contains
                   call read_field(trim(kinds(c)), v)
                   if (iostat /= 0_I4P) return
                   write(cell, '(ES24.16E3)') v
-                  lines = lines//trim(adjustl(cell))//' '
+                  w = len_trim(adjustl(cell), kind=I4P)
+                  buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
+                  at = at + w + 1_I4P
                enddo
                write(cell, '(ES24.16E3)') origin(1) + step(1) * real(merge(shape(1) - 1_I4P - col, col, flip(1)), R8P)
-               lines = lines//trim(adjustl(cell))//' '
+               w = len_trim(adjustl(cell), kind=I4P)
+               buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
+               at = at + w + 1_I4P
                write(cell, '(ES24.16E3)') origin(2) + step(2) * real(merge(shape(2) - 1_I4P - row, row, flip(2)), R8P)
-               lines = lines//trim(adjustl(cell))//new_line('a')
+               w = len_trim(adjustl(cell), kind=I4P)
+               buffer(at + 1:at + w + 1) = trim(adjustl(cell))//new_line('a')
+               at = at + w + 1_I4P
             enddo
          enddo
+         lines = buffer(1:at)
       endblock
       deallocate(bytes)
       ! the datablock, named for this item
