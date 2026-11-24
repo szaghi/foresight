@@ -3095,6 +3095,7 @@ contains
    real(R8P)                                    :: hull_expand !< `expand D` of the hull, 0 for none.
    logical                                      :: surface_item !< A polar gridded surface (`with surface`).
    logical                                      :: ps_var    !< `ps variable`: each point's size from a column.
+   logical                                      :: zsort_item !< `zsort`: the points drawn in the order of their z.
    logical                                      :: hypertext !< `with labels hypertext`: the texts on mouse-over.
    real(R8P), allocatable                       :: point_sizes(:) !< The sizes of `ps variable`.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
@@ -3636,6 +3637,7 @@ contains
       hull_expand = 0.0_R8P
       surface_item = .false.
       ps_var = .false.
+      zsort_item = .false.
       hypertext = .false.
       if (allocated(point_sizes)) deallocate(point_sizes)
       band_smooth = .false.
@@ -3990,6 +3992,13 @@ contains
                filter = 'path'
                hull = 1_I4P
             endif
+            ! `smooth zsort`: the zsort filter (gnuplot 6.0)
+            if (gnuplot_abbreviates(filter, 'z$sort')) then
+               zsort_item = .true.
+               filter = ''
+               i = i + 1_I4P
+               cycle
+            endif
             filter = smooth_name(filter)
             if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES) .or. filter == 'path')) then
                call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES// &
@@ -4167,6 +4176,9 @@ contains
                call fail('plot: '//word//' applies to data, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
+         elseif (word == 'zsort') then
+            ! gnuplot's zsort filter: the points of each curve drawn in the order of their z (third column)
+            zsort_item = .true.
          elseif (word == 'expand' .and. hull > 0_I4P) then
             ! `expand D` of a hull after other options (`concavehull smooth path expand D`)
             if (.not. next_real(tokens, i, hull_expand, iostat, iomsg, self%symbols)) then
@@ -4763,7 +4775,8 @@ contains
          ! smooth acsplines: X:Y:WEIGHT, the weights read by the smoothing; polar theta:r:z data (gnuplot's polar grid
          ! demos) drawn as points or lines, the z ignored as gnuplot
          if (nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines') .and. .not. (nbar == 1_I4P .and. &
-             self%figure%panels(self%figure%current)%polar .and. is_word(with, 'points lines linespoints'))) then
+             self%figure%panels(self%figure%current)%polar .and. is_word(with, 'points lines linespoints')) .and. &
+             .not. (nbar == 1_I4P .and. zsort_item)) then
             call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
             return
          endif
@@ -4833,6 +4846,7 @@ contains
          endblock
       endif
       if (hull > 0_I4P) call hull_filter
+      if (zsort_item) call zsort_filter
       if (with == 'surface') call surface_grid
       x = values(:, 1)
       y = values(:, 2)
@@ -6417,6 +6431,62 @@ contains
       fs = fs//' noborder'
       if (allocated(xlabels)) deallocate(xlabels)
       endsubroutine surface_grid
+
+      subroutine zsort_filter
+      !< gnuplot's zsort: the rows of each curve (a run of defined points) sorted by their z, the third column, stably
+      !< (glibc's merge sort), the lowest first, then the z column dropped (`using x:y:z[:color]`).
+      integer(I4P), allocatable :: order(:) !< Row order.
+      integer(I4P), allocatable :: rest(:)  !< Columns kept.
+      integer(I4P)              :: first    !< Run start.
+      integer(I4P)              :: last     !< Run end.
+      integer(I4P)              :: k        !< Counter.
+      integer(I4P)              :: j        !< Counter.
+      integer(I4P)              :: key      !< Row moved.
+      integer(I4P)              :: n        !< Rows.
+      logical                   :: after    !< A row after the key.
+
+      if (size(values, 2) < 3) return
+      n = size(values, 1, kind=I4P)
+      order = [(k, k = 1_I4P, n)]
+      first = 1_I4P
+      do while (first <= n)
+         if (.not. (ieee_is_finite(values(first, 1)) .and. ieee_is_finite(values(first, 2)))) then
+            first = first + 1_I4P
+            cycle
+         endif
+         last = first
+         do while (last < n)
+            if (.not. (ieee_is_finite(values(last + 1, 1)) .and. ieee_is_finite(values(last + 1, 2)))) exit
+            last = last + 1_I4P
+         enddo
+         ! a stable insertion sort of the run on z (an undefined z last)
+         do k = first + 1_I4P, last
+            key = order(k)
+            j = k - 1_I4P
+            do while (j >= first)
+               ! row order(j) after the key on z (an undefined z after every other)
+               if (.not. ieee_is_finite(values(order(j), 3))) then
+                  after = ieee_is_finite(values(key, 3))
+               elseif (.not. ieee_is_finite(values(key, 3))) then
+                  after = .false.
+               else
+                  after = values(order(j), 3) > values(key, 3)
+               endif
+               if (.not. after) exit
+               order(j + 1) = order(j)
+               j = j - 1_I4P
+            enddo
+            order(j + 1) = key
+         enddo
+         first = last + 1_I4P
+      enddo
+      values = values(order, :)
+      rest = pack([(k, k = 1_I4P, size(values, 2, kind=I4P))], [(k /= 3_I4P, k = 1_I4P, size(values, 2, kind=I4P))])
+      values = values(:, rest)
+      if (allocated(xlabels)) then
+         if (size(xlabels) == n) xlabels = xlabels(order)
+      endif
+      endsubroutine zsort_filter
 
       subroutine hull_filter
       !< gnuplot's hull filters of the item's points, right after they are read: `convexhull` or `concavehull` (its

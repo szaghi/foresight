@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(231)                           !< Per-check outcome.
+logical                       :: test_passed(232)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5663,6 +5663,25 @@ if (test_passed(231)) then
    endblock
 endif
 
+
+! zsort (gnuplot 6.0): the points of each block drawn in the order of their z (third column, stably, the lowest first),
+! the z column dropped; smooth zsort the same
+call interpreter%init(scratch)
+call interpreter%run_text('$Z << EOD'//new_line('a')//'1 1 3'//new_line('a')//'2 2 1'//new_line('a')//'3 3 2'// &
+                          new_line('a')//'4 4 1'//new_line('a')//''//new_line('a')//'5 5 9'//new_line('a')//'6 6 0'// &
+                          new_line('a')//'EOD'//new_line('a')//'plot $Z using 1:2:3 zsort with points, '// &
+                          '$Z using 1:2:3:3 smooth zsort with points lc palette', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(232) = iostat == 0_I4P
+if (test_passed(232)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      ! the first block 2, 4 (z 1, in their order), 3, 1; the second 6, 5; the blank line kept between them
+      test_passed(232) = same(series(1)%x, [2, 4, 3, 1, -1, 6, 5]) .and. same(series(2)%x, [2, 4, 3, 1, -1, 6, 5]) &
+                        .and. allocated(series(2)%zvalues)
+      if (test_passed(232)) test_passed(232) = same(series(2)%zvalues, [1, 1, 2, 3, -1, 0, 9])
+   endassociate
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5671,7 +5690,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,231L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,232L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
