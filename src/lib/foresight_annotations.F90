@@ -77,6 +77,12 @@ type :: arrow_object
    character(len=8)              :: fill = 'nofilled'    !< Heads `nofilled` (two barbs), `filled`, `empty`,
                                                          !< `noborder`.
    logical                       :: front = .false.      !< Over the frame, else behind the data.
+   logical                       :: polar = .false.      !< The tip by a length and an angle from the tail (gnuplot
+                                                         !< `length L angle A`), not by `to`.
+   real(R8P)                     :: span = 0.0_R8P       !< That length, negative backwards.
+   character(len=9)              :: span_system = 'first' !< Its system (along x: first, second, graph, screen,
+                                                          !< character).
+   real(R8P)                     :: direction = 0.0_R8P  !< That angle on the page [deg, counterclockwise from x].
    character(len=:), allocatable :: color                !< Line color, the frame's if empty.
    real(R8P)                     :: lw = 1.0_R8P         !< Line width [px].
    character(len=:), allocatable :: dashes               !< SVG dash array, empty for solid.
@@ -277,6 +283,7 @@ contains
             if (tip%sy /= arrows(k)%from%sy) tip%sy = arrows(k)%from%sy
          endif
          b = page_of(tip, frame, xaxis, yaxis, x2axis, y2axis)
+         if (arrows(k)%polar .and. all(a /= huge(1.0_R8P))) b = polar_tip(arrows(k), a)
          if (any(a == huge(1.0_R8P)) .or. any(b == huge(1.0_R8P))) cycle
          call backend%polyline([a(1), b(1)], [a(2), b(2)], color_of(arrows(k)%color), arrows(k)%lw, dashes_of(arrows(k)))
          if (arrows(k)%head == 1_I4P .or. arrows(k)%head == 3_I4P) call head(arrows(k), a, b)
@@ -285,6 +292,35 @@ contains
       call backend%end_group
    enddo
    contains
+      function polar_tip(arrow, tail) result(tip_px)
+      !< The tip of `arrow` given by a length and an angle (gnuplot `length L angle A`): the length along x in its
+      !< system, the angle on the page, from the tail [px].
+      type(arrow_object), intent(in) :: arrow     !< Arrow.
+      real(R8P),          intent(in) :: tail(2)   !< Tail [px].
+      real(R8P)                      :: tip_px(2) !< Tip [px].
+      type(place_object)             :: p         !< Tail and tail plus the length, along x.
+      real(R8P)                      :: q(2)      !< Page point of the latter [px].
+      real(R8P)                      :: length    !< Length [px].
+      real(R8P), parameter           :: PI = acos(-1.0_R8P) !< pi.
+
+      select case (trim(arrow%span_system))
+      case ('first', 'second')
+         ! axis units: the page distance of the tail moved by the length
+         p = arrow%from
+         p%x = arrow%from%x + arrow%span
+         q = page_of(p, frame, xaxis, yaxis, x2axis, y2axis)
+         length = sign(abs(q(1) - tail(1)), arrow%span)
+      case ('graph')
+         length = arrow%span * (frame%area(2) - frame%area(1))
+      case ('screen')
+         length = arrow%span * frame%canvas(1)
+      case default
+         length = arrow%span * frame%cell(1)
+      endselect
+      tip_px = [tail(1) + length * cos(arrow%direction * PI / 180.0_R8P), &
+                tail(2) - length * sin(arrow%direction * PI / 180.0_R8P)]
+      endfunction polar_tip
+
       subroutine head(arrow, tail, point)
       !< The head of `arrow` at `point`, the shaft coming from `tail`.
       type(arrow_object), intent(in) :: arrow   !< Arrow.

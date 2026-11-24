@@ -342,7 +342,10 @@ type :: axes_object
    logical                          :: link_y2 = .false. !< y2 linked to y (`set link y2`).
    logical                          :: link_x2_via = .false. !< The x2 link maps through `link_maps(1:2)`.
    logical                          :: link_y2_via = .false. !< The y2 link maps through `link_maps(3:4)`.
-   type(expression_object), allocatable :: link_maps(:) !< `via` and `inverse` of x2 (1, 2) and y2 (3, 4), of x (y).
+   type(expression_object), allocatable :: link_maps(:) !< `via` and `inverse` of x2 (1, 2) and y2 (3, 4), of x (y);
+                                                        !< of the nonlinear x (5, 6) and y (7, 8), of their values.
+   logical                          :: nonlinear_x = .false. !< x a nonlinear axis (gnuplot `set nonlinear x`), maps 5, 6.
+   logical                          :: nonlinear_y = .false. !< y a nonlinear axis, maps 7, 8.
    ! last: with a component after it, nvfortran 26.9 -O2 crashed the copies of the panels (multiplot, scripts)
    type(colormap_object), allocatable :: colormaps(:) !< Named colormaps of the series (`colormap` index).
    contains
@@ -6519,6 +6522,8 @@ contains
    self%yaxis%tight = self%has_image() .or. self%yaxis%noextend
    call collect_labels
    call self%xaxis%setup(xmin(1), xmax(1), xfound(1), area(2) - area(1))
+   if (self%nonlinear_x .and. .not. self%polar .and. allocated(self%link_maps)) &
+      call nonlinear_axis(self%xaxis, self%link_maps, 5_I4P, area(2) - area(1), xmin(1), xmax(1), xfound(1))
    self%x2_active = .not. self%polar .and. (xfound(2) .or. (self%x2axis%min_fixed .and. self%x2axis%max_fixed) .or. &
                                             self%x2axis%tics%mode /= TICS_NONE)
    if (self%x2_active .and. self%link_x2) then
@@ -6554,6 +6559,8 @@ contains
       call self%series_extent(s, .true., xmin, xmax, ymin, ymax, found, xfound)
    enddo
    call self%yaxis%setup(ymin(1), ymax(1), found(1), area(4) - area(3))
+   if (self%nonlinear_y .and. .not. self%polar .and. allocated(self%link_maps)) &
+      call nonlinear_axis(self%yaxis, self%link_maps, 7_I4P, area(4) - area(3), ymin(1), ymax(1), found(1))
    self%y2_active = found(2) .or. (self%y2axis%min_fixed .and. self%y2axis%max_fixed)
    self%y2axis%tight = self%y2axis%noextend
    if (self%link_y2) then
@@ -6779,6 +6786,200 @@ contains
                                           sup=probe%ticks(t)%sup))
    enddo
    endsubroutine linked_axis
+
+   subroutine nonlinear_axis(axis, maps, k, npx, dmin, dmax, found)
+   !< `axis` made nonlinear (gnuplot `set nonlinear`): placed linearly in the values of `maps(k)` (f, the hidden axis),
+   !< `maps(k + 1)` (g) its inverse. The hidden axis takes the mapped data and ends and its own automatic range; the
+   !< axis ends are g of its ends. Automatic ticks sit at the hidden axis' automatic ticks, labelled by g of them (as
+   !< gnuplot 6.0: `via sqrt(x)` over [0:100] reads 0, 4, 16, ...), other ticks (a step, a list) are in the axis' own
+   !< values. The map is a table (`map_*` of axis_object): g sampled uniformly over the hidden range, the edges of an
+   !< undefined part (a broken axis) found by bisection, the ticks exact. One local axis_object (nvfortran 26.9).
+   type(axis_object),       intent(inout) :: axis    !< Axis.
+   type(expression_object), intent(in)    :: maps(:) !< Maps: f at k, g at k + 1.
+   integer(I4P),            intent(in)    :: k       !< Forward map index.
+   real(R8P),               intent(in)    :: npx     !< Axis length [px].
+   real(R8P),               intent(in)    :: dmin    !< Smallest data value.
+   real(R8P),               intent(in)    :: dmax    !< Largest data value.
+   logical,                 intent(in)    :: found   !< Any data.
+   integer(I4P), parameter                :: N = 2048_I4P !< Table intervals.
+   type(axis_object)                      :: probe   !< The hidden axis, then the labeller of the ticks.
+   type(tic_item), allocatable            :: items(:) !< Mapped hidden ticks.
+   type(tick_object), allocatable         :: ticks(:) !< Ticks of the axis.
+   real(R8P), allocatable                 :: tu(:)   !< Table: unit positions.
+   real(R8P), allocatable                 :: tx(:)   !< Table: values.
+   real(R8P)                              :: hlo     !< Hidden start.
+   real(R8P)                              :: hhi     !< Hidden end.
+   real(R8P)                              :: a       !< Mapped data start, bisection end.
+   real(R8P)                              :: b       !< Mapped data end, bisection end.
+   real(R8P)                              :: v       !< A value.
+   real(R8P)                              :: h       !< A hidden value.
+   integer(I4P)                           :: i       !< Counter.
+   integer(I4P)                           :: j       !< Counter.
+   integer(I4P)                           :: m       !< Items.
+   logical                                :: auto    !< Automatic ticks.
+   character(len=:), allocatable          :: message !< set_fixed's problem, none.
+
+   ! the hidden axis: the mapped data and ends, linear
+   probe = axis
+   probe%log = .false.
+   probe%time = .false.
+   if (allocated(probe%map_x)) deallocate(probe%map_x, probe%map_u, probe%map_f)
+   if (axis%min_fixed) probe%min_user = maps(k)%value_at(axis%min_user)
+   if (axis%max_fixed) probe%max_user = maps(k)%value_at(axis%max_user)
+   if (axis%plot_min_fixed) probe%plot_min = maps(k)%value_at(axis%plot_min)
+   if (axis%plot_max_fixed) probe%plot_max = maps(k)%value_at(axis%plot_max)
+   a = 0.0_R8P
+   b = 1.0_R8P
+   if (found) then
+      a = maps(k)%value_at(dmin)
+      b = maps(k)%value_at(dmax)
+   endif
+   if (.not. (ieee_is_finite(a) .and. ieee_is_finite(b))) return
+   call probe%setup(min(a, b), max(a, b), found, npx)
+   auto = axis%tics%mode == TICS_AUTO .and. axis%tics%series .and. .not. axis%tics%has_list()
+   ! the hidden step: between the first two major ticks
+   h = huge(1.0_R8P)
+   if (allocated(probe%ticks)) then
+      j = 0_I4P
+      do i = 1_I4P, size(probe%ticks, kind=I4P)
+         if (.not. probe%ticks(i)%major) cycle
+         if (j > 0_I4P) then
+            h = abs(probe%ticks(i)%value - probe%ticks(j)%value)
+            exit
+         endif
+         j = i
+      enddo
+   endif
+   if (auto .and. h < 1.0_R8P) then
+      ! gnuplot's computed ticks of a nonlinear axis: a hidden step of 1 at least (gen_tics)
+      call probe%tics%set_fixed('1', '', '', message)
+      call probe%setup(min(a, b), max(a, b), found, npx)
+   endif
+   hlo = probe%lo
+   hhi = probe%hi
+   if (hlo == hhi) return
+   a = maps(k + 1_I4P)%value_at(hlo)
+   b = maps(k + 1_I4P)%value_at(hhi)
+   if (.not. (ieee_is_finite(a) .and. ieee_is_finite(b))) return
+   axis%lo = a
+   axis%hi = b
+   ! ticks
+   allocate(ticks(0))
+   if (auto .and. allocated(probe%ticks)) then
+      allocate(items(size(probe%ticks)))
+      m = 0_I4P
+      do i = 1_I4P, size(probe%ticks, kind=I4P)
+         v = maps(k + 1_I4P)%value_at(probe%ticks(i)%value)
+         if (.not. ieee_is_finite(v)) cycle
+         if (.not. probe%ticks(i)%major) then
+            call push(ticks, tick_object(value=v, major=.false., label='', sup=''))
+            cycle
+         endif
+         m = m + 1_I4P
+         items(m)%value = v
+         items(m)%major = .true.
+         items(m)%labelled = .false.
+         items(m)%label = ''
+      enddo
+      if (m > 0_I4P) then
+         ! the axis labels them, as an explicit list
+         probe = axis
+         probe%log = .false.
+         probe%time = .false.
+         probe%tight = .true.
+         call probe%tics%set_list(items(1:m), .false.)
+         call probe%setup(min(axis%lo, axis%hi), max(axis%lo, axis%hi), .true., npx)
+         if (allocated(probe%ticks)) then
+            do i = 1_I4P, size(probe%ticks, kind=I4P)
+               call push(ticks, probe%ticks(i))
+            enddo
+         endif
+      endif
+   else
+      ! the axis' own ticks, in its values, over its range
+      probe = axis
+      probe%log = .false.
+      probe%tight = .true.
+      probe%min_fixed = .true.
+      probe%max_fixed = .true.
+      probe%plot_min_fixed = .false.
+      probe%plot_max_fixed = .false.
+      probe%min_user = axis%lo
+      probe%max_user = axis%hi
+      probe%reverse = .false.
+      call probe%setup(min(axis%lo, axis%hi), max(axis%lo, axis%hi), .true., npx)
+      if (allocated(probe%ticks)) then
+         do i = 1_I4P, size(probe%ticks, kind=I4P)
+            if (ieee_is_finite(maps(k)%value_at(probe%ticks(i)%value))) call push(ticks, probe%ticks(i))
+         enddo
+      endif
+   endif
+   axis%ticks = ticks
+   ! the table: g sampled uniformly over the hidden range, the edges of undefined parts, the ticks exactly
+   allocate(tu(0), tx(0))
+   do i = 0_I4P, N
+      h = hlo + real(i, R8P) / real(N, R8P) * (hhi - hlo)
+      tu = [tu, real(i, R8P) / real(N, R8P)]
+      tx = [tx, maps(k + 1_I4P)%value_at(h)]
+   enddo
+   do i = 1_I4P, N
+      if (ieee_is_finite(tx(i)) .eqv. ieee_is_finite(tx(i + 1_I4P))) cycle
+      ! bisection for the last defined hidden value on the defined side
+      a = tu(i)
+      b = tu(i + 1_I4P)
+      do j = 1_I4P, 60_I4P
+         h = 0.5_R8P * (a + b)
+         v = maps(k + 1_I4P)%value_at(hlo + h * (hhi - hlo))
+         if (ieee_is_finite(v) .eqv. ieee_is_finite(tx(i))) then
+            a = h
+         else
+            b = h
+         endif
+      enddo
+      h = merge(a, b, ieee_is_finite(tx(i)))
+      tu = [tu, h]
+      tx = [tx, maps(k + 1_I4P)%value_at(hlo + h * (hhi - hlo))]
+   enddo
+   do i = 1_I4P, size(ticks, kind=I4P)
+      h = (maps(k)%value_at(ticks(i)%value) - hlo) / (hhi - hlo)
+      if (.not. ieee_is_finite(h) .or. h < 0.0_R8P .or. h > 1.0_R8P) cycle
+      tu = [tu, h]
+      tx = [tx, ticks(i)%value]
+   enddo
+   ! sorted by unit position (insertion: the table is nearly sorted)
+   do i = 2_I4P, size(tu, kind=I4P)
+      a = tu(i)
+      b = tx(i)
+      j = i - 1_I4P
+      do while (j >= 1_I4P)
+         if (tu(j) <= a) exit
+         tu(j + 1_I4P) = tu(j)
+         tx(j + 1_I4P) = tx(j)
+         j = j - 1_I4P
+      enddo
+      tu(j + 1_I4P) = a
+      tx(j + 1_I4P) = b
+   enddo
+   axis%map_u = tu
+   axis%map_x = tx
+   axis%map_f = tx
+   v = ieee_value(1.0_R8P, ieee_quiet_nan)
+   do i = 1_I4P, size(tx, kind=I4P)
+      if (ieee_is_finite(tx(i))) then
+         v = tx(i)
+      elseif (ieee_is_finite(v)) then
+         axis%map_f(i) = v
+      endif
+   enddo
+   ! a leading undefined part takes the first defined value
+   do i = size(tx, kind=I4P), 1_I4P, -1_I4P
+      if (ieee_is_finite(tx(i))) v = tx(i)
+      if (.not. ieee_is_finite(axis%map_f(i))) axis%map_f(i) = v
+   enddo
+   axis%map_sign = merge(1.0_R8P, -1.0_R8P, axis%hi >= axis%lo)
+   ! only the ticks the map places
+   if (size(axis%ticks) > 0) axis%ticks = pack(axis%ticks, ieee_is_finite(axis%to_unit(axis%ticks%value)))
+   endsubroutine nonlinear_axis
 
    subroutine plain_ticks(self)
    !< On an enhanced text device, the tick labels of the `noenhanced` axes escaped, read as they are (their widths

@@ -8,8 +8,8 @@ module foresight_axis
 !< Text labels from the data (`using ...:xtic(1)`), when any, replace the ticks, as gnuplot: a tick at each labelled
 !< value inside the range, the range itself not extended. They are derived per rendering (`labels`), never stored in
 !< the user settings `tics`, so a multiplot does not carry the categories of a panel into the next one.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
-use penf, only : R8P
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
+use penf, only : I4P, R8P
 use foresight_ticks, only : linear_ticks, list_ticks, log_ticks, merge_list, tick_object, tics_object, time_ticks, TICS_NONE
 
 implicit none
@@ -55,6 +55,11 @@ type :: axis_object
    logical                        :: bounded(2, 2) = .false. !< Limits of the autoscaled ends given: (end, lower or
                                                              !< upper), gnuplot `set xrange [lb<*<ub:lb<*<ub]`.
    real(R8P)                      :: limits(2, 2) = 0.0_R8P  !< Those limits.
+   real(R8P), allocatable         :: map_u(:)  !< A nonlinear axis (gnuplot `set nonlinear`): unit positions, increasing,
+                                               !< of the table; unallocated for a linear or log axis.
+   real(R8P), allocatable         :: map_x(:)  !< Its values at them, NaN where undefined (a broken axis).
+   real(R8P), allocatable         :: map_f(:)  !< Those values with each NaN filled by the last defined one (the search).
+   real(R8P)                      :: map_sign = 1.0_R8P !< 1 if the values grow along the table, -1 if they fall.
    contains
       procedure, pass(self) :: accepts   !< Whether a value can be placed on the axis.
       procedure, pass(self) :: has_label !< Whether the axis has a label.
@@ -86,6 +91,8 @@ contains
 
    ok = ieee_is_finite(v)
    if (ok .and. self%log) ok = v > 0.0_R8P
+   ! a nonlinear axis: where its map is defined
+   if (ok .and. allocated(self%map_x)) ok = ieee_is_finite(self%to_unit(v))
    endfunction accepts
 
    pure function has_label(self) result(has)
@@ -260,10 +267,61 @@ contains
    real(R8P),          intent(in) :: v    !< Value.
    real(R8P)                      :: u    !< Unit coordinate.
 
-   if (self%log) then
+   if (allocated(self%map_x)) then
+      u = map_unit(self%map_u, self%map_x, self%map_f, self%map_sign, v)
+   elseif (self%log) then
       u = (log10(v) - log10(self%lo)) / (log10(self%hi) - log10(self%lo))
    else
       u = (v - self%lo) / (self%hi - self%lo)
    endif
    endfunction to_unit
+
+   pure function map_unit(mu, mx, mf, sgn, v) result(u)
+   !< The unit position of `v` on a nonlinear axis by its table (`map_*` of axis_object): linear between the two entries
+   !< around `v` (the first such pair, so an entry right at the edge of an undefined part is found defined), NaN if one
+   !< of them is undefined, extrapolated beyond the ends.
+   real(R8P), intent(in) :: mu(:) !< Unit positions.
+   real(R8P), intent(in) :: mx(:) !< Values, NaN where undefined.
+   real(R8P), intent(in) :: mf(:) !< Values, filled.
+   real(R8P), intent(in) :: sgn   !< Direction of the values.
+   real(R8P), intent(in) :: v     !< Value.
+   real(R8P)             :: u     !< Unit position.
+   integer(I4P)          :: a     !< Search start.
+   integer(I4P)          :: b     !< Search end.
+   integer(I4P)          :: m     !< Search middle.
+
+   u = ieee_value(1.0_R8P, ieee_quiet_nan)
+   if (size(mu) < 2 .or. .not. ieee_is_finite(v)) return
+   ! the first k with sgn * mf(k + 1) >= sgn * v
+   a = 1_I4P
+   b = size(mu, kind=I4P) - 1_I4P
+   if (sgn * mf(b + 1_I4P) < sgn * v) then
+      a = b
+   elseif (sgn * mf(2) >= sgn * v) then
+      a = 1_I4P
+   else
+      do while (a < b)
+         m = (a + b) / 2_I4P
+         if (sgn * mf(m + 1_I4P) >= sgn * v) then
+            b = m
+         else
+            a = m + 1_I4P
+         endif
+      enddo
+   endif
+   ! right at a defined entry next to an undefined one: that entry
+   if (ieee_is_finite(mx(a + 1_I4P)) .and. v == mx(a + 1_I4P)) then
+      u = mu(a + 1_I4P)
+      return
+   elseif (ieee_is_finite(mx(a)) .and. v == mx(a)) then
+      u = mu(a)
+      return
+   endif
+   if (.not. (ieee_is_finite(mx(a)) .and. ieee_is_finite(mx(a + 1_I4P)))) return
+   if (mx(a + 1_I4P) == mx(a)) then
+      u = mu(a)
+   else
+      u = mu(a) + (v - mx(a)) / (mx(a + 1_I4P) - mx(a)) * (mu(a + 1_I4P) - mu(a))
+   endif
+   endfunction map_unit
 endmodule foresight_axis

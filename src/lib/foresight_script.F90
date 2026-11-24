@@ -204,6 +204,8 @@ type :: script_object
    type(figure_object)             :: figure                   !< Figure being built.
    character(len=:), allocatable   :: output                   !< Current output file.
    logical                         :: output_set = .false.     !< Output set by `set output`.
+   character(len=:), allocatable   :: default_output           !< The output given at init, back after a bare
+                                                               !< `set output`.
    character(len=:), allocatable   :: previous_file            !< File of the last plot item, for `''`.
    character(len=:), allocatable   :: last_plot                !< Items of the last plot, for `replot`.
    type(token_object), allocatable :: data_files(:)            !< Data files read, for watching.
@@ -338,6 +340,7 @@ contains
       if (len_trim(theme) > 0) call self%figure%set_theme(name=trim(theme))
    endif
    self%output = output
+   self%default_output = output
    self%output_set = .false.
    self%multiplot = .false.
    self%advance_pending = .false.
@@ -7487,6 +7490,26 @@ contains
          elseif (word == 'to' .or. word == 'rto') then
             call position(arrow%to)
             arrow%relative = word == 'rto'
+            arrow%polar = .false.
+         elseif (word == 'length') then
+            ! gnuplot `length [SYS] L angle A`: the tip from the tail
+            arrow%span_system = 'first'
+            call coordinate(arrow%span, arrow%span_system)
+            if (iostat /= 0_I4P) return
+            if (i + 2_I4P > size(tokens, kind=I4P)) then
+               call fail('set arrow: length L angle A expected', iostat, iomsg)
+               return
+            endif
+            if (tokens(i + 1_I4P)%text /= 'angle') then
+               call fail('set arrow: length L angle A expected', iostat, iomsg)
+               return
+            endif
+            i = i + 1_I4P
+            second = 'first'
+            call coordinate(arrow%direction, second)
+            if (iostat /= 0_I4P) return
+            arrow%polar = .true.
+            arrow%relative = .false.
          elseif (is_word(word, 'nohead head backhead heads')) then
             arrow%head = merge(0_I4P, merge(1_I4P, merge(2_I4P, 3_I4P, word == 'backhead'), word == 'head'), &
                                word == 'nohead')
@@ -8168,6 +8191,8 @@ contains
       call colormap_option
    elseif (option == 'link') then
       call link_option
+   elseif (keyword(option, 'nonlinear', 4_I4P)) then
+      call nonlinear_option
    elseif (keyword(option, 'colorsequence', 6_I4P)) then
       call colorsequence_option
    elseif (keyword(option, 'cbrange', 3_I4P)) then
@@ -8183,6 +8208,12 @@ contains
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call boxwidth_option
    elseif (keyword(option, 'output', 2_I4P)) then
+      if (size(tokens) < 2) then
+         ! bare (gnuplot: the standard output): back to the default output
+         if (allocated(self%default_output)) self%output = self%default_output
+         self%output_set = .false.
+         return
+      endif
       if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
       if (len(text) == 0) then
          call fail('set output: a file name is required', iostat, iomsg)
@@ -9961,6 +9992,81 @@ contains
       endassociate
       endsubroutine colorsequence_option
 
+      subroutine nonlinear_option
+      !< gnuplot `set nonlinear x|y via EXPR inverse EXPR`: the axis placed linearly in the values of the first map (of
+      !< `x`, of `y`), the second its inverse; see foresight_axes' nonlinear_axis.
+      type(expression_object) :: fwd  !< Forward map.
+      type(expression_object) :: inv  !< Inverse map.
+      character(len=1)        :: axis !< x or y.
+      integer(I4P)            :: k    !< Token counter.
+      integer(I4P)            :: v    !< Token of `via`.
+      integer(I4P)            :: w    !< Token of `inverse`.
+
+      if (size(tokens) < 2) then
+         call fail('set nonlinear: x or y expected', iostat, iomsg)
+         return
+      endif
+      if (.not. (tokens(2)%text == 'x' .or. tokens(2)%text == 'y')) then
+         call fail('set nonlinear: x or y expected (x2, y2, cb and r are not supported), found "'//tokens(2)%text//'"', &
+                   iostat, iomsg)
+         return
+      endif
+      axis = tokens(2)%text
+      v = 0_I4P
+      w = 0_I4P
+      do k = 3_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%text == 'via') v = k
+         if (keyword(tokens(k)%text, 'inverse', 3_I4P)) w = k
+      enddo
+      if (v /= 3_I4P .or. w <= v + 1_I4P .or. w >= size(tokens, kind=I4P)) then
+         call fail('set nonlinear: via EXPR inverse EXPR expected', iostat, iomsg)
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         call fwd%compile(expression_source(tokens(v + 1_I4P:w - 1_I4P)), iostat, iomsg, variable=axis, &
+                          degrees=panel%degrees, symbols=self%symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set nonlinear: via: '//iomsg
+            return
+         endif
+         call inv%compile(expression_source(tokens(w + 1_I4P:)), iostat, iomsg, variable=axis, &
+                          degrees=panel%degrees, symbols=self%symbols)
+         if (iostat /= 0_I4P) then
+            iomsg = 'set nonlinear: inverse: '//iomsg
+            return
+         endif
+         call grow_maps
+         if (axis == 'x') then
+            panel%link_maps(5) = fwd
+            panel%link_maps(6) = inv
+            panel%nonlinear_x = .true.
+         else
+            panel%link_maps(7) = fwd
+            panel%link_maps(8) = inv
+            panel%nonlinear_y = .true.
+         endif
+      endassociate
+      endsubroutine nonlinear_option
+
+      subroutine grow_maps
+      !< The maps of the current panel, 8 (link and nonlinear), those set kept.
+      type(expression_object), allocatable :: maps(:) !< Maps.
+      integer(I4P)                         :: k       !< Counter.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         if (allocated(panel%link_maps)) then
+            if (size(panel%link_maps) >= 8) return
+            allocate(maps(8))
+            do k = 1_I4P, size(panel%link_maps, kind=I4P)
+               maps(k) = panel%link_maps(k)
+            enddo
+            call move_alloc(maps, panel%link_maps)
+         else
+            allocate(panel%link_maps(8))
+         endif
+      endassociate
+      endsubroutine grow_maps
+
       subroutine link_option
       !< gnuplot `set link x2|y2 [via EXPR inverse EXPR]` (`x`, `y` name them too): the secondary axis on the range of
       !< the first, its ticks through the maps (of `x`, of `y`), its data plotted through the inverse.
@@ -10021,7 +10127,7 @@ contains
             iomsg = 'set link: inverse: '//iomsg
             return
          endif
-         if (.not. allocated(panel%link_maps)) allocate(panel%link_maps(4))
+         call grow_maps
          if (axis == 'x2') then
             panel%link_maps(1) = fwd
             panel%link_maps(2) = inv
@@ -12419,7 +12525,7 @@ contains
    endif
    ! labels, arrows, objects take a tag (handled below)
    if (.not. (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. &
-              keyword(option, 'object', 3_I4P) .or. option == 'link')) then
+              keyword(option, 'object', 3_I4P) .or. option == 'link' .or. keyword(option, 'nonlinear', 4_I4P))) then
       if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
    endif
    if (keyword(option, 'multiplot', 5_I4P)) then
@@ -12461,6 +12567,25 @@ contains
             panel%link_y2 = .false.
          else
             call fail('unset link: x2 or y2 expected', iostat, iomsg)
+            return
+         endif
+      endassociate
+   elseif (keyword(option, 'output', 2_I4P)) then
+      ! as a bare `set output`: back to the default output
+      if (allocated(self%default_output)) self%output = self%default_output
+      self%output_set = .false.
+   elseif (keyword(option, 'nonlinear', 4_I4P)) then
+      ! gnuplot `unset nonlinear [x|y]`
+      associate(panel => self%figure%panels(self%figure%current))
+         if (size(tokens) < 2) then
+            panel%nonlinear_x = .false.
+            panel%nonlinear_y = .false.
+         elseif (tokens(2)%text == 'x') then
+            panel%nonlinear_x = .false.
+         elseif (tokens(2)%text == 'y') then
+            panel%nonlinear_y = .false.
+         else
+            call fail('unset nonlinear: x or y expected (x2, y2, cb and r are not supported)', iostat, iomsg)
             return
          endif
       endassociate

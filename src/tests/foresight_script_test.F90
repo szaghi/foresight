@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(217)                           !< Per-check outcome.
+logical                       :: test_passed(218)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -4966,6 +4966,36 @@ if (test_passed(217)) then
    endblock
 endif
 
+! set nonlinear x|y via f inverse g, as gnuplot 6.0: automatic ticks at the hidden axis' ticks (a step of 1 at least)
+! labelled by g (sqrt over [0:100]: 0, 4, 16, ..., 100), placed linearly in f; a broken axis (f undefined inside) keeps
+! its ends placeable; set arrow from P length L angle A; a bare set output back to the default output
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_nonlinear.svg"; set xrange [0:100]; '// &
+                          'set nonlinear x via sqrt(x) inverse x**2; set yrange [15:600] noextend; '// &
+                          'f(x) = (x <= 100) ? x : (x < 500) ? NaN : (x - 375); '// &
+                          'g(x) = (x <= 100) ? x : (x < 125) ? NaN : (x + 375); set nonlinear y via f(y) inverse g(y); '// &
+                          'set ytics 50; set arrow 1 from 50, graph 0 length graph 0.1 angle 90; plot x', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(218) = iostat == 0_I4P
+if (test_passed(218)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(218) = size(panel%xaxis%ticks) == 6
+      if (test_passed(218)) test_passed(218) = panel%xaxis%ticks(3)%label == '16' .and. &
+         abs(panel%xaxis%to_unit(16.0_R8P) - 0.4_R8P) < 1.0e-9_R8P .and. &
+         abs(panel%xaxis%to_unit(30.0_R8P) - sqrt(30.0_R8P) / 10.0_R8P) < 1.0e-5_R8P
+      ! y: 100 and 500 placed (the edges of the gap), 300 not
+      test_passed(218) = test_passed(218) .and. panel%yaxis%accepts(100.0_R8P) .and. panel%yaxis%accepts(500.0_R8P) .and. &
+                        .not. panel%yaxis%accepts(300.0_R8P) .and. &
+                        abs(panel%yaxis%to_unit(500.0_R8P) - (125.0_R8P - 15.0_R8P) / 210.0_R8P) < 1.0e-9_R8P
+   endassociate
+endif
+call interpreter%run_text('set output; unset nonlinear', iostat, iomsg)
+test_passed(218) = test_passed(218) .and. iostat == 0_I4P
+call interpreter%run_text('set nonlinear x2 via x inverse x', iostat, iomsg)
+test_passed(218) = test_passed(218) .and. iostat /= 0_I4P
+open(newunit=unit, file='foresight_script_test_nonlinear.svg')
+close(unit, status='delete')
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -4974,7 +5004,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,217L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,218L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
