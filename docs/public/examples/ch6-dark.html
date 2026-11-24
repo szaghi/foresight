@@ -553,6 +553,14 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
       tics.color = words[k + 1];
       words.splice(k, 2);
     }
+    // the labels' font: "font SIZE BOLD ITALIC FAMILY" (0 the page's size, 1/0 flags, "-" none)
+    k = words.indexOf("font");
+    if (k >= 0) {
+      tics.font = {size: Number(words[k + 1]), bold: words[k + 2] === "1",
+        italic: words[k + 3] === "1",
+        family: words[k + 4] === "-" ? "" : decodeURIComponent(words[k + 4])};
+      words.splice(k, 5);
+    }
     // the placement: "axis" (on the zero axis of the other coordinate), "rangelimited LO HI"
     k = words.indexOf("axis");
     if (k >= 0) {
@@ -1436,6 +1444,16 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
       y -= tics.offset[1] * fs;
     }
     var attributes = {x: x, y: y, "text-anchor": anchor};
+    // the axis' font (mirror of font_attributes)
+    if (tics && tics.font) {
+      if (tics.font.size > 0) attributes["font-size"] = shortNumber(tics.font.size);
+      if (tics.font.family) {
+        attributes["font-family"] = tics.font.family.indexOf(" ") >= 0 ?
+          "'" + tics.font.family + "'" : tics.font.family;
+      }
+      if (tics.font.bold) attributes["font-weight"] = "bold";
+      if (tics.font.italic) attributes["font-style"] = "italic";
+    }
     if (tics && tics.color) attributes.fill = tics.color;
     if (rotate) attributes.transform = "rotate(" + (-rotate) + " " + x + " " + y + ")";
     var node = element(parent, "text", attributes), parts = String(tick.label).split("\n");

@@ -334,6 +334,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_lc_shapes" svg :width="560" :height="320" caption="a color per shape (lc variable)" />
   <Plot name="cb_annotations" svg :width="640" :height="400" caption="labels, arrows and objects" />
   <Plot name="cb_pixmap" svg :width="560" :height="320" caption="images from PNG files" />
+  <Plot name="cb_fonts" svg :width="560" :height="320" caption="a font per text" />
   <Plot name="cb_boxed_labels" svg :width="560" :height="320" caption="boxed labels" />
   <Plot name="cb_arrow_styles" svg :width="560" :height="360" caption="arrow styles, dashed objects" />
 </div>

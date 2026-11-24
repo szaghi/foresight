@@ -56,12 +56,12 @@ that did what it says.
 
 | Option | `set` | `unset` |
 |---|---|---|
-| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] [`boxed`] | panel title, shifted by `offset` characters (y up); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` read and ignored; `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text); `boxed` on the background (text box style 0); a new line (`"a\nb"`) starts a line below, the plot lower, as gnuplot; options without a text (`set title offset 0,-2`) keep the title | no title |
+| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] [`boxed`] | panel title, shifted by `offset` characters (y up); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` its [font](#fonts) (its size grows the top margin, as gnuplot); `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text); `boxed` on the background (text box style 0); a new line (`"a\nb"`) starts a line below, the plot lower, as gnuplot; options without a text (`set title offset 0,-2`) keep the title | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
 | **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
-| **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`offset X[,Y]`] [`font F`] [`tc COLOR`] [`rotate` ...\|`norotate`] [`noenhanced`] [`boxed`] | axis label (`y2` on the right, `x2` on the top), shifted by `offset` characters (x right, y up; a third, 3D, offset read and ignored; the x label's y offset narrows or widens the bottom margin, the x2 label's the top one, as gnuplot), in its `tc` color; `font`, `rotate` and `left`/`center`/`right` read and ignored; `noenhanced`: as it is, not as [enhanced text](#enhanced-text); `boxed` on the background; options without a text (`set xlabel offset 0,1.5 boxed`) keep the label, as gnuplot | no label |
+| **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`offset X[,Y]`] [`font F`] [`tc COLOR`] [`rotate` ...\|`norotate`] [`noenhanced`] [`boxed`] | axis label (`y2` on the right, `x2` on the top), shifted by `offset` characters (x right, y up; a third, 3D, offset read and ignored; the x label's y offset narrows or widens the bottom margin, the x2 label's the top one, as gnuplot), in its `tc` color and [font](#fonts) (the x2 label's size grows the top margin, the others only their text, as gnuplot); `rotate` and `left`/`center`/`right` read and ignored; `noenhanced`: as it is, not as [enhanced text](#enhanced-text); `boxed` on the background; options without a text (`set xlabel offset 0,1.5 boxed`) keep the label, as gnuplot | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange [`[min:max]`] [`noextend`\|`extend`] [`reverse`\|`noreverse`] [`nowriteback`] | axis range; `*` autoscales an end, an empty end keeps it as it is (fixed or autoscaled: `set xrange [2:5]; set xrange [:10]` is [2:10], as gnuplot 6.0) (`lb<*<ub` within limits, see [below](#grid-zero-axes-and-border)), `[]` or no range keeps both; `min > max` reverses; `reverse` reverses an axis with an autoscaled end (an explicit range is left as it is, as gnuplot); `noextend` keeps autoscaled ends at the data | autoscale |
 | **offset**s [`graph`] `L`, [`graph`] `R`, [`graph`] `T`, [`graph`] `B` | autoscaled x and y ends moved out, see [Offsets](#offsets) | no offsets |
 | **par**ametric | [parametric](#parametric-plots) functions: items in pairs x(t), y(t) over `trange` | functions of x |
@@ -94,7 +94,7 @@ that did what it says.
 | **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | — |
 | **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
 | **enc**oding [`default`\|`utf8`\|`locale`\|`iso_8859_1`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8: with `iso_8859_1` the bytes of the texts (an octal `"\351"`) are written as their Latin-1 characters (gnuplot declares its output's encoding instead); other encodings are refused | `default` |
-| **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font` read and ignored | — |
+| **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font "name,size"` the page's [font](#fonts) (also `set terminal svg font ...`) | — |
 | **for**mat [*axes*] [`"format"`] [`timedate`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `numeric` numeric ones | default labels |
 | **xda**ta / **yda**ta / **x2da**ta / **y2da**ta [`time`] | the data of the axis are [times](#time-data), read with the `timefmt`; the axis ticked and labelled in time units | numbers |
 | **timef**mt `"format"` | the input [time format](#time-data), `%d/%m/%y,%H:%M` by default | the default |
@@ -1118,7 +1118,7 @@ and keeps the labels; each axis takes it too (`set xtics scale 2`). `set tics fr
 `rotate`.
 
 The tick labels of an axis (`set xtics ...`) or of every axis (`set tics ...`) take gnuplot's options: `format "..."`
-(the axis' `set format`), `font "..."` (read and ignored: foresight has one font), `offset X[,Y]` and `nooffset` (a
+(the axis' `set format`), `font "..."` (the labels' [font](#fonts), placed as the page's, as gnuplot), `offset X[,Y]` and `nooffset` (a
 shift in characters, 0.6 font sizes wide and 1 high, y up; gnuplot's svg characters are 0.7 by 1.5) and
 `textcolor`/`tc COLOR`. `set tics` changes only the options it names.
 
@@ -1305,8 +1305,8 @@ them all. The samples are gnuplot 6.0's: a line, points, a filled box (its fill 
 has one), an arrow for `vectors` and `arrows`, none for `labels` (their point with `labels point`) and for a
 `keyentry` without a style. In a script `samplen L` is L characters plus a tick length (gnuplot's `samplen * h_char +
 h_tic`), a boxed key draws a line under its title, and a vertical key taller than the panel wraps into columns, filled
-top down, as gnuplot. A character is foresight's cell, 0.6 font sizes wide and 1 high. `font` is read and ignored (foresight has one
-font); `noenhanced` writes the key's texts as they are, not as [enhanced text](#enhanced-text).
+top down, as gnuplot. A character is foresight's cell, 0.6 font sizes wide and 1 high. `font` the key's [font](#fonts) (its
+rows and widths by its size); `noenhanced` writes the key's texts as they are, not as [enhanced text](#enhanced-text).
 
 ```gnuplot
 set key box lt 4 lw 2 maxrows 3 spacing 1.5 tc variable   # 3 rows a column, titles in their series' colors
@@ -1555,7 +1555,7 @@ cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system o
 
 | Command | Options (gnuplot 6.0's, defaults first) |
 |---|---|
-| `set label [N] ["text"] [at POS]` | a text on several lines (`"a\nb"`) one below the other, the first at the position; a third (3D) coordinate of POS read and ignored; `left`\|`center`\|`right`, `norotate`\|`rotate [by A]`, `back`\|`front`, `tc`/`textcolor` `rgb "c"`\|`"c"`\|`lt N`, `nopoint`\|`point [pt N] [ps S]`, `offset X,Y` (characters), `font "f"` (read, ignored), `noenhanced` |
+| `set label [N] ["text"] [at POS]` | a text on several lines (`"a\nb"`) one below the other, the first at the position; a third (3D) coordinate of POS read and ignored; `left`\|`center`\|`right`, `norotate`\|`rotate [by A]`, `back`\|`front`, `tc`/`textcolor` `rgb "c"`\|`"c"`\|`lt N`, `nopoint`\|`point [pt N] [ps S]`, `offset X,Y` (characters), `font "f"` (its [font](#fonts)), `noenhanced` |
 | `set arrow [N] from POS to\|rto POS\|length [SYS] L angle A` | `as N`/`arrowstyle N` (the look of `set style arrow N`, the options after it applied on it), `head`\|`nohead`\|`backhead`\|`heads`, `size [SYS] L,A` (head length in x axis values, or graph, screen, character; barb angle [deg]); `length L angle A` the tip from the tail, the length along x in its system (negative: backwards), the angle on the page, `nofilled` (two barbs)\|`filled`\|`empty`\|`noborder`, `back`\|`front`, `lc`, `lt`, `lw`, `dt` |
 | `set style arrow N [default]` | the arrow options above but the position: the look of the arrows `as N`; `unset style arrow` forgets them |
 | `set object [N] rectangle from POS to\|rto POS` \| `rectangle center\|at POS size W,H` | `fc`/`fillcolor`, `fs`/`fillstyle` (as `set style fill`, `border lc C` included), `lw`, `dt` (a dashed border), `back`\|`front`\|`behind`, `clip`\|`noclip`, `default`; a rectangle in the page color (`fc bgnd`) with a black border, as gnuplot, or in the look of `set style rectangle` |
@@ -1591,6 +1591,30 @@ boxed`) draw the text on the background when the
 flooding the text's bounding box; no border, no margin). An arrow takes `fill` for `filled` and `ls N` (the color, width and dashes of line style N).
 
 Not supported: `boxed` on axis labels, `hypertext`, `set style circle|ellipse`, `units xx|yy`.
+
+## Fonts
+
+```gnuplot
+set terminal svg size 640,400 font "Georgia,11"   # the page's font: every text
+set title "Results" font ",20"                    # a size
+set xlabel "time" font ":Italic"                  # a style
+set ytics font ",8"                               # the tick labels of an axis (set tics font: every axis)
+set key font ":Bold"                              # a weight
+set label 1 "peak" at 3, 0.9 font "Times:Bold,14" # a family, a weight and a size
+plot 'run.dat' using 1:2:3 with labels font ",8"  # data labels
+```
+
+A font is gnuplot's `"family:Bold:Italic,size"`, each part optional, as gnuplot 6.0's svg terminal: the size in pixels
+(`",8"`), `:Bold` and `:Italic` (or ` bold`, ` italic`), the family (`"serif"`, `"Times"`, `"Lucida Sans"`). Fonts
+apply to the title, the multiplot title, the axis labels (x, y, x2, y2, r, cb), the tick labels of each axis, the key,
+`set label`, the data labels and the page (`set terminal ... font`, `set termoption font`). The layout grows as
+gnuplot's: the title, the multiplot title and the x2 label take rows of their size, the key its size; the tick labels
+and the other axis labels are placed as the page's text, only their glyphs change. A family is written to the SVG as
+given, the page's after it as fallback: the reader's fonts draw it, while foresight measures every text as its own
+font (0.55 font sizes a character), so a wide family may need room. Font files (`"/path/a.ttf"`) and gnuplot's
+`mbfont:` sets name no family an SVG can use: their size, weight and style are kept. Text devices keep their one
+cell. Within a text, [enhanced text](#enhanced-text) changes the size and the style of a part (`{/=8 ...}`,
+`{/:Bold ...}`).
 
 ## Enhanced text
 
@@ -1694,7 +1718,7 @@ plot 'run.dat' with linespoints pt "✠" pn 10                           # about
 ```
 
 `pt "c"` draws the first character of the string (UTF-8) as the point, centred, in the series color or the item's
-`tc` color, as text that keeps its size under zoom; also in `set style line`. An item's `font` is read and ignored.
+`tc` color, as text that keeps its size under zoom; also in `set style line`. An item's `font` is its labels' (`with labels font ",8"`); the characters of `pt "c"` keep the page's.
 `pn N` (`pointnumber`) marks about N of the placeable points, every (count-1)/(N-1)-th, the start shifted by the
 item's number, as gnuplot.
 

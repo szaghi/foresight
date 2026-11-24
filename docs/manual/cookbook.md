@@ -1325,6 +1325,16 @@ none its own pixels. The SVG holds the file itself. See
 [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
 
+### Fonts per text
+
+<<< @/examples/snippets/cb_fonts.gp{gnuplot}
+
+<Plot name="cb_fonts" svg :width="560" :height="320" />
+
+Each text takes gnuplot's `font "family:Bold:Italic,size"`: the title larger, the axis labels italic and bold, the
+tick labels smaller, the key and the label in a serif family. As gnuplot, only the title (and the x2 label, the key)
+take room by their size. See [Fonts](/guide/gnuplot-subset#fonts).
+
 ### Boxed labels
 
 <<< @/examples/snippets/cb_boxed_labels.gp{gnuplot}
