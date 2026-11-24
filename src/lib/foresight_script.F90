@@ -142,7 +142,8 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             FILL_SOLID, FILL_PATTERN, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_LABELS, &
                             WITH_XERRORBARS, &
                             WITH_XERRORLINES, &
-                            WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES
+                            WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES, &
+                            WITH_POINTS, WITH_LINESPOINTS
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD, UNAME_CHARS, UNAME_START
@@ -182,6 +183,7 @@ type :: line_style_object
    character(len=:), allocatable :: pt_char    !< A character as the point (`pt "c"`).
    integer(I4P),     allocatable :: pn         !< About N points evenly spread (`pointnumber`).
    character(len=:), allocatable :: colormap   !< A named colormap (`lc palette NAME`).
+   integer(I4P)                  :: ptdef = 0_I4P !< Default point type from `lt N`/`ls N` (gnuplot), 0 if none.
 endtype line_style_object
 
 type :: loop_level
@@ -5464,6 +5466,7 @@ contains
       subroutine mark_last
       !< The series just added: the axis of its text labels (`ytic(N)`, ...) and its point interval.
       integer(I4P) :: last !< Series just added.
+      integer(I4P) :: kpt  !< Linetype of the default point type.
 
       associate(panel => self%figure%panels(self%figure%current))
          last = size(panel%series, kind=I4P)
@@ -5488,6 +5491,16 @@ contains
                allocate(panel%series(last)%xlabels2(size(labels2)))
                panel%series(last)%xlabels2 = labels2
             endif
+         endif
+         ! gnuplot's default point type: the item's linetype, cycling every 15
+         if (panel%series(last)%style%pointtype < 0_I4P) then
+            select case (panel%series(last)%style%with)
+            case (WITH_POINTS, WITH_LINESPOINTS, WITH_YERRORBARS, WITH_XERRORBARS, WITH_XYERRORBARS, &
+                  WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES)
+               kpt = last + panel%color_shift
+               if (line%ptdef > 0_I4P) kpt = line%ptdef
+               panel%series(last)%style%pointtype = modulo(kpt - 1_I4P, 15_I4P) + 1_I4P
+            endselect
          endif
          if (allocated(line%pi)) panel%series(last)%pointinterval = line%pi
          if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
@@ -14275,8 +14288,17 @@ contains
       if (allocated(styles(s)%pt)) line%pt = styles(s)%pt
       if (allocated(styles(s)%pt_char)) line%pt_char = styles(s)%pt_char
       if (allocated(styles(s)%pn)) line%pn = styles(s)%pn
+      ! the style's point type when it has none: that of its `lt M`, else of the linetype `id` when predefined, else 1
+      if (styles(s)%ptdef > 0_I4P) then
+         line%ptdef = styles(s)%ptdef
+      elseif (id >= 1_I4P .and. id <= 8_I4P) then
+         line%ptdef = id
+      else
+         line%ptdef = 1_I4P
+      endif
       return
    enddo
+   if (id >= 1_I4P .and. id <= 8_I4P) line%ptdef = id
    ! gnuplot's special linetypes: black (-1), nodraw (-2), bgnd (-3)
    select case (id)
    case (-1_I4P)
@@ -14553,6 +14575,8 @@ contains
             line%lc = special_color('bgnd')
          case default
             line%lc = default_color(number, colors)
+            ! gnuplot's eight predefined linetypes carry point types 1..8; a higher one keeps the item's own
+            if (number >= 1_I4P .and. number <= 8_I4P) line%ptdef = number
          endselect
       endif
    elseif (word == 'lw' .or. keyword(word, 'linewidth', 5_I4P)) then

@@ -206,7 +206,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `lw` `W`, `dt` `N`, `ps` `S` | line width [px], dash type 1..5 (`dt solid` is 1), point size |
 | `dt "string"` / `dt (S, E, ...)` | gnuplot's custom dash patterns: `.` dot, `-` dash, `_` long dash, a blank a longer gap; or the solid and empty lengths; a string variable too (`dt new`); scaled by the line width as gnuplot's svg |
 | `lc bgnd` / `lt nodraw` / `lt -1` | the background color, nothing drawn, black (`lt -2` nodraw, `lt -3` bgnd) |
-| `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, points are round dots |
+| `pt` `N` / **pointt**ype `N` | [point type](#point-types); without it, the point type of the item's linetype, as gnuplot |
 | `pi` `N` / **pointi**nterval `N` | a point on the first point and every N-th after it (`linespoints`, error bar styles); a negative N every \|N\|-th, the line blanked under each point (a disk of the background), as gnuplot |
 | **noauto**scale | the item out of the autoscaling of its axes |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
@@ -1661,8 +1661,10 @@ plot 'run.dat' u 1:2 w lp pt 7 t 'residual', '' u 1:3 w p pt 4 ps 1.5 t 'cd'
 
 The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3 star, 4 square, 6 circle,
 8 triangle, 10 inverted triangle, 12 diamond, 14 pentagon, each odd type from 5 the filled shape before it; beyond 15
-they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` a point is foresight's round dot,
-6 px at `ps 1`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
+they cycle. A marker is 9 px wide at `ps 1`, its lines `lw` wide. Without `pt` an item draws the point type of its
+linetype, as gnuplot 6.0: the k-th item type k (cycling every 15), `lt N` of the eight predefined linetypes type N,
+`ls N` the point type of its style (of its `lt`, else type N up to 8, else 1); a keyentry does not use one up. The
+library's own `plot` keeps foresight's round dot, 6 px at `ps 1`, without `pt`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
 with the symbol of its color. `set pointsize S` sets the size of the points without their own `ps` (an item's `ps`
 replaces it, as gnuplot's); `unset pointsize` and `reset` restore 1.
 

@@ -339,7 +339,7 @@ test_passed(42) = test_passed(42) .and. iostat /= 0_I4P .and. index(iomsg, 'a fu
 open(newunit=unit, file=scratch)
 close(unit, status='delete')
 
-! point types: in an item, in a line style, the long form; never negative; without pt the round dot (-1)
+! point types: in an item, in a line style, the long form; never negative; without pt the item's linetype, as gnuplot
 call interpreter%init(scratch)
 call interpreter%run_text("set style line 3 pt 6 ps 2; plot x w p pt 7, x w lp ls 3, x w p pointtype 12, x w p", &
                           iostat, iomsg)
@@ -348,7 +348,18 @@ if (test_passed(43)) then
    associate(series => interpreter%figure%panels(1)%series)
       test_passed(43) = series(1)%style%pointtype == 7_I4P .and. series(2)%style%pointtype == 6_I4P .and. &
                         series(2)%style%pointsize == 2.0_R8P .and. series(3)%style%pointtype == 12_I4P .and. &
-                        series(4)%style%pointtype == -1_I4P
+                        series(4)%style%pointtype == 4_I4P
+   endassociate
+endif
+! gnuplot 6.0: lt 1..8 and ls of a predefined linetype give its point type, a higher lt the item's own, a style of
+! a higher number without pt or lt point type 1, a keyentry takes the next item's linetype without using it up
+call interpreter%run_text("set style line 12 lc rgb 'red'; set style line 2 lt 4; plot x w p lt 5, x w p lt 12, "// &
+                          "x w p ls 12, x w p ls 2, x w l, x w p, keyentry w p t 'k', x w p", iostat, iomsg)
+test_passed(43) = test_passed(43) .and. iostat == 0_I4P
+if (test_passed(43)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(43) = all(series([1, 2, 3, 4, 6, 7, 8])%style%pointtype == [5, 2, 1, 4, 6, 7, 7]) .and. &
+                        series(5)%style%pointtype == -1_I4P
    endassociate
 endif
 call interpreter%run_text("plot x w p pt -1", iostat, iomsg)
