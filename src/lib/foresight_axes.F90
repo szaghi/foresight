@@ -51,7 +51,7 @@ module foresight_axes
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
-                                  label_object, shape_object
+                                  has_shapes, label_object, shape_object
 use foresight_axis, only : axis_object, paxis_default
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -1345,6 +1345,7 @@ contains
                                                      !< the drawing of their projection.
    integer(I4P)                         :: s         !< Series counter.
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
+   logical                              :: separate  !< Front objects in a layer of their own, over the overlays.
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
@@ -1561,8 +1562,21 @@ contains
                                                        self%yaxis%to_unit([0.0_R8P, 0.0_R8P]), FRAME_COLOR, 1.0_R8P, '')
       endassociate
    endif
-   call annotate('front', .true.)
-   call backend%end_plot_area
+   ! gnuplot's front objects cover the points: on a device with overlays, in a layer of their own over them
+   separate = .false.
+   if (allocated(self%objects)) then
+      if (has_shapes(self%objects, 'front', .true.)) then
+         call backend%end_plot_area
+         call backend%front_area(.true., separate)
+         call annotate('front', .true.)
+         call backend%front_area(.false., separate)
+         if (.not. separate) call backend%end_plot_area
+      endif
+   endif
+   if (.not. separate) then
+      call annotate('front', .true.)
+      call backend%end_plot_area
+   endif
    if (self%grid_front) then
       call backend%begin_group('fs-grid', visible=self%grid)
       call self%draw_grid(backend, area)

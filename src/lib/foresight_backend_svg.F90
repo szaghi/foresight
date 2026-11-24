@@ -81,6 +81,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self), private :: pattern_fill !< Fill of a polygon, a pattern defined if needed.
       procedure, pass(self) :: data_label
       procedure, pass(self) :: hover !< Text on mouse-over of a point: a transparent disk with its title.
+      procedure, pass(self) :: front_area !< The front layer of the plot area: an svg over the overlays.
       procedure, pass(self) :: data_label_raw !< data_label without the ISO 8859-1 conversion.
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
@@ -620,6 +621,23 @@ contains
       endif
       endsubroutine add_head
    endsubroutine data_arrows
+
+   subroutine front_area(self, opening, separate)
+   !< Open (`opening`) or close the front layer of the plot area: an svg of the plot area's geometry (`fs-front`,
+   !< zoomed with it by the viewer) written after the overlays, so that gnuplot's `front` objects cover the markers.
+   class(backend_svg), intent(inout) :: self     !< Device.
+   logical,            intent(in)    :: opening  !< Open, else close.
+   logical,            intent(out)   :: separate !< A layer of its own.
+
+   separate = .true.
+   if (opening) then
+      call self%put('<svg class="fs-front" x="'//px(self%area(1))//'" y="'//px(self%area(2))//'" width="'// &
+                    px(self%area(3))//'" height="'//px(self%area(4))// &
+                    '" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">')
+   else
+      call self%put('</svg>')
+   endif
+   endsubroutine front_area
 
    subroutine hover(self, x, y, text, diameter)
    !< gnuplot's hypertext: `text` shown on mouse-over of the point (`x`, `y`) [unit square], a transparent disk of

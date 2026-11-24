@@ -1275,6 +1275,8 @@
     var gstyle = group.getAttribute("data-grid-style");
     this.gridStyle = gstyle ? gstyle.split(" ") : null;
     this.plot = group.querySelector(".fs-plot");
+    // gnuplot's front objects in data space: a layer of the plot area's geometry over the markers
+    this.front = group.querySelector(".fs-front");
     this.gridGroup = group.querySelector(".fs-grid");
     // polar panel: its grid is data geometry (zoomed with the series), its r tick labels and
     // theta labels page geometry, hidden while zoomed
@@ -1436,6 +1438,7 @@
   Panel.prototype.redraw = function () {
     var v = this.view;
     this.plot.setAttribute("viewBox", [v.u0, 1 - v.v1, v.u1 - v.u0, v.v1 - v.v0].join(" "));
+    if (this.front) this.front.setAttribute("viewBox", this.plot.getAttribute("viewBox"));
     this.gridGroup.setAttribute("display", this.grid ? "inline" : "none");
     if (this.polarGrid) this.polarGrid.setAttribute("display", this.grid ? "inline" : "none");
     if (this.groupTitles) {

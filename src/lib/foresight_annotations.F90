@@ -23,6 +23,7 @@ public :: arrow_object
 public :: draw_arrows
 public :: draw_labels
 public :: draw_shapes
+public :: has_shapes
 public :: label_object
 public :: place_object
 public :: push
@@ -392,6 +393,37 @@ contains
       endsubroutine head
    endsubroutine draw_arrows
 
+   pure function in_space(shape) result(yes)
+   !< Whether `shape` is drawn in data space: clipped, every point (and the size) in axis values.
+   type(shape_object), intent(in) :: shape !< Object.
+   logical                        :: yes   !< In data space.
+   integer(I4P)                   :: i     !< Point counter.
+
+   yes = shape%clip .and. allocated(shape%points)
+   if (.not. yes) return
+   do i = 1_I4P, size(shape%points, kind=I4P)
+      yes = yes .and. in_data(shape%points(i))
+   enddo
+   endfunction in_space
+
+   pure function has_shapes(shapes, layer, data_space) result(yes)
+   !< Whether any of `shapes` is of `layer` and in data space (`data_space`), or on the page.
+   type(shape_object), intent(in) :: shapes(:)  !< Objects.
+   character(len=*),   intent(in) :: layer      !< Layer.
+   logical,            intent(in) :: data_space !< The data space ones, else the page ones.
+   logical                        :: yes        !< Any.
+   integer(I4P)                   :: k          !< Object counter.
+
+   yes = .false.
+   do k = 1_I4P, size(shapes, kind=I4P)
+      if (trim(shapes(k)%layer) /= layer) cycle
+      if (in_space(shapes(k)) .eqv. data_space) then
+         yes = .true.
+         return
+      endif
+   enddo
+   endfunction has_shapes
+
    subroutine draw_shapes(shapes, layer, data_space, backend, area, canvas, font_size, xaxis, yaxis, x2axis, y2axis)
    !< The objects of `layer` (`behind`, `back`, `front`), those in data space (`data_space`: clipped, both coordinates
    !< axis values, drawn in the unit square) or the others (on the page): rectangles, circles (an arc and its centre
@@ -450,19 +482,6 @@ contains
    enddo
    if (drawn) call backend%end_group
    contains
-      pure function in_space(shape) result(yes)
-      !< Whether `shape` is drawn in data space: clipped, every point (and the size) in axis values.
-      type(shape_object), intent(in) :: shape !< Object.
-      logical                        :: yes   !< In data space.
-      integer(I4P)                   :: i     !< Point counter.
-
-      yes = shape%clip .and. allocated(shape%points)
-      if (.not. yes) return
-      do i = 1_I4P, size(shape%points, kind=I4P)
-         yes = yes .and. in_data(shape%points(i))
-      enddo
-      endfunction in_space
-
       subroutine outline(shape, px, py)
       !< The outline of `shape` on the page [px], empty if a point is unplaceable.
       type(shape_object),     intent(in)  :: shape !< Object.

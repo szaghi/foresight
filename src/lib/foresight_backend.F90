@@ -96,6 +96,8 @@ type, abstract :: backend_object
       procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
       procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
+      procedure,                            pass(self)           :: front_area     !< Open or close the front layer of
+                                                                                      !< the plot area.
 endtype backend_object
 
 abstract interface
@@ -329,6 +331,17 @@ contains
    real(R8P),             intent(in)    :: diameter !< Sensitive disk [px].
 
    endsubroutine hover
+
+   subroutine front_area(self, opening, separate)
+   !< Open (`opening`) or close the front layer of the plot area, after its overlays (markers, caps): the data space
+   !< objects of gnuplot's `front` layer go above the points. `separate` false on a device that draws them in the plot
+   !< area (before it closes): this one, nothing to open or close.
+   class(backend_object), intent(inout) :: self     !< Device.
+   logical,               intent(in)    :: opening  !< Open, else close.
+   logical,               intent(out)   :: separate !< A layer of its own.
+
+   separate = .false.
+   endsubroutine front_area
 
    pure function row_height(self) result(height)
    !< Height of a text row of the device [px]: 0 on vector devices, where text sits anywhere.
