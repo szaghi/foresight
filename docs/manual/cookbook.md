@@ -577,6 +577,17 @@ weibull(x, k, l)`. See [Iteration](/guide/gnuplot-subset#iteration).
 Names may hold UTF-8 letters, as gnuplot: `ω`, `ζ`, `τ` in variables, functions and their dummies. See
 [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
 
+
+### Latin-1 strings and symbols
+
+<<< @/examples/snippets/cb_latin1.gp{gnuplot}
+
+<Plot name="cb_latin1" svg :width="560" :height="320" />
+
+`"\260"` is an octal byte, as gnuplot; with `set encoding iso_8859_1` the bytes read as Latin-1 (°, é), the
+Symbol font's upper half as its symbols (`\362` the integral, `\245` infinity), and `\U+hhhh` a code point in
+enhanced text. See [Strings](/guide/gnuplot-subset#strings).
+
 ### Sums and assignments in a plot
 
 <<< @/examples/snippets/cb_sums.gp{gnuplot}
@@ -701,6 +712,15 @@ background, nothing and black. See [Line properties](/guide/gnuplot-subset#style
 `lc variable` reads the color of each point from the last `using` column, a linetype number; a segment takes the color
 of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`). See
 [Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+
+### High values on top
+
+<<< @/examples/snippets/cb_zsort.gp{gnuplot}
+
+<Plot name="cb_zsort" svg :width="560" :height="320" />
+
+`zsort` draws the points of a curve in the order of their z (the third column), the highest last, so dense clouds
+show their extremes, as gnuplot 6.0. See [`plot` items](/guide/gnuplot-subset#plot-items).
 
 ### Colors from the palette
 
@@ -940,6 +960,18 @@ narrower to show more detail.
 
 `smooth path` fits each set of points (apart at blank lines) in its order, not sorted on x: a closed set wraps
 around, and `with filledcurves closed` closes every set. See [Smoothing](/guide/gnuplot-subset#smoothing).
+
+
+### Hulls around scattered points
+
+<<< @/examples/snippets/cb_hulls.gp{gnuplot}
+
+<Plot name="cb_hulls" svg :width="560" :height="360" />
+
+`convexhull` keeps the points of the bounding convex polygon, clockwise and closed; `concavehull` a chi-shape that
+follows the hollows (its length from the variable `chi_length`, else `set chi_shape fraction` of the longest edge);
+`expand D` pushes the hull out by D, and `smooth path` rounds it. As gnuplot 6.0, point for point. See
+[Smoothing](/guide/gnuplot-subset#smoothing).
 
 ### A monotone interpolation
 
@@ -1281,6 +1313,17 @@ See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects
 border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
 
+
+### Hypertext on points
+
+<<< @/examples/snippets/cb_hypertext.gp{gnuplot}
+
+<Plot name="cb_hypertext" svg :width="560" :height="320" />
+
+`with labels hypertext` shows each text only on mouse-over of its point (hover the dots), as gnuplot's svg; `ps
+variable` sizes each point from a column. See
+[Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+
 ### Labels turned and colored by columns
 
 <<< @/examples/snippets/cb_label_rotate.gp{gnuplot}
@@ -1419,6 +1462,17 @@ A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour m
 meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
 angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
 
+
+### Images from binary files
+
+<<< @/examples/snippets/cb_binary.gp{gnuplot}
+
+<Plot name="cb_binary" svg :width="560" :height="320" />
+
+`binary array=(W,H) format='%uchar'` reads raw bytes, a pixel after the other, as gnuplot: `flipy` puts the first
+scan line on top, `dx`, `dy` and `origin` place and scale the pixels. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ### Colors as numbers
 
 <<< @/examples/snippets/cb_rgb_numbers.gp{gnuplot}
@@ -1467,6 +1521,27 @@ and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subse
 
 `set rrange [90:0]` puts 90 at the pole and 0 on the rim: an elevation, the horizon outside. The grid takes its line
 style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+
+
+### A labelled radial axis and clipped curves
+
+<<< @/examples/snippets/cb_rlabel.gp{gnuplot}
+
+<Plot name="cb_rlabel" svg :width="480" :height="420" />
+
+`set rlabel` names the radial axis, over its middle; a curve leaving the r range is cut at the rim, where
+`title ... at beginning|end left|right` puts its name. `set ttics add` places named angles alone. See
+[Polar plots](/guide/gnuplot-subset#polar-plots).
+
+### A surface on a polar grid
+
+<<< @/examples/snippets/cb_polar_surface.gp{gnuplot}
+
+<Plot name="cb_polar_surface" svg :width="520" :height="420" />
+
+`set polar grid T,R gauss scale S` and `with surface` weigh scattered theta:r:z points onto a polar grid of T x R
+cells, each drawn in the palette color of its value (qnorm, gauss, cauchy, exp or box weights, `kdensity` for
+sums), as gnuplot 6.0's polar gridded surfaces. See [Polar plots](/guide/gnuplot-subset#polar-plots).
 
 ### Named angles on a polar plot
 

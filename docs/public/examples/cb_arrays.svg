@@ -28,11 +28,12 @@
 </g>
 <g class="fs-series" data-series="2">
 <polyline fill="none" stroke="#1f5f8b" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" stroke-dasharray="8,4" points="0.111111,0.951016 0.222222,0.803689 0.333333,0.704932 0.444444,0.638734 0.555556,0.59436 0.666667,0.564615 0.777778,0.544676 0.888889,0.531311"/>
-<path fill="none" stroke="#1f5f8b" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0.111111,0.951016h0 M0.222222,0.803689h0 M0.333333,0.704932h0 M0.444444,0.638734h0 M0.555556,0.59436h0 M0.666667,0.564615h0 M0.777778,0.544676h0 M0.888889,0.531311h0"/>
+<path class="fs-pts" data-pt="2" data-size="9" data-lw="1" data-color="#1f5f8b" fill="none" stroke="none" d="M0.111111,0.951016 M0.222222,0.803689 M0.333333,0.704932 M0.444444,0.638734 M0.555556,0.59436 M0.666667,0.564615 M0.777778,0.544676 M0.888889,0.531311"/>
 </g>
 </svg>
 <svg class="fs-marks" x="56.8" y="37" width="493.2" height="231" viewBox="0 0 493.2 231" overflow="visible">
 <path data-series="1" fill="#b3163f" stroke="#b3163f" stroke-width="1" d="M50.3,103.23A4.5,4.5 0 1 0 59.3,103.23A4.5,4.5 0 1 0 50.3,103.23ZM105.1,69.2A4.5,4.5 0 1 0 114.1,69.2A4.5,4.5 0 1 0 105.1,69.2ZM159.9,46.38A4.5,4.5 0 1 0 168.9,46.38A4.5,4.5 0 1 0 159.9,46.38ZM214.7,31.09A4.5,4.5 0 1 0 223.7,31.09A4.5,4.5 0 1 0 214.7,31.09ZM269.5,20.84A4.5,4.5 0 1 0 278.5,20.84A4.5,4.5 0 1 0 269.5,20.84ZM324.3,13.97A4.5,4.5 0 1 0 333.3,13.97A4.5,4.5 0 1 0 324.3,13.97ZM379.1,9.36A4.5,4.5 0 1 0 388.1,9.36A4.5,4.5 0 1 0 379.1,9.36ZM433.9,6.28A4.5,4.5 0 1 0 442.9,6.28A4.5,4.5 0 1 0 433.9,6.28Z"/>
+<path data-series="2" fill="none" stroke="#1f5f8b" stroke-width="1" d="M50.3,215.18L59.3,224.18M59.3,215.18L50.3,224.18M105.1,181.15L114.1,190.15M114.1,181.15L105.1,190.15M159.9,158.34L168.9,167.34M168.9,158.34L159.9,167.34M214.7,143.05L223.7,152.05M223.7,143.05L214.7,152.05M269.5,132.8L278.5,141.8M278.5,132.8L269.5,141.8M324.3,125.93L333.3,134.93M333.3,125.93L324.3,134.93M379.1,121.32L388.1,130.32M388.1,121.32L379.1,130.32M433.9,118.23L442.9,127.23M442.9,118.23L433.9,127.23"/>
 </svg>
 <rect x="56.8" y="37" width="493.2" height="231" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">
@@ -100,7 +101,7 @@
 </g>
 <g class="fs-key-entry" data-series="2">
 <polyline fill="none" stroke="#1f5f8b" stroke-width="1" stroke-dasharray="8,4" points="504,254.5 540,254.5"/>
-<path fill="none" stroke="#1f5f8b" stroke-width="6" stroke-linecap="round" d="M522,254.5h0"/>
+<path fill="none" stroke="#1f5f8b" stroke-width="1" d="M517.5,250L526.5,259M526.5,250L517.5,259"/>
 <text x="498" y="258.7" text-anchor="end">T - mean + 300</text>
 </g>
 </g>

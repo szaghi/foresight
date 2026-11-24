@@ -1262,13 +1262,26 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
     952, 961, 963, 964, 965, 982, 969, 958, 968, 950, 913, 914, 935, 916, 917, 934, 915, 919, 921,
     977, 922, 923, 924, 925, 927, 928, 920, 929, 931, 932, 933, 962, 937, 926, 936, 918];
 
+  // the characters 160-255 in the Symbol font (Adobe's encoding): its symbols
+  var HIGH = [8364, 978, 8242, 8804, 8260, 8734, 402, 9827, 9830, 9829, 9824, 8596, 8592, 8593,
+    8594, 8595, 176, 177, 8243, 8805, 215, 8733, 8706, 8226, 247, 8800, 8801, 8776, 8230, 9168,
+    9135, 8629, 8501, 8465, 8476, 8472, 8855, 8853, 8709, 8745, 8746, 8835, 8839, 8836, 8834,
+    8838, 8712, 8713, 8736, 8711, 174, 169, 8482, 8719, 8730, 8901, 172, 8743, 8744, 8660, 8656,
+    8657, 8658, 8659, 9674, 9001, 174, 169, 8482, 8721, 9115, 9116, 9117, 9121, 9122, 9123, 9127,
+    9128, 9129, 9130, 0, 9002, 8747, 8992, 9134, 8993, 9118, 9119, 9120, 9124, 9125, 9126, 9131,
+    9132, 9133, 0];
+
   // whether `text` holds a character of the markup
   function hasMarkup(text) { return /[\^_{}@&~\\]/.test(text); }
 
-  // the letters of the Symbol font (Adobe's encoding) as the Greek letters
+  // the letters of the Symbol font (Adobe's encoding) as the Greek letters, the characters 160-255
+  // as its symbols
   function greek(text) {
     return Array.from(text).map(function (c) {
-      var k = LATIN.indexOf(c);
+      var k = LATIN.indexOf(c), code = c.codePointAt(0);
+      if (k < 0 && code >= 160 && code <= 255 && HIGH[code - 160] > 0) {
+        return String.fromCodePoint(HIGH[code - 160]);
+      }
       return k < 0 ? c : String.fromCodePoint(GREEK[k]);
     }).join("");
   }
@@ -1340,6 +1353,19 @@ M0.825,0.409267 M0.875,0.4204 M0.925,0.438467 M0.975,0.460467"/>
       var inner, first, w, raise, m;
       switch (c[at.pos]) {
         case "\\":
+          // gnuplot's \U+hhhh: the character of that code point (its hex digits read greedily)
+          if (c[at.pos + 1] === "U" && c[at.pos + 2] === "+" &&
+            /[0-9a-fA-F]/.test(c[at.pos + 3] || "")) {
+            m = at.pos + 3;
+            w = 0;
+            while (m < c.length && /[0-9a-fA-F]/.test(c[m])) {
+              if (w < 16777216) w = 16 * w + parseInt(c[m], 16);
+              m++;
+            }
+            put(String.fromCodePoint(w <= 0x10FFFF ? w : 0xFFFD), state);
+            at.pos = m;
+            break;
+          }
           if (at.pos < c.length - 1) at.pos++;
           put(c[at.pos], state);
           at.pos++;

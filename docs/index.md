@@ -274,6 +274,13 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_interrupted_lines" svg :width="560" :height="320" caption="interrupted lines" />
   <Plot name="cb_hist_colors" svg :width="560" :height="320" caption="stacks colored by category" />
   <Plot name="cb_rgb_numbers" svg :width="560" :height="360" caption="colors as numbers" />
+  <Plot name="cb_hulls" svg :width="560" :height="360" caption="hulls around points" />
+  <Plot name="cb_rlabel" svg :width="480" :height="420" caption="a labelled radial axis" />
+  <Plot name="cb_polar_surface" svg :width="520" :height="420" caption="a surface on a polar grid" />
+  <Plot name="cb_binary" svg :width="560" :height="320" caption="images from binary files" />
+  <Plot name="cb_latin1" svg :width="560" :height="320" caption="Latin-1 strings and symbols" />
+  <Plot name="cb_hypertext" svg :width="560" :height="320" caption="hypertext on points" />
+  <Plot name="cb_zsort" svg :width="560" :height="320" caption="high values on top" />
   <Plot name="cb_iterated_defs" svg :width="560" :height="320" caption="a family of curves from arrays" />
   <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
   <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />

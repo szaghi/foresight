@@ -28,11 +28,11 @@ M0.821429,0.366071L0.894943,0.3775M0.821429,0.098214L0.907143,0.108786M0.928571,
 M0.928571,0.232143L1.009714,0.23975"/>
 </g>
 <g class="fs-series" data-series="2">
-<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#ff0000" fill="none" stroke="none" d="M0.214286,0.5 M0.7,0.339286 M0.7,0.660714 M0.871429,0.5"/>
+<path class="fs-pts" data-pt="7" data-size="9" data-lw="1" data-color="#1d1b18" fill="none" stroke="none" d="M0.214286,0.5 M0.7,0.339286 M0.7,0.660714 M0.871429,0.5"/>
 </g>
 </svg>
 <svg class="fs-marks" x="125.6" y="16" width="328" height="328" viewBox="0 0 328 328" overflow="hidden">
-<path data-series="2" fill="#ff0000" stroke="#ff0000" stroke-width="1" d="M65.79,164A4.5,4.5 0 1 0 74.79,164A4.5,4.5 0 1 0 65.79,164ZM225.1,111.29A4.5,4.5 0 1 0 234.1,111.29A4.5,4.5 0 1 0 225.1,111.29ZM225.1,216.71A4.5,4.5 0 1 0 234.1,216.71A4.5,4.5 0 1 0 225.1,216.71ZM281.33,164A4.5,4.5 0 1 0 290.33,164A4.5,4.5 0 1 0 281.33,164Z"/>
+<path data-series="2" fill="#1d1b18" stroke="#1d1b18" stroke-width="1" d="M65.79,164A4.5,4.5 0 1 0 74.79,164A4.5,4.5 0 1 0 65.79,164ZM225.1,111.29A4.5,4.5 0 1 0 234.1,111.29A4.5,4.5 0 1 0 225.1,111.29ZM225.1,216.71A4.5,4.5 0 1 0 234.1,216.71A4.5,4.5 0 1 0 225.1,216.71ZM281.33,164A4.5,4.5 0 1 0 290.33,164A4.5,4.5 0 1 0 281.33,164Z"/>
 </svg>
 <svg class="fs-heads" x="125.6" y="16" width="328" height="328" viewBox="0 0 328 328" overflow="hidden">
 <g data-series="1">
