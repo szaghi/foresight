@@ -10361,6 +10361,23 @@ contains
       enddo
       ok = self%string_argument(tokens(1:j - 1_I4P), text, iostat, iomsg)
       if (.not. ok) return
+      ! options alone (`set xlabel offset 0,1.5 boxed`): the text kept, as gnuplot
+      if (j == 2_I4P .and. size(tokens) > 1) then
+         associate(panel => self%figure%panels(self%figure%current))
+            select case (axis)
+            case (1_I4P)
+               if (allocated(panel%xaxis%label)) text = panel%xaxis%label
+            case (2_I4P)
+               if (allocated(panel%yaxis%label)) text = panel%yaxis%label
+            case (3_I4P)
+               if (allocated(panel%y2axis%label)) text = panel%y2axis%label
+            case (4_I4P)
+               if (allocated(panel%x2axis%label)) text = panel%x2axis%label
+            case default
+               if (allocated(panel%raxis%label)) text = panel%raxis%label
+            endselect
+         endassociate
+      endif
       ok = .false.
       plain = .false.
       offset = self%figure%panels(self%figure%current)%label_offset(:, axis)

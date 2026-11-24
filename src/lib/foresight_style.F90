@@ -774,6 +774,13 @@ contains
                endif
                k = k + 1_I4P
                style%border_color = unquoted(trim(list(k)))
+               ! gnuplot's special colors: the background (white, the theme's page), black
+               select case (style%border_color)
+               case ('bgnd', 'background')
+                  style%border_color = 'white'
+               case ('black')
+                  style%border_color = 'black'
+               endselect
             endselect
          endif
       case ('noborder')

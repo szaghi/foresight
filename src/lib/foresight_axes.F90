@@ -1260,11 +1260,16 @@ contains
    logical                           :: hit       !< The series has a counted point.
    integer(I4P)                      :: kx        !< x axis of the series: 1 or 2.
    integer(I4P)                      :: ky        !< y axis of the series: 1 or 2.
+   real(R8P)                         :: ysave(2)  !< y extent before the series (a noautoscale boxplot).
+   logical                           :: fsave     !< Its found flag.
 
-   ! gnuplot `noautoscale`: the series out of the autoscaling
-   if (self%series(s)%noautoscale) return
+   ! gnuplot `noautoscale`: the series out of the autoscaling; a boxplot still widens x (gnuplot's
+   ! boxplot_range_fiddling places every box), its y left out
+   if (self%series(s)%noautoscale .and. self%series(s)%style%with /= WITH_BOXPLOT) return
    kx = merge(2_I4P, 1_I4P, self%series(s)%x2)
    ky = merge(2_I4P, 1_I4P, self%series(s)%y2)
+   ysave = [ymin(ky), ymax(ky)]
+   fsave = found(ky)
    hit = .false.
    if (kx == 2_I4P) then
       if (ky == 2_I4P) then
@@ -1279,6 +1284,11 @@ contains
    endif
    found(ky) = found(ky) .or. hit
    xfound(kx) = xfound(kx) .or. hit
+   if (self%series(s)%noautoscale) then
+      ymin(ky) = ysave(1)
+      ymax(ky) = ysave(2)
+      found(ky) = fsave
+   endif
    contains
       pure subroutine widen(xaxis, yaxis, x0, x1, y0, y1, any)
       !< Widen by the series against its axes; the extent is an argument: a pure procedure defines no host-associated
@@ -1977,10 +1987,21 @@ contains
          endif
       enddo
       call backend%end_group
-      ! the titles of the histogram groups (gnuplot `newhistogram "title"`), a line below the x tick labels
-      if (self%group_rows() > 0_I4P) call self%draw_group_titles(backend, left, right, bottom + shift + GAP + &
-                                                                 font_size + LINE_HEIGHT * font_size * &
-                                                                 real(label_rows(self%xaxis%ticks), R8P), font_size)
+      ! the titles of the histogram groups (gnuplot `newhistogram "title"`), a line below the x tick labels (below their
+      ! extent when rotated)
+      if (self%group_rows() > 0_I4P) then
+         if (self%xaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+            block
+               real(R8P) :: extent(3) !< Rotated labels extent [px]: below, left, right.
+
+               extent = self%xlabels_extent(backend, font_size)
+               call self%draw_group_titles(backend, left, right, bottom + shift + extent(1) + GAP + font_size, font_size)
+            endblock
+         else
+            call self%draw_group_titles(backend, left, right, bottom + shift + GAP + font_size + LINE_HEIGHT * &
+                                        font_size * real(label_rows(self%xaxis%ticks), R8P), font_size)
+         endif
+      endif
       call backend%begin_group('fs-yticks')
       ! on the y axis (x = 0) with `set ytics axis`, not mirrored
       base = left
@@ -2082,7 +2103,7 @@ contains
             depth = shift + GAP + LINE_HEIGHT * font_size * real(label_rows(self%xaxis%ticks) + self%group_rows(), R8P)
             if (angle /= 0.0_R8P) then
                extent = self%xlabels_extent(backend, font_size)
-               depth = shift + extent(1)
+               depth = shift + extent(1) + LINE_HEIGHT * font_size * real(self%group_rows(), R8P)
             endif
             call axis_text(0.5_R8P * (left + right), bottom + depth + GAP + font_size, self%xaxis%label, 1_I4P, &
                            0.0_R8P)
@@ -2360,6 +2381,7 @@ contains
    class(backend_object), intent(inout) :: backend !< Output device.
    real(R8P)                            :: radius  !< Largest radius [r units from the pole].
    real(R8P)                            :: rho     !< Ring radius [r units from the pole].
+   real(R8P)                            :: largest !< Largest ring drawn [r units from the pole].
    real(R8P)                            :: a       !< Page angle [rad].
    real(R8P)                            :: turn(CIRCLE_SIDES + 1) !< Angles of the circle vertices [rad].
    integer(I4P)                         :: t       !< Tick counter.
@@ -2373,13 +2395,17 @@ contains
    color = GRID_COLOR
    if (allocated(self%grid_lc)) color = self%grid_lc
    dashes = self%grid_dash_array()
+   largest = 0.0_R8P
    do t = 1_I4P, size(self%raxis%ticks, kind=I4P)
       if (.not. self%raxis%ticks(t)%major) cycle
       rho = polar_rho(self%raxis, self%raxis%ticks(t)%value)
       if (rho <= 0.0_R8P .or. rho > radius * (1.0_R8P + 1.0e-9_R8P)) cycle
       call backend%data_polyline(self%xaxis%to_unit(rho * cos(turn)), self%yaxis%to_unit(rho * sin(turn)), color, &
                                  self%grid_lw, dashes)
+      largest = max(largest, rho)
    enddo
+   ! the spokes up to the largest ring drawn (gnuplot's largest_polar_circle), else to the largest r
+   if (largest > 0.0_R8P) radius = largest
    k = 0_I4P
    ! a step of a full turn (`set grid r` alone): the rings only
    do while (real(k, R8P) * self%grid_polar < 360.0_R8P - 1.0e-9_R8P .and. self%grid_polar < 360.0_R8P .and. &
@@ -2691,8 +2717,8 @@ contains
    do s = 1_I4P, size(self%series, kind=I4P)
       if (len(self%series(s)%title) == 0 .or. self%is_readout(s) .or. self%stacked_column(s)) cycle
       if (self%series(s)%title_at > 0_I4P) cycle
-      ! entry k (from 0; the last first with invert) in column mod(k, columns), row k / columns
-      call entry_place(merge(grid(1) - 1_I4P - k, k, self%key_invert), xs, yc, tx, anchor)
+      ! entry k (from 0) in its cell; with invert the rows mirrored, each entry in its column (gnuplot)
+      call entry_place(k, xs, yc, tx, anchor)
       k = k + 1_I4P
       call backend%begin_group('fs-key-entry', series=s)
       call key_sample_marks(self%series(s), backend, xs, yc, font_size)
@@ -2717,7 +2743,7 @@ contains
          integer(I4P)       :: r   !< Row counter.
 
          do r = size(self%series(s)%texts, kind=I4P), 1_I4P, -1_I4P
-            call entry_place(merge(grid(1) - 1_I4P - k, k, self%key_invert), xs, yc, tx, anchor)
+            call entry_place(k, xs, yc, tx, anchor)
             k = k + 1_I4P
             row = self%series(s)%style
             row%color = default_color(r, self%linecolors)
@@ -2743,15 +2769,22 @@ contains
       real(R8P),        intent(out) :: tx     !< Title abscissa [px].
       character(len=5), intent(out) :: anchor !< Title anchor.
       real(R8P)                     :: cell(2) !< Cell left and right [px].
+      integer(I4P)                  :: row     !< Row of the entry.
+      integer(I4P)                  :: rows    !< Rows of the key.
 
-      ! row after row (horizontal), column after column (vertical: more than one with `maxrows`)
+      ! row after row (horizontal), column after column (vertical: more than one with `maxrows`); `invert` mirrors the
+      ! rows (gnuplot flips the entries' heights in the key box: an entry keeps its column)
       if (self%key_horizontal) then
          cell(1) = left + real(modulo(n, grid(2)), R8P) * entry
-         yc = top + (real(n / grid(2), R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
+         row = n / grid(2)
+         rows = (grid(1) + grid(2) - 1_I4P) / grid(2)
       else
          cell(1) = left + real(n / grid(3), R8P) * entry
-         yc = top + (real(modulo(n, grid(3)), R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
+         row = modulo(n, grid(3))
+         rows = grid(3)
       endif
+      if (self%key_invert) row = rows - 1_I4P - row
+      yc = top + (real(row, R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
       cell(2) = cell(1) + entry - GAP
       if (self%key_reverse) then
          xs = [cell(1), cell(1) + self%key_sample(font_size)]

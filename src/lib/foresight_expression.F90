@@ -3757,8 +3757,9 @@ contains
    endfunction plain_column
 
    pure function reads_column(self, c) result(reads)
-   !< Whether the expression reads the data column `c` (from 1): as a plain column or `$c`, or any column through
-   !< `column(expr)`.
+   !< Whether the expression reads the data column `c` (from 1): as a plain column or `$c`. A column read through
+   !< `column(expr)` is known only when evaluated: a missing cell there reads as undefined (gnuplot reads the column
+   !< the expression asks for, histograms.dem's `column(i)` with `set datafile missing`).
    class(expression_object), intent(in) :: self  !< Expression.
    integer(I4P),             intent(in) :: c     !< Column.
    logical                              :: reads !< Column read.
@@ -3767,7 +3768,7 @@ contains
    reads = .false.
    if (.not. allocated(self%code)) return
    do k = 1_I4P, size(self%code, kind=I4P)
-      if ((self%code(k)%op == OP_COLUMN .and. self%code(k)%arg == c) .or. self%code(k)%op == OP_COLUMN_OF) then
+      if (self%code(k)%op == OP_COLUMN .and. self%code(k)%arg == c) then
          reads = .true.
          return
       endif

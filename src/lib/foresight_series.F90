@@ -237,7 +237,8 @@ contains
       call widen(ends, yaxis, ymin, ymax)
    endif
    if (self%style%with == WITH_ELLIPSES .and. allocated(self%shape)) then
-      ! an ellipse's bounding box, its axes in their axis units (gnuplot's autoscale of ellipses)
+      ! gnuplot's autoscale of ellipses (plot2d.c): half the larger diameter about the centre, times 1.1 on x for
+      ! `units xx` and 1.4 on y but for `units yy` (its empirical factors for rotated ellipses on unequal scales)
       do i = 1_I4P, min(size(self%x, kind=I4P), size(self%shape, 2, kind=I4P))
          if (.not. (xaxis%accepts(self%x(i)) .and. yaxis%accepts(self%y(i)))) cycle
          if (.not. all(ieee_is_finite(self%shape(:, i)))) cycle
@@ -251,11 +252,11 @@ contains
             real(R8P) :: hx !< Half width.
             real(R8P) :: hy !< Half height.
 
-            a = 0.5_R8P * abs(self%shape(1, i))
-            b = 0.5_R8P * abs(self%shape(2, i))
-            t = self%shape(3, i) * acos(-1.0_R8P) / 180.0_R8P
-            hx = sqrt((a * cos(t))**2 + (b * sin(t))**2)
-            hy = sqrt((a * sin(t))**2 + (b * cos(t))**2)
+            a = 0.5_R8P * max(self%shape(1, i), self%shape(2, i))
+            b = a
+            t = 0.0_R8P
+            hx = a * merge(1.1_R8P, 1.0_R8P, self%ellipse_units == 'xx')
+            hy = b * merge(1.0_R8P, 1.4_R8P, self%ellipse_units == 'yy')
             if (xaxis%accepts(self%x(i) - hx)) xmin = min(xmin, self%x(i) - hx)
             if (xaxis%accepts(self%x(i) + hx)) xmax = max(xmax, self%x(i) + hx)
             if (yaxis%accepts(self%y(i) - hy)) ymin = min(ymin, self%y(i) - hy)

@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(232)                           !< Per-check outcome.
+logical                       :: test_passed(233)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5682,6 +5682,91 @@ if (test_passed(232)) then
    endassociate
 endif
 
+
+! fidelity to gnuplot 6.0 (round 10 demos): set xlabel with options alone keeps its text (matrix_every); a fill border
+! lc bgnd the background (windrose); key invert mirrors the rows, each entry in its column (histograms); a missing cell
+! read through column(i) leaves that point out only (histograms); noauto boxplots still widen x (boxplot); ellipses
+! autoscale as gnuplot (half the larger diameter, 1.4 on y); group titles below rotated tick labels
+call interpreter%init(scratch)
+call interpreter%run_text('set xlabel "sub"; set xlabel offset 0,1.5 boxed; set style fill solid border lc bgnd', &
+                          iostat, iomsg)
+test_passed(233) = iostat == 0_I4P
+if (test_passed(233)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(233) = panel%xaxis%label == 'sub' .and. panel%fill_default%border_color == 'white'
+   endassociate
+endif
+call interpreter%run_text('set datafile missing "-"'//new_line('a')//'$M << EOD'//new_line('a')//'1 2 -'// &
+                          new_line('a')//'2 3 4'//new_line('a')//'EOD'//new_line('a')//'i = 2'//new_line('a')// &
+                          'plot $M using 1:(column(i)) with points, $M using 1:3 with points', iostat, iomsg)
+test_passed(233) = test_passed(233) .and. iostat == 0_I4P
+if (test_passed(233)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      ! column(2) is never missing: both points; column 3 is missing in the first row: one point
+      test_passed(233) = size(series(1)%x) == 2 .and. size(series(2)%x) == 1
+   endassociate
+endif
+! (a boxplot needs 4 points at least: gnuplot 6.0 draws none of 3)
+call interpreter%run_text('unset datafile; set style data boxplot'//new_line('a')//'$B << EOD'//new_line('a')// &
+                          '1'//new_line('a')//'2'//new_line('a')//'3'//new_line('a')//'4'//new_line('a')//'5'// &
+                          new_line('a')//'EOD'//new_line('a')// &
+                          'plot $B using (1):1, $B using (4):($1*100) noauto', iostat, iomsg)
+test_passed(233) = test_passed(233) .and. iostat == 0_I4P
+if (test_passed(233)) then
+   block
+      real(R8P) :: xmin(2), xmax(2), ymin(2), ymax(2) !< Extent.
+      logical   :: found(2), xfound(2)                 !< Points found.
+
+      call interpreter%figure%panels(1)%axes_extent(xmin, xmax, ymin, ymax, found, xfound)
+      ! the noauto box at x 4 counts for x, its values (100-300) not for y
+      test_passed(233) = xmax(1) >= 4.0_R8P .and. ymax(1) < 10.0_R8P
+   endblock
+endif
+call interpreter%run_text('set style data lines'//new_line('a')//'$E << EOD'//new_line('a')//'0 10 10 6 60'// &
+                          new_line('a')//'EOD'//new_line('a')//'plot $E using 1:2:3:4:5 with ellipses', iostat, iomsg)
+test_passed(233) = test_passed(233) .and. iostat == 0_I4P
+if (test_passed(233)) then
+   block
+      real(R8P) :: xmin(2), xmax(2), ymin(2), ymax(2) !< Extent.
+      logical   :: found(2), xfound(2)                 !< Points found.
+
+      call interpreter%figure%panels(1)%axes_extent(xmin, xmax, ymin, ymax, found, xfound)
+      test_passed(233) = abs(xmax(1) - 5.0_R8P) < 1.0e-9_R8P .and. abs(ymax(1) - 17.0_R8P) < 1.0e-9_R8P
+   endblock
+endif
+! a two-column key inverted, and histogram group titles under rotated tick labels: rendered
+call interpreter%run_text('set output "foresight_script_test_fid10.svg"; set key invert maxrows 2; '// &
+                          'set style data histograms; set xtics rotate by -45'//new_line('a')//'$H << EOD'// &
+                          new_line('a')//'a 1 2 3'//new_line('a')//'b 2 3 4'//new_line('a')//'EOD'//new_line('a')// &
+                          'plot newhistogram "G", $H using 2:xtic(1) t "one", "" using 3 t "two", "" using 4 t "three"', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(233) = test_passed(233) .and. iostat == 0_I4P
+if (test_passed(233)) then
+   block
+      character(len=1000) :: line   !< SVG line.
+      integer(I4P)        :: ios    !< Read status.
+      real(R8P)           :: y(3)   !< Title baselines.
+      integer(I4P)        :: k      !< Position.
+
+      y = -1.0_R8P
+      open(newunit=unit, file='foresight_script_test_fid10.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         k = index(line, ' y="')
+         if (k == 0) cycle
+         if (index(line, '>one</text>') > 0) read(line(k + 4:index(line(k + 4:), '"') + k + 2), *) y(1)
+         if (index(line, '>two</text>') > 0) read(line(k + 4:index(line(k + 4:), '"') + k + 2), *) y(2)
+         if (index(line, '>three</text>') > 0) read(line(k + 4:index(line(k + 4:), '"') + k + 2), *) y(3)
+      enddo
+      close(unit, status='delete')
+      ! two rows, two columns: one and two in the first column mirrored (two above one), three in the second at the
+      ! bottom row
+      test_passed(233) = all(y > 0.0_R8P) .and. y(2) < y(1) .and. abs(y(3) - y(1)) < 1.0e-6_R8P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5690,7 +5775,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,232L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,233L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
