@@ -12703,6 +12703,14 @@ contains
                panel%y2axis%tics%color = labels%color
                panel%cbaxis%tics%color = labels%color
             endif
+            if (labels%font%is_set()) then
+               panel%xaxis%tics%font = labels%font
+               panel%yaxis%tics%font = labels%font
+               panel%x2axis%tics%font = labels%font
+               panel%y2axis%tics%font = labels%font
+               panel%cbaxis%tics%font = labels%font
+               panel%ttics%font = labels%font
+            endif
          endif
       endassociate
       endsubroutine all_tics_option
@@ -12760,7 +12768,7 @@ contains
 
       function label_option(toks, i, tics, fmt) result(handled)
       !< The tick label options of `set xtics` and `set tics` at `toks(i)`, `i` left on their last token: `format "f"`
-      !< (`fmt`, checked: a number or a time format), `font "f"` (read and ignored: one font), `offset X[,Y]`
+      !< (`fmt`, checked: a number or a time format), `font "f"` (the labels' font), `offset X[,Y]`
       !< (characters, y up) and `nooffset`, `textcolor|tc COLOR`. False if `toks(i)` is none of them; an error sets
       !< `iostat`.
       type(token_object),            intent(in)    :: toks(:) !< Option tokens.
@@ -12794,9 +12802,10 @@ contains
          endif
          fmt = text
       elseif (toks(i)%text == 'font') then
-         ! the font is the page's: the name is read and ignored
-         if (i < size(toks, kind=I4P)) then
-            if (toks(i + 1_I4P)%kind == TOKEN_STRING) i = i + 1_I4P
+         ! the labels' font (gnuplot `set xtics font ",8"`)
+         if (.not. font_spec(self, toks, i, tics%font, iostat, iomsg)) then
+            iomsg = 'set '//option//': '//iomsg
+            return
          endif
       elseif (toks(i)%text == 'offset') then
          if (.not. next_real(toks, i, v(1), iostat, iomsg, self%symbols)) then

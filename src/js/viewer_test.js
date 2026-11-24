@@ -61,6 +61,10 @@ ticks = viewer.linearTicks(0.07, 2.93, 500, viewer.readTics("0.5 0.4 2", ""));
 check("fixed start and end", ticks.length === 4 && ticks[0].label === "0.5" &&
   ticks[3].label === "1.7");
 check("no ticks", viewer.linearTicks(0, 1, 500, viewer.readTics("none", "")).length === 0);
+// the labels' font of an axis: size, weight, style, family (URI-encoded)
+var fonted = viewer.readTics("font 8e0 1 0 Lucida%20Sans color #ff0000 * 1 *", "");
+check("tics font", fonted.font.size === 8 && fonted.font.bold && !fonted.font.italic &&
+  fonted.font.family === "Lucida Sans" && fonted.color === "#ff0000" && fonted.step === "1");
 ticks = viewer.linearTicks(0, 3, 500, viewer.readTics("* 0.25 *", "%.2f"));
 check("fixed step format", ticks[0].label === "0.00" && ticks[12].label === "3.00");
 ticks = viewer.logTicks(1, 1000, 400, viewer.readTics("* 3 *", ""));

@@ -2816,8 +2816,8 @@ test_passed(131) = test_passed(131) .and. file_has('foresight_script_test_powers
 open(newunit=unit, file='foresight_script_test_powers.svg')
 close(unit, status='delete')
 
-! tick label options: format, font (ignored), offset (characters 0.6 by 1 font size, y up), textcolor, of an axis and of
-! every axis (set tics)
+! tick label options: format, font (the labels' size, the viewer told), offset (characters 0.6 by 1 font size, y up),
+! textcolor, of an axis and of every axis (set tics)
 call interpreter%init(scratch)
 call interpreter%run_text('set term svg; set output "foresight_script_test_ticlabels.svg"'//new_line('a')// &
                           'set tics format "%.2f" tc rgb "blue" font ",8"'//new_line('a')// &
@@ -2835,7 +2835,9 @@ if (test_passed(132)) then
 endif
 test_passed(132) = test_passed(132) .and. file_has('foresight_script_test_ticlabels.svg', 'fill="#ff0000">2.0</text>') &
                    .and. file_has('foresight_script_test_ticlabels.svg', 'fill="#0000ff">0.40</text>') .and. &
-                   file_has('foresight_script_test_ticlabels.svg', 'data-xtics="offset 0 -1e0 color #ff0000 * 1 *"')
+                   file_has('foresight_script_test_ticlabels.svg', &
+                            'data-xtics="offset 0 -1e0 font 8e0 0 0 - color #ff0000 * 1 *"') .and. &
+                   file_has('foresight_script_test_ticlabels.svg', 'font-size="8" text-anchor="end" fill="#0000ff">0.40<')
 open(newunit=unit, file='foresight_script_test_ticlabels.svg')
 close(unit, status='delete')
 call interpreter%run_text('set xtics format "%q"', iostat, iomsg)

@@ -2022,13 +2022,17 @@ contains
             call tick_label(backend, self%xaxis%tics, font_size, ax, ay, self%xaxis%ticks(t)%label, &
                             trim(self%xaxis%tics%anchor()), self%xaxis%ticks(t)%sup, -angle)
          elseif (self%xaxis%tics%out) then
+            backend%font = self%xaxis%tics%font
             call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
                             label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
                             LINE_HEIGHT * font_size, self%xaxis%tics%color)
+            backend%font = font_object()
          else
+            backend%font = self%xaxis%tics%font
             call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
                             label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
                             LINE_HEIGHT * font_size, self%xaxis%tics%color)
+            backend%font = font_object()
          endif
       enddo
       call backend%end_group
@@ -2377,11 +2381,34 @@ contains
       if (len(words) > 0) words = ' '//words
       words = 'color '//trim(tics%color)//words
    endif
+   ! the font: `font SIZE BOLD ITALIC FAMILY` (0 the page's size, 1/0 flags, the family URI-encoded or `-`)
+   if (tics%font%is_set()) then
+      if (len(words) > 0) words = ' '//words
+      words = 'font '//real_str(tics%font%size)//' '//trim(merge('1', '0', tics%font%bold))//' '// &
+              trim(merge('1', '0', tics%font%italic))//' '//family_word(tics%font%family)//words
+   endif
    if (any(tics%offset /= 0.0_R8P)) then
       if (len(words) > 0) words = ' '//words
       words = 'offset '//real_str(tics%offset(1))//' '//real_str(tics%offset(2))//words
    endif
    endfunction style_words
+
+   pure function family_word(family) result(word)
+   !< A font family as one word of the viewer tick settings: blanks as `%20`, `-` for none.
+   character(len=*), intent(in)  :: family !< Family.
+   character(len=:), allocatable :: word   !< Word.
+   integer(I4P)                  :: k      !< Character counter.
+
+   word = ''
+   do k = 1_I4P, len_trim(family, kind=I4P)
+      if (family(k:k) == ' ') then
+         word = word//'%20'
+      else
+         word = word//family(k:k)
+      endif
+   enddo
+   if (len(word) == 0) word = '-'
+   endfunction family_word
 
    pure function plain_word(plain, tics) result(words)
    !< The viewer tick settings `tics`, after `noenhanced` if the labels are `plain` (not read as enhanced text).
@@ -2560,6 +2587,8 @@ contains
    endif
    if (self%ttics%mode == TICS_NONE) return
    tics = self%ttics
+   ! the theta labels in their font (gnuplot `set ttics font`)
+   backend%font = tics%font
    ! a list added to the automatic ticks (`set ttics add (...)`): its items alone, as gnuplot (which draws no
    ! automatic theta ticks); without one, automatic: every 45 degrees from 0
    only_list = .false.
@@ -2608,6 +2637,7 @@ contains
                         cy - (radius * sy * (1.0_R8P + 0.05_R8P * tics%offset(1)) + GAP + 0.5_R8P * font_size) * &
                         sin(a) + 0.35_R8P * font_size, thetas(t)%label, trim(anchor), sup=thetas(t)%sup)
    enddo
+   backend%font = font_object()
    endsubroutine draw_polar_axes
 
    elemental function page_angle(self, theta) result(a)
@@ -6896,14 +6926,18 @@ contains
          if (self%cbox%horizontal) then
             pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
             call backend%polyline([pos, pos], [top + bh, top + bh - cb_major], FRAME_COLOR, 1.0_R8P, '')
+            backend%font = self%cbaxis%tics%font
             call backend%text(pos, top + bh + GAP + font_size, self%cbaxis%ticks(k)%label, 'middle', &
                               sup=self%cbaxis%ticks(k)%sup)
+            backend%font = font_object()
          else
             pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
             pos = merge(top + pos, top + bh - pos, self%cbox%invert)
             call backend%polyline([left + bw, left + bw - cb_major], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+            backend%font = self%cbaxis%tics%font
             call backend%text(left + bw + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
                               sup=self%cbaxis%ticks(k)%sup)
+            backend%font = font_object()
          endif
       enddo
       ! as colorbox_width: over every tick
@@ -7634,6 +7668,8 @@ contains
 
    px = x + label_dx(tics, font_size)
    py = y + label_dy(tics, font_size)
+   ! in the axis' font (gnuplot `set xtics font`), placed as the page's (gnuplot's layout)
+   backend%font = tics%font
    if (rotate /= 0.0_R8P) then
       if (len_trim(tics%color) > 0) then
          call backend%text(px, py, label, anchor, sup=sup, rotate=rotate, color=trim(tics%color))
@@ -7645,6 +7681,7 @@ contains
    else
       call backend%text(px, py, label, anchor, sup=sup)
    endif
+   backend%font = font_object()
    endsubroutine tick_label
 
    subroutine draw_stamp(self, backend, x0, y0, height, font_size)

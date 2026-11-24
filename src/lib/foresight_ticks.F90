@@ -29,6 +29,7 @@ module foresight_ticks
 !<
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
+use foresight_font, only : font_object
 use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
 use foresight_time, only : civil_time, DAY_SEC, MON_SEC, WEEK_SEC, YEAR_SEC, strftime, time_format_check, time_justify, &
                            time_parts
@@ -88,6 +89,7 @@ type :: tics_object
    logical                       :: plain = .false.  !< The labels as they are, not enhanced text (`noenhanced`).
    real(R8P)                     :: offset(2) = 0.0_R8P !< Label shift [characters, x right, y up], gnuplot `offset`.
    character(len=24)             :: color = ''       !< Label color, the frame's if blank (gnuplot `textcolor`).
+   type(font_object)             :: font             !< Label font (gnuplot `font "..."`), the page's if unset.
    logical                       :: on_axis = .false. !< On the zero axis of the other coordinate, gnuplot `axis`.
    logical                       :: rangelimited = .false. !< Ticks and border side within the data range.
    character(len=:), allocatable :: start            !< Fixed ticks start (decimal text), empty for none.
