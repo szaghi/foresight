@@ -29,6 +29,7 @@ use foresight_annotations, only : arrow_object, label_object, pixmap_object, pla
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
+use foresight_font, only : font_object
 use penf, only : I4P, R8P
 
 implicit none
@@ -68,6 +69,9 @@ type :: figure_object
                                                               !< `upwards`), else from the top.
    logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
+   type(font_object)              :: title_font               !< Multiplot title font (`set multiplot title ... font`).
+   character(len=48)              :: font_family = ''         !< Page font family (`set terminal ... font "name,size"`),
+                                                              !< empty for foresight's.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
    real(R8P)                      :: layout_margins(4) = -1.0_R8P !< Layout plot areas within left, right, bottom, top
                                                                   !< (gnuplot `set multiplot ... margins`): screen
@@ -2208,6 +2212,7 @@ contains
    backend%enhanced = self%enhanced
    backend%latin1 = self%latin1
    backend%text_size = self%font_size
+   backend%page_family = self%font_family
    call backend%begin_page(file, self%width, self%height, self%font_size)
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
    top = 0.0_R8P
@@ -2217,7 +2222,10 @@ contains
          integer(I4P) :: a    !< Line start.
          integer(I4P) :: e    !< Line end.
          integer(I4P) :: line !< Line counter.
+         real(R8P)    :: size !< Title font size [px] (a text device: the page's).
 
+         size = self%font_size
+         if (.not. backend%row_height() > 0.0_R8P) size = self%title_font%size_px(self%font_size)
          a = 1_I4P
          line = 0_I4P
          do
@@ -2227,13 +2235,15 @@ contains
             else
                e = a + e - 2_I4P
             endif
-            if (e >= a) call backend%text(0.5_R8P * self%width, PAD + self%font_size + &
-                                          real(line, R8P) * LINE_HEIGHT * self%font_size, self%title(a:e), 'middle')
+            backend%font = self%title_font
+            if (e >= a) call backend%text(0.5_R8P * self%width, PAD + size + real(line, R8P) * LINE_HEIGHT * size, &
+                                          self%title(a:e), 'middle')
+            backend%font = font_object()
             line = line + 1_I4P
             a = e + 2_I4P
             if (a > len(self%title, kind=I4P) + 1_I4P) exit
          enddo
-         top = PAD + real(line, R8P) * LINE_HEIGHT * self%font_size + GAP
+         top = PAD + real(line, R8P) * LINE_HEIGHT * size + GAP
       endblock
    endif
    cell = [self%width / real(self%cols, R8P), (self%height - top) / real(self%rows, R8P)]

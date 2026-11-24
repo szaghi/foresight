@@ -54,6 +54,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   has_shapes, label_object, pixmap_object, shape_object, &
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
+use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
 use foresight_enhanced, only : has_markup, markup_literal
@@ -243,6 +244,10 @@ type :: axes_object
    character(len=6)                 :: title_anchor = 'middle' !< Title justification, `set title left|right`:
                                                                !< start, middle or end, at the centre.
    character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
+   type(font_object)                :: title_font              !< Title font, `set title font "..."`.
+   type(font_object)                :: label_font(5)           !< x, y, y2, x2, r label fonts, `set xlabel font`.
+   type(font_object)                :: cblabel_font            !< Color box label font, `set cblabel font`.
+   type(font_object)                :: key_font                !< Key font (entries and title), `set key font`.
    real(R8P)                        :: label_offset(2, 5) = 0.0_R8P !< x, y, y2, x2, r label shifts [characters, y up],
                                                                     !< `set xlabel offset X,Y`.
    character(len=24)                :: label_color(5) = ''     !< x, y, y2, x2, r label colors, `set xlabel tc`.
@@ -1368,10 +1373,13 @@ contains
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
             backend%literal = self%title_plain
-            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle', &
-                           row_step(backend, font_size), '')
+            backend%font = self%title_font
+            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + element_px(backend, self%title_font, font_size), &
+                           self%title, 'middle', row_step(backend, element_px(backend, self%title_font, font_size)), '')
             backend%literal = .false.
-            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
+            backend%font = font_object()
+            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * &
+                      element_px(backend, self%title_font, font_size) + GAP
          endif
          select case (self%series(1)%style%with)
          case (WITH_PIE)
@@ -1406,10 +1414,13 @@ contains
          area = [x0 + PAD, x0 + width - PAD, y0 + PAD, y0 + height - PAD]
          if (self%has_title()) then
             backend%literal = self%title_plain
-            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + font_size, self%title, 'middle', &
-                           row_step(backend, font_size), '')
+            backend%font = self%title_font
+            call text_rows(backend, x0 + 0.5_R8P * width, y0 + PAD + element_px(backend, self%title_font, font_size), &
+                           self%title, 'middle', row_step(backend, element_px(backend, self%title_font, font_size)), '')
             backend%literal = .false.
-            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
+            backend%font = font_object()
+            area(3) = area(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * &
+                      element_px(backend, self%title_font, font_size) + GAP
          endif
          if (self%readout) call self%draw_readouts(backend, area, font_size, .true.)
          return
@@ -1418,7 +1429,7 @@ contains
    ! an outside key takes its side of the panel box; above the plot it goes below the title, as gnuplot
    box = [x0, y0, width, height]
    above = 0.0_R8P
-   call self%key_layout(backend, font_size, width - 2.0_R8P * PAD, grid, key, &
+   call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
                         tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    if (self%key .and. grid(1) > 0_I4P) then
       select case (self%key_place())
@@ -1603,7 +1614,8 @@ contains
       call self%draw_polar_axes(backend, area, font_size)
       call backend%end_group
    endif
-   if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], font_size, &
+   if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], &
+                                                         element_px(backend, self%key_font, font_size), &
                                                          grid, key)
    call draw_titles_at(self, backend, area, font_size)
    if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, &
@@ -1816,8 +1828,8 @@ contains
                                                                    self%x2_rise > 0.0_R8P)
    endif
    ! the x2 label's row, more for an offset up, as gnuplot's boundary
-   if (self%x2axis%has_label()) room = room + max(0.0_R8P, LINE_HEIGHT * font_size + GAP + self%label_offset(2, 4) * &
-                                                  font_size)
+   if (self%x2axis%has_label()) room = room + max(0.0_R8P, LINE_HEIGHT * self%label_font(4)%size_px(font_size) + GAP + &
+                                                  self%label_offset(2, 4) * font_size)
    endfunction x2_room
 
    pure function stacked_column(self, s) result(yes)
@@ -2155,7 +2167,7 @@ contains
                                                   self%y2axis%label, 3_I4P, -90.0_R8P)
       backend%literal = .false.
       if (self%has_title()) then
-         title_y = y0 + PAD + font_size
+         title_y = y0 + PAD + element_px(backend, self%title_font, font_size)
          ! on a text device, the row right above the x2 label or tick labels, with no empty row between them
          if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
             if (self%x2axis%has_label() .and. any(self%x2axis%ticks%major)) then
@@ -2169,12 +2181,14 @@ contains
          ! `set title left|right`: the anchor at the same centre, as gnuplot
          backend%literal = self%title_plain
          backend%boxed = self%title_boxed
+         backend%font = self%title_font
          ! a title on several lines (new lines in it, gnuplot's "\n"), each a row lower
          call text_rows(backend, 0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
                         title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
-                        row_step(backend, font_size), trim(self%title_color))
+                        row_step(backend, element_px(backend, self%title_font, font_size)), trim(self%title_color))
          backend%literal = .false.
          backend%boxed = .false.
+         backend%font = font_object()
       endif
    endassociate
    contains
@@ -2192,6 +2206,7 @@ contains
       px = x + self%label_offset(1, k) * CHAR_WIDTH * font_size
       py = y - self%label_offset(2, k) * font_size
       backend%boxed = btest(self%label_boxed, k - 1_I4P)
+      backend%font = self%label_font(k)
       if (len_trim(self%label_color(k)) > 0) then
          if (angle /= 0.0_R8P) then
             call backend%text(px, py, string, 'middle', rotate=angle, color=trim(self%label_color(k)))
@@ -2204,6 +2219,7 @@ contains
          call backend%text(px, py, string, 'middle')
       endif
       backend%boxed = .false.
+      backend%font = font_object()
       endsubroutine axis_text
 
       pure function horizontal_span(axis) result(ends)
@@ -2529,6 +2545,7 @@ contains
    if (self%raxis%has_label()) then
       backend%literal = self%label_plain(5)
       backend%boxed = btest(self%label_boxed, 4_I4P)
+      backend%font = self%label_font(5)
       p = cx + 0.5_R8P * radius * sx + self%label_offset(1, 5) * CHAR_WIDTH * font_size
       if (len_trim(self%label_color(5)) > 0) then
          call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * font_size, self%raxis%label, &
@@ -2539,6 +2556,7 @@ contains
       endif
       backend%literal = .false.
       backend%boxed = .false.
+      backend%font = font_object()
    endif
    if (self%ttics%mode == TICS_NONE) return
    tics = self%ttics
@@ -2621,6 +2639,8 @@ contains
    real(R8P)                            :: tx        !< Title abscissa [px].
    character(len=5)                     :: anchor    !< Title anchor.
 
+   ! the key's texts in its font (`set key font`), its rows and widths by its size (key_layout)
+   backend%font = self%key_font
    associate(width => extent(1), height => extent(2))
       entry = (width + GAP) / real(grid(2), R8P)
       if (self%key_at) then
@@ -2792,6 +2812,7 @@ contains
          enddo
       endblock
    endif
+   backend%font = font_object()
    contains
       subroutine entry_place(n, xs, yc, tx, anchor)
       !< Sample abscissae, row centre and title position of entry `n` (from 0): the sample at the right of its cell, or at
@@ -3996,8 +4017,9 @@ contains
          endif
          color = FRAME_COLOR
          if (allocated(series%text_color)) color = series%text_color
-         ! `boxed`: each text on the background (gnuplot's svg textbox)
+         ! `boxed`: each text on the background (gnuplot's svg textbox); `font`: in its font
          backend%boxed = series%text_boxed
+         backend%font = series%font
          do i = 1_I4P, n
             if (.not. valid(i)) cycle
             if (len_trim(series%texts(i)) == 0) cycle
@@ -4008,15 +4030,18 @@ contains
                   call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
                                         label_angle(i), trim(series%colors(i)), &
                                         series%text_offset(1) * 0.6_R8P * font_size, &
-                                        -series%text_offset(2) * font_size + 0.35_R8P * font_size, font_size)
+                                        -series%text_offset(2) * font_size + 0.35_R8P * font_size, &
+                                        element_px(backend, series%font, font_size))
                   cycle
                endif
             endif
             call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
                                   label_angle(i), color, series%text_offset(1) * 0.6_R8P * font_size, &
-                                  -series%text_offset(2) * font_size + 0.35_R8P * font_size, font_size)
+                                  -series%text_offset(2) * font_size + 0.35_R8P * font_size, &
+                                  element_px(backend, series%font, font_size))
          enddo
          backend%boxed = .false.
+         backend%font = font_object()
       endassociate
       endsubroutine draw_labels
 
@@ -6649,7 +6674,8 @@ contains
    if (self%colorbox .and. self%has_image(palette=.true.) .and. .not. (self%cbox%user .or. self%cbox%horizontal)) &
       margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
-   if (self%has_title()) margins(3) = margins(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * font_size + GAP
+   if (self%has_title()) margins(3) = margins(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * &
+                                     element_px(backend, self%title_font, font_size) + GAP
    ! the row of a timestamp at the top (gnuplot `set timestamp top`)
    if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) margins(3) = margins(3) + LINE_HEIGHT * font_size
    margins(3) = margins(3) + above + self%x2_room(font_size)
@@ -6885,6 +6911,7 @@ contains
          widest = max(widest, backend%text_width(self%cbaxis%ticks(k)%label, self%cbaxis%ticks(k)%sup, font_size))
       enddo
       if (self%cbaxis%has_label()) then
+         backend%font = self%cblabel_font
          if (self%cbox%horizontal) then
             call backend%text(left + 0.5_R8P * bw, top + bh + GAP + font_size + &
                               merge(GAP + LINE_HEIGHT * font_size, 0.0_R8P, labelled), self%cbaxis%label, 'middle')
@@ -6892,6 +6919,7 @@ contains
             call backend%text(left + bw + 3.0_R8P * GAP + widest + (LINE_HEIGHT - 0.25_R8P) * font_size, &
                               top + 0.5_R8P * bh, self%cbaxis%label, 'middle', rotate=-90.0_R8P)
          endif
+         backend%font = font_object()
       endif
    endassociate
    call backend%end_group
@@ -7500,6 +7528,18 @@ contains
       rows = max(rows, n)
    enddo
    endfunction label_rows
+
+   pure function element_px(backend, font, font_size) result(size)
+   !< The size [px] of a text element in `font` (the page's `font_size` if unset); on a text device, which has one
+   !< cell, the page's.
+   class(backend_object), intent(in) :: backend   !< Output device.
+   type(font_object),     intent(in) :: font      !< Element font.
+   real(R8P),             intent(in) :: font_size !< Page font size [px].
+   real(R8P)                         :: size      !< Size [px].
+
+   size = font_size
+   if (.not. backend%row_height() > 0.0_R8P) size = font%size_px(font_size)
+   endfunction element_px
 
    function row_step(backend, font_size) result(step)
    !< Distance between two lines of text [px]: a row of a text device, else a line height.

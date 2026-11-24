@@ -10,6 +10,7 @@ module foresight_backend
 !< A panel is bracketed by `begin_axes`/`end_axes`, which hand the device the panel geometry and axis ranges, and its
 !< redrawable decorations (grid, ticks) by named `begin_group`/`end_group`: an interactive device regenerates them after
 !< a zoom, a static one just writes them.
+use foresight_font, only : font_object
 use penf, only : I4P, R8P
 use foresight_theme, only : theme_object
 
@@ -66,6 +67,9 @@ type, abstract :: backend_object
    logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
    real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
    logical            :: boxed = .false.     !< The texts written now are boxed (gnuplot's textbox): on the background.
+   character(len=48)  :: page_family = ''    !< Font family of the page (`set terminal ... font`), empty: the device's.
+   type(font_object)  :: font                !< The font of the texts written now (gnuplot `font "..."`); unset parts
+                                             !< the page's.
    real(R8P)          :: head_px(2) = 0.0_R8P !< Length [px] and angle [deg] of the data arrowheads drawn now, 0 for
                                               !< the default head.
    contains

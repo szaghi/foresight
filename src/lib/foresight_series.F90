@@ -2,6 +2,7 @@
 module foresight_series
 !< foresight_series, a plotted data series.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use foresight_font, only : font_object
 use penf, only : I4P, R8P
 use foresight_axis, only : axis_object
 use foresight_style, only : style_object, WITH_ELLIPSES, WITH_HISTOGRAMS, WITH_VECTORS
@@ -74,6 +75,7 @@ type :: series_object
    real(R8P)                     :: text_rotate = 0.0_R8P  !< Label rotation [deg, counterclockwise].
    real(R8P)                     :: text_offset(2) = 0.0_R8P !< Label offset [characters, y upward].
    character(len=:), allocatable :: text_color !< Label color, the frame color if unallocated.
+   type(font_object)             :: font       !< Label font (`with labels font "..."`).
    logical                       :: text_point = .false. !< Labels mark their point.
    integer(I4P)                  :: curve_to = 0_I4P  !< Fill of `filledcurves`: 0 closed, to `ylow` (a line or a
                                                       !< band); 1 to the bottom (gnuplot `x1`), 2 to the top (`x2`),

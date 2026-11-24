@@ -123,6 +123,7 @@ use foresight_expression, only : block_hook, element_fetch_hook, element_hook, f
                                  saved_array, saved_variable, &
                                  symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
                                  OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
+use foresight_font, only : font_object, font_of
 use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
@@ -1188,6 +1189,35 @@ contains
    i = last
    ok = .true.
    endfunction string_expression
+
+   function font_spec(self, tokens, i, font, iostat, iomsg) result(ok)
+   !< The font after the `font` word at token `i` (gnuplot `font "family:Bold:Italic,size"`, a string expression),
+   !< `i` left on its last token.
+   class(script_object),          intent(in)    :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens.
+   integer(I4P),                  intent(inout) :: i         !< The `font` word in, the spec's last token out.
+   type(font_object),             intent(out)   :: font      !< Font.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Success.
+   character(len=:), allocatable                :: text      !< Spec.
+
+   font = font_object()
+   iostat = 0_I4P
+   iomsg = ''
+   ok = i < size(tokens, kind=I4P)
+   if (.not. ok) then
+      call fail('font needs a "name,size"', iostat, iomsg)
+      return
+   endif
+   i = i + 1_I4P
+   ok = self%string_expression(tokens, i, text, iostat, iomsg)
+   if (.not. ok) then
+      iomsg = 'font: '//iomsg
+      return
+   endif
+   font = font_of(text)
+   endfunction font_spec
 
    function string_argument(self, tokens, text, iostat, iomsg) result(ok)
    !< Optional string expression after an option (`set title "T"`, `set output name . ".svg"`); absent means empty.
@@ -3184,6 +3214,7 @@ contains
    integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
    integer(I4P)                                 :: title_justify !< Its justification: 0 its own, 1 left, 2 right.
    character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
+   type(font_object)                            :: item_font !< Font of the item's labels (`font "..."`).
    character(len=2)                             :: ellipse_units !< Units of the ellipse diameters (`units xy|xx|yy`).
    logical                                      :: rotate_var !< Labels rotated by a using field (`rotate variable`).
    logical                                      :: polar_base !< The base is a polar `r=V`.
@@ -3673,6 +3704,7 @@ contains
       rotate_var = .false.
       ellipse_units = 'xy'
       if (allocated(point_tc)) deallocate(point_tc)
+      item_font = font_object()
       title_at = 0_I4P
       title_justify = 0_I4P
       title_xy = 0.0_R8P
@@ -4282,10 +4314,9 @@ contains
                point_tc = trim(color)
             endblock
          elseif (word == 'font') then
-            ! read and ignored: foresight has one font
-            i = i + 1_I4P
-            if (i > size(tokens, kind=I4P)) then
-               call fail('plot: font needs a "name,size"', iostat, iomsg)
+            ! the font of the item's labels (`with labels font ",8"`)
+            if (.not. font_spec(self, tokens, i, item_font, iostat, iomsg)) then
+               iomsg = 'plot: '//iomsg
                return
             endif
          elseif (word == 'volatile') then
@@ -6000,6 +6031,7 @@ contains
          if (allocated(line%pt_char)) panel%series(last)%style%point_char = line%pt_char
          if (allocated(point_tc) .and. panel%series(last)%style%with /= WITH_LABELS) &
             panel%series(last)%text_color = point_tc
+         panel%series(last)%font = item_font
       endassociate
       endsubroutine mark_last
 
@@ -8506,8 +8538,10 @@ contains
                call pair(label%offset, system)
             endblock
          elseif (word == 'font') then
-            ! the font is the page's: the name is read and ignored
-            i = i + 1_I4P
+            if (.not. font_spec(self, tokens, i, label%font, iostat, iomsg)) then
+               iomsg = 'set label: '//iomsg
+               return
+            endif
          elseif (keyword(word, 'noenhanced', 5_I4P) .or. keyword(word, 'enhanced', 3_I4P)) then
             ! gnuplot's noenh$anced, enh$anced
             label%plain = word(1:2) == 'no'
@@ -9280,7 +9314,27 @@ contains
                         reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
-      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      ! `set cblabel "text" [font F]`
+      block
+         integer(I4P) :: f !< The `font` word, or past the end.
+
+         f = size(tokens, kind=I4P) + 1_I4P
+         do k = 2_I4P, size(tokens, kind=I4P)
+            if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'font') then
+               f = k
+               exit
+            endif
+         enddo
+         if (.not. self%string_argument(tokens(1:f - 1_I4P), text, iostat, iomsg)) return
+         if (f <= size(tokens, kind=I4P)) then
+            if (.not. font_spec(self, tokens, f, self%figure%panels(self%figure%current)%cblabel_font, iostat, &
+                                iomsg)) then
+               iomsg = 'set cblabel: '//iomsg
+               return
+            endif
+            if (.not. no_more(tokens, f + 1_I4P, iostat, iomsg)) return
+         endif
+      endblock
       call self%figure%set_cblabel(text)
    elseif (keyword(option, 'colorbox', 4_I4P)) then
       call colorbox_option
@@ -9406,6 +9460,18 @@ contains
             call self%figure%set_theme(name=tokens(i)%text)
          elseif (tokens(i)%text == 'glow' .or. tokens(i)%text == 'noglow') then
             call self%figure%set_theme(glow=tokens(i)%text == 'glow')
+         elseif (tokens(i)%text == 'font') then
+            block
+               type(font_object) :: font !< Page font.
+
+               if (.not. font_spec(self, tokens, i, font, iostat, iomsg)) then
+                  iomsg = 'set terminal: '//iomsg
+                  return
+               endif
+               ! the size and family of every text (gnuplot's terminal font)
+               if (font%size > 0.0_R8P) self%figure%font_size = font%size
+               self%figure%font_family = font%family
+            endblock
          else
             call fail('set terminal: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
             return
@@ -9496,7 +9562,17 @@ contains
          case ('enhanced', 'enh')
             call self%figure%set_enhanced(.true.)
          case ('font')
-            i = i + 1_I4P
+            block
+               type(font_object) :: font !< Page font.
+
+               if (.not. font_spec(self, tokens, i, font, iostat, iomsg)) then
+                  iomsg = 'set terminal: '//iomsg
+                  return
+               endif
+               ! the size and family of every text (gnuplot's terminal font)
+               if (font%size > 0.0_R8P) self%figure%font_size = font%size
+               self%figure%font_family = font%family
+            endblock
          case default
             call fail('set termoption: unsupported option "'//tokens(i)%text//'" (dash, noenhanced, font)', iostat, &
                       iomsg)
@@ -9583,10 +9659,9 @@ contains
          elseif (keyword(tokens(i)%text, 'upwards', 2_I4P)) then
             upwards = .true.
          elseif (tokens(i)%text == 'font') then
-            ! the font of the title: one font in foresight, the name read and ignored
-            i = i + 1_I4P
-            if (i > size(tokens, kind=I4P)) then
-               call fail('set multiplot: font needs a name', iostat, iomsg)
+            ! the font of the title
+            if (.not. font_spec(self, tokens, i, self%figure%title_font, iostat, iomsg)) then
+               iomsg = 'set multiplot: '//iomsg
                return
             endif
          elseif (keyword(tokens(i)%text, 'margins', 3_I4P)) then
@@ -10504,6 +10579,7 @@ contains
       real(R8P)                     :: z      !< gnuplot's z offset, ignored.
       character(len=24)             :: color  !< Color.
       logical                       :: plain  !< `noenhanced`: the label as it is.
+      type(font_object)             :: font   !< Font.
       integer(I4P)                  :: j      !< First option token.
       integer(I4P)                  :: k      !< Token counter.
 
@@ -10538,6 +10614,7 @@ contains
       plain = .false.
       offset = self%figure%panels(self%figure%current)%label_offset(:, axis)
       color = self%figure%panels(self%figure%current)%label_color(axis)
+      font = self%figure%panels(self%figure%current)%label_font(axis)
       k = j
       do while (k <= size(tokens, kind=I4P))
          select case (tokens(k)%text)
@@ -10561,9 +10638,8 @@ contains
                endif
             endif
          case ('font')
-            k = k + 1_I4P
-            if (k > size(tokens, kind=I4P)) then
-               call fail('set '//tokens(1)%text//': font needs a name', iostat, iomsg)
+            if (.not. font_spec(self, tokens, k, font, iostat, iomsg)) then
+               iomsg = 'set '//tokens(1)%text//': '//iomsg
                return
             endif
          case ('tc', 'textcolor', 'textc', 'textco', 'textcol', 'textcolo')
@@ -10604,6 +10680,7 @@ contains
       self%figure%panels(self%figure%current)%label_plain(axis) = plain
       self%figure%panels(self%figure%current)%label_offset(:, axis) = offset
       self%figure%panels(self%figure%current)%label_color(axis) = color
+      self%figure%panels(self%figure%current)%label_font(axis) = font
       ok = .true.
       endfunction axis_label
 
@@ -10656,9 +10733,8 @@ contains
             i = i + 1_I4P
             if (.not. next_real(tokens, i, offset(2), iostat, iomsg, self%symbols)) return
          case ('font')
-            i = i + 1_I4P
-            if (i > size(tokens, kind=I4P)) then
-               call fail('set title: font needs a name', iostat, iomsg)
+            if (.not. font_spec(self, tokens, i, self%figure%panels(self%figure%current)%title_font, iostat, iomsg)) then
+               iomsg = 'set title: '//iomsg
                return
             endif
          case ('noenhanced', 'noenh')
@@ -10851,8 +10927,10 @@ contains
          case ('notitle')
             call self%figure%set_key_style(title='')
          case ('font')
-            ! read and ignored: one font in foresight
-            i = i + 1_I4P
+            if (.not. font_spec(self, tokens, i, self%figure%panels(self%figure%current)%key_font, iostat, iomsg)) then
+               iomsg = 'set key: '//iomsg
+               return
+            endif
          case ('noenhanced', 'noenh', 'enhanced', 'enh')
             ! the key's texts as they are, or as enhanced text
             self%figure%panels(self%figure%current)%key_plain = tokens(i)%text(1:2) == 'no'

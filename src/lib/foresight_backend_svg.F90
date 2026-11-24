@@ -14,6 +14,7 @@ use foresight_format, only : fixed, int_str, latin1_utf8, real_str, xml_escape
 use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
+use foresight_font, only : font_attributes
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -324,14 +325,14 @@ contains
    character(len=:), allocatable            :: line   !< Output line.
    character(len=:), allocatable            :: runs   !< Enhanced text runs.
 
-   line = '<text x="'//px(x)//'" y="'//px(y)//'"'
+   line = '<text x="'//px(x)//'" y="'//px(y)//'"'//font_attributes(self%font, self%font%size)
    if (self%boxed) line = line//textbox_attribute(self)
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
    if (present(color)) line = line//' fill="'//self%theme%map(color)//'"'
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       ! gnuplot's enhanced text: styled runs, the blanks at their ends kept (a renderer may strip them per <tspan>)
-      runs = markup_svg(string, self%text_size)
+      runs = markup_svg(string, self%font%size_px(self%text_size))
       if (index(runs, '<tspan') > 0) line = line//' xml:space="preserve"'
       line = line//'>'//runs
    else
@@ -719,10 +720,10 @@ contains
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (rotate /= 0.0_R8P) line = line//' data-rotate="'//px(-rotate)//'" transform="rotate('//px(-rotate)//' '// &
                                  px(p(1))//' '//px(p(2))//')"'
-   line = line//' fill="'//self%theme%map(color)//'"'
+   line = line//' fill="'//self%theme%map(color)//'"'//font_attributes(self%font, self%font%size)
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       ! gnuplot's enhanced text, as `text` (cities.dem's `{/=3 Arras}`)
-      runs = markup_svg(string, self%text_size)
+      runs = markup_svg(string, self%font%size_px(self%text_size))
       if (index(runs, '<tspan') > 0) line = line//' xml:space="preserve"'
       line = line//'>'//runs//'</text>'
    else
@@ -917,13 +918,30 @@ contains
                                               trim(self%theme%name)//'" data-frame="'//trim(self%theme%frame)// &
                                               '" data-grid-color="'//trim(self%theme%grid)//'"'
    call self%put('<svg xmlns="http://www.w3.org/2000/svg" width="'//px(width)//'" height="'//px(height)// &
-                 '" viewBox="0 0 '//px(width)//' '//px(height)//'" font-family="'//FONT_FAMILY// &
+                 '" viewBox="0 0 '//px(width)//' '//px(height)//'" font-family="'//page_family(self%page_family)// &
                  '" font-size="'//px(font_size)//'"'//extra//'>')
    ! the filter region in page pixels: a bounding box relative region fails on the nested plot area viewports
    if (self%theme%glow) call self%put('<defs><filter id="fs-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="'// &
                                       px(width)//'" height="'//px(height)//'">'// &
                                       '<feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/>'// &
                                       '<feMergeNode in="SourceGraphic"/></feMerge></filter></defs>')
+   contains
+      pure function page_family(name) result(family)
+      !< The page's font family: `name` (`set terminal ... font "Times,12"`, foresight's after it as fallbacks), else
+      !< foresight's.
+      character(len=*), intent(in)  :: name   !< Family set, blank if none.
+      character(len=:), allocatable :: family !< CSS family list.
+
+      if (len_trim(name) > 0) then
+         if (index(trim(name), ' ') > 0) then
+            family = "'"//trim(name)//"',"//FONT_FAMILY
+         else
+            family = trim(name)//','//FONT_FAMILY
+         endif
+      else
+         family = FONT_FAMILY
+      endif
+      endfunction page_family
    endsubroutine open_svg
 
    pure function output_unit(self) result(unit)

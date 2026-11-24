@@ -9,6 +9,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_expression, only : value_object
+use foresight_font, only : font_object, font_of
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
 use foresight_style, only : default_color, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, WITH_IMAGE, WITH_FILLSTEPS, &
                             WITH_BOXES, WITH_CIRCLES, WITH_PIE, WITH_FILLEDCURVES, WITH_GAUGE, &
@@ -40,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(241)                           !< Per-check outcome.
+logical                       :: test_passed(242)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5934,6 +5935,49 @@ test_passed(241) = test_passed(241) .and. iostat /= 0_I4P .and. index(iomsg, 'un
 call interpreter%run_text("e = RR + 1", iostat, iomsg)
 test_passed(241) = test_passed(241) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: RR') > 0
 
+! fonts per element, as gnuplot 6.0's svg: "family:Bold:Italic,size" (font files and mbfont sets no family); the title,
+! axis labels, key, labels, data labels, color box label, multiplot title in their fonts; set terminal font the page's
+block
+   character(len=:), allocatable :: svg  !< Rendered SVG.
+   type(font_object)             :: f(5) !< Parsed fonts.
+
+   f(1) = font_of(',8')
+   f(2) = font_of(':Bold')
+   f(3) = font_of('Times:Italic,10')
+   f(4) = font_of('/usr/share/fonts/a.ttf,11')
+   f(5) = font_of('mbfont:sazanami mincho,vera,20')
+   test_passed(242) = f(1)%size == 8.0_R8P .and. len_trim(f(1)%family) == 0 .and. .not. f(1)%bold .and. &
+                     f(2)%bold .and. f(2)%size == 0.0_R8P .and. len_trim(f(2)%family) == 0 .and. &
+                     f(3)%italic .and. f(3)%family == 'Times' .and. f(3)%size == 10.0_R8P .and. &
+                     len_trim(f(4)%family) == 0 .and. f(4)%size == 11.0_R8P .and. len_trim(f(5)%family) == 0
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400 font 'Georgia,11'; "// &
+                             "set output 'foresight_script_test_fonts.svg'; set title 'T' font ',20'; "// &
+                             "set xlabel 'X' font 'serif,15'; set ylabel 'Y' font ':Bold'; set key font ':Bold,14'; "// &
+                             "set label 1 'L' at 0,0 font 'Times:Bold,14'; set cblabel 'C' font ',9'; "// &
+                             "plot x title 'c', '+' using 1:1:('d') with labels font ':Italic' notitle", iostat, iomsg)
+   test_passed(242) = test_passed(242) .and. iostat == 0_I4P
+   if (test_passed(242)) then
+      svg = read_text('foresight_script_test_fonts.svg')
+      test_passed(242) = index(svg, 'font-family="Georgia,') > 0 .and. index(svg, 'font-size="11"') > 0 .and. &
+                        index(svg, 'font-size="20" text-anchor="middle">T<') > 0 .and. &
+                        index(svg, 'font-size="15" font-family="serif" text-anchor="middle">X<') > 0 .and. &
+                        index(svg, 'font-weight="bold" text-anchor="middle" transform="rotate(-90') > 0 .and. &
+                        index(svg, 'font-size="14" font-weight="bold" text-anchor="end">c<') > 0 .and. &
+                        index(svg, 'font-size="14" font-family="Times" font-weight="bold"') > 0 .and. &
+                        index(svg, 'font-style="italic">d<') > 0
+   endif
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_fonts.svg'; "// &
+                             "set multiplot layout 2,1 title 'M' font ',18'; plot x; plot x; unset multiplot", &
+                             iostat, iomsg)
+   test_passed(242) = test_passed(242) .and. iostat == 0_I4P
+   if (test_passed(242)) test_passed(242) = index(read_text('foresight_script_test_fonts.svg'), &
+                                                 'font-size="18" text-anchor="middle">M<') > 0
+   call interpreter%run_text("set title 'T' font", iostat, iomsg)
+   test_passed(242) = test_passed(242) .and. iostat /= 0_I4P .and. index(iomsg, 'font needs') > 0
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5942,7 +5986,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,241L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,242L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
