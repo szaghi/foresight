@@ -192,6 +192,7 @@ type :: axes_object
                                                                !< foresight's (3 font sizes).
    real(R8P)                        :: key_extra = 0.0_R8P !< Width added to the titles [character widths], `width`.
    real(R8P)                        :: key_offset(2) = 0.0_R8P !< Key shift [characters], gnuplot `offset`.
+   integer(I4P)                     :: key_offset_unit(2) = 0_I4P !< Its coordinates: 0 characters, 1 screen, 2 graph.
    real(R8P)                        :: key_spacing = 1.0_R8P !< Row spacing [rows], gnuplot `spacing`.
    real(R8P)                        :: point_scale = 1.0_R8P !< Point size of the series without their own, gnuplot
                                                              !< `set pointsize`.
@@ -2411,6 +2412,7 @@ contains
    real(R8P)                            :: hi        !< Theta range end [deg].
    real(R8P)                            :: length    !< Tick length [px].
    integer(I4P)                         :: t         !< Tick counter.
+   logical                              :: only_list !< An added list alone.
 
    associate(left => area(1), right => area(2), top => area(3), bottom => area(4))
       cx = left + self%xaxis%to_unit(0.0_R8P) * (right - left)
@@ -2452,11 +2454,16 @@ contains
    endif
    if (self%ttics%mode == TICS_NONE) return
    tics = self%ttics
-   ! automatic: every 45 degrees from 0 (gnuplot draws none)
+   ! a list added to the automatic ticks (`set ttics add (...)`): its items alone, as gnuplot (which draws no
+   ! automatic theta ticks); without one, automatic: every 45 degrees from 0
+   only_list = .false.
+   if (tics%mode /= TICS_FIXED .and. allocated(tics%list)) only_list = size(tics%list) > 0
    if (tics%mode /= TICS_FIXED) call tics%set_fixed('45', '0', '', message)
    lo = 0.0_R8P
    hi = 360.0_R8P
-   if (tics%series) then
+   ! the items at their angle within a turn (-90 is 270)
+   if (allocated(tics%list)) tics%list%value = modulo(tics%list%value, 360.0_R8P)
+   if (tics%series .and. .not. only_list) then
       call linear_ticks(lo, hi, 1.0_R8P, .false., .false., thetas, tics)
    else
       allocate(thetas(0))
@@ -2582,9 +2589,23 @@ contains
          endselect
       endselect
       endif
-      ! gnuplot `offset`: characters, y up
-      left = left + self%key_offset(1) * CHAR_WIDTH * font_size
-      top = top - self%key_offset(2) * font_size
+      ! gnuplot `offset`: characters (or screen, graph fractions), y up
+      select case (self%key_offset_unit(1))
+      case (1_I4P)
+         left = left + self%key_offset(1) * self%canvas(1)
+      case (2_I4P)
+         left = left + self%key_offset(1) * (area(2) - area(1))
+      case default
+         left = left + self%key_offset(1) * CHAR_WIDTH * font_size
+      endselect
+      select case (self%key_offset_unit(2))
+      case (1_I4P)
+         top = top - self%key_offset(2) * self%canvas(2)
+      case (2_I4P)
+         top = top - self%key_offset(2) * (area(4) - area(3))
+      case default
+         top = top - self%key_offset(2) * font_size
+      endselect
       if (self%key_opaque) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
                                              'none', WINDOW_FILL, 1.0_R8P)
       if (self%key_box) then
@@ -2913,7 +2934,13 @@ contains
       case default
          anchor = trim(merge('end  ', 'start', self%series(s)%title_at == 1_I4P))
       endselect
-      call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
+      ! a title on several lines (gnuplot's "\n"), the first at the point, the next below
+      if (index(self%series(s)%title, new_line('a')) > 0) then
+         call text_rows(backend, p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, trim(anchor), &
+                        row_step(backend, font_size), '')
+      else
+         call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
+      endif
       backend%literal = .false.
    enddo
    endsubroutine draw_titles_at
@@ -5283,10 +5310,12 @@ contains
    enddo
    endsubroutine polar_window
 
-   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise, logr, reversed)
+   pure subroutine polar_project(all, rmin, cut, degrees, origin, clockwise, logr, reversed, rim)
    !< Project the series `all` from theta:r to x:y about the pole at r = `rmin`, as gnuplot: x = (r - rmin) cos(phi),
    !< y = (r - rmin) sin(phi), phi the page angle of theta (`logr`: log10(r / rmin) for r - rmin); with `cut` (a fixed
-   !< `rmin`) a point with r below `rmin` is undefined, else it lies across the pole. Readouts kept.
+   !< `rmin`) a point with r below `rmin` is undefined, else it lies across the pole. Readouts kept. A point beyond the
+   !< end of the r range (farther than `rim` from the pole) is undefined, as gnuplot clips it; on lines one next to a
+   !< point within moves to where their segment crosses the rim (gnuplot's clipped segment, the curve's end).
    !< (A module procedure, not a binding: gfortran 16 debug builds misread the components of `self%series` reached
    !< through the class dummy after their reallocation.)
    type(series_object), intent(inout) :: all(:)    !< Series: theta:r in, x:y out.
@@ -5298,6 +5327,11 @@ contains
    logical,             intent(in)    :: logr      !< Log r axis.
    logical,             intent(in)    :: reversed  !< A reversed r axis: r = `rmin` at the pole, smaller r outwards;
                                                    !< a larger r undefined.
+   real(R8P),           intent(in)    :: rim       !< Distance of the r range end from the pole [r units].
+   real(R8P),           allocatable   :: px(:)     !< Abscissae, unclipped.
+   real(R8P),           allocatable   :: py(:)     !< Ordinates, unclipped.
+   logical,             allocatable   :: out(:)    !< Beyond the rim.
+   integer(I4P)                       :: j         !< Neighbour within the rim.
    real(R8P)                          :: nan       !< Undefined value.
    real(R8P)                          :: phi       !< Page angle [rad].
    real(R8P)                          :: rho       !< Distance from the pole [r units].
@@ -5326,8 +5360,58 @@ contains
          r = all(s)%y(i)
          call project(phi, r, all(s)%x(i), all(s)%y(i))
       enddo
+      ! beyond the rim: undefined, or on lines moved to the crossing of the rim
+      if (.not. (rim > 0.0_R8P)) cycle
+      px = all(s)%x
+      py = all(s)%y
+      allocate(out(size(px)))
+      out = .false.
+      do i = 1_I4P, size(px, kind=I4P)
+         if (ieee_is_finite(px(i)) .and. ieee_is_finite(py(i))) out(i) = hypot(px(i), py(i)) > rim * (1.0_R8P + 1.0e-9_R8P)
+      enddo
+      do i = 1_I4P, size(px, kind=I4P)
+         if (.not. out(i)) cycle
+         all(s)%x(i) = nan
+         all(s)%y(i) = nan
+         if (all(s)%style%with /= WITH_LINES) cycle
+         ! the neighbour within the rim, before then after (defined and not out)
+         j = 0_I4P
+         if (i > 1_I4P) then
+            if (ieee_is_finite(px(i - 1_I4P)) .and. ieee_is_finite(py(i - 1_I4P))) then
+               if (.not. out(i - 1_I4P)) j = i - 1_I4P
+            endif
+         endif
+         if (j == 0_I4P .and. i < size(px, kind=I4P)) then
+            if (ieee_is_finite(px(i + 1_I4P)) .and. ieee_is_finite(py(i + 1_I4P))) then
+               if (.not. out(i + 1_I4P)) j = i + 1_I4P
+            endif
+         endif
+         if (j > 0_I4P) call crossing(px(j), py(j), px(i), py(i), all(s)%x(i), all(s)%y(i))
+      enddo
+      deallocate(out)
    enddo
    contains
+      pure subroutine crossing(ax, ay, bx, by, cx, cy)
+      !< Where the segment from (ax, ay), within the rim, to (bx, by), beyond it, crosses the rim.
+      real(R8P), intent(in)  :: ax, ay !< Point within.
+      real(R8P), intent(in)  :: bx, by !< Point beyond.
+      real(R8P), intent(out) :: cx, cy !< Crossing.
+      real(R8P)              :: dx, dy !< Segment.
+      real(R8P)              :: qa, qb, qc !< Quadratic coefficients of |a + t d| = rim.
+      real(R8P)              :: t      !< Segment fraction.
+
+      dx = bx - ax
+      dy = by - ay
+      qa = dx * dx + dy * dy
+      qb = 2.0_R8P * (ax * dx + ay * dy)
+      qc = ax * ax + ay * ay - rim * rim
+      t = 1.0_R8P
+      if (qa > 0.0_R8P) t = (-qb + sqrt(max(qb * qb - 4.0_R8P * qa * qc, 0.0_R8P))) / (2.0_R8P * qa)
+      t = min(max(t, 0.0_R8P), 1.0_R8P)
+      cx = ax + t * dx
+      cy = ay + t * dy
+      endsubroutine crossing
+
       pure subroutine project(theta, r, px, py)
       !< x:y of theta:r, as the points (undefined below a cut pole).
       real(R8P), intent(in)  :: theta !< Theta.
@@ -6742,7 +6826,7 @@ contains
       endif
       radius = polar_rho(self%raxis, self%raxis%hi)
       call polar_project(self%series, self%raxis%lo, self%raxis%min_fixed .or. self%raxis%log, self%degrees, &
-                         self%theta_origin, self%theta_clockwise, self%raxis%log, self%raxis%hi < self%raxis%lo)
+                         self%theta_origin, self%theta_clockwise, self%raxis%log, self%raxis%hi < self%raxis%lo, radius)
       xmin(1) = -radius
       xmax(1) = radius
       found = [.true., .false.]

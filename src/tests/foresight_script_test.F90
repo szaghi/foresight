@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(225)                           !< Per-check outcome.
+logical                       :: test_passed(227)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5317,6 +5317,140 @@ call interpreter%run_text('unset rlabel', iostat, iomsg)
 test_passed(225) = test_passed(225) .and. iostat == 0_I4P .and. &
                   len(interpreter%figure%panels(1)%raxis%label) == 0
 
+
+! hull filters (gnuplot 6.0 convexhull, expand, concavehull, delaunay; values from gnuplot's set table) and the forms of
+! their demos: set chi_shape fraction, GPVAL_CHI_LENGTH, +CHI_SHAPES, real("+Inf"), set tics INCR, set isotropic,
+! key offset in screen units
+call interpreter%init(scratch)
+call interpreter%run_text('$T << EOD'//new_line('a')//'0 0'//new_line('a')//'2 -1'//new_line('a')//'5 0'// &
+                          new_line('a')//'3 4'//new_line('a')//'-1 2'//new_line('a')//'1 1'//new_line('a')//'5 4'// &
+                          new_line('a')//'EOD'//new_line('a')//'$S << EOD'//new_line('a')//'0 0'//new_line('a')// &
+                          '4 0'//new_line('a')//'4 3'//new_line('a')//'0 3'//new_line('a')//'2 1'//new_line('a')// &
+                          '1 2'//new_line('a')//'EOD'//new_line('a')//'$C << EOD'//new_line('a')//'0 0'// &
+                          new_line('a')//'4 0'//new_line('a')//'8 0'//new_line('a')//'8 4'//new_line('a')//'8 8'// &
+                          new_line('a')//'4 8'//new_line('a')//'0 8'//new_line('a')//'0 4'//new_line('a')//'4 4.5'// &
+                          new_line('a')//'3 7'//new_line('a')//'5 7'//new_line('a')//'EOD', iostat, iomsg)
+call interpreter%run_text('plot $T convexhull w l, $S convexhull expand 1 w l, $C concavehull w l, $C delaunay w l', &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(226) = iostat == 0_I4P
+if (test_passed(226)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(226) = matches(series(1)%x, [-1, 3, 5, 5, 2, 0, -1]) .and. matches(series(1)%y, [2, 4, 4, 0, -1, 0, 2])
+      test_passed(226) = test_passed(226) .and. matches(series(2)%x, [0, -1, -1, 0, 4, 5, 5, 4, 0, -1]) .and. &
+                        matches(series(2)%y, [-1, 0, 3, 4, 4, 3, 0, -1, -1, 0])
+      test_passed(226) = test_passed(226) .and. matches(series(3)%x, [4, 5, 8, 8, 8, 4, 0, 0, 0, 3, 4]) .and. &
+                        matches(series(3)%y, [8, 7, 8, 4, 0, 0, 0, 4, 8, 7, 8]) .and. size(series(4)%x) == 60
+   endassociate
+endif
+call interpreter%run_text('chi_length = 3.5; plot $C concavehull w l', iostat, iomsg)
+test_passed(226) = test_passed(226) .and. iostat == 0_I4P
+if (test_passed(226)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(226) = matches(series(1)%x, [0, 3, 4, 5, 8, 8, 8, 4, 0, 0, 0]) .and. &
+                        matches(series(1)%y, [8, 7, 8, 7, 8, 4, 0, 0, 0, 4, 8])
+   endassociate
+endif
+! an integer chi_length is not read (gnuplot reads a real one only): the default, 0.6 of the longest hull edge
+call interpreter%run_text('chi_length = 5; set chi_shape fraction 0.3; plot $C concavehull w l; '// &
+                          'v = GPVAL_CHI_LENGTH; w = real("+Inf"); z = real("-inf"); '// &
+                          'u = strstrt(GPVAL_COMPILE_OPTIONS, "+CHI_SHAPES")', iostat, iomsg)
+test_passed(226) = test_passed(226) .and. iostat == 0_I4P
+if (test_passed(226)) then
+   block
+      real(R8P) :: v, w, z, u !< Values read back.
+      logical   :: found      !< Defined.
+
+      call interpreter%symbols%value_of('v', v, found)
+      call interpreter%symbols%value_of('w', w, found)
+      call interpreter%symbols%value_of('z', z, found)
+      call interpreter%symbols%value_of('u', u, found)
+      test_passed(226) = abs(v - 1.2_R8P) < 1.0e-12_R8P .and. w > huge(1.0_R8P) .and. z < -huge(1.0_R8P) .and. &
+                        u > 0.0_R8P
+   endblock
+endif
+call interpreter%run_text('set tics 0.5; set isotropic; set key offset screen -0.3, -.2', iostat, iomsg)
+test_passed(226) = test_passed(226) .and. iostat == 0_I4P
+if (test_passed(226)) then
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(226) = panel%xaxis%tics%mode == TICS_FIXED .and. panel%yaxis%tics%mode == TICS_FIXED .and. &
+                        panel%ratio == -1.0_R8P .and. all(panel%key_offset_unit == 1_I4P) .and. &
+                        all(near(panel%key_offset, [-0.3_R8P, -0.2_R8P]))
+   endassociate
+endif
+call interpreter%run_text('unset isotropic', iostat, iomsg)
+test_passed(226) = test_passed(226) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%ratio == 0.0_R8P
+
+
+! fidelity to gnuplot 6.0 (solar_path, chi_shapes): polar lines clipped at the end of the r range, the curve ending on
+! the rim; `set ttics add` alone draws its own labels, -90 at 270; titles at the end on several lines; a later
+! `set title "text"` keeps noenhanced
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_rim.svg"; set polar; set size square; unset xtics; '// &
+                          'unset ytics; set border polar; set rrange [0:1]; set samples 50; '// &
+                          "set ttics add ('N' 0, 'W' -90); set title noenhanced offset 0,-2; set title 'a_b'; "// &
+                          'plot 0.5+t/4 lw 2 title "one"."\n"."two" at end', iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(227) = iostat == 0_I4P .and. interpreter%figure%panels(1)%title_plain
+if (test_passed(227)) then
+   block
+      character(len=20000)   :: line   !< SVG line.
+      real(R8P), allocatable :: uv(:)  !< Polyline coordinates.
+      integer(I4P)           :: ios    !< Read status.
+      integer(I4P)           :: k      !< Position.
+      integer(I4P)           :: n      !< Coordinates.
+      logical                :: rim    !< The curve within the rim, its end on it.
+      logical                :: labels !< N and W, no automatic 45.
+      logical                :: rows   !< The title on two rows.
+
+      rim = .false.
+      labels = .true.
+      n = 0_I4P
+      rows = .false.
+      open(newunit=unit, file='foresight_script_test_rim.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '<polyline') > 0 .and. index(line, 'stroke-width="2"') > 0) then
+            k = index(line, 'points="') + 8
+            line = line(k:)
+            ! the points wrap over several lines, up to the closing quote
+            do while (index(line, '"') == 0)
+               block
+                  character(len=4000) :: more !< Next line.
+
+                  read(unit, '(A)', iostat=ios) more
+                  if (ios /= 0) exit
+                  line = trim(line)//' '//trim(more)
+               endblock
+            enddo
+            if (index(line, '"') > 0) line = line(1:index(line, '"') - 1)
+            do k = 1, len_trim(line)
+               if (line(k:k) == ',') line(k:k) = ' '
+            enddo
+            n = (count([(line(k:k) == ' ', k = 1, len_trim(line))]) + 1) / 2
+            allocate(uv(2 * n))
+            read(line, *) uv
+            ! unit coordinates: the pole at (0.5, 0.5), the rim 0.5 away
+            rim = all(hypot(uv(1::2) - 0.5_R8P, uv(2::2) - 0.5_R8P) <= 0.5_R8P + 1.0e-5_R8P) .and. &
+                  abs(hypot(uv(2 * n - 1) - 0.5_R8P, uv(2 * n) - 0.5_R8P) - 0.5_R8P) < 1.0e-5_R8P
+         endif
+         if (index(line, '>45</text>') > 0) labels = .false.
+         if (index(line, '>two</text>') > 0) rows = .true.
+      enddo
+      close(unit)
+      open(newunit=unit, file='foresight_script_test_rim.svg')
+      k = 0_I4P
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, '>N</text>') > 0 .or. index(line, '>W</text>') > 0) k = k + 1_I4P
+      enddo
+      close(unit, status='delete')
+      test_passed(227) = rim .and. labels .and. rows .and. k == 2_I4P .and. n > 10_I4P
+   endblock
+endif
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5325,7 +5459,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,225L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,227L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo
@@ -5413,6 +5547,16 @@ contains
       endif
    enddo
    endfunction same
+
+   pure function matches(values, expected) result(equal)
+   !< Whether `values` equal the integers `expected` to rounding (no NaN convention: -1 is -1).
+   real(R8P), intent(in) :: values(:)   !< Values.
+   integer,   intent(in) :: expected(:) !< Expected values.
+   logical               :: equal       !< Equal.
+
+   equal = size(values) == size(expected)
+   if (equal) equal = all(abs(values - real(expected, R8P)) <= 1.0e-12_R8P * max(1.0_R8P, abs(real(expected, R8P))))
+   endfunction matches
 
    function consecutive(file, starts) result(ok)
    !< Whether the first non-blank words of three consecutive lines of `file` are `starts`, in order.

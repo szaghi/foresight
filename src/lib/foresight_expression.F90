@@ -45,7 +45,7 @@ module foresight_expression
 !< Accepted beyond gnuplot: `%` and the logical operators on reals (gnuplot rejects them), and overflows give a gap
 !< where gnuplot stops the plot. Every floating point operation is checked beforehand, so evaluation never raises an
 !< IEEE invalid, division by zero or overflow exception.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_positive_inf, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_check, format_decimal, format_value, &
                              gnuplot_real, int_str, real_from_decimal
@@ -4915,6 +4915,7 @@ contains
    integer(I8P)                      :: h     !< Hexadecimal value.
    logical                           :: is_real !< Point or exponent.
    logical                           :: minus !< Negative.
+   character(len=3)                  :: word  !< Three letters, lower case.
 
    if (.not. a%is_string) return
    t = a%s
@@ -4950,6 +4951,18 @@ contains
          enddo
          if (minus) h = -h
          a = int_value(h)
+         return
+      endif
+   endif
+   ! inf, infinity and nan in any case (C's strtod, gnuplot's reading)
+   if (i + 2_I4P <= n) then
+      word = to_lower(t(i:i))//to_lower(t(i + 1_I4P:i + 1_I4P))//to_lower(t(i + 2_I4P:i + 2_I4P))
+      if (word == 'inf') then
+         a = value_object(r=ieee_value(1.0_R8P, ieee_positive_inf))
+         if (minus) a%r = -a%r
+         return
+      elseif (word == 'nan') then
+         a = value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan))
          return
       endif
    endif

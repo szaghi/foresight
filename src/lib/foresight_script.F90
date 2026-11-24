@@ -144,6 +144,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES, &
                             WITH_POINTS, WITH_LINESPOINTS
+use foresight_hulls, only : concave_hull, convex_hull, delaunay_triangles, expand_hull
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD, UNAME_CHARS, UNAME_START
@@ -233,6 +234,8 @@ type :: script_object
                                                                !< dataset is a header.
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
+   real(R8P)                       :: chi_fraction = 0.6_R8P   !< Default concave hull length, a fraction of the longest
+                                                               !< convex hull edge (`set chi_shape fraction`).
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
    type(fit_settings)              :: fit_options              !< `set fit` limit, maxiter, lambda, scaling options.
    character(len=7)                :: fit_verbosity = 'quiet'  !< `set fit quiet|results|brief`: the report on the
@@ -366,6 +369,7 @@ contains
    self%isosamples = 10_I4P
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
+   self%chi_fraction = 0.6_R8P
    ! a new session: gnuplot's program settings at start
    overflow_mode = OVERFLOW_FLOAT
    self%minus_sign = .false.
@@ -419,7 +423,7 @@ contains
    call self%symbols%set_value('GPVAL_VERSION', 6.0_R8P, is_int=.false.)
    call self%symbols%set_string('GPVAL_PATCHLEVEL', '0')
    call self%symbols%set_string('GPVAL_COMPILE_OPTIONS', '+OBJECTS +STATS +POLARGRID +FUNCTIONBLOCKS '// &
-                                '-LIBCERF -COMPLEX_FUNCS -CHI_SHAPES -WATCHPOINTS -EXTERNAL_FUNCTIONS')
+                                '+CHI_SHAPES -LIBCERF -COMPLEX_FUNCS -WATCHPOINTS -EXTERNAL_FUNCTIONS')
    call self%symbols%set_string('GPVAL_ENCODING', self%encoding)
    call self%symbols%set_string('GPVAL_TERM', self%term_name)
    call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html svg')
@@ -2742,6 +2746,8 @@ contains
    logical,                 allocatable         :: sharpens(:) !< Each function sharpened (gnuplot `sharpen`).
    integer(I4P)                                 :: spider_group !< Spider plot group (gnuplot `newspiderplot`).
    logical                                      :: sharpen_item !< The item is sharpened.
+   integer(I4P)                                 :: hull      !< `convexhull` 1, `concavehull` 2, `delaunay` 3, none 0.
+   real(R8P)                                    :: hull_expand !< `expand D` of the hull, 0 for none.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
@@ -3277,6 +3283,8 @@ contains
       heads = ''
       arrow_var = .false.
       sharpen_item = .false.
+      hull = 0_I4P
+      hull_expand = 0.0_R8P
       band_smooth = .false.
       polar_base = .false.
       rotate_var = .false.
@@ -3624,6 +3632,11 @@ contains
                i = i + 1_I4P
                cycle
             endif
+            ! gnuplot's deprecated `smooth convexhull`: `convexhull smooth path`
+            if (gnuplot_abbreviates(filter, 'convex$hull')) then
+               filter = 'path'
+               hull = 1_I4P
+            endif
             filter = smooth_name(filter)
             if (.not. (is_word(filter, SMOOTH_MODES) .or. is_word(filter, CURVE_MODES) .or. filter == 'path')) then
                call fail('plot: unsupported smooth "'//filter//'" (supported: '//SMOOTH_MODES//' '//CURVE_MODES// &
@@ -3781,6 +3794,28 @@ contains
                   i = i + 1_I4P
                   if (.not. title_place()) return
                endif
+            endif
+         elseif (word == 'convexhull' .or. word == 'concavehull' .or. word == 'delaunay') then
+            ! gnuplot's hull filters, `expand D` after them (`delaunay`: the triangles, gnuplot's undocumented filter)
+            hull = merge(1_I4P, merge(2_I4P, 3_I4P, word == 'concavehull'), word == 'convexhull')
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'expand') then
+                  i = i + 1_I4P
+                  if (.not. next_real(tokens, i, hull_expand, iostat, iomsg, self%symbols)) then
+                     iomsg = 'plot: expand: '//iomsg
+                     return
+                  endif
+               endif
+            endif
+            if (is_function) then
+               call fail('plot: '//word//' applies to data, not to the function "'//written//'"', iostat, iomsg)
+               return
+            endif
+         elseif (word == 'expand' .and. hull > 0_I4P) then
+            ! `expand D` of a hull after other options (`concavehull smooth path expand D`)
+            if (.not. next_real(tokens, i, hull_expand, iostat, iomsg, self%symbols)) then
+               iomsg = 'plot: expand: '//iomsg
+               return
             endif
          elseif (word == 'sharpen') then
             ! gnuplot's sharpen: the extrema of a function found between its samples (data: ignored, as gnuplot)
@@ -4409,6 +4444,7 @@ contains
          values(:, 1) = values(:, 2)
          values(:, 2) = 1.0_R8P
       endif
+      if (hull > 0_I4P) call hull_filter
       x = values(:, 1)
       y = values(:, 2)
       ! gnuplot `set link x2|y2`: values on the linked axis plotted on the first one (through `inverse`)
@@ -5825,6 +5861,65 @@ contains
       if (len(problem) > 0) call fail('plot: smooth '//filter//': '//problem, iostat, iomsg)
       endsubroutine curve_filter
 
+      subroutine hull_filter
+      !< gnuplot's hull filters of the item's points, right after they are read: `convexhull` or `concavehull` (its
+      !< characteristic length the variable chi_length if positive, else `set chi_shape fraction` of the longest convex
+      !< hull edge, the one used in GPVAL_CHI_LENGTH), then `expand D`; every column follows its point.
+      integer(I4P), allocatable :: rows(:)   !< Rows of finite points.
+      integer(I4P), allocatable :: idx(:)    !< Hull rows among them.
+      integer(I4P), allocatable :: src(:)    !< Hull point of each expanded point.
+      real(R8P),    allocatable :: kept(:,:) !< Finite points.
+      real(R8P),    allocatable :: ex(:)     !< Expanded abscissae.
+      real(R8P),    allocatable :: ey(:)     !< Expanded ordinates.
+      real(R8P)                 :: chi       !< Characteristic length given, 0 for none.
+      real(R8P)                 :: chi_used  !< Characteristic length used.
+      logical                   :: found     !< chi_length defined.
+      logical                   :: is_int    !< chi_length an integer.
+      integer(I4P)              :: r         !< Row.
+
+      rows = pack([(r, r = 1_I4P, size(values, 1, kind=I4P))], ieee_is_finite(values(:, 1)) .and. &
+                  ieee_is_finite(values(:, 2)))
+      kept = values(rows, :)
+      if (hull == 1_I4P) then
+         call convex_hull(kept(:, 1), kept(:, 2), idx)
+      elseif (hull == 3_I4P) then
+         ! the triangles, each closed, a blank line (an undefined point) after each
+         call delaunay_triangles(kept(:, 1), kept(:, 2), idx)
+         block
+            real(R8P), allocatable :: tris(:,:) !< Triangle points.
+            integer(I4P)           :: k         !< Counter.
+
+            allocate(tris(size(idx), size(kept, 2)))
+            tris = ieee_value(1.0_R8P, ieee_quiet_nan)
+            do k = 1_I4P, size(idx, kind=I4P)
+               if (idx(k) > 0_I4P) tris(k, :) = kept(idx(k), :)
+            enddo
+            values = tris
+         endblock
+         if (allocated(xlabels)) deallocate(xlabels)
+         return
+      else
+         ! gnuplot reads chi_length only when it holds a real (an integer, `chi_length = 5`, is ignored)
+         call self%symbols%value_of('chi_length', chi, found, is_int)
+         if (.not. found .or. is_int) chi = 0.0_R8P
+         if (.not. chi > 0.0_R8P) chi = 0.0_R8P
+         call concave_hull(kept(:, 1), kept(:, 2), chi, self%chi_fraction, idx, chi_used)
+         call self%symbols%set_value('GPVAL_CHI_LENGTH', chi_used, is_int=.false.)
+      endif
+      values = kept(idx, :)
+      rows = rows(idx)
+      if (hull_expand /= 0.0_R8P) then
+         call expand_hull(values(:, 1), values(:, 2), hull_expand, ex, ey, src)
+         values = values(src, :)
+         values(:, 1) = ex
+         values(:, 2) = ey
+         rows = rows(src)
+      endif
+      if (allocated(xlabels)) then
+         if (size(xlabels) >= maxval([0_I4P, rows])) xlabels = xlabels(rows)
+      endif
+      endsubroutine hull_filter
+
       subroutine path_filter
       !< gnuplot's `smooth path` of the item into (x, y): a spline along each set of points in their order (path_spline),
       !< `set samples` points over a path, the path length scaled by the x and y ranges (set, else the data's), every
@@ -6932,6 +7027,7 @@ contains
    self%isosamples = 10_I4P
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
+   self%chi_fraction = 0.6_R8P
    self%timefmt = '%d/%m/%y,%H:%M'
    self%symbols%timefmt = self%timefmt
    self%time_data = .false.
@@ -8286,6 +8382,30 @@ contains
       self%data_style = 'spiderplot'
    elseif (option == 'paxis') then
       call paxis_option
+   elseif (option == 'chi_shape') then
+      ! gnuplot `set chi_shape fraction F`: the default characteristic length of concave hulls, F times the longest
+      ! edge of the convex hull
+      block
+         real(R8P) :: v !< Fraction.
+
+         if (size(tokens) /= 3) then
+            call fail('set chi_shape: fraction F expected', iostat, iomsg)
+            return
+         endif
+         if (.not. keyword(tokens(2)%text, 'fraction', 2_I4P)) then
+            call fail('set chi_shape: fraction F expected', iostat, iomsg)
+            return
+         endif
+         if (.not. to_number(tokens(3)%text, v)) then
+            call fail('set chi_shape fraction: a number between 0 and 1 expected', iostat, iomsg)
+            return
+         endif
+         if (.not. (v > 0.0_R8P .and. v <= 1.0_R8P)) then
+            call fail('set chi_shape fraction: a number between 0 and 1 expected', iostat, iomsg)
+            return
+         endif
+         self%chi_fraction = v
+      endblock
    elseif (option == 'rgbmax') then
       block
          real(R8P) :: v !< Full intensity.
@@ -8643,6 +8763,10 @@ contains
       call pair_option([0.0_R8P, 0.0_R8P], tokens)
    elseif (keyword(option, 'size', 2_I4P)) then
       call size_option
+   elseif (option == 'isotropic') then
+      ! gnuplot 6.0 `set isotropic`: equal unit lengths on x and y, `set size ratio -1` in 2D
+      if (.not. no_more(tokens, 2_I4P, iostat, iomsg)) return
+      call self%figure%set_size(ratio=-1.0_R8P)
    elseif (keyword(option, 'multiplot', 5_I4P)) then
       rows = 0_I4P
       cols = 0_I4P
@@ -9704,7 +9828,8 @@ contains
       anchor = self%figure%panels(self%figure%current)%title_anchor
       color = self%figure%panels(self%figure%current)%title_color
       boxed = .false.
-      plain = .false.
+      ! noenhanced kept by a later `set title "text"`, as gnuplot
+      plain = self%figure%panels(self%figure%current)%title_plain
       i = j
       do while (i <= size(tokens, kind=I4P))
          select case (tokens(i)%text)
@@ -9842,18 +9967,53 @@ contains
             if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
             call self%figure%set_key_style(width=v)
          case ('offset')
-            if (.not. next_real(tokens, i, xy(1), iostat, iomsg, self%symbols)) return
-            if (i >= size(tokens, kind=I4P)) then
-               call fail('set key: offset X,Y expected', iostat, iomsg)
-               return
-            endif
-            if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
-               call fail('set key: offset X,Y expected', iostat, iomsg)
-               return
-            endif
-            i = i + 1_I4P
-            if (.not. next_real(tokens, i, xy(2), iostat, iomsg, self%symbols)) return
-            call self%figure%set_key_style(offset=xy)
+            ! each coordinate in characters (the default), screen or graph fractions; y in the system of x unless
+            ! given, as gnuplot
+            block
+               integer(I4P) :: units(2) !< Coordinate systems: 0 characters, 1 screen, 2 graph.
+
+               units = 0_I4P
+               if (i < size(tokens, kind=I4P)) then
+                  select case (tokens(i + 1_I4P)%text)
+                  case ('screen')
+                     units(1) = 1_I4P
+                     i = i + 1_I4P
+                  case ('graph')
+                     units(1) = 2_I4P
+                     i = i + 1_I4P
+                  case ('character', 'char', 'first', 'second')
+                     units(1) = 0_I4P
+                     i = i + 1_I4P
+                  endselect
+               endif
+               if (.not. next_real(tokens, i, xy(1), iostat, iomsg, self%symbols)) return
+               if (i >= size(tokens, kind=I4P)) then
+                  call fail('set key: offset X,Y expected', iostat, iomsg)
+                  return
+               endif
+               if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+                  call fail('set key: offset X,Y expected', iostat, iomsg)
+                  return
+               endif
+               i = i + 1_I4P
+               units(2) = units(1)
+               if (i < size(tokens, kind=I4P)) then
+                  select case (tokens(i + 1_I4P)%text)
+                  case ('screen')
+                     units(2) = 1_I4P
+                     i = i + 1_I4P
+                  case ('graph')
+                     units(2) = 2_I4P
+                     i = i + 1_I4P
+                  case ('character', 'char', 'first', 'second')
+                     units(2) = 0_I4P
+                     i = i + 1_I4P
+                  endselect
+               endif
+               if (.not. next_real(tokens, i, xy(2), iostat, iomsg, self%symbols)) return
+               call self%figure%set_key_style(offset=xy)
+               self%figure%panels(self%figure%current)%key_offset_unit = units
+            endblock
          case ('title')
             ! a string expression, or nothing (no title)
             if (i < size(tokens, kind=I4P)) then
@@ -11478,6 +11638,29 @@ contains
                panel%x2axis%tics%plain = toks(i)%text == 'noenhanced'
                panel%y2axis%tics%plain = toks(i)%text == 'noenhanced'
                panel%cbaxis%tics%plain = toks(i)%text == 'noenhanced'
+            elseif (toks(i)%kind == TOKEN_WORD .and. verify(toks(i)%text(1:1), '0123456789.') == 0) then
+               ! gnuplot `set tics INCR`: the step of every axis, which axes show ticks unchanged
+               block
+                  character(len=:), allocatable :: message !< Step problem.
+                  real(R8P)                     :: v       !< Step.
+
+                  if (.not. to_number(toks(i)%text, v)) then
+                     call fail('set tics: a number expected, found "'//toks(i)%text//'"', iostat, iomsg)
+                     return
+                  endif
+                  message = ''
+                  if (panel%xaxis%tics%mode /= TICS_NONE) call panel%xaxis%tics%set_fixed(toks(i)%text, '', '', message)
+                  if (panel%yaxis%tics%mode /= TICS_NONE .and. len(message) == 0) &
+                     call panel%yaxis%tics%set_fixed(toks(i)%text, '', '', message)
+                  if (panel%x2axis%tics%mode /= TICS_NONE .and. len(message) == 0) &
+                     call panel%x2axis%tics%set_fixed(toks(i)%text, '', '', message)
+                  if (panel%y2axis%tics%mode /= TICS_NONE .and. len(message) == 0) &
+                     call panel%y2axis%tics%set_fixed(toks(i)%text, '', '', message)
+                  if (len(message) > 0) then
+                     call fail('set tics: '//message, iostat, iomsg)
+                     return
+                  endif
+               endblock
             else
                call fail('set tics: supported options are mirror, nomirror, in, out, scale, axis, border, '// &
                          'rangelimited, format, font, offset, textcolor and noenhanced, not "'//toks(i)%text//'"', &
@@ -12771,6 +12954,8 @@ contains
       call self%figure%set_x2label('')
    elseif (keyword(option, 'rlabel', 3_I4P)) then
       self%figure%panels(self%figure%current)%raxis%label = ''
+   elseif (option == 'isotropic') then
+      call self%figure%set_size(ratio=0.0_R8P)
    elseif (keyword(option, 'grid', 2_I4P)) then
       call self%figure%set_grid(.false., polar=0.0_R8P)
    elseif (keyword(option, 'polar', 3_I4P)) then
@@ -14426,7 +14611,8 @@ contains
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
-        word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P)
+        word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &
+        .or. word == 'concavehull' .or. word == 'delaunay'
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)
