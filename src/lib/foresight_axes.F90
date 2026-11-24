@@ -184,7 +184,7 @@ type :: axes_object
    logical                          :: key_reverse = .false. !< Samples left of the titles (gnuplot `reverse`).
    logical                          :: key_plain = .false. !< The key's texts as they are, not enhanced (`noenhanced`).
    logical                          :: title_plain = .false. !< The title as it is, not enhanced (`noenhanced`).
-   logical                          :: label_plain(4) = .false. !< The x, y, y2, x2 labels as they are (`noenhanced`).
+   logical                          :: label_plain(5) = .false. !< The x, y, y2, x2, r labels as they are (`noenhanced`).
    logical                          :: key_left = .false. !< Titles left-justified (gnuplot `Left`), else right.
    logical                          :: key_invert = .false. !< Entries in reverse order (gnuplot `invert`).
    logical                          :: key_opaque = .false. !< The key area painted over the plot (`opaque`).
@@ -240,9 +240,9 @@ type :: axes_object
    character(len=6)                 :: title_anchor = 'middle' !< Title justification, `set title left|right`:
                                                                !< start, middle or end, at the centre.
    character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
-   real(R8P)                        :: label_offset(2, 4) = 0.0_R8P !< x, y, y2, x2 label shifts [characters, y up],
+   real(R8P)                        :: label_offset(2, 5) = 0.0_R8P !< x, y, y2, x2, r label shifts [characters, y up],
                                                                     !< `set xlabel offset X,Y`.
-   character(len=24)                :: label_color(4) = ''     !< x, y, y2, x2 label colors, `set xlabel tc`.
+   character(len=24)                :: label_color(5) = ''     !< x, y, y2, x2, r label colors, `set xlabel tc`.
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
                                                                   !< `set lmargin`...): characters, or a page fraction
                                                                   !< with `margin_screen`; negative: computed.
@@ -2434,6 +2434,22 @@ contains
          endif
       enddo
    endif
+   ! gnuplot `set rlabel`: centred over the middle of the radial axis, two character heights (1.5 font sizes each)
+   ! above its tick labels, shifted by its offset [characters, y up]
+   if (self%raxis%has_label()) then
+      backend%literal = self%label_plain(5)
+      backend%boxed = btest(self%label_boxed, 4_I4P)
+      p = cx + 0.5_R8P * radius * sx + self%label_offset(1, 5) * CHAR_WIDTH * font_size
+      if (len_trim(self%label_color(5)) > 0) then
+         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * font_size, self%raxis%label, &
+                           'middle', color=trim(self%label_color(5)))
+      else
+         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * font_size, self%raxis%label, &
+                           'middle')
+      endif
+      backend%literal = .false.
+      backend%boxed = .false.
+   endif
    if (self%ttics%mode == TICS_NONE) return
    tics = self%ttics
    ! automatic: every 45 degrees from 0 (gnuplot draws none)
@@ -2821,7 +2837,8 @@ contains
    subroutine draw_titles_at(self, backend, area, font_size)
    !< The titles placed by gnuplot's `title ... at`: `at beginning` right-justified before the first placeable point,
    !< `at end` left-justified after the last one (key or not), `at X,Y` a key entry (title right-justified at the
-   !< screen position, its sample after it) while the key is shown.
+   !< screen position, its sample after it) while the key is shown; `left` or `right` after beginning or end justify it.
+   !< Polar plots too (their series projected on the page).
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
@@ -2831,8 +2848,9 @@ contains
    real(R8P)                            :: xs(2)     !< Sample abscissae [px].
    integer(I4P)                         :: s         !< Series counter.
    integer(I4P)                         :: i         !< Point counter.
+   character(len=5)                     :: anchor    !< Title anchor: start or end.
 
-   if (.not. allocated(self%series) .or. self%polar) return
+   if (.not. allocated(self%series)) return
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%series(s)%title_at == 0_I4P .or. len(self%series(s)%title) == 0) cycle
       if (self%series(s)%title_at == 3_I4P .or. self%series(s)%title_at == 4_I4P) then
@@ -2887,8 +2905,15 @@ contains
       endif
       p = [area(1) + p(1) * (area(2) - area(1)), area(4) - p(2) * (area(4) - area(3))]
       backend%literal = self%key_plain .or. self%series(s)%title_plain
-      call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, &
-                        trim(merge('end  ', 'start', self%series(s)%title_at == 1_I4P)))
+      select case (self%series(s)%title_justify)
+      case (1_I4P)
+         anchor = 'start'
+      case (2_I4P)
+         anchor = 'end'
+      case default
+         anchor = trim(merge('end  ', 'start', self%series(s)%title_at == 1_I4P))
+      endselect
+      call backend%text(p(1), p(2) + 0.35_R8P * font_size, self%series(s)%title, trim(anchor))
       backend%literal = .false.
    enddo
    endsubroutine draw_titles_at

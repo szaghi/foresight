@@ -39,7 +39,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(224)                           !< Per-check outcome.
+logical                       :: test_passed(225)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5280,6 +5280,43 @@ if (test_passed(224)) then
    endblock
 endif
 
+
+! set rlabel (gnuplot 6.0): over the middle of the radial axis, 2 character heights above its tick labels; titles at
+! beginning|end with left|right, polar plots too (solar_path)
+call interpreter%init(scratch)
+call interpreter%run_text('set output "foresight_script_test_rlabel.svg"; set polar; set rrange [0:2]; set rtics 0.5; '// &
+                          'unset xtics; unset ytics; set size square; set rlabel "RLAB"; '// &
+                          "plot '+' using 1:1 w l title 'BEG' at beg left, '+' using 1:1 w l title 'END' at end right", &
+                          iostat, iomsg)
+if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+test_passed(225) = iostat == 0_I4P
+if (test_passed(225)) then
+   block
+      character(len=1000) :: line   !< SVG line.
+      integer(I4P)        :: ios    !< Read status.
+      logical             :: label  !< The r label, centred.
+      logical             :: beg    !< BEG left-justified (start).
+      logical             :: fin    !< END right-justified (end).
+
+      label = .false.
+      beg = .false.
+      fin = .false.
+      open(newunit=unit, file='foresight_script_test_rlabel.svg')
+      do
+         read(unit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, 'text-anchor="middle">RLAB</text>') > 0) label = .true.
+         if (index(line, '>BEG</text>') > 0 .and. index(line, 'text-anchor') == 0) beg = .true.
+         if (index(line, 'text-anchor="end">END</text>') > 0) fin = .true.
+      enddo
+      close(unit, status='delete')
+      test_passed(225) = label .and. beg .and. fin
+   endblock
+endif
+call interpreter%run_text('unset rlabel', iostat, iomsg)
+test_passed(225) = test_passed(225) .and. iostat == 0_I4P .and. &
+                  len(interpreter%figure%panels(1)%raxis%label) == 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5288,7 +5325,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,224L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,225L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

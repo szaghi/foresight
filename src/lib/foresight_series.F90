@@ -106,6 +106,8 @@ type :: series_object
                                                      !< first point, 2 after the last one, 3 a page position, 4 a
                                                      !< plot area position (graph coordinates).
    real(R8P)                     :: title_xy(2) = 0.0_R8P !< That position, screen fractions from the bottom left.
+   integer(I4P)                  :: title_justify = 0_I4P !< `title at beginning|end left|right`: 1 left, 2 right,
+                                                          !< 0 the place's own (right before the first point).
    integer(I4P)                  :: pointnumber = 0_I4P !< About N point markers evenly spread, 0 for all (gnuplot
                                                         !< `pointnumber`).
    character(len=2)              :: ellipse_units = 'xy' !< Units of the ellipse diameters: `xy` (major in x, minor

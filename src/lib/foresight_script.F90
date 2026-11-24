@@ -2798,6 +2798,7 @@ contains
    character(len=:), allocatable                :: heads     !< Arrowhead words of vectors and arrows.
    real(R8P)                                    :: item_head(2) !< Their head length (0 the default) and angle [deg].
    integer(I4P)                                 :: title_at  !< Title place: 0 the key, 1 beginning, 2 end, 3 at X,Y.
+   integer(I4P)                                 :: title_justify !< Its justification: 0 its own, 1 left, 2 right.
    character(len=:), allocatable                :: point_tc  !< Color of the character points (`tc`).
    character(len=2)                             :: ellipse_units !< Units of the ellipse diameters (`units xy|xx|yy`).
    logical                                      :: rotate_var !< Labels rotated by a using field (`rotate variable`).
@@ -3282,6 +3283,7 @@ contains
       ellipse_units = 'xy'
       if (allocated(point_tc)) deallocate(point_tc)
       title_at = 0_I4P
+      title_justify = 0_I4P
       title_xy = 0.0_R8P
       item_head = 0.0_R8P
       item_head_system = 'first'
@@ -5514,6 +5516,7 @@ contains
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_auto = auto_title
          panel%series(last)%title_at = title_at
+         panel%series(last)%title_justify = title_justify
          panel%series(last)%title_xy = title_xy
          if (allocated(line%pt_char)) panel%series(last)%style%point_char = line%pt_char
          if (allocated(point_tc) .and. panel%series(last)%style%with /= WITH_LABELS) &
@@ -5533,12 +5536,20 @@ contains
          call fail('plot: title at: beginning, end or X,Y expected', iostat, iomsg)
          return
       endif
-      if (keyword(tokens(i + 1_I4P)%text, 'beginning', 3_I4P)) then
+      if (keyword(tokens(i + 1_I4P)%text, 'beginning', 3_I4P) .or. tokens(i + 1_I4P)%text == 'end') then
          i = i + 1_I4P
-         title_at = 1_I4P
-      elseif (tokens(i + 1_I4P)%text == 'end') then
-         i = i + 1_I4P
-         title_at = 2_I4P
+         title_at = merge(2_I4P, 1_I4P, tokens(i)%text == 'end')
+         ! gnuplot's justification of that title: left or right
+         if (i < size(tokens, kind=I4P)) then
+            select case (tokens(i + 1_I4P)%text)
+            case ('left')
+               i = i + 1_I4P
+               title_justify = 1_I4P
+            case ('right')
+               i = i + 1_I4P
+               title_justify = 2_I4P
+            endselect
+         endif
       else
          ! screen coordinates (3), or graph ones (4): one system for both
          title_at = 3_I4P
@@ -8164,6 +8175,10 @@ contains
    elseif (keyword(option, 'x2label', 3_I4P)) then
       if (.not. axis_label(4_I4P)) return
       call self%figure%set_x2label(text)
+   elseif (keyword(option, 'rlabel', 3_I4P)) then
+      ! gnuplot `set rlabel`: over the radial axis of polar plots
+      if (.not. axis_label(5_I4P)) return
+      self%figure%panels(self%figure%current)%raxis%label = text
    elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
       then
       call self%annotation_option(tokens, iostat, iomsg)
@@ -9564,7 +9579,7 @@ contains
       !< [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, shifted by characters (x right,
       !< y up), in its color, and whether it is read as it is, not as enhanced text. The font, the rotation and the
       !< justification are read and ignored, as one font and the axis' own layout are foresight's.
-      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2.
+      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2, 5 r.
       logical                       :: ok     !< Success.
       character(len=*), parameter   :: WORDS = 'offset font tc textcolor textc textco textcol textcolo rotate norotate '// &
                                                'left right center centre noenhanced noenh enhanced enh boxed noboxed' !< Options.
@@ -12754,6 +12769,8 @@ contains
       call self%figure%set_y2label('')
    elseif (keyword(option, 'x2label', 3_I4P)) then
       call self%figure%set_x2label('')
+   elseif (keyword(option, 'rlabel', 3_I4P)) then
+      self%figure%panels(self%figure%current)%raxis%label = ''
    elseif (keyword(option, 'grid', 2_I4P)) then
       call self%figure%set_grid(.false., polar=0.0_R8P)
    elseif (keyword(option, 'polar', 3_I4P)) then
