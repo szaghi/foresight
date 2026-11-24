@@ -25,7 +25,7 @@ use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_time, only : time_format_check
 use foresight_style, only : fill_style, sequence_colors, style_object, FILL_EMPTY, FILL_SOLID, WITH_HISTOGRAMS
-use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
+use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
@@ -100,6 +100,8 @@ type :: figure_object
       procedure, pass(self) :: add_label       !< Add a label object (gnuplot `set label`).
       procedure, pass(self) :: add_arrow       !< Add an arrow object (gnuplot `set arrow`).
       procedure, pass(self) :: add_object      !< Add a shape object (gnuplot `set object`).
+      procedure, pass(self) :: add_pixmap      !< Add an image from a PNG file (gnuplot `set pixmap`).
+      procedure, pass(self) :: unset_pixmap    !< gnuplot `unset pixmap`.
       procedure, pass(self) :: set_label       !< gnuplot `set label`.
       procedure, pass(self) :: set_arrow       !< gnuplot `set arrow`.
       procedure, pass(self) :: set_object      !< gnuplot `set object`.
@@ -936,6 +938,42 @@ contains
       call push(panel%objects, item)
    endassociate
    endsubroutine add_object
+
+   subroutine add_pixmap(self, pixmap)
+   !< Add `pixmap` to the current panel, an existing tag replaced.
+   class(figure_object), intent(inout) :: self   !< Figure.
+   type(pixmap_object),  intent(in)    :: pixmap !< Pixmap.
+   integer(I4P)                        :: k      !< Counter.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (allocated(panel%pixmaps)) then
+         do k = 1_I4P, size(panel%pixmaps, kind=I4P)
+            if (panel%pixmaps(k)%tag == pixmap%tag) then
+               panel%pixmaps(k) = pixmap
+               return
+            endif
+         enddo
+      endif
+      call push(panel%pixmaps, pixmap)
+   endassociate
+   endsubroutine add_pixmap
+
+   subroutine unset_pixmap(self, tag)
+   !< Remove the pixmap `tag` of the current panel, every pixmap without it (gnuplot `unset pixmap N`, `unset pixmaps`).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   integer(I4P),         intent(in), optional :: tag  !< Tag.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (.not. allocated(panel%pixmaps)) return
+      if (present(tag)) then
+         panel%pixmaps = pack(panel%pixmaps, panel%pixmaps%tag /= tag)
+      else
+         deallocate(panel%pixmaps)
+      endif
+   endassociate
+   endsubroutine unset_pixmap
 
    subroutine unset_label(self, tag)
    !< Remove the label `tag` of the current panel, every label without it (gnuplot `unset label [N]`).

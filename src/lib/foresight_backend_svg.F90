@@ -82,6 +82,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_label
       procedure, pass(self) :: hover !< Text on mouse-over of a point: a transparent disk with its title.
       procedure, pass(self) :: front_area !< The front layer of the plot area: an svg over the overlays.
+      procedure, pass(self) :: pixmap     !< A PNG image: an `<image>` of the file as data.
       procedure, pass(self) :: data_label_raw !< data_label without the ISO 8859-1 conversion.
       ! building blocks for extending devices
       procedure, pass(self) :: close_file  !< Close the stream and publish the file atomically.
@@ -623,6 +624,21 @@ contains
       endif
       endsubroutine add_head
    endsubroutine data_arrows
+
+   subroutine pixmap(self, x, y, width, height, png)
+   !< The PNG image `png` (base64) with its top left corner at (`x`, `y`), `width` x `height` [px], stretched: an
+   !< `<image>` holding the file, as gnuplot's svg `set pixmap`.
+   class(backend_svg), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Left side [px].
+   real(R8P),          intent(in)    :: y      !< Top side [px].
+   real(R8P),          intent(in)    :: width  !< Width [px].
+   real(R8P),          intent(in)    :: height !< Height [px].
+   character(len=*),   intent(in)    :: png    !< The PNG file, base64.
+
+   call self%put('<image x="'//px(x)//'" y="'//px(y)//'" width="'//px(width)//'" height="'//px(height)// &
+                 '" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" '// &
+                 'xlink:href="data:image/png;base64,'//png//'"/>')
+   endsubroutine pixmap
 
    subroutine front_area(self, opening, separate)
    !< Open (`opening`) or close the front layer of the plot area: an svg of the plot area's geometry (`fs-front`,

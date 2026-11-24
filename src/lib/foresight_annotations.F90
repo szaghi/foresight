@@ -24,6 +24,8 @@ public :: draw_arrows
 public :: draw_labels
 public :: draw_shapes
 public :: has_shapes
+public :: draw_pixmaps
+public :: pixmap_object
 public :: label_object
 public :: place_object
 public :: push
@@ -34,7 +36,7 @@ public :: in_data
 interface push
    !< Append an item through a temporary: nvfortran 26.9 corrupts `list = [list, item]` when the items hold
    !< deferred-length characters.
-   module procedure push_label, push_arrow, push_shape
+   module procedure push_label, push_arrow, push_shape, push_pixmap
 endinterface push
 
 character(len=*), parameter :: FRAME_COLOR = 'black' !< Default text and line color (the theme maps it).
@@ -104,6 +106,19 @@ type :: shape_object
    character(len=6)                :: layer = 'back'     !< `behind`, `back` or `front`.
    logical                         :: clip = .true.      !< Clipped by the plot area (axis coordinates only).
 endtype shape_object
+
+type :: pixmap_object
+   !< An image from a PNG file, gnuplot `set pixmap`.
+   integer(I4P)                  :: tag = 0_I4P         !< Tag (`set pixmap N`).
+   character(len=:), allocatable :: png                 !< The file, base64.
+   integer(I4P)                  :: pixels(2) = 0_I4P   !< Its width and height [pixels].
+   type(place_object)            :: at                  !< Position: the lower left corner, or the centre.
+   type(place_object)            :: span                !< Width and height, each in its system.
+   integer(I4P)                  :: sized = 0_I4P       !< 0 its pixels, 1 `size` (both), 2 `width` (the height by
+                                                        !< the aspect), 3 `height` (the width by the aspect).
+   logical                       :: center = .false.    !< `at` is the centre.
+   character(len=6)              :: layer = 'front'     !< `behind`, `back` or `front` (gnuplot's default).
+endtype pixmap_object
 
 type :: frame_object
    !< What a position needs: the plot area, the page, the axes.
@@ -393,6 +408,97 @@ contains
       endsubroutine head
    endsubroutine draw_arrows
 
+   subroutine draw_pixmaps(pixmaps, layer, backend, area, canvas, font_size, xaxis, yaxis, x2axis, y2axis)
+   !< The pixmaps of `layer` (`behind`, `back`, `front`), gnuplot `set pixmap`: each PNG at its position (its lower left
+   !< corner, or its centre), its own pixels large, or `size` W,H, or `width` W (or `height` H) the other side by its
+   !< aspect; W and H in their systems (`first` and `second` measured from the position, `graph`, `screen` fractions,
+   !< `character` cells). Those tied to the data in the `fs-anchored` group (hidden by the viewer while zoomed).
+   type(pixmap_object),   intent(in)    :: pixmaps(:) !< Pixmaps.
+   character(len=*),      intent(in)    :: layer      !< Layer.
+   class(backend_object), intent(inout) :: backend    !< Output device.
+   real(R8P),             intent(in)    :: area(4)    !< Plot area: left, right, top, bottom [px].
+   real(R8P),             intent(in)    :: canvas(2)  !< Page width and height [px].
+   real(R8P),             intent(in)    :: font_size  !< Font size [px].
+   type(axis_object),     intent(in)    :: xaxis      !< x axis.
+   type(axis_object),     intent(in)    :: yaxis      !< y axis.
+   type(axis_object),     intent(in)    :: x2axis     !< x2 axis.
+   type(axis_object),     intent(in)    :: y2axis     !< y2 axis.
+   type(frame_object)                   :: frame      !< Plot area and page.
+   real(R8P)                            :: xy(2)      !< Position [px].
+   real(R8P)                            :: wh(2)      !< Width and height [px].
+   integer(I4P)                         :: k          !< Pixmap counter.
+   integer(I4P)                         :: pass       !< 1 page pixmaps, 2 anchored ones.
+
+   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
+   do pass = 1_I4P, 2_I4P
+      if (.not. any([(trim(pixmaps(k)%layer) == layer .and. (anchored(pixmaps(k)%at) .eqv. pass == 2_I4P), &
+                      k = 1_I4P, size(pixmaps, kind=I4P))])) cycle
+      if (pass == 2_I4P) call backend%begin_group('fs-anchored')
+      do k = 1_I4P, size(pixmaps, kind=I4P)
+         if (trim(pixmaps(k)%layer) /= layer) cycle
+         if (anchored(pixmaps(k)%at) .neqv. pass == 2_I4P) cycle
+         if (.not. allocated(pixmaps(k)%png) .or. any(pixmaps(k)%pixels <= 0_I4P)) cycle
+         xy = page_of(pixmaps(k)%at, frame, xaxis, yaxis, x2axis, y2axis)
+         if (xy(1) == huge(1.0_R8P)) cycle
+         wh = real(pixmaps(k)%pixels, R8P)
+         if (pixmaps(k)%sized > 0_I4P) then
+            wh = span_of(pixmaps(k)%at, pixmaps(k)%span, frame, xaxis, yaxis, x2axis, y2axis)
+            if (pixmaps(k)%sized == 2_I4P) wh(2) = wh(1) * real(pixmaps(k)%pixels(2), R8P) / &
+                                                   real(pixmaps(k)%pixels(1), R8P)
+            if (pixmaps(k)%sized == 3_I4P) wh(1) = wh(2) * real(pixmaps(k)%pixels(1), R8P) / &
+                                                   real(pixmaps(k)%pixels(2), R8P)
+         endif
+         if (pixmaps(k)%center) then
+            call backend%pixmap(xy(1) - 0.5_R8P * wh(1), xy(2) - 0.5_R8P * wh(2), wh(1), wh(2), pixmaps(k)%png)
+         else
+            call backend%pixmap(xy(1), xy(2) - wh(2), wh(1), wh(2), pixmaps(k)%png)
+         endif
+      enddo
+      if (pass == 2_I4P) call backend%end_group
+   enddo
+   endsubroutine draw_pixmaps
+
+   pure function span_of(centre, span, frame, xaxis, yaxis, x2axis, y2axis) result(size_px)
+   !< The page size [px] of a width and height `span` (its systems in `sx`, `sy`) about `centre`: axis values measured
+   !< across the centre (a log axis included), graph and screen ones as fractions, character ones in cells.
+   type(place_object), intent(in) :: centre     !< Centre.
+   type(place_object), intent(in) :: span       !< Width and height.
+   type(frame_object), intent(in) :: frame      !< Plot area and page.
+   type(axis_object),  intent(in) :: xaxis      !< x axis.
+   type(axis_object),  intent(in) :: yaxis      !< y axis.
+   type(axis_object),  intent(in) :: x2axis     !< x2 axis.
+   type(axis_object),  intent(in) :: y2axis     !< y2 axis.
+   real(R8P)                      :: size_px(2) !< Width and height [px].
+   type(place_object)             :: lo         !< Lower corner.
+   type(place_object)             :: hi         !< Upper corner.
+   real(R8P)                      :: a(2)       !< Lower corner [px].
+   real(R8P)                      :: b(2)       !< Upper corner [px].
+
+   lo = centre
+   hi = centre
+   lo%sx = span%sx
+   hi%sx = span%sx
+   lo%sy = span%sy
+   hi%sy = span%sy
+   if (span%sx == centre%sx) then
+      lo%x = centre%x - 0.5_R8P * span%x
+      hi%x = centre%x + 0.5_R8P * span%x
+   else
+      lo%x = 0.0_R8P
+      hi%x = span%x
+   endif
+   if (span%sy == centre%sy) then
+      lo%y = centre%y - 0.5_R8P * span%y
+      hi%y = centre%y + 0.5_R8P * span%y
+   else
+      lo%y = 0.0_R8P
+      hi%y = span%y
+   endif
+   a = page_of(lo, frame, xaxis, yaxis, x2axis, y2axis)
+   b = page_of(hi, frame, xaxis, yaxis, x2axis, y2axis)
+   size_px = abs(b - a)
+   endfunction span_of
+
    pure function in_space(shape) result(yes)
    !< Whether `shape` is drawn in data space: clipped, every point (and the size) in axis values.
    type(shape_object), intent(in) :: shape !< Object.
@@ -670,6 +776,22 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_arrow
+
+   pure subroutine push_pixmap(list, item)
+   !< Append `item` to `list`.
+   type(pixmap_object), allocatable, intent(inout) :: list(:) !< List.
+   type(pixmap_object),              intent(in)    :: item    !< Item.
+   type(pixmap_object), allocatable                :: grown(:) !< Longer list.
+   integer(I4P)                                    :: k        !< Counter.
+
+   if (.not. allocated(list)) allocate(list(0))
+   allocate(grown(size(list) + 1))
+   do k = 1_I4P, size(list, kind=I4P)
+      grown(k) = list(k)
+   enddo
+   grown(size(grown)) = item
+   call move_alloc(grown, list)
+   endsubroutine push_pixmap
 
    pure subroutine push_shape(list, item)
    !< Append `item` to `list` through a temporary.

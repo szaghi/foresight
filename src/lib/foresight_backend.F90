@@ -96,6 +96,7 @@ type, abstract :: backend_object
       procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
       procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
+      procedure,                            pass(self)           :: pixmap         !< A PNG image [px].
       procedure,                            pass(self)           :: front_area     !< Open or close the front layer of
                                                                                       !< the plot area.
 endtype backend_object
@@ -331,6 +332,18 @@ contains
    real(R8P),             intent(in)    :: diameter !< Sensitive disk [px].
 
    endsubroutine hover
+
+   subroutine pixmap(self, x, y, width, height, png)
+   !< The PNG image `png` (base64) with its top left corner at (`x`, `y`), `width` x `height` [px], stretched (gnuplot
+   !< `set pixmap`): nothing on a device without images.
+   class(backend_object), intent(inout) :: self   !< Device.
+   real(R8P),             intent(in)    :: x      !< Left side [px].
+   real(R8P),             intent(in)    :: y      !< Top side [px].
+   real(R8P),             intent(in)    :: width  !< Width [px].
+   real(R8P),             intent(in)    :: height !< Height [px].
+   character(len=*),      intent(in)    :: png    !< The PNG file, base64.
+
+   endsubroutine pixmap
 
    subroutine front_area(self, opening, separate)
    !< Open (`opening`) or close the front layer of the plot area, after its overlays (markers, caps): the data space

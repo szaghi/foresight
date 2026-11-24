@@ -1562,6 +1562,7 @@ cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system o
 | `set object [N] circle [at POS] size R [arc [A:B]]` | as rectangle; empty with a black border; `R` in x axis values (round on the page), `radius R` the same, an arc a wedge from the centre |
 | `set object [N] ellipse [at POS] size W,H [angle A]` | as circle; the axes in the units of x and y, turned by `A` in those units (gnuplot's `units xy`) |
 | `set object [N] polygon from POS to POS to POS ...` | as circle |
+| `set pixmap N "file.png" [at POS] [size W,H \| width W \| height H] [center]` | a PNG image, gnuplot 6.0's: `at` its lower left corner (`center` its centre), its own pixels without a size, `width` or `height` alone the other side by its aspect; W, H in any system (`first` by default, `char` cells); `behind`, `back`, `front` (the default) its layer; `unset pixmap N`, `unset pixmaps`. PNG only (gnuplot also reads JPEG and GIF); the SVG holds the file, text devices draw nothing |
 
 `N` is a tag: an existing one is replaced, or changed when no position is given (`set object 3 fc rgb "red"`), as
 gnuplot; without it the next free tag. `rto` is relative to the previous point. Layers: `back` behind the data,

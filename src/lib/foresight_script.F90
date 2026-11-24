@@ -123,7 +123,7 @@ use foresight_expression, only : block_hook, element_fetch_hook, element_hook, f
                                  saved_array, saved_variable, &
                                  symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
                                  OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
-use foresight_annotations, only : arrow_object, label_object, place_object, push, shape_object
+use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
@@ -148,7 +148,8 @@ use foresight_hulls, only : concave_hull, convex_hull, delaunay_triangles, expan
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
                              TOKEN_RANGE, TOKEN_STRING, TOKEN_WORD, UNAME_CHARS, UNAME_START
-use penf, only : I4P, I8P, R4P, R8P
+use penf, only : I1P, I4P, I8P, R4P, R8P
+use befor64, only : b64_encode, b64_init, is_b64_initialized
 
 implicit none
 private
@@ -7989,6 +7990,7 @@ contains
    type(label_object)                           :: label     !< Label.
    type(arrow_object)                           :: arrow     !< Arrow.
    type(shape_object)                           :: object    !< Object.
+   type(pixmap_object)                          :: pix       !< Pixmap.
    type(place_object)                           :: p         !< A position.
    type(line_style_object)                      :: line      !< Line properties read.
    integer(I4P)                                 :: i         !< Token counter.
@@ -8010,6 +8012,8 @@ contains
       option = 'style arrow'
    elseif (tokens(1)%text == 'rectanglestyle') then
       option = 'style rectangle'
+   elseif (tokens(1)%text == 'pixmap') then
+      option = 'pixmap'
    else
       option = 'object'
    endif
@@ -8058,6 +8062,15 @@ contains
       case ('style rectangle')
          object = self%rectangle_style
          found = .true.
+      case ('pixmap')
+         if (allocated(panel%pixmaps) .and. tag > 0_I4P) then
+            do k = 1_I4P, size(panel%pixmaps, kind=I4P)
+               if (panel%pixmaps(k)%tag == tag) then
+                  pix = panel%pixmaps(k)
+                  found = .true.
+               endif
+            enddo
+         endif
       case default
          if (allocated(panel%objects) .and. tag > 0_I4P) then
             do k = 1_I4P, size(panel%objects, kind=I4P)
@@ -8081,6 +8094,16 @@ contains
       call fail('set style arrow: a style number is expected', iostat, iomsg)
       return
    endif
+   if (option == 'pixmap' .and. tag == 0_I4P) then
+      call fail('set pixmap: a pixmap number is expected', iostat, iomsg)
+      return
+   endif
+   pix%tag = tag
+   if (option == 'pixmap' .and. tag == 0_I4P) then
+      call fail('set pixmap: a pixmap number is expected', iostat, iomsg)
+      return
+   endif
+   pix%tag = tag
    label%tag = tag
    arrow%tag = tag
    object%tag = tag
@@ -8101,6 +8124,8 @@ contains
       call label_words
    case ('arrow', 'style arrow')
       call arrow_words
+   case ('pixmap')
+      call pixmap_words
    case default
       call object_words
    endselect
@@ -8119,6 +8144,12 @@ contains
       self%rectangle_style = object
    case ('label')
       call self%figure%add_label(label)
+   case ('pixmap')
+      if (.not. allocated(pix%png)) then
+         call fail('set pixmap: a PNG file is expected', iostat, iomsg)
+         return
+      endif
+      call self%figure%add_pixmap(pix)
    case ('arrow')
       if (.not. placed) then
          call fail('set arrow: from POS to|rto POS expected', iostat, iomsg)
@@ -8177,6 +8208,90 @@ contains
                 iomsg)
       endsubroutine apply_arrow_style
 
+      subroutine pixmap_words
+      !< gnuplot `set pixmap N "file.png" [at POS] [size W,H | width W | height H] [center] [behind|back|front]`: the
+      !< PNG file read now (its width and height from its header), POS its lower left corner (its centre with
+      !< `center`), W and H in their systems (`first` by default), the other side by the aspect with `width` or
+      !< `height` alone, its own pixels without.
+      character(len=:), allocatable :: word !< Current word.
+
+         do while (i <= size(tokens, kind=I4P))
+            word = tokens(i)%text
+            if (tokens(i)%kind == TOKEN_STRING) then
+               call read_png(word)
+               if (iostat /= 0_I4P) return
+            elseif (word == 'at') then
+               call position(pix%at)
+            elseif (word == 'size') then
+               call position(pix%span)
+               pix%sized = 1_I4P
+            elseif (word == 'width') then
+               pix%span%sx = 'first'
+               call coordinate(pix%span%x, pix%span%sx)
+               pix%sized = 2_I4P
+            elseif (word == 'height') then
+               pix%span%sy = 'first'
+               call coordinate(pix%span%y, pix%span%sy)
+               pix%sized = 3_I4P
+            elseif (word == 'center' .or. word == 'centre') then
+               pix%center = .true.
+            elseif (is_word(word, 'behind back front')) then
+               pix%layer = word
+            else
+               call fail('set pixmap: unsupported option "'//word//'" (a file, at, size, width, height, center, '// &
+                         'behind, back, front are)', iostat, iomsg)
+            endif
+            if (iostat /= 0_I4P) return
+            i = i + 1_I4P
+         enddo
+      endsubroutine pixmap_words
+
+      subroutine read_png(file)
+      !< The PNG `file` into `pix`: its bytes as base64, its width and height (the IHDR chunk, big endian).
+      character(len=*), intent(in)  :: file     !< File name.
+      integer(I1P), allocatable     :: bytes(:) !< File bytes.
+      character(len=:), allocatable :: code     !< Base64.
+      integer(I4P)                  :: unit     !< File unit.
+      integer(I4P)                  :: n        !< File size [bytes].
+      integer(I4P)                  :: ios      !< I/O status.
+      integer(I4P)                  :: k        !< Byte counter.
+      integer(I4P), parameter       :: SIGNATURE(8) = [137_I4P, 80_I4P, 78_I4P, 71_I4P, 13_I4P, 10_I4P, 26_I4P, &
+                                                       10_I4P] !< PNG signature.
+
+         open(newunit=unit, file=file, access='stream', form='unformatted', action='read', status='old', iostat=ios)
+         if (ios /= 0_I4P) then
+            call fail('set pixmap: cannot open "'//file//'"', iostat, iomsg)
+            return
+         endif
+         inquire(unit=unit, size=n)
+         if (n < 24_I4P) then
+            close(unit)
+            call fail('set pixmap: "'//file//'" is not a PNG file (foresight reads PNG files only)', iostat, iomsg)
+            return
+         endif
+         allocate(bytes(n))
+         read(unit, iostat=ios) bytes
+         close(unit)
+         if (ios /= 0_I4P) then
+            call fail('set pixmap: cannot read "'//file//'"', iostat, iomsg)
+            return
+         endif
+         do k = 1_I4P, 8_I4P
+            if (iand(int(bytes(k), I4P), 255_I4P) /= SIGNATURE(k)) then
+               call fail('set pixmap: "'//file//'" is not a PNG file (foresight reads PNG files only)', iostat, iomsg)
+               return
+            endif
+         enddo
+         pix%pixels = 0_I4P
+         do k = 1_I4P, 4_I4P
+            pix%pixels(1) = pix%pixels(1) * 256_I4P + iand(int(bytes(16_I4P + k), I4P), 255_I4P)
+            pix%pixels(2) = pix%pixels(2) * 256_I4P + iand(int(bytes(20_I4P + k), I4P), 255_I4P)
+         enddo
+         if (.not. is_b64_initialized) call b64_init
+         call b64_encode(n=bytes, code=code)
+         pix%png = code
+      endsubroutine read_png
+
       pure function is_annotation_word(w) result(yes)
       !< Whether `w` is an option word of the annotations (not a tag).
       character(len=*), intent(in) :: w   !< Word.
@@ -8186,7 +8301,7 @@ contains
                     'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
                     'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
                     'backhead heads filled empty nofilled noborder clip noclip default units boxed noboxed as arrowstyle '// &
-                    'noenh noenha noenhan noenhanc noenhance enh enha enhan enhanc enhance')
+                    'noenh noenha noenhan noenhanc noenhance enh enha enhan enhanc enhance width height')
       endfunction is_annotation_word
 
       subroutine position(q)
@@ -8226,6 +8341,19 @@ contains
                q%sy = 'first'
             endblock
          endassociate
+         ! a third coordinate (gnuplot's z): read and ignored
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+               block
+                  real(R8P)        :: z  !< Ignored.
+                  character(len=9) :: sz !< Its system.
+
+                  sz = 'first'
+                  i = i + 1_I4P
+                  call coordinate(z, sz)
+               endblock
+            endif
+         endif
          return
       endif
       call coordinate(q%x, q%sx)
@@ -8931,8 +9059,8 @@ contains
       ! gnuplot `set rlabel`: over the radial axis of polar plots
       if (.not. axis_label(5_I4P)) return
       self%figure%panels(self%figure%current)%raxis%label = text
-   elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
-      then
+   elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P) &
+           .or. option == 'pixmap') then
       call self%annotation_option(tokens, iostat, iomsg)
    elseif (is_word(option, 'xdata ydata y2data x2data xda yda y2da x2da xdat ydat y2dat x2dat')) then
       ! `set xdata time`: the x data are times read with the timefmt, the axis ticked and labelled as times
@@ -13732,7 +13860,8 @@ contains
    endif
    ! labels, arrows, objects take a tag (handled below)
    if (.not. (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. &
-              keyword(option, 'object', 3_I4P) .or. option == 'link' .or. keyword(option, 'nonlinear', 4_I4P))) then
+              keyword(option, 'object', 3_I4P) .or. option == 'link' .or. keyword(option, 'nonlinear', 4_I4P) .or. &
+              option == 'pixmap')) then
       ! `unset polar grid` (gnuplot's grid settings)
       if (keyword(option, 'polar', 3_I4P) .and. size(tokens) == 2) then
          if (tokens(2)%text /= 'grid') then
@@ -13835,6 +13964,25 @@ contains
       call self%figure%set_cblabel('')
    elseif (keyword(option, 'boxwidth', 3_I4P)) then
       call self%figure%set_boxwidth()
+   elseif (option == 'pixmap' .or. option == 'pixmaps') then
+      ! unset pixmap N, unset pixmaps
+      block
+         integer(I4P) :: n !< Tag.
+         integer(I4P) :: j !< Token counter.
+
+         if (size(tokens) > 2 .or. (option == 'pixmap' .and. size(tokens) /= 2) .or. &
+             (option == 'pixmaps' .and. size(tokens) /= 1)) then
+            call fail('unset pixmap N, or unset pixmaps, expected', iostat, iomsg)
+            return
+         endif
+         if (option == 'pixmap') then
+            j = 1_I4P
+            if (.not. next_integer(tokens, j, n, iostat, iomsg, self%symbols)) return
+            call self%figure%unset_pixmap(n)
+         else
+            call self%figure%unset_pixmap()
+         endif
+      endblock
    elseif (keyword(option, 'label', 3_I4P) .or. keyword(option, 'arrow', 3_I4P) .or. keyword(option, 'object', 3_I4P)) &
       then
       ! unset label|arrow|object [N]

@@ -1313,6 +1313,17 @@ Positions mix data (`first`), plot area (`graph`) and page (`screen`) coordinate
 whole height behind the grid, the polygon is in front of the curve. In the HTML page the objects zoom with the data.
 See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
+### Images from PNG files
+
+<<< @/examples/snippets/cb_pixmap.gp{gnuplot}
+
+<Plot name="cb_pixmap" svg :width="560" :height="320" />
+
+`set pixmap N 'file.png'` puts a PNG image on the page, as gnuplot 6.0: `at` its lower left corner (its centre with
+`center`), in any coordinates; `width` (or `height`) sets one side, the other by the image's aspect; `size W,H` both,
+none its own pixels. The SVG holds the file itself. See
+[Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+
 
 ### Boxed labels
 

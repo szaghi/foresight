@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(239)                           !< Per-check outcome.
+logical                       :: test_passed(240)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5878,6 +5878,39 @@ if (test_passed(239)) then
    endblock
 endif
 
+! set pixmap, as gnuplot 6.0: a PNG file at a position (its lower left corner, or its centre), its own pixels large,
+! or a size, or a width (the height by its aspect); the svg an <image> of the file; unset pixmap N; a file not PNG
+block
+   integer(I4P), parameter :: PNG(71) = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, &
+                                         0, 0, 1, 8, 2, 0, 0, 0, 123, 64, 232, 221, 0, 0, 0, 14, 73, 68, 65, 84, 120, &
+                                         156, 99, 248, 207, 192, 0, 66, 255, 1, 15, 249, 3, 253, 133, 17, 153, 118, 0, &
+                                         0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130] !< A 2 x 1 PNG.
+   character(len=:), allocatable :: svg !< Rendered SVG.
+   integer(I4P)                  :: k   !< Byte counter.
+
+   open(newunit=unit, file='foresight_script_test_pixmap.png', access='stream', form='unformatted', status='replace')
+   write(unit) [(achar(PNG(k)), k = 1, 71)]
+   close(unit)
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pixmap.svg'; "// &
+                             "set pixmap 1 'foresight_script_test_pixmap.png' at screen 0.1, 0.1 width screen 0.2 back; "// &
+                             "set pixmap 2 'foresight_script_test_pixmap.png' at screen 0.5, 0.5 center; "// &
+                             "set pixmap 3 'foresight_script_test_pixmap.png' at screen 0, 0 size screen 0.1, 0.05; "// &
+                             "unset pixmap 3; plot x", iostat, iomsg)
+   test_passed(240) = iostat == 0_I4P
+   if (test_passed(240)) then
+      svg = read_text('foresight_script_test_pixmap.svg')
+      ! 1: 120 px wide, 60 high (the aspect 2:1), its lower left at (60, 360); 2: 2 x 1 px about the page centre
+      test_passed(240) = index(svg, '<image x="60" y="300" width="120" height="60"') > 0 .and. &
+                        index(svg, '<image x="299" y="199.5" width="2" height="1"') > 0 .and. &
+                        index(svg, 'height="20"') == 0 .and. index(svg, 'data:image/png;base64,iVBORw0KGgo') > 0
+   endif
+   call interpreter%run_text("set pixmap 4 'foresight_script_test_pixmap.svg'", iostat, iomsg)
+   test_passed(240) = test_passed(240) .and. iostat /= 0_I4P .and. index(iomsg, 'not a PNG file') > 0
+   call interpreter%run_text("set pixmap 'foresight_script_test_pixmap.png'", iostat, iomsg)
+   test_passed(240) = test_passed(240) .and. iostat /= 0_I4P .and. index(iomsg, 'a pixmap number is expected') > 0
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5886,7 +5919,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,239L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,240L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

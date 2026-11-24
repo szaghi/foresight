@@ -51,7 +51,8 @@ module foresight_axes
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
-                                  has_shapes, label_object, shape_object
+                                  has_shapes, label_object, pixmap_object, shape_object, &
+                                  draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -293,6 +294,7 @@ type :: axes_object
    type(label_object), allocatable  :: notes(:)   !< Labels, gnuplot `set label`.
    type(arrow_object), allocatable  :: arrows(:)  !< Arrows, gnuplot `set arrow`.
    type(shape_object), allocatable  :: objects(:) !< Objects, gnuplot `set object`.
+   type(pixmap_object), allocatable  :: pixmaps(:)       !< Images from PNG files, gnuplot `set pixmap`.
    real(R8P)                        :: x2_rise = 0.0_R8P   !< Height of the rotated x2 tick labels above their gap [px],
                                                            !< 0 if not rotated (set by `render` from the text widths).
    logical                          :: readout = .true. !< Draw the readouts.
@@ -1617,6 +1619,10 @@ contains
       character(len=*), intent(in) :: layer      !< `behind`, `back` or `front`.
       logical,          intent(in) :: data_space !< The data space objects, else the page annotations.
 
+      ! the pixmaps on the page before the objects of their layer, as gnuplot
+      if (.not. data_space .and. allocated(self%pixmaps)) &
+         call draw_pixmaps(self%pixmaps, layer, backend, area, self%canvas, font_size, self%xaxis, self%yaxis, &
+                           self%x2axis, self%y2axis)
       if (allocated(self%objects)) call draw_shapes(self%objects, layer, data_space, backend, area, self%canvas, &
                                                     font_size, self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       if (data_space .or. layer == 'behind') return
