@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(240)                           !< Per-check outcome.
+logical                       :: test_passed(241)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5911,6 +5911,29 @@ block
    test_passed(240) = test_passed(240) .and. iostat /= 0_I4P .and. index(iomsg, 'a pixmap number is expected') > 0
 endblock
 
+! an undefined variable in an operand run only if a condition holds, as gnuplot 6.0 (`exists("Q") && Q == 27`, the
+! mouse demos' idiom): read when run, an error only if reached; elsewhere an error when compiled
+call interpreter%init(scratch)
+call interpreter%run_text("a = exists('QQ') && QQ == 27; b = !exists('QQ') || QQ == 1; c = exists('QQ') ? QQ : -1; "// &
+                          "QQ = 5; d = exists('QQ') && QQ == 5", iostat, iomsg)
+test_passed(241) = iostat == 0_I4P
+if (test_passed(241)) then
+   block
+      real(R8P) :: v(4)     !< Values.
+      logical   :: found(4) !< Defined.
+
+      call interpreter%symbols%value_of('a', v(1), found(1))
+      call interpreter%symbols%value_of('b', v(2), found(2))
+      call interpreter%symbols%value_of('c', v(3), found(3))
+      call interpreter%symbols%value_of('d', v(4), found(4))
+      test_passed(241) = all(found) .and. all(v == [0.0_R8P, 1.0_R8P, -1.0_R8P, 1.0_R8P])
+   endblock
+endif
+call interpreter%run_text("e = 1 ? RR : 2", iostat, iomsg)
+test_passed(241) = test_passed(241) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable') > 0
+call interpreter%run_text("e = RR + 1", iostat, iomsg)
+test_passed(241) = test_passed(241) .and. iostat /= 0_I4P .and. index(iomsg, 'undefined variable: RR') > 0
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5919,7 +5942,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,240L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,241L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

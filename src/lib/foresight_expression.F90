@@ -488,6 +488,8 @@ contains
    integer(I4P)                                 :: pos     !< Next character.
    integer(I4P)                                 :: depth   !< Current stack depth.
    integer(I4P)                                 :: nesting !< Current recursion depth.
+   integer(I4P)                                 :: guarded !< Inside operands run only if a condition holds (the right
+                                                           !< one of `&&`, `||`, the branches of `?:`).
    type(name_object), allocatable               :: procs(:) !< Recursive functions called, compiled after the main code.
    integer(I4P), allocatable                    :: entries(:) !< Their first instructions.
    logical                                      :: in_procedure !< Compiling one of them.
@@ -512,6 +514,7 @@ contains
    pos = 1_I4P
    depth = 0_I4P
    nesting = 0_I4P
+   guarded = 0_I4P
    loose = .false.
    if (present(lenient)) loose = lenient
    allocate(frames(0), procs(0), entries(0))
@@ -964,6 +967,7 @@ contains
       endif
       call parse_binary(1_I4P)
       if (accept('?')) then
+         guarded = guarded + 1_I4P
          call emit(OP_JUMP_UNLESS, k=skip_a)
          call parse_ternary
          call expect(':')
@@ -972,6 +976,7 @@ contains
          depth = depth - 1_I4P ! `b` starts where `a` did
          call parse_ternary
          call patch(skip_b)
+         guarded = guarded - 1_I4P
       endif
       nesting = nesting - 1_I4P
       endsubroutine parse_ternary
@@ -1150,7 +1155,9 @@ contains
             else
                call emit(OP_AND_JUMP, k=k)
             endif
+            guarded = guarded + 1_I4P
             call parse_binary(level + 1_I4P)
+            guarded = guarded - 1_I4P
             call emit(OP_TRUTH)
             call patch(k)
          case default
@@ -2035,6 +2042,15 @@ contains
          call emit(OP_CONSTANT, v=value_object(r=ieee_value(1.0_R8P, ieee_quiet_nan)))
       elseif (loose) then
          call emit(OP_CONSTANT, v=value_object())
+      elseif (guarded > 0_I4P) then
+         ! in an operand run only if a condition holds (`exists("Q") && Q == 1`, gnuplot's idiom): read when run, an
+         ! undefined variable error then if it still has no value
+         block
+            integer(I4P) :: index !< Instruction index.
+
+            call emit(OP_FETCH, arg=store_slot(name), v=value_object(), k=index)
+            self%code(index)%calls = 0_I4P
+         endblock
       else
          call syntax('undefined variable: '//name, at)
       endif

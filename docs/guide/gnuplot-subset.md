@@ -353,7 +353,8 @@ uses it). Names may hold UTF-8 letters (`π = pi`, `α(λ,φ) = ...`), as gnuplo
 xrange [0:2*tau]`, also `[-pi:pi]`). The plot's dummy variable wins over a user variable of its name, and is not seen
 inside a function body (there `x` is the user variable `x`). Names are case sensitive (`a_1`, `A`), `pi` may be
 assigned, the builtin functions may not be redefined. Errors as gnuplot: `undefined variable: c`, `function f requires
-1 variable`. Variables also hold [strings](#strings); `undefine NAME` forgets one (see
+1 variable`; a variable in an operand run only if a condition holds (`exists("Q") && Q == 27`, the right one of
+`&&`, `||`, the branches of `?:`) is read when run, an error only if reached, as gnuplot's. Variables also hold [strings](#strings); `undefine NAME` forgets one (see
 [Datablocks and scripts](#datablocks-and-scripts)).
 
 Functions may recurse, directly or through others, as in gnuplot 6.0:
