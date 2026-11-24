@@ -1,6 +1,7 @@
 !< foresight_mathlib, gnuplot 6.0's real special functions by name: the table of names and arities the expression
 !< compiler reads, and the dispatch of a call to the ports of gnuplot's algorithms (foresight_bessel, foresight_gammafun,
-!< foresight_specfun) and to the elementary ones (round, cbrt, asinh, acosh, atanh).
+!< foresight_specfun), to the elementary ones (round, cbrt, asinh, acosh, atanh) and to the time ones (tm_sec ... tm_yday,
+!< tm_week, weekdate_iso, weekdate_cdc).
 module foresight_mathlib
 !< foresight_mathlib, gnuplot 6.0's real special functions by name: the table of names and arities the expression
 !< compiler reads, and the dispatch of a call to the ports of gnuplot's algorithms (foresight_bessel, foresight_gammafun,
@@ -10,6 +11,7 @@ use, intrinsic :: iso_c_binding, only : c_double
 use foresight_bessel, only : gp_besi0, gp_besi1, gp_besin, gp_besj0, gp_besj1, gp_besjn, gp_besy0, gp_besy1, gp_besyn
 use foresight_gammafun, only : gp_erf, gp_erfc, gp_gamma, gp_ibeta, gp_igamma, gp_inverf, gp_invibeta, gp_invigamma, &
                                gp_invnorm, gp_lgamma, gp_norm, gp_uigamma
+use foresight_time, only : DAY_SEC, WEEK_SEC, civil_time, time_parts
 use foresight_specfun, only : gp_airy, gp_EllipticE, gp_EllipticK, gp_EllipticPi, gp_expint, gp_lambertw, gp_SynchrotronF, &
                               gp_voigt, gp_zeta
 use penf, only : I4P, I8P, R8P
@@ -22,15 +24,18 @@ public :: math_function
 public :: math_order
 
 !< gnuplot's names (case matters: EllipticK), their arguments, and which take an integer order first
-character(len=*), parameter :: MATH_FUNCTIONS(35) = [character(len=12) :: &
+character(len=*), parameter :: MATH_FUNCTIONS(46) = [character(len=12) :: &
    'round', 'cbrt', 'asinh', 'acosh', 'atanh', &
    'erf', 'erfc', 'gamma', 'lgamma', 'norm', 'invnorm', 'inverf', 'igamma', 'uigamma', 'invigamma', 'ibeta', 'invibeta', &
    'besj0', 'besj1', 'besy0', 'besy1', 'besjn', 'besyn', 'besi0', 'besi1', 'besin', &
-   'lambertw', 'airy', 'expint', 'EllipticK', 'EllipticE', 'EllipticPi', 'voigt', 'zeta', 'SynchrotronF'] !< Names.
-integer(I4P), parameter :: MATH_ARGS(35) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
+   'lambertw', 'airy', 'expint', 'EllipticK', 'EllipticE', 'EllipticPi', 'voigt', 'zeta', 'SynchrotronF', &
+   'tm_sec', 'tm_min', 'tm_hour', 'tm_mday', 'tm_mon', 'tm_year', 'tm_wday', 'tm_yday', 'tm_week', &
+   'weekdate_iso', 'weekdate_cdc'] !< Names (weekdate_*: the day, the third argument, 1 when omitted).
+integer(I4P), parameter :: MATH_ARGS(46) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 2_I4P, 3_I4P, 3_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, &
-   1_I4P, 1_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P] !< Arguments.
+   1_I4P, 1_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, &
+   1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 3_I4P, 3_I4P] !< Arguments.
 
 interface
    pure function c_cbrt(x) bind(C, name='cbrt') result(y)
@@ -172,6 +177,25 @@ contains
       call gp_zeta(x(1), r, status)
    case ('SynchrotronF')
       call gp_SynchrotronF(x(1), r, status)
+   case ('tm_sec', 'tm_min', 'tm_hour', 'tm_mday', 'tm_mon', 'tm_year', 'tm_wday', 'tm_yday')
+      call time_field(trim(MATH_FUNCTIONS(f)), x(1), r)
+   case ('tm_week')
+      ! gnuplot's tmweek: standard 0 ISO 8601 (weeks from Monday), 1 CDC (from Sunday)
+      if (x(2) == 0.0_R8P .or. x(2) == 1.0_R8P) then
+         r = real(week_of(x(1), int(x(2), I4P)), R8P)
+         is_int = .true.
+      else
+         status = 1_I4P
+      endif
+   case ('weekdate_iso', 'weekdate_cdc')
+      ! gnuplot's weekdate: the arguments truncated to integers, day 0 as 1, an invalid week date undefined
+      if (abs(x(1)) < 1.0e9_R8P .and. aint(x(2)) >= 1.0_R8P .and. aint(x(2)) <= 53.0_R8P .and. &
+          aint(x(3)) >= 0.0_R8P .and. aint(x(3)) <= 7.0_R8P) then
+         r = week_date(int(x(1), I8P), int(x(2), I8P), max(int(x(3), I8P), 1_I8P), &
+                       merge(1_I4P, 0_I4P, trim(MATH_FUNCTIONS(f)) == 'weekdate_cdc'))
+      else
+         status = 1_I4P
+      endif
    case default
       status = 1_I4P
    endselect
@@ -182,4 +206,97 @@ contains
       is_int = .false.
    endif
    endsubroutine math_function
+
+   pure subroutine time_field(name, t, r)
+   !< gnuplot's tm_sec ... tm_yday of the time `t` [s]: the field of its broken-down UTC time, as a real (tm_mon and
+   !< tm_yday from 0, tm_wday 0 on Sunday, tm_year the whole year).
+   character(len=*), intent(in)  :: name     !< Function name.
+   real(R8P),        intent(in)  :: t        !< Time [s].
+   real(R8P),        intent(out) :: r        !< Field.
+   integer(I8P)                  :: parts(8) !< Year, month, day, hour, minute, second, day of the year, weekday.
+   real(R8P)                     :: fraction !< Fraction of the second.
+
+   call time_parts(t, parts(1), parts(2), parts(3), parts(4), parts(5), parts(6), fraction, parts(7), parts(8))
+   select case (name)
+   case ('tm_sec')
+      r = real(parts(6), R8P)
+   case ('tm_min')
+      r = real(parts(5), R8P)
+   case ('tm_hour')
+      r = real(parts(4), R8P)
+   case ('tm_mday')
+      r = real(parts(3), R8P)
+   case ('tm_mon')
+      r = real(parts(2) - 1_I8P, R8P)
+   case ('tm_year')
+      r = real(parts(1), R8P)
+   case ('tm_wday')
+      r = real(parts(8), R8P)
+   case default
+      r = real(parts(7) - 1_I8P, R8P)
+   endselect
+   endsubroutine time_field
+
+   pure function weekday_of(year, month, day) result(wday)
+   !< Weekday of a date, 0 on Sunday.
+   integer(I8P), intent(in) :: year  !< Year.
+   integer(I8P), intent(in) :: month !< Month, from 1.
+   integer(I8P), intent(in) :: day   !< Day of the month.
+   integer(I8P)             :: wday  !< Weekday.
+
+   wday = modulo(floor(civil_time(year, month, day, 0_I8P, 0_I8P, 0.0_R8P) / DAY_SEC, I8P) + 4_I8P, 7_I8P)
+   endfunction weekday_of
+
+   pure function week_of(t, standard) result(week)
+   !< gnuplot's tmweek: the week of the time `t` [s], 1 to 53; `standard` 0 ISO 8601 (weeks from Monday, week 1 the
+   !< one of the first Thursday), 1 CDC/MMWR (from Sunday). The first days of January may be in week 52 or 53 of the
+   !< year before, the last days of December in week 1.
+   real(R8P),    intent(in) :: t        !< Time [s].
+   integer(I4P), intent(in) :: standard !< 0 ISO, 1 CDC.
+   integer(I8P)             :: week     !< Week.
+   integer(I8P)             :: parts(8) !< Year, month, day, hour, minute, second, day of the year, weekday.
+   real(R8P)                :: fraction !< Fraction of the second.
+   integer(I8P)             :: wday     !< Weekday from the first day of the week.
+   integer(I8P)             :: jan01    !< Weekday of 1 January of the year before, 0 on Sunday.
+   integer(I8P)             :: dec31    !< Weekday of 31 December of the year before.
+
+   call time_parts(t, parts(1), parts(2), parts(3), parts(4), parts(5), parts(6), fraction, parts(7), parts(8))
+   wday = parts(8)
+   if (standard == 0_I4P) wday = modulo(6_I8P + parts(8), 7_I8P)
+   week = (10_I8P + parts(7) - 1_I8P - wday) / 7_I8P
+   if (parts(2) == 12_I8P) then
+      if ((parts(3) == 31_I8P .and. wday < 3_I8P) .or. (parts(3) == 30_I8P .and. wday < 2_I8P) .or. &
+          (parts(3) == 29_I8P .and. wday < 1_I8P)) week = 1_I8P
+   endif
+   if (week == 0_I8P) then
+      jan01 = weekday_of(parts(1) - 1_I8P, 1_I8P, 1_I8P)
+      dec31 = weekday_of(parts(1) - 1_I8P, 12_I8P, 31_I8P)
+      if (standard == 0_I4P) then
+         week = merge(53_I8P, 52_I8P, jan01 == 4_I8P .or. dec31 == 4_I8P)
+      else
+         week = merge(53_I8P, 52_I8P, jan01 == 3_I8P .or. dec31 == 3_I8P)
+      endif
+   endif
+   endfunction week_of
+
+   pure function week_date(year, week, day, standard) result(t)
+   !< gnuplot's weekdate: the time [s] of day `day` (1 the first) of week `week` of year `year`; `standard` 0 ISO 8601
+   !< (weeks from Monday), 1 CDC/MMWR (from Sunday): week 1 starts on the first day of the week nearest 1 January.
+   integer(I8P), intent(in) :: year     !< Week-date year.
+   integer(I8P), intent(in) :: week     !< Week, 1 to 53.
+   integer(I8P), intent(in) :: day      !< Day of the week, 1 to 7.
+   integer(I4P), intent(in) :: standard !< 0 ISO, 1 CDC.
+   real(R8P)                :: t        !< Time [s].
+   integer(I8P)             :: wday     !< Weekday of 1 January from the first day of the week.
+
+   t = civil_time(year, 1_I8P, 1_I8P, 0_I8P, 0_I8P, 0.0_R8P)
+   wday = weekday_of(year, 1_I8P, 1_I8P)
+   if (standard == 0_I4P) wday = modulo(6_I8P + wday, 7_I8P)
+   if (wday < 4_I8P) then
+      t = t - real(wday, R8P) * DAY_SEC
+   else
+      t = t + real(7_I8P - wday, R8P) * DAY_SEC
+   endif
+   t = t + real(week - 1_I8P, R8P) * WEEK_SEC + real(day - 1_I8P, R8P) * DAY_SEC
+   endfunction week_date
 endmodule foresight_mathlib

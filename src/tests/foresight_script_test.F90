@@ -40,7 +40,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(234)                           !< Per-check outcome.
+logical                       :: test_passed(235)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -5786,6 +5786,23 @@ associate(panel => interpreter%figure%panels(1))
    test_passed(234) = test_passed(234) .and. panel%cbaxis%lo == 0.13_R8P .and. panel%cbaxis%hi == 0.87_R8P
 endassociate
 
+! time functions, as gnuplot 6.0 (identical on 4000 days and 36 years of week dates): tm_sec ... tm_yday (tm_mon and
+! tm_yday from 0), tm_week ISO and CDC, weekdate_iso and weekdate_cdc (day 1 when omitted, 0 as 1)
+call interpreter%init(scratch)
+call interpreter%run_text("set print 'foresight_script_test_print.txt'; t = 1700000000.75; "// &
+                          "print tm_sec(t), tm_min(t), tm_hour(t), tm_mday(t), tm_mon(t), tm_year(t), tm_wday(t), "// &
+                          "tm_yday(t), tm_week(t, 0), tm_week(t, 1); "// &
+                          "print strftime('%Y-%m-%d', weekdate_iso(2004, 1)), strftime('%Y-%m-%d', weekdate_iso(2009, 1, 2)), "// &
+                          "strftime('%Y-%m-%d', weekdate_cdc(2021, 1)), strftime('%Y-%m-%d', weekdate_cdc(2022, 52, 7)); "// &
+                          "print tm_week(strptime('%Y-%m-%d', '2021-01-01'), 0), tm_week(-86400*3, 0), "// &
+                          "weekdate_iso(2020, 53, 0), tm_sec(-0.5); set print", iostat, iomsg)
+test_passed(235) = iostat == 0_I4P .and. &
+                  file_is('foresight_script_test_print.txt', &
+                          [character(len=50) :: '20.0 13.0 22.0 14.0 10.0 2023.0 2.0 317.0 46 46', &
+                           '2003-12-29 2008-12-30 2021-01-03 2022-12-31', '53 1 1609113600.0 59.0'])
+call interpreter%run_text("x = weekdate_iso(2020, 54)", iostat, iomsg)
+test_passed(235) = test_passed(235) .and. iostat /= 0_I4P
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -5794,7 +5811,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,234L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,235L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

@@ -291,7 +291,7 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 |---|---|
 | Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")`; `column(-1)` the block, `column(-2)` the dataset; the text of a column: [`strcol(N)`](#string-columns) |
 | Operators, loosest first | `?:` · `\|\|` · `&&` · `\|` · `^` · `&` · `==` `!=` · `<` `<=` `>` `>=` · `<<` `>>` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` `~` · `**` |
-| Functions | `abs acos arg asin atan atan2 ceil conj cos cosh exp floor imag int log log10 real sgn sin sinh sqrt tan tanh`; gnuplot's [special functions](#special-functions) (`erf`, `gamma`, `besj0`, `lambertw`, ...); the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays), `rand(x)` (gnuplot's generator: `rand(0)` the next number, `rand(-1)` reset, `rand(N)` seeded; the same numbers as gnuplot), `exists("name")` (old name `exist`) |
+| Functions | `abs acos arg asin atan atan2 ceil conj cos cosh exp floor imag int log log10 real sgn sin sinh sqrt tan tanh`; gnuplot's [special functions](#special-functions) (`erf`, `gamma`, `besj0`, `lambertw`, ...); the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`, `tm_*`, `weekdate_iso`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays), `rand(x)` (gnuplot's generator: `rand(0)` the next number, `rand(-1)` reset, `rand(N)` seeded; the same numbers as gnuplot), `exists("name")` (old name `exist`) |
 | Arrays | `A[i]` an element, `A[i:j]` a slice, `\|A\|` the size, `$NAME[i]` a datablock line, see [Arrays](#arrays) |
 | Function blocks | `$f(args)`, see [Function blocks](#function-blocks) |
 | Constants | numbers (`2`, `1.5`, `.5`, `1e-3`, hexadecimal `0xff`, octal `017`), `pi`, complex `{re, im}` and `I` (`{0,1}`) |
@@ -668,7 +668,11 @@ ticks after a zoom by the same rules (the `time` minor ticks excepted) and shows
 
 `strftime("format", t)` writes a time, `strptime("format", "text")` reads one (undefined if the text does not match),
 `timecolumn(N[, "format"])` reads column N (with the `timefmt` without a format), `time(0)` is the time now (`time(0.0)`
-with its fraction, `time("format")` as text), taken when the expression is read. In `strptime` a blank matches any run
+with its fraction, `time("format")` as text), taken when the expression is read. `tm_sec(t)`, `tm_min`, `tm_hour`,
+`tm_mday`, `tm_mon`, `tm_year`, `tm_wday`, `tm_yday` give the fields of a time (UTC; `tm_mon` and `tm_yday` from 0,
+`tm_wday` 0 on Sunday), `tm_week(t, 0)` its ISO 8601 week (`1` the CDC/MMWR epidemiological week, from Sunday), and
+`weekdate_iso(year, week [, day])` / `weekdate_cdc(...)` the time of a week date (2004-W01-1 is 29 December 2003), as
+gnuplot 6.0. In `strptime` a blank matches any run
 of blanks; fields take up to their width in digits (`%Y%m%d` reads `20240301`) and may overflow (`25:70` is 26:10).
 Conversions gnuplot does not know write nothing, as gnuplot's. `set format x "%H:%M" timedate` makes the x axis a time
 axis for its ticks and labels without reading the data as times, `numeric` turns it back; `set xtics time` (gnuplot's

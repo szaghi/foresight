@@ -1327,6 +1327,11 @@ contains
          if (any(MATH_FUNCTIONS == name)) then
             ! gnuplot's special functions (foresight_mathlib)
             f = findloc(MATH_FUNCTIONS, name, dim=1)
+            if ((name == 'weekdate_iso' .or. name == 'weekdate_cdc') .and. nargs == 2_I4P) then
+               ! the day omitted: the first of the week
+               call emit(OP_CONSTANT, v=int_value(1_I8P))
+               nargs = 3_I4P
+            endif
             if (nargs /= MATH_ARGS(f)) then
                call syntax(name//' needs '//trim(adjustl(int_text(MATH_ARGS(f))))//' argument'// &
                            trim(merge('s', ' ', MATH_ARGS(f) /= 1_I4P)), at)
