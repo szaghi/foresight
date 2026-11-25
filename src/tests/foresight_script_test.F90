@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(267)                           !< Per-check outcome.
+logical                       :: test_passed(268)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1791,8 +1791,9 @@ block
    call interpreter%symbols%value_of('i', v, found)
    test_passed(102) = test_passed(102) .and. .not. found
 endblock
+! bounds depending on an outer variable: evaluated again as it moves (gnuplot's; check 268), three items
 call interpreter%run_text("plot for [i=1:2] for [j=1:i] x", iostat, iomsg)
-test_passed(102) = test_passed(102) .and. iostat /= 0_I4P .and. index(iomsg, 'depending on the outer variable i') > 0
+test_passed(102) = test_passed(102) .and. iostat == 0_I4P .and. size(interpreter%figure%panels(1)%series) == 3
 open(newunit=unit, file=data_file)
 close(unit, status='delete')
 
@@ -6909,6 +6910,42 @@ block
                      .not. interpreter%figure%panels(1)%zaxis%min_fixed
    call interpreter%run_text("unset hidden3d", iostat, iomsg)
    test_passed(267) = test_passed(267) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%view3d%hidden3d
+endblock
+
+
+! plot for clauses with bounds depending on an outer variable (gnuplot 6.0's iterate.dem: for [i=1:3] for [k=i:i]
+! for [j=1:k], the items in gnuplot's order), sample after the inline ranges (splot [-2:2][-2:2] sample [h=1:5] '+'),
+! rgbalpha of one packed ARGB column (the alpha inverted, as gnuplot)
+block
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   character(len=12), parameter  :: titles(6) = [character(len=12) :: 'k=1 j=1', 'k=2 j=1', 'k=2 j=2', 'k=3 j=1', &
+                                                 'k=3 j=2', 'k=3 j=3'] !< gnuplot's titles.
+   integer(I4P)                  :: k !< Item counter.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; plot for [i=1:3] for [k=i:i] for [j=1:k] "// &
+                             "10*k + j title sprintf('k=%d j=%d', k, j); unset table", iostat, iomsg)
+   test_passed(268) = iostat == 0_I4P
+   if (test_passed(268)) then
+      test_passed(268) = size(interpreter%figure%panels(1)%series) == 6
+      if (test_passed(268)) test_passed(268) = all([(interpreter%figure%panels(1)%series(k)%title == trim(titles(k)), &
+                                                   k = 1_I4P, 6_I4P)])
+   endif
+   call interpreter%run_text("set table 'foresight_script_test.dat'; "// &
+                             "splot [-2:2][-2:2] sample [h=1:5] '+' using (cos(h)):(sin(h)):(h); unset table", &
+                             iostat, iomsg)
+   test_passed(268) = test_passed(268) .and. iostat == 0_I4P
+   if (test_passed(268)) test_passed(268) = interpreter%figure%panels(1)%series(1)%z(1) == 1.0_R8P
+   call interpreter%run_text("$B << EOB"//nl//"0x40ff8000 0x00000000"//nl//"0x00ffffff 0x0000ff00"//nl//"EOB"//nl// &
+                             "set table 'foresight_script_test.dat'; plot $B matrix using 1:2:3 with rgbalpha; "// &
+                             "unset table", iostat, iomsg)
+   test_passed(268) = test_passed(268) .and. iostat == 0_I4P
+   if (test_passed(268)) then
+      associate(c => interpreter%figure%panels(1)%series(1)%channels)
+         test_passed(268) = c(1, 1, 1) == 255.0_R8P .and. c(2, 1, 1) == 128.0_R8P .and. c(3, 1, 1) == 0.0_R8P .and. &
+                           c(4, 1, 1) == 191.0_R8P .and. c(4, 2, 1) == 255.0_R8P
+      endassociate
+   endif
 endblock
 
 if (all(test_passed)) then

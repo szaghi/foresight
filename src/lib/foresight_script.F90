@@ -221,6 +221,8 @@ type :: loop_level
    integer(I4P)                    :: pos = 1_I4P    !< Value in use.
    type(saved_variable)            :: saved          !< The variable before the loop.
    logical                         :: forever = .false. !< `for [i=A:*]`: until an item yields no valid point.
+   character(len=:), allocatable   :: clause         !< The clause, evaluated again when an outer variable moves.
+   logical                         :: dependent = .false. !< Bounds depending on an outer variable.
 endtype loop_level
 
 type :: local_state
@@ -4357,6 +4359,13 @@ contains
    if (sample_first) i = 2_I4P
    do while (i <= size(tokens, kind=I4P))
       if (sample_first) exit
+      ! `sample` after the plot ranges: the first item's sampling range follows (gnuplot's plot [x] [y] sample [t=..])
+      if (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'sample' .and. i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_RANGE) then
+            i = i + 1_I4P
+            exit
+         endif
+      endif
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
       if (splot_mode) then
@@ -7013,12 +7022,10 @@ contains
          if (tokens(i)%kind /= TOKEN_WORD) exit
          if (tokens(i)%text /= 'for') exit
          if (tokens(i + 1_I4P)%kind /= TOKEN_RANGE) exit
+         ! bounds depending on an outer variable (gnuplot's for [k=i:i]): evaluated again each time it moves
+         level%dependent = .false.
          do k = 1_I4P, size(levels, kind=I4P)
-            if (mentions(tokens(i + 1_I4P)%text, levels(k)%name)) then
-               call fail('plot: for ['//tokens(i + 1_I4P)%text//']: bounds depending on the outer variable '// &
-                         levels(k)%name//' are not supported in a plot (they are in do for)', iostat, iomsg)
-               return
-            endif
+            if (mentions(tokens(i + 1_I4P)%text, levels(k)%name)) level%dependent = .true.
          enddo
          ! gnuplot `for [i=A:*]`, an unbounded iteration of a data item: up to FOREVER values, ended by the first
          ! item without a valid point
@@ -7041,6 +7048,7 @@ contains
                endif
             endif
             call for_values(self, clause, level%name, level%values, level%words, iostat, iomsg)
+            level%clause = clause
          endblock
          if (iostat /= 0_I4P) then
             iomsg = 'plot: for ['//tokens(i + 1_I4P)%text//']: '//iomsg
@@ -7049,6 +7057,8 @@ contains
          call self%symbols%save_variable(level%name, level%saved)
          level%pos = 1_I4P
          if (size(level%values) == 0) skip_item = .true.
+         ! its first value now: an inner clause may depend on it
+         if (size(level%values) > 0) call set_loop_variable(self, level%name, level%values(1)%text, level%words)
          n = size(levels, kind=I4P)
          allocate(grown(n + 1_I4P))
          do k = 1_I4P, n
@@ -7077,6 +7087,7 @@ contains
       !< Advance the clauses to their next values, the last clause first; false when all are done.
       logical      :: more !< Values left.
       integer(I4P) :: k    !< Clause.
+      integer(I4P) :: m    !< Inner clause.
 
       more = .false.
       k = size(levels, kind=I4P)
@@ -7084,8 +7095,27 @@ contains
          if (levels(k)%pos < size(levels(k)%values, kind=I4P)) then
             levels(k)%pos = levels(k)%pos + 1_I4P
             call set_loop_variable(self, levels(k)%name, levels(k)%values(levels(k)%pos)%text, levels(k)%words)
+            ! the inner clauses from their first values, those depending on an outer variable evaluated again; an
+            ! empty one moves this clause on
             more = .true.
-            return
+            do m = k + 1_I4P, size(levels, kind=I4P)
+               if (levels(m)%dependent) then
+                  call for_values(self, levels(m)%clause, levels(m)%name, levels(m)%values, levels(m)%words, iostat, &
+                                  iomsg)
+                  if (iostat /= 0_I4P) then
+                     more = .false.
+                     return
+                  endif
+               endif
+               levels(m)%pos = 1_I4P
+               if (size(levels(m)%values) == 0) then
+                  more = .false.
+                  exit
+               endif
+               call set_loop_variable(self, levels(m)%name, levels(m)%values(1)%text, levels(m)%words)
+            enddo
+            if (more) return
+            cycle
          endif
          levels(k)%pos = 1_I4P
          call set_loop_variable(self, levels(k)%name, levels(k)%values(1)%text, levels(k)%words)
@@ -8672,11 +8702,38 @@ contains
 
       m = merge(4_I4P, 3_I4P, with == 'rgbalpha')
       if (.not. allocated(fields)) fields = plain_columns([(k, k = 1_I4P, m + 2_I4P)])
-      if (size(fields) /= m + 2_I4P) then
-         call fail('plot: '//with//' needs using x:y:r:g:b'//trim(merge(':a', '  ', m == 4_I4P)), iostat, iomsg)
+      if (size(fields) /= m + 2_I4P .and. size(fields) /= 3) then
+         call fail('plot: '//with//' needs using x:y:r:g:b'//trim(merge(':a', '  ', m == 4_I4P))//' or x:y:argb', &
+                   iostat, iomsg)
          return
       endif
       call data%table(fields, set_index, every, points)
+      if (size(fields) == 3) then
+         ! one 32-bit ARGB value per pixel (gnuplot's): its bytes the channels, the alpha inverted (gnuplot's "alpha
+         ! channel convention": AA = 0 opaque), on the 0-255 scale whatever rgbmax
+         block
+            real(R8P), allocatable :: unpacked(:,:) !< x, y, r, g, b, a.
+            integer(I8P)           :: argb          !< Packed value.
+            integer(I4P)           :: r             !< Row counter.
+
+            allocate(unpacked(size(points, 1), 6))
+            unpacked(:, 1:2) = points(:, 1:2)
+            do r = 1_I4P, size(points, 1, kind=I4P)
+               if (.not. ieee_is_finite(points(r, 3))) then
+                  unpacked(r, 3:6) = points(r, 3)
+                  cycle
+               endif
+               argb = iand(int(points(r, 3), I8P), int(z'FFFFFFFF', I8P))
+               unpacked(r, 3) = real(iand(shiftr(argb, 16), 255_I8P), R8P)
+               unpacked(r, 4) = real(iand(shiftr(argb, 8), 255_I8P), R8P)
+               unpacked(r, 5) = real(iand(argb, 255_I8P), R8P)
+               unpacked(r, 6) = real(255_I8P - iand(shiftr(argb, 24), 255_I8P), R8P)
+            enddo
+            unpacked(:, 3:6) = unpacked(:, 3:6) * (self%rgbmax / 255.0_R8P)
+            ! an assignment, not move_alloc, in a block (nvfortran 26.9)
+            points = unpacked
+         endblock
+      endif
       do k = 1_I4P, m
          call regular_grid(points(:, 1), points(:, 2), points(:, 2_I4P + k) * (255.0_R8P / self%rgbmax), xs, ys, z, &
                            problem)

@@ -288,8 +288,8 @@ of them, the last varying fastest); the item's `using` fields, title and options
 field that is a constant expression is the column it gives (`u 1:i`; a string, the column of that header name), the
 line options take expressions (`lc i`, `lw w`). Each value adds a series with the next color, the default title is the
 item as written (`'run.dat' u 1:i`), `''` is the previous file, an empty range plots nothing; iterated and plain items
-mix. The loop variable is restored afterwards. Departure: in a plot an inner clause's bounds may not depend on an outer
-variable (`for [i = 1:3] for [j = 1:i]` is an error; `do for` supports it).
+mix. The loop variable is restored afterwards. An inner clause's bounds may depend on an outer variable, evaluated
+again each time it moves, as gnuplot's (`for [i = 1:3] for [j = 1:i]`: six items).
 
 Definitions written before an iterated item are its own, run on each pass, as gnuplot: `plot for [i = 1:7] rho =
 r[i], lambda = l[i], f(x, rho, lambda)`. An assignment written before an item without a comma (`ysum=0 '' using ...`)
@@ -834,7 +834,8 @@ the x range (the `xrange` ends where set, else the extent of the data plotted be
 [-10:10]; evenly in log x on a log x axis). The variable is the dummy (`x`, or the one of `set dummy`), and its value
 is that of column 1 in the `using` expressions: `'+' using 1:(f(x))`. An item's sampling range names it and may give
 the interval: `[t=-3:25:1.5] '+' using (t):(f(t))` samples from -3 by 1.5 while inside the range. Before the first
-item the range follows the keyword `sample`, else it would be the plot's x range: `plot sample [i=1:10:1] '+' ...`.
+item the range follows the keyword `sample`, else it would be the plot's x range: `plot sample [i=1:10:1] '+' ...`,
+also after the plot's own ranges: `splot [-2:2] [-2:2] sample [h=1:5] '+' using (cos(h)):(sin(h)):(h)`.
 
 `'++'` is a grid of two columns, u and v: `set samples` values over `urange`, by `set isosamples` (its second value)
 values over `vrange` (both [-5:5] by default), v from its maximum down, the scan lines apart (a blank line). The
@@ -2094,7 +2095,8 @@ and border line types, `pm3d`.
 
 `with rgbimage` (`using x:y:r:g:b`) and `with rgbalpha` (`x:y:r:g:b:a`) color the pixels of a regular grid directly,
 the components from 0 to `set rgbmax` (255; 1.0 for fractions), without palette nor color box; an undefined component
-makes its pixel transparent. Packed ARGB in one column and `matrix` RGB data are not supported.
+makes its pixel transparent. One column of packed 32-bit ARGB values (`using 1:2:3`, `0xAARRGGBB`) gives the four
+components, the alpha inverted as gnuplot's (AA 0 opaque, FF transparent). `matrix` RGB data are not supported.
 
 ### Named palettes
 
