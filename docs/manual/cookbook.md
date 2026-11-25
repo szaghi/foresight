@@ -1544,6 +1544,16 @@ angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot
 scan line on top, `dx`, `dy` and `origin` place and scale the pixels. See
 [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### Rotated images
+
+<<< @/examples/snippets/cb_binary_rotate.gp{gnuplot}
+
+<Plot name="cb_binary_rotate" svg :width="560" :height="360" />
+
+`center=(X,Y)` places a binary image by its centre and `rotation=A` turns it about that centre (`90d`, `0.5pi` or
+radians), as gnuplot: a right angle keeps the pixels a grid, any other one draws each pixel as a small polygon. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+
 ### Colors as numbers
 
 <<< @/examples/snippets/cb_rgb_numbers.gp{gnuplot}

@@ -2826,7 +2826,11 @@ contains
    !< one line per pixel: its fields (as the format: one specifier for every field, else one per field) then x and y
    !< (pixel i, j at origin + (i dx, j dy), the first scan line at the bottom unless flipped); the item's `using`
    !< prefixed by these x:y columns, or `using x:y:1:...:N` (N fields: rgbimage 3, rgbalpha 4, else the format's); a
-   !< splot's (`three_d`) by x:y:(0), its pixels at z 0 (gnuplot's).
+   !< splot's (`three_d`) by x:y:(0), its pixels at z 0 (gnuplot's). `center=(X,Y)` moves the image's natural centre
+   !< there; `rotation=A` (`rotate`, `rot`; A in radians, `Ad` degrees, `Api` multiples of pi) turns the pixels about
+   !< that centre, or about the origin when `origin=` is given, as gnuplot's; an angle off the right ones makes each
+   !< pixel a polygon of its four corners (`with polygons`, colored by its value through the palette, or by its packed
+   !< RGB), as gnuplot draws rotated images.
    class(script_object),            intent(inout) :: self      !< Interpreter.
    type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
    logical,                         intent(in)    :: three_d   !< A splot.
@@ -2843,6 +2847,15 @@ contains
    character(len=8)                               :: kinds(64) !< Field types.
    real(R8P)                                      :: step(2)   !< Pixel size.
    real(R8P)                                      :: origin(2) !< First pixel position.
+   real(R8P)                                      :: centre(2) !< Centre of the image (`center=`).
+   real(R8P)                                      :: angle     !< Rotation [rad].
+   real(R8P)                                      :: rot(2, 2) !< Rotation matrix.
+   real(R8P)                                      :: half(2, 2) !< Half pixel vectors, rotated (column each).
+   logical                                        :: origin_set !< origin= given.
+   logical                                        :: centre_set !< center= given.
+   logical                                        :: dy_set    !< dy= given.
+   logical                                        :: polygons  !< Pixels as polygons (an angle off the right ones).
+   integer(I4P)                                   :: quarter   !< Right angle multiple, -1 if none.
    real(R8P)                                      :: v         !< A value read.
    integer(I4P)                                   :: shape(2)  !< Pixels across and up.
    integer(I4P)                                   :: nkinds    !< Field types given.
@@ -2872,6 +2885,11 @@ contains
       shape = 0_I4P
       step = 1.0_R8P
       origin = 0.0_R8P
+      centre = 0.0_R8P
+      angle = 0.0_R8P
+      origin_set = .false.
+      centre_set = .false.
+      dy_set = .false.
       flip = .false.
       big = .false.
       skip = 0_I4P
@@ -2885,7 +2903,56 @@ contains
             value = word(index(word, '=') + 1:)
             word = word(1:index(word, '=') - 1)
          endif
+         ! a parenthesized value written with blanks, `center=( 64,201 )`: its tokens joined
+         if (len(value) > 0) then
+            if (value(1:1) == '(' .and. index(value, ')') == 0) then
+               do while (k < size(tokens, kind=I4P))
+                  k = k + 1_I4P
+                  value = value//tokens(k)%text
+                  if (index(tokens(k)%text, ')') > 0) exit
+               enddo
+            endif
+         endif
          select case (word)
+         case ('center')
+            value = strip_parentheses(value)
+            read(value, *, iostat=iostat) centre
+            if (iostat /= 0_I4P) then
+               call fail('plot: binary center=(X,Y) expected', iostat, iomsg)
+               return
+            endif
+            centre_set = .true.
+         case ('rotation', 'rotate', 'rot')
+            ! radians, `d` degrees, `pi` multiples of pi (gnuplot's)
+            if (len(value) > 2) then
+               if (value(len(value) - 1:) == 'pi') then
+                  if (len(value) == 2) then
+                     v = 1.0_R8P
+                  elseif (.not. to_number(value(1:len(value) - 2), v)) then
+                     call fail('plot: binary rotation=A expected', iostat, iomsg)
+                     return
+                  endif
+                  angle = v * acos(-1.0_R8P)
+                  k = k + 1_I4P
+                  cycle
+               endif
+            endif
+            if (len(value) > 1) then
+               if (value(len(value):) == 'd') then
+                  if (.not. to_number(value(1:len(value) - 1), v)) then
+                     call fail('plot: binary rotation=A expected', iostat, iomsg)
+                     return
+                  endif
+                  angle = v * acos(-1.0_R8P) / 180.0_R8P
+                  k = k + 1_I4P
+                  cycle
+               endif
+            endif
+            if (.not. to_number(value, v)) then
+               call fail('plot: binary rotation=A expected', iostat, iomsg)
+               return
+            endif
+            angle = v
          case ('array', 'record')
             ! (W,H) or WxH, or W alone (one line)
             value = strip_parentheses(value)
@@ -2918,6 +2985,9 @@ contains
                return
             endif
             step(merge(1, 2, word == 'dx')) = v
+            ! dx alone: dy the same (gnuplot's)
+            if (word == 'dx' .and. .not. dy_set) step(2) = v
+            if (word == 'dy') dy_set = .true.
          case ('origin')
             value = strip_parentheses(value)
             read(value, *, iostat=iostat) origin
@@ -2925,6 +2995,7 @@ contains
                call fail('plot: binary origin=(X,Y) expected', iostat, iomsg)
                return
             endif
+            origin_set = .true.
          case ('skip')
             read(value, *, iostat=iostat) skip
             if (iostat /= 0_I4P) then
@@ -2945,6 +3016,26 @@ contains
          call fail('plot: binary needs array=(W,H) (raw arrays only)', iostat, iomsg)
          return
       endif
+      ! the rotation: a right angle (within 1e-3 rad, gnuplot's rotate=3.1415) exact, so the pixels stay a grid
+      quarter = nint(angle / (0.5_R8P * acos(-1.0_R8P)), I4P)
+      if (abs(angle - real(quarter, R8P) * 0.5_R8P * acos(-1.0_R8P)) < 1.0e-3_R8P) then
+         select case (modulo(quarter, 4_I4P))
+         case (0_I4P)
+            rot = reshape([1.0_R8P, 0.0_R8P, 0.0_R8P, 1.0_R8P], [2, 2])
+         case (1_I4P)
+            rot = reshape([0.0_R8P, 1.0_R8P, -1.0_R8P, 0.0_R8P], [2, 2])
+         case (2_I4P)
+            rot = reshape([-1.0_R8P, 0.0_R8P, 0.0_R8P, -1.0_R8P], [2, 2])
+         case default
+            rot = reshape([0.0_R8P, -1.0_R8P, 1.0_R8P, 0.0_R8P], [2, 2])
+         endselect
+         polygons = .false.
+      else
+         rot = reshape([cos(angle), sin(angle), -sin(angle), cos(angle)], [2, 2])
+         polygons = .true.
+      endif
+      half(:, 1) = matmul(rot, [0.5_R8P * step(1), 0.0_R8P])
+      half(:, 2) = matmul(rot, [0.0_R8P, 0.5_R8P * step(2)])
       ! the item: its style and using, up to the next comma
       last = k - 1_I4P
       has_using = .false.
@@ -2978,7 +3069,8 @@ contains
          nkinds = 1_I4P
          kinds(1) = 'float'
       endif
-      nfields = nkinds
+      ! gnuplot's %*type: a field read and skipped
+      nfields = count([(kinds(q)(1:1) /= '*', q = 1_I4P, nkinds)])
       if (nkinds == 1_I4P) then
          select case (style)
          case ('rgbimage')
@@ -2988,6 +3080,14 @@ contains
          case default
             nfields = 1_I4P
          endselect
+         ! one specifier for every field: as many fields as the using reads (`format='%uchar' using
+         ! ($1+$2+$3)/3`: 3 bytes a pixel, gnuplot's)
+         do q = k, last
+            if (q > k) then
+               if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P)) &
+                  nfields = max(nfields, highest_column(tokens(q)%text))
+            endif
+         enddo
       endif
       ! the bytes
       open(newunit=u, file=items(size(items))%text, access='stream', form='unformatted', action='read', &
@@ -3010,27 +3110,79 @@ contains
          integer(I4P)                  :: at     !< Characters written.
          integer(I4P)                  :: w      !< Width of a value.
 
-         allocate(character(len=int(shape(1), I8P) * shape(2) * (nfields + 2_I4P) * 26_I8P) :: buffer)
+         real(R8P)                     :: fv(64) !< Fields of a pixel.
+         real(R8P)                     :: p(2)   !< Pixel centre.
+         real(R8P)                     :: cnat(2) !< Natural centre.
+         integer(I4P)                  :: corner !< Corner counter.
+         real(R8P), parameter          :: SIGNS(2, 4) = reshape([-1.0_R8P, -1.0_R8P, 1.0_R8P, -1.0_R8P, 1.0_R8P, &
+                                                                 1.0_R8P, -1.0_R8P, 1.0_R8P], [2, 4]) !< Corners.
+
+         allocate(character(len=int(shape(1), I8P) * shape(2) * (nfields + 2_I4P) * 26_I8P * &
+                                merge(5_I8P, 1_I8P, polygons) + 1_I8P) :: buffer)
          at = 0_I4P
+         cnat = 0.5_R8P * step * real(shape - 1_I4P, R8P)
          do row = 0_I4P, shape(2) - 1_I4P
             do col = 0_I4P, shape(1) - 1_I4P
-               do f = 1_I4P, nfields
-                  c = min(f, nkinds)
-                  call read_field(trim(kinds(c)), v)
-                  if (iostat /= 0_I4P) return
-                  write(cell, '(ES24.16E3)') v
+               if (nkinds == 1_I4P) then
+                  do f = 1_I4P, nfields
+                     call read_field(trim(kinds(1)), v)
+                     if (iostat /= 0_I4P) return
+                     fv(f) = v
+                  enddo
+               else
+                  ! the format's fields in order, the skipped ones (%*type) read and dropped
+                  f = 0_I4P
+                  do c = 1_I4P, nkinds
+                     if (kinds(c)(1:1) == '*') then
+                        call read_field(trim(kinds(c)(2:)), v)
+                     else
+                        call read_field(trim(kinds(c)), v)
+                        f = f + 1_I4P
+                        fv(f) = v
+                     endif
+                     if (iostat /= 0_I4P) return
+                  enddo
+               endif
+               ! the pixel centre: about the natural centre moved to center=, about the origin with origin=, else
+               ! about the natural centre (gnuplot's)
+               p = step * real([merge(shape(1) - 1_I4P - col, col, flip(1)), &
+                                merge(shape(2) - 1_I4P - row, row, flip(2))], R8P)
+               if (centre_set) then
+                  p = matmul(rot, p - cnat) + centre
+               elseif (origin_set) then
+                  p = matmul(rot, p) + origin
+               else
+                  p = matmul(rot, p - cnat) + cnat + origin
+               endif
+               do corner = 1_I4P, merge(4_I4P, 1_I4P, polygons)
+                  do f = 1_I4P, nfields
+                     write(cell, '(ES24.16E3)') fv(f)
+                     w = len_trim(adjustl(cell), kind=I4P)
+                     buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
+                     at = at + w + 1_I4P
+                  enddo
+                  if (polygons) then
+                     write(cell, '(ES24.16E3)') p(1) + SIGNS(1, corner) * half(1, 1) + SIGNS(2, corner) * half(1, 2)
+                  else
+                     write(cell, '(ES24.16E3)') p(1)
+                  endif
                   w = len_trim(adjustl(cell), kind=I4P)
                   buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
                   at = at + w + 1_I4P
+                  if (polygons) then
+                     write(cell, '(ES24.16E3)') p(2) + SIGNS(1, corner) * half(2, 1) + SIGNS(2, corner) * half(2, 2)
+                  else
+                     write(cell, '(ES24.16E3)') p(2)
+                  endif
+                  w = len_trim(adjustl(cell), kind=I4P)
+                  buffer(at + 1:at + w + 1) = trim(adjustl(cell))//new_line('a')
+                  at = at + w + 1_I4P
                enddo
-               write(cell, '(ES24.16E3)') origin(1) + step(1) * real(merge(shape(1) - 1_I4P - col, col, flip(1)), R8P)
-               w = len_trim(adjustl(cell), kind=I4P)
-               buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
-               at = at + w + 1_I4P
-               write(cell, '(ES24.16E3)') origin(2) + step(2) * real(merge(shape(2) - 1_I4P - row, row, flip(2)), R8P)
-               w = len_trim(adjustl(cell), kind=I4P)
-               buffer(at + 1:at + w + 1) = trim(adjustl(cell))//new_line('a')
-               at = at + w + 1_I4P
+               ! a polygon per pixel: a blank line after it
+               if (polygons) then
+                  buffer(at + 1:at + 1) = new_line('a')
+                  at = at + 1_I4P
+               endif
             enddo
          enddo
          lines = buffer(1:at)
@@ -3042,8 +3194,106 @@ contains
       call self%symbols%set_string(name, lines)
       items(size(items))%kind = TOKEN_WORD
       items(size(items))%text = name
-      ! the item's using after the x:y columns of the pixels, or every field
+      ! rotated off the right angles: each pixel a polygon colored by its value (palette) or its packed RGB
+      if (polygons) then
+         block
+            character(len=:), allocatable :: spec   !< The item's using.
+            character(len=512), allocatable :: parts(:) !< Its fields as expressions.
+            character(len=:), allocatable :: color  !< Color expression.
+            logical                       :: rgb    !< rgbimage or rgbalpha.
+
+            spec = ''
+            do q = k, last
+               if (q > k) then
+                  if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P)) &
+                     spec = tokens(q)%text
+               endif
+            enddo
+            if (len(spec) == 0) then
+               spec = '1'
+               do f = 2_I4P, nfields
+                  spec = spec//':'//int_str(int(f, I8P))
+               enddo
+            endif
+            parts = using_parts(spec)
+            rgb = style == 'rgbimage' .or. style == 'rgbalpha'
+            if (rgb) then
+               if (size(parts) < 3) then
+                  call fail('plot: '//style//' needs r:g:b fields', iostat, iomsg)
+                  return
+               endif
+               color = '(int('//trim(parts(1))//')*65536+int('//trim(parts(2))//')*256+int('//trim(parts(3))//'))'
+            else
+               color = trim(parts(1))
+            endif
+            t%kind = TOKEN_WORD
+            t%quote = ' '
+            ! at the source of the last binary option: the automatic title the item as written (gnuplot's)
+            t%first = tokens(k - 1_I4P)%first
+            t%last = tokens(k - 1_I4P)%last
+            if (.not. has_using) then
+               t%text = 'using'
+               call push(items, t)
+               t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))//':'//color
+               call push(items, t)
+            endif
+            t%first = tokens(last)%first
+            t%last = tokens(last)%last
+            q = k
+            do while (q <= last)
+               if (q > k) then
+                  if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P)) then
+                     call push(items, tokens(q))
+                     items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
+                                               int_str(int(nfields + 2_I4P, I8P))//':'//color
+                     q = q + 1_I4P
+                     cycle
+                  endif
+               endif
+               if (tokens(q)%kind == TOKEN_WORD .and. keyword(tokens(q)%text, 'with', 1_I4P) .and. q < last) then
+                  t%text = 'with'
+                  call push(items, t)
+                  t%text = 'polygons'
+                  call push(items, t)
+                  q = q + 2_I4P
+                  ! gnuplot's pixels (drawn so anyway) dropped
+                  if (q <= last) then
+                     if (tokens(q)%kind == TOKEN_WORD .and. tokens(q)%text == 'pixels') q = q + 1_I4P
+                  endif
+                  cycle
+               endif
+               call push(items, tokens(q))
+               q = q + 1_I4P
+            enddo
+            t%text = 'fs'
+            call push(items, t)
+            t%text = 'solid'
+            call push(items, t)
+            t%text = 'noborder'
+            call push(items, t)
+            t%text = 'lc'
+            call push(items, t)
+            if (rgb) then
+               t%text = 'rgb'
+               call push(items, t)
+               t%text = 'variable'
+               call push(items, t)
+            else
+               t%text = 'palette'
+               call push(items, t)
+               t%text = 'z'
+               call push(items, t)
+            endif
+         endblock
+         k = last + 1_I4P
+         cycle
+      endif
+      ! the item's using after the x:y columns of the pixels, or every field; at the source of the last binary
+      ! option (the automatic title the item as written)
       t%kind = TOKEN_WORD
+      t%quote = ' '
+      t%first = tokens(k - 1_I4P)%first
+      t%last = tokens(k - 1_I4P)%last
       if (.not. has_using) then
          t%text = 'using'
          call push(items, t)
@@ -3077,6 +3327,93 @@ contains
       endif
       if (index(inner, ')') > 0) inner = inner(1:index(inner, ')') - 1)
       endfunction strip_parentheses
+
+      pure function highest_column(spec) result(n)
+      !< The highest column a using `spec` reads: its plain column numbers and its `$N`.
+      character(len=*), intent(in) :: spec !< Specification.
+      integer(I4P)                 :: n    !< Highest column, 0 if none.
+      integer(I4P)                 :: a, b, d, v !< Counters, depth, value.
+      logical                      :: plain !< A field of digits alone.
+
+      n = 0_I4P
+      a = 1_I4P
+      d = 0_I4P
+      do while (a <= len(spec, kind=I4P))
+         if (spec(a:a) == '$') then
+            b = a + 1_I4P
+            do while (b <= len(spec, kind=I4P))
+               if (verify(spec(b:b), '0123456789') /= 0) exit
+               b = b + 1_I4P
+            enddo
+            if (b > a + 1_I4P .and. b - a <= 9) then
+               read(spec(a + 1:b - 1), *) v
+               n = max(n, v)
+            endif
+            a = b
+            cycle
+         endif
+         ! a plain field: digits between colons (or the ends), outside parentheses
+         if (spec(a:a) == '(') d = d + 1_I4P
+         if (spec(a:a) == ')') d = d - 1_I4P
+         plain = .false.
+         if (d == 0_I4P .and. verify(spec(a:a), '0123456789') == 0) then
+            if (a == 1_I4P) then
+               plain = .true.
+            elseif (spec(a - 1:a - 1) == ':') then
+               plain = .true.
+            endif
+         endif
+         if (plain) then
+            b = a
+            do while (b <= len(spec, kind=I4P))
+               if (verify(spec(b:b), '0123456789') /= 0) exit
+               b = b + 1_I4P
+            enddo
+            if (b > len(spec)) then
+               if (b - a <= 9) read(spec(a:b - 1), *) v
+               if (b - a <= 9) n = max(n, v)
+            elseif (spec(b:b) == ':') then
+               if (b - a <= 9) read(spec(a:b - 1), *) v
+               if (b - a <= 9) n = max(n, v)
+            endif
+            a = b
+            cycle
+         endif
+         a = a + 1_I4P
+      enddo
+      endfunction highest_column
+
+      pure function using_parts(spec) result(parts)
+      !< The fields of a using `spec` as expressions: a column number N as `$N`, a parenthesized one as it is (fixed
+      !< length arrays grown by assignment: nvfortran 26.9 breaks deferred-length self-assignments and move_alloc).
+      character(len=*), intent(in)    :: spec     !< Specification.
+      character(len=512), allocatable :: parts(:) !< Fields.
+      character(len=512), allocatable :: more(:)  !< Fields, one more.
+      integer(I4P)                    :: a, b, d  !< Field start, end, depth.
+
+      allocate(parts(0))
+      a = 1_I4P
+      do while (a <= len(spec, kind=I4P))
+         d = 0_I4P
+         b = a
+         do while (b <= len(spec, kind=I4P))
+            if (spec(b:b) == '(') d = d + 1_I4P
+            if (spec(b:b) == ')') d = d - 1_I4P
+            if (spec(b:b) == ':' .and. d == 0_I4P) exit
+            b = b + 1_I4P
+         enddo
+         allocate(more(size(parts) + 1))
+         more(1:size(parts)) = parts
+         if (verify(spec(a:b - 1), '0123456789') == 0 .and. b > a) then
+            more(size(more)) = '$'//spec(a:b - 1)
+         else
+            more(size(more)) = spec(a:b - 1)
+         endif
+         parts = more
+         deallocate(more)
+         a = b + 1_I4P
+      enddo
+      endfunction using_parts
 
       subroutine read_field(kind, value)
       !< The next field of type `kind` from the bytes (gnuplot's %char, %uchar, %short, %ushort, %int, %uint, %long,
@@ -17665,10 +18002,8 @@ contains
          endif
          ! a variable a field assigns read when run by the next ones, `(Total = $2+$3, ...):($4/Total)`, as gnuplot
          call symbols%learn_assigned(field)
-         if (.not. is_parenthesized(text)) then
-            call fail('using: field "'//text//'" must be a single parenthesized expression', iostat, iomsg)
-            return
-         endif
+         ! an expression starting with a parenthesis is read whole, `($1+$2+$3)/3`, as gnuplot's (its expression
+         ! parser takes all of it)
       elseif (constant_column(text)) then
          ! a constant expression, `using 1:i` in a plot for: a number is the column, a string a header name
          continue
@@ -17693,24 +18028,7 @@ contains
                      index(text(2:len(text) - 1), text(1:1)) == 0
       endfunction is_quoted
 
-      pure function is_parenthesized(text) result(yes)
-      !< Whether `text` is one parenthesized group: `(...)`, the first parenthesis closed by the last character.
-      character(len=*), intent(in) :: text  !< Field.
-      logical                      :: yes   !< Parenthesized.
-      integer(I4P)                 :: depth !< Parenthesis depth.
-      integer(I4P)                 :: k     !< Character counter.
 
-      yes = .false.
-      if (len(text) < 2) return
-      if (text(1:1) /= '(') return
-      depth = 0_I4P
-      do k = 1_I4P, len(text, kind=I4P)
-         if (text(k:k) == '(') depth = depth + 1_I4P
-         if (text(k:k) == ')') depth = depth - 1_I4P
-         if (depth == 0_I4P) exit
-      enddo
-      yes = k == len(text, kind=I4P)
-      endfunction is_parenthesized
       function constant_column(expression) result(ok)
       !< Whether `expression` is a constant giving a column (a whole number >= 0) or a header name; `field` set to it.
       character(len=*), intent(in)  :: expression !< Field text.

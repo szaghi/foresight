@@ -342,8 +342,8 @@ The rules are gnuplot's, checked against gnuplot 6.0:
   evaluates the fields in order (`plot r=0 $D using (r):(dr = $2, r = r + dr, dr)`: the running start of each row);
   `A[i] = value` assigns an element of an [array](#arrays).
 
-A field must be a column number or one parenthesized expression, as in gnuplot: `using 1:$2` and `using 1:2*3` are
-errors. A spec broken after a colon by a line continuation (`using 2:1:\` and the next line) is joined, as gnuplot, and
+A field must be a column number or an expression starting with a parenthesis (read whole, `($1+$2+$3)/3`), as in
+gnuplot: `using 1:$2` and `using 1:2*3` are errors. A spec broken after a colon by a line continuation (`using 2:1:\` and the next line) is joined, as gnuplot, and
 so are blanks around its colons (`using (T(3)) : ($0)`). A format string after the spec reads the fields of each line
 by scanf conversions, as gnuplot: `using 1:2:3 "%lf %lf %lf"` (blank separated `%lf`, `%f`, `%le`, `%e`, `%g`). Syntax errors point at the character: `using: unexpected ")" at character 6 of "($2 +)"`.
 
@@ -1993,12 +1993,16 @@ gnuplot. Undefined values are transparent. On a [nonlinear](#ticks-and-label-for
 one at their mapped edges, as gnuplot's `pixels`.
 
 gnuplot's binary data arrays are read too: `plot 'file' binary array=(W,H) [format='%uchar...'] [flipx] [flipy]
-[flip=x|y] [dx=DX] [dy=DY] [origin=(X,Y)] [skip=N] [endian=little|big] with rgbimage` (or `image`, `rgbalpha`, any
-style): W x H pixels, a scan line after the other, the first at the bottom unless flipped, pixel (i, j) at origin +
-(i dx, j dy); each pixel's fields as the format (`%char`, `%uchar`, `%short`, `%ushort`, `%int`, `%uint`, `%long`,
-`%ulong`, `%float`, `%double` and the sized names `%int8` ... `%float64`; one specifier for every field, floats by
-default; rgbimage reads 3, rgbalpha 4). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of
-the pixels implied. Not supported: `filetype=` (png, ...) and the general binary records without `array`.
+[flip=x|y] [dx=DX] [dy=DY] [origin=(X,Y)] [center=(X,Y)] [rotation=A] [skip=N] [endian=little|big] with rgbimage`
+(or `image`, `rgbalpha`, any style): W x H pixels, a scan line after the other, the first at the bottom unless
+flipped, pixel (i, j) at origin + (i dx, j dy) (`dx` alone sets `dy` too); `center` moves the image's natural centre
+there; `rotation` (`rotate`, `rot`: radians, `30d` degrees, `0.5pi` multiples of pi) turns the pixels about that
+centre, or about the origin when `origin` is given, as gnuplot's; a right angle keeps them a grid, any other angle
+draws each pixel as the polygon of its corners (colored by the palette or its packed RGB; its key entry a filled
+box, where gnuplot's has none). Each pixel's fields as the format (`%char`, `%uchar`, `%short`, `%ushort`, `%int`,
+`%uint`, `%long`, `%ulong`, `%float`, `%double` and the sized names `%int8` ... `%float64`; `%*type` reads a field and
+skips it; one specifier for every field, floats by default; rgbimage reads 3, rgbalpha 4, or as many as the `using`
+reads). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of the pixels implied. Not supported: `filetype=` (png, ...) and the general binary records without `array`.
 
 The palette maps the values over `cbrange` (autoscaled to the values and, a linear one, extended to its ticks; `noextend` or `set autoscale cbfix` keeps the values) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`

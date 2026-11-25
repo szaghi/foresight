@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(258)                           !< Per-check outcome.
+logical                       :: test_passed(259)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6598,6 +6598,42 @@ block
    if (test_passed(258)) test_passed(258) = size(interpreter%figure%panels(1)%series) == 3
    if (test_passed(258)) test_passed(258) = interpreter%figure%panels(1)%series(1)%grid(2, 1) == 4.0_R8P .and. &
                                          interpreter%figure%panels(1)%series(2)%noautoscale
+endblock
+
+! binary images as gnuplot 6.0: center=(X,Y) moves the natural centre, rotation=A (d, pi, radians) turns the pixels
+! about it (about the origin with origin=), off the right angles each pixel a polygon; %*type skips a field; dx alone
+! sets dy; a using field starting with a parenthesis is read whole
+block
+   integer(I4P) :: u !< File unit.
+
+   open(newunit=u, file='foresight_script_test.bin', access='stream', form='unformatted', status='replace')
+   write(u) achar(10)//achar(20)//achar(30)//achar(40)//achar(50)//achar(60)
+   close(u)
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg; set output 'foresight_script_test.svg'; plot 'foresight_script_test.bin' "// &
+                             "binary array=(3,2) center=( 10,20 ) format='%uchar' with image", iostat, iomsg)
+   test_passed(259) = iostat == 0_I4P
+   if (test_passed(259)) test_passed(259) = abs(interpreter%figure%panels(1)%series(1)%x(1) - 8.5_R8P) < 1.0e-9_R8P .and. &
+                                         abs(interpreter%figure%panels(1)%series(1)%y(2) - 21.0_R8P) < 1.0e-9_R8P
+   call interpreter%run_text("plot 'foresight_script_test.bin' binary array=(3,2) rotation=90d format='%uchar' with image", &
+                             iostat, iomsg)
+   test_passed(259) = test_passed(259) .and. iostat == 0_I4P
+   if (test_passed(259)) test_passed(259) = size(interpreter%figure%panels(1)%series(1)%grid, 1) == 2 .and. &
+                                         size(interpreter%figure%panels(1)%series(1)%grid, 2) == 3
+   call interpreter%run_text("plot 'foresight_script_test.bin' binary array=(3,2) rot=0.25pi format='%uchar' "// &
+                             "using ($1)*2 with image", iostat, iomsg)
+   test_passed(259) = test_passed(259) .and. iostat == 0_I4P
+   if (test_passed(259)) test_passed(259) = interpreter%figure%panels(1)%series(1)%style%with == WITH_POLYGONS
+   call interpreter%run_text("plot 'foresight_script_test.bin' binary array=(3,1) format='%uchar%*uchar' with image", &
+                             iostat, iomsg)
+   test_passed(259) = test_passed(259) .and. iostat == 0_I4P
+   if (test_passed(259)) test_passed(259) = all(interpreter%figure%panels(1)%series(1)%grid(:, 1) == [10, 30, 50])
+   call interpreter%run_text("plot 'foresight_script_test.bin' binary array=(3,2) dx=2 format='%uchar' with image", &
+                             iostat, iomsg)
+   test_passed(259) = test_passed(259) .and. iostat == 0_I4P
+   if (test_passed(259)) test_passed(259) = abs(interpreter%figure%panels(1)%series(1)%y(2) - 3.0_R8P) < 1.0e-9_R8P
+   open(newunit=u, file='foresight_script_test.bin')
+   close(u, status='delete')
 endblock
 
 if (all(test_passed)) then
