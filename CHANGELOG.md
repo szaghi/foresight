@@ -4,6 +4,59 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.17.0] — 2026-11-25
+### Added
+- **script**: Splot items and their data, as gnuplot 6.0
+
+- **axes**: The map view of splot, as gnuplot 6.0
+
+- **pm3d**: Pm3d surfaces in the map view, as gnuplot 6.0
+
+- **contour**: Contour lines of the splot surfaces, as gnuplot 6.0
+
+- **dgrid3d**: Gridded and masked surfaces, as gnuplot 6.0
+
+- **script**: Pt variable, each point's type from a column, as gnuplot 6.0
+
+- **axes**: Rotated y and y2 tick labels, as gnuplot 6.0
+
+- **script**: Sectors colored per row, on polar centres, as gnuplot 6.0
+
+- **script**: Sparse matrix and matrix row/column headers, as gnuplot 6.0
+
+- **script**: Rotated and centred binary images, as gnuplot 6.0
+
+- **view3d**: 3D views of splot, as gnuplot 6.0
+
+- **view3d**: Labels, arrows and objects in 3D views, as gnuplot 6.0
+
+- **fit**: Xyerrors, parameter files and gnuplot's variables rule
+
+- **view3d**: Set mapping spherical and cylindrical, as gnuplot 6.0
+
+- **view3d**: 3D views static on the HTML page, drawn on the text devices
+
+- **view3d**: Set hidden3d by a painter's algorithm, gnuplot's 3D key
+
+- **script**: Dependent plot iterations, sample after ranges, packed ARGB
+
+- **view3d**: Splot smooth csplines and acsplines, as gnuplot 6.0
+
+
+### Fixed
+- **script**: Negative zero in set table, "-" in titles before palette data
+
+- **palette**: Gnuplot 6.0's default defined gradient, palette file headers
+
+- **backend**: Default arrowheads scale with the arrow, as gnuplot 6.0
+
+- **backend**: Sized arrowheads shrink on short arrows unless fixed, as gnuplot 6.0
+
+- **axes**: Color range extended to its ticks only with the color box, as gnuplot 6.0
+
+- **script**: What gnuplot 6.0's 3D demos read, as gnuplot
+
+
 ## [0.16.0] — 2026-11-24
 ### Added
 - **expression**: Tm_sec ... tm_yday, tm_week and week dates, as gnuplot 6.0
