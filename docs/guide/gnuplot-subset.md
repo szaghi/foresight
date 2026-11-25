@@ -5,7 +5,7 @@ title: gnuplot Subset
 # gnuplot Subset
 
 foresight interprets a subset of the gnuplot command language. Everything outside it is an error naming the command
-and its line (`script.gp:12: unsupported command "splot"`), never silently ignored: a script that runs is a script
+and its line (`script.gp:12: unsupported command "bind"`), never silently ignored: a script that runs is a script
 that did what it says.
 
 ## Syntax
@@ -29,6 +29,7 @@ that did what it says.
 | Command | Effect |
 |---|---|
 | **p**lot *items* | replace the current plot and render it to the output |
+| **sp**lot *items* | a [3D plot](#3d-plots): items with a height z, functions of x and y; drawn in the map view (`set view map`) |
 | **rep**lot [*items*] | render the last plot again (re-reading its data), optionally adding items |
 | **ref**resh | the last plot again, without new items (gnuplot redraws its stored data; the files are read again here) |
 | **se**t *option* | set an option |
@@ -108,9 +109,14 @@ that did what it says.
 | **dataf**ile **mis**sing [`"string"`\|`NaN`] | the cells holding `string` are missing data: a point reading one is left out, its line not broken (a cell read through `column(expr)` is known only when evaluated: undefined there), see [Data Files](data-files#missing-data-and-comments); no argument: none | none |
 | **dataf**ile **com**mentschars [`"chars"`] | the characters starting a comment in data files; no argument: `#` | `#` |
 | **dataf**ile **columnhead**ers \| **nocolumnhead**ers | the first row of each dataset is a header, in plots, `stats` and `fit` (other datafile options may follow) | not a header |
-| **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` is accepted and ignored; expressions truncated to integers, as gnuplot | 100 |
+| **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` the points along y of the [`splot` functions](#3d-plots)' iso-curves of x (N by default); expressions truncated to integers, as gnuplot | 100 |
+| **iso**samples `N`[`,M`] | the iso-curves of the [`splot` functions](#3d-plots): M curves of y (the surface grid), N of x; 10 by default; M also the v samples of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | 10 |
+| `view` *rot_x*[`,` *rot_z*[`,` *scale*[`,` *scale_z*]]] \| `map` [`scale S`] \| [`no`]`equal` [`xy`\|`xyz`] \| `azimuth A` \| `projection xy` | the view of the [3D plots](#3d-plots), gnuplot's `60, 30, 1, 1` by default (an empty field keeps its value); `map` seen from above, as a 2D plot | `60, 30, 1, 1`, no map |
+| **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D plots](#3d-plots): at the height Z, or F times the z range below it (0.5 by default) | — |
+| **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
+| **zr**ange, **zl**abel, **zti**cs, **mzti**cs, **zzero**axis | the z axis of the [3D plots](#3d-plots): its range (the options of `xrange`), label (those of `xlabel`), ticks (those of `xtics`), minor ticks and zero axis | as the x ones |
 | **ov**erflow [`float`\|`undefined`\|`NaN`] | an integer overflow of `+ - * **` gives a real (the default), an undefined value or NaN, see [Expressions](#expressions-in-using) | `+` and `-` wrap around (two's complement), `*` and `**` give a real, as gnuplot |
-| **iso**samples, **mou**se, **mac**ros, `pointintervalbox`, **zr**ange, **xyp**lane, `ticslevel`, `view`, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's 2D svg output (surfaces, interactive terminals, macros always on, `pointinterval` gaps, `splot`); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`); `isosamples` (its second value) and **ur**ange, **vr**ange also set the grid of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | the same |
+| **mou**se, **mac**ros, `pointintervalbox`, **minus**sign, **mic**ro | read and ignored: they change nothing in gnuplot's svg output (interactive terminals, macros always on, `pointinterval` gaps); `minussign` and `micro` only with the default encoding, where gnuplot prints the same characters (refused after `set encoding utf8`); **ur**ange, **vr**ange set the grid of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | the same |
 | `noxtics`, `noytics`, `nox2tics`, `noy2tics`, `nocbtics`, `nomxtics`, `nomytics`, `nokey`, `nogrid`, `noborder` | gnuplot's old forms of `unset xtics`, ... | — |
 | **st**yle **d**ata `STYLE` | style of data items without `with` | — |
 | **st**yle **f**unction `STYLE` | style of [functions](#functions) without `with`: `lines`, `points`, `linespoints` | back to `lines` |
@@ -2155,6 +2161,34 @@ plot 'phases.dat' u 2:xtic(1) w rose
 proportional instead, the common but exaggerating choice (twice the value, four times the area). The rings mark the
 values of the scale.
 
+## 3D plots
+
+`splot` plots items with a height: data with three `using` fields x:y:z, functions of x and y, matrices, the
+pseudo-files. As in gnuplot 6.0, the data of an item are scans, its blocks separated by blank lines (each dataset, two
+blank lines apart, a surface of its own); a function of x and y is sampled on its iso-curves, `set isosamples N,M`
+(10 by default): M curves of y, the surface grid, of `set samples` points along x each, then N curves of x; a matrix
+has a scan per row (x the column number, y the row number from 0, or with `nonuniform` its first row and column); a
+single column is the z of the point and scan numbers. The `using` fields are those of `plot` with the z third:
+`using 1:2:3:4 with labels` (x:y:z:text), `using 1:2:3:4:5:6 with vectors` (the z delta read and ignored by the map
+view), `using 1:2:3 with points lc palette` (colored by z unless a column follows), `using 1:2:3 with image` (x:y:value,
+or x:y:z:value).
+
+```gnuplot
+set view map
+set isosamples 30, 30
+set xrange [-3:3]; set yrange [-3:3]
+splot x*exp(-x**2-y**2) with points pt 7 ps 0.5 lc palette
+```
+
+Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them). `set table` writes
+the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of each item, its grid iso-curves (the
+scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,
+`set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` are kept for the 3D view.
+
+The map view (`set view map`) is drawn; the other 3D views are not drawn yet (an error), nor `set parametric` surfaces.
+In the library, `fig%splot(x, y, z)` adds scattered points (a scan) and `fig%splot(x, y, z2d)` a grid `z(i, j)` at
+`(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set the z axis.
+
 ## Polar plots
 
 gnuplot's `set polar`: the items are theta:r, drawn at x = (r - rmin) cos(theta), y = (r - rmin) sin(theta) and joined
@@ -2256,13 +2290,14 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-`splot`, `fit` beyond [its subset](#fit), log bases other than 10; `set rlabel`,
+3D views other than the [map view](#3d-plots) (`splot` with `set view ROT_X,ROT_Z`), `set parametric` surfaces,
+`fit` beyond [its subset](#fit), log bases other than 10; `set rlabel`,
 the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `axis` of the
 x2 and y2 ticks; the complex forms of the functions but `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
 `exp`, `log`, `log10`, `sin`, `cos`, `tan`, `sinh`, `cosh` (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
 (`VP`, `erfi`, `FresnelC`, ...);
-in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; `splot`'s `set parametric` (u, v); in `set format`,
+in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,
 `commentschars` and `columnheaders`; `lc variable` and `lc palette z` with boxplot, `set style boxplot labels x2`; the blank key rows of
 `newhistogram` groups; the line gap of a negative `pointinterval` or `pointnumber`; `reread`

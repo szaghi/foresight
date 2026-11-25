@@ -14,6 +14,7 @@ module foresight_figure
 !< call fig%plot(x, y, title='x^2', with='linespoints')
 !< call fig%save('parabola.svg')
 !<```
+use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use foresight_axes, only : axes_names, axes_object, boxplot_words, colorbox_object, key_position, paxis_object, &
                            polar_series, push, readout_position, spider_words, POLAR_STYLES
 use foresight_axis, only : axis_object, paxis_default
@@ -89,6 +90,12 @@ type :: figure_object
       procedure, pass(self) :: init            !< Reset the figure, optionally resizing it.
       procedure, pass(self) :: next_panel      !< Move to the next multiplot panel, carrying the settings over.
       procedure, pass(self) :: plot            !< gnuplot `plot`, one series per call.
+      procedure, pass(self), private :: splot_points !< gnuplot `splot` of scattered points.
+      procedure, pass(self), private :: splot_grid   !< gnuplot `splot` of a grid.
+      generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
+      procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
+      procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
+      procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
       procedure, pass(self) :: set_angles      !< gnuplot `set angles`.
       procedure, pass(self) :: set_border      !< gnuplot `set border` / `unset border`.
@@ -1789,6 +1796,129 @@ contains
       endif
    endassociate
    endsubroutine set_ttics
+
+   subroutine splot_points(self, x, y, z, title, with, lc, lw, dt, ps, pt)
+   !< Add the points (`x`, `y`, `z`) to the current panel, made a 3D panel, as gnuplot `splot ... using 1:2:3`: one
+   !< scan of scattered points, in the style `with` (points by default) and the line options of `plot`.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in)           :: x(:)  !< Abscissae.
+   real(R8P),            intent(in)           :: y(:)  !< Ordinates.
+   real(R8P),            intent(in)           :: z(:)  !< Heights.
+   character(len=*),     intent(in), optional :: title !< Key title.
+   character(len=*),     intent(in), optional :: with  !< Style, points if absent.
+   character(len=*),     intent(in), optional :: lc    !< Line color.
+   real(R8P),            intent(in), optional :: lw    !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt    !< Dash type.
+   real(R8P),            intent(in), optional :: ps    !< Point size.
+   integer(I4P),         intent(in), optional :: pt    !< Point type.
+
+   if (size(x) /= size(y) .or. size(x) /= size(z)) error stop 'foresight: splot: x, y and z sizes differ'
+   if (present(with)) then
+      call self%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
+   else
+      call self%plot(x, y, title=title, with='points', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
+   endif
+   call heights_of_last(self, z, reshape([1_I4P, size(z, kind=I4P)], [2, 1]))
+   endsubroutine splot_points
+
+   subroutine splot_grid(self, x, y, z, title, with, lc, lw, dt, ps, pt)
+   !< Add the surface `z(i, j)` at (`x(i)`, `y(j)`) to the current panel, made a 3D panel, as gnuplot `splot` of a
+   !< grid: a scan per `y(j)` (gnuplot's iso-curves), in the style `with` (lines by default) and the line options of
+   !< `plot`.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in)           :: x(:)   !< Abscissae of the columns.
+   real(R8P),            intent(in)           :: y(:)   !< Ordinates of the rows.
+   real(R8P),            intent(in)           :: z(:,:) !< Heights (column, row).
+   character(len=*),     intent(in), optional :: title  !< Key title.
+   character(len=*),     intent(in), optional :: with   !< Style, lines if absent.
+   character(len=*),     intent(in), optional :: lc     !< Line color.
+   real(R8P),            intent(in), optional :: lw     !< Line width [px].
+   integer(I4P),         intent(in), optional :: dt     !< Dash type.
+   real(R8P),            intent(in), optional :: ps     !< Point size.
+   integer(I4P),         intent(in), optional :: pt     !< Point type.
+   real(R8P),    allocatable                  :: xs(:)  !< Points, a NaN break after each scan.
+   real(R8P),    allocatable                  :: ys(:)  !< Their ordinates.
+   real(R8P),    allocatable                  :: zs(:)  !< Their heights.
+   integer(I4P), allocatable                  :: scans(:,:) !< First and last point of each scan.
+   integer(I4P)                               :: nx     !< Columns.
+   integer(I4P)                               :: j      !< Row.
+   integer(I4P)                               :: k      !< First point of the scan.
+
+   if (size(z, 1) /= size(x) .or. size(z, 2) /= size(y)) error stop 'foresight: splot: z must be size(x) by size(y)'
+   nx = size(x, kind=I4P)
+   allocate(xs((nx + 1_I4P) * size(y) - 1_I4P), ys((nx + 1_I4P) * size(y) - 1_I4P), zs((nx + 1_I4P) * size(y) - 1_I4P))
+   allocate(scans(2, size(y)))
+   xs = ieee_value(1.0_R8P, ieee_quiet_nan)
+   ys = xs
+   zs = xs
+   do j = 1_I4P, size(y, kind=I4P)
+      k = (j - 1_I4P) * (nx + 1_I4P) + 1_I4P
+      xs(k:k + nx - 1_I4P) = x
+      ys(k:k + nx - 1_I4P) = y(j)
+      zs(k:k + nx - 1_I4P) = z(:, j)
+      scans(:, j) = [k, k + nx - 1_I4P]
+   enddo
+   if (present(with)) then
+      call self%plot(xs, ys, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
+   else
+      call self%plot(xs, ys, title=title, with='lines', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
+   endif
+   call heights_of_last(self, zs, scans)
+   endsubroutine splot_grid
+
+   subroutine heights_of_last(self, z, scans)
+   !< The heights `z` and the `scans` of the last series of the current panel, made a 3D panel.
+   class(figure_object), intent(inout) :: self       !< Figure.
+   real(R8P),            intent(in)    :: z(:)       !< Heights.
+   integer(I4P),         intent(in)    :: scans(:,:) !< First and last point of each scan.
+   integer(I4P)                        :: last       !< Last series.
+
+   associate(panel => self%panels(self%current))
+      panel%three_d = .true.
+      last = size(panel%series, kind=I4P)
+      panel%series(last)%z = z
+      panel%series(last)%scans = scans
+      allocate(panel%series(last)%scan_sets(size(scans, 2)))
+      panel%series(last)%scan_sets = 0_I4P
+      panel%series(last)%grid_scans = size(scans, 2, kind=I4P)
+   endassociate
+   endsubroutine heights_of_last
+
+   subroutine set_zlabel(self, label)
+   !< Set the z axis label of the current panel (a 3D one), empty for none.
+   class(figure_object), intent(inout) :: self  !< Figure.
+   character(len=*),     intent(in)    :: label !< Label.
+
+   call self%ensure_panels
+   self%panels(self%current)%zaxis%label = label
+   endsubroutine set_zlabel
+
+   subroutine set_zrange(self, min, max)
+   !< Set the z range as gnuplot `set zrange [min:max]`: an absent end is autoscaled.
+   class(figure_object), intent(inout)        :: self !< Figure.
+   real(R8P),            intent(in), optional :: min  !< Value at the axis start.
+   real(R8P),            intent(in), optional :: max  !< Value at the axis end.
+
+   call self%ensure_panels
+   call self%panels(self%current)%zaxis%set_range(min=min, max=max)
+   endsubroutine set_zrange
+
+   subroutine set_ztics(self, step, start, end, positions, labels, minor, add)
+   !< z ticks every `step` from `start` to `end` (both optional), as gnuplot `set ztics START,STEP,END`; automatic
+   !< without `step`; `positions`, `labels`, `minor` and `add` an explicit list, as `set_xtics`.
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   real(R8P),            intent(in), optional :: step  !< Tick step.
+   real(R8P),            intent(in), optional :: start !< First tick.
+   real(R8P),            intent(in), optional :: end   !< Last tick.
+   real(R8P),            intent(in), optional :: positions(:) !< Explicit list positions.
+   character(len=*),     intent(in), optional :: labels(:)    !< Explicit list labels.
+   logical,              intent(in), optional :: minor(:)     !< Explicit list minor ticks.
+   logical,              intent(in), optional :: add          !< Add the list to the ticks.
+
+   call self%ensure_panels
+   call set_tics(self%panels(self%current)%zaxis%tics, 'set_ztics', step, start, end, positions=positions, &
+                 labels=labels, minor=minor, add=add)
+   endsubroutine set_ztics
 
    subroutine set_xlabel(self, label)
    !< Set the x axis label of the current panel, empty for none.

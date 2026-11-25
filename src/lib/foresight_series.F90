@@ -155,6 +155,15 @@ type :: series_object
                                                           !< xhigh:yhigh, drawn along the radius.
    integer(I4P)                  :: colormap = 0_I4P !< Named colormap of the palette colors (the panel's `colormaps`),
                                                      !< 0 for the panel palette.
+   real(R8P), allocatable        :: z(:) !< Heights of a 3D series (gnuplot `splot`), one per point (NaN at the
+                                         !< breaks between scans, as `x` and `y`); unallocated for a 2D series.
+   integer(I4P), allocatable     :: scans(:,:) !< Scans of a 3D series (2, scan): the first and last point of each
+                                               !< (gnuplot's iso-curves: a data block, a matrix row, a function line).
+   integer(I4P), allocatable     :: scan_sets(:) !< Dataset of each scan, from 0: each a surface of its own (gnuplot).
+   integer(I4P)                  :: grid_scans = 0_I4P !< Leading scans making the surface grid; the others are the
+                                                       !< cross iso-curves of a function (drawn, not gridded).
+   logical                       :: data_scans = .false. !< Scans read from data, which gnuplot keeps last first (its
+                                                         !< table order); a function's are in order.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

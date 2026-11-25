@@ -27,7 +27,7 @@ gnuplot build with the right terminals, glue scripts in a second language. fores
 
 foresight is deliberately scoped. It does not aim at publication figures with LaTeX labels (use pgfplots or
 matplotlib), 3D or field visualisation (use ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran)), or
-3D plots (`splot`). Anything outside the supported gnuplot subset is reported as an
+3D views beyond the map view of `splot` (the 3D support grows step by step). Anything outside the supported gnuplot subset is reported as an
 error naming the command, never silently ignored.
 
 ## Where to start

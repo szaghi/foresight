@@ -7,7 +7,7 @@ program foresight_script_test
 !< Run from the repository root; `FORESIGHT_UPDATE_GOLDEN=1` rewrites the reference file.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use foresight, only : fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
+use foresight, only : figure_object, fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
 use foresight_expression, only : value_object
 use foresight_font, only : font_object, font_of
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(243)                           !< Per-check outcome.
+logical                       :: test_passed(246)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -88,8 +88,8 @@ test_passed(5) = interpreter%output == 'mine.html'
 
 ! unsupported constructs are errors naming source and line
 call interpreter%init('run.html')
-call interpreter%run_text('set grid'//new_line('a')//'splot x', iostat, iomsg, source='t.gp')
-test_passed(6) = iostat /= 0_I4P .and. iomsg == 't.gp:2: unsupported command "splot"'
+call interpreter%run_text('set grid'//new_line('a')//'sumplot x', iostat, iomsg, source='t.gp')
+test_passed(6) = iostat /= 0_I4P .and. iomsg == 't.gp:2: unsupported command "sumplot"'
 call interpreter%run_text('plot [0:1] [0:1] [0:1] sin(x)', iostat, iomsg)
 test_passed(7) = iostat /= 0_I4P .and. index(iomsg, 'at most two inline ranges') > 0
 call interpreter%run_text("plot '"//data_file//"' u 1:$2", iostat, iomsg)
@@ -138,7 +138,7 @@ test_passed(14) = size(interpreter%figure%panels(1)%series(1)%x) == 15
 ! option errors name the option
 call interpreter%run_text('set xtics 1,', iostat, iomsg)
 test_passed(15) = iostat /= 0_I4P .and. index(iomsg, 'set xtics: supported forms') > 0
-call interpreter%run_text("set format z '%g'", iostat, iomsg)
+call interpreter%run_text("set format q '%g'", iostat, iomsg)
 test_passed(16) = iostat /= 0_I4P .and. index(iomsg, 'axes must be among x, y, y2') > 0
 call interpreter%run_text("set format y '%d'", iostat, iomsg)
 test_passed(17) = iostat /= 0_I4P .and. index(iomsg, 'unsupported conversion "%d"') > 0
@@ -5997,6 +5997,121 @@ test_passed(243) = test_passed(243) .and. iostat == 0_I4P
 if (test_passed(243)) test_passed(243) = index(read_text('foresight_script_test_fonts2.svg'), &
                                               'font-size="9" text-anchor="middle">G<') > 0
 
+
+! splot data as gnuplot 6.0 tabulates them: a function's grid iso-curves, data scans last first, one column (point and
+! scan numbers), a matrix, a surface per dataset, set format z and the out-of-range flag
+block
+   character(len=:), allocatable :: tab !< Table text.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set isosamples 3,2; set samples 4,5; "// &
+                             "splot x*y; unset table", iostat, iomsg)
+   test_passed(244) = iostat == 0_I4P
+   tab = read_text('foresight_script_test.dat')
+   test_passed(244) = test_passed(244) .and. tab == nl//'# Surface 0 of 1 surfaces'//nl//nl//'# Curve title: "x*y"'// &
+                     nl//nl//'# IsoCurve 0, 4 points'//nl//'# x y z type'//nl//'-10 -10  100 i'//nl// &
+                     '-3.33333 -10  33.3333 i'//nl//' 3.33333 -10 -33.3333 i'//nl//' 10 -10 -100 i'//nl//nl// &
+                     '# IsoCurve 1, 4 points'//nl//'# x y z type'//nl//'-10  10 -100 i'//nl// &
+                     '-3.33333  10 -33.3333 i'//nl//' 3.33333  10  33.3333 i'//nl//' 10  10  100 i'//nl//nl
+   ! the second set of iso-curves (x fixed) is drawn, not tabulated
+   test_passed(244) = test_passed(244) .and. size(interpreter%figure%panels(1)%series(1)%scans, 2) == 5 .and. &
+                     interpreter%figure%panels(1)%series(1)%grid_scans == 2
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'"//nl//"$d << EOD"//nl//"1 1 1"//nl//"2 1 2"//nl// &
+                             nl//"1 2 3"//nl//"2 2 4"//nl//nl//nl//"5 5 5"//nl//"EOD"//nl//"set format z '%.2f'; "// &
+                             "set zrange [0:4.5]; splot $d using 1:2:3, $d index 0 every 1:1:0:1 notitle; "// &
+                             "unset table", iostat, iomsg)
+   test_passed(244) = test_passed(244) .and. iostat == 0_I4P
+   tab = read_text('foresight_script_test.dat')
+   test_passed(244) = test_passed(244) .and. tab == nl//'# Surface 0 of 3 surfaces'//nl//nl// &
+                     '# Curve title: "$d using 1:2:3"'//nl//nl//'# IsoCurve 0, 2 points'//nl//'# x y z type'//nl// &
+                     ' 1  2 3.00 i'//nl//' 2  2 4.00 i'//nl//nl//'# IsoCurve 1, 2 points'//nl//'# x y z type'//nl// &
+                     ' 1  1 1.00 i'//nl//' 2  1 2.00 i'//nl//nl//nl//'# Surface 1 of 3 surfaces'//nl//nl// &
+                     '# IsoCurve 0, 1 points'//nl//'# x y z type'//nl//' 5  5 5.00 o'//nl//nl//nl// &
+                     '# Surface 2 of 3 surfaces'//nl//nl//'# IsoCurve 0, 2 points'//nl//'# x y z type'//nl// &
+                     ' 1  2 3.00 i'//nl//' 2  2 4.00 i'//nl//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'"//nl//"$m << EOD"//nl//"1 2 3"//nl//"4 5 6"//nl// &
+                             "EOD"//nl//"$c << EOD"//nl//"5"//nl//"6"//nl//nl//"7"//nl//"EOD"//nl// &
+                             "splot $m matrix using 1:2:($3*2) with lines, $c; unset table", iostat, iomsg)
+   test_passed(244) = test_passed(244) .and. iostat == 0_I4P
+   tab = read_text('foresight_script_test.dat')
+   test_passed(244) = test_passed(244) .and. index(tab, '# Curve title: "$m matrix using 1:2:($3*2)"') > 0 .and. &
+                     index(tab, ' 0  1  8 i'//nl//' 1  1  10 i'//nl//' 2  1  12 i') > 0 .and. &
+                     index(tab, '# Curve title: "$c"'//nl//nl//'# IsoCurve 0, 1 points'//nl//'# x y z type'//nl// &
+                           ' 0  1  7 i'//nl//nl//'# IsoCurve 1, 2 points'//nl//'# x y z type'//nl//' 0  0  5 i'//nl// &
+                           ' 1  0  6 i') > 0
+   ! the automatic title of a 2D item holds its data options, as gnuplot's
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'"//nl//"$d << EOD"//nl//"1 1"//nl//nl//nl//"2 2"// &
+                             nl//"EOD"//nl//"plot $d i 1 u 1:2; unset table", iostat, iomsg)
+   test_passed(244) = test_passed(244) .and. iostat == 0_I4P .and. &
+                     index(read_text('foresight_script_test.dat'), '# Curve title: "$d i 1 u 1:2"') > 0
+endblock
+
+
+! splot's settings: set view (rot_x, rot_z, scales, map, equal, azimuth), set xyplane and ticslevel, the z axis,
+! isosamples and samples (both values), surface; their unset; the errors
+call interpreter%init(scratch)
+call interpreter%run_text("set view 70, , 1.5, 2; set xyplane at -1; set zrange [0:5]; set zlabel 'Z' offset 1,2; "// &
+                          "set ztics 0.5; set mztics 2; set isosamples 3,4; set samples 5,6; set zzeroaxis lt 1; "// &
+                          "unset surface; set view azimuth 10; set view equal xyz", iostat, iomsg)
+test_passed(245) = iostat == 0_I4P
+associate(panel => interpreter%figure%panels(1))
+   test_passed(245) = test_passed(245) .and. panel%view3d%rot_x == 70.0_R8P .and. panel%view3d%rot_z == 30.0_R8P .and. &
+                     panel%view3d%scale == 1.5_R8P .and. panel%view3d%zscale == 2.0_R8P .and. panel%view3d%xyplane_at &
+                     .and. panel%view3d%xyplane_z == -1.0_R8P .and. panel%zaxis%max_user == 5.0_R8P .and. &
+                     panel%zaxis%label == 'Z' .and. panel%label_offset(1, 6) == 1.0_R8P .and. &
+                     panel%zaxis%tics%minor == 2_I4P .and. .not. panel%view3d%surface .and. panel%view3d%zzeroaxis .and. &
+                     panel%view3d%azimuth == 10.0_R8P .and. panel%view3d%equal == 2_I4P .and. .not. panel%view3d%map
+endassociate
+call interpreter%run_text("set view map scale 1.2; set ticslevel 0.3; unset zrange; unset zlabel; set surface", &
+                          iostat, iomsg)
+test_passed(245) = test_passed(245) .and. iostat == 0_I4P
+associate(panel => interpreter%figure%panels(1))
+   test_passed(245) = test_passed(245) .and. panel%view3d%map .and. panel%view3d%map_scale == 1.2_R8P .and. &
+                     .not. panel%view3d%xyplane_at .and. panel%view3d%ticslevel == 0.3_R8P .and. &
+                     .not. panel%zaxis%max_fixed .and. panel%zaxis%label == '' .and. panel%view3d%surface
+endassociate
+call interpreter%run_text("unset view", iostat, iomsg)
+test_passed(245) = test_passed(245) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%view3d%map
+call interpreter%run_text("splot x*y", iostat, iomsg)
+test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'set view map draws the map view') > 0
+call interpreter%run_text("set view 400", iostat, iomsg)
+test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'rot_x must be in [0:360]') > 0
+call interpreter%run_text("set view map; splot [0:1] [0:1] [0:1] [0:1] x*y", iostat, iomsg)
+test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'at most three inline ranges') > 0
+call interpreter%run_text("set table 'foresight_script_test.dat'; splot '+' using 1:1 notitle; unset table", iostat, &
+                          iomsg)
+test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'using needs x:y:z') > 0
+call interpreter%run_text("set table 'foresight_script_test.dat'; splot [-1:1] [0:2] [-5:5] x+y; unset table", iostat, &
+                          iomsg)
+test_passed(245) = test_passed(245) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%zaxis%plot_max == 5.0_R8P &
+                  .and. interpreter%figure%panels(1)%series(1)%x(1) == -1.0_R8P .and. &
+                  interpreter%figure%panels(1)%series(1)%y(1) == 0.0_R8P
+
+
+! the library's splot: scattered points (one scan) and a grid (a scan per row, NaN breaks between), the z axis
+block
+   type(figure_object) :: fig !< Library figure.
+
+   call fig%splot([1.0_R8P, 2.0_R8P], [3.0_R8P, 4.0_R8P], [5.0_R8P, 6.0_R8P], title='p')
+   call fig%splot([0.0_R8P, 1.0_R8P, 2.0_R8P], [0.0_R8P, 1.0_R8P], &
+                  reshape([1.0_R8P, 2.0_R8P, 3.0_R8P, 4.0_R8P, 5.0_R8P, 6.0_R8P], [3, 2]), with='lines')
+   call fig%set_zrange(min=0.0_R8P, max=7.0_R8P)
+   call fig%set_zlabel('height')
+   call fig%set_ztics(step=2.0_R8P)
+   associate(panel => fig%panels(1))
+      test_passed(246) = panel%three_d .and. size(panel%series) == 2 .and. panel%series(1)%z(2) == 6.0_R8P .and. &
+                        all(panel%series(1)%scans(:, 1) == [1, 2]) .and. size(panel%series(2)%x) == 7 .and. &
+                        all(panel%series(2)%scans(:, 2) == [5, 7]) .and. panel%series(2)%z(6) == 5.0_R8P .and. &
+                        panel%series(2)%y(5) == 1.0_R8P .and. ieee_is_nan(panel%series(2)%x(4)) .and. &
+                        panel%series(2)%grid_scans == 2 .and. panel%zaxis%max_user == 7.0_R8P .and. &
+                        panel%zaxis%label == 'height' .and. panel%series(1)%style%with == WITH_POINTS
+   endassociate
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -6005,7 +6120,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,243L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,246L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

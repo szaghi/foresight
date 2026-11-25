@@ -388,7 +388,7 @@ contains
    y = values(:, 2)
    endsubroutine columns
 
-   subroutine table(self, fields, index, every, values, header, labels, label)
+   subroutine table(self, fields, index, every, values, header, labels, label, sets)
    !< Values of the `using` `fields` on the rows of dataset `index` (all if negative) selected by `every`:
    !< `values(point, field)`.
    !<
@@ -410,7 +410,11 @@ contains
    logical,                 intent(in), optional :: header !< The first row of each dataset is a header.
    character(len=:), allocatable, intent(out), optional :: labels(:) !< Text labels of the points.
    type(expression_object), intent(in), optional :: label  !< Field of the labels.
+   integer(I4P), allocatable, intent(out), optional :: sets(:) !< Dataset of each point (from 0), -1 for the breaks
+                                                               !< (gnuplot's scans of splot are the runs between them).
    logical                              :: headed      !< Headers in use.
+   integer(I4P), allocatable            :: row_sets(:) !< `sets`, filled by store_points (a local: nvfortran 26.9
+                                                       !< misreads host optional dummies in internal procedures).
    integer(I4P)                         :: width       !< Label length.
    integer(I4P)                         :: r           !< Row counter.
    integer(I4P)                         :: stored      !< Points stored.
@@ -422,6 +426,7 @@ contains
    headed = .false.
    if (present(header)) headed = header
    allocate(values(count_points(), size(fields)))
+   allocate(row_sets(size(values, 1)))
    if (present(label)) allocate(words(size(values, 1)))
    if (present(labels)) then
       ! the longest row label, at least 1
@@ -437,7 +442,7 @@ contains
          labels(:) = ''
       endif
    endif
-   call store_points
+   call store_points(row_sets)
    ! fewer points when some were left out, through temporaries (nvfortran 26.9: see foresight_tokens push), here and
    ! not in store_points (it breaks a host's rank-2 array reallocated in an internal procedure)
    if (stored < size(values, 1)) then
@@ -450,6 +455,7 @@ contains
          call move_alloc(texts, labels)
       endif
    endif
+   if (present(sets)) sets = row_sets(1:stored)
    ! the labels of the `label` field, at their final length and number
    if (present(labels) .and. present(label)) then
       width = 1_I4P
@@ -498,8 +504,10 @@ contains
       enddo
       endfunction count_points
 
-      subroutine store_points
-      !< Store the points, NaN breaks between blocks.
+      subroutine store_points(marks)
+      !< Store the points, NaN breaks between blocks; `marks` the dataset of each, -1 for the breaks (an argument:
+      !< nvfortran 26.9 misplaces a second host array written here).
+      integer(I4P), intent(inout) :: marks(:) !< Dataset of each point, -1 for the breaks.
       integer(I4P) :: r        !< Row counter.
       integer(I4P) :: k        !< Point counter.
       integer(I4P) :: f        !< Field counter.
@@ -577,12 +585,14 @@ contains
          if (last_blk >= 0_I4P .and. self%block(r) /= last_blk) then
             k = k + 1_I4P
             values(k, :) = ieee_value(1.0_R8P, ieee_quiet_nan)
+            marks(k) = -1_I4P
          endif
          last_blk = self%block(r)
          if (self%dataset(r) /= set) picked = -1_I4P
          set = self%dataset(r)
          picked = picked + 1_I4P
          k = k + 1_I4P
+         marks(k) = self%dataset(r)
          place = [in_set_block, self%dataset(r)]
          if (self%has_text) then
             associate(cells => self%texts(self%first(r):self%first(r + 1_I4P) - 1_I4P), &

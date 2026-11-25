@@ -54,6 +54,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   has_shapes, label_object, pixmap_object, shape_object, &
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
+use foresight_view3d, only : view3d_object
 use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -187,7 +188,7 @@ type :: axes_object
    logical                          :: key_reverse = .false. !< Samples left of the titles (gnuplot `reverse`).
    logical                          :: key_plain = .false. !< The key's texts as they are, not enhanced (`noenhanced`).
    logical                          :: title_plain = .false. !< The title as it is, not enhanced (`noenhanced`).
-   logical                          :: label_plain(5) = .false. !< The x, y, y2, x2, r labels as they are (`noenhanced`).
+   logical                          :: label_plain(6) = .false. !< The x, y, y2, x2, r, z labels as they are (`noenhanced`).
    logical                          :: key_left = .false. !< Titles left-justified (gnuplot `Left`), else right.
    logical                          :: key_invert = .false. !< Entries in reverse order (gnuplot `invert`).
    logical                          :: key_opaque = .false. !< The key area painted over the plot (`opaque`).
@@ -246,12 +247,12 @@ type :: axes_object
                                                                !< start, middle or end, at the centre.
    character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
    type(font_object)                :: title_font              !< Title font, `set title font "..."`.
-   type(font_object)                :: label_font(5)           !< x, y, y2, x2, r label fonts, `set xlabel font`.
+   type(font_object)                :: label_font(6)           !< x, y, y2, x2, r, z label fonts, `set xlabel font`.
    type(font_object)                :: cblabel_font            !< Color box label font, `set cblabel font`.
    type(font_object)                :: key_font                !< Key font (entries and title), `set key font`.
-   real(R8P)                        :: label_offset(2, 5) = 0.0_R8P !< x, y, y2, x2, r label shifts [characters, y up],
+   real(R8P)                        :: label_offset(2, 6) = 0.0_R8P !< x, y, y2, x2, r, z label shifts [characters, y up],
                                                                     !< `set xlabel offset X,Y`.
-   character(len=24)                :: label_color(5) = ''     !< x, y, y2, x2, r label colors, `set xlabel tc`.
+   character(len=24)                :: label_color(6) = ''     !< x, y, y2, x2, r, z label colors, `set xlabel tc`.
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
                                                                   !< `set lmargin`...): characters, or a page fraction
                                                                   !< with `margin_screen`; negative: computed.
@@ -316,6 +317,10 @@ type :: axes_object
    real(R8P)                        :: theta_origin = 0.0_R8P !< Direction of theta = 0 (`set theta`) [deg,
                                                               !< counterclockwise from the right].
    logical                          :: theta_clockwise = .false. !< Theta grows clockwise.
+   logical                          :: three_d = .false. !< A 3D panel (gnuplot `splot`): its series have heights,
+                                                         !< drawn through its view.
+   type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
+   type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
    type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
    logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
    type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.

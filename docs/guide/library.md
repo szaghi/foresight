@@ -172,7 +172,7 @@ integer(I4P)                  :: iostat
 
 call gp%init('monitor.html')                    ! default output
 call gp%run_file('monitor.gp', iostat, iomsg)
-if (iostat /= 0) print '(A)', iomsg              ! e.g. monitor.gp:7: unsupported command "splot"
+if (iostat /= 0) print '(A)', iomsg              ! e.g. monitor.gp:7: unsupported command "bind"
 call gp%execute('replot', iostat, iomsg)        ! one statement
 ```
 

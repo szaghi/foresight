@@ -127,6 +127,8 @@ use foresight_font, only : font_object, font_of
 use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
+use foresight_series, only : series_object
+use foresight_view3d, only : view3d_object
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
                              real_from_decimal
 use foresight_readout, only : readout_check
@@ -284,7 +286,12 @@ type :: script_object
    integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
    character(len=:), allocatable   :: dummy                    !< `set dummy NAME`: the functions' variable, empty for
                                                                !< gnuplot's (x, t in polar mode).
-   integer(I4P)                    :: isosamples = 10_I4P      !< `set isosamples N,M`: M, the v samples of `'++'`.
+   integer(I4P)                    :: isosamples = 10_I4P      !< `set isosamples N,M`: M, the v samples of `'++'`
+                                                               !< and the iso-curves of y of the splot functions.
+   integer(I4P)                    :: isosamples1 = 10_I4P     !< N: the iso-curves of x of the splot functions.
+   integer(I4P)                    :: samples2 = 100_I4P       !< `set samples N,M`: M, the samples along y of the
+                                                               !< splot functions' iso-curves of x.
+   logical                         :: last_splot = .false.     !< The last plot a splot (for replot, refresh).
    real(R8P)                       :: uv_range(2, 2) = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
                                                                !< `set urange`, `set vrange` (columns u, v).
    character(len=:), allocatable   :: data_curve               !< `set style data filledcurves OPTIONS`: the options
@@ -388,6 +395,8 @@ contains
    self%column_headers = .false.
    self%samples = 100_I4P
    self%isosamples = 10_I4P
+   self%isosamples1 = 10_I4P
+   self%samples2 = 100_I4P
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    self%chi_fraction = 0.6_R8P
@@ -1026,7 +1035,8 @@ contains
    command = tokens(1)%text
    ! in a multiplot, the first command after a plot opens the next panel (the multiplot options excepted)
    if (self%advance_pending .and. (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P) .or. &
-                                   keyword(command, 'plot', 1_I4P) .or. keyword(command, 'reset', 3_I4P))) then
+                                   keyword(command, 'plot', 1_I4P) .or. keyword(command, 'splot', 2_I4P) .or. &
+                                   keyword(command, 'reset', 3_I4P))) then
       if (.not. is_multiplot_option(tokens)) then
          if (self%figure%layout .and. self%figure%current >= size(self%figure%panels, kind=I4P)) then
             call fail('multiplot: the layout is full', iostat, iomsg)
@@ -1042,7 +1052,12 @@ contains
       call self%unset_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'plot', 1_I4P)) then
       self%last_plot = after_command(statement)
+      self%last_splot = .false.
       call self%plot_command(tokens(2:), statement, iostat, iomsg)
+   elseif (keyword(command, 'splot', 2_I4P)) then
+      self%last_plot = after_command(statement)
+      self%last_splot = .true.
+      call self%plot_command(tokens(2:), statement, iostat, iomsg, three_d=.true.)
    elseif (command == 'fit') then
       call self%fit_command(tokens(2:), statement, iostat, iomsg)
    elseif (keyword(command, 'print', 2_I4P)) then
@@ -1126,7 +1141,7 @@ contains
       if (iostat /= 0_I4P) return
       call resolve_colors(tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
-      call self%plot_command(tokens, self%last_plot, iostat, iomsg)
+      call self%plot_command(tokens, self%last_plot, iostat, iomsg, three_d=self%last_splot)
    elseif (keyword(command, 'refresh', 3_I4P)) then
       ! gnuplot redraws the last plot from its stored data: the data are read again here, the same files
       if (len(self%last_plot) == 0) then
@@ -1138,7 +1153,7 @@ contains
       if (iostat /= 0_I4P) return
       call resolve_colors(tokens, iostat, iomsg)
       if (iostat /= 0_I4P) return
-      call self%plot_command(tokens, self%last_plot, iostat, iomsg)
+      call self%plot_command(tokens, self%last_plot, iostat, iomsg, three_d=self%last_splot)
    elseif (keyword(command, 'show', 2_I4P) .or. command == 'test') then
       ! gnuplot `show ...` prints settings, `test` draws a test page: nothing here, as a script runs on
       continue
@@ -3105,41 +3120,66 @@ contains
       endsubroutine read_field
    endsubroutine binary_items
 
-   subroutine plot_command(self, tokens, text, iostat, iomsg)
-   !< `plot` (plot_items), gnuplot's binary arrays (`'file' binary array=...`) first read into datablocks.
+   subroutine plot_command(self, tokens, text, iostat, iomsg, three_d)
+   !< `plot` and `splot` (`three_d`) (plot_items), gnuplot's binary arrays (`'file' binary array=...`) first read into
+   !< datablocks.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Items tokens.
    character(len=*),              intent(in)    :: text      !< Text the tokens come from, for function titles.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical,             optional, intent(in)    :: three_d   !< A splot.
+   logical                                      :: splot_mode !< A splot.
    type(token_object), allocatable              :: items(:)  !< Tokens, binary files as datablocks.
    integer(I4P)                                 :: k         !< Token counter.
    logical                                      :: binary    !< A binary file among the items.
 
+   splot_mode = .false.
+   if (present(three_d)) splot_mode = three_d
    binary = .false.
    do k = 2_I4P, size(tokens, kind=I4P)
       if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'binary') binary = .true.
    enddo
    if (.not. binary) then
-      call self%plot_items(tokens, text, iostat, iomsg)
+      call self%plot_items(tokens, text, iostat, iomsg, splot_mode)
       return
    endif
    call self%binary_items(tokens, items, iostat, iomsg)
    if (iostat /= 0_I4P) return
-   call self%plot_items(items, text, iostat, iomsg)
+   call self%plot_items(items, text, iostat, iomsg, splot_mode)
    endsubroutine plot_command
 
-   subroutine plot_items(self, tokens, text, iostat, iomsg)
+   subroutine plot_items(self, tokens, text, iostat, iomsg, splot_mode)
    !< `plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
    !< renders it.
    !<
    !< Functions are sampled once all the items are read: their x range depends on the data of the whole plot, as gnuplot.
    !< Until then each holds its place (its color, its key row) as an empty series.
+   !<
+   !< `splot` (`splot_mode`, gnuplot 6.0's): the items have a z, the third using field, read as the last column and kept
+   !< apart (`zfield`), so that the other fields are the styles' plot fields; a function of x and y is sampled on its
+   !< iso-curves (`function_rows`), a matrix becomes rows x y z (`matrix_rows`), both read as data. The series keep their
+   !< heights and scans (`attach_z`): the blocks of the data, separated by blank lines.
    class(script_object),          intent(inout) :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Items tokens.
    character(len=*),              intent(in)    :: text      !< Text the tokens come from, for function titles.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical,                       intent(in)    :: splot_mode !< A splot.
+   type(expression_object)                      :: zfield    !< The z field of a splot item.
+   logical                                      :: z_read    !< `zfield` read as the last column of the values.
+   logical                                      :: one_column3d !< A splot of one data column: z, x and y the point
+                                                                !< and scan numbers.
+   real(R8P),        allocatable                :: z3(:)     !< The heights of the splot item.
+   integer(I4P),     allocatable                :: row_sets(:) !< Dataset of each row, -1 for the breaks.
+   character(len=:), allocatable                :: generated !< Rows of a splot function or matrix.
+   integer(I4P)                                 :: grid_rows !< Scans of a splot function's grid, 0: all scans.
+   character(len=:), allocatable                :: shown_spec !< The using spec as written, for the title.
+   integer(I4P)                                 :: item_first !< First token of the item (its file).
+   integer(I4P)                                 :: title_to  !< Last token of the automatic title: the file and its
+                                                             !< data options after it (index, every, using, matrix).
+   logical                                      :: other_seen !< An option other than the data ones met.
+   character(len=:), allocatable                :: option_word !< The current option as written.
    type(datafile_object)                        :: data      !< Current data file.
    type(expression_object)                      :: func      !< Current function.
    type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
@@ -3316,6 +3356,11 @@ contains
    allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0), sharpens(0))
    spider_group = 0_I4P
    call self%figure%clear
+   self%figure%panels(self%figure%current)%three_d = splot_mode
+   if (splot_mode .and. self%parametric) then
+      call fail('splot: parametric surfaces are not supported yet (foresight 3D support, phase 2)', iostat, iomsg)
+      return
+   endif
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
       return
@@ -3336,6 +3381,17 @@ contains
       if (sample_first) exit
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
+      if (splot_mode) then
+         ! [x] [y] [z]
+         if (nranges > 3_I4P) then
+            call fail('splot: at most three inline ranges, [x], [y] and [z], are supported', iostat, iomsg)
+            return
+         endif
+         call inline_range(tokens(i)%text, merge(4_I4P, nranges, nranges == 3_I4P))
+         if (iostat /= 0_I4P) return
+         i = i + 1_I4P
+         cycle
+      endif
       if (nranges > merge(3_I4P, 2_I4P, self%parametric .or. self%figure%panels(self%figure%current)%polar)) then
          if (self%parametric .or. self%figure%panels(self%figure%current)%polar) then
             call fail('plot: at most three inline ranges, [t], [x] and [y], in parametric mode', iostat, iomsg)
@@ -3492,6 +3548,7 @@ contains
             endif
          endblock
       endif
+      item_first = i
       is_function = tokens(i)%kind == TOKEN_WORD
       keyentry = .false.
       keyentry_blank = .false.
@@ -3546,7 +3603,10 @@ contains
                file = value
             endif
          endblock
-         if (is_function) then
+         if (is_function .and. splot_mode) then
+            ! a function of x and y, read as the third field of its sampled grid (function_rows)
+            continue
+         elseif (is_function) then
             associate(panel => self%figure%panels(self%figure%current))
                call func%compile(written, iostat, iomsg, variable=item_dummy, degrees=panel%degrees, &
                                  symbols=self%symbols)
@@ -3655,6 +3715,7 @@ contains
       ! modifiers
       if (allocated(fields)) deallocate(fields)
       spec = ''
+      using = 'using'
       label_col = 0_I4P
       label_col2 = 0_I4P
       tic_col = 0_I4P
@@ -3723,10 +3784,13 @@ contains
       if (allocated(base)) deallocate(base)
       shaping = ''
       line = line_style_object()
+      title_to = i
+      other_seen = .false.
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
          if (tokens(i)%kind == TOKEN_COMMA) exit
          word = tokens(i)%text
+         option_word = word
          if (tokens(i)%kind /= TOKEN_WORD) then
             call fail('plot: unexpected "'//word//'"', iostat, iomsg)
             return
@@ -4343,6 +4407,15 @@ contains
             call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
             return
          endif
+         ! the data options right after the file are in its automatic title, as gnuplot's (df_open's tokens)
+         if (.not. other_seen .and. (keyword(option_word, 'using', 1_I4P) .or. keyword(option_word, 'index', 1_I4P) &
+                                     .or. keyword(option_word, 'every', 2_I4P) .or. &
+                                     keyword(option_word, 'matrix', 3_I4P) .or. &
+                                     keyword(option_word, 'nonuniform', 4_I4P) .or. option_word == 'skip')) then
+            title_to = i
+         else
+            other_seen = .true.
+         endif
          i = i + 1_I4P
       enddo
       if (with == 'readout') then
@@ -4436,6 +4509,42 @@ contains
             endif
          endif
       endassociate
+      grid_rows = 0_I4P
+      if (splot_mode .and. is_function .and. .not. keyentry) then
+         ! splot f(x,y): its iso-curves as generated rows x y, the function their third field, the expression its title
+         if (.not. has_title .and. self%autotitle /= 'none') then
+            title = item_glued//item_prefix//written
+            auto_title = .true.
+            has_title = .true.
+         endif
+         call function_rows(generated)
+         if (iostat /= 0_I4P) return
+         block
+            character(len=:), allocatable :: names !< The two dummy variables.
+
+            names = 'x y'
+            if (len_trim(self%dummies) > 0) then
+               if (word_count(self%dummies) >= 2) then
+                  names = trim(first_word(self%dummies))//' '// &
+                          trim(first_word(adjustl(self%dummies(index(adjustl(self%dummies), ' '):))))
+               else
+                  names = trim(first_word(self%dummies))//' y'
+               endif
+            endif
+            spec = '1:2:('//written//')'
+            using = 'using'
+            sampled = names
+            call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                             self%symbols, sampled=names)
+            if (iostat /= 0_I4P) then
+               iomsg = 'splot: '//iomsg
+               return
+            endif
+         endblock
+         is_function = .false.
+         pseudo = 3_I4P
+         file = '++'
+      endif
       if (is_function .and. with == 'table') then
          ! gnuplot writes nothing for a function, with a warning
          write(error_unit, '(A)') "foresight: warning: 'with table' requires a data source not a pure function"
@@ -4524,6 +4633,13 @@ contains
          cycle
       endif
       ! data
+      z_read = .false.
+      one_column3d = .false.
+      shown_spec = spec
+      if (splot_mode) then
+         call splot_columns
+         if (iostat /= 0_I4P) return
+      endif
       if (is_matrix .and. with /= 'image') then
          if (with == 'rgbimage' .or. with == 'rgbalpha') then
             call fail('plot: '//with//' takes using x:y:r:g:b'//trim(merge(':a', '  ', with == 'rgbalpha'))// &
@@ -4854,11 +4970,9 @@ contains
             title_column = 0_I4P
          case ('file')
             ! gnuplot: the item as written, '' included, as it is (not enhanced text)
-            title = item_glued//trim(quote)//written//trim(quote)
-            ! inline data, as written: '-' or "-"
-            if (index(written, '$FS_INLINE_S') == 1) title = item_glued//"'-'"
-            if (index(written, '$FS_INLINE_D') == 1) title = item_glued//'"-"'
-            if (len(spec) > 0) title = title//' '//using//' '//spec
+            call item_auto_title(text, tokens(item_first)%first, tokens(item_first)%last, tokens(title_to)%last, &
+                                 written, quote, shown_spec, using, title)
+            title = item_glued//title
             auto_title = .true.
          endselect
       endif
@@ -4882,10 +4996,27 @@ contains
             call data%table(fields, set_index, every, values, header=headed, labels=labels2, label=label_field2)
          if (tic_col > 0_I4P) &
             call data%table(fields, set_index, every, values, header=headed, labels=ticlabels, label=tic_field)
-         call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
+         if (z_read) then
+            call data%table([fields, zfield], set_index, every, values, header=headed, labels=xlabels, &
+                            label=label_field, sets=row_sets)
+         else
+            call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
+         endif
       else
-         call data%table(fields, set_index, every, values, header=headed)
+         if (z_read) then
+            call data%table([fields, zfield], set_index, every, values, header=headed, sets=row_sets)
+         else
+            call data%table(fields, set_index, every, values, header=headed)
+         endif
          if (allocated(xlabels)) deallocate(xlabels)
+      endif
+      if (z_read) then
+         ! the heights apart, the other columns the plot's
+         ! a plain reassignment: nvfortran 26.9 broke the values of every plot (2D too) after a move_alloc into them
+         ! in a block here
+         z3 = values(:, size(values, 2))
+         values = values(:, 1:size(values, 2) - 1)
+         if (one_column3d) call scan_numbers(values, row_sets)
       endif
       if (weight_one) then
          values(:, 1) = values(:, 2)
@@ -5355,6 +5486,7 @@ contains
       if (len(palette_lc) > 0) call paint_last
       call mark_last
       call fill_last
+      if (z_read) call attach_z(z3, row_sets)
       if (binned) then
          ! the autoscale spans the outer bin edges and y = 0, as gnuplot
          associate(panel => self%figure%panels(self%figure%current))
@@ -5407,12 +5539,302 @@ contains
       call self%write_table(iostat, iomsg)
       return
    endif
+   if (splot_mode .and. .not. self%figure%panels(self%figure%current)%view3d%map) then
+      call fail('splot: 3D views are not drawn yet (foresight 3D support, phase 2): set view map draws the map view', &
+                iostat, iomsg)
+      return
+   endif
    if (self%multiplot) self%advance_pending = .true.
    ! a multiplot on the standard output is printed once, complete, at unset multiplot (as gnuplot); files are rewritten
    ! at each plot, so that a watched page shows the panels done so far
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      subroutine splot_columns
+      !< splot's using fields made plot's: the third, z, apart in `zfield` (read after the others as the last column,
+      !< `z_read`), the others the style's plot fields in their order, `spec` rewritten so (labels read their text field
+      !< from it). gnuplot's defaults: 1:2:3 (1:2:3:4 labels, 1:2:3:4:5:6 vectors); a single data column is z, x and y the
+      !< point and scan numbers (`scan_numbers`); `with image` takes x:y:value (z 0) or x:y:z:value; the z delta of
+      !< vectors is read and ignored (a map view). A matrix becomes rows x y z (`matrix_rows`), but a `matrix with image`
+      !< without using stays plot's image of a matrix. `lc palette` colors by z unless a column follows the plot fields.
+      character(len=:), allocatable        :: parts(:) !< The fields as written.
+      character(len=:), allocatable        :: zspec    !< The z field as written.
+      character(len=:), allocatable        :: rest     !< The plot fields.
+      type(expression_object), allocatable :: zfields(:) !< The z field parsed.
+      integer(I4P)                         :: n        !< Fields.
+      integer(I4P)                         :: needed   !< Plot fields of the style with a color column.
+      integer(I4P)                         :: k        !< Field counter.
+      logical                              :: image_style !< An image style.
+
+      image_style = with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha'
+      if (len(filter) > 0 .or. binned .or. hull > 0_I4P .or. zsort_item) then
+         call fail('splot: smooth, bins, hulls and zsort apply to plot', iostat, iomsg)
+         return
+      endif
+      if (is_matrix) then
+         if (image_style .and. .not. allocated(fields)) return
+         call matrix_rows
+         if (iostat /= 0_I4P) return
+      endif
+      if (.not. allocated(fields)) then
+         ux = 1_I4P
+         if (pseudo == 0_I4P) then
+            ! the columns of the data
+            call self%load_data(data, file, iostat, iomsg, skip=skip)
+            if (iostat /= 0_I4P) return
+            loaded = file
+            loaded_skip = skip
+            call self%register_file(file)
+            call data%default_using(ux, uy)
+         endif
+         if (ux == 0_I4P) then
+            one_column3d = .true.
+            spec = '1:1:1'
+         else
+            select case (with)
+            case ('labels')
+               spec = '1:2:3:4'
+            case ('vectors')
+               spec = '1:2:3:4:5:6'
+            case default
+               spec = '1:2:3'
+            endselect
+         endif
+      endif
+      call using_parts(spec, parts)
+      n = size(parts, kind=I4P)
+      if (with == 'image' .and. n == 3_I4P) then
+         zspec = '(0)'
+         rest = trim(parts(1))//':'//trim(parts(2))//':'//trim(parts(3))
+      elseif (n < 3_I4P) then
+         call fail('splot: using needs x:y:z, found "'//spec//'"', iostat, iomsg)
+         return
+      else
+         zspec = trim(parts(3))
+         rest = trim(parts(1))//':'//trim(parts(2))
+         do k = 4_I4P, n
+            ! the z delta of vectors (the sixth field) is the 3D view's
+            if (with == 'vectors' .and. k == 6_I4P) cycle
+            rest = rest//':'//trim(parts(k))
+         enddo
+      endif
+      ! lc palette (z): the z as the color column, unless the item gives one after its plot fields
+      if (allocated(line%lc)) then
+         if (line%lc == LC_PALETTE_Z) then
+            needed = 3_I4P + merge(1_I4P, 0_I4P, ps_var) + merge(1_I4P, 0_I4P, with == 'labels') + &
+                     merge(1_I4P, 0_I4P, rotate_var) + merge(2_I4P, 0_I4P, with == 'vectors')
+            if (word_count(replace_colons(rest)) < needed) rest = rest//':'//zspec
+         endif
+      endif
+      spec = rest
+      if (len(sampled) > 0 .and. pseudo /= 4_I4P) then
+         call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols, &
+                          sampled=sampled)
+         if (iostat == 0_I4P) call parse_using(zspec, zfields, iostat, iomsg, &
+                                               self%figure%panels(self%figure%current)%degrees, self%symbols, &
+                                               sampled=sampled)
+      else
+         call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+         if (iostat == 0_I4P) call parse_using(zspec, zfields, iostat, iomsg, &
+                                               self%figure%panels(self%figure%current)%degrees, self%symbols)
+      endif
+      if (iostat /= 0_I4P) then
+         iomsg = 'splot: '//iomsg
+         return
+      endif
+      if (image_style) return
+      zfield = zfields(1)
+      z_read = .true.
+      endsubroutine splot_columns
+
+      subroutine matrix_rows
+      !< A splot matrix as generated rows `x y z`, a block per matrix row (gnuplot's scans): x the column number and y
+      !< the row number from 0, or (`nonuniform`) the first row and column of the file.
+      real(R8P),        allocatable :: zm(:,:) !< The matrix (column, row).
+      character(len=:), allocatable :: problem !< Matrix problem.
+      character(len=:), allocatable :: buffer  !< Rows.
+      integer(I4P)                  :: used    !< Its length used.
+      integer(I4P)                  :: c       !< Column.
+      integer(I4P)                  :: r       !< Row.
+      integer(I4P)                  :: c0      !< First value column.
+      real(R8P)                     :: xv      !< Abscissa.
+      real(R8P)                     :: yv      !< Ordinate.
+
+      call self%load_data(data, file, iostat, iomsg, skip=skip)
+      if (iostat /= 0_I4P) return
+      loaded = file
+      loaded_skip = skip
+      call self%register_file(file)
+      call data%matrix(set_index, zm, problem)
+      if (len(problem) > 0) then
+         call fail('splot: '//problem//' in "'//file//'"', iostat, iomsg)
+         return
+      endif
+      if (size(zm) == 0) then
+         call fail('splot: no values in "'//file//'"', iostat, iomsg)
+         return
+      endif
+      if (any(every /= [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P])) then
+         call fail('splot: every on a matrix is not supported', iostat, iomsg)
+         return
+      endif
+      c0 = merge(2_I4P, 1_I4P, nonuniform)
+      used = 0_I4P
+      do r = c0, size(zm, 2, kind=I4P)
+         yv = real(r - 1_I4P, R8P)
+         if (nonuniform) yv = zm(1, r)
+         do c = c0, size(zm, 1, kind=I4P)
+            xv = real(c - 1_I4P, R8P)
+            if (nonuniform) xv = zm(c, 1)
+            call append_text(buffer, used, gnuplot_real(xv)//' '//gnuplot_real(yv)//' '//gnuplot_real(zm(c, r))// &
+                             new_line('a'))
+         enddo
+         call append_text(buffer, used, new_line('a'))
+      enddo
+      generated = ''
+      if (used > 0_I4P) generated = buffer(1:used)
+      is_matrix = .false.
+      pseudo = 4_I4P
+      loaded = ''
+      endsubroutine matrix_rows
+
+      subroutine function_rows(rows)
+      !< The rows of a splot function, as gnuplot 6.0 samples it (plot3d.c, calculate_set_of_isolines): `set isosamples
+      !< N1,N2` iso-curves of y (N2 of them, `set samples` S1 points along x each) then N1 iso-curves of x (S2 points
+      !< along y each), over the x and y ranges (inline, set, the data so far when autoscaled, [-10:10] without); the
+      !< columns x and y, a blank line after each curve. The first N2 curves are the surface grid (`grid_rows`).
+      character(len=:), allocatable, intent(out) :: rows   !< Rows.
+      character(len=:), allocatable              :: buffer !< Rows being built.
+      integer(I4P)                               :: used   !< Its length used.
+      real(R8P)                                  :: lo(2)  !< Range starts, x and y.
+      real(R8P)                                  :: hi(2)  !< Range ends.
+      real(R8P)                                  :: u      !< x sample.
+      real(R8P)                                  :: v      !< y sample.
+      integer(I4P)                               :: j      !< Curve counter.
+      integer(I4P)                               :: k      !< Sample counter.
+
+      call surface_range(1_I4P, lo(1), hi(1))
+      call surface_range(2_I4P, lo(2), hi(2))
+      used = 0_I4P
+      do j = 0_I4P, self%isosamples - 1_I4P
+         v = lo(2) + real(j, R8P) * (hi(2) - lo(2)) / real(self%isosamples - 1_I4P, R8P)
+         do k = 0_I4P, self%samples - 1_I4P
+            u = lo(1) + real(k, R8P) * (hi(1) - lo(1)) / real(self%samples - 1_I4P, R8P)
+            call append_text(buffer, used, gnuplot_real(u)//' '//gnuplot_real(v)//new_line('a'))
+         enddo
+         call append_text(buffer, used, new_line('a'))
+      enddo
+      do j = 0_I4P, self%isosamples1 - 1_I4P
+         u = lo(1) + real(j, R8P) * (hi(1) - lo(1)) / real(self%isosamples1 - 1_I4P, R8P)
+         do k = 0_I4P, self%samples2 - 1_I4P
+            v = lo(2) + real(k, R8P) * (hi(2) - lo(2)) / real(self%samples2 - 1_I4P, R8P)
+            call append_text(buffer, used, gnuplot_real(u)//' '//gnuplot_real(v)//new_line('a'))
+         enddo
+         call append_text(buffer, used, new_line('a'))
+      enddo
+      rows = buffer(1:used)
+      grid_rows = self%isosamples
+      endsubroutine function_rows
+
+      subroutine surface_range(axis, lo, hi)
+      !< The sampling range of a splot function along x (`axis` 1) or y (2): the plot's inline range, else the set one,
+      !< else the data so far, else [-10:10], as gnuplot.
+      integer(I4P), intent(in)  :: axis !< 1 x, 2 y.
+      real(R8P),    intent(out) :: lo   !< Start.
+      real(R8P),    intent(out) :: hi   !< End.
+      real(R8P)                 :: x0(2), x1(2), y0(2), y1(2) !< Data extent.
+      logical                   :: found(2), xfound(2)        !< Any data.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         call panel%axes_extent(x0, x1, y0, y1, found, xfound)
+         lo = -10.0_R8P
+         hi = 10.0_R8P
+         if (axis == 1_I4P) then
+            if (xfound(1)) then
+               lo = x0(1)
+               hi = x1(1)
+            endif
+            if (panel%xaxis%min_fixed) lo = panel%xaxis%min_user
+            if (panel%xaxis%max_fixed) hi = panel%xaxis%max_user
+            if (panel%xaxis%plot_min_fixed) lo = panel%xaxis%plot_min
+            if (panel%xaxis%plot_max_fixed) hi = panel%xaxis%plot_max
+         else
+            if (found(1)) then
+               lo = y0(1)
+               hi = y1(1)
+            endif
+            if (panel%yaxis%min_fixed) lo = panel%yaxis%min_user
+            if (panel%yaxis%max_fixed) hi = panel%yaxis%max_user
+            if (panel%yaxis%plot_min_fixed) lo = panel%yaxis%plot_min
+            if (panel%yaxis%plot_max_fixed) hi = panel%yaxis%plot_max
+         endif
+      endassociate
+      endsubroutine surface_range
+
+      subroutine scan_numbers(rows, marks)
+      !< One data column: x the point number within its scan, y the scan number within its dataset (gnuplot's).
+      real(R8P),    intent(inout) :: rows(:,:) !< Rows, x and y set.
+      integer(I4P), intent(in)    :: marks(:)  !< Dataset of each row, -1 at the breaks.
+      integer(I4P) :: r    !< Row.
+      integer(I4P) :: p    !< Point within the scan.
+      integer(I4P) :: sc   !< Scan within the dataset.
+      integer(I4P) :: last !< Dataset of the last point.
+
+      p = 0_I4P
+      sc = 0_I4P
+      last = -2_I4P
+      do r = 1_I4P, size(rows, 1, kind=I4P)
+         if (marks(r) < 0_I4P) then
+            sc = sc + 1_I4P
+            p = 0_I4P
+            cycle
+         endif
+         if (marks(r) /= last) then
+            sc = 0_I4P
+            p = 0_I4P
+            last = marks(r)
+         endif
+         rows(r, 1) = real(p, R8P)
+         rows(r, 2) = real(sc, R8P)
+         p = p + 1_I4P
+      enddo
+      endsubroutine scan_numbers
+
+      subroutine attach_z(heights, marks)
+      !< The heights and scans of the splot item, on its series: the scans are the runs of points between the breaks,
+      !< each in its dataset; a function's first `grid_rows` scans its grid.
+      real(R8P),    intent(in) :: heights(:) !< Heights.
+      integer(I4P), intent(in) :: marks(:)   !< Dataset of each row, -1 at the breaks.
+      integer(I4P)              :: last  !< The item's series.
+      integer(I4P)              :: n     !< Scans.
+      integer(I4P)              :: r     !< Row.
+      integer(I4P), allocatable :: bounds(:,:) !< Scans: first and last point.
+      integer(I4P), allocatable :: sets(:)     !< Their datasets.
+
+      allocate(bounds(2, size(heights)), sets(size(heights)))
+      n = 0_I4P
+      do r = 1_I4P, size(heights, kind=I4P)
+         if (marks(r) < 0_I4P) cycle
+         if (r == 1_I4P) then
+            n = n + 1_I4P
+            bounds(1, n) = r
+            sets(n) = marks(r)
+         elseif (marks(r - 1_I4P) < 0_I4P) then
+            n = n + 1_I4P
+            bounds(1, n) = r
+            sets(n) = marks(r)
+         endif
+         bounds(2, n) = r
+      enddo
+      associate(panel => self%figure%panels(self%figure%current))
+         last = size(panel%series, kind=I4P)
+         if (last == 0_I4P) return
+         if (size(panel%series(last)%x) /= size(heights)) return
+         call set_heights(panel%series(last), heights, bounds(:, 1:n), sets(1:n), &
+                          merge(grid_rows, n, grid_rows > 0_I4P .and. grid_rows <= n), pseudo /= 3_I4P)
+      endassociate
+      endsubroutine attach_z
+
       subroutine table_item
       !< A data item `with table`: its rows written now as text where `set table` sends them (gnuplot's layout).
       type(expression_object), allocatable :: used(:)  !< `using` fields, none for the leading numeric cells.
@@ -6771,6 +7193,11 @@ contains
       integer(I4P), parameter                    :: MAX_ROWS = 1000000_I4P !< Bound of an explicit sampling.
 
       rows = ''
+      if (pseudo >= 3_I4P) then
+         ! a splot function's iso-curves or a matrix's rows, generated before
+         rows = generated
+         return
+      endif
       if (pseudo == 1_I4P) then
          logx = .false.
          associate(panel => self%figure%panels(self%figure%current))
@@ -6862,17 +7289,17 @@ contains
       endsubroutine pseudo_rows
 
       subroutine inline_range(text, axis)
-      !< An inline range `[min:max]` of the plot command (`text` without brackets): of x (`axis` 1), y (2) or t (3,
-      !< the first range in parametric mode); `[name=min:max]` of x or t also names the dummy variable; an empty or `*`
-      !< end keeps the set one, as gnuplot.
+      !< An inline range `[min:max]` of the plot command (`text` without brackets): of x (`axis` 1), y (2), t (3,
+      !< the first range in parametric mode) or z (4, splot's third); `[name=min:max]` of x or t also names the dummy
+      !< variable; an empty or `*` end keeps the set one, as gnuplot.
       character(len=*), intent(in)  :: text  !< Range text.
-      integer(I4P),     intent(in)  :: axis  !< 1 x, 2 y, 3 t.
+      integer(I4P),     intent(in)  :: axis  !< 1 x, 2 y, 3 t, 4 z.
       logical                       :: first !< A range of the dummy variable (x or t).
       character(len=:), allocatable :: body  !< Range without the dummy variable.
       integer(I4P)                  :: colon !< Separator.
       integer(I4P)                  :: equal !< Dummy variable separator.
 
-      first = axis /= 2_I4P
+      first = axis == 1_I4P .or. axis == 3_I4P
       body = text
       equal = index(text, '=', kind=I4P)
       colon = top_colon(text)
@@ -6898,7 +7325,10 @@ contains
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
-         if (axis == 3_I4P) then
+         if (axis == 4_I4P) then
+            call inline_end(body(1:colon - 1_I4P), panel%zaxis%plot_min_fixed, panel%zaxis%plot_min)
+            if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%zaxis%plot_max_fixed, panel%zaxis%plot_max)
+         elseif (axis == 3_I4P) then
             call inline_end(body(1:colon - 1_I4P), panel%taxis%plot_min_fixed, panel%taxis%plot_min)
             if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), panel%taxis%plot_max_fixed, panel%taxis%plot_max)
          elseif (axis == 1_I4P) then
@@ -6938,8 +7368,8 @@ contains
       character(len=:), allocatable :: problem     !< Grid problem.
 
       if (.not. has_title .and. self%autotitle == 'file') then
-         title = trim(quote)//written//trim(quote)
-         if (len(spec) > 0) title = title//' '//using//' '//spec
+         call item_auto_title(text, tokens(item_first)%first, tokens(item_first)%last, tokens(title_to)%last, &
+                              written, quote, shown_spec, using, title)
       endif
       if (is_matrix) then
          if (allocated(fields)) then
@@ -7713,6 +8143,8 @@ contains
    self%column_headers = .false.
    self%samples = 100_I4P
    self%isosamples = 10_I4P
+   self%isosamples1 = 10_I4P
+   self%samples2 = 100_I4P
    self%uv_range = reshape([-5.0_R8P, 5.0_R8P, -5.0_R8P, 5.0_R8P], [2, 2])
    self%rgbmax = 255.0_R8P
    self%chi_fraction = 0.6_R8P
@@ -7764,6 +8196,13 @@ contains
    integer(I4P)                                 :: k      !< Series counter.
    integer(I4P)                                 :: p      !< Point counter.
    integer(I4P)                                 :: unit   !< File unit.
+   character(len=:), allocatable                :: zfmt   !< z format.
+   integer(I4P)                                 :: nsurf  !< Surfaces of a splot.
+   integer(I4P)                                 :: isurf  !< Surface counter.
+   integer(I4P)                                 :: d      !< Dataset counter.
+   integer(I4P)                                 :: j      !< Scan counter.
+   integer(I4P)                                 :: q      !< Scan.
+   integer(I4P)                                 :: curve  !< Iso-curve number within its surface.
 
    iostat = 0_I4P
    iomsg = ''
@@ -7771,6 +8210,58 @@ contains
    associate(panel => self%figure%panels(self%figure%current))
       n = 0_I4P
       if (allocated(panel%series)) n = size(panel%series, kind=I4P)
+      if (panel%three_d) then
+         ! splot, as gnuplot 6.0 tabulates it: a surface per dataset of each item (`# Surface K of N surfaces`, the item
+         ! title on its first), its grid scans (the data ones last first, gnuplot's order) as `# IsoCurve J, M points`,
+         ! rows `x y z type`
+         xfmt = axis_format(panel%xaxis%tics%format, panel%xaxis%time)
+         yfmt = axis_format(panel%yaxis%tics%format, panel%yaxis%time)
+         zfmt = axis_format(panel%zaxis%tics%format, panel%zaxis%time)
+         nsurf = 0_I4P
+         do k = 1_I4P, n
+            if (.not. allocated(panel%series(k)%scans)) cycle
+            if (panel%series(k)%grid_scans > 0_I4P) &
+               nsurf = nsurf + maxval(panel%series(k)%scan_sets(1:panel%series(k)%grid_scans)) - &
+                       minval(panel%series(k)%scan_sets(1:panel%series(k)%grid_scans)) + 1_I4P
+         enddo
+         isurf = 0_I4P
+         do k = 1_I4P, n
+            associate(series => panel%series(k))
+               if (.not. allocated(series%scans)) cycle
+               if (series%grid_scans == 0_I4P) cycle
+               do d = minval(series%scan_sets(1:series%grid_scans)), maxval(series%scan_sets(1:series%grid_scans))
+                  text = text//new_line('a')//'# Surface '//int_str(int(isurf, I8P))//' of '// &
+                         int_str(int(nsurf, I8P))//' surfaces'//new_line('a')//new_line('a')
+                  if (d == minval(series%scan_sets(1:series%grid_scans)) .and. len(series%title) > 0) &
+                     text = text//'# Curve title: "'//series%title//'"'//new_line('a')//new_line('a')
+                  curve = 0_I4P
+                  do j = 1_I4P, series%grid_scans
+                     q = merge(series%grid_scans + 1_I4P - j, j, series%data_scans)
+                     if (series%scan_sets(q) /= d) cycle
+                     text = text//'# IsoCurve '//int_str(int(curve, I8P))//', '// &
+                            int_str(int(series%scans(2, q) - series%scans(1, q) + 1_I4P, I8P))//' points'// &
+                            new_line('a')//'# x y z type'//new_line('a')
+                     do p = series%scans(1, q), series%scans(2, q)
+                        flag = 'i'
+                        if (.not. (ieee_is_finite(series%x(p)) .and. ieee_is_finite(series%y(p)) .and. &
+                                   ieee_is_finite(series%z(p)))) then
+                           flag = 'u'
+                        elseif (outside(series%x(p), panel%xaxis) .or. outside(series%y(p), panel%yaxis) .or. &
+                                outside(series%z(p), panel%zaxis)) then
+                           flag = 'o'
+                        endif
+                        text = text//number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)//' '// &
+                               number(series%z(p), zfmt)//' '//flag//new_line('a')
+                     enddo
+                     text = text//new_line('a')
+                     curve = curve + 1_I4P
+                  enddo
+                  isurf = isurf + 1_I4P
+               enddo
+            endassociate
+         enddo
+         n = 0_I4P
+      endif
       do k = 1_I4P, n
          associate(series => panel%series(k))
             xfmt = axis_format(panel%xaxis%tics%format, panel%xaxis%time)
@@ -9760,20 +10251,56 @@ contains
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       ! the surfaces' (splot, not in foresight); M the v samples of the `'++'` pseudo-file
       call samples_option(.false.)
-   elseif (keyword(option, 'xyplane', 3_I4P) .or. option == 'view' .or. option == 'ticslevel') then
-      ! splot's base plane (`set ticslevel`, its old name) and view (`set view map|equal xy|...`): read and ignored, as
-      ! in gnuplot's 2D plots
-      continue
-   elseif (keyword(option, 'zrange', 2_I4P) .or. keyword(option, 'urange', 2_I4P) .or. &
-           keyword(option, 'vrange', 2_I4P)) then
-      ! the z axis is splot's (checked and ignored); u and v the ranges of the `'++'` pseudo-file
+   elseif (option == 'view') then
+      call view_option(tokens)
+   elseif (keyword(option, 'xyplane', 3_I4P) .or. keyword(option, 'ticslevel', 5_I4P)) then
+      call xyplane_option(tokens)
+   elseif (keyword(option, 'surface', 2_I4P)) then
+      ! `set surface [implicit|explicit]`: the surfaces drawn (the pm3d modes read)
+      if (size(tokens) > 1) then
+         if (.not. is_word(tokens(2)%text, 'implicit explicit')) then
+            call fail('set surface: implicit or explicit expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+            return
+         endif
+         if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+      endif
+      self%figure%panels(self%figure%current)%view3d%surface = .true.
+   elseif (keyword(option, 'zrange', 2_I4P)) then
+      associate(axis => self%figure%panels(self%figure%current)%zaxis)
+         call set_range(axis%min_fixed, axis%min_user, axis%max_fixed, axis%max_user, tight=axis%noextend, &
+                        reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
+      endassociate
+   elseif (keyword(option, 'zlabel', 2_I4P)) then
+      if (.not. axis_label(6_I4P)) return
+      self%figure%panels(self%figure%current)%zaxis%label = text
+   elseif (keyword(option, 'ztics', 3_I4P)) then
+      call tics_option(self%figure%panels(self%figure%current)%zaxis%tics)
+   elseif (keyword(option, 'mztics', 3_I4P)) then
+      call minor_option(self%figure%panels(self%figure%current)%zaxis%tics)
+   elseif (keyword(option, 'zzeroaxis', 5_I4P)) then
+      ! the z zero axis of the 3D views (its line options read)
+      i = 1_I4P
+      do while (i < size(tokens, kind=I4P))
+         i = i + 1_I4P
+         if (tokens(i)%kind /= TOKEN_WORD .or. .not. is_line_option(tokens(i)%text)) then
+            call fail('set zzeroaxis: unsupported option "'//tokens(i)%text//'" (lt, lc, lw, dt)', iostat, iomsg)
+            return
+         endif
+         i = i + 1_I4P
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i)%text == 'rgb' .or. tokens(i)%text == 'rgbcolor') i = i + 1_I4P
+         endif
+      enddo
+      self%figure%panels(self%figure%current)%view3d%zzeroaxis = .true.
+   elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P)) then
+      ! u and v the ranges of the `'++'` pseudo-file
       block
          logical   :: fixed(2) !< Bound given.
          real(R8P) :: bound(2) !< Bounds.
          integer(I4P) :: c     !< Column: 1 u, 2 v.
 
          call set_range(fixed(1), bound(1), fixed(2), bound(2))
-         if (iostat == 0_I4P .and. option(1:1) /= 'z') then
+         if (iostat == 0_I4P) then
             c = merge(1_I4P, 2_I4P, option(1:1) == 'u')
             if (fixed(1)) self%uv_range(1, c) = bound(1)
             if (fixed(2)) self%uv_range(2, c) = bound(2)
@@ -10577,7 +11104,7 @@ contains
       !< [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, shifted by characters (x right,
       !< y up), in its color, and whether it is read as it is, not as enhanced text. The font, the rotation and the
       !< justification are read and ignored, as one font and the axis' own layout are foresight's.
-      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2, 5 r.
+      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2, 5 r, 6 z.
       logical                       :: ok     !< Success.
       character(len=*), parameter   :: WORDS = 'offset font tc textcolor textc textco textcol textcolo rotate norotate '// &
                                                'left right center centre noenhanced noenh enhanced enh boxed noboxed' !< Options.
@@ -10611,6 +11138,8 @@ contains
                if (allocated(panel%y2axis%label)) text = panel%y2axis%label
             case (4_I4P)
                if (allocated(panel%x2axis%label)) text = panel%x2axis%label
+            case (6_I4P)
+               if (allocated(panel%zaxis%label)) text = panel%zaxis%label
             case default
                if (allocated(panel%raxis%label)) text = panel%raxis%label
             endselect
@@ -10689,6 +11218,132 @@ contains
       self%figure%panels(self%figure%current)%label_font(axis) = font
       ok = .true.
       endfunction axis_label
+
+      subroutine view_option(toks)
+      !< gnuplot `set view ROT_X[,ROT_Z[,SCALE[,SCALE_Z]]]` (empty fields keep theirs), `set view map [scale S]`,
+      !< `set view [no]equal [xy|xyz]`, `set view azimuth A`, `set view projection xy` (the map); `set view` alone keeps
+      !< the view.
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      real(R8P)    :: v    !< A value.
+      integer(I4P) :: f    !< Field: 1 rot_x, 2 rot_z, 3 scale, 4 scale_z.
+
+      if (size(toks) < 2) return
+      associate(view => self%figure%panels(self%figure%current)%view3d)
+         select case (toks(2)%text)
+         case ('map')
+            view%map = .true.
+            view%map_scale = 1.0_R8P
+            i = 2_I4P
+            if (size(toks) > 2) then
+               if (toks(3)%text /= 'scale') then
+                  call fail('set view map: scale S expected, found "'//toks(3)%text//'"', iostat, iomsg)
+                  return
+               endif
+               i = 3_I4P
+               if (.not. next_real(toks, i, view%map_scale, iostat, iomsg, self%symbols)) return
+            endif
+            if (.not. no_more(toks, i + 1_I4P, iostat, iomsg)) return
+         case ('equal')
+            view%equal = 1_I4P
+            if (size(toks) > 2) then
+               if (toks(3)%text == 'xyz') then
+                  view%equal = 2_I4P
+               elseif (toks(3)%text /= 'xy') then
+                  call fail('set view equal: xy or xyz expected, found "'//toks(3)%text//'"', iostat, iomsg)
+                  return
+               endif
+               if (.not. no_more(toks, 4_I4P, iostat, iomsg)) return
+            endif
+         case ('noequal')
+            view%equal = 0_I4P
+         case ('azimuth')
+            i = 2_I4P
+            if (.not. next_real(toks, i, view%azimuth, iostat, iomsg, self%symbols)) return
+            if (.not. no_more(toks, i + 1_I4P, iostat, iomsg)) return
+         case ('projection')
+            if (size(toks) < 3) then
+               call fail('set view projection: xy, xz or yz expected', iostat, iomsg)
+               return
+            endif
+            if (toks(3)%text /= 'xy') then
+               call fail('set view projection '//toks(3)%text//': not supported yet (the xy projection is the '// &
+                         'map view)', iostat, iomsg)
+               return
+            endif
+            view%map = .true.
+            view%map_scale = 1.0_R8P
+         case default
+            ! ROT_X, ROT_Z, SCALE, SCALE_Z, each may be empty
+            f = 1_I4P
+            i = 1_I4P
+            do while (i < size(toks, kind=I4P))
+               if (toks(i + 1_I4P)%kind == TOKEN_COMMA) then
+                  f = f + 1_I4P
+                  i = i + 1_I4P
+                  cycle
+               endif
+               if (f > 4_I4P) then
+                  call fail('set view: at most ROT_X, ROT_Z, SCALE, SCALE_Z', iostat, iomsg)
+                  return
+               endif
+               if (.not. next_real(toks, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'set view: '//iomsg
+                  return
+               endif
+               select case (f)
+               case (1_I4P)
+                  if (v < 0.0_R8P .or. v > 360.0_R8P) then
+                     call fail('set view: rot_x must be in [0:360] degrees', iostat, iomsg)
+                     return
+                  endif
+                  view%rot_x = v
+               case (2_I4P)
+                  if (v < 0.0_R8P .or. v > 360.0_R8P) then
+                     call fail('set view: rot_z must be in [0:360] degrees', iostat, iomsg)
+                     return
+                  endif
+                  view%rot_z = v
+               case (3_I4P)
+                  if (v < 1.0e-6_R8P) then
+                     call fail('set view: scale must be > 0', iostat, iomsg)
+                     return
+                  endif
+                  view%scale = v
+               case default
+                  if (v < 1.0e-6_R8P) then
+                     call fail('set view: zscale must be > 0', iostat, iomsg)
+                     return
+                  endif
+                  view%zscale = v
+               endselect
+            enddo
+            view%map = .false.
+         endselect
+      endassociate
+      endsubroutine view_option
+
+      subroutine xyplane_option(toks)
+      !< gnuplot `set xyplane at Z`, `set xyplane relative F`, `set xyplane F` and `set ticslevel F`: the base plane at
+      !< the height Z, or F times the z range below the range.
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      associate(view => self%figure%panels(self%figure%current)%view3d)
+         i = 1_I4P
+         if (size(toks) < 2) then
+            call fail('set '//option//': a value expected', iostat, iomsg)
+            return
+         endif
+         if (toks(2)%text == 'at') then
+            i = 2_I4P
+            if (.not. next_real(toks, i, view%xyplane_z, iostat, iomsg, self%symbols)) return
+            view%xyplane_at = .true.
+         else
+            if (toks(2)%text == 'relative') i = 2_I4P
+            if (.not. next_real(toks, i, view%ticslevel, iostat, iomsg, self%symbols)) return
+            view%xyplane_at = .false.
+         endif
+         if (.not. no_more(toks, i + 1_I4P, iostat, iomsg)) return
+      endassociate
+      endsubroutine xyplane_option
 
       subroutine title_option
       !< `set title ["text"] [offset X,Y] [font "f"] [left|center|right] [tc COLOR] [noenhanced] [enhanced]`: the text,
@@ -13431,7 +14086,9 @@ contains
       endif
       if (store) then
          self%samples = n
+         self%samples2 = m
       else
+         self%isosamples1 = n
          self%isosamples = m
       endif
       endsubroutine samples_option
@@ -13473,15 +14130,23 @@ contains
       character(len=:), allocatable :: format  !< Label format.
       character(len=:), allocatable :: message !< Problem.
       character(len=:), allocatable :: kind    !< `timedate`, `numeric` or empty.
+      logical                       :: zaxis   !< The z axis named (splot's): its format set apart.
 
       axes = 'xyy2cbx2'
+      zaxis = .true.
       format = ''
       i = 2_I4P
       ! a lone word before the format names the axes
       if (i < size(tokens, kind=I4P)) then
          if (tokens(i)%kind == TOKEN_WORD .and. expression_end(tokens, i) == i) then
             axes = tokens(i)%text
-            if (.not. valid_axes(axes)) then
+            zaxis = index(axes, 'z') > 0
+            if (zaxis) axes = axes(1:index(axes, 'z') - 1)//axes(index(axes, 'z') + 1:)
+            if (len(axes) == 0 .and. zaxis) axes = 'z'
+            if (axes == 'z' .and. tokens(i)%text /= 'z') axes = 'zz'
+            if (axes == 'z') then
+               continue
+            elseif (.not. valid_axes(axes)) then
                call fail('set format: axes must be among x, y, y2, cb, x2 (e.g. y or xy2), not "'//axes//'"', iostat, iomsg)
                return
             endif
@@ -13490,6 +14155,10 @@ contains
       elseif (i == size(tokens, kind=I4P)) then
          if (tokens(i)%kind == TOKEN_WORD .and. valid_axes(tokens(i)%text)) then
             axes = tokens(i)%text
+            zaxis = .false.
+            i = i + 1_I4P
+         elseif (tokens(i)%kind == TOKEN_WORD .and. tokens(i)%text == 'z') then
+            axes = 'z'
             i = i + 1_I4P
          endif
       endif
@@ -13532,7 +14201,8 @@ contains
             call self%figure%set_time_axes(axes, on=kind == 'timedate')
          endif
       endif
-      call self%figure%set_format(format, axes)
+      if (zaxis) self%figure%panels(self%figure%current)%zaxis%tics%format = format
+      if (axes /= 'z') call self%figure%set_format(format, axes)
       endsubroutine format_option
 
       function time_axes(names) result(time)
@@ -14147,10 +14817,33 @@ contains
    elseif (keyword(option, 'rrange', 2_I4P)) then
       self%figure%panels(self%figure%current)%raxis%min_fixed = .false.
       self%figure%panels(self%figure%current)%raxis%max_fixed = .false.
-   elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P) .or. &
-           keyword(option, 'zrange', 2_I4P)) then
+   elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P)) then
       if (option(1:1) == 'u') self%uv_range(:, 1) = [-5.0_R8P, 5.0_R8P]
       if (option(1:1) == 'v') self%uv_range(:, 2) = [-5.0_R8P, 5.0_R8P]
+   elseif (keyword(option, 'zrange', 2_I4P)) then
+      self%figure%panels(self%figure%current)%zaxis%min_fixed = .false.
+      self%figure%panels(self%figure%current)%zaxis%max_fixed = .false.
+   elseif (keyword(option, 'zlabel', 2_I4P)) then
+      self%figure%panels(self%figure%current)%zaxis%label = ''
+   elseif (keyword(option, 'ztics', 3_I4P)) then
+      call self%figure%panels(self%figure%current)%zaxis%tics%disable
+   elseif (keyword(option, 'mztics', 3_I4P)) then
+      self%figure%panels(self%figure%current)%zaxis%tics%minor = 0_I4P
+   elseif (keyword(option, 'zzeroaxis', 5_I4P)) then
+      self%figure%panels(self%figure%current)%view3d%zzeroaxis = .false.
+   elseif (keyword(option, 'surface', 2_I4P)) then
+      self%figure%panels(self%figure%current)%view3d%surface = .false.
+   elseif (option == 'view') then
+      ! gnuplot 6.0: unset view is set view 60, 30, 1, 1 (the map off)
+      block
+         type(view3d_object) :: fresh !< Default view.
+
+         self%figure%panels(self%figure%current)%view3d%rot_x = fresh%rot_x
+         self%figure%panels(self%figure%current)%view3d%rot_z = fresh%rot_z
+         self%figure%panels(self%figure%current)%view3d%scale = fresh%scale
+         self%figure%panels(self%figure%current)%view3d%zscale = fresh%zscale
+         self%figure%panels(self%figure%current)%view3d%map = fresh%map
+      endblock
    elseif (is_word(option, 'lmargin rmargin tmargin bmargin lmar rmar tmar bmar lmarg rmarg tmarg bmarg')) then
       call self%figure%set_margin(option(1:1))
    elseif (keyword(option, 'margins', 4_I4P)) then
@@ -14206,8 +14899,10 @@ contains
       self%figure%panels(self%figure%current)%errorbar_size = 0.0_R8P
    elseif (keyword(option, 'samples', 3_I4P)) then
       self%samples = 100_I4P
+      self%samples2 = 100_I4P
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       self%isosamples = 10_I4P
+      self%isosamples1 = 10_I4P
    elseif (keyword(option, 'mouse', 3_I4P) .or. &
            keyword(option, 'macros', 3_I4P)) then
       ! surfaces, interactive terminals, macros always on: nothing to undo
@@ -14227,6 +14922,135 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure subroutine item_auto_title(text, first, file_last, last, written, quote, spec, using, title)
+   !< The automatic title of a data item, gnuplot's: the item as written from its file (characters `first` to
+   !< `file_last` of the statement `text`) through its data options (index, every, using, matrix, skip: up to `last`);
+   !< inline data as '-' or "-"; from the file `written` in its `quote` and the `using` `spec` when the positions are
+   !< not the text's (binary items rewritten). A subroutine with its arguments: nvfortran 26.9 broke the data of the
+   !< plot through an internal function of plot_items returning the title.
+   character(len=*),              intent(in)  :: text      !< Statement.
+   integer(I4P),                  intent(in)  :: first     !< First character of the file.
+   integer(I4P),                  intent(in)  :: file_last !< Its last character.
+   integer(I4P),                  intent(in)  :: last      !< Last character of the data options.
+   character(len=*),              intent(in)  :: written   !< The file as written.
+   character(len=*),              intent(in)  :: quote     !< Its quote.
+   character(len=*),              intent(in)  :: spec      !< The using spec as written.
+   character(len=*),              intent(in)  :: using     !< The using keyword as written.
+   character(len=:), allocatable, intent(out) :: title     !< Title.
+
+   if (first < 1_I4P .or. last > len(text, kind=I4P) .or. last < first) then
+      title = trim(quote)//written//trim(quote)
+      if (len(spec) > 0) title = title//' '//using//' '//spec
+   elseif (index(written, '$FS_INLINE_S') == 1) then
+      title = "'-'"//text(file_last + 1_I4P:last)
+   elseif (index(written, '$FS_INLINE_D') == 1) then
+      title = '"-"'//text(file_last + 1_I4P:last)
+   else
+      title = text(first:last)
+   endif
+   endsubroutine item_auto_title
+
+   pure subroutine set_heights(series, z, scans, sets, grid, read)
+   !< Give `series` its heights `z` and its `scans` (first and last point of each) in their datasets `sets`, the first
+   !< `grid` of them its surface grid, `read` from data (gnuplot keeps those last first).
+   type(series_object), intent(inout) :: series     !< Series.
+   real(R8P),           intent(in)    :: z(:)       !< Heights.
+   integer(I4P),        intent(in)    :: scans(:,:) !< Scans.
+   integer(I4P),        intent(in)    :: sets(:)    !< Their datasets.
+   integer(I4P),        intent(in)    :: grid       !< Grid scans.
+   logical,             intent(in)    :: read       !< Read from data.
+
+   series%z = z
+   series%scans = scans
+   series%scan_sets = sets
+   series%grid_scans = grid
+   series%data_scans = read
+   endsubroutine set_heights
+
+   pure subroutine append_text(buffer, used, piece)
+   !< Append `piece` to `buffer(1:used)`, doubling its length as needed: a long text built in linear time.
+   character(len=:), allocatable, intent(inout) :: buffer !< Text, valid up to `used`.
+   integer(I4P),                  intent(inout) :: used   !< Its length used.
+   character(len=*),              intent(in)    :: piece  !< Text appended.
+   character(len=:), allocatable                :: bigger !< Grown text.
+
+   if (.not. allocated(buffer)) then
+      allocate(character(len=max(4096, 2 * len(piece))) :: buffer)
+      used = 0_I4P
+   endif
+   if (used + len(piece) > len(buffer)) then
+      allocate(character(len=max(2 * len(buffer), used + len(piece))) :: bigger)
+      bigger(1:used) = buffer(1:used)
+      call move_alloc(bigger, buffer)
+   endif
+   buffer(used + 1:used + len(piece)) = piece
+   used = used + len(piece, kind=I4P)
+   endsubroutine append_text
+
+   pure subroutine using_parts(spec, parts)
+   !< The fields of a using spec as written, split at the colons outside parentheses and quotes (as parse_using).
+   character(len=*),              intent(in)  :: spec     !< Specification.
+   character(len=:), allocatable, intent(out) :: parts(:) !< Fields, blank padded.
+   integer(I4P)                               :: n        !< Fields.
+   integer(I4P)                               :: k        !< Character counter.
+   integer(I4P)                               :: start    !< Field start.
+   integer(I4P)                               :: depth    !< Parenthesis depth.
+   character(len=1)                           :: quote    !< Open quote, blank if none.
+
+   n = 1_I4P
+   depth = 0_I4P
+   quote = ' '
+   do k = 1_I4P, len(spec, kind=I4P)
+      if (quote /= ' ') then
+         if (spec(k:k) == quote) quote = ' '
+      elseif (spec(k:k) == '"' .or. spec(k:k) == "'") then
+         quote = spec(k:k)
+      elseif (spec(k:k) == '(') then
+         depth = depth + 1_I4P
+      elseif (spec(k:k) == ')') then
+         depth = depth - 1_I4P
+      elseif (spec(k:k) == ':' .and. depth == 0_I4P) then
+         n = n + 1_I4P
+      endif
+   enddo
+   allocate(character(len=max(1, len(spec))) :: parts(n))
+   parts(:) = ''
+   n = 1_I4P
+   depth = 0_I4P
+   quote = ' '
+   start = 1_I4P
+   do k = 1_I4P, len(spec, kind=I4P)
+      if (quote /= ' ') then
+         if (spec(k:k) == quote) quote = ' '
+      elseif (spec(k:k) == '"' .or. spec(k:k) == "'") then
+         quote = spec(k:k)
+      elseif (spec(k:k) == '(') then
+         depth = depth + 1_I4P
+      elseif (spec(k:k) == ')') then
+         depth = depth - 1_I4P
+      elseif (spec(k:k) == ':' .and. depth == 0_I4P) then
+         parts(n) = spec(start:k - 1_I4P)
+         n = n + 1_I4P
+         start = k + 1_I4P
+      endif
+   enddo
+   parts(n) = spec(start:)
+   endsubroutine using_parts
+
+   pure function replace_colons(spec) result(words)
+   !< The fields of a using spec as blank separated words (the count of its fields by word_count).
+   character(len=*), intent(in)  :: spec  !< Specification.
+   character(len=:), allocatable :: words !< Fields, one word each.
+   character(len=:), allocatable :: parts(:) !< Fields.
+   integer(I4P)                  :: k     !< Field counter.
+
+   call using_parts(spec, parts)
+   words = ''
+   do k = 1_I4P, size(parts, kind=I4P)
+      words = words//' x'
+   enddo
+   endfunction replace_colons
+
    pure function top_colon(text) result(colon)
    !< Position of the first `:` outside quotes and parentheses, 0 if none.
    character(len=*), intent(in) :: text  !< Text.
@@ -14518,7 +15342,7 @@ contains
    word = leading_word(line)
    if (len(word) == 0) return
    if (.not. (keyword(word, 'plot', 1_I4P) .or. keyword(word, 'replot', 3_I4P) .or. word == 'fit' .or. &
-              keyword(word, 'stats', 2_I4P))) return
+              keyword(word, 'stats', 2_I4P) .or. keyword(word, 'splot', 2_I4P))) return
    i = index(line, word, kind=I4P) + len(word, kind=I4P)
    rewritten = line(1:i - 1)
    expect = .true.

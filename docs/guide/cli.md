@@ -84,5 +84,5 @@ stops after N polls (tests, demos), with status 0 whatever the last cycle gave. 
 Errors print one line on the standard error, never a backtrace:
 
 ```
-foresight: -e:1: unsupported command "splot"
+foresight: -e:1: unsupported command "bind"
 ```
