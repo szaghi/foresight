@@ -4068,6 +4068,7 @@ contains
    real(R8P),        allocatable                :: label_rotations(:) !< Their rotations [deg].
    real(R8P)                                    :: title_xy(2) !< That position [screen fractions].
    character(len=9)                             :: item_head_system !< System of the head length.
+   logical                                      :: item_head_fixed !< The sized heads keep their size (`fixed`).
    character(len=:), allocatable                :: curve     !< Filled curve option words.
    logical                                      :: keyed     !< The label column is `key(N)`, row names.
    real(R8P),        allocatable                :: at_x      !< Position of a parallel axis (`at X`).
@@ -4607,6 +4608,7 @@ contains
       title_justify = 0_I4P
       title_xy = 0.0_R8P
       item_head = 0.0_R8P
+      item_head_fixed = .false.
       item_head_system = 'first'
       label_opts = ''
       curve = ''
@@ -4834,8 +4836,9 @@ contains
                      i = i + 1_I4P
                      heads = heads//' filled'
                   elseif (word == 'fixed') then
-                     ! foresight's heads keep their size on short arrows anyway
+                     ! the sized heads keep their size on short arrows (gnuplot's)
                      i = i + 1_I4P
+                     item_head_fixed = .true.
                   elseif (word == 'size') then
                      i = i + 1_I4P
                      if (.not. head_size_option()) return
@@ -7198,6 +7201,7 @@ contains
          associate(last => panel%series(size(panel%series)))
             last%head_size = item_head
             last%head_system = item_head_system
+            last%head_fixed = item_head_fixed
          endassociate
       endassociate
       endsubroutine head_last
@@ -7277,6 +7281,7 @@ contains
                heads = heads//' nofilled'
             endif
             item_head = 0.0_R8P
+            item_head_fixed = style%fixed
             if (style%length > 0.0_R8P) then
                item_head = [style%length, style%angle]
                item_head_system = style%length_system
@@ -10177,7 +10182,8 @@ contains
                endblock
             endif
          elseif (word == 'fixed') then
-            continue
+            ! a sized head keeps its size on a short arrow (gnuplot's)
+            arrow%fixed = .true.
          elseif ((word == 'as' .or. word == 'arrowstyle') .and. option == 'arrow') then
             call apply_arrow_style
          elseif (word == 'default' .and. option == 'style arrow') then

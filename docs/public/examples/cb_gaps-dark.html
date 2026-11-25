@@ -1465,6 +1465,7 @@
         filled: path.getAttribute("data-filled") === "1", color: path.getAttribute("stroke"),
         width: path.getAttribute("stroke-width"),
         length: Number(path.getAttribute("data-length") || 0),
+        fixed: path.getAttribute("data-fixed") === "1",
         angle: Number(path.getAttribute("data-angle") || HEAD_ANGLE)};
       while ((m = pattern.exec(d)) !== null) {
         vectors.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
@@ -1475,12 +1476,17 @@
 
   // barbs of an arrowhead at tip, pointing away from tail (mirror of sized_head): length [px]
   // and angle [deg]; without a length gnuplot's default head (mirror of arrow_head): 0.3 of the
-  // shaft, within 0.3 and 2 tics (HEAD_LENGTH / 2 each); none on a zero length shaft (gnuplot)
-  function arrowHead(tail, tip, length, angle) {
+  // shaft, within 0.3 and 2 tics (HEAD_LENGTH / 2 each); none on a zero length shaft (gnuplot);
+  // a length longer than half the shaft halved, its angle widened, unless fixed (sized_head)
+  function arrowHead(tail, tip, length, angle, fixed) {
     var shaft = Math.hypot(tip[0] - tail[0], tip[1] - tail[1]), tic = HEAD_LENGTH / 2;
     var l = length || Math.max(0.3 * tic, Math.min(0.3 * shaft, 2 * tic));
     var a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
     var h = (angle || HEAD_ANGLE) * Math.PI / 180;
+    if (length && !fixed && length > shaft / 2) {
+      l = shaft / 2;
+      h = Math.atan(Math.tan(h) * length / l);
+    }
     if (shaft === 0) return [tip, tip];
     return [[tip[0] + l * Math.cos(a + h), tip[1] + l * Math.sin(a + h)],
       [tip[0] + l * Math.cos(a - h), tip[1] + l * Math.sin(a - h)]];
@@ -1652,7 +1658,7 @@
         return [(e[0] - v.u0) / (v.u1 - v.u0) * w, (e[1] - (1 - v.v1)) / (v.v1 - v.v0) * h];
       });
       var draw = function (tail, tip) {
-        var b = arrowHead(tail, tip, s.length, s.angle);
+        var b = arrowHead(tail, tip, s.length, s.angle, s.fixed);
         element(self.heads, s.filled ? "polygon" : "polyline", {"data-series": s.series,
           points: [b[0], tip, b[1]].map(function (q) {
             return px(q[0]) + "," + px(q[1]);

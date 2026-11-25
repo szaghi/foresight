@@ -4446,6 +4446,7 @@ contains
                                                  series%arrow_widths(i1), series%arrow_heads(i1), series%arrow_filled(i1))
                      else
                         call head_pixels(series%head_size, series%head_system, w)
+                        backend%head_fixed = series%head_fixed
                         call backend%data_arrows(u(i1:i2), v(i1:i2), tu(i1:i2), tv(i1:i2), trim(arrow_color(i1)), &
                                                  series%style%linewidth, series%head, series%head_filled)
                      endif
@@ -4455,10 +4456,12 @@ contains
             endblock
          elseif (any(ok)) then
             call head_pixels(series%head_size, series%head_system, w)
+            backend%head_fixed = series%head_fixed
             call backend%data_arrows(pack(u, ok), pack(v, ok), pack(tu, ok), pack(tv, ok), series%style%color, &
                                      series%style%linewidth, series%head, series%head_filled)
          endif
          backend%head_px = 0.0_R8P
+         backend%head_fixed = .false.
       endassociate
       endsubroutine draw_arrows
 

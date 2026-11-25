@@ -72,6 +72,7 @@ type, abstract :: backend_object
                                              !< the page's.
    real(R8P)          :: head_px(2) = 0.0_R8P !< Length [px] and angle [deg] of the data arrowheads drawn now, 0 for
                                               !< the default head.
+   logical            :: head_fixed = .false. !< Those heads keep their size on short arrows (gnuplot `fixed`).
    contains
       procedure(begin_page_interface),      pass(self), deferred :: begin_page      !< Open the output page.
       procedure(finish_interface),          pass(self), deferred :: end_page        !< Close the output page.
@@ -380,7 +381,8 @@ contains
    real(R8P)              :: shaft       !< Shaft length [px].
 
    shaft = norm2(tip - tail)
-   call sized_head(tail, tip, default_head_length(shaft), HEAD_ANGLE, barbs)
+   ! its own rule for short shafts (default_head_length), not the sized heads' halving
+   call sized_head(tail, tip, default_head_length(shaft), HEAD_ANGLE, barbs, fixed=.true.)
    endsubroutine arrow_head
 
    elemental function default_head_length(shaft) result(length)
@@ -394,17 +396,22 @@ contains
    length = max(0.3_R8P * TIC, min(0.3_R8P * shaft, 2.0_R8P * TIC))
    endfunction default_head_length
 
-   pure subroutine sized_head(tail, tip, length, angle, barbs)
+   pure subroutine sized_head(tail, tip, length, angle, barbs, fixed)
    !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation], `length` px long, `angle`
    !< degrees off the shaft: `barbs(:, 1)` and `barbs(:, 2)`. A zero length shaft has no head (both barbs at the tip),
-   !< as gnuplot's do_arrow.
-   real(R8P), intent(in)  :: tail(2)     !< Tail [px].
-   real(R8P), intent(in)  :: tip(2)      !< Tip [px].
-   real(R8P), intent(in)  :: length      !< Barb length [px].
-   real(R8P), intent(in)  :: angle       !< Barb angle [deg].
-   real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
-   real(R8P)              :: a           !< Shaft direction, tip to tail [rad].
-   real(R8P)              :: h           !< Barb half angle [rad].
+   !< as gnuplot's do_arrow. On a shaft shorter than twice the barbs the head shrinks to half the shaft, its angle
+   !< widened so the barbs spread as far (gnuplot's effective_length), unless `fixed`.
+   real(R8P), intent(in)           :: tail(2)     !< Tail [px].
+   real(R8P), intent(in)           :: tip(2)      !< Tip [px].
+   real(R8P), intent(in)           :: length      !< Barb length [px].
+   real(R8P), intent(in)           :: angle       !< Barb angle [deg].
+   real(R8P), intent(out)          :: barbs(2, 2) !< Barb ends [px].
+   logical,   intent(in), optional :: fixed       !< The head keeps its size (gnuplot `fixed`).
+   real(R8P)                       :: a           !< Shaft direction, tip to tail [rad].
+   real(R8P)                       :: h           !< Barb half angle [rad].
+   real(R8P)                       :: l           !< Barb length used [px].
+   real(R8P)                       :: shaft       !< Shaft length [px].
+   logical                         :: keep        !< Keep the size.
 
    if (all(tip == tail)) then
       barbs(:, 1) = tip
@@ -413,8 +420,16 @@ contains
    endif
    a = atan2(tail(2) - tip(2), tail(1) - tip(1))
    h = angle * atan(1.0_R8P) / 45.0_R8P
-   barbs(:, 1) = tip + length * [cos(a + h), sin(a + h)]
-   barbs(:, 2) = tip + length * [cos(a - h), sin(a - h)]
+   l = length
+   keep = .false.
+   if (present(fixed)) keep = fixed
+   shaft = norm2(tip - tail)
+   if (.not. keep .and. length > 0.5_R8P * shaft) then
+      l = 0.5_R8P * shaft
+      h = atan(tan(h) * length / l)
+   endif
+   barbs(:, 1) = tip + l * [cos(a + h), sin(a + h)]
+   barbs(:, 2) = tip + l * [cos(a - h), sin(a - h)]
    endsubroutine sized_head
 
 endmodule foresight_backend

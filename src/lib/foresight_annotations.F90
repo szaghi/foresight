@@ -13,7 +13,7 @@ module foresight_annotations
 !< `behind` (objects) behind the grid too.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use foresight_axis, only : axis_object
-use foresight_backend, only : arrow_head, backend_object
+use foresight_backend, only : arrow_head, backend_object, sized_head
 use foresight_style, only : style_object
 use foresight_font, only : font_object
 use penf, only : I4P, R8P
@@ -79,6 +79,7 @@ type :: arrow_object
    real(R8P)                     :: length = 0.0_R8P     !< Head length (0: the default head).
    character(len=9)              :: length_system = 'first' !< System of the head length (x direction).
    real(R8P)                     :: angle = 15.0_R8P     !< Head barb angle [deg].
+   logical                       :: fixed = .false.      !< The head keeps its size on a short arrow (`fixed`).
    character(len=8)              :: fill = 'nofilled'    !< Heads `nofilled` (two barbs), `filled`, `empty`,
                                                          !< `noborder`.
    logical                       :: front = .false.      !< Over the frame, else behind the data.
@@ -369,8 +370,6 @@ contains
       real(R8P),          intent(in) :: point(2) !< Head point [px].
       real(R8P)                      :: barbs(2, 2) !< Barb ends [px].
       real(R8P)                      :: length  !< Head length [px].
-      real(R8P)                      :: d       !< Shaft direction, point to tail [rad].
-      real(R8P)                      :: h       !< Barb angle [rad].
       character(len=:), allocatable  :: color   !< Color.
 
       color = color_of(arrow%color)
@@ -387,11 +386,8 @@ contains
             length = abs(arrow%length / (xaxis%hi - xaxis%lo)) * (area(2) - area(1))
             if (xaxis%log) length = abs(arrow%length / (log10(xaxis%hi) - log10(xaxis%lo))) * (area(2) - area(1))
          endselect
-         d = 0.0_R8P
-         if (any(point /= tail)) d = atan2(tail(2) - point(2), tail(1) - point(1))
-         h = arrow%angle * PI / 180.0_R8P
-         barbs(:, 1) = point + length * [cos(d + h), sin(d + h)]
-         barbs(:, 2) = point + length * [cos(d - h), sin(d - h)]
+         ! shrunk on a short arrow unless fixed, as gnuplot's do_arrow (sized_head)
+         call sized_head(tail, point, length, arrow%angle, barbs, fixed=arrow%fixed)
       else
          call arrow_head(tail, point, barbs)
       endif

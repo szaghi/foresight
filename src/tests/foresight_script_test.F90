@@ -8,7 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : figure_object, fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
-use foresight_backend, only : arrow_head
+use foresight_backend, only : arrow_head, sized_head
 use foresight_expression, only : value_object
 use foresight_font, only : font_object, font_of
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(259)                           !< Per-check outcome.
+logical                       :: test_passed(260)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6634,6 +6634,30 @@ block
    if (test_passed(259)) test_passed(259) = abs(interpreter%figure%panels(1)%series(1)%y(2) - 3.0_R8P) < 1.0e-9_R8P
    open(newunit=u, file='foresight_script_test.bin')
    close(u, status='delete')
+endblock
+
+! a sized arrowhead on a short arrow, as gnuplot's do_arrow: halved to half the shaft, its angle widened so the barbs
+! spread as far (probed: a 15.86 px shaft, size 52.86 px at 20 degrees: barbs 3.02 px back, 7.33 px aside), unless
+! `fixed`; the fixed of items, set arrow and arrow styles
+block
+   real(R8P) :: barbs(2, 2) !< Barb ends [px].
+
+   call sized_head([0.0_R8P, 0.0_R8P], [15.86_R8P, 0.0_R8P], 52.86_R8P, 20.0_R8P, barbs)
+   test_passed(260) = abs(15.86_R8P - barbs(1, 1) - 3.02_R8P) < 0.01_R8P .and. abs(abs(barbs(2, 1)) - 7.33_R8P) < 0.01_R8P
+   call sized_head([0.0_R8P, 0.0_R8P], [15.86_R8P, 0.0_R8P], 52.86_R8P, 20.0_R8P, barbs, fixed=.true.)
+   test_passed(260) = test_passed(260) .and. abs(15.86_R8P - barbs(1, 1) - 49.67_R8P) < 0.01_R8P
+   call interpreter%init(scratch)
+   call interpreter%run_text("set style arrow 2 head size 1,20 fixed; set arrow 1 from 0,0 to 1,1 size 1,20 fixed; "// &
+                             "plot '+' using 1:1:(0.1):(0) with vectors size 1,20 fixed, "// &
+                             "'+' using 1:1:(0.1):(0) with vectors as 2, '+' using 1:1:(0.1):(0) with vectors size 1,20", &
+                             iostat, iomsg)
+   test_passed(260) = test_passed(260) .and. iostat == 0_I4P
+   if (test_passed(260)) then
+      associate(panel => interpreter%figure%panels(1))
+         test_passed(260) = panel%arrows(1)%fixed .and. panel%series(1)%head_fixed .and. panel%series(2)%head_fixed .and. &
+                           .not. panel%series(3)%head_fixed
+      endassociate
+   endif
 endblock
 
 if (all(test_passed)) then

@@ -105,6 +105,7 @@ type :: series_object
    logical                       :: text_boxed = .false. !< Labels in a text box (gnuplot `with labels boxed`).
    real(R8P)                     :: head_size(2) = 0.0_R8P !< Arrowhead length (0: the default head) and angle [deg]
                                                            !< of `vectors` and `arrows` (gnuplot `size L,A`).
+   logical                       :: head_fixed = .false.   !< The heads keep their size on short arrows (`fixed`).
    character(len=9)              :: head_system = 'first' !< System of the head length: first, graph, screen,
                                                           !< character.
    integer(I4P)                  :: title_at = 0_I4P !< Title place (gnuplot `title ... at`): 0 the key, 1 before the

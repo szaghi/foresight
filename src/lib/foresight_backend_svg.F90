@@ -580,6 +580,7 @@ contains
    ! a head size of its own (gnuplot `size L,A`), the viewer's too
    if (self%head_px(1) > 0.0_R8P) write(self%unit, '(A)', advance='no') ' data-length="'//px(self%head_px(1))// &
                                                                        '" data-angle="'//px(self%head_px(2))//'"'
+   if (self%head_px(1) > 0.0_R8P .and. self%head_fixed) write(self%unit, '(A)', advance='no') ' data-fixed="1"'
    write(self%unit, '(A)', advance='no') ' data-filled="'//flag(filled)//'" fill="none" stroke="'// &
                                          self%theme%map(color)//'" stroke-width="'//px(line_width)// &
                                          '" vector-effect="non-scaling-stroke" d="'
@@ -610,7 +611,7 @@ contains
       character(len=:), allocatable :: points !< Vertices.
 
       if (self%head_px(1) > 0.0_R8P) then
-         call sized_head(tail, tip, self%head_px(1), self%head_px(2), barbs)
+         call sized_head(tail, tip, self%head_px(1), self%head_px(2), barbs, fixed=self%head_fixed)
       else
          call arrow_head(tail, tip, barbs)
       endif

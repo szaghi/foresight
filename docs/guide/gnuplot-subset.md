@@ -1544,7 +1544,8 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 Arrowheads are gnuplot's unless `size` is given: barbs 15 degrees off the shaft, 0.3 of its length, within 2.7 and
 18 px (gnuplot's svg), so the heads of arrows shorter than 60 px shrink with them. As label texts they are drawn in
 pixels: in the HTML page a zoom moves them with the data and sizes them by the arrows as zoomed. A head with `size`
-keeps it; `fixed` is read (gnuplot also shrinks a sized head on an arrow shorter than twice it, foresight does not). `lc variable`, `lc rgb variable` (0xAARRGGBB, AA the transparency) and `lc palette z` color
+keeps it unless the arrow is shorter than twice it: the head is then halved to half the arrow, its barbs widened to
+spread as far, as gnuplot's; `fixed` keeps it whole. `lc variable`, `lc rgb variable` (0xAARRGGBB, AA the transparency) and `lc palette z` color
 each vector or arrow from the last `using` column; a row with an undefined field is no point and out of the color
 range, as gnuplot. A second `set style arrow N` changes style N (`default` resets it), as gnuplot. Labels are black
 (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike gnuplot, sectors widen the autoscale to their
