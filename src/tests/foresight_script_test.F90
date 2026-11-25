@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(268)                           !< Per-check outcome.
+logical                       :: test_passed(269)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6946,6 +6946,29 @@ block
                            c(4, 1, 1) == 191.0_R8P .and. c(4, 2, 1) == 255.0_R8P
       endassociate
    endif
+endblock
+
+
+! splot ... smooth csplines|acsplines, as gnuplot 6.0's gen_3d_splines: each scan smoothed in 3D, `set samples` points;
+! a curve in a plane of constant x splined as z of y (probed: gnuplot's table, csplines through 6 points sampled 6
+! times gives them back; acsplines weighted 1 at y = 0 gives 1.16974); the other smoothings refused in splot
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("$d << EOD"//nl//"0 0 1"//nl//"0 1 2"//nl//"0 2 1.5"//nl//"0 3 3"//nl//"0 4 2"//nl// &
+                             "0 5 2.5"//nl//"EOD"//nl//"set samples 6; set table 'foresight_script_test.dat'; "// &
+                             "splot $d using 1:2:3 smooth csplines, $d using 1:2:3:(1) smooth acsplines; unset table", &
+                             iostat, iomsg)
+   test_passed(269) = iostat == 0_I4P
+   if (test_passed(269)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(269) = size(series(1)%x) == 6 .and. abs(series(1)%z(4) - 3.0_R8P) < 1.0e-12_R8P .and. &
+                           abs(series(2)%z(1) - 1.16974_R8P) < 1.0e-5_R8P
+      endassociate
+   endif
+   call interpreter%run_text("splot $d using 1:2:3 smooth bezier", iostat, iomsg)
+   test_passed(269) = test_passed(269) .and. iostat /= 0_I4P .and. index(iomsg, 'csplines and acsplines') > 0
 endblock
 
 if (all(test_passed)) then

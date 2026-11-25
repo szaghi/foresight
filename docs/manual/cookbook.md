@@ -1645,6 +1645,16 @@ points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot-subse
 takes the next linetype, so the Moebius strip shows its single side in two colors where it twists. See
 [3D views](/guide/gnuplot-subset#3d-views).
 
+### Smoothed profiles in 3D
+
+<<< @/examples/snippets/cb_view3d_smooth.gp{gnuplot}
+
+<Plot name="cb_view3d_smooth" svg :width="560" :height="400" />
+
+`smooth acsplines` in `splot` smooths each scan of the data in 3D: here each profile lies in a plane of constant depth,
+so it is splined as value of position, weighted by the fourth `using` field, as gnuplot's 3D splines. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
 ### A field seen from above
 
 <<< @/examples/snippets/cb_map_points.gp{gnuplot}

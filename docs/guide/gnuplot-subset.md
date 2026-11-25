@@ -215,7 +215,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **newspider**plot | the next spider plot items a new set of polygons on the same axes, see [Parallel axes and spider plots](#parallel-axes-and-spider-plots) |
 | `sharpen` | of a function: the extrema between its samples found (gnuplot 6.0's filter: a golden section search where the 5-term Savitzky-Golay second derivative turns) and added; ignored on data, as gnuplot |
 | **fc** / **fillc**olor `COLOR` | the fill's own color (styles with a fill), its border too (over `lc`, unless `fs border lc` gives one, as gnuplot 6.0): `with filledcurves fc rgb "#80e0a080"`; `fc palette cb V`, `fc palette frac F` one palette color for the item |
-| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, `path`, see [below](#smoothing); `bins` see [Bins](#bins) |
+| **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, `path`, see [below](#smoothing); `bins` see [Bins](#bins); in `splot` `csplines` and `acsplines` (x:y:z[:weight]) of the lines, see [3D views](#3d-views) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `surface` (`sur`) on a polar panel, see [below](#polar-plots); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table); `splot`'s `pm3d`, see [3D plots](#3d-plots); `mask`, polygons masking the `mask` items, see [below](#gridded-and-masked-surfaces) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` (gnuplot's abbreviations: `bo`, `nobo`, `tr`, `so`, `e`mpty, `pa`) |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
@@ -2287,6 +2287,11 @@ color, the linetype after its own (`offset N`; `nooffset` the same; gnuplot rese
 taking the one after). A function is then sampled on its `isosamples` grid both ways, without crossing curves. Points,
 labels, other lines and the box are not hidden by the surfaces (gnuplot hides them); `trianglepattern`, `undefined`,
 `altdiagonal`, `bentover`, `front`, `back` are read. `unset hidden3d` draws the meshes again.
+
+`splot ... with lines smooth csplines|acsplines` smooths each scan in 3D as gnuplot's gen_3d_splines: a scan in a
+plane of constant x is splined as z of y, of constant y as z of x, of constant z as y of x, from its first point to
+its last in `set samples` points; any other as x, y and z of its path length; `acsplines` weighs the points by a fourth
+`using` field (1 without).
 
 ### Contours
 

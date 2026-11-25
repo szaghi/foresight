@@ -19,13 +19,14 @@ module foresight_smooth
 !<
 !< The bins (`bin_values`, gnuplot's `bins` filter) are the sums, or the means, of y over equal-width intervals of x.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
-use penf, only : I4P, R8P
+use penf, only : I4P, R4P, R8P
 
 implicit none
 private
 public :: bin_values
 public :: smooth
 public :: smooth_curve
+public :: spline_curve3d
 public :: path_spline
 public :: sorted
 public :: CURVE_MODES
@@ -657,6 +658,150 @@ contains
       deallocate(px, py, t)
    enddo
    endsubroutine path_spline
+
+   pure subroutine spline_curve3d(mode, x, y, z, w, samples, ranges, xs, ys, zs)
+   !< A 3D curve smoothed as gnuplot 6.0's do_3d_cubic (`smooth csplines|acsplines` of splot): its unusable points
+   !< (NaN) and repeated ones dropped; with more than 3 left, a curve in a plane of constant x is z of y (`samples`
+   !< points from its first y to its last), of constant y z of x, of constant z y of x; else x, y and z each a spline
+   !< of the path length (the steps over the axis `ranges`, normalized to 1). `csplines` natural cubic splines,
+   !< `acsplines` the smoothing splines weighted by `w`. With 3 points or fewer the curve is kept as it is.
+   character(len=*), intent(in)               :: mode      !< `csplines` or `acsplines`.
+   real(R8P),        intent(in)               :: x(:)      !< Abscissae.
+   real(R8P),        intent(in)               :: y(:)      !< Ordinates.
+   real(R8P),        intent(in)               :: z(:)      !< Heights.
+   real(R8P),        intent(in)               :: w(:)      !< Weights (acsplines).
+   integer(I4P),     intent(in)               :: samples   !< Points of the smoothed curve.
+   real(R8P),        intent(in)               :: ranges(3) !< x, y and z axis lengths (the path's scale).
+   real(R8P),        allocatable, intent(out) :: xs(:)     !< Smoothed abscissae.
+   real(R8P),        allocatable, intent(out) :: ys(:)     !< Smoothed ordinates.
+   real(R8P),        allocatable, intent(out) :: zs(:)     !< Smoothed heights.
+   real(R8P),        allocatable              :: px(:), py(:), pz(:), pw(:) !< Usable points.
+   real(R8P),        allocatable              :: path(:)   !< Path length of each point, normalized.
+   real(R8P),        allocatable              :: cx(:,:), cy(:,:), cz(:,:) !< Spline coefficients.
+   real(R8P)                                  :: d(3)      !< A step over the ranges.
+   real(R8P)                                  :: dmax(3)   !< Largest steps (planarity).
+   real(R8P)                                  :: t         !< Sample.
+   real(R8P)                                  :: tstep     !< Sample step.
+   real(R8P)                                  :: temp      !< Offset in the interval.
+   integer(I4P)                               :: n         !< Usable points.
+   integer(I4P)                               :: i, l      !< Counters.
+   logical                                    :: acs       !< acsplines.
+
+   acs = mode == 'acsplines'
+   allocate(px(size(x)), py(size(x)), pz(size(x)), pw(size(x)))
+   n = 0_I4P
+   do i = 1_I4P, size(x, kind=I4P)
+      if (.not. (ieee_is_finite(x(i)) .and. ieee_is_finite(y(i)) .and. ieee_is_finite(z(i)))) cycle
+      if (n > 0_I4P) then
+         if (x(i) == px(n) .and. y(i) == py(n) .and. z(i) == pz(n)) cycle
+      endif
+      n = n + 1_I4P
+      px(n) = x(i)
+      py(n) = y(i)
+      pz(n) = z(i)
+      pw(n) = w(i)
+   enddo
+   if (n <= 3_I4P) then
+      xs = px(1:n)
+      ys = py(1:n)
+      zs = pz(1:n)
+      return
+   endif
+   px = px(1:n)
+   py = py(1:n)
+   pz = pz(1:n)
+   pw = pw(1:n)
+   allocate(path(n))
+   path(1) = 0.0_R8P
+   dmax = 0.0_R8P
+   do i = 2_I4P, n
+      d = [(px(i) - px(i - 1_I4P)) / ranges(1), (py(i) - py(i - 1_I4P)) / ranges(2), (pz(i) - pz(i - 1_I4P)) / ranges(3)]
+      path(i) = path(i - 1_I4P) + sqrt(sum(d**2))
+      dmax = max(dmax, abs(d))
+   enddo
+   path(2:) = path(2:) / path(n)
+   allocate(xs(samples), ys(samples), zs(samples))
+   ! the coefficients 0:3, allocated before the assignments (an expression's lower bounds are 1)
+   allocate(cx(0:3, n), cy(0:3, n), cz(0:3, n))
+   if (dmax(1) < epsilon(1.0_R4P)) then
+      ! in the yz plane: z of y
+      cz = coefficients(py, pz, acs, pw)
+      tstep = (py(n) - py(1)) / real(samples - 1_I4P, R8P)
+      l = 1_I4P
+      do i = 1_I4P, samples
+         t = py(1) + real(i - 1_I4P, R8P) * tstep
+         do while (t >= py(l + 1_I4P) .and. l < n - 1_I4P)
+            l = l + 1_I4P
+         enddo
+         temp = t - py(l)
+         xs(i) = px(l)
+         ys(i) = t
+         zs(i) = ((cz(3, l) * temp + cz(2, l)) * temp + cz(1, l)) * temp + cz(0, l)
+      enddo
+   elseif (dmax(2) < epsilon(1.0_R4P)) then
+      ! in the xz plane: z of x
+      cz = coefficients(px, pz, acs, pw)
+      tstep = (px(n) - px(1)) / real(samples - 1_I4P, R8P)
+      l = 1_I4P
+      do i = 1_I4P, samples
+         t = px(1) + real(i - 1_I4P, R8P) * tstep
+         do while (t >= px(l + 1_I4P) .and. l < n - 1_I4P)
+            l = l + 1_I4P
+         enddo
+         temp = t - px(l)
+         xs(i) = t
+         ys(i) = py(l)
+         zs(i) = ((cz(3, l) * temp + cz(2, l)) * temp + cz(1, l)) * temp + cz(0, l)
+      enddo
+   elseif (dmax(3) < epsilon(1.0_R4P)) then
+      ! in the xy plane: y of x
+      cy = coefficients(px, py, acs, pw)
+      tstep = (px(n) - px(1)) / real(samples - 1_I4P, R8P)
+      l = 1_I4P
+      do i = 1_I4P, samples
+         t = px(1) + real(i - 1_I4P, R8P) * tstep
+         do while (t >= px(l + 1_I4P) .and. l < n - 1_I4P)
+            l = l + 1_I4P
+         enddo
+         temp = t - px(l)
+         xs(i) = t
+         ys(i) = ((cy(3, l) * temp + cy(2, l)) * temp + cy(1, l)) * temp + cy(0, l)
+         zs(i) = pz(l)
+      enddo
+   else
+      ! the general case: x, y and z of the path length
+      cx = coefficients(path, px, acs, pw)
+      cy = coefficients(path, py, acs, pw)
+      cz = coefficients(path, pz, acs, pw)
+      tstep = path(n) / real(samples - 1_I4P, R8P)
+      l = 1_I4P
+      do i = 1_I4P, samples
+         t = real(i - 1_I4P, R8P) * tstep
+         do while (t >= path(l + 1_I4P) .and. l < n - 1_I4P)
+            l = l + 1_I4P
+         enddo
+         temp = t - path(l)
+         xs(i) = ((cx(3, l) * temp + cx(2, l)) * temp + cx(1, l)) * temp + cx(0, l)
+         ys(i) = ((cy(3, l) * temp + cy(2, l)) * temp + cy(1, l)) * temp + cy(0, l)
+         zs(i) = ((cz(3, l) * temp + cz(2, l)) * temp + cz(1, l)) * temp + cz(0, l)
+      enddo
+   endif
+   contains
+      pure function coefficients(knots, values, weighted, weights) result(c)
+      !< The spline of `values` over `knots`: natural (csplines) or weighted by `weights` (acsplines, `weighted`).
+      real(R8P), intent(in)  :: knots(:)   !< Knots.
+      real(R8P), intent(in)  :: values(:)  !< Values.
+      logical,   intent(in)  :: weighted   !< acsplines.
+      real(R8P), intent(in)  :: weights(:) !< Weights.
+      real(R8P), allocatable :: c(:,:)     !< Coefficients (0:3, interval).
+
+      if (weighted) then
+         c = approximation_spline(knots, values, weights)
+      else
+         c = natural_spline(knots, values)
+      endif
+      endfunction coefficients
+   endsubroutine spline_curve3d
 
    pure function natural_spline(x, y) result(c)
    !< Coefficients `c(0:3, i)` of the natural cubic spline through (`x`, `y`) (x increasing, at least 3 points) on each

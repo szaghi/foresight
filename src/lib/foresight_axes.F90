@@ -3069,9 +3069,13 @@ contains
          ! centred half an entry below the top of the entries (yinkey), placed in the plot bounds; foresight's key box
          ! drawn so that its first entry lands there
          call key3d_origin(self, f, km, grid, dx, dy)
+         ! below the plot, gnuplot's columns share its width (key_col_wth): foresight's entries as wide
+         if (self%key_place() == 'bottom' .and. grid(2) > 1_I4P) &
+            key(1) = real(grid(2), R8P) * (f%bounds(2) - f%bounds(1)) / real(grid(2), R8P) * 0.01_R8P - GAP
          call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
                             element_px(backend, self%key_font, font_size), grid, key, &
-                            origin=[(dx - km(1)) * 0.01_R8P - key(1) + 52.0_R8P / 12.0_R8P * font_size - PAD, &
+                            origin=[(dx - km(1)) * 0.01_R8P - (key(1) + GAP) / real(grid(2), R8P) + GAP + &
+                                    52.0_R8P / 12.0_R8P * font_size - PAD, &
                                     f%height - (dy - 0.5_R8P * km(2)) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * &
                                     font_size + GAP])
       endif

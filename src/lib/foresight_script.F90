@@ -143,7 +143,7 @@ use foresight_sys, only : command_output, sleep_ms
 use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
-use foresight_smooth, only : bin_values, CURVE_MODES, path_spline, smooth, smooth_curve, SMOOTH_MODES
+use foresight_smooth, only : bin_values, CURVE_MODES, path_spline, smooth, smooth_curve, SMOOTH_MODES, spline_curve3d
 use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : custom_dashtype, default_color, fill_style, &
@@ -4142,6 +4142,9 @@ contains
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
    logical,                       intent(in)    :: splot_mode !< A splot.
    type(expression_object)                      :: zfield    !< The z field of a splot item.
+   type(expression_object)                      :: wfield    !< The weight field of a splot item smoothed by acsplines.
+   character(len=:), allocatable                :: smooth3d  !< splot's smoothing of the item's scans, empty for none.
+   real(R8P),        allocatable                :: w3(:)     !< Weights of the splot item's points (acsplines).
    logical                                      :: z_read    !< `zfield` read as the last column of the values.
    logical                                      :: one_column3d !< A splot of one data column: z, x and y the point
                                                                 !< and scan numbers.
@@ -4756,6 +4759,7 @@ contains
       head_piece = 0_I4P
       axes = 'x1y1'
       filter = ''
+      smooth3d = ''
       bandwidth = 0.0_R8P
       binned = .false.
       nbins = self%samples
@@ -6069,14 +6073,19 @@ contains
             call data%table(fields, set_index, every, values, header=headed, labels=labels2, label=label_field2)
          if (tic_col > 0_I4P) &
             call data%table(fields, set_index, every, values, header=headed, labels=ticlabels, label=tic_field)
-         if (z_read) then
+         if (z_read .and. smooth3d_on()) then
+            call data%table([fields, wfield, zfield], set_index, every, values, header=headed, labels=xlabels, &
+                            label=label_field, sets=row_sets)
+         elseif (z_read) then
             call data%table([fields, zfield], set_index, every, values, header=headed, labels=xlabels, &
                             label=label_field, sets=row_sets)
          else
             call data%table(fields, set_index, every, values, header=headed, labels=xlabels, label=label_field)
          endif
       else
-         if (z_read) then
+         if (z_read .and. smooth3d_on()) then
+            call data%table([fields, wfield, zfield], set_index, every, values, header=headed, sets=row_sets)
+         elseif (z_read) then
             call data%table([fields, zfield], set_index, every, values, header=headed, sets=row_sets)
          else
             call data%table(fields, set_index, every, values, header=headed)
@@ -6089,6 +6098,10 @@ contains
          ! in a block here
          z3 = values(:, size(values, 2))
          values = values(:, 1:size(values, 2) - 1)
+         if (smooth3d_on()) then
+            w3 = values(:, size(values, 2))
+            values = values(:, 1:size(values, 2) - 1)
+         endif
          if (one_column3d) call scan_numbers(values, row_sets)
       endif
       if (weight_one) then
@@ -6583,6 +6596,18 @@ contains
       call mark_last
       call fill_last
       if (z_read) call attach_z(z3, row_sets)
+      ! smooth csplines|acsplines of splot: each scan smoothed in 3D
+      if (z_read .and. smooth3d_on()) then
+         associate(panel => self%figure%panels(self%figure%current))
+            if (size(panel%series) > 0) then
+               if (size(w3) == size(panel%series(size(panel%series))%x)) &
+                  call smooth_scans3d(panel%series(size(panel%series)), w3, smooth3d, self%samples, &
+                                      [axis_span(panel%xaxis, panel%series(size(panel%series))%x), &
+                                       axis_span(panel%yaxis, panel%series(size(panel%series))%y), &
+                                       axis_span(panel%zaxis, panel%series(size(panel%series))%z)])
+            endif
+         endassociate
+      endif
       if (binned) then
          ! the autoscale spans the outer bin edges and y = 0, as gnuplot
          associate(panel => self%figure%panels(self%figure%current))
@@ -6641,6 +6666,14 @@ contains
    if (self%multiplot .and. self%output == '-') return
    call self%save_output(iostat, iomsg)
    contains
+      pure function smooth3d_on() result(yes)
+      !< Whether the splot item is smoothed in 3D.
+      logical :: yes !< Smoothed.
+
+      yes = .false.
+      if (allocated(smooth3d)) yes = len(smooth3d) > 0
+      endfunction smooth3d_on
+
       subroutine splot_columns
       !< splot's using fields made plot's: the third, z, apart in `zfield` (read after the others as the last column,
       !< `z_read`), the others the style's plot fields in their order, `spec` rewritten so (labels read their text field
@@ -6658,8 +6691,15 @@ contains
       logical                              :: image_style !< An image style.
 
       image_style = with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha'
+      ! smooth csplines and acsplines: the item's scans smoothed in 3D (gnuplot's gen_3d_splines), lines only
+      smooth3d = ''
+      if (filter == 'csplines' .or. filter == 'acsplines') then
+         if (with == 'lines') smooth3d = filter
+         filter = ''
+      endif
       if (len(filter) > 0 .or. binned .or. hull > 0_I4P .or. zsort_item) then
-         call fail('splot: smooth, bins, hulls and zsort apply to plot', iostat, iomsg)
+         call fail('splot: smooth csplines and acsplines apply to splot; the other smoothings, bins, hulls and '// &
+                   'zsort to plot', iostat, iomsg)
          return
       endif
       if (is_matrix) then
@@ -6714,6 +6754,8 @@ contains
          do k = 4_I4P, n
             ! the z delta of vectors (the sixth field) is the 3D view's
             if (with == 'vectors' .and. k == 6_I4P) cycle
+            ! the weights of acsplines (the fourth field), read apart
+            if (smooth3d == 'acsplines' .and. k == 4_I4P) cycle
             rest = rest//':'//trim(parts(k))
          enddo
       endif
@@ -6747,6 +6789,21 @@ contains
       if (image_style) return
       zfield = zfields(1)
       z_read = .true.
+      ! the weights of acsplines: the fourth field, 1 without
+      if (len(smooth3d) > 0) then
+         if (smooth3d == 'acsplines' .and. n >= 4_I4P) then
+            call parse_using(trim(parts(4)), zfields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                             self%symbols)
+         else
+            call parse_using('(1)', zfields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
+                             self%symbols)
+         endif
+         if (iostat /= 0_I4P) then
+            iomsg = 'splot: '//iomsg
+            return
+         endif
+         wfield = zfields(1)
+      endif
       endsubroutine splot_columns
 
       subroutine matrix_rows
@@ -16909,6 +16966,85 @@ contains
    write(buf, '(ES25.17E3)') v
    text = trim(adjustl(buf))
    endfunction exact_real
+
+   pure function axis_span(axis, values) result(span)
+   !< The length of `axis` as gnuplot's 3D splines read it while the data come: its set range, else the values' extent
+   !< (1 for an empty one).
+   type(axis_object), intent(in) :: axis      !< Axis.
+   real(R8P),         intent(in) :: values(:) !< Values of the item.
+   real(R8P)                     :: span      !< Length.
+
+   if (axis%min_fixed .and. axis%max_fixed) then
+      span = abs(axis%max_user - axis%min_user)
+   else
+      span = 0.0_R8P
+      if (any(ieee_is_finite(values))) span = maxval(values, mask=ieee_is_finite(values)) - &
+                                              minval(values, mask=ieee_is_finite(values))
+   endif
+   if (span == 0.0_R8P) span = 1.0_R8P
+   endfunction axis_span
+
+   pure subroutine smooth_scans3d(series, w, mode, samples, ranges)
+   !< Each scan of a 3D `series` smoothed by gnuplot's do_3d_cubic (foresight_smooth's spline_curve3d, `mode`
+   !< csplines or acsplines, weights `w`), `samples` points each, a break between scans; the per point colors follow.
+   type(series_object), intent(inout) :: series    !< Series.
+   real(R8P),           intent(in)    :: w(:)      !< Weights of the points.
+   character(len=*),    intent(in)    :: mode      !< Smoothing.
+   integer(I4P),        intent(in)    :: samples   !< Points per smoothed scan.
+   real(R8P),           intent(in)    :: ranges(3) !< Axis lengths.
+   real(R8P), allocatable             :: xs(:), ys(:), zs(:) !< A smoothed scan.
+   real(R8P), allocatable             :: nx(:), ny(:), nz(:) !< The new points.
+   integer(I4P), allocatable          :: scans(:,:) !< The new scans.
+   integer(I4P), allocatable          :: idx(:)     !< Points of a curve.
+   integer(I4P)                       :: c          !< Curve counter.
+   integer(I4P)                       :: k          !< Point counter.
+   integer(I4P)                       :: m          !< Points.
+   integer(I4P)                       :: nsc        !< Data scans.
+   integer(I4P)                       :: npts       !< Points per scan.
+   integer(I4P)                       :: ncurves    !< Curves: scans, then the crossing ones of a grid.
+   logical                            :: grid       !< Scans of one length.
+
+   if (.not. allocated(series%scans)) return
+   nsc = size(series%scans, 2, kind=I4P)
+   npts = series%scans(2, 1) - series%scans(1, 1) + 1_I4P
+   ! a grid (scans of one length): its crossing curves through the data points too, smoothed as the scans (gnuplot
+   ! makes them before smoothing)
+   grid = nsc > 1_I4P
+   if (grid) grid = all(series%scans(2, :) - series%scans(1, :) + 1_I4P == npts)
+   ncurves = nsc
+   if (grid) ncurves = nsc + npts
+   allocate(nx(0), ny(0), nz(0), scans(2, ncurves))
+   m = 0_I4P
+   do c = 1_I4P, ncurves
+      if (c <= nsc) then
+         idx = [(k, k = series%scans(1, c), series%scans(2, c))]
+      else
+         idx = [(series%scans(1, k) + c - nsc - 1_I4P, k = 1_I4P, nsc)]
+      endif
+      call spline_curve3d(mode, series%x(idx), series%y(idx), series%z(idx), w(idx), samples, ranges, xs, ys, zs)
+      if (m > 0_I4P) then
+         nx = [nx, ieee_value(1.0_R8P, ieee_quiet_nan)]
+         ny = [ny, ieee_value(1.0_R8P, ieee_quiet_nan)]
+         nz = [nz, ieee_value(1.0_R8P, ieee_quiet_nan)]
+         m = m + 1_I4P
+      endif
+      scans(:, c) = [m + 1_I4P, m + size(xs, kind=I4P)]
+      nx = [nx, xs]
+      ny = [ny, ys]
+      nz = [nz, zs]
+      m = m + size(xs, kind=I4P)
+   enddo
+   series%x = nx
+   series%y = ny
+   series%z = nz
+   series%scans = scans
+   ! the data scans the grid; the crossing curves drawn as they are (as a function's)
+   series%grid_scans = nsc
+   if (allocated(series%scan_sets)) series%scan_sets = [series%scan_sets(1:nsc), (series%scan_sets(1), k = 1_I4P, &
+                                                                                 ncurves - nsc)]
+   if (allocated(series%zvalues)) series%zvalues = nz
+   if (allocated(series%colors)) deallocate(series%colors)
+   endsubroutine smooth_scans3d
 
    pure subroutine map_points(series, mapping, degrees)
    !< The points of a 3D `series` read in spherical (`mapping` 1: theta, phi, r) or cylindrical (2: theta, z, r)
