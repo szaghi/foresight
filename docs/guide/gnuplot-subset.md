@@ -92,7 +92,7 @@ that did what it says.
 | **lmar**gin / **rmar**gin / **tmar**gin / **bmar**gin [[`at`] `screen` `N` \| `N`] | a margin set: `N` characters from the panel's edge, or the border at the page fraction `N` (from the bottom left); bare or negative, computed, see [below](#margins) | computed |
 | **marg**ins `L, R, B, T` | the four margins, each [`at screen`] `N` | all computed |
 | **zero**axis / **xzero**axis / **yzero**axis / **x2zero**axis / **y2zero**axis [`lt N`] [`lc C`] [`lw W`] [`dt N`] | lines at the zero of the axes (`xzeroaxis`: y = 0), gnuplot's black dots by default | no line |
-| **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | — |
+| **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | the ranges fixed as they are (all axes without one), as gnuplot |
 | **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
 | **enc**oding [`default`\|`utf8`\|`locale`\|`iso_8859_1`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8: with `iso_8859_1` the bytes of the texts (an octal `"\351"`) are written as their Latin-1 characters (gnuplot declares its output's encoding instead); other encodings are refused | `default` |
 | **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font "name,size"` the page's [font](#fonts) (also `set terminal svg font ...`) | — |
@@ -196,7 +196,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `$NAME` | a [datablock](#datablocks-and-scripts), as a file |
 | **newhist**ogram [`"title"`] [`lt N`] [`fs FILL`] [`at X`] | a new group of [histograms](#histograms), before the histograms of the group |
 | **i**ndex `N` \| `"name"` | dataset `N` (0-based, an expression: `index (i-1)`) of the file, or the dataset after the comment line starting with `name` (the comment characters and blanks before it removed), as gnuplot |
-| **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` (`pixels` read: the pixels are drawn one by one anyway); `every` keeps columns (the points) and rows (the blocks), at their places |
+| **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` (`pixels` read: the pixels are drawn one by one anyway); `every` keeps columns (the points) and rows (the blocks), at their places; with `using` or another style its rows `x y value`, as gnuplot's (`plot 'm' matrix using 1:2:3 with image, '' matrix using 1:2:(sprintf("%g",$3)) with labels`) |
 | **nonuni**form **mat**rix | the first row of the matrix holds the x of the columns (after a value ignored), the first column the y of the rows, as gnuplot; for `with image`, evenly spaced (uneven pixels are not supported) |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1`; the fields may be expressions, `every ::j:0:j:0` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
@@ -2185,7 +2185,14 @@ the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of
 scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,
 `set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` are kept for the 3D view.
 
-The map view (`set view map`) is drawn; the other 3D views are not drawn yet (an error), nor `set parametric` surfaces.
+The map view (`set view map`) is drawn as gnuplot 6.0 draws it: its plot area is the projection of the x and y
+ranges (gnuplot's 3D layout, narrower than a 2D plot's: `set view map scale S` scales it), ticks inward on all four
+sides with lengths by the projection, the tick labels, axis labels, title, key and color box at gnuplot's map places
+(the color box a character width farther right than a 2D plot's, its ticks on both sides). The items keep their
+`plot` styles: points, lines, labels, vectors, images (`with image`, from data `x:y:value`, `x:y:z:value` or a
+matrix), `lc palette` by z, `ps variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
+own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error), nor `set
+parametric` surfaces; `pt variable`, sparse matrices are not supported.
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan) and `fig%splot(x, y, z2d)` a grid `z(i, j)` at
 `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set the z axis.
 

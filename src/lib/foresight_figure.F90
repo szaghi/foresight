@@ -93,6 +93,7 @@ type :: figure_object
       procedure, pass(self), private :: splot_points !< gnuplot `splot` of scattered points.
       procedure, pass(self), private :: splot_grid   !< gnuplot `splot` of a grid.
       generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
+      procedure, pass(self) :: set_view        !< gnuplot `set view`.
       procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
       procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
       procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
@@ -1797,9 +1798,10 @@ contains
    endassociate
    endsubroutine set_ttics
 
-   subroutine splot_points(self, x, y, z, title, with, lc, lw, dt, ps, pt)
+   subroutine splot_points(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette)
    !< Add the points (`x`, `y`, `z`) to the current panel, made a 3D panel, as gnuplot `splot ... using 1:2:3`: one
-   !< scan of scattered points, in the style `with` (points by default) and the line options of `plot`.
+   !< scan of scattered points, in the style `with` (points by default) and the line options of `plot`; `palette`
+   !< colors them by their height (gnuplot `lc palette`).
    class(figure_object), intent(inout)        :: self  !< Figure.
    real(R8P),            intent(in)           :: x(:)  !< Abscissae.
    real(R8P),            intent(in)           :: y(:)  !< Ordinates.
@@ -1811,9 +1813,19 @@ contains
    integer(I4P),         intent(in), optional :: dt    !< Dash type.
    real(R8P),            intent(in), optional :: ps    !< Point size.
    integer(I4P),         intent(in), optional :: pt    !< Point type.
+   logical,              intent(in), optional :: palette !< Colored by height through the palette.
+   logical                                    :: by_z  !< Colored by height.
 
    if (size(x) /= size(y) .or. size(x) /= size(z)) error stop 'foresight: splot: x, y and z sizes differ'
-   if (present(with)) then
+   by_z = .false.
+   if (present(palette)) by_z = palette
+   if (by_z) then
+      if (present(with)) then
+         call self%plot(x, y, title=title, with=with, lw=lw, dt=dt, ps=ps, pt=pt, palette_z=z)
+      else
+         call self%plot(x, y, title=title, with='points', lw=lw, dt=dt, ps=ps, pt=pt, palette_z=z)
+      endif
+   elseif (present(with)) then
       call self%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
    else
       call self%plot(x, y, title=title, with='points', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
@@ -1821,10 +1833,10 @@ contains
    call heights_of_last(self, z, reshape([1_I4P, size(z, kind=I4P)], [2, 1]))
    endsubroutine splot_points
 
-   subroutine splot_grid(self, x, y, z, title, with, lc, lw, dt, ps, pt)
+   subroutine splot_grid(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette)
    !< Add the surface `z(i, j)` at (`x(i)`, `y(j)`) to the current panel, made a 3D panel, as gnuplot `splot` of a
-   !< grid: a scan per `y(j)` (gnuplot's iso-curves), in the style `with` (lines by default) and the line options of
-   !< `plot`.
+   !< grid: a scan per `y(j)` (gnuplot's iso-curves), in the style `with` (lines by default; `image` its pixels, the
+   !< grid evenly spaced) and the line options of `plot`; `palette` colors the points by height.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in)           :: x(:)   !< Abscissae of the columns.
    real(R8P),            intent(in)           :: y(:)   !< Ordinates of the rows.
@@ -1836,6 +1848,7 @@ contains
    integer(I4P),         intent(in), optional :: dt     !< Dash type.
    real(R8P),            intent(in), optional :: ps     !< Point size.
    integer(I4P),         intent(in), optional :: pt     !< Point type.
+   logical,              intent(in), optional :: palette !< Colored by height through the palette.
    real(R8P),    allocatable                  :: xs(:)  !< Points, a NaN break after each scan.
    real(R8P),    allocatable                  :: ys(:)  !< Their ordinates.
    real(R8P),    allocatable                  :: zs(:)  !< Their heights.
@@ -1845,6 +1858,14 @@ contains
    integer(I4P)                               :: k      !< First point of the scan.
 
    if (size(z, 1) /= size(x) .or. size(z, 2) /= size(y)) error stop 'foresight: splot: z must be size(x) by size(y)'
+   if (present(with)) then
+      if (with == 'image') then
+         ! the grid's pixels, as plot's image (gnuplot `splot ... with image`)
+         call self%image(z, x, y, title=title)
+         self%panels(self%current)%three_d = .true.
+         return
+      endif
+   endif
    nx = size(x, kind=I4P)
    allocate(xs((nx + 1_I4P) * size(y) - 1_I4P), ys((nx + 1_I4P) * size(y) - 1_I4P), zs((nx + 1_I4P) * size(y) - 1_I4P))
    allocate(scans(2, size(y)))
@@ -1858,6 +1879,17 @@ contains
       zs(k:k + nx - 1_I4P) = z(:, j)
       scans(:, j) = [k, k + nx - 1_I4P]
    enddo
+   if (present(palette)) then
+      if (palette) then
+         if (present(with)) then
+            call self%plot(xs, ys, title=title, with=with, lw=lw, dt=dt, ps=ps, pt=pt, palette_z=zs)
+         else
+            call self%plot(xs, ys, title=title, with='lines', lw=lw, dt=dt, ps=ps, pt=pt, palette_z=zs)
+         endif
+         call heights_of_last(self, zs, scans)
+         return
+      endif
+   endif
    if (present(with)) then
       call self%plot(xs, ys, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
    else
@@ -1883,6 +1915,30 @@ contains
       panel%series(last)%grid_scans = size(scans, 2, kind=I4P)
    endassociate
    endsubroutine heights_of_last
+
+   subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal)
+   !< The view of the 3D panels, as gnuplot `set view ROT_X, ROT_Z, SCALE, SCALE_Z` (each kept if absent) or `set view
+   !< map [scale S]` (`map` true; false back to the 3D view); `equal` 0 none, 1 `equal xy`, 2 `equal xyz`.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   logical,              intent(in), optional :: map       !< Seen from above, as a map.
+   real(R8P),            intent(in), optional :: rot_x     !< Rotation about x [deg].
+   real(R8P),            intent(in), optional :: rot_z     !< Rotation about z [deg].
+   real(R8P),            intent(in), optional :: scale     !< Scale.
+   real(R8P),            intent(in), optional :: zscale    !< Scale of z.
+   real(R8P),            intent(in), optional :: map_scale !< Scale of the map view.
+   integer(I4P),         intent(in), optional :: equal     !< Equal axes.
+
+   call self%ensure_panels
+   associate(view => self%panels(self%current)%view3d)
+      if (present(map)) view%map = map
+      if (present(rot_x)) view%rot_x = rot_x
+      if (present(rot_z)) view%rot_z = rot_z
+      if (present(scale)) view%scale = scale
+      if (present(zscale)) view%zscale = zscale
+      if (present(map_scale)) view%map_scale = map_scale
+      if (present(equal)) view%equal = equal
+   endassociate
+   endsubroutine set_view
 
    subroutine set_zlabel(self, label)
    !< Set the z axis label of the current panel (a 3D one), empty for none.

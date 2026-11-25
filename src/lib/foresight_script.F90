@@ -4140,7 +4140,7 @@ contains
                call fail('plot: smooth applies to data files, not to the function "'//written//'"', iostat, iomsg)
                return
             endif
-         elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
+         elseif (word == 'fs' .or. word == 'fill' .or. keyword(word, 'fillstyle', 5_I4P)) then
             call fill_words(fs)
             if (iostat /= 0_I4P) return
          elseif (word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) then
@@ -4161,9 +4161,12 @@ contains
                      ! `fc palette cb V|frac F`: one palette color, the item's (fill and line), as gnuplot's keyentry
                      line%lc = probe%lc
                      line%palette = probe%palette
+                  elseif (probe%lc == LC_PALETTE_Z .or. probe%lc == LC_VARIABLE .or. probe%lc == LC_RGB_VARIABLE) then
+                     ! `fc palette [z]`, `fc variable`: the fills (and lines) colored per point, as lc's
+                     line%lc = probe%lc
                   elseif (index(probe%lc, '*') == 1) then
-                     call fail('plot: fc: variable and palette z colors are not supported (lc variable, lc palette '// &
-                               'z color the fills)', iostat, iomsg)
+                     call fail('plot: fc: this color form is not supported (lc variable, lc palette z color the '// &
+                               'fills)', iostat, iomsg)
                      return
                   else
                      fill_rgb = probe%lc
@@ -4638,6 +4641,10 @@ contains
       shown_spec = spec
       if (splot_mode) then
          call splot_columns
+         if (iostat /= 0_I4P) return
+      elseif (is_matrix .and. (allocated(fields) .or. .not. is_word(with, 'image rgbimage rgbalpha'))) then
+         ! a matrix with using fields or another style than image: its rows x y z read as data, as gnuplot's
+         call matrix_rows
          if (iostat /= 0_I4P) return
       endif
       if (is_matrix .and. with /= 'image') then
@@ -8546,6 +8553,17 @@ contains
    if (i <= size(tokens, kind=I4P)) then
       if (tokens(i)%kind == TOKEN_WORD .and. .not. is_annotation_word(tokens(i)%text)) then
          call self%symbols%value_of(tokens(i)%text, v, found)
+         ! a numeric constant expression too, `set object i*11 noclip` in a loop (clipobject.dem); never a string one
+         ! (`set label sprintf("%s%d", w, k) at ...`, its text)
+         if (.not. found .and. scan(tokens(i)%text, '"'//"'") == 0) then
+            block
+               character(len=:), allocatable :: message !< Not a constant.
+               integer(I4P)                  :: status  !< Constant status.
+
+               call self%symbols%constant(tokens(i)%text, v, status, message)
+               found = status == 0_I4P
+            endblock
+         endif
          if (to_number(tokens(i)%text, v) .or. scan(tokens(i)%text(1:1), '0123456789(') > 0 .or. found) then
             k = i - 1_I4P
             if (.not. next_integer(tokens, k, tag, iostat, iomsg, self%symbols)) return
@@ -9680,6 +9698,32 @@ contains
       endif
       self%figure%panels(self%figure%current)%raxis%log = .true.
    elseif (keyword(option, 'logscale', 3_I4P)) then
+      ! the z axis (splot's) apart from the others
+      if (size(tokens) >= 2) then
+         if (index(tokens(2)%text, 'z') > 0 .and. tokens(2)%kind == TOKEN_WORD) then
+            self%figure%panels(self%figure%current)%zaxis%log = .true.
+            if (len(tokens(2)%text) == 1) then
+               if (size(tokens) >= 3) then
+                  if (tokens(3)%text /= '10' .or. size(tokens) > 3) then
+                     call fail('logscale: only base 10 is supported', iostat, iomsg)
+                     return
+                  endif
+               endif
+               return
+            endif
+            block
+               type(token_object), allocatable :: rest(:) !< The other axes.
+
+               rest = tokens
+               rest(2)%text = rest(2)%text(1:index(rest(2)%text, 'z') - 1)//rest(2)%text(index(rest(2)%text, 'z') + 1:)
+               if (.not. axes_argument(rest, text, iostat, iomsg)) return
+            endblock
+            call self%figure%set_logscale(text)
+            return
+         endif
+      else
+         self%figure%panels(self%figure%current)%zaxis%log = .true.
+      endif
       if (.not. axes_argument(tokens, text, iostat, iomsg)) return
       call self%figure%set_logscale(text)
    elseif (keyword(option, 'grid', 2_I4P)) then
@@ -14571,6 +14615,23 @@ contains
       call self%figure%unset_logscale(axes)
       return
    elseif (keyword(option, 'logscale', 3_I4P)) then
+      if (size(tokens) >= 2) then
+         if (index(tokens(2)%text, 'z') > 0) then
+            self%figure%panels(self%figure%current)%zaxis%log = .false.
+            if (len(tokens(2)%text) == 1) return
+            block
+               type(token_object), allocatable :: rest(:) !< The other axes.
+
+               rest = tokens
+               rest(2)%text = rest(2)%text(1:index(rest(2)%text, 'z') - 1)//rest(2)%text(index(rest(2)%text, 'z') + 1:)
+               if (.not. axes_argument(rest, axes, iostat, iomsg)) return
+            endblock
+            call self%figure%unset_logscale(axes)
+            return
+         endif
+      else
+         self%figure%panels(self%figure%current)%zaxis%log = .false.
+      endif
       if (.not. axes_argument(tokens, axes, iostat, iomsg)) return
       call self%figure%unset_logscale(axes)
       return
@@ -14820,6 +14881,28 @@ contains
    elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P)) then
       if (option(1:1) == 'u') self%uv_range(:, 1) = [-5.0_R8P, 5.0_R8P]
       if (option(1:1) == 'v') self%uv_range(:, 2) = [-5.0_R8P, 5.0_R8P]
+   elseif (keyword(option, 'autoscale', 4_I4P)) then
+      ! gnuplot `unset autoscale [AXES]`: the ranges of the axes (all by default) fixed as they are now
+      block
+         character(len=:), allocatable :: names !< Axes named.
+
+         names = 'x y x2 y2 z cb'
+         if (size(tokens) > 1) names = tokens(2)%text
+         associate(panel => self%figure%panels(self%figure%current))
+            if (names == 'x y x2 y2 z cb' .or. index(names, 'x') > 0) call fix_range(panel%xaxis)
+            if (names == 'x y x2 y2 z cb' .or. index(names, 'y') > 0) call fix_range(panel%yaxis)
+            if (names == 'x y x2 y2 z cb') then
+               call fix_range(panel%x2axis)
+               call fix_range(panel%y2axis)
+               call fix_range(panel%zaxis)
+               call fix_range(panel%cbaxis)
+            elseif (index(names, 'z') > 0) then
+               call fix_range(panel%zaxis)
+            elseif (index(names, 'cb') > 0) then
+               call fix_range(panel%cbaxis)
+            endif
+         endassociate
+      endblock
    elseif (keyword(option, 'zrange', 2_I4P)) then
       self%figure%panels(self%figure%current)%zaxis%min_fixed = .false.
       self%figure%panels(self%figure%current)%zaxis%max_fixed = .false.
@@ -14922,6 +15005,16 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure subroutine fix_range(axis)
+   !< The range of `axis` fixed as it is (gnuplot `unset autoscale`): its set ends, else the effective ones.
+   type(axis_object), intent(inout) :: axis !< Axis.
+
+   if (.not. axis%min_fixed) axis%min_user = axis%lo
+   if (.not. axis%max_fixed) axis%max_user = axis%hi
+   axis%min_fixed = .true.
+   axis%max_fixed = .true.
+   endsubroutine fix_range
+
    pure subroutine item_auto_title(text, first, file_last, last, written, quote, spec, using, title)
    !< The automatic title of a data item, gnuplot's: the item as written from its file (characters `first` to
    !< `file_last` of the statement `text`) through its data options (index, every, using, matrix, skip: up to `last`);
@@ -16072,6 +16165,20 @@ contains
                  w == 'fc' .or. keyword(w, 'fillcolor', 5_I4P) .or. w == 'tc' .or. keyword(w, 'textcolor', 5_I4P) .or. &
                  keyword(w, 'background', 5_I4P))) cycle
       call gnuplot_color(tokens(i)%text, color, ok)
+      ! gnuplot reads "#RRGGBB" by its hex digits, whatever follows (clipobject.dem's "#DDAA00' @fs")
+      if (.not. ok .and. len(tokens(i)%text) > 7) then
+         if (tokens(i)%text(1:1) == '#' .and. verify(tokens(i)%text(2:7), '0123456789abcdefABCDEF') == 0) then
+            if (len(tokens(i)%text) >= 9) then
+               if (verify(tokens(i)%text(8:9), '0123456789abcdefABCDEF') == 0) then
+                  call gnuplot_color(tokens(i)%text(1:9), color, ok)
+               else
+                  call gnuplot_color(tokens(i)%text(1:7), color, ok)
+               endif
+            else
+               call gnuplot_color(tokens(i)%text(1:7), color, ok)
+            endif
+         endif
+      endif
       if (.not. ok) then
          call fail('unrecognized color name "'//tokens(i)%text//'" and not a string "#AARRGGBB" or "0xAARRGGBB"', &
                    iostat, iomsg)
@@ -16552,6 +16659,7 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
+        word == 'fill' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
         word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &

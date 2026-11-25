@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(108)                  !< Per-figure outcome.
+logical                     :: test_passed(114)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -135,7 +135,14 @@ test_passed(106) = check('enhanced.txt', figure_enhanced())
 ! ticks on the zero axes; the html page is also the one of the viewer DOM test of tick placement
 test_passed(107) = check('tics_axis.svg', figure_tics_axis())
 test_passed(108) = check('tics_axis.html', figure_tics_axis())
-write(output_unit, '(A,108L2)') 'foresight golden checks:', test_passed
+! 3D plots, the map view (gnuplot `set view map`): scattered points colored by height, a grid as an image
+test_passed(109) = check('map_points.svg', figure_map_points())
+test_passed(110) = check('map_points.html', figure_map_points())
+test_passed(111) = check('map_points.txt', figure_map_points())
+test_passed(112) = check('map_image.svg', figure_map_image())
+test_passed(113) = check('map_image.html', figure_map_image())
+test_passed(114) = check('map_image.txt', figure_map_image())
+write(output_unit, '(A,114L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -815,6 +822,50 @@ contains
    call fig%set_cblabel('phi')
    call fig%image(z, x, y, title='field')
    endfunction figure_image
+
+   function figure_map_points() result(fig)
+   !< A map view (gnuplot `set view map`) of scattered points colored by their height, a title, axis labels and the
+   !< color box at gnuplot's map places.
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   real(R8P), allocatable :: y(:) !< Ordinates.
+   real(R8P), allocatable :: z(:) !< Heights.
+   integer(I4P)           :: k    !< Point counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(4.0_R8P * cos(0.37_R8P * real(k, R8P)) * real(k, R8P) / 40.0_R8P, k = 1, 40)]
+   y = [(3.0_R8P * sin(0.37_R8P * real(k, R8P)) * real(k, R8P) / 40.0_R8P, k = 1, 40)]
+   z = x * y
+   call fig%set_view(map=.true.)
+   call fig%set_title('spiral')
+   call fig%set_xlabel('x')
+   call fig%set_ylabel('y')
+   call fig%splot(x, y, z, title='x*y', pt=7_I4P, palette=.true.)
+   endfunction figure_map_points
+
+   function figure_map_image() result(fig)
+   !< A map view of a grid drawn as an image (gnuplot `splot ... with image`), the color box at the map's place.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Pixel centre abscissae.
+   real(R8P), allocatable :: y(:)   !< Pixel centre ordinates.
+   real(R8P), allocatable :: z(:,:) !< Values.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=500_I4P, height=360_I4P)
+   x = [(real(i, R8P), i = 0, 15)]
+   y = [(real(j, R8P), j = 0, 11)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = sin(0.4_R8P * x(i)) * cos(0.5_R8P * y(j))
+      enddo
+   enddo
+   call fig%set_view(map=.true.)
+   call fig%set_palette('viridis')
+   call fig%set_cblabel('w')
+   call fig%splot(x, y, z, with='image', title='w')
+   endfunction figure_map_image
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

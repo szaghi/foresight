@@ -54,7 +54,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   has_shapes, label_object, pixmap_object, shape_object, &
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
-use foresight_view3d, only : view3d_object
+use foresight_view3d, only : map_geometry, map_layout, view3d_object
 use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -411,6 +411,8 @@ type :: axes_object
       procedure, pass(self), private :: colorbox_width     !< Room of the color box [px].
       procedure, pass(self), private :: colorbox_height    !< Room of a horizontal color box below the plot [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
+      procedure, pass(self), private :: map_geometry_of    !< Geometry of a map view.
+      procedure, pass(self), private :: draw_map_frame     !< Border, ticks, labels and title of a map view.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
 
@@ -1370,6 +1372,8 @@ contains
    integer(I4P)                         :: s         !< Series counter.
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
    logical                              :: separate  !< Front objects in a layer of their own, over the overlays.
+   type(map_geometry)                   :: geo       !< Geometry of a map view.
+   logical                              :: map       !< A map view (gnuplot `splot` with `set view map`).
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
@@ -1452,7 +1456,19 @@ contains
       endselect
    endif
    if (self%polar) raw = self%series
+   map = self%three_d .and. self%view3d%map
+   if (map) then
+      ! gnuplot's map view: the area its 3D layout, independent of the tick labels (the ranges only, for `ratio -1`)
+      area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, y0 + 2.0_R8P * font_size, &
+              y0 + height - 4.0_R8P * font_size]
+      call self%setup_axes(area, raw)
+      geo = self%map_geometry_of(x0, y0, width, height, font_size)
+      area = geo%area
+      call self%setup_axes(area, raw)
+      if (backend%enhanced) call plain_ticks(self)
+   endif
    ! ticks depend on the plot area size, margins on the tick labels: refine a first guess twice
+   if (.not. map) then
    associate(bx => box(1), by => box(2), bw => box(3), bh => box(4))
       area = [bx + 6.0_R8P * font_size, bx + bw - 2.0_R8P * font_size, &
               by + 2.0_R8P * font_size + above, by + bh - 4.0_R8P * font_size]
@@ -1465,6 +1481,7 @@ contains
       self%x2_rise = x2labels_rise(self, backend, font_size)
       area = self%place_plot_area(backend, bx, by, bw, bh, font_size, above)
    endassociate
+   endif
    ! the series colored by the palette, over the color axis just set up
    if (self%has_image(palette=.true.)) then
       if (allocated(self%colormaps)) then
@@ -1613,7 +1630,11 @@ contains
       call self%draw_grid(backend, area)
       call backend%end_group
    endif
-   call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   if (map) then
+      call self%draw_map_frame(backend, geo, font_size)
+   else
+      call self%draw_frame(backend, area, box(1), box(2), box(1) + box(3), font_size)
+   endif
    if (self%stamp) call draw_stamp(self, backend, x0, y0, height, font_size)
    call annotate('front', .false.)
    if (self%polar) then
@@ -1621,12 +1642,33 @@ contains
       call self%draw_polar_axes(backend, area, font_size)
       call backend%end_group
    endif
-   if (self%key .and. grid(1) > 0_I4P) call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], &
-                                                         element_px(backend, self%key_font, font_size), &
-                                                         grid, key)
+   if (self%key .and. grid(1) > 0_I4P) then
+      if (map .and. .not. (self%key_at .or. self%key_outside)) then
+         ! gnuplot's 3D key inside the map (do_3dkey_layout): its title ends 2 tick lengths and 6 characters left of the
+         ! border, its first row a tick length and half a character below the top
+         block
+            real(R8P) :: dx !< Shift left [px].
+            real(R8P) :: dy !< Shift down [px].
+
+            dx = 2.0_R8P * geo%vtic + 6.0_R8P * geo%hchar - 52.0_R8P / 12.0_R8P * font_size
+            dy = geo%vtic + 0.5_R8P * geo%vchar + geo%shift - 17.7_R8P / 12.0_R8P * font_size
+            call self%draw_key(backend, [area(1) + dx, area(2) - dx, area(3) + dy, area(4) - dy], &
+                               [x0, y0, x0 + width, y0 + height], element_px(backend, self%key_font, font_size), &
+                               grid, key)
+         endblock
+      else
+         call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], &
+                            element_px(backend, self%key_font, font_size), grid, key)
+      endif
+   endif
    call draw_titles_at(self, backend, area, font_size)
-   if (self%colorbox .and. self%has_image(palette=.true.)) call self%draw_colorbox(backend, area, &
-                                                                                 [x0, y0, x0 + width, y0 + height], font_size)
+   if (self%colorbox .and. self%has_image(palette=.true.)) then
+      if (map) then
+         call self%draw_colorbox(backend, area, [x0, y0, x0 + width, y0 + height], font_size, geo)
+      else
+         call self%draw_colorbox(backend, area, [x0, y0, x0 + width, y0 + height], font_size)
+      endif
+   endif
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
@@ -2253,6 +2295,157 @@ contains
       ends = [min(area(4), max(ends(1), ends(2))), max(area(3), min(ends(1), ends(2)))]
       endfunction vertical_span
    endsubroutine draw_frame
+
+   function map_geometry_of(self, x0, y0, width, height, font_size) result(geo)
+   !< The geometry of the panel's map view in the box of top-left corner (`x0`, `y0`) and size `width` x `height`
+   !< [px] (foresight_view3d's map_layout): gnuplot's title lines (one, plus the backslashes of its text, as gnuplot
+   !< counts them), the color box at the right, the x2 and y2 labels, the margins, `set size ratio`.
+   class(axes_object), intent(in) :: self      !< Panel.
+   real(R8P),          intent(in) :: x0        !< Box left side [px].
+   real(R8P),          intent(in) :: y0        !< Box top side [px].
+   real(R8P),          intent(in) :: width     !< Box width [px].
+   real(R8P),          intent(in) :: height    !< Box height [px].
+   real(R8P),          intent(in) :: font_size !< Font size [px].
+   type(map_geometry)             :: geo       !< Geometry.
+   integer(I4P)                   :: lines     !< Title lines.
+   integer(I4P)                   :: k         !< Character counter.
+
+   lines = 0_I4P
+   if (self%has_title()) lines = 1_I4P + count([(self%title(k:k) == '\', k = 1_I4P, len(self%title, kind=I4P))])
+   geo = map_layout(self%view3d, [x0, y0, width, height], self%canvas, font_size, lines, &
+                    self%colorbox .and. self%has_image(palette=.true.) .and. .not. self%cbox%user, &
+                    self%x2axis%has_label(), self%y2axis%has_label(), self%x2_active, &
+                    merge(self%xaxis%tics%scale(1), 0.0_R8P, self%xaxis%tics%mirror .and. self%xaxis%tics%out), &
+                    self%margin_user, self%margin_screen, self%ratio, self%xaxis%hi - self%xaxis%lo, &
+                    self%yaxis%hi - self%yaxis%lo)
+   endfunction map_geometry_of
+
+   subroutine draw_map_frame(self, backend, geo, font_size)
+   !< The frame of a map view, gnuplot 6.0's (graph3d.c, its `set view map` branches): the border; the x ticks inward
+   !< from the bottom (mirrored from the top), their labels below, the y ticks inward from the left (mirrored from the
+   !< right), their labels at the left, with the lengths and gaps of gnuplot's projection (`geo`); the x label a line
+   !< and a half below the tick labels, the y label left of the widest of them; the title above the plot. Texts are
+   !< centred on their anchors, as gnuplot's svg terminal.
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   type(map_geometry),    intent(in)    :: geo       !< Geometry.
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   real(R8P)                            :: p         !< Tick position [px].
+   real(R8P)                            :: length    !< Tick length [px], negative outward.
+   real(R8P)                            :: out_x     !< Room of the outward x ticks below the border [px].
+   real(R8P)                            :: out_y     !< Room of the outward y ticks left of the border [px].
+   integer(I4P)                         :: widest    !< Widest y tick label [characters].
+   integer(I4P)                         :: t         !< Tick counter.
+   character(len=:), allocatable        :: bcolor    !< Border color.
+   type(style_object)                   :: bline     !< Border line.
+
+   associate(left => geo%area(1), right => geo%area(2), top => geo%area(3), bottom => geo%area(4))
+      bcolor = FRAME_COLOR
+      if (allocated(self%border_lc)) bcolor = self%border_lc
+      bline%dashtype = self%border_dt
+      bline%linewidth = self%border_lw
+      if (iand(self%border, 15_I4P) == 15_I4P .and. self%border_dt == 1_I4P) then
+         call backend%rect(left, top, right - left, bottom - top, bcolor, 'none', self%border_lw)
+      else
+         if (btest(self%border, 0)) call backend%polyline([left, right], [bottom, bottom], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 1)) call backend%polyline([left, left], [bottom, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 2)) call backend%polyline([left, right], [top, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+         if (btest(self%border, 3)) call backend%polyline([right, right], [bottom, top], bcolor, self%border_lw, &
+                                                          bline%dasharray())
+      endif
+      out_x = merge(geo%xtic * self%xaxis%tics%scale(1), 0.0_R8P, self%xaxis%tics%out)
+      out_y = merge(geo%ytic * self%yaxis%tics%scale(1), 0.0_R8P, self%yaxis%tics%out)
+      call backend%begin_group('fs-xticks')
+      do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
+         if (.not. within(self%xaxis, self%xaxis%ticks(t)%value)) cycle
+         p = left + self%xaxis%to_unit(self%xaxis%ticks(t)%value) * (right - left)
+         length = geo%xtic * merge(self%xaxis%tics%scale(1), self%xaxis%tics%scale(2), self%xaxis%ticks(t)%major)
+         if (self%xaxis%tics%out) length = -length
+         call backend%polyline([p, p], [bottom, bottom - length], FRAME_COLOR, 1.0_R8P, '')
+         if (self%xaxis%tics%mirror) call backend%polyline([p, p], [top, top + length], FRAME_COLOR, 1.0_R8P, '')
+         if (.not. self%xaxis%ticks(t)%major) cycle
+         backend%font = self%xaxis%tics%font
+         call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), bottom + geo%xdrop + out_x + geo%shift + &
+                         label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
+                         geo%vchar, self%xaxis%tics%color)
+         backend%font = font_object()
+      enddo
+      call backend%end_group
+      call backend%begin_group('fs-yticks')
+      widest = 0_I4P
+      do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
+         if (.not. within(self%yaxis, self%yaxis%ticks(t)%value)) cycle
+         p = bottom - self%yaxis%to_unit(self%yaxis%ticks(t)%value) * (bottom - top)
+         length = geo%ytic * merge(self%yaxis%tics%scale(1), self%yaxis%tics%scale(2), self%yaxis%ticks(t)%major)
+         if (self%yaxis%tics%out) length = -length
+         call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+         if (self%yaxis%tics%mirror) call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+         if (.not. self%yaxis%ticks(t)%major) cycle
+         ! gnuplot's widest label in characters, the blank of its default format ("% h") counted
+         widest = max(widest, len_trim(self%yaxis%ticks(t)%label, kind=I4P) + &
+                              merge(1_I4P, 0_I4P, .not. self%yaxis%tics%has_format() .and. &
+                                                  index(self%yaxis%ticks(t)%label, '-') /= 1))
+         call tick_label(backend, self%yaxis%tics, font_size, left - geo%ygap - out_y, p + geo%shift, &
+                         self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, 0.0_R8P)
+      enddo
+      call backend%end_group
+      if (self%xaxis%has_label()) then
+         backend%literal = self%label_plain(1)
+         call map_text(0.5_R8P * (left + right), bottom + geo%xdrop + out_x + 1.5_R8P * geo%vchar + geo%shift, &
+                       self%xaxis%label, 1_I4P, 0.0_R8P)
+      endif
+      if (self%yaxis%has_label()) then
+         backend%literal = self%label_plain(2)
+         call map_text(left - geo%ygap - out_y - (0.5_R8P + real(widest, R8P)) * geo%hchar + geo%shift, &
+                       0.5_R8P * (top + bottom), self%yaxis%label, 2_I4P, -90.0_R8P)
+      endif
+      backend%literal = .false.
+      if (self%has_title()) then
+         backend%literal = self%title_plain
+         backend%boxed = self%title_boxed
+         backend%font = self%title_font
+         call text_rows(backend, 0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                        geo%title_y + geo%shift - self%title_offset(2) * font_size, self%title, &
+                        trim(self%title_anchor), geo%vchar, trim(self%title_color))
+         backend%literal = .false.
+         backend%boxed = .false.
+         backend%font = font_object()
+      endif
+   endassociate
+   contains
+      subroutine map_text(x, y, string, k, angle)
+      !< Axis label `k` (1 x, 2 y) at (`x`, `y`) [px], rotated by `angle` (0 for none), shifted by its `offset`
+      !< [characters, y up], in its color and font.
+      real(R8P),        intent(in) :: x      !< Abscissa [px].
+      real(R8P),        intent(in) :: y      !< Ordinate [px].
+      character(len=*), intent(in) :: string !< Label.
+      integer(I4P),     intent(in) :: k      !< Label: 1 x, 2 y.
+      real(R8P),        intent(in) :: angle  !< Rotation [degrees], 0 for none.
+      real(R8P)                    :: px     !< Shifted abscissa [px].
+      real(R8P)                    :: py     !< Shifted ordinate [px].
+
+      px = x + self%label_offset(1, k) * geo%hchar
+      py = y - self%label_offset(2, k) * geo%vchar
+      backend%boxed = btest(self%label_boxed, k - 1_I4P)
+      backend%font = self%label_font(k)
+      if (len_trim(self%label_color(k)) > 0) then
+         if (angle /= 0.0_R8P) then
+            call backend%text(px, py, string, 'middle', rotate=angle, color=trim(self%label_color(k)))
+         else
+            call backend%text(px, py, string, 'middle', color=trim(self%label_color(k)))
+         endif
+      elseif (angle /= 0.0_R8P) then
+         call backend%text(px, py, string, 'middle', rotate=angle)
+      else
+         call backend%text(px, py, string, 'middle')
+      endif
+      backend%boxed = .false.
+      backend%font = font_object()
+      endsubroutine map_text
+   endsubroutine draw_map_frame
 
    subroutine draw_grid(self, backend, area)
    !< Draw grid lines at the ticks of `grid_lines` (the x and y major ones by default), in the grid style.
@@ -6857,15 +7050,21 @@ contains
    if (self%cbaxis%has_label()) room = room + GAP + LINE_HEIGHT * font_size
    endfunction colorbox_height
 
-   subroutine draw_colorbox(self, backend, area, panel, font_size)
+   subroutine draw_colorbox(self, backend, area, panel, font_size, geo)
    !< The color box: the palette gradient over the color axis, its frame (`border`), ticks, labels and label. Vertical,
    !< low values at the bottom (at the top with `invert`), at the right of the plot by default; horizontal, low values
    !< at the left, below the x labels by default; or in the `user` box (canvas fractions from the bottom left).
+   !< A map view's (`geo`), as gnuplot's: from 1.025 to 1.075 of the plot width and a character width right, the plot
+   !< height, its ticks on both sides inward, the labels a character width right.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: panel(4)  !< Panel box: left, top, right, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(map_geometry),    intent(in), optional :: geo !< Geometry of a map view.
+   logical                              :: mapped    !< A map view's default box.
+   real(R8P)                            :: label_gap !< Tick labels right of the box [px].
+   real(R8P)                            :: label_dy  !< Their baseline below the tick [px].
    integer(I4P), allocatable            :: rgba(:,:,:) !< Gradient.
    type(palette_object)                 :: p         !< Effective palette.
    real(R8P)                            :: box(4)    !< Box left, top, width, height [px].
@@ -6888,6 +7087,16 @@ contains
    else
       box = [panel(3) - PAD - self%colorbox_width(backend, font_size) + GAP, area(3), COLORBOX_SIZE * font_size, &
              area(4) - area(3)]
+   endif
+   mapped = .false.
+   if (present(geo)) mapped = .not. (self%cbox%user .or. self%cbox%horizontal)
+   label_gap = GAP
+   label_dy = 0.35_R8P * font_size
+   if (mapped) then
+      box = [area(2) + 0.025_R8P * (area(2) - area(1)) + geo%hchar, area(3), 0.05_R8P * (area(2) - area(1)), &
+             area(4) - area(3)]
+      label_gap = geo%hchar
+      label_dy = geo%shift
    endif
    p = effective_palette(self%palette, backend%theme%name)
    n = 256_I4P
@@ -6913,6 +7122,10 @@ contains
    labelled = .false.
    cb_major = tick_length(self%cbaxis%tics, .true.)
    cb_minor = tick_length(self%cbaxis%tics, .false.)
+   if (mapped) then
+      cb_major = geo%vtic * self%cbaxis%tics%scale(1)
+      cb_minor = geo%vtic * self%cbaxis%tics%scale(2)
+   endif
    call backend%begin_group('fs-colorbox')
    associate(left => box(1), top => box(2), bw => box(3), bh => box(4))
       call backend%image(left, top, left + bw, top + bh, rgba)
@@ -6928,6 +7141,7 @@ contains
                pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
                pos = merge(top + pos, top + bh - pos, self%cbox%invert)
                call backend%polyline([left + bw, left + bw - cb_minor], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+               if (mapped) call backend%polyline([left, left + cb_minor], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
             endif
             cycle
          endif
@@ -6943,8 +7157,9 @@ contains
             pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
             pos = merge(top + pos, top + bh - pos, self%cbox%invert)
             call backend%polyline([left + bw, left + bw - cb_major], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
+            if (mapped) call backend%polyline([left, left + cb_major], [pos, pos], FRAME_COLOR, 1.0_R8P, '')
             backend%font = self%cbaxis%tics%font
-            call backend%text(left + bw + GAP, pos + 0.35_R8P * font_size, self%cbaxis%ticks(k)%label, 'start', &
+            call backend%text(left + bw + label_gap, pos + label_dy, self%cbaxis%ticks(k)%label, 'start', &
                               sup=self%cbaxis%ticks(k)%sup)
             backend%font = font_object()
          endif

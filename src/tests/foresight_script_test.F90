@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(246)                           !< Per-check outcome.
+logical                       :: test_passed(247)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -243,6 +243,8 @@ call interpreter%run_text("set logscale x2; set format x2 '%.2f'", iostat, iomsg
 test_passed(34) = iostat == 0_I4P .and. interpreter%figure%panels(1)%x2axis%log .and. &
                   interpreter%figure%panels(1)%x2axis%tics%format == '%.2f' .and. .not. interpreter%figure%panels(1)%yaxis%log
 call interpreter%run_text('set logscale z', iostat, iomsg)
+test_passed(34) = test_passed(34) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%zaxis%log
+call interpreter%run_text('set logscale q', iostat, iomsg)
 test_passed(34) = test_passed(34) .and. iostat /= 0_I4P .and. index(iomsg, 'axes among x, y, y2, cb, x2 expected') > 0
 call interpreter%run_text("unset logscale; set output '"//scratch//"'; plot sin(x) axes x2y1", iostat, iomsg)
 test_passed(35) = iostat == 0_I4P .and. interpreter%figure%panels(1)%series(1)%x2 .and. &
@@ -602,8 +604,9 @@ associate(palette => interpreter%figure%panels(interpreter%figure%current)%palet
    test_passed(58) = test_passed(58) .and. iostat == 0_I4P .and. palette%table > 0_I4P .and. palette%negative .and. &
                      palette%maxcolors == 5_I4P .and. all(palette%rgb(0.0_R8P) == [89, 0, 8])
 endassociate
+! a matrix with another style: its rows x y z, as gnuplot's
 call interpreter%run_text("plot '"//data_file//"' matrix w lines", iostat, iomsg)
-test_passed(58) = test_passed(58) .and. iostat /= 0_I4P .and. index(iomsg, 'matrix data are plotted with image') > 0
+test_passed(58) = test_passed(58) .and. iostat == 0_I4P
 open(newunit=unit, file=data_file, action='write', status='replace')
 write(unit, '(A)') '0 0 1', '1 0 2', '3 0 3'
 close(unit)
@@ -3721,7 +3724,7 @@ if (test_passed(168)) then
    endassociate
 endif
 call interpreter%run_text('plot x with filledcurves fc palette', iostat, iomsg)
-test_passed(168) = test_passed(168) .and. iostat /= 0_I4P .and. index(iomsg, 'fc: variable and palette') > 0
+test_passed(168) = test_passed(168) .and. iostat /= 0_I4P .and. index(iomsg, 'lc palette z needs using x:y:z') > 0
 
 
 ! lc variable on candlesticks, boxxyerror, histograms (Y:COLOR), filledcurves and polygons (a color per run, its
@@ -6112,6 +6115,48 @@ block
    endassociate
 endblock
 
+
+! the map view (set view map) at gnuplot 6.0's places (probed on its svg): plot area, tick labels, axis labels, title,
+! color box; a 2D matrix with using fields and labels; unset autoscale; "#RRGGBB" with a tail; object tags as
+! expressions; fill as fillstyle
+block
+   character(len=:), allocatable :: svg !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_map.svg'; set view map; "// &
+                             "set title 'Map title'; set xlabel 'X label'; set ylabel 'Y label'; set xrange [0:10]; "// &
+                             "set yrange [0:5]"//nl//"$p << EOD"//nl//"1 1 0"//nl//"9 4 1"//nl//"EOD"//nl// &
+                             "splot $p using 1:2:3 with points pt 7 lc palette title 'pts'", iostat, iomsg)
+   test_passed(247) = iostat == 0_I4P
+   if (test_passed(247)) then
+      svg = read_text('foresight_script_test_map.svg')
+      test_passed(247) = index(svg, '<rect x="71.61" y="73.8" width="401.92" height="252.4"') > 0 .and. &
+                        index(svg, 'x="71.61" y="350.43" text-anchor="middle">0<') > 0 .and. &
+                        index(svg, 'x="56.52" y="330.1" text-anchor="end">0<') > 0 .and. &
+                        index(svg, 'x="272.57" y="377.43" text-anchor="middle">X label<') > 0 .and. &
+                        index(svg, 'x="39.45" y="200" text-anchor="middle" transform="rotate(-90 39.45 200)">Y label<') &
+                        > 0 .and. index(svg, 'x="272.57" y="50.7" text-anchor="middle">Map title<') > 0 .and. &
+                        index(svg, '<rect x="491.97" y="73.8" width="20.1" height="252.4"') > 0 .and. &
+                        index(svg, 'x="405.19" y="95.7" text-anchor="end">pts<') > 0
+   endif
+   ! a matrix through using, with image and with labels (gnuplot's heatmaps.dem)
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg; set output 'foresight_script_test_map.svg'"//nl//"$m << EOD"//nl// &
+                             "0 1"//nl//"2 0"//nl//"EOD"//nl//"plot $m matrix using 1:2:3 with image, $m matrix "// &
+                             "using 1:2:($3 == 0 ? '' : sprintf('%g', $3)) with labels", iostat, iomsg)
+   test_passed(247) = test_passed(247) .and. iostat == 0_I4P
+   if (test_passed(247)) test_passed(247) = size(interpreter%figure%panels(1)%series) == 2 .and. &
+                                         trim(interpreter%figure%panels(1)%series(2)%texts(4)) == '2'
+   call interpreter%run_text("set xrange [1:4]; unset autoscale; set object 2*11 rect from 0,0 to 1,1 "// &
+                             "fc rgb '#DDAA00 junk'", iostat, iomsg)
+   test_passed(247) = test_passed(247) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%yaxis%max_fixed .and. &
+                     interpreter%figure%panels(1)%xaxis%max_user == 4.0_R8P .and. &
+                     interpreter%figure%panels(1)%objects(size(interpreter%figure%panels(1)%objects))%tag == 22
+   call interpreter%run_text("plot '+' using 1:1 with boxes fill solid 0.5", iostat, iomsg)
+   test_passed(247) = test_passed(247) .and. iostat == 0_I4P
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -6120,7 +6165,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,246L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,247L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

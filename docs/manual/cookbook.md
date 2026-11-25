@@ -1533,6 +1533,18 @@ palette](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
 `rgbimage` (`x:y:r:g:b`) and `rgbalpha` (`x:y:r:g:b:a`) color each pixel directly, components 0 to 255 (`set rgbmax 1`
 for fractions), without palette nor color box.
 
+## 3D plots
+
+### A field seen from above
+
+<<< @/examples/snippets/cb_map_points.gp{gnuplot}
+
+<Plot name="cb_map_points" svg :width="560" :height="400" />
+
+`splot` plots points with a height; `set view map` looks at them from above, as a 2D plot laid out as gnuplot's 3D
+map (its plot area, ticks and color box), `lc palette` coloring each point by its z. The `using` fields are `plot`'s
+with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
+
 ## Polar and radial charts
 
 ### A polar plot

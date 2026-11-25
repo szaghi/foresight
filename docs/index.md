@@ -354,6 +354,12 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_rgbimage" svg :width="560" :height="400" caption="an RGB image" />
 </div>
 
+### 3D plots
+
+<div class="fs-gallery">
+  <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
+</div>
+
 ### Polar and radial charts
 
 <div class="fs-gallery">
