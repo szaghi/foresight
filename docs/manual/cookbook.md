@@ -941,6 +941,16 @@ unless asked: `set fit results` prints gnuplot's report, `set fit logfile 'fit.l
 slope `p` is the observed order of accuracy of a scheme. From Fortran, `call fit(model, x, y, params)` does the same
 ([library](../guide/library.md)).
 
+
+### A fit with errors in x and y
+
+<<< @/examples/snippets/cb_fit_xyerrors.gp{gnuplot}
+
+<Plot name="cb_fit_xyerrors" svg :width="560" :height="360" />
+
+Pearson's data with York's weights, a classic test of straight line fits: `yerrors` weighs each point by its y error,
+`xyerrors` by its effective error, the y error combined with the x error times the slope of the model (Orear's
+effective variance, gnuplot's). See [Fit](/guide/gnuplot-subset#fit).
 ### A fit of two variables
 
 <<< @/examples/snippets/cb_fit_surface.gp{gnuplot}

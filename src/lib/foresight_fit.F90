@@ -41,8 +41,8 @@ type :: fit_settings
    real(R8P)    :: limit = 1.0e-5_R8P      !< Relative change of chi-square that stops the fit (`limit`, FIT_LIMIT).
    real(R8P)    :: limit_abs = 0.0_R8P     !< Absolute part of the stopping change (`limit_abs`).
    integer(I4P) :: maxiter = 0_I4P         !< Most iterations, 0 for no limit (`maxiter`, FIT_MAXITER).
-   real(R8P)    :: start_lambda = 0.0_R8P  !< First lambda, 0 for gnuplot's estimate (`start-lambda`).
-   real(R8P)    :: lambda_factor = 10.0_R8P !< lambda factor up and down (`lambda-factor`).
+   real(R8P)    :: start_lambda = 0.0_R8P  !< First lambda, 0 for gnuplot's estimate (`start_lambda`).
+   real(R8P)    :: lambda_factor = 10.0_R8P !< lambda factor up and down (`lambda_factor`).
    logical      :: prescale = .true.       !< Parameters scaled by their initial values (`prescale`).
    logical      :: errorscaling = .true.   !< Errors scaled by the reduced chi-square (`errorscaling`).
 endtype fit_settings
@@ -71,6 +71,7 @@ type, abstract :: fit_model
    !< procedure argument: an internal procedure passed as an argument costs gfortran an executable stack (trampoline).
    contains
       procedure(model_values), deferred, pass(self) :: values !< Values at the data points.
+      procedure, pass(self) :: slopes => model_slopes         !< Slopes in x at the data points (`xyerrors`).
 endtype fit_model
 
 type, extends(fit_model) :: function_model
@@ -79,6 +80,7 @@ type, extends(fit_model) :: function_model
    real(R8P), allocatable                     :: x(:)        !< Abscissae.
    contains
       procedure, pass(self) :: values => function_values !< Values at the abscissae.
+      procedure, pass(self) :: slopes => function_slopes !< Slopes at the abscissae.
 endtype function_model
 
 abstract interface
@@ -162,10 +164,42 @@ contains
    ok = all(ieee_is_finite(f))
    endsubroutine function_values
 
-   subroutine levenberg_marquardt(model, z, err, a0, settings, result, weighted)
+   subroutine model_slopes(self, p, f, dfdx, ok)
+   !< Slopes in x of the model at the data points for the parameters `p` (its values `f` there): none by default.
+   class(fit_model), intent(inout) :: self    !< Model.
+   real(R8P),        intent(in)    :: p(:)    !< Parameters.
+   real(R8P),        intent(in)    :: f(:)    !< Model values.
+   real(R8P),        intent(out)   :: dfdx(:) !< Slopes.
+   logical,          intent(out)   :: ok      !< Every slope defined.
+
+   dfdx = 0.0_R8P
+   ok = .false.
+   endsubroutine model_slopes
+
+   subroutine function_slopes(self, p, f, dfdx, ok)
+   !< Slopes of the model function at the abscissae, gnuplot's calc_derivatives: one-sided, the step
+   !< max(0.001 |x|, 8e-8 (|x| + 1e-8)).
+   class(function_model), intent(inout) :: self    !< Model.
+   real(R8P),             intent(in)    :: p(:)    !< Parameters.
+   real(R8P),             intent(in)    :: f(:)    !< Model values.
+   real(R8P),             intent(out)   :: dfdx(:) !< Slopes.
+   logical,               intent(out)   :: ok      !< Every slope defined.
+   real(R8P)                            :: h       !< Step.
+   integer(I4P)                         :: i       !< Counter.
+
+   do i = 1_I4P, size(self%x, kind=I4P)
+      h = max(DELTA * abs(self%x(i)), 8.0e-8_R8P * (abs(self%x(i)) + 1.0e-8_R8P))
+      dfdx(i) = (self%f(self%x(i) + h, p) - f(i)) / h
+   enddo
+   ok = all(ieee_is_finite(dfdx))
+   endsubroutine function_slopes
+
+   subroutine levenberg_marquardt(model, z, err, a0, settings, result, weighted, xerr)
    !< Fit `model` (values at the data points for a parameter vector) to the data `z` of errors `err` from the initial
    !< parameters `a0`, as gnuplot's regress (see the module notes); `weighted` tells the errors were given (for the
-   !< error scaling and the report).
+   !< error scaling and the report). With the errors `xerr` of the abscissae (gnuplot's `xyerrors`), each point's error
+   !< is the effective one, sqrt(err^2 + (f' xerr)^2), the slope f' of the model at the parameters being tried (Orear's
+   !< effective variance, gnuplot's effective_error).
    class(fit_model),   intent(inout)  :: model    !< Model.
    real(R8P),          intent(in)     :: z(:)     !< Data.
    real(R8P),          intent(in)     :: err(:)   !< Errors of the data.
@@ -173,6 +207,10 @@ contains
    type(fit_settings), intent(in)     :: settings !< Options.
    type(fit_result),   intent(out)    :: result   !< Outcome.
    logical,            intent(in)     :: weighted !< The data carry errors.
+   real(R8P),          intent(in), optional :: xerr(:) !< Errors of the abscissae.
+   real(R8P), allocatable             :: xe(:)    !< Errors of the abscissae (a local copy for the internal procedures:
+                                                  !< nvfortran 26.9 misreads a host's optional dummy).
+   logical                            :: effective !< Effective errors (`xerr` given).
    real(R8P), allocatable             :: a(:)     !< Scaled parameters.
    real(R8P), allocatable             :: scale(:) !< Parameter scales.
    real(R8P), allocatable             :: c(:,:)   !< Jacobian over the errors, n + m rows.
@@ -198,6 +236,8 @@ contains
    result%stop_text = ''
    result%progress = ''
    result%weighted = weighted
+   effective = present(xerr)
+   if (effective) xe = xerr
    n = size(z, kind=I4P)
    m = size(a0, kind=I4P)
    allocate(result%params(m), result%errors(m), result%correlation(m, m))
@@ -339,11 +379,14 @@ contains
       real(R8P), allocatable   :: f(:)       !< Model values.
       real(R8P), allocatable   :: high(:)    !< Model values at a moved parameter.
       real(R8P), allocatable   :: moved(:)   !< Moved parameters.
+      real(R8P), allocatable   :: e(:)       !< Errors (effective ones with `xerr`).
+      real(R8P), allocatable   :: dfdx(:)    !< Slopes of the model in x.
       real(R8P)                :: ta         !< Parameter moved from.
       integer(I4P)             :: k          !< Data counter.
       integer(I4P)             :: q          !< Parameter counter.
 
-      allocate(f(n), high(n), moved(m))
+      allocate(f(n), high(n), moved(m), e(n), dfdx(n))
+      e = err
       chi = 0.0_R8P
       call model%values(p * scale, f, defined)
       if (.not. defined) then
@@ -365,10 +408,18 @@ contains
          enddo
          moved(q) = p(q)
       enddo
+      if (effective) then
+         call model%slopes(p * scale, f, dfdx, defined)
+         if (.not. defined) then
+            result%message = 'Function evaluation yields NaN ("not a number") or an undefined value'
+            return
+         endif
+         e = sqrt(err**2 + (dfdx * xe)**2)
+      endif
       do k = 1_I4P, n
-         res_d(k) = (f(k) - z(k)) / err(k)
+         res_d(k) = (f(k) - z(k)) / e(k)
          do q = 1_I4P, m
-            jac(k, q) = jac(k, q) / err(k)
+            jac(k, q) = jac(k, q) / e(k)
          enddo
       enddo
       chi = sumsq(res_d(1:n))

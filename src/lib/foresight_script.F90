@@ -273,6 +273,8 @@ type :: script_object
                                                                !< standard error (none by default, unlike gnuplot).
    character(len=:), allocatable   :: fit_logfile              !< `set fit logfile`, empty for none (the default).
    logical                         :: fit_errorvariables = .true. !< `set fit errorvariables`: NAME_err set.
+   logical                         :: fit_covariancevariables = .false. !< `set fit covariancevariables`:
+                                                                        !< FIT_COV_A_B set.
    character(len=:), allocatable   :: timefmt                  !< Input time format, gnuplot `set timefmt`.
    logical                         :: time_data(4) = .false.   !< Time data on x, y, y2, x2 (`set xdata time`).
    character(len=:), allocatable   :: print_file               !< `set print`: '' the standard error (gnuplot's
@@ -365,6 +367,7 @@ type, extends(fit_model) :: script_model
    character(len=:), allocatable  :: vars     !< Their names, blank separated (columns 1, 2, ... of a row).
    contains
       procedure, pass(self) :: values => script_model_values !< Values at the abscissae.
+      procedure, pass(self) :: slopes => script_model_slopes !< Slopes at the abscissae (`xyerrors`).
 endtype script_model
 
 class(script_object), pointer :: active => null() !< The interpreter running (function blocks run in it).
@@ -428,6 +431,7 @@ contains
    self%fit_verbosity = 'quiet'
    self%fit_logfile = ''
    self%fit_errorvariables = .true.
+   self%fit_covariancevariables = .false.
    self%print_file = ''
    self%loop_depth = 0_I4P
    self%loop_signal = 0_I4P
@@ -2351,6 +2355,7 @@ contains
    real(R8P), allocatable                       :: x(:)      !< Abscissae.
    real(R8P), allocatable                       :: z(:)      !< Data.
    real(R8P), allocatable                       :: err(:)    !< Errors of the data.
+   real(R8P), allocatable                       :: xerr(:)   !< Errors of the abscissae (`xyerrors`).
    real(R8P), allocatable                       :: start(:)  !< Initial parameters.
    logical, allocatable                         :: use(:)    !< Points fitted.
    real(R8P)                                    :: range(2, 13) !< Ranges of the variables, then of the data, inline.
@@ -2362,6 +2367,7 @@ contains
    logical                                      :: found     !< Variable found.
    logical                                      :: weighted  !< Errors given.
    logical                                      :: unit      !< `unitweights` given.
+   logical                                      :: xyerr     !< `xyerrors` given.
    integer(I4P)                                 :: set_index !< Dataset, -1 for all.
    integer(I4P)                                 :: every(6)  !< `every` fields.
    integer(I4P)                                 :: skip      !< First lines of the file not read (`skip N`).
@@ -2435,6 +2441,7 @@ contains
    skip = 0_I4P
    weighted = .false.
    unit = .false.
+   xyerr = .false.
    allocate(names(0))
    i = i + 1_I4P
    do while (i <= size(tokens, kind=I4P))
@@ -2452,9 +2459,14 @@ contains
       elseif (word == 'skip') then
          ! gnuplot's `skip N`: the first N lines of the file not read
          if (.not. next_integer(tokens, i, skip, iostat, iomsg, self%symbols)) return
-      elseif (word == 'yerrors' .or. word == 'yerror' .or. word == 'zerror' .or. word == 'zerrors') then
+      elseif (is_word(word, 'yerr yerro yerror yerrors zerr zerro zerror zerrors')) then
          weighted = .true.
          unit = .false.
+      elseif (is_word(word, 'xyerr xyerro xyerror xyerrors')) then
+         ! x:z:sx:sz, the effective errors (gnuplot's effective variance)
+         weighted = .true.
+         unit = .false.
+         xyerr = .true.
       elseif (word == 'unitweights') then
          weighted = .false.
          unit = .true.
@@ -2462,8 +2474,54 @@ contains
          i = i + 1_I4P
          do while (i <= size(tokens, kind=I4P))
             if (tokens(i)%kind == TOKEN_STRING) then
-               call fail('fit: via a parameter file is not supported (via the parameter names is)', iostat, iomsg)
-               return
+               ! gnuplot's parameter file: `NAME = VALUE` lines set the parameters, fitted unless `# FIXED`
+               block
+                  character(len=1024)           :: line  !< A line.
+                  character(len=:), allocatable :: left  !< Before the comment.
+                  integer(I4P)                  :: u     !< File unit.
+                  integer(I4P)                  :: ios   !< Status.
+                  integer(I4P)                  :: eq    !< Equal sign.
+                  logical                       :: fixed !< `# FIXED`.
+
+                  open(newunit=u, file=tokens(i)%text, status='old', action='read', iostat=ios)
+                  if (ios /= 0_I4P) then
+                     call fail('fit: cannot read the parameter file "'//tokens(i)%text//'"', iostat, iomsg)
+                     return
+                  endif
+                  do
+                     read(u, '(A)', iostat=ios) line
+                     if (ios /= 0_I4P) exit
+                     ! tabs as blanks
+                     do eq = 1_I4P, len_trim(line, kind=I4P)
+                        if (line(eq:eq) == achar(9)) line(eq:eq) = ' '
+                     enddo
+                     left = line
+                     fixed = .false.
+                     if (index(line, '#') > 0) then
+                        left = line(1:index(line, '#') - 1)
+                        fixed = index(line(index(line, '#'):), 'FIXED') > 0
+                     endif
+                     eq = index(left, '=', kind=I4P)
+                     if (eq == 0_I4P) cycle
+                     call self%symbols%assign(trim(adjustl(left(1:eq - 1_I4P))), trim(adjustl(left(eq + 1_I4P:))), &
+                                              iostat, iomsg)
+                     if (iostat /= 0_I4P) then
+                        close(u)
+                        iomsg = 'fit: parameter file "'//tokens(i)%text//'": '//iomsg
+                        return
+                     endif
+                     if (fixed) cycle
+                     allocate(kept(size(names) + 1))
+                     kept(1:size(names)) = names
+                     kept(size(kept)) = trim(adjustl(left(1:eq - 1_I4P)))
+                     ! assignment, not move_alloc, in a block (nvfortran 26.9)
+                     names = kept
+                     deallocate(kept)
+                  enddo
+                  close(u)
+               endblock
+               i = i + 1_I4P
+               cycle
             endif
             if (tokens(i)%kind == TOKEN_WORD) then
                allocate(kept(size(names) + 1))
@@ -2498,8 +2556,35 @@ contains
       call fail('fit: using X:Z, X:Z:S, X:Y:Z:S, ... expected', iostat, iomsg)
       return
    endif
-   if (size(fields) >= 3 .and. .not. unit) weighted = .true.
+   ! the names of the variables: `set dummy` (all of them), then gnuplot's legacy order x y t u v beyond them
+   vars = ' x y'
+   if (len(self%dummy) > 0) vars = ' '//self%dummy//' y'
+   if (allocated(self%dummies)) then
+      if (len_trim(self%dummies) > 0) vars = self%dummies
+   endif
+   block
+      character(len=1), parameter   :: LEGACY(5) = ['x', 'y', 't', 'u', 'v'] !< gnuplot's dummy_old_default.
+      character(len=:), allocatable :: grown                                 !< The names grown (a temporary:
+                                                                             !< nvfortran 26.9 corrupts a self-append).
+      integer(I4P)                  :: j                                     !< Position.
+
+      do j = word_count(vars) + 1_I4P, 5_I4P
+         grown = vars//' '//LEGACY(j)
+         vars = grown
+      enddo
+   endblock
+   ! no error keyword (gnuplot's fit.c): errors in the last column when the variable that column would be is not in
+   ! the function (version 4 syntax), else unit weights and every column but the last a variable
+   if (size(fields) >= 3 .and. .not. unit .and. .not. weighted) &
+      weighted = .not. names_variable(text, vars, size(fields, kind=I4P) - 1_I4P)
    nvar = size(fields, kind=I4P) - merge(2_I4P, 1_I4P, weighted)
+   if (xyerr) then
+      if (size(fields) /= 4) then
+         call fail('fit: xyerrors needs exactly 4 columns, x:z:sx:sz', iostat, iomsg)
+         return
+      endif
+      nvar = 1_I4P
+   endif
    if (nvar < 1_I4P .or. nvar > 12_I4P) then
       call fail('fit: 1 to 12 independent variables, using X:Z[:S], X:Y:Z[:S], ...', iostat, iomsg)
       return
@@ -2507,12 +2592,6 @@ contains
    if (nranges > nvar + 1_I4P) then
       call fail('fit: more ranges than variables and data', iostat, iomsg)
       return
-   endif
-   ! their names: `set dummy` (all of them), else x then y, as gnuplot
-   vars = ' x y'
-   if (len(self%dummy) > 0) vars = ' '//self%dummy//' y'
-   if (allocated(self%dummies)) then
-      if (len_trim(self%dummies) > 0) vars = self%dummies
    endif
    if (word_count(vars) < nvar) then
       call fail('fit: name the independent variables beyond the second with set dummy', iostat, iomsg)
@@ -2539,7 +2618,10 @@ contains
    enddo
    x = pack(values(:, 1), use)
    z = pack(values(:, nvar + 1_I4P), use)
-   if (weighted) then
+   if (xyerr) then
+      err = pack(values(:, 4), use)
+      xerr = pack(values(:, 3), use)
+   elseif (weighted) then
       err = pack(values(:, nvar + 2_I4P), use)
    else
       allocate(err(size(z)))
@@ -2589,7 +2671,11 @@ contains
    endif
    fitted%degrees = self%figure%panels(self%figure%current)%degrees
    fitted%symbols = self%symbols
-   call levenberg_marquardt(fitted, z, err, start, options, result, weighted)
+   if (xyerr) then
+      call levenberg_marquardt(fitted, z, err, start, options, result, weighted, xerr=xerr)
+   else
+      call levenberg_marquardt(fitted, z, err, start, options, result, weighted)
+   endif
    if (len(result%message) > 0) then
       do k = 1_I4P, size(names, kind=I4P)
          call set_parameter(self%symbols, trim(names(k)), start(k))
@@ -2606,6 +2692,21 @@ contains
       call self%symbols%set_value('FIT_P', result%p, .false.)
       call self%symbols%set_value('FIT_NITER', real(result%niter, R8P), .true.)
       call self%symbols%set_value('FIT_CONVERGED', merge(1.0_R8P, 0.0_R8P, result%converged), .true.)
+      ! gnuplot's FIT_COV_A_B: the covariances of the parameters (the correlations times their errors)
+      if (self%fit_covariancevariables .and. result%has_errors) then
+         block
+            integer(I4P) :: j !< Parameter counter.
+
+            do k = 1_I4P, size(names, kind=I4P)
+               if (index(names(k), '[') > 0) cycle
+               do j = 1_I4P, size(names, kind=I4P)
+                  if (index(names(j), '[') > 0) cycle
+                  call self%symbols%set_value('FIT_COV_'//trim(names(k))//'_'//trim(names(j)), &
+                                              result%correlation(k, j) * result%errors(k) * result%errors(j), .false.)
+               enddo
+            enddo
+         endblock
+      endif
    endif
    if (self%fit_verbosity /= 'quiet') call fit_report(result, names, '-', "'"//file//"'"//trim(' using '//spec), &
                                                       text, self%fit_verbosity == 'brief')
@@ -2613,6 +2714,44 @@ contains
                                                   "'"//file//"'"//trim(' using '//spec), text, .false.)
    if (len(result%message) > 0) call fail('fit: '//result%message, iostat, iomsg)
    endsubroutine fit_command
+
+   pure function names_variable(model, names, k) result(yes)
+   !< Whether the `k`-th of the blank separated `names` is a name in the `model` text (gnuplot's fit_dummy_var).
+   !< A module procedure, not fit_command's: an internal one there and nvfortran 26.9 loses the via names (move_alloc).
+   character(len=*), intent(in) :: model !< Fitted expression.
+   character(len=*), intent(in) :: names !< Variable names.
+   integer(I4P),     intent(in) :: k     !< Variable.
+   logical                      :: yes   !< Used.
+   character(len=:), allocatable :: rest !< Names left.
+   character(len=:), allocatable :: left !< Names left, a temporary.
+   character(len=:), allocatable :: name !< The k-th name.
+   integer(I4P)                  :: j    !< Counter.
+   integer(I4P)                  :: at   !< Occurrence.
+   integer(I4P)                  :: from !< Search start.
+
+   yes = .false.
+   rest = adjustl(names)
+   name = ''
+   do j = 1_I4P, k
+      if (len_trim(rest) == 0) return
+      name = trim(first_word(rest))
+      ! through a temporary (nvfortran 26.9 and self-referencing deferred-length assignments)
+      left = adjustl(rest(len(name) + 1:))
+      rest = left
+   enddo
+   from = 1_I4P
+   do
+      at = index(model(from:), name, kind=I4P)
+      if (at == 0_I4P) return
+      at = at + from - 1_I4P
+      yes = .true.
+      if (at > 1_I4P) yes = verify(model(at - 1_I4P:at - 1_I4P), UNAME_CHARS) /= 0
+      if (at + len(name, kind=I4P) <= len(model, kind=I4P)) &
+         yes = yes .and. verify(model(at + len(name, kind=I4P):at + len(name, kind=I4P)), UNAME_CHARS) /= 0
+      if (yes) return
+      from = at + 1_I4P
+   enddo
+   endfunction names_variable
 
    subroutine script_model_values(self, p, f, ok)
    !< The model at every abscissa, the parameters set as user variables of the model's own symbols.
@@ -2634,18 +2773,48 @@ contains
       ok = ios == 0_I4P
       if (.not. ok) return
       do q = 1_I4P, size(self%xs, 1, kind=I4P)
-         f(q) = e%evaluate(self%xs(q, :), q - 1_I4P)
+         f(q) = e%evaluate(self%xs(q, :), q - 1_I4P, real_part=.true.)
       enddo
    else
       call e%compile(self%text, ios, msg, variable=self%vars, degrees=self%degrees, symbols=self%symbols)
       ok = ios == 0_I4P
       if (.not. ok) return
       do q = 1_I4P, size(self%x, kind=I4P)
-         f(q) = e%value_at(self%x(q))
+         f(q) = e%value_at(self%x(q), real_part=.true.)
       enddo
    endif
+   ! a complex value counts by its real part, as gnuplot's fit
    ok = all(ieee_is_finite(f))
    endsubroutine script_model_values
+
+   subroutine script_model_slopes(self, p, f, dfdx, ok)
+   !< The slopes of the model (one variable) at every abscissa, gnuplot's calc_derivatives: one-sided, the step
+   !< max(0.001 |x|, 8e-8 (|x| + 1e-8)).
+   class(script_model), intent(inout) :: self    !< Model.
+   real(R8P),           intent(in)    :: p(:)    !< Parameters.
+   real(R8P),           intent(in)    :: f(:)    !< Model values.
+   real(R8P),           intent(out)   :: dfdx(:) !< Slopes.
+   logical,             intent(out)   :: ok      !< All defined.
+   type(expression_object)            :: e       !< Model at these parameters.
+   character(len=:), allocatable      :: msg     !< Compilation message.
+   integer(I4P)                       :: ios     !< Compilation status.
+   integer(I4P)                       :: q       !< Counter.
+   real(R8P)                          :: h       !< Step.
+
+   dfdx = 0.0_R8P
+   ok = .false.
+   if (.not. allocated(self%x)) return
+   do q = 1_I4P, size(p, kind=I4P)
+      call set_parameter(self%symbols, trim(self%names(q)), p(q))
+   enddo
+   call e%compile(self%text, ios, msg, variable=self%vars, degrees=self%degrees, symbols=self%symbols)
+   if (ios /= 0_I4P) return
+   do q = 1_I4P, size(self%x, kind=I4P)
+      h = max(0.001_R8P * abs(self%x(q)), 8.0e-8_R8P * (abs(self%x(q)) + 1.0e-8_R8P))
+      dfdx(q) = (e%value_at(self%x(q) + h, real_part=.true.) - f(q)) / h
+   enddo
+   ok = all(ieee_is_finite(dfdx))
+   endsubroutine script_model_slopes
 
    pure function word_count(text) result(n)
    !< Number of blank separated words of `text`.
@@ -2806,6 +2975,8 @@ contains
          list = list(min(comma + 1_I4P, len(list, kind=I4P) + 1_I4P):)
       enddo
       call self%symbols%define(name, params, trim(adjustl(rhs)), iostat, iomsg)
+      ! gnuplot's GPFUN_NAME: the definition as written
+      if (iostat == 0_I4P) call self%symbols%set_string('GPFUN_'//trim(name), trim(adjustl(s)))
    else
       ! an array or a slice of one makes an array, gnuplot's B = A[2:3]
       call self%symbols%array_value(rhs, elements, listed, iostat, iomsg, &
@@ -11842,7 +12013,7 @@ contains
 
       subroutine fit_option
       !< `set fit [quiet|results|brief] [logfile "file"|nologfile] [limit E] [limit_abs E] [maxiter N|default]
-      !< [start-lambda L] [lambda-factor F] [[no]prescale] [[no]errorscaling] [[no]errorvariables]`; bare, the defaults
+      !< [start_lambda L] [lambda_factor F] [[no]prescale] [[no]errorscaling] [[no]errorvariables]`; bare, the defaults
       !< (silent, no log file, gnuplot's limits).
       character(len=:), allocatable :: word !< Option word.
       real(R8P)                     :: v    !< Number.
@@ -11853,6 +12024,7 @@ contains
          self%fit_verbosity = 'quiet'
          self%fit_logfile = ''
          self%fit_errorvariables = .true.
+         self%fit_covariancevariables = .false.
          return
       endif
       i = 2_I4P
@@ -11875,12 +12047,15 @@ contains
             self%fit_logfile = tokens(i)%text
          case ('nolog', 'nologf', 'nologfi', 'nologfil', 'nologfile')
             self%fit_logfile = ''
-         case ('limit', 'limit_abs', 'start-lambda', 'lambda-factor')
+         case ('limit', 'limit_abs', 'start_lambda', 'lambda_factor', 'start-lambda', 'lambda-factor')
+            ! gnuplot's start_lambda and lambda_factor (the hyphenated forms read too)
+            if (word == 'start-lambda') word = 'start_lambda'
+            if (word == 'lambda-factor') word = 'lambda_factor'
             if (.not. next_real(tokens, i, v, iostat, iomsg)) then
                iomsg = 'set fit '//word//': '//iomsg
                return
             endif
-            if (.not. v > 0.0_R8P .and. word /= 'limit_abs' .and. word /= 'start-lambda') then
+            if (.not. v > 0.0_R8P .and. word /= 'limit_abs' .and. word /= 'start_lambda') then
                call fail('set fit '//word//': a positive number is expected', iostat, iomsg)
                return
             endif
@@ -11889,7 +12064,7 @@ contains
                self%fit_options%limit = v
             case ('limit_abs')
                self%fit_options%limit_abs = max(0.0_R8P, v)
-            case ('start-lambda')
+            case ('start_lambda')
                self%fit_options%start_lambda = max(0.0_R8P, v)
             case default
                self%fit_options%lambda_factor = v
@@ -11913,10 +12088,12 @@ contains
             self%fit_options%errorscaling = word == 'errorscaling'
          case ('errorvariables', 'noerrorvariables')
             self%fit_errorvariables = word == 'errorvariables'
+         case ('covariancevariables', 'nocovariancevariables')
+            self%fit_covariancevariables = word == 'covariancevariables'
          case default
             call fail('set fit: unsupported option "'//word//'" (supported: quiet, results, brief, logfile, '// &
-                      'nologfile, limit, limit_abs, maxiter, start-lambda, lambda-factor, [no]prescale, '// &
-                      '[no]errorscaling, [no]errorvariables)', iostat, iomsg)
+                      'nologfile, limit, limit_abs, maxiter, start_lambda, lambda_factor, [no]prescale, '// &
+                      '[no]errorscaling, [no]errorvariables, [no]covariancevariables)', iostat, iomsg)
             return
          endselect
          i = i + 1_I4P

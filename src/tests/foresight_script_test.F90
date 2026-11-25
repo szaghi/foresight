@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(263)                           !< Per-check outcome.
+logical                       :: test_passed(264)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1627,8 +1627,9 @@ call interpreter%run_text("set fit nologfile; m = 0; q = 1; fit m*x+q '"//data_f
 test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'Singular matrix in Invert_RtR') > 0
 call interpreter%run_text("fit m*x+q '"//data_file//"'", iostat, iomsg)
 test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'via and the names of the parameters') > 0
+! a parameter file that cannot be read (check 264 reads one)
 call interpreter%run_text("fit m*x+q '"//data_file//"' via 'p.par'", iostat, iomsg)
-test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'via a parameter file is not supported') > 0
+test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'cannot read the parameter file') > 0
 call interpreter%run_text("set fit verbose", iostat, iomsg)
 test_passed(98) = test_passed(98) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "verbose"') > 0
 call interpreter%run_text("fit m*x+q '"//data_file//"' using 1 via m, q", iostat, iomsg)
@@ -6745,6 +6746,56 @@ block
    endif
    open(newunit=u, file='foresight_script_test_3dl.svg')
    close(u, status='delete')
+endblock
+
+
+! fit as gnuplot 6.0's fit.dem: a function of x and y with three columns (unit weights: the function uses y), its
+! parameters from a file (a FIXED one kept), xyerrors (York's weights, the effective variance: probed digits), the
+! covariance variables, yerr, start_lambda; GPFUN_name the definition as written
+block
+   integer(I4P)                  :: u     !< File unit.
+   real(R8P)                     :: v(2)  !< Values.
+   logical                       :: found !< Defined.
+   character(len=:), allocatable :: text  !< A string variable.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   open(newunit=u, file='foresight_script_test.par', action='write', status='replace')
+   write(u, '(A)') '# start', 'a'//achar(9)//'= 1.5', 'b = 2.5   # FIXED'
+   close(u)
+   call interpreter%run_text("h(x,y) = a*x + b*y"//nl//"$d << EOD"//nl//"0 0 1"//nl//"1 0 2"//nl//"0 1 3"//nl// &
+                             "1 1 4.1"//nl//"EOD"//nl//"fit h(x,y) $d using 1:2:3 via a, b", iostat, iomsg)
+   test_passed(264) = iostat == 0_I4P
+   call interpreter%symbols%value_of('a', v(1), found)
+   call interpreter%symbols%value_of('b', v(2), found)
+   test_passed(264) = test_passed(264) .and. abs(v(1) - 1.70000003670338_R8P) < 1.0e-9_R8P .and. &
+                     abs(v(2) - 2.69999995378878_R8P) < 1.0e-9_R8P
+   call interpreter%run_text("fit h(x,y) $d using 1:2:3 via 'foresight_script_test.par'", iostat, iomsg)
+   test_passed(264) = test_passed(264) .and. iostat == 0_I4P
+   call interpreter%symbols%value_of('b', v(2), found)
+   test_passed(264) = test_passed(264) .and. v(2) == 2.5_R8P
+   open(newunit=u, file='foresight_script_test.par')
+   close(u, status='delete')
+   call interpreter%run_text("$P << EOD"//nl//"0.0 1000 5.9 1.0"//nl//"0.9 1000 5.4 1.8"//nl//"1.8 500 4.4 4.0"//nl// &
+                             "2.6 800 4.6 8.0"//nl//"3.3 200 3.5 20.0"//nl//"4.4 80 3.7 20.0"//nl// &
+                             "5.2 60 2.8 70.0"//nl//"6.1 20 2.8 70.0"//nl//"6.5 1.8 2.4 100.0"//nl// &
+                             "7.4 1.0 1.5 500.0"//nl//"EOD"//nl//"f(x) = a1 + a2*x; a1 = 5; a2 = -0.5"//nl// &
+                             "set fit covariancevariables start_lambda 0.01"//nl// &
+                             "fit f(x) $P using 1:3:(sqrt(1./$2)):(sqrt(1./$4)) xyerrors via a1, a2", iostat, iomsg)
+   test_passed(264) = test_passed(264) .and. iostat == 0_I4P
+   call interpreter%symbols%value_of('a1', v(1), found)
+   call interpreter%symbols%value_of('a2', v(2), found)
+   test_passed(264) = test_passed(264) .and. abs(v(1) - 5.39608232951652_R8P) < 1.0e-9_R8P .and. &
+                      abs(v(2) + 0.463454807950324_R8P) < 1.0e-9_R8P
+   call interpreter%symbols%value_of('FIT_COV_a1_a2', v(1), found)
+   test_passed(264) = test_passed(264) .and. found .and. abs(v(1) + 0.0246207560840814_R8P) < 1.0e-9_R8P
+   call interpreter%run_text("set fit nocovariancevariables; fit f(x) $P using 1:3:(sqrt(1./$4)) yerr via a1, a2", &
+                             iostat, iomsg)
+   test_passed(264) = test_passed(264) .and. iostat == 0_I4P
+   call interpreter%run_text("l(x) = y0 + m*x"//nl//"msg = GPFUN_l", iostat, iomsg)
+   test_passed(264) = test_passed(264) .and. iostat == 0_I4P
+   call interpreter%symbols%string_of('msg', text, found)
+   test_passed(264) = test_passed(264) .and. found .and. text == 'l(x) = y0 + m*x'
 endblock
 
 if (all(test_passed)) then

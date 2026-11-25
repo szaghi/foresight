@@ -295,6 +295,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_plot_for" svg :width="560" :height="320" caption="one line per column" />
   <Plot name="cb_stats" svg :width="560" :height="320" caption="statistics of a run" />
   <Plot name="cb_fit" svg :width="560" :height="320" caption="a fitted model" />
+  <Plot name="cb_fit_xyerrors" svg :width="560" :height="360" caption="a fit with errors in x and y" />
   <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
   <Plot name="cb_unique" svg :width="760" :height="320" caption="block averages and running totals (smooth)" />
   <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />

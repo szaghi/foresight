@@ -3198,12 +3198,13 @@ contains
    k = 0_I4P
    endfunction function_index
 
-   recursive function evaluate(self, row, point, cells, heads, place) result(v)
+   recursive function evaluate(self, row, point, cells, heads, place, real_part) result(v)
    !< Value on a data row: `row` holds its cells (NaN if missing), `point` is its point number (column 0).
    !<
    !< `cells` are the texts of the row cells (`strcol`), `heads` those of the first row of its dataset (`columnhead`),
    !< `place` its block within the dataset and its dataset (the pseudo-columns -1 and -2), all from 0; without them
-   !< those functions and pseudo-columns are undefined.
+   !< those functions and pseudo-columns are undefined. A complex value is undefined, or its real part with `real_part`
+   !< (gnuplot's fit).
    !<
    !< NaN if undefined. Every floating point operation is checked beforehand, so no IEEE exception is raised.
    class(expression_object), intent(in)           :: self     !< Expression.
@@ -3212,6 +3213,7 @@ contains
    type(name_object),        intent(in), optional :: cells(:) !< Row cell texts.
    type(name_object),        intent(in), optional :: heads(:) !< Header cell texts of the row's dataset.
    integer(I4P),             intent(in), optional :: place(2) !< Block within the dataset and dataset, from 0.
+   logical,                  intent(in), optional :: real_part !< A complex value's real part, not undefined.
    real(R8P)                                      :: v        !< Value.
    type(value_object)                             :: top      !< Typed value.
    logical                                        :: defined  !< Defined.
@@ -3230,8 +3232,8 @@ contains
    call run(self, row, point, top, defined, cells=cells, heads=heads, place=place)
    if (defined .and. top%is_string) call numeric(top, defined, err)
    if (defined) then
-      ! a complex value: undefined beyond gnuplot's `set zero`
-      if (abs(top%im) > ZERO_IMAG) then
+      ! a complex value: undefined beyond gnuplot's `set zero`, unless its real part is asked
+      if (abs(top%im) > ZERO_IMAG .and. .not. present_true(real_part)) then
          defined = .false.
       else
          v = real_of(top)
@@ -3879,14 +3881,25 @@ contains
    self%code(1) = instruction
    endsubroutine single_instruction
 
-   recursive function value_at(self, x) result(v)
-   !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined.
-   class(expression_object), intent(in) :: self !< Expression.
-   real(R8P),                intent(in) :: x    !< Variable value.
-   real(R8P)                            :: v    !< Value.
+   recursive function value_at(self, x, real_part) result(v)
+   !< Value of an expression compiled with a dummy variable at the variable value `x`; NaN if undefined (a complex
+   !< value too, unless `real_part`: its real part).
+   class(expression_object), intent(in)           :: self      !< Expression.
+   real(R8P),                intent(in)           :: x         !< Variable value.
+   logical,                  intent(in), optional :: real_part !< A complex value's real part.
+   real(R8P)                                      :: v         !< Value.
 
-   v = self%evaluate([x], 0_I4P)
+   v = self%evaluate([x], 0_I4P, real_part=present_true(real_part))
    endfunction value_at
+
+   pure function present_true(flag) result(yes)
+   !< Whether the optional `flag` is present and true.
+   logical, intent(in), optional :: flag !< Flag.
+   logical                       :: yes  !< Present and true.
+
+   yes = .false.
+   if (present(flag)) yes = flag
+   endfunction present_true
 
    ! private procedures
    pure subroutine check_name(name, iostat, iomsg)

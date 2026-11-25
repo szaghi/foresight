@@ -373,7 +373,8 @@ inside a function body (there `x` is the user variable `x`). Names are case sens
 assigned, the builtin functions may not be redefined. Errors as gnuplot: `undefined variable: c`, `function f requires
 1 variable`; a variable in an operand run only if a condition holds (`exists("Q") && Q == 27`, the right one of
 `&&`, `||`, the branches of `?:`) is read when run, an error only if reached, as gnuplot's. Variables also hold [strings](#strings); `undefine NAME` forgets one (see
-[Datablocks and scripts](#datablocks-and-scripts)).
+[Datablocks and scripts](#datablocks-and-scripts)). Each function definition is kept as written in the string
+variable `GPFUN_`*name*, as gnuplot's (`print GPFUN_f` prints `f(x) = a*x`).
 
 Functions may recurse, directly or through others, as in gnuplot 6.0:
 
@@ -992,11 +993,20 @@ rule), so the parameters, their errors and the iterations agree with gnuplot's t
 - The model is any expression of `x`, user functions included; the parameters after `via` are user variables: an
   undefined one starts at 1. After the fit they hold the fitted values.
 - Modifiers: `using X:Y` (the default `1:2`) or `X:Y:YERROR` (`yerrors` optional), the weights `1/YERROR**2`;
-  `unitweights` with two columns; `yerror`, `zerror`, `zerrors` as `yerrors`; `index`, `every`; a range `[min:max]`
-  before the function keeps the points with x inside.
+  `unitweights` with two columns; `yerr`, `yerror`, `zerror`, `zerrors` as `yerrors`; `index`, `every`; a range
+  `[min:max]` before the function keeps the points with x inside. `xyerrors` reads `X:Y:XERROR:YERROR` and weighs each
+  point by its effective error sqrt(YERROR² + (f'(X) XERROR)²), the slope f' of the model at the parameters being
+  tried (Orear's effective variance, as gnuplot's).
+- Without an error keyword, gnuplot's rule: of three columns or more the last is the errors unless the function uses
+  the variable that column would be; `fit h(x,y) 'grid.dat' using 1:2:3` fits a function of x and y with unit
+  weights.
+- A complex model value (`sqrt` of a negative number) counts by its real part, as gnuplot's.
+- `via 'file'` reads the parameters from a file of `name = value` lines (`#` comments), each fitted unless its line
+  is marked `# FIXED`, as gnuplot's parameter files.
 - Several independent variables, as gnuplot 6.0: `using X:Y:Z:S` fits a function of `x` and `y` to Z with the errors S
   (`fit f(x,y) 'grid.dat' using 1:2:3:(1) via a, b, c`), up to 12 variables with as many columns before the last two;
-  the names are `x`, `y`, then those of `set dummy` (`set dummy x, y, w`), one range per variable before the function
+  the names are those of `set dummy` (`set dummy x, y, w`), then gnuplot's order `x`, `y`, `t`, `u`, `v`, one range per
+  variable before the function
   (`fit [0:1][*:*] ...`). Array elements are parameters too: `via A[1], A[2]`.
 - Set after a fit: *name*`_err`, the asymptotic standard errors (scaled by sqrt(WSSR/ndf), gnuplot's `errorscaling`),
   `FIT_NDF`, `FIT_WSSR`, `FIT_STDFIT`, `FIT_P`, `FIT_NITER`, `FIT_CONVERGED`. `FIT_LIMIT` and `FIT_MAXITER`, when
@@ -1012,10 +1022,11 @@ rule), so the parameters, their errors and the iterations agree with gnuplot's t
 | `logfile "file"` \| `nologfile` (default; `log`, `nolog` abbreviate them) | append the full report to a file; no log file |
 | `limit E` \| `limit_abs E` | stop when chi-square changes by less than E times itself (1e-5) plus `limit_abs` (0) |
 | `maxiter N` \| `maxiter default` | at most N iterations; no limit |
-| `start-lambda L` \| `lambda-factor F` | the first lambda (gnuplot's estimate by default); its factor (10) |
+| `start_lambda L` \| `lambda_factor F` | the first lambda (gnuplot's estimate by default); its factor (10) |
 | [`no`]`prescale` \| [`no`]`errorscaling` \| [`no`]`errorvariables` | parameters scaled by their initial values; errors scaled by the reduced chi-square; *name*`_err` set (all on) |
+| [`no`]`covariancevariables` | `FIT_COV_`*a*`_`*b* set, the covariance of each pair of parameters (off) |
 
-Not supported: `via 'file'`, more than one independent variable, `set fit verbose`, `set fit covariancevariables`.
+Not supported: `set fit verbose`.
 The [cookbook](/manual/cookbook#fitting-a-model) fits an order of accuracy; Fortran programs call `fit` directly
 ([library](library.md#fitting-a-model)).
 
