@@ -115,7 +115,8 @@ module foresight_script
 !< `source:line:`), not stopped on, so a watch loop can survive a bad cycle.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : error_unit, input_unit, output_unit
-use foresight_axes, only : axes_names, axes_object, MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
+use foresight_axes, only : axes_names, axes_object, contour_label, surface_contours, &
+                           MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
                            spider_words, POLAR_STYLES, colormap_object
 use foresight_datafile, only : datafile_object
 use foresight_expression, only : block_hook, element_fetch_hook, element_hook, fetch_hook, store_hook, expression_object, &
@@ -129,6 +130,8 @@ use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
 use foresight_series, only : series_object
 use foresight_view3d, only : view3d_object
+use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
+                              LEVELS_INCREMENTAL
 use foresight_pm3d, only : pm3d_object, CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, &
                             CORNERS_MEDIAN, CORNERS_MIN, CORNERS_RMS
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
@@ -3184,6 +3187,8 @@ contains
                                                              !< data options after it (index, every, using, matrix).
    logical                                      :: other_seen !< An option other than the data ones met.
    character(len=:), allocatable                :: option_word !< The current option as written.
+   logical                                      :: item_nocontours !< `nocontours`: no contour lines of the item.
+   logical                                      :: item_nosurface  !< `nosurface`: the item's surface not drawn.
    type(datafile_object)                        :: data      !< Current data file.
    type(expression_object)                      :: func      !< Current function.
    type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
@@ -3818,6 +3823,8 @@ contains
       line = line_style_object()
       title_to = i
       other_seen = .false.
+      item_nocontours = .false.
+      item_nosurface = .false.
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
          if (tokens(i)%kind == TOKEN_COMMA) exit
@@ -4438,6 +4445,12 @@ contains
             elseif (word == 'as' .or. keyword(word, 'arrowstyle', 6_I4P)) then
                if (.not. item_arrow_style()) return
             endif
+         elseif (splot_mode .and. (keyword(word, 'nocontours', 6_I4P) .or. word == 'nocontour')) then
+            ! splot's: no contour lines of the item
+            item_nocontours = .true.
+         elseif (splot_mode .and. keyword(word, 'nosurface', 6_I4P)) then
+            ! splot's: the item's contours only, its surface not drawn
+            item_nosurface = .true.
          else
             call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -5765,20 +5778,21 @@ contains
 
       call surface_range(1_I4P, lo(1), hi(1))
       call surface_range(2_I4P, lo(2), hi(2))
+      ! gnuplot's samples, min + i step with the step computed first, written to the last bit
       used = 0_I4P
       do j = 0_I4P, self%isosamples - 1_I4P
-         v = lo(2) + real(j, R8P) * (hi(2) - lo(2)) / real(self%isosamples - 1_I4P, R8P)
+         v = lo(2) + real(j, R8P) * ((hi(2) - lo(2)) / real(self%isosamples - 1_I4P, R8P))
          do k = 0_I4P, self%samples - 1_I4P
-            u = lo(1) + real(k, R8P) * (hi(1) - lo(1)) / real(self%samples - 1_I4P, R8P)
-            call append_text(buffer, used, gnuplot_real(u)//' '//gnuplot_real(v)//new_line('a'))
+            u = lo(1) + real(k, R8P) * ((hi(1) - lo(1)) / real(self%samples - 1_I4P, R8P))
+            call append_text(buffer, used, exact_real(u)//' '//exact_real(v)//new_line('a'))
          enddo
          call append_text(buffer, used, new_line('a'))
       enddo
       do j = 0_I4P, self%isosamples1 - 1_I4P
-         u = lo(1) + real(j, R8P) * (hi(1) - lo(1)) / real(self%isosamples1 - 1_I4P, R8P)
+         u = lo(1) + real(j, R8P) * ((hi(1) - lo(1)) / real(self%isosamples1 - 1_I4P, R8P))
          do k = 0_I4P, self%samples2 - 1_I4P
-            v = lo(2) + real(k, R8P) * (hi(2) - lo(2)) / real(self%samples2 - 1_I4P, R8P)
-            call append_text(buffer, used, gnuplot_real(u)//' '//gnuplot_real(v)//new_line('a'))
+            v = lo(2) + real(k, R8P) * ((hi(2) - lo(2)) / real(self%samples2 - 1_I4P, R8P))
+            call append_text(buffer, used, exact_real(u)//' '//exact_real(v)//new_line('a'))
          enddo
          call append_text(buffer, used, new_line('a'))
       enddo
@@ -5888,6 +5902,8 @@ contains
          if (size(panel%series(last)%x) /= size(heights)) return
          call set_heights(panel%series(last), heights, bounds(:, 1:n), sets(1:n), &
                           merge(grid_rows, n, grid_rows > 0_I4P .and. grid_rows <= n), pseudo /= 3_I4P)
+         panel%series(last)%no_contours = item_nocontours
+         panel%series(last)%no_surface = item_nosurface
       endassociate
       endsubroutine attach_z
 
@@ -8286,32 +8302,65 @@ contains
                if (.not. allocated(series%scans)) cycle
                if (series%grid_scans == 0_I4P) cycle
                do d = minval(series%scan_sets(1:series%grid_scans)), maxval(series%scan_sets(1:series%grid_scans))
+                  ! gnuplot's print_3dtable: a blank line before each block
                   text = text//new_line('a')//'# Surface '//int_str(int(isurf, I8P))//' of '// &
-                         int_str(int(nsurf, I8P))//' surfaces'//new_line('a')//new_line('a')
+                         int_str(int(nsurf, I8P))//' surfaces'//new_line('a')
                   if (d == minval(series%scan_sets(1:series%grid_scans)) .and. len(series%title) > 0) &
-                     text = text//'# Curve title: "'//series%title//'"'//new_line('a')//new_line('a')
-                  curve = 0_I4P
-                  do j = 1_I4P, series%grid_scans
-                     q = merge(series%grid_scans + 1_I4P - j, j, series%data_scans)
-                     if (series%scan_sets(q) /= d) cycle
-                     text = text//'# IsoCurve '//int_str(int(curve, I8P))//', '// &
-                            int_str(int(series%scans(2, q) - series%scans(1, q) + 1_I4P, I8P))//' points'// &
-                            new_line('a')//'# x y z type'//new_line('a')
-                     do p = series%scans(1, q), series%scans(2, q)
-                        flag = 'i'
-                        if (.not. (ieee_is_finite(series%x(p)) .and. ieee_is_finite(series%y(p)) .and. &
-                                   ieee_is_finite(series%z(p)))) then
-                           flag = 'u'
-                        elseif (outside(series%x(p), panel%xaxis) .or. outside(series%y(p), panel%yaxis) .or. &
-                                outside(series%z(p), panel%zaxis)) then
-                           flag = 'o'
-                        endif
-                        text = text//number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)//' '// &
-                               number(series%z(p), zfmt)//' '//flag//new_line('a')
+                     text = text//new_line('a')//'# Curve title: "'//series%title//'"'//new_line('a')
+                  if (panel%view3d%surface .and. .not. series%no_surface) then
+                     curve = 0_I4P
+                     do j = 1_I4P, series%grid_scans
+                        q = merge(series%grid_scans + 1_I4P - j, j, series%data_scans)
+                        if (series%scan_sets(q) /= d) cycle
+                        text = text//new_line('a')//'# IsoCurve '//int_str(int(curve, I8P))//', '// &
+                               int_str(int(series%scans(2, q) - series%scans(1, q) + 1_I4P, I8P))//' points'// &
+                               new_line('a')//'# x y z type'//new_line('a')
+                        do p = series%scans(1, q), series%scans(2, q)
+                           flag = 'i'
+                           if (.not. (ieee_is_finite(series%x(p)) .and. ieee_is_finite(series%y(p)) .and. &
+                                      ieee_is_finite(series%z(p)))) then
+                              flag = 'u'
+                           elseif (outside(series%x(p), panel%xaxis) .or. outside(series%y(p), panel%yaxis) .or. &
+                                   outside(series%z(p), panel%zaxis)) then
+                              flag = 'o'
+                           endif
+                           text = text//number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)//' '// &
+                                  number(series%z(p), zfmt)//' '//flag//new_line('a')
+                        enddo
+                        curve = curve + 1_I4P
                      enddo
                      text = text//new_line('a')
-                     curve = curve + 1_I4P
-                  enddo
+                  endif
+                  ! the contour lines (set contour): a header per level, a blank line after each chunk
+                  if (panel%contour%on .and. .not. series%no_contours) then
+                     block
+                        real(R8P), allocatable :: cx(:), cy(:), cz(:) !< Lines, NaN separated.
+                        real(R8P), allocatable :: level(:)            !< Level of each chunk.
+                        logical,   allocatable :: first(:)            !< First chunk of its level.
+                        integer(I4P)           :: c                   !< Chunk counter.
+                        integer(I4P)           :: r                   !< Row.
+                        integer(I4P)           :: number_level        !< Level number.
+
+                        call surface_contours(panel, series, d, cx, cy, cz, level, first)
+                        r = 0_I4P
+                        number_level = 0_I4P
+                        do c = 1_I4P, size(level, kind=I4P)
+                           if (first(c)) then
+                              text = text//new_line('a')//'# Contour '//int_str(int(number_level, I8P))// &
+                                     ', label: '//contour_label(panel%contour%format, level(c))//new_line('a')
+                              number_level = number_level + 1_I4P
+                           endif
+                           do
+                              r = r + 1_I4P
+                              if (r > size(cx, kind=I4P)) exit
+                              if (.not. ieee_is_finite(cx(r))) exit
+                              text = text//number(cx(r), xfmt)//' '//number(cy(r), yfmt)//' '// &
+                                     number(cz(r), zfmt)//' '//new_line('a')
+                           enddo
+                           text = text//new_line('a')
+                        enddo
+                     endblock
+                  endif
                   isurf = isurf + 1_I4P
                enddo
             endassociate
@@ -10346,6 +10395,29 @@ contains
       call samples_option(.false.)
    elseif (keyword(option, 'pm3d', 2_I4P)) then
       call pm3d_option(tokens)
+   elseif (keyword(option, 'contour', 3_I4P)) then
+      ! `set contour [base|surface|both]`
+      associate(cnt => self%figure%panels(self%figure%current)%contour)
+         cnt%place = 'base'
+         if (size(tokens) > 1) then
+            if (keyword(tokens(2)%text, 'base', 2_I4P)) then
+               cnt%place = 'base'
+            elseif (keyword(tokens(2)%text, 'surface', 1_I4P)) then
+               cnt%place = 'surface'
+            elseif (keyword(tokens(2)%text, 'both', 2_I4P)) then
+               cnt%place = 'both'
+            else
+               call fail('set contour: base, surface or both expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+               return
+            endif
+            if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+         endif
+         cnt%on = .true.
+      endassociate
+   elseif (keyword(option, 'cntrparam', 5_I4P)) then
+      call cntrparam_option(tokens)
+   elseif (keyword(option, 'cntrlabel', 5_I4P)) then
+      call cntrlabel_option(tokens)
    elseif (option == 'view') then
       call view_option(tokens)
    elseif (keyword(option, 'xyplane', 3_I4P) .or. keyword(option, 'ticslevel', 5_I4P)) then
@@ -11313,6 +11385,154 @@ contains
       self%figure%panels(self%figure%current)%label_font(axis) = font
       ok = .true.
       endfunction axis_label
+
+      subroutine cntrparam_option(toks)
+      !< gnuplot `set cntrparam [linear|cubicspline|bspline] [points N] [order N] [levels [auto [N]|N|discrete z1,
+      !< z2, ...|incremental start, step[, end]]] [firstlinetype N] [sorted|unsorted]`; alone, the defaults.
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      integer(I4P)                   :: k       !< Token counter.
+      integer(I4P)                   :: n       !< An integer read.
+      real(R8P)                      :: v       !< A number read.
+      real(R8P), allocatable         :: list(:) !< Levels read.
+      logical                        :: discrete !< Discrete levels, else incremental.
+
+      associate(cnt => self%figure%panels(self%figure%current)%contour)
+         if (size(toks) < 2) then
+            cnt%npoints = 5_I4P
+            cnt%kind = CONTOUR_LINEAR
+            cnt%order = 4_I4P
+            cnt%levels = 5_I4P
+            cnt%levels_kind = LEVELS_AUTO
+            cnt%firstlinetype = 0_I4P
+            return
+         endif
+         k = 2_I4P
+         do while (k <= size(toks, kind=I4P))
+            if (keyword(toks(k)%text, 'points', 1_I4P)) then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               cnt%npoints = max(1_I4P, n)
+            elseif (keyword(toks(k)%text, 'firstlinetype', 5_I4P)) then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               cnt%firstlinetype = n
+            elseif (keyword(toks(k)%text, 'sorted', 4_I4P)) then
+               cnt%sorted = .true.
+            elseif (keyword(toks(k)%text, 'unsorted', 6_I4P)) then
+               cnt%sorted = .false.
+            elseif (keyword(toks(k)%text, 'linear', 2_I4P)) then
+               cnt%kind = CONTOUR_LINEAR
+            elseif (keyword(toks(k)%text, 'cubicspline', 1_I4P)) then
+               cnt%kind = CONTOUR_CUBIC
+            elseif (keyword(toks(k)%text, 'bspline', 1_I4P)) then
+               cnt%kind = CONTOUR_BSPLINE
+            elseif (keyword(toks(k)%text, 'order', 1_I4P)) then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               if (n < 2_I4P .or. n > 10_I4P) then
+                  call fail('set cntrparam: bspline order must be in [2..10] range', iostat, iomsg)
+                  return
+               endif
+               cnt%order = n
+            elseif (keyword(toks(k)%text, 'levels', 2_I4P)) then
+               if (k == size(toks, kind=I4P)) then
+                  call fail('set cntrparam: levels needs auto [N], N, discrete or incremental', iostat, iomsg)
+                  return
+               endif
+               k = k + 1_I4P
+               if (keyword(toks(k)%text, 'discrete', 2_I4P) .or. keyword(toks(k)%text, 'incremental', 2_I4P)) then
+                  discrete = keyword(toks(k)%text, 'discrete', 2_I4P)
+                  ! the numbers comma separated to the end
+                  allocate(list(0))
+                  do
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) then
+                        iomsg = 'set cntrparam: '//iomsg
+                        return
+                     endif
+                     list = [list, v]
+                     if (k >= size(toks, kind=I4P)) exit
+                     if (toks(k + 1_I4P)%kind /= TOKEN_COMMA) exit
+                     k = k + 1_I4P
+                  enddo
+                  if (discrete) then
+                     cnt%levels_kind = LEVELS_DISCRETE
+                     cnt%list = list
+                     cnt%levels = size(list, kind=I4P)
+                  else
+                     if (size(list) < 2) then
+                        call fail('set cntrparam: incremental needs start, step[, end]', iostat, iomsg)
+                        return
+                     endif
+                     if (list(2) == 0.0_R8P) then
+                        call fail('set cntrparam: increment cannot be 0', iostat, iomsg)
+                        return
+                     endif
+                     cnt%levels_kind = LEVELS_INCREMENTAL
+                     cnt%list = list(1:2)
+                     ! gnuplot's count, truncated: 10,10,50 is 5 levels, 10,10,49 four
+                     if (size(list) >= 3) cnt%levels = int((list(3) - list(1)) / list(2) + 1.0_R8P, I4P)
+                  endif
+                  deallocate(list)
+               elseif (keyword(toks(k)%text, 'auto', 2_I4P)) then
+                  cnt%levels_kind = LEVELS_AUTO
+                  if (k < size(toks, kind=I4P)) then
+                     if (toks(k + 1_I4P)%kind == TOKEN_WORD .and. .not. is_cntrparam_word(toks(k + 1_I4P)%text)) then
+                        if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+                        cnt%levels = n
+                     endif
+                  endif
+               else
+                  k = k - 1_I4P
+                  if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+                  if (cnt%levels_kind /= LEVELS_DISCRETE) cnt%levels = n
+               endif
+            else
+               call fail("set cntrparam: expecting 'linear', 'cubicspline', 'bspline', 'points', 'levels' or "// &
+                         "'order', found """//toks(k)%text//'"', iostat, iomsg)
+               return
+            endif
+            k = k + 1_I4P
+         enddo
+      endassociate
+      endsubroutine cntrparam_option
+
+      subroutine cntrlabel_option(toks)
+      !< gnuplot `set cntrlabel [format "fmt"] [font "f"] [start N] [interval N] [onecolor]`; alone, the defaults.
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      integer(I4P)                   :: k       !< Token counter.
+      integer(I4P)                   :: n       !< An integer read.
+
+      associate(cnt => self%figure%panels(self%figure%current)%contour)
+         if (size(toks) < 2) then
+            cnt%format = '%8.3g'
+            cnt%onecolor = .false.
+            return
+         endif
+         k = 2_I4P
+         do while (k <= size(toks, kind=I4P))
+            if (keyword(toks(k)%text, 'format', 4_I4P)) then
+               k = k + 1_I4P
+               if (k > size(toks, kind=I4P)) then
+                  call fail('set cntrlabel: format needs a string', iostat, iomsg)
+                  return
+               endif
+               cnt%format = toks(k)%text
+            elseif (toks(k)%text == 'font') then
+               k = k + 1_I4P
+            elseif (keyword(toks(k)%text, 'onecolor', 3_I4P)) then
+               cnt%onecolor = .true.
+            elseif (toks(k)%text == 'start') then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               cnt%label_start = n
+            elseif (keyword(toks(k)%text, 'interval', 3_I4P)) then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               cnt%label_interval = n
+            else
+               call fail('set cntrlabel: unexpected "'//toks(k)%text//'" (format, font, start, interval, onecolor)', &
+                         iostat, iomsg)
+               return
+            endif
+            k = k + 1_I4P
+         enddo
+      endassociate
+      endsubroutine cntrlabel_option
 
       subroutine pm3d_option(toks)
       !< gnuplot `set pm3d [at b|s|t...] [interpolate N,M] [corners2color mean|geomean|harmean|rms|median|min|max|c1..c4]
@@ -15129,6 +15349,8 @@ contains
             endif
          endassociate
       endblock
+   elseif (keyword(option, 'contour', 3_I4P)) then
+      self%figure%panels(self%figure%current)%contour%on = .false.
    elseif (keyword(option, 'pm3d', 2_I4P)) then
       ! the surfaces no more drawn with pm3d (gnuplot: explicit), the pm3d data and function styles back to the defaults
       ! (lines, foresight's data style)
@@ -15237,6 +15459,17 @@ contains
    endsubroutine unset_command
 
    ! helpers
+   pure function is_cntrparam_word(word) result(yes)
+   !< Whether `word` is an option of `set cntrparam`.
+   character(len=*), intent(in) :: word !< Word.
+   logical                      :: yes  !< An option.
+
+   yes = keyword(word, 'points', 1_I4P) .or. keyword(word, 'firstlinetype', 5_I4P) .or. keyword(word, 'sorted', 4_I4P) &
+         .or. keyword(word, 'unsorted', 6_I4P) .or. keyword(word, 'linear', 2_I4P) .or. &
+         keyword(word, 'cubicspline', 1_I4P) .or. keyword(word, 'bspline', 1_I4P) .or. keyword(word, 'order', 1_I4P) &
+         .or. keyword(word, 'levels', 2_I4P)
+   endfunction is_cntrparam_word
+
    pure subroutine fix_range(axis)
    !< The range of `axis` fixed as it is (gnuplot `unset autoscale`): its set ends, else the effective ones.
    type(axis_object), intent(inout) :: axis !< Axis.
@@ -15274,6 +15507,16 @@ contains
       title = text(first:last)
    endif
    endsubroutine item_auto_title
+
+   pure function exact_real(v) result(text)
+   !< `v` written to its last bit (17 significant digits), read back the same.
+   real(R8P), intent(in)         :: v    !< Value.
+   character(len=:), allocatable :: text !< Text.
+   character(len=32)             :: buf  !< Buffer.
+
+   write(buf, '(ES25.17E3)') v
+   text = trim(adjustl(buf))
+   endfunction exact_real
 
    pure subroutine set_heights(series, z, scans, sets, grid, read)
    !< Give `series` its heights `z` and its `scans` (first and last point of each) in their datasets `sets`, the first
@@ -16902,7 +17145,7 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
-        word == 'fill' .or. &
+        word == 'fill' .or. word == 'nocontours' .or. word == 'nosurface' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
         word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &

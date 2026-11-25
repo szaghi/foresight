@@ -56,12 +56,13 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_object
 use foresight_pm3d, only : pm3d_object, pm3d_polygons
+use foresight_contour, only : contour_lines, contour_object
 use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
 use foresight_enhanced, only : has_markup, markup_literal
 use foresight_expression, only : expression_object
-use foresight_format, only : int_str, real_str
+use foresight_format, only : decimal_of, format_value, int_str, real_str
 use foresight_backend, only : axes_view, backend_object
 use foresight_palette, only : hex_color, palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
@@ -83,6 +84,8 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: axes_object
+public :: surface_contours
+public :: contour_label
 public :: MAX_LINETYPES
 public :: colorbox_object
 public :: colormap_object
@@ -323,6 +326,8 @@ type :: axes_object
    type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
    type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
    type(pm3d_object)                :: pm3d              !< pm3d settings of a 3D panel: `set pm3d`.
+   type(contour_object)             :: contour           !< Contour settings of a 3D panel: `set contour`, `set
+                                                         !< cntrparam`.
    type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
    logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
    type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.
@@ -1377,6 +1382,7 @@ contains
    logical                              :: separate  !< Front objects in a layer of their own, over the overlays.
    type(map_geometry)                   :: geo       !< Geometry of a map view.
    logical                              :: map       !< A map view (gnuplot `splot` with `set view map`).
+   real(R8P)                            :: spacing   !< The key spacing, a map view's restored after.
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
@@ -1440,6 +1446,15 @@ contains
          return
       endif
    endif
+   ! a map view's series as drawn (pm3d quadrangles, contour levels), before the key counts its entries: restored after
+   map = self%three_d .and. self%view3d%map
+   if (map) then
+      raw = self%series
+      call self%map_surfaces
+      ! gnuplot's 3D key rows are a character height apart (1.5 font sizes, not 1.25): restored after
+      spacing = self%key_spacing
+      self%key_spacing = spacing * 1.5_R8P / LINE_HEIGHT
+   endif
    ! an outside key takes its side of the panel box; above the plot it goes below the title, as gnuplot
    box = [x0, y0, width, height]
    above = 0.0_R8P
@@ -1459,11 +1474,7 @@ contains
       endselect
    endif
    if (self%polar) raw = self%series
-   map = self%three_d .and. self%view3d%map
    if (map) then
-      ! the pm3d surfaces as colored quadrangles, the surfaces drawn or not (`set surface`): restored after the drawing
-      raw = self%series
-      call self%map_surfaces
       ! gnuplot's map view: the area its 3D layout, independent of the tick labels (the ranges only, for `ratio -1`)
       area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, y0 + 2.0_R8P * font_size, &
               y0 + height - 4.0_R8P * font_size]
@@ -1657,7 +1668,7 @@ contains
             real(R8P) :: dy !< Shift down [px].
 
             dx = 2.0_R8P * geo%vtic + 6.0_R8P * geo%hchar - 52.0_R8P / 12.0_R8P * font_size
-            dy = geo%vtic + 0.5_R8P * geo%vchar + geo%shift - 17.7_R8P / 12.0_R8P * font_size
+            dy = geo%vtic + 0.5_R8P * geo%vchar + geo%shift - 19.2_R8P / 12.0_R8P * font_size
             call self%draw_key(backend, [area(1) + dx, area(2) - dx, area(3) + dy, area(4) - dy], &
                                [x0, y0, x0 + width, y0 + height], element_px(backend, self%key_font, font_size), &
                                grid, key)
@@ -1679,6 +1690,7 @@ contains
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
    if (self%polar .or. map) call move_alloc(raw, self%series)
+   if (map) self%key_spacing = spacing
    contains
       subroutine annotate(layer, data_space)
       !< The annotations of `layer`: the objects in data space (`data_space`), or the page ones with the labels and
@@ -2311,24 +2323,195 @@ contains
    class(axes_object), intent(inout) :: self    !< Panel.
    type(series_object), allocatable  :: drawn(:) !< Series as drawn.
    type(series_object)               :: quads   !< Quadrangles of a surface.
+   type(series_object)               :: blank   !< A series of default components (never assigned).
    integer(I4P)                      :: s       !< Series counter.
    logical                           :: pm3d    !< A `with pm3d` item.
 
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
       pm3d = self%series(s)%style%with == WITH_PM3D
+      ! a `with pm3d` item is a surface (`unset surface` hides it, as gnuplot); the implicit pm3d of any surface is not
       if (allocated(self%series(s)%scans)) then
-         if (pm3d .or. (self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
+         if ((pm3d .and. self%view3d%surface .and. .not. self%series(s)%no_surface) .or. &
+             (.not. pm3d .and. self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
             call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, quads)
             call push(drawn, quads)
          endif
       endif
-      if (pm3d) cycle
-      if (allocated(self%series(s)%z) .and. .not. self%view3d%surface) cycle
-      call push(drawn, self%series(s))
+      if (.not. pm3d .and. .not. (allocated(self%series(s)%z) .and. .not. self%view3d%surface) .and. &
+          .not. self%series(s)%no_surface) then
+         call push(drawn, self%series(s))
+      elseif (allocated(self%series(s)%title) .and. .not. (pm3d .and. self%view3d%surface .and. &
+                                                           .not. self%series(s)%no_surface)) then
+         ! a surface not drawn keeps its key entry, a text alone (gnuplot's)
+         if (len(self%series(s)%title) > 0) then
+            ! not series_object(): nvfortran 26.9's front end crashes on it (bug 30)
+            quads = blank
+            quads%title = self%series(s)%title
+            quads%title_plain = self%series(s)%title_plain
+            quads%key_blank = .true.
+            quads%x = [real(R8P) :: ]
+            quads%y = [real(R8P) :: ]
+            quads%style = self%series(s)%style
+            call push(drawn, quads)
+         endif
+      endif
+      ! the contour lines of the surface (`set contour`), a series per level after it
+      if (self%contour%on .and. allocated(self%series(s)%scans) .and. .not. self%series(s)%no_contours) then
+         if (self%series(s)%grid_scans > 1_I4P) call contour_series(self, s, drawn)
+      endif
    enddo
    call move_alloc(drawn, self%series)
    endsubroutine map_surfaces
+
+   subroutine contour_series(self, s, drawn)
+   !< The contour lines of the surface `s` as lines, gnuplot's: a series per level in linetypes after the surface's (or
+   !< from `firstlinetype`), its width times the surface's, titled by the level's label (`set cntrlabel format`), the
+   !< levels in gnuplot's order; `onecolor`: one series in the surface's color, no key entry.
+   class(axes_object),               intent(in)    :: self     !< Panel.
+   integer(I4P),                     intent(in)    :: s        !< Surface series.
+   type(series_object), allocatable, intent(inout) :: drawn(:) !< Series as drawn.
+   type(series_object)                             :: lines    !< A level.
+   real(R8P), allocatable                          :: cx(:), cy(:), cz(:) !< Lines, NaN separated.
+   real(R8P), allocatable                          :: level(:) !< Level of each chunk.
+   logical,   allocatable                          :: first(:) !< First chunk of its level.
+   integer(I4P)                                    :: c        !< Chunk counter.
+   integer(I4P)                                    :: r        !< Row of the lines.
+   integer(I4P)                                    :: r0       !< First row of the level.
+   integer(I4P)                                    :: ic       !< Level counter.
+   integer(I4P)                                    :: lt       !< Linetype of the level.
+
+   integer(I4P)                                    :: d        !< Dataset.
+
+   do d = minval(self%series(s)%scan_sets(1:self%series(s)%grid_scans)), &
+          maxval(self%series(s)%scan_sets(1:self%series(s)%grid_scans))
+   call surface_contours(self, self%series(s), d, cx, cy, cz, level, first)
+   if (size(level) == 0) cycle
+   r = 0_I4P
+   r0 = 1_I4P
+   ic = 0_I4P
+   do c = 1_I4P, size(level, kind=I4P)
+      ! the rows of the chunk and its NaN row
+      do
+         r = r + 1_I4P
+         if (r >= size(cx, kind=I4P)) exit
+         if (.not. ieee_is_finite(cx(r))) exit
+      enddo
+      if (c < size(level, kind=I4P)) then
+         if (.not. first(c + 1_I4P) .or. self%contour%onecolor) cycle
+      endif
+      ! a level (or, onecolor, all of them) complete: its series
+      ic = ic + 1_I4P
+      lines%x = cx(r0:r)
+      lines%y = cy(r0:r)
+      lines%style = self%series(s)%style
+      lines%style%with = WITH_LINES
+      ! the contours of a pm3d item are not stroked, their key entries a text alone (gnuplot 6.0's svg)
+      lines%key_blank = self%series(s)%style%with == WITH_PM3D
+      if (lines%key_blank) then
+         lines%x = [real(R8P) :: ]
+         lines%y = [real(R8P) :: ]
+      endif
+      lines%x2 = self%series(s)%x2
+      lines%y2 = self%series(s)%y2
+      lt = 0_I4P
+      if (self%contour%onecolor) then
+         lines%title = ''
+      elseif (len(self%series(s)%title) == 0) then
+         ! an untitled surface (`notitle`): its levels have no key entries either (gnuplot's title_is_suppressed)
+         lt = s + self%color_shift + ic
+         if (self%contour%firstlinetype > 0_I4P) lt = self%contour%firstlinetype + ic - 1_I4P
+         lines%style%color = default_color(lt, self%linecolors)
+         lines%title = ''
+      else
+         lt = s + self%color_shift + ic
+         if (self%contour%firstlinetype > 0_I4P) lt = self%contour%firstlinetype + ic - 1_I4P
+         lines%style%color = default_color(lt, self%linecolors)
+         lines%title = contour_label(self%contour%format, level(c))
+         lines%title_plain = .true.
+      endif
+      call push(drawn, lines)
+      r0 = r + 1_I4P
+   enddo
+   enddo
+   endsubroutine contour_series
+
+   subroutine surface_contours(self, series, dataset, cx, cy, cz, level, first)
+   !< The contour lines of the surface of a 3D `series` from its `dataset` (foresight_contour): its grid scans in
+   !< gnuplot's order (the data's last first), as many points per row as its first, the points in the fixed x, y and z
+   !< ranges, the heights' extent over the defined ones.
+   class(axes_object),     intent(in)  :: self     !< Panel.
+   type(series_object),    intent(in)  :: series   !< Surface.
+   integer(I4P),           intent(in)  :: dataset  !< Its dataset.
+   real(R8P), allocatable, intent(out) :: cx(:), cy(:), cz(:) !< Lines, NaN separated.
+   real(R8P), allocatable, intent(out) :: level(:) !< Level of each chunk.
+   logical,   allocatable, intent(out) :: first(:) !< First chunk of its level.
+   real(R8P), allocatable              :: gx(:,:), gy(:,:), gz(:,:) !< Grid.
+   logical,   allocatable              :: gin(:,:), gdef(:,:) !< In range, defined.
+   integer(I4P), allocatable           :: rows(:)  !< Scans of the dataset, in gnuplot's order.
+   integer(I4P)                        :: nx, ny   !< Grid size.
+   integer(I4P)                        :: i, j, q, k !< Counters.
+
+   rows = pack([(merge(series%grid_scans + 1_I4P - j, j, series%data_scans), j = 1_I4P, series%grid_scans)], &
+               [(series%scan_sets(merge(series%grid_scans + 1_I4P - j, j, series%data_scans)) == dataset, &
+                 j = 1_I4P, series%grid_scans)])
+   ny = size(rows, kind=I4P)
+   allocate(cx(0), cy(0), cz(0), level(0), first(0))
+   if (ny < 2_I4P) return
+   deallocate(cx, cy, cz, level, first)
+   nx = series%scans(2, rows(1)) - series%scans(1, rows(1)) + 1_I4P
+   allocate(gx(nx, ny), gy(nx, ny), gz(nx, ny), gin(nx, ny), gdef(nx, ny))
+   gx = 0.0_R8P
+   gy = 0.0_R8P
+   gz = 0.0_R8P
+   gin = .false.
+   gdef = .false.
+   do j = 1_I4P, ny
+      q = rows(j)
+      do i = 1_I4P, nx
+         k = series%scans(1, q) + i - 1_I4P
+         if (k > series%scans(2, q)) cycle
+         gx(i, j) = series%x(k)
+         gy(i, j) = series%y(k)
+         gz(i, j) = series%z(k)
+         gdef(i, j) = ieee_is_finite(series%x(k)) .and. ieee_is_finite(series%y(k)) .and. ieee_is_finite(series%z(k))
+         gin(i, j) = gdef(i, j)
+         if (gin(i, j)) gin(i, j) = inside(self%xaxis, gx(i, j)) .and. inside(self%yaxis, gy(i, j)) .and. &
+                                    inside(self%zaxis, gz(i, j))
+      enddo
+   enddo
+   call contour_lines(gx, gy, gz, gin, gdef, self%contour, self%zaxis%log, cx, cy, cz, level, first)
+   contains
+      pure function inside(axis, v) result(yes)
+      !< Whether `v` lies within the fixed ends of `axis`.
+      type(axis_object), intent(in) :: axis !< Axis.
+      real(R8P),         intent(in) :: v    !< Value.
+      logical                       :: yes  !< Inside.
+
+      yes = .true.
+      if (axis%min_fixed .and. axis%max_fixed) then
+         yes = v >= min(axis%min_user, axis%max_user) .and. v <= max(axis%min_user, axis%max_user)
+      elseif (axis%min_fixed) then
+         yes = v >= axis%min_user
+      elseif (axis%max_fixed) then
+         yes = v <= axis%max_user
+      endif
+      endfunction inside
+   endsubroutine surface_contours
+
+   pure function contour_label(format, z) result(label)
+   !< A level's label in the `set cntrlabel` format (gnuplot's gprintf, "%8.3g" by default), its blanks kept.
+   character(len=*), intent(in)  :: format !< Format.
+   real(R8P),        intent(in)  :: z      !< Level.
+   character(len=:), allocatable :: label  !< Label.
+   character(len=:), allocatable :: sup    !< Exponent of %h formats.
+   integer(I8P)                  :: mantissa !< Decimal mantissa.
+   integer(I4P)                  :: e      !< Decimal exponent.
+
+   call decimal_of(z, mantissa, e)
+   call format_value(trim(format), mantissa, e, 10.0_R8P, label, sup)
+   if (len(sup) > 0) label = label//'^{'//sup//'}'
+   endfunction contour_label
 
    subroutine pm3d_series(series, settings, xaxis, yaxis, titled, quads)
    !< The pm3d quadrangles of a 3D `series` as a series of polygons (see map_surfaces); `titled` keeps its key entry

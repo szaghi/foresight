@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(118)                  !< Per-figure outcome.
+logical                     :: test_passed(121)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -147,7 +147,11 @@ test_passed(115) = check('map_pm3d.svg', figure_map_pm3d(1_I4P))
 test_passed(116) = check('map_pm3d.html', figure_map_pm3d(1_I4P))
 test_passed(117) = check('map_pm3d.txt', figure_map_pm3d(1_I4P))
 test_passed(118) = check('map_pm3d_interpolate.svg', figure_map_pm3d(4_I4P))
-write(output_unit, '(A,118L2)') 'foresight golden checks:', test_passed
+! contour lines in the map view, a level per linetype and key entry, over a pm3d surface
+test_passed(119) = check('map_contour.svg', figure_map_contour())
+test_passed(120) = check('map_contour.html', figure_map_contour())
+test_passed(121) = check('map_contour.txt', figure_map_contour())
+write(output_unit, '(A,121L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -897,6 +901,31 @@ contains
    call fig%set_title('pm3d')
    call fig%splot(x, y, z, with='pm3d', title='bump')
    endfunction figure_map_pm3d
+
+   function figure_map_contour() result(fig)
+   !< A map view of a surface with its contour lines (gnuplot `set contour`): automatic levels, a linetype and key
+   !< entry each, the surface drawn as its iso-lines.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=560_I4P, height=400_I4P)
+   x = [(-3.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 24)]
+   y = [(-2.0_R8P + 0.25_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = x(i) * exp(-(x(i)**2 + y(j)**2) / 2.0_R8P)
+      enddo
+   enddo
+   call fig%set_view(map=.true.)
+   call fig%set_contour(levels=6_I4P)
+   call fig%set_title('contours')
+   call fig%splot(x, y, z, title='x exp(-r^2/2)', lc='#c0c0c0')
+   endfunction figure_map_contour
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

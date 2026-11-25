@@ -1555,6 +1555,16 @@ with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
 the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`set pm3d interpolate 2,2`). See
 [3D plots](/guide/gnuplot-subset#3d-plots).
 
+### Contour lines over a map
+
+<<< @/examples/snippets/cb_map_contour.gp{gnuplot}
+
+<Plot name="cb_map_contour" svg :width="560" :height="400" />
+
+`set contour` traces the levels of the surface (gnuplot's contour.c), each in a linetype of its own with a key entry
+for its value; `set pm3d at b` with `unset surface` draws the colored map without the surface's own lines. See
+[Contours](/guide/gnuplot-subset#contours).
+
 ## Polar and radial charts
 
 ### A polar plot

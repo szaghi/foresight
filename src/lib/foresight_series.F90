@@ -166,6 +166,8 @@ type :: series_object
                                                          !< table order); a function's are in order.
    logical                       :: key_blank = .false. !< A key entry of its title alone, no sample (gnuplot's pm3d
                                                         !< surfaces).
+   logical                       :: no_contours = .false. !< No contour lines (gnuplot's item option `nocontours`).
+   logical                       :: no_surface = .false.  !< Its surface not drawn (gnuplot's item option `nosurface`).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

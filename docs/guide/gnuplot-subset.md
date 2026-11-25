@@ -112,6 +112,9 @@ that did what it says.
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` the points along y of the [`splot` functions](#3d-plots)' iso-curves of x (N by default); expressions truncated to integers, as gnuplot | 100 |
 | **iso**samples `N`[`,M`] | the iso-curves of the [`splot` functions](#3d-plots): M curves of y (the surface grid), N of x; 10 by default; M also the v samples of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | 10 |
 | `view` *rot_x*[`,` *rot_z*[`,` *scale*[`,` *scale_z*]]] \| `map` [`scale S`] \| [`no`]`equal` [`xy`\|`xyz`] \| `azimuth A` \| `projection xy` | the view of the [3D plots](#3d-plots), gnuplot's `60, 30, 1, 1` by default (an empty field keeps its value); `map` seen from above, as a 2D plot | `60, 30, 1, 1`, no map |
+| **cont**our [`base`\|`surface`\|`both`] | the [contour lines](#contours) of the 3D surfaces (`base` by default; in a map view the three are the same picture) | no contour lines |
+| **cntrp**aram [`linear`\|`cubicspline`\|`bspline`] [`points N`] [`order N`] [`levels` [`auto` [`N`]\|`N`\|`discrete z1, z2, ...`\|`incremental start, step`[`, end`]]] [`firstlinetype N`] [`sorted`\|`unsorted`] | the [contour](#contours) lines: linear segments, a cubic spline through their points or a B-spline approximation (`order` 2 to 10, 4 by default; `points` per interval, 5); about N automatic levels (5), or the levels given; the first level's linetype; levels high to low; alone, the defaults | — |
+| **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; the drawing order options (`scans...`, `depthorder`, `flush`, `ftriangles`) and the border are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D plots](#3d-plots): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
@@ -201,6 +204,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **nonuni**form **mat**rix | the first row of the matrix holds the x of the columns (after a value ignored), the first column the y of the rows, as gnuplot; for `with image`, evenly spaced (uneven pixels are not supported) |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1`; the fields may be expressions, `every ::j:0:j:0` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
+| `nocontours`, `nosurface` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn |
 | `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; the linetype of the next item, not used up; with the other styles of a plot panel its sample is a filled box (polygons, boxplots, circles, ellipses, candlesticks, the box styles, histograms, sectors), a line and points (error lines) or a line; with `spiderplot` a key entry of a [spider plot](#parallel-axes-and-spider-plots) set |
 | **newspider**plot | the next spider plot items a new set of polygons on the same axes, see [Parallel axes and spider plots](#parallel-axes-and-spider-plots) |
 | `sharpen` | of a function: the extrema between its samples found (gnuplot 6.0's filter: a golden section search where the 5-term Savitzky-Golay second derivative turns) and added; ignored on data, as gnuplot |
@@ -2200,6 +2204,29 @@ set pm3d interpolate 4,4
 set isosamples 30, 30
 splot sin(x)*cos(y) with pm3d notitle
 ```
+
+### Contours
+
+```gnuplot
+set view map
+set pm3d at b; unset surface          # the pm3d map, the surface lines not drawn (their contours are)
+set contour base
+set cntrparam levels incremental -0.75, 0.5, 0.75
+splot sin(x)*cos(y) lw 2 title 'sin(x) cos(y)'
+```
+
+`set contour` draws the contour lines of every surface, a port of gnuplot 6.0's contour.c: each grid cell split into
+two triangles, the lines traced through them (from the grid's boundary first, then the closed ones), in linear segments
+(`set cntrparam linear`, the default), through a cubic spline (`cubicspline`) or approximated by a B-spline
+(`bspline order N`), `points N` per spline interval. The levels are about N round values within the heights
+(`levels auto N`, 5 by default: gnuplot's tick step), the values given (`discrete`), or from start by step
+(`incremental`). Each level is drawn in its own linetype, the surface's next ones (`firstlinetype N` the first), with
+a key entry its value in the `set cntrlabel format` (`"%8.3g"`); `set cntrlabel onecolor` draws them all in the
+surface's color, without key entries. As gnuplot's, the levels of an untitled surface have no key entries, and the
+contours of a `with pm3d` item are not stroked. `set table` writes them as gnuplot does (`# Contour N, label: L`, the
+levels high first, lines in chunks of at most 99 points); 2D scripts read them back (`plot $CONTOURS with lines`).
+`unset surface` keeps the contours, `nocontours` and `nosurface` select per item. Labels on the lines (`with labels`
+on contours, `cntrlabel start interval`) are not drawn.
 
 The map view (`set view map`) is drawn as gnuplot 6.0 draws it: its plot area is the projection of the x and y
 ranges (gnuplot's 3D layout, narrower than a 2D plot's: `set view map scale S` scales it), ticks inward on all four

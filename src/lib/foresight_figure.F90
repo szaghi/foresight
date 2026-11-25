@@ -31,6 +31,8 @@ use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
 use foresight_font, only : font_object
+use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
+                              LEVELS_INCREMENTAL
 use foresight_pm3d, only : CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, CORNERS_MEDIAN, &
                            CORNERS_MIN, CORNERS_RMS
 use penf, only : I4P, R8P
@@ -97,6 +99,7 @@ type :: figure_object
       generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
       procedure, pass(self) :: set_view        !< gnuplot `set view`.
       procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
+      procedure, pass(self) :: set_contour     !< gnuplot `set contour`, `set cntrparam`, `set cntrlabel`.
       procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
       procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
       procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
@@ -1918,6 +1921,67 @@ contains
       panel%series(last)%grid_scans = size(scans, 2, kind=I4P)
    endassociate
    endsubroutine heights_of_last
+
+   subroutine set_contour(self, on, place, kind, levels, discrete, incremental, points, order, firstlinetype, sorted, &
+                          format, onecolor)
+   !< The contour lines of the 3D surfaces, gnuplot `set contour PLACE` (`on`, `place` `base`, `surface`, `both`),
+   !< `set cntrparam`: `kind` `linear`, `cubicspline`, `bspline`; `levels` N (automatic, about N), `discrete` the levels,
+   !< `incremental` start, step[, end]; `points` per spline interval, B-spline `order`, `firstlinetype`, `sorted`;
+   !< `set cntrlabel`: the label `format` ("%8.3g"), `onecolor`.
+   class(figure_object), intent(inout)        :: self           !< Figure.
+   logical,              intent(in), optional :: on             !< Contours drawn.
+   character(len=*),     intent(in), optional :: place          !< `base`, `surface` or `both`.
+   character(len=*),     intent(in), optional :: kind           !< `linear`, `cubicspline` or `bspline`.
+   integer(I4P),         intent(in), optional :: levels         !< About N automatic levels.
+   real(R8P),            intent(in), optional :: discrete(:)    !< The levels.
+   real(R8P),            intent(in), optional :: incremental(:) !< Start, step[, end].
+   integer(I4P),         intent(in), optional :: points         !< Points per spline interval.
+   integer(I4P),         intent(in), optional :: order          !< B-spline order, 2 to 10.
+   integer(I4P),         intent(in), optional :: firstlinetype  !< Linetype of the first level.
+   logical,              intent(in), optional :: sorted         !< Levels high to low.
+   character(len=*),     intent(in), optional :: format         !< Label format.
+   logical,              intent(in), optional :: onecolor       !< All levels in the surface's color.
+
+   call self%ensure_panels
+   associate(cnt => self%panels(self%current)%contour)
+      cnt%on = .true.
+      if (present(on)) cnt%on = on
+      if (present(place)) cnt%place = place
+      if (present(kind)) then
+         select case (kind)
+         case ('linear')
+            cnt%kind = CONTOUR_LINEAR
+         case ('cubicspline')
+            cnt%kind = CONTOUR_CUBIC
+         case ('bspline')
+            cnt%kind = CONTOUR_BSPLINE
+         case default
+            error stop 'foresight: set_contour: kind must be linear, cubicspline or bspline'
+         endselect
+      endif
+      if (present(levels)) then
+         cnt%levels_kind = LEVELS_AUTO
+         cnt%levels = levels
+      endif
+      if (present(discrete)) then
+         cnt%levels_kind = LEVELS_DISCRETE
+         cnt%list = discrete
+         cnt%levels = size(discrete, kind=I4P)
+      endif
+      if (present(incremental)) then
+         if (size(incremental) < 2) error stop 'foresight: set_contour: incremental needs start, step[, end]'
+         cnt%levels_kind = LEVELS_INCREMENTAL
+         cnt%list = incremental(1:2)
+         if (size(incremental) >= 3) cnt%levels = int((incremental(3) - incremental(1)) / incremental(2) + 1.0_R8P, I4P)
+      endif
+      if (present(points)) cnt%npoints = points
+      if (present(order)) cnt%order = order
+      if (present(firstlinetype)) cnt%firstlinetype = firstlinetype
+      if (present(sorted)) cnt%sorted = sorted
+      if (present(format)) cnt%format = format
+      if (present(onecolor)) cnt%onecolor = onecolor
+   endassociate
+   endsubroutine set_contour
 
    subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in)
    !< gnuplot `set pm3d`: `implicit` every surface drawn as colored quadrangles too (`set pm3d`; false: only the items

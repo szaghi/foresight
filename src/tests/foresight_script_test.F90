@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(249)                           !< Per-check outcome.
+logical                       :: test_passed(250)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6261,6 +6261,66 @@ block
                      interpreter%figure%panels(1)%xaxis%tics%rotate == 45.0_R8P
 endblock
 
+
+! contours (a port of gnuplot 6.0's contour.c) as gnuplot tabulates them: discrete levels over the surface, auto levels
+! without it, cubic spline, B-spline and incremental levels; the options, errors, nocontours
+block
+   character(len=:), allocatable :: tab !< Table.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set contour base; set cntrparam levels discrete "// &
+                             "0.5, 1.5; set isosamples 4,4; set samples 4,4; set xrange [0:3]; set yrange [0:3]; "// &
+                             "splot x+y; unset table", iostat, iomsg)
+   test_passed(250) = iostat == 0_I4P
+   tab = read_text('foresight_script_test.dat')
+   test_passed(250) = test_passed(250) .and. index(tab, ' 3  3  6 i'//nl//nl//nl//'# Contour 0, label:      1.5'//nl// &
+                     ' 1.5  0  1.5 '//nl//' 1  0.5  1.5 '//nl//' 0.5  1  1.5 '//nl//' 0  1.5  1.5 '//nl//nl//nl// &
+                     '# Contour 1, label:      0.5'//nl//' 0.5  0  0.5 '//nl//' 0  0.5  0.5 '//nl//nl) > 0
+   call interpreter%run_text("set table 'foresight_script_test.dat'; unset surface; set cntrparam levels auto 5; "// &
+                             "splot x*y; unset table", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. read_text('foresight_script_test.dat') == nl// &
+                     '# Surface 0 of 1 surfaces'//nl//nl//'# Curve title: "x*y"'//nl//nl// &
+                     '# Contour 0, label:        8'//nl//' 3  2.66667  8 '//nl//' 2.66667  3  8 '//nl//nl//nl// &
+                     '# Contour 1, label:        6'//nl//' 3  2  6 '//nl//' 2  3  6 '//nl//nl//nl// &
+                     '# Contour 2, label:        4'//nl//' 3  1.33333  4 '//nl//' 2  2  4 '//nl//' 1.33333  3  4 '// &
+                     nl//nl//nl//'# Contour 3, label:        2'//nl//' 3  0.666667  2 '//nl//' 2  1  2 '//nl// &
+                     ' 1  2  2 '//nl//' 0.666667  3  2 '//nl//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set contour base; unset surface; set isosamples 6,6; set samples 6,6; "// &
+                             "set xrange [-2:2]; set yrange [-2:2]; set cntrparam levels discrete 0.3, 0.6; "// &
+                             "set table 'foresight_script_test.dat'; set cntrparam cubicspline points 4; "// &
+                             "splot exp(-x**2-y**2); unset table", iostat, iomsg)
+   tab = read_text('foresight_script_test.dat')
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. index(tab, '# Contour 0, label:      0.6'//nl// &
+                     '-0.4 -0.592501  0.6 '//nl//'-0.505787 -0.508757  0.6 '//nl//'-0.590241 -0.403593  0.6 ') > 0
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set cntrparam bspline order 3 points 3; "// &
+                             "splot exp(-x**2-y**2); unset table", iostat, iomsg)
+   tab = read_text('foresight_script_test.dat')
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. index(tab, '# Contour 0, label:      0.6'//nl// &
+                     '-0.496251 -0.496251  0.6 '//nl//'-0.549723 -0.398334  0.6 '//nl//'-0.581807 -0.232917  0.6 ') > 0
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set cntrparam linear levels incremental "// &
+                             "0.1, 0.2, 0.9; splot exp(-x**2-y**2); unset table", iostat, iomsg)
+   tab = read_text('foresight_script_test.dat')
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. index(tab, '# Contour 0, label:      0.7'//nl// &
+                     '-0.4 -0.439903  0.7 '//nl//'-0.439903 -0.4  0.7 ') > 0 .and. &
+                     interpreter%figure%panels(1)%contour%levels == 5
+   ! options and errors
+   call interpreter%run_text("set cntrlabel format '%.1f' onecolor; set contour both", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%contour%format == '%.1f' .and. &
+                     interpreter%figure%panels(1)%contour%onecolor .and. interpreter%figure%panels(1)%contour%place == 'both'
+   call interpreter%run_text("set cntrparam order 11", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat /= 0_I4P .and. index(iomsg, 'order must be in [2..10]') > 0
+   call interpreter%run_text("set contour sideways", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat /= 0_I4P .and. index(iomsg, 'base, surface or both') > 0
+   call interpreter%run_text("set table 'foresight_script_test.dat'; splot x*y nocontours; unset table", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. &
+                     index(read_text('foresight_script_test.dat'), '# Contour') == 0
+   call interpreter%run_text("unset contour", iostat, iomsg)
+   test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%contour%on
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -6269,7 +6329,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,249L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,250L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

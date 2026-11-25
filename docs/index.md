@@ -359,6 +359,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
+  <Plot name="cb_map_contour" svg :width="560" :height="400" caption="contour lines over a map" />
 </div>
 
 ### Polar and radial charts
