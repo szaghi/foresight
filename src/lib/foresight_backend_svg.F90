@@ -132,6 +132,8 @@ contains
            attribute('data-xtime', view%xtime)//attribute('data-ytime', view%ytime)
    ! the tick labels drawn again by the viewer: as enhanced text, if any has markup
    if (self%enhanced .and. view%markup) extra = extra//' data-enhanced="1"'
+   ! a 3D view: drawn static, the viewer leaves it alone
+   if (view%three_d) extra = extra//' data-3d="1"'
    if (any(view%mirror .neqv. [.true., .true., .false.])) &
       extra = extra//' data-mirror="'//flag(view%mirror(1))//' '//flag(view%mirror(2))//' '//flag(view%mirror(3))//'"'
    y2 = ''

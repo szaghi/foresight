@@ -57,6 +57,7 @@ type :: axes_view
    character(len=:), allocatable :: x2time !< Input time format of a time x2 axis, empty if numeric.
    character(len=:), allocatable :: gridlines !< Grid lines (`x y2 mx`), empty for the x and y major ones.
    character(len=:), allocatable :: gridstyle !< Grid line `color width dashes`, empty for the theme's.
+   logical   :: three_d   = .false.  !< A 3D view: static on an interactive device (no zoom, no pan).
 endtype axes_view
 
 type, abstract :: backend_object

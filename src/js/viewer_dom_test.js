@@ -325,5 +325,13 @@ check("a zoom keeps the x ticks on the y = 0 line", axticks.innerHTML !== axHome
 key("a");
 check("autoscale restores the axis ticks", axticks.innerHTML === axHome);
 
+// a 3D view (data-3d) stays as drawn: no zoom on a wheel, no click boxes on its key entries, nothing in the URL
+page = strip(path.join(__dirname, "..", "tests", "goldens", "view3d_frame.html"));
+p = load("");
+var v3d = p.document.querySelector(".fs-axes"), v3dHome = v3d.innerHTML;
+fire(p.document.querySelector("svg"), "wheel", {deltaY: -100, clientX: 300, clientY: 200});
+check("a 3D view is static", v3d.hasAttribute("data-3d") && v3d.innerHTML === v3dHome && p.location.hash === "" &&
+  v3d.querySelectorAll(".fs-key-entry rect").length === 0);
+
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

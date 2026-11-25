@@ -2111,7 +2111,8 @@
 
   // a key entry toggles its series: a transparent box over the entry takes the clicks
   function keyTargets(svg) {
-    svg.querySelectorAll(".fs-key-entry").forEach(function (node) {
+    // the entries of the 2D panels (a 3D view's are static)
+    svg.querySelectorAll(".fs-axes:not([data-3d]) .fs-key-entry").forEach(function (node) {
       var b = node.getBBox();
       element(node, "rect", {x: b.x - 2, y: b.y - 2, width: b.width + 4, height: b.height + 4,
         fill: "transparent", cursor: "pointer"}).appendChild(document.createElementNS(NS, "title"))
@@ -2125,8 +2126,11 @@
     if (svg.hasAttribute("data-frame")) FRAME_COLOR = svg.getAttribute("data-frame");
     if (svg.hasAttribute("data-grid-color")) GRID_COLOR = svg.getAttribute("data-grid-color");
     svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
+      // a 3D view stays as drawn (no zoom, no pan)
+      if (group.hasAttribute("data-3d")) return;
       panels.push(new Panel(svg, group, k));
     });
+    if (!panels.length) return;
     linkPanels();
     keyTargets(svg);
     var panel = panels[0];

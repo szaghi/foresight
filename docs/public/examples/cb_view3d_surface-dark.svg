@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="560" height="400" viewBox="0 0 560 400" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
 <rect x="0" y="0" width="560" height="400" fill="#130d0f" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="0 560 0 400" data-x="0 5.6e2" data-y="-4e2 0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="0 560 0 400" data-x="0 5.6e2" data-y="-4e2 0" data-log="0 0" data-grid="0" data-font-size="12" data-3d="1">
 <g class="fs-border">
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="81.56,292.91 226.82,216.21"/>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="478.43,260.5 226.82,216.21"/>

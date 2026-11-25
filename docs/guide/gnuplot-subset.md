@@ -2264,7 +2264,8 @@ the top right of the plot. `set grid` draws the x and y grid on the base (`set g
 `set grid ztics` the z levels); `set xzeroaxis`, `set yzeroaxis` and `set zzeroaxis` the zero lines. Lines, linespoints,
 points, dots and labels are drawn in the view, a data grid (scans of one length) as a mesh of its scans and the curves
 across them, lines clipped to the box, points outside it dropped; impulses rise from z = 0 (the z range then includes
-it). `set multiplot` places the views in gnuplot's cells. `set label`, `set arrow` and `set object` positions take a
+it). `set multiplot` places the views in gnuplot's cells. The HTML page shows a 3D view as drawn (no zoom, no pan; a
+map view zooms as a 2D plot); the dumb and block devices draw it with their own text layout. `set label`, `set arrow` and `set object` positions take a
 third coordinate (`at x, y, z`; z 0 when absent): axis values are projected as the data, `graph` ones are fractions of
 the x, y and z axes, `screen` and `character` ones are page positions as in 2D; a circle's radius in x units is scaled
 as gnuplot's (the x axis length on the page). `set mapping spherical` reads splot's data as theta:phi:r (x = r cos

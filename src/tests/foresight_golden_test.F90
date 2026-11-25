@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(125)                  !< Per-figure outcome.
+logical                     :: test_passed(127)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -157,7 +157,10 @@ test_passed(124) = check('map_dgrid3d.txt', figure_map_dgrid3d())
 ! a 3D view (gnuplot's default view 60, 30): a surface mesh in its box, the ticks and labels of the three axes, the key
 ! and the title at gnuplot's places
 test_passed(125) = check('view3d_frame.svg', figure_view3d_frame())
-write(output_unit, '(A,125L2)') 'foresight golden checks:', test_passed
+! the 3D view on the HTML page (static: data-3d, the viewer leaves it) and on the dumb device
+test_passed(126) = check('view3d_frame.html', figure_view3d_frame())
+test_passed(127) = check('view3d_frame.txt', figure_view3d_frame())
+write(output_unit, '(A,127L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 

@@ -3003,6 +3003,7 @@ contains
    call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
                         tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    view = axes_view(area=area, x=[area(1), area(2)], y=[-area(4), -area(3)], font_size=font_size)
+   view%three_d = .true.
    call backend%begin_axes(view)
    ! gnuplot's order: the objects behind, the back of the box, the back objects, labels and arrows, the series, the
    ! front of the box, the front objects, labels and arrows
