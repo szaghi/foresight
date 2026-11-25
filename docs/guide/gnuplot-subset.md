@@ -203,6 +203,8 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **i**ndex `N` \| `"name"` | dataset `N` (0-based, an expression: `index (i-1)`) of the file, or the dataset after the comment line starting with `name` (the comment characters and blanks before it removed), as gnuplot |
 | **mat**rix | the file is a matrix of values (columns the x index, rows the y index, from 0), for `with image` (`pixels` read: the pixels are drawn one by one anyway); `every` keeps columns (the points) and rows (the blocks), at their places; with `using` or another style its rows `x y value`, as gnuplot's (`plot 'm' matrix using 1:2:3 with image, '' matrix using 1:2:(sprintf("%g",$3)) with labels`) |
 | **nonuni**form **mat**rix | the first row of the matrix holds the x of the columns (after a value ignored), the first column the y of the rows, as gnuplot; for `with image`, evenly spaced (uneven pixels are not supported) |
+| `matrix rowheaders`, `matrix columnheaders` | the first cell of each row of the matrix names its row, the first row names the columns (after its corner cell with `rowheaders`): the names are the y and x tick labels at the row and column numbers from 0, the numbers read as a plain matrix, as gnuplot |
+| `sparse matrix=(C,R)` [`origin=(X0,Y0)`] [`dx=DX`] [`dy=DY`] | the points (`using x:y:value`, 1:2:3 by default) fill a grid of C columns and R rows at X0 + i DX, Y0 + j DY (origin 0,0, DX 1, DY = DX), each in the cell nearest to its x:y, the other cells undefined: a heat map of unordered or incomplete data (`with image`), as gnuplot's; a point off its cell's centre is drawn at the centre |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1`; the fields may be expressions, `every ::j:0:j:0` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
 | `nocontours`, `nosurface`, `nogrid` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn; the item's points as they are, not [gridded](#gridded-and-masked-surfaces) by `set dgrid3d` |
@@ -2273,8 +2275,7 @@ sides with lengths by the projection, the tick labels, axis labels, title, key a
 (the color box a character width farther right than a 2D plot's, its ticks on both sides). The items keep their
 `plot` styles: points, lines, labels, vectors, images (`with image`, from data `x:y:value`, `x:y:z:value` or a
 matrix), `lc palette` by z, `ps variable`, `pt variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
-own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error); sparse matrices are
-not supported. `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
+own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error). `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
 `vrange` iso-curves.
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
 `fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set

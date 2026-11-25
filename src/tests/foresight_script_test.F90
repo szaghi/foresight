@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(257)                           !< Per-check outcome.
+logical                       :: test_passed(258)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6565,6 +6565,39 @@ block
    tab = read_text('foresight_script_test.dat')
    test_passed(257) = test_passed(257) .and. iostat == 0_I4P .and. index(tab, '20 '//achar(9)//' 12') > 0 .and. &
                      index(tab, '25 '//achar(9)//' 32') > 0
+endblock
+
+! gnuplot's sparse matrix=(C,R) [origin=(X0,Y0)] [dx= dy=]: the points binned to the nearest cell of a full grid, the
+! others undefined; matrix rowheaders columnheaders: the names tick labels at the column and row numbers
+block
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   character(len=:), allocatable :: svg !< Rendering.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("$sp << EOD"//nl//"1 1 5"//nl//"3 2 7"//nl//"2.9 0.1 9"//nl//"EOD"//nl// &
+                             "set terminal svg; set output 'foresight_script_test.svg'; "// &
+                             "plot $sp sparse matrix=(3,3) origin=(1,0) dx=1 using 1:2:3 with image", iostat, iomsg)
+   test_passed(258) = iostat == 0_I4P
+   if (test_passed(258)) test_passed(258) = size(interpreter%figure%panels(1)%series) == 1
+   if (test_passed(258)) then
+      associate(series => interpreter%figure%panels(1)%series(1))
+         test_passed(258) = allocated(series%grid)
+         if (test_passed(258)) test_passed(258) = size(series%grid, 1) == 3 .and. size(series%grid, 2) == 3 .and. &
+                                                series%grid(1, 2) == 5.0_R8P .and. series%grid(3, 3) == 7.0_R8P .and. &
+                                                series%grid(3, 1) == 9.0_R8P .and. .not. series%grid(2, 2) == series%grid(2, 2)
+      endassociate
+   endif
+   call interpreter%run_text("plot $sp sparse matrix=(0,3) using 1:2:3 with image", iostat, iomsg)
+   test_passed(258) = test_passed(258) .and. iostat /= 0_I4P .and. index(iomsg, 'sparse matrix=(<cols>,<rows>)') > 0
+   call interpreter%run_text("$h << EOD"//nl//",Apple,Bacon,Cream"//nl//"Row 1, 5, 4, 3"//nl//"Row 2, 2, 2, 0"//nl// &
+                             "EOD"//nl//"set datafile separator comma; "// &
+                             "plot $h matrix rowheaders columnheaders using 1:2:3 with image; set datafile separator", &
+                             iostat, iomsg)
+   svg = read_text('foresight_script_test.svg')
+   test_passed(258) = test_passed(258) .and. iostat == 0_I4P .and. index(svg, '>Bacon<') > 0 .and. index(svg, '>Row 2<') > 0
+   if (test_passed(258)) test_passed(258) = size(interpreter%figure%panels(1)%series) == 3
+   if (test_passed(258)) test_passed(258) = interpreter%figure%panels(1)%series(1)%grid(2, 1) == 4.0_R8P .and. &
+                                         interpreter%figure%panels(1)%series(2)%noautoscale
 endblock
 
 if (all(test_passed)) then

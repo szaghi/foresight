@@ -1415,6 +1415,25 @@ stands X cells from the left and Y up from the bottom of the page.
 
 `x:y:z` points on a regular grid, colored by the default palette; the color box at the right.
 
+
+### A heat map of sparse data
+
+<<< @/examples/snippets/cb_sparse_matrix.gp{gnuplot}
+
+<Plot name="cb_sparse_matrix" svg :width="520" :height="400" />
+
+`sparse matrix=(4,4) origin=(1,1)` bins the given points into a 4 by 4 grid, each in its nearest cell, the cells
+without a point left empty: here a distance matrix given as its upper triangle. See
+[plot items](/guide/gnuplot-subset#plot-items).
+
+### A table with named rows and columns
+
+<<< @/examples/snippets/cb_matrix_headers.gp{gnuplot}
+
+<Plot name="cb_matrix_headers" svg :width="560" :height="360" />
+
+`matrix rowheaders columnheaders` reads a CSV table as gnuplot does: its first row names the columns, the first cell
+of each row names it, and the names become the tick labels. See [plot items](/guide/gnuplot-subset#plot-items).
 ### A matrix file
 
 <<< @/examples/snippets/cb_matrix.gp{gnuplot}

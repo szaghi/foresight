@@ -320,6 +320,8 @@ type :: script_object
       procedure, pass(self), private :: plot_command  !< `plot`.
       procedure, pass(self), private :: plot_items    !< `plot` items, binary files as datablocks.
       procedure, pass(self), private :: binary_items  !< Binary files of `plot` items as datablocks.
+      procedure, pass(self), private :: sparse_items  !< Sparse matrices of `plot` items as datablocks.
+      procedure, pass(self), private :: matrix_header_items !< Matrices with headers of `plot` items as datablocks.
       procedure, pass(self), private :: reset_command !< `reset`.
       procedure, pass(self), private :: pause_command !< `pause`.
       procedure, pass(self), private :: write_table   !< The points of a plot as text (`set table`).
@@ -3135,6 +3137,428 @@ contains
       endsubroutine read_field
    endsubroutine binary_items
 
+   subroutine sparse_items(self, tokens, items, iostat, iomsg)
+   !< The `plot` tokens with each gnuplot sparse matrix (`'file' sparse matrix=(C,R) [origin=(X0,Y0)] [dx=DX]
+   !< [dy=DY]`) read into a datablock, as gnuplot's populate_sparse_matrix: a grid of C x R cells at X0 + i DX, Y0 + j DY
+   !< (origin 0,0, DX 1, DY = DX), every point of the item's `using` fields (1:2:3 by default) copied into the cell
+   !< nearest to its x:y (rounded), the other cells undefined; the item reads `using 1:2:...` of the datablock. Unlike
+   !< gnuplot, a point off its cell's centre is drawn at the centre (the image needs a regular grid).
+   class(script_object),            intent(inout) :: self      !< Interpreter.
+   type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
+   type(token_object), allocatable, intent(out)   :: items(:)  !< Tokens, sparse matrices as datablocks.
+   integer(I4P),                    intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable,   intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                  :: word      !< Option word.
+   character(len=:), allocatable                  :: value     !< Option value.
+   character(len=:), allocatable                  :: file      !< The item's file or datablock.
+   character(len=:), allocatable                  :: spec      !< The item's using.
+   character(len=:), allocatable                  :: name      !< Datablock name.
+   character(len=:), allocatable                  :: lines     !< Datablock lines.
+   type(datafile_object)                          :: data      !< The item's data.
+   type(expression_object), allocatable           :: fields(:) !< Its using fields.
+   real(R8P), allocatable                         :: values(:,:) !< Its points.
+   real(R8P), allocatable                         :: grid(:,:) !< Cells (field, cell).
+   integer(I4P)                                   :: shape(2)  !< Columns and rows.
+   real(R8P)                                      :: origin(2) !< Origin.
+   real(R8P)                                      :: step(2)   !< Steps.
+   real(R8P)                                      :: v         !< A number.
+   logical                                        :: dy_set    !< dy given.
+   integer(I4P)                                   :: k, q, p, i, j, f !< Counters.
+   integer(I4P)                                   :: using_at  !< Token of the using spec, 0 if none.
+   type(token_object)                             :: t         !< New token.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(items(0))
+   k = 1_I4P
+   do while (k <= size(tokens, kind=I4P))
+      if (.not. (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'sparse' .and. size(items) > 0)) then
+         call push(items, tokens(k))
+         k = k + 1_I4P
+         cycle
+      endif
+      file = items(size(items))%text
+      shape = 0_I4P
+      origin = 0.0_R8P
+      step = 1.0_R8P
+      dy_set = .false.
+      k = k + 1_I4P
+      do while (k <= size(tokens, kind=I4P))
+         if (tokens(k)%kind /= TOKEN_WORD) exit
+         word = tokens(k)%text
+         value = ''
+         if (index(word, '=') > 0) then
+            value = word(index(word, '=') + 1:)
+            word = word(1:index(word, '=') - 1)
+         endif
+         select case (word)
+         case ('matrix')
+            value = strip_parentheses(value)
+            read(value, *, iostat=iostat) shape
+            if (iostat /= 0_I4P .or. any(shape < 1_I4P)) then
+               call fail('plot: sparse matrix=(<cols>,<rows>) [dx=<dx> dy=<dy> origin=(<x0>,<y0>)] expected', iostat, &
+                         iomsg)
+               return
+            endif
+         case ('origin')
+            value = strip_parentheses(value)
+            read(value, *, iostat=iostat) origin
+            if (iostat /= 0_I4P) then
+               call fail('plot: sparse origin=(<x0>,<y0>) expected', iostat, iomsg)
+               return
+            endif
+         case ('dx', 'dy')
+            if (.not. to_number(value, v)) then
+               call fail('plot: sparse '//word//'=<value> expected', iostat, iomsg)
+               return
+            endif
+            if (.not. v > 0.0_R8P .and. .not. v < 0.0_R8P) then
+               call fail('plot: sparse '//word//' must not be 0', iostat, iomsg)
+               return
+            endif
+            step(merge(1, 2, word == 'dx')) = v
+            if (word == 'dy') dy_set = .true.
+         case default
+            exit
+         endselect
+         k = k + 1_I4P
+      enddo
+      if (any(shape < 1_I4P)) then
+         call fail('plot: sparse matrix=(<cols>,<rows>) [dx=<dx> dy=<dy> origin=(<x0>,<y0>)] expected', iostat, iomsg)
+         return
+      endif
+      if (.not. dy_set) step(2) = step(1)
+      ! the item's using, up to the next comma
+      spec = '1:2:3'
+      using_at = 0_I4P
+      do q = k, size(tokens, kind=I4P)
+         if (tokens(q)%kind == TOKEN_COMMA) exit
+         if (tokens(q)%kind == TOKEN_WORD .and. keyword(tokens(q)%text, 'using', 1_I4P) .and. &
+             q < size(tokens, kind=I4P)) then
+            using_at = q + 1_I4P
+            spec = tokens(q + 1_I4P)%text
+         endif
+      enddo
+      call self%load_data(data, file, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, self%symbols)
+      if (iostat /= 0_I4P) return
+      if (size(fields) < 3) then
+         call fail('plot: sparse matrix needs using x:y:value', iostat, iomsg)
+         return
+      endif
+      call data%table(fields, -1_I4P, [1_I4P, 1_I4P, 0_I4P, 0_I4P, -1_I4P, -1_I4P], values)
+      allocate(grid(size(fields), shape(1) * shape(2)))
+      grid = ieee_value(1.0_R8P, ieee_quiet_nan)
+      do j = 0_I4P, shape(2) - 1_I4P
+         do i = 0_I4P, shape(1) - 1_I4P
+            grid(1, j * shape(1) + i + 1_I4P) = origin(1) + real(i, R8P) * step(1)
+            grid(2, j * shape(1) + i + 1_I4P) = origin(2) + real(j, R8P) * step(2)
+         enddo
+      enddo
+      do p = 1_I4P, size(values, 1, kind=I4P)
+         if (.not. (ieee_is_finite(values(p, 1)) .and. ieee_is_finite(values(p, 2)))) cycle
+         if (abs((values(p, 1) - origin(1)) / step(1)) > 1.0e9_R8P .or. &
+             abs((values(p, 2) - origin(2)) / step(2)) > 1.0e9_R8P) cycle
+         i = nint((values(p, 1) - origin(1)) / step(1), I4P)
+         j = nint((values(p, 2) - origin(2)) / step(2), I4P)
+         if (i < 0_I4P .or. j < 0_I4P .or. i >= shape(1) .or. j >= shape(2)) cycle
+         ! the point whole (gnuplot's), at its cell's place: a regular grid for the image
+         grid(3:, j * shape(1) + i + 1_I4P) = values(p, 3:)
+      enddo
+      lines = ''
+      do p = 1_I4P, size(grid, 2, kind=I4P)
+         do f = 1_I4P, size(grid, 1, kind=I4P)
+            if (ieee_is_finite(grid(f, p))) then
+               lines = lines//exact_real(grid(f, p))
+            else
+               lines = lines//'NaN'
+            endif
+            if (f < size(grid, 1, kind=I4P)) lines = lines//' '
+         enddo
+         lines = lines//new_line('a')
+      enddo
+      deallocate(grid)
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__sparse'//int_str(int(self%binary_count, I8P))
+      call self%symbols%set_string(name, lines)
+      items(size(items))%kind = TOKEN_WORD
+      items(size(items))%text = name
+      ! the item's tokens, its using the datablock's columns
+      t%kind = TOKEN_WORD
+      word = '1'
+      do f = 2_I4P, size(fields, kind=I4P)
+         word = word//':'//int_str(int(f, I8P))
+      enddo
+      if (using_at == 0_I4P) then
+         t%text = 'using'
+         call push(items, t)
+         t%text = word
+         call push(items, t)
+      endif
+      do q = k, size(tokens, kind=I4P)
+         if (tokens(q)%kind == TOKEN_COMMA) exit
+         if (q == using_at) then
+            t = tokens(q)
+            t%text = word
+            call push(items, t)
+         else
+            call push(items, tokens(q))
+         endif
+      enddo
+      k = q
+   enddo
+   contains
+      pure function strip_parentheses(text) result(inner)
+      !< `text` without its surrounding parentheses.
+      character(len=*), intent(in)  :: text  !< Text.
+      character(len=:), allocatable :: inner !< Inner text.
+
+      inner = trim(adjustl(text))
+      if (len(inner) >= 2) then
+         if (inner(1:1) == '(' .and. inner(len(inner):len(inner)) == ')') inner = inner(2:len(inner) - 1)
+      endif
+      endfunction strip_parentheses
+   endsubroutine sparse_items
+
+   subroutine matrix_header_items(self, tokens, items, iostat, iomsg)
+   !< The `plot` tokens with each gnuplot `matrix rowheaders|columnheaders` file without its headers, a datablock in the
+   !< same separator: the first row (columnheaders, its first cell a corner with rowheaders) names the columns, the
+   !< first cell of each row (rowheaders) names the row; the names become x and y tick labels at the column and row
+   !< numbers from 0, as gnuplot's: items of their own appended, `$names using 1:2:xtic(3)` (ytic) with points of
+   !< size 0, untitled and out of the autoscaling.
+   class(script_object),            intent(inout) :: self      !< Interpreter.
+   type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
+   type(token_object), allocatable, intent(out)   :: items(:)  !< Tokens, the matrices as datablocks.
+   integer(I4P),                    intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable,   intent(out)   :: iomsg     !< Error message.
+   character(len=:), allocatable                  :: file      !< The item's file or datablock.
+   character(len=:), allocatable                  :: content   !< Its lines.
+   character(len=:), allocatable                  :: line      !< A line.
+   character(len=:), allocatable                  :: lines     !< Datablock lines.
+   character(len=256), allocatable                :: cells(:)  !< Cells of a line (fixed length: nvfortran 26.9
+                                                               !< breaks deferred-length array self-assignments).
+   character(len=:), allocatable                  :: sep       !< Separator written.
+   character(len=:), allocatable                  :: name      !< Datablock name.
+   logical                                        :: rows_h    !< rowheaders.
+   logical                                        :: cols_h    !< columnheaders.
+   logical                                        :: found     !< Datablock found.
+   logical                                        :: first     !< First data line still to come.
+   character(len=256), allocatable                :: columns(:) !< Column names.
+   character(len=256), allocatable                :: rownames(:) !< Row names.
+   character(len=256), allocatable                :: grown(:)  !< Row names, one more.
+   integer(I4P)                                   :: c0        !< First number cell of a row.
+   character(len=:), allocatable                  :: labels    !< Datablock of the names.
+   type(token_object)                             :: t         !< New token.
+   integer(I4P)                                   :: k, q, a, b, c, u !< Counters, unit.
+   integer(I4P)                                   :: file_at   !< Token of the file.
+
+   iostat = 0_I4P
+   iomsg = ''
+   allocate(items(0))
+   k = 1_I4P
+   do while (k <= size(tokens, kind=I4P))
+      if (.not. (tokens(k)%kind == TOKEN_WORD .and. keyword(tokens(k)%text, 'matrix', 3_I4P) .and. size(items) > 0)) then
+         call push(items, tokens(k))
+         k = k + 1_I4P
+         cycle
+      endif
+      ! the headers words of this item (up to its comma)
+      rows_h = .false.
+      cols_h = .false.
+      do q = k + 1_I4P, size(tokens, kind=I4P)
+         if (tokens(q)%kind == TOKEN_COMMA) exit
+         if (tokens(q)%kind /= TOKEN_WORD) cycle
+         if (tokens(q)%text == 'rowheaders') rows_h = .true.
+         if (tokens(q)%text == 'columnheaders') cols_h = .true.
+      enddo
+      if (.not. (rows_h .or. cols_h)) then
+         call push(items, tokens(k))
+         k = k + 1_I4P
+         cycle
+      endif
+      file_at = size(items, kind=I4P)
+      file = items(file_at)%text
+      if (is_datablock(file)) then
+         call self%symbols%string_of(file, content, found)
+         if (.not. found) then
+            call fail('plot: no datablock '//file, iostat, iomsg)
+            return
+         endif
+      else
+         block
+            integer(I4P) :: bytes !< File size.
+
+            open(newunit=u, file=file, access='stream', form='unformatted', action='read', status='old', iostat=iostat)
+            if (iostat /= 0_I4P) then
+               call fail('plot: cannot open "'//file//'"', iostat, iomsg)
+               return
+            endif
+            inquire(unit=u, size=bytes)
+            allocate(character(len=bytes) :: content)
+            read(u) content
+            close(u)
+         endblock
+      endif
+      sep = ' '
+      if (len(self%separator) > 0) sep = self%separator(1:1)
+      lines = ''
+      first = .true.
+      a = 1_I4P
+      allocate(rownames(0), columns(0))
+      do while (a <= len(content))
+         b = index(content(a:), new_line('a'))
+         if (b == 0) then
+            b = len(content) + 1
+         else
+            b = a + b - 1
+         endif
+         line = content(a:b - 1)
+         a = b + 1
+         if (len_trim(line) == 0) cycle
+         if (line(verify(line, ' '):verify(line, ' ')) == '#') cycle
+         cells = split_cells(line, self%separator)
+         if (first .and. cols_h) then
+            ! the column names (after the corner cell with rowheaders)
+            first = .false.
+            c = merge(2_I4P, 1_I4P, rows_h)
+            if (size(cells) >= c) then
+               deallocate(columns)
+               allocate(columns(size(cells) - c + 1))
+               columns = cells(c:)
+            endif
+            cycle
+         endif
+         first = .false.
+         c0 = 1_I4P
+         if (rows_h) then
+            if (size(cells) < 1) cycle
+            ! an assignment, not move_alloc: nvfortran 26.9 leaves the target empty here (bug 31)
+            allocate(grown(size(rownames) + 1))
+            grown(1:size(rownames)) = rownames
+            grown(size(grown)) = cells(1)
+            rownames = grown
+            deallocate(grown)
+            c0 = 2_I4P
+         endif
+         do c = c0, size(cells, kind=I4P)
+            lines = lines//trim(cells(c))
+            if (c < size(cells, kind=I4P)) lines = lines//sep
+         enddo
+         lines = lines//new_line('a')
+      enddo
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__matrix'//int_str(int(self%binary_count, I8P))
+      call self%symbols%set_string(name, lines)
+      items(file_at)%kind = TOKEN_WORD
+      items(file_at)%text = name
+      call push(items, tokens(k))
+      do q = k + 1_I4P, size(tokens, kind=I4P)
+         if (tokens(q)%kind == TOKEN_COMMA) exit
+         if (tokens(q)%kind == TOKEN_WORD .and. (tokens(q)%text == 'rowheaders' .or. tokens(q)%text == 'columnheaders')) &
+            cycle
+         call push(items, tokens(q))
+      enddo
+      k = q
+      ! the names: items of their own, tick labels at the column (x) and row (y) numbers
+      if (size(columns) > 0) call label_item(columns, 'xtic')
+      if (size(rownames) > 0) call label_item(rownames, 'ytic')
+   enddo
+   contains
+      subroutine label_item(names, axis)
+      !< Append `, $__matrixN using 1:2:AXIS(3) with points ps 0 notitle noautoscale`, its rows `i NaN "name"` (xtic)
+      !< or `NaN i "name"` (ytic) in the separator in force.
+      character(len=*), intent(in) :: names(:) !< Names.
+      character(len=*), intent(in) :: axis     !< `xtic` or `ytic`.
+      integer(I4P)                 :: i        !< Name counter.
+      character(len=:), allocatable :: number  !< Its number.
+
+      ! the source positions of the item's last token (an item's text is sliced by them)
+      t = items(size(items))
+      t%quote = ' '
+      labels = ''
+      do i = 1_I4P, size(names, kind=I4P)
+         number = int_str(int(i - 1_I4P, I8P))
+         if (axis == 'xtic') then
+            labels = labels//number//sep//'NaN'//sep//'"'//trim(names(i))//'"'//new_line('a')
+         else
+            labels = labels//'NaN'//sep//number//sep//'"'//trim(names(i))//'"'//new_line('a')
+         endif
+      enddo
+      self%binary_count = self%binary_count + 1_I4P
+      call self%symbols%set_string('$__matrix'//int_str(int(self%binary_count, I8P)), labels)
+      t%kind = TOKEN_COMMA
+      t%text = ','
+      call push(items, t)
+      t%kind = TOKEN_WORD
+      t%text = '$__matrix'//int_str(int(self%binary_count, I8P))
+      call push(items, t)
+      t%text = 'using'
+      call push(items, t)
+      t%text = '1:2:'//axis//'(3)'
+      call push(items, t)
+      t%text = 'with'
+      call push(items, t)
+      t%text = 'points'
+      call push(items, t)
+      t%text = 'ps'
+      call push(items, t)
+      t%text = '0'
+      call push(items, t)
+      t%text = 'notitle'
+      call push(items, t)
+      t%text = 'noautoscale'
+      call push(items, t)
+      endsubroutine label_item
+
+      pure function split_cells(text, separator) result(parts)
+      !< The cells of `text`: blank separated (empty `separator`), else between the separator characters (empty
+      !< cells kept), each trimmed.
+      character(len=*), intent(in)    :: text      !< Line.
+      character(len=*), intent(in)    :: separator !< Separator characters, empty for blanks.
+      character(len=256), allocatable :: parts(:)  !< Cells.
+      character(len=256), allocatable :: more(:)   !< Cells, one more.
+      character(len=:), allocatable   :: piece     !< A cell.
+      integer(I4P)                    :: i, j      !< Counters.
+
+      allocate(parts(0))
+      i = 1_I4P
+      do while (i <= len(text))
+         if (len(separator) == 0) then
+            if (text(i:i) == ' ' .or. text(i:i) == achar(9)) then
+               i = i + 1_I4P
+               cycle
+            endif
+            j = i
+            do while (j <= len(text))
+               if (text(j:j) == ' ' .or. text(j:j) == achar(9)) exit
+               j = j + 1_I4P
+            enddo
+         else
+            j = i
+            do while (j <= len(text))
+               if (index(separator, text(j:j)) > 0) exit
+               j = j + 1_I4P
+            enddo
+         endif
+         piece = trim(adjustl(text(i:j - 1)))
+         allocate(more(size(parts) + 1))
+         more(1:size(parts)) = parts
+         more(size(more)) = piece
+         parts = more
+         deallocate(more)
+         i = j + 1_I4P
+         if (len(separator) > 0 .and. j == len(text)) then
+            allocate(more(size(parts) + 1))
+            more(1:size(parts)) = parts
+            more(size(more)) = ''
+            parts = more
+            deallocate(more)
+         endif
+      enddo
+      endfunction split_cells
+   endsubroutine matrix_header_items
+
    subroutine plot_command(self, tokens, text, iostat, iomsg, three_d)
    !< `plot` and `splot` (`three_d`) (plot_items), gnuplot's binary arrays (`'file' binary array=...`) first read into
    !< datablocks.
@@ -3146,15 +3570,38 @@ contains
    logical,             optional, intent(in)    :: three_d   !< A splot.
    logical                                      :: splot_mode !< A splot.
    type(token_object), allocatable              :: items(:)  !< Tokens, binary files as datablocks.
+   type(token_object), allocatable              :: sparse(:) !< Tokens, sparse matrices as datablocks.
    integer(I4P)                                 :: k         !< Token counter.
    logical                                      :: binary    !< A binary file among the items.
+   logical                                      :: has_sparse !< A sparse matrix among the items.
 
    splot_mode = .false.
    if (present(three_d)) splot_mode = three_d
    binary = .false.
+   has_sparse = .false.
    do k = 2_I4P, size(tokens, kind=I4P)
       if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'binary') binary = .true.
+      if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'sparse') has_sparse = .true.
    enddo
+   if (has_sparse) then
+      ! gnuplot's sparse matrix=(C,R): the points binned into a full grid, a datablock
+      call self%sparse_items(tokens, sparse, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call self%plot_items(sparse, text, iostat, iomsg, splot_mode)
+      return
+   endif
+   has_sparse = .false.
+   do k = 2_I4P, size(tokens, kind=I4P)
+      if (tokens(k)%kind == TOKEN_WORD .and. (tokens(k)%text == 'rowheaders' .or. tokens(k)%text == 'columnheaders')) &
+         has_sparse = .true.
+   enddo
+   if (has_sparse) then
+      ! gnuplot's matrix rowheaders|columnheaders: the plain matrix a datablock, the headers the tick labels
+      call self%matrix_header_items(tokens, sparse, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call self%plot_items(sparse, text, iostat, iomsg, splot_mode)
+      return
+   endif
    if (.not. binary) then
       call self%plot_items(tokens, text, iostat, iomsg, splot_mode)
       return

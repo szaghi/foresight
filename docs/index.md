@@ -345,6 +345,8 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 <div class="fs-gallery">
   <Plot name="cb_image" svg :width="560" :height="400" caption="a heatmap with its color box" />
+  <Plot name="cb_sparse_matrix" svg :width="520" :height="400" caption="a heat map of sparse data" />
+  <Plot name="cb_matrix_headers" svg :width="560" :height="360" caption="a table with named rows and columns" />
   <Plot name="cb_matrix" svg :width="560" :height="400" caption="a matrix file" />
   <Plot name="cb_palettes" svg :width="760" :height="560" caption="palettes" />
   <Plot name="cb_palette_hsv" svg :width="560" :height="360" caption="a palette in hue, saturation and value" />
