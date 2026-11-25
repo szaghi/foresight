@@ -358,8 +358,10 @@ contains
          ! the list runs to its closing parenthesis, blanks included
          rest = trim(adjustl(rest))
          if (len(rest) == 0) then
-            ! no list: gnuplot's default gradient, black, blue, green, red, white
-            call defined_list('(0 0 0 0, 1 0 0 1, 3 0 1 0, 4 1 0 0, 6 1 1 1)')
+            ! no list: gnuplot 6.0's default gradient (color.c set_palette_defined): dark blue, blue, green, yellow,
+            ! orange, red, light red, pink
+            call defined_list('(0 0.05 0.05 0.2, 0.1 0 0 1, 0.3 0.05 0.9 0.4, 0.5 0.9 0.9 0, 0.7 1 0.6471 0, '// &
+                              '0.8 1 0 0, 0.9 0.94 0.195 0.195, 1 1 0.8 0.8)')
             if (len(bad) > 0) return
             cycle
          endif

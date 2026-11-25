@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(253)                           !< Per-check outcome.
+logical                       :: test_passed(254)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6231,7 +6231,7 @@ block
                      all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [255, 255, 255])
    call interpreter%run_text("set palette model RGB defined", iostat, iomsg)
    test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. &
-                     all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P / 6.0_R8P) == [0, 0, 255])
+                     all(interpreter%figure%panels(1)%palette%rgb(0.1_R8P) == [0, 0, 255])
    call interpreter%run_text("r = rgbcolor('red'); w = rgbcolor('white')", iostat, iomsg)
    call interpreter%symbols%value_of('r', v, found)
    test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. found .and. v == 16711680.0_R8P
@@ -6452,6 +6452,23 @@ block
    test_passed(253) = test_passed(253) .and. iostat == 0_I4P .and. &
                      interpreter%figure%panels(1)%title == 'set palette file "-" (3 columns)' .and. &
                      all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [0, 0, 255])
+endblock
+
+! set palette defined alone: gnuplot 6.0's default gradient (color.c), 8 stops from dark blue to pink
+block
+   call interpreter%init(scratch)
+   call interpreter%run_text("set palette defined", iostat, iomsg)
+   test_passed(254) = iostat == 0_I4P .and. all(interpreter%figure%panels(1)%palette%rgb(0.1_R8P) == [0, 0, 255]) .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.8_R8P) == [255, 0, 0]) .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P) == [255, 204, 204])
+   ! set datafile columnheaders: the first row of a palette file is a header (pm3dcolors.dem)
+   call interpreter%run_text("set datafile columnheaders"//new_line('a')// &
+                             "set palette file '-' using ($0):1:2:(($1+$2)/2)"//new_line('a')//"0 0"// &
+                             new_line('a')//"0 1"//new_line('a')//"1 0"//new_line('a')//"1 1"//new_line('a')//"e", &
+                             iostat, iomsg)
+   test_passed(254) = test_passed(254) .and. iostat == 0_I4P .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [0, 255, 128]) .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P) == [255, 255, 255])
 endblock
 
 if (all(test_passed)) then

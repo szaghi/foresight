@@ -12866,7 +12866,7 @@ contains
       if (.not. allocated(pfields)) then
          ! gnuplot's default: gray:r:g:b if the rows have a 4th column, else r:g:b
          pfields = plain_columns([1_I4P, 2_I4P, 3_I4P, 4_I4P])
-         call pdata%table(pfields, pindex, pevery, rows)
+         call pdata%table(pfields, pindex, pevery, rows, header=self%column_headers)
          ! rows without a 4th column are skipped (gnuplot): none left means r:g:b
          if (size(rows, 1) == 0) then
             pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
@@ -12878,7 +12878,8 @@ contains
          call fail('set palette file: using needs r:g:b, gray:r:g:b or gray:rgb', iostat, iomsg)
          return
       endif
-      call pdata%table(pfields, pindex, pevery, rows)
+      ! `set datafile columnheaders`: the first row a header, as gnuplot's df_open of the palette file
+      call pdata%table(pfields, pindex, pevery, rows, header=self%column_headers)
       n = size(rows, 1, kind=I4P)
       if (n == 0_I4P) then
          call fail('set palette file: no colors in "'//file//'"', iostat, iomsg)
