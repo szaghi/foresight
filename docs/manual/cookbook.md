@@ -1565,6 +1565,26 @@ the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`
 for its value; `set pm3d at b` with `unset surface` draws the colored map without the surface's own lines. See
 [Contours](/guide/gnuplot-subset#contours).
 
+### A density map of scattered points
+
+<<< @/examples/snippets/cb_map_dgrid3d.gp{gnuplot}
+
+<Plot name="cb_map_dgrid3d" svg :width="560" :height="400" />
+
+`set dgrid3d ... gauss kdensity` grids the points on a 60 by 60 grid with a Gaussian kernel, each node the sum of the
+points' weights: a density map, drawn with pm3d; `nogrid` keeps the points of the second item as they are. See
+[Gridded and masked surfaces](/guide/gnuplot-subset#gridded-and-masked-surfaces).
+
+### A surface masked to its data
+
+<<< @/examples/snippets/cb_map_mask.gp{gnuplot}
+
+<Plot name="cb_map_mask" svg :width="560" :height="400" />
+
+A grid from scattered points (`set dgrid3d`) covers their bounding box, beyond the data. Their convex hull, tabulated
+into `$HULL`, becomes a mask (`with mask`): the pm3d item with the `mask` option is drawn only inside it. See
+[Gridded and masked surfaces](/guide/gnuplot-subset#gridded-and-masked-surfaces).
+
 ## Polar and radial charts
 
 ### A polar plot

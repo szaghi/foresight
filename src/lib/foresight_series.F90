@@ -168,6 +168,7 @@ type :: series_object
                                                         !< surfaces).
    logical                       :: no_contours = .false. !< No contour lines (gnuplot's item option `nocontours`).
    logical                       :: no_surface = .false.  !< Its surface not drawn (gnuplot's item option `nosurface`).
+   logical                       :: masked = .false.      !< Masked by the `with mask` polygons (item option `mask`).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

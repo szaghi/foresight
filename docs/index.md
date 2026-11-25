@@ -360,6 +360,8 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
   <Plot name="cb_map_contour" svg :width="560" :height="400" caption="contour lines over a map" />
+  <Plot name="cb_map_dgrid3d" svg :width="560" :height="400" caption="a density map of scattered points (dgrid3d)" />
+  <Plot name="cb_map_mask" svg :width="560" :height="400" caption="a surface masked to its data (with mask)" />
 </div>
 
 ### Polar and radial charts

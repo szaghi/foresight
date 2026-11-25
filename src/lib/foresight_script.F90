@@ -130,6 +130,8 @@ use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
 use foresight_series, only : series_object
 use foresight_view3d, only : view3d_object
+use foresight_dgrid3d, only : dgrid3d_object, grid_series, DGRID_BOX, DGRID_CAUCHY, DGRID_EXP, DGRID_GAUSS, &
+                              DGRID_HANN, DGRID_QNORM, DGRID_SPLINES
 use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
                               LEVELS_INCREMENTAL
 use foresight_pm3d, only : pm3d_object, CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, &
@@ -148,7 +150,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             gnuplot_abbreviates, sequence_colors, style_name, style_object, style_with, &
                             STYLE_NAMES, WITH_GAUGE, WITH_PARALLELAXES, WITH_PIE, WITH_RADAR, WITH_ROSE, WITH_SPIDERPLOT, &
                             FILL_SOLID, FILL_PATTERN, WITH_BOXES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_LABELS, &
-                            WITH_XERRORBARS, &
+                            WITH_XERRORBARS, WITH_MASK, &
                             WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES, &
                             WITH_POINTS, WITH_LINESPOINTS
@@ -2812,14 +2814,16 @@ contains
    endif
    endfunction assignment
 
-   subroutine binary_items(self, tokens, items, iostat, iomsg)
+   subroutine binary_items(self, tokens, three_d, items, iostat, iomsg)
    !< The `plot` tokens with each gnuplot binary array (`'file' binary array=(W,H)|WxH [record=...] [format='%uchar...']
    !< [flipx] [flipy] [flip=x|y] [dx=DX] [dy=DY] [origin=(X,Y)] [skip=N] [endian=little|big]`) read into a datablock,
    !< one line per pixel: its fields (as the format: one specifier for every field, else one per field) then x and y
    !< (pixel i, j at origin + (i dx, j dy), the first scan line at the bottom unless flipped); the item's `using`
-   !< prefixed by these x:y columns, or `using x:y:1:...:N` (N fields: rgbimage 3, rgbalpha 4, else the format's).
+   !< prefixed by these x:y columns, or `using x:y:1:...:N` (N fields: rgbimage 3, rgbalpha 4, else the format's); a
+   !< splot's (`three_d`) by x:y:(0), its pixels at z 0 (gnuplot's).
    class(script_object),            intent(inout) :: self      !< Interpreter.
    type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
+   logical,                         intent(in)    :: three_d   !< A splot.
    type(token_object), allocatable, intent(out)   :: items(:)  !< Tokens, binary files as datablocks.
    integer(I4P),                    intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable,   intent(out)   :: iomsg     !< Error message.
@@ -3038,6 +3042,7 @@ contains
          t%text = 'using'
          call push(items, t)
          t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))
+         if (three_d) t%text = t%text//':(0)'
          do f = 1_I4P, nfields
             t%text = t%text//':'//int_str(int(f, I8P))
          enddo
@@ -3048,7 +3053,8 @@ contains
          if (q > k) then
             if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P)) &
                items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
-                                         int_str(int(nfields + 2_I4P, I8P))//':'//tokens(q)%text
+                                         int_str(int(nfields + 2_I4P, I8P))//trim(merge(':(0)', '    ', three_d))// &
+                                         ':'//tokens(q)%text
          endif
       enddo
       k = last + 1_I4P
@@ -3149,7 +3155,7 @@ contains
       call self%plot_items(tokens, text, iostat, iomsg, splot_mode)
       return
    endif
-   call self%binary_items(tokens, items, iostat, iomsg)
+   call self%binary_items(tokens, splot_mode, items, iostat, iomsg)
    if (iostat /= 0_I4P) return
    call self%plot_items(items, text, iostat, iomsg, splot_mode)
    endsubroutine plot_command
@@ -3189,6 +3195,8 @@ contains
    character(len=:), allocatable                :: option_word !< The current option as written.
    logical                                      :: item_nocontours !< `nocontours`: no contour lines of the item.
    logical                                      :: item_nosurface  !< `nosurface`: the item's surface not drawn.
+   logical                                      :: item_nogrid     !< `nogrid`: the item's data not gridded (dgrid3d).
+   logical                                      :: item_mask       !< `mask`: the item masked by the `with mask` polygons.
    type(datafile_object)                        :: data      !< Current data file.
    type(expression_object)                      :: func      !< Current function.
    type(expression_object), allocatable         :: functions(:) !< Functions of the plot.
@@ -3825,6 +3833,8 @@ contains
       other_seen = .false.
       item_nocontours = .false.
       item_nosurface = .false.
+      item_nogrid = .false.
+      item_mask = .false.
       i = i + 1_I4P
       do while (i <= size(tokens, kind=I4P))
          if (tokens(i)%kind == TOKEN_COMMA) exit
@@ -4451,6 +4461,12 @@ contains
          elseif (splot_mode .and. keyword(word, 'nosurface', 6_I4P)) then
             ! splot's: the item's contours only, its surface not drawn
             item_nosurface = .true.
+         elseif (splot_mode .and. word == 'nogrid') then
+            ! splot's: the item's data as they are, not gridded by set dgrid3d
+            item_nogrid = .true.
+         elseif (word == 'mask') then
+            ! gnuplot's: the item (pm3d, image) drawn only inside the polygons of the `with mask` item
+            item_mask = .true.
          else
             call fail('plot: unsupported option "'//word//'"', iostat, iomsg)
             return
@@ -4806,6 +4822,9 @@ contains
       if (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha') then
          call image_item
          if (iostat /= 0_I4P) return
+         associate(panel => self%figure%panels(self%figure%current))
+            if (size(panel%series) > 0) panel%series(size(panel%series))%masked = item_mask
+         endassociate
          if (i > size(tokens, kind=I4P)) exit
          i = i + 1_I4P
          cycle
@@ -5904,6 +5923,10 @@ contains
                           merge(grid_rows, n, grid_rows > 0_I4P .and. grid_rows <= n), pseudo /= 3_I4P)
          panel%series(last)%no_contours = item_nocontours
          panel%series(last)%no_surface = item_nosurface
+         ! set dgrid3d: the data (not a function's samples) gridded, gnuplot's grid_nongrid_data
+         ! a mask is never gridded (gnuplot's opt_out_of_dgrid3d)
+         if (panel%dgrid3d%on .and. pseudo /= 3_I4P .and. .not. item_nogrid .and. &
+             panel%series(last)%style%with /= WITH_MASK) call grid_series(panel%series(last), panel%dgrid3d)
       endassociate
       endsubroutine attach_z
 
@@ -6502,6 +6525,9 @@ contains
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
          if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%noautoscale = item_noauto
+         panel%series(last)%masked = item_mask
+         ! a mask is not drawn: its key entry is its title alone (gnuplot's)
+         panel%series(last)%key_blank = panel%series(last)%key_blank .or. panel%series(last)%style%with == WITH_MASK
          panel%series(last)%key_mid_palette = surface_item
          panel%series(last)%crisp = surface_item
          if (allocated(point_sizes)) then
@@ -10416,6 +10442,8 @@ contains
       endassociate
    elseif (keyword(option, 'cntrparam', 5_I4P)) then
       call cntrparam_option(tokens)
+   elseif (keyword(option, 'dgrid3d', 2_I4P)) then
+      call dgrid3d_option(tokens)
    elseif (keyword(option, 'cntrlabel', 5_I4P)) then
       call cntrlabel_option(tokens)
    elseif (option == 'view') then
@@ -11385,6 +11413,96 @@ contains
       self%figure%panels(self%figure%current)%label_font(axis) = font
       ok = .true.
       endfunction axis_label
+
+      subroutine dgrid3d_option(toks)
+      !< gnuplot `set dgrid3d [ROWS[,COLS]] [qnorm [Q]|splines|gauss|cauchy|exp|box|hann [kdensity] [DX[,DY]]]`: the
+      !< scattered data of splot gridded, ROWS points along y of COLS iso-curves of x (10, 10, qnorm 1 by default).
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      type(dgrid3d_object)           :: new     !< The settings read.
+      integer(I4P)                   :: k       !< Token counter.
+      integer(I4P)                   :: n       !< An integer read.
+      real(R8P)                      :: v       !< A number read.
+
+      new = self%figure%panels(self%figure%current)%dgrid3d
+      new%kdensity = .false.
+      k = 2_I4P
+      if (k <= size(toks, kind=I4P)) then
+         if (to_number(toks(k)%text, v) .or. scan(toks(k)%text(1:1), '(') > 0) then
+            k = k - 1_I4P
+            if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+            new%rows = n
+            new%cols = n
+            if (k < size(toks, kind=I4P)) then
+               if (toks(k + 1_I4P)%kind == TOKEN_COMMA) then
+                  k = k + 1_I4P
+                  if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+                  new%cols = n
+               endif
+            endif
+            k = k + 1_I4P
+         endif
+      endif
+      do while (k <= size(toks, kind=I4P))
+         select case (toks(k)%text)
+         case ('qnorm')
+            new%mode = DGRID_QNORM
+            if (k < size(toks, kind=I4P)) then
+               if (to_number(toks(k + 1_I4P)%text, v)) then
+                  if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+                  new%norm = n
+               endif
+            endif
+         case ('splines', 'spline')
+            new%mode = DGRID_SPLINES
+         case ('gauss', 'cauchy', 'exp', 'box', 'hann')
+            select case (toks(k)%text)
+            case ('gauss')
+               new%mode = DGRID_GAUSS
+            case ('cauchy')
+               new%mode = DGRID_CAUCHY
+            case ('exp')
+               new%mode = DGRID_EXP
+            case ('box')
+               new%mode = DGRID_BOX
+            case default
+               new%mode = DGRID_HANN
+            endselect
+            if (k < size(toks, kind=I4P)) then
+               if (keyword(toks(k + 1_I4P)%text, 'kdensity2d', 5_I4P)) then
+                  new%kdensity = .true.
+                  k = k + 1_I4P
+               endif
+            endif
+            if (k < size(toks, kind=I4P)) then
+               if (to_number(toks(k + 1_I4P)%text, v) .or. toks(k + 1_I4P)%text(1:1) == '(') then
+                  if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                  new%scale = v
+                  if (k < size(toks, kind=I4P)) then
+                     if (toks(k + 1_I4P)%kind == TOKEN_COMMA) then
+                        k = k + 1_I4P
+                        if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                        new%scale(2) = v
+                     endif
+                  endif
+               endif
+            endif
+         case default
+            call fail('set dgrid3d: unrecognized keyword or unexpected value "'//toks(k)%text//'"', iostat, iomsg)
+            return
+         endselect
+         k = k + 1_I4P
+      enddo
+      if (new%rows < 2_I4P .or. new%rows > 1000_I4P .or. new%cols < 2_I4P .or. new%cols > 1000_I4P) then
+         call fail('set dgrid3d: number of grid points must be in [2:1000]', iostat, iomsg)
+         return
+      endif
+      if (any(new%scale < 0.0_R8P)) then
+         call fail('set dgrid3d: scale factors must be greater than zero', iostat, iomsg)
+         return
+      endif
+      new%on = .true.
+      self%figure%panels(self%figure%current)%dgrid3d = new
+      endsubroutine dgrid3d_option
 
       subroutine cntrparam_option(toks)
       !< gnuplot `set cntrparam [linear|cubicspline|bspline] [points N] [order N] [levels [auto [N]|N|discrete z1,
@@ -15349,6 +15467,8 @@ contains
             endif
          endassociate
       endblock
+   elseif (keyword(option, 'dgrid3d', 2_I4P)) then
+      self%figure%panels(self%figure%current)%dgrid3d%on = .false.
    elseif (keyword(option, 'contour', 3_I4P)) then
       self%figure%panels(self%figure%current)%contour%on = .false.
    elseif (keyword(option, 'pm3d', 2_I4P)) then
@@ -17145,7 +17265,7 @@ contains
         keyword(word, 'with', 1_I4P) .or. keyword(word, 'title', 1_I4P) .or. keyword(word, 'notitle', 3_I4P) .or. &
         keyword(word, 'axes', 2_I4P) .or. keyword(word, 'smooth', 1_I4P) .or. word == 'ls' .or. &
         keyword(word, 'linestyle', 5_I4P) .or. is_line_option(word) .or. word == 'format' .or. word == 'fs' .or. &
-        word == 'fill' .or. word == 'nocontours' .or. word == 'nosurface' .or. &
+        word == 'fill' .or. word == 'nocontours' .or. word == 'nosurface' .or. word == 'nogrid' .or. word == 'mask' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
         word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &

@@ -22,7 +22,7 @@ none of them covers: pure Fortran, interactive pages that need nothing to view, 
 | 2D plot styles | every gnuplot 2D style (lines to spider plots, heatmaps, polar); pies, gauges, readouts | all | through gnuplot | through gnuplot | through matplotlib | many | many |
 | Smoothing, histograms | `smooth`, 11 filters; `bins` | `smooth`, 13 filters; `bins` | through gnuplot | through gnuplot | histograms | histograms | histograms |
 | Fitting | `fit`, gnuplot's Marquardt-Levenberg, in scripts and from Fortran | `fit` | through gnuplot | through gnuplot | no | no | no |
-| 3D, contours | no | yes | through gnuplot | through gnuplot | contours, 3D | contours, 3D axes | contours, 3D lines |
+| 3D, contours | the `splot` map view: pm3d, contours, gridded and masked surfaces; no 3D projections yet | yes | through gnuplot | through gnuplot | contours, 3D | contours, 3D axes | contours, 3D lines |
 
 The rows on other projects summarise their documentation as of October 2026
 ([feedgnuplot](https://github.com/dkogan/feedgnuplot), [fplotlib](https://github.com/certik/fplotlib),
@@ -43,6 +43,6 @@ The rows on other projects summarise their documentation as of October 2026
 ## When to use something else
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.
-- **Raster output** (PNG), contours, maps or 3D from pure Fortran: fplotlib, fortplot.
+- **Raster output** (PNG) or 3D projections from pure Fortran: fplotlib, fortplot.
 - **The full gnuplot language** (3D views beyond the `splot` map view, the interactive terminals): gnuplot itself.
 - **Fields on meshes**: ParaView through [VTKFortran](https://github.com/szaghi/VTKFortran).

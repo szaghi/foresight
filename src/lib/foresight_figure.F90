@@ -33,6 +33,8 @@ use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
 use foresight_font, only : font_object
 use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
                               LEVELS_INCREMENTAL
+use foresight_dgrid3d, only : grid_series, DGRID_BOX, DGRID_CAUCHY, DGRID_EXP, DGRID_GAUSS, DGRID_HANN, DGRID_QNORM, &
+                              DGRID_SPLINES
 use foresight_pm3d, only : CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, CORNERS_MEDIAN, &
                            CORNERS_MIN, CORNERS_RMS
 use penf, only : I4P, R8P
@@ -100,6 +102,7 @@ type :: figure_object
       procedure, pass(self) :: set_view        !< gnuplot `set view`.
       procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
       procedure, pass(self) :: set_contour     !< gnuplot `set contour`, `set cntrparam`, `set cntrlabel`.
+      procedure, pass(self) :: set_dgrid3d     !< gnuplot `set dgrid3d`.
       procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
       procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
       procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
@@ -1837,6 +1840,10 @@ contains
       call self%plot(x, y, title=title, with='points', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
    endif
    call heights_of_last(self, z, reshape([1_I4P, size(z, kind=I4P)], [2, 1]))
+   ! set_dgrid3d: the scattered points gridded (gnuplot's grid_nongrid_data)
+   associate(panel => self%panels(self%current))
+      if (panel%dgrid3d%on) call grid_series(panel%series(size(panel%series)), panel%dgrid3d)
+   endassociate
    endsubroutine splot_points
 
    subroutine splot_grid(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette)
@@ -1982,6 +1989,53 @@ contains
       if (present(onecolor)) cnt%onecolor = onecolor
    endassociate
    endsubroutine set_contour
+
+   subroutine set_dgrid3d(self, on, rows, cols, mode, norm, scale, kdensity)
+   !< gnuplot `set dgrid3d`: the scattered points of `splot` gridded (`on`), `rows` points along y of `cols` iso-curves
+   !< of x (10, 10), each node a weighted mean of the points by `mode`: `qnorm` (inverse distance to the power `norm`,
+   !< 1), `splines` (thin plate splines), or a kernel of the distance scaled by `scale` (dx, dy; 1, 1) `gauss`,
+   !< `cauchy`, `exp`, `box`, `hann`; `kdensity` the kernel's weighted sums, a density.
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   logical,              intent(in), optional :: on       !< Data gridded.
+   integer(I4P),         intent(in), optional :: rows     !< Points along y of each iso-curve.
+   integer(I4P),         intent(in), optional :: cols     !< Iso-curves of x.
+   character(len=*),     intent(in), optional :: mode     !< Weighting.
+   integer(I4P),         intent(in), optional :: norm     !< The power of `qnorm`.
+   real(R8P),            intent(in), optional :: scale(2) !< Kernel scales along x and y.
+   logical,              intent(in), optional :: kdensity !< Kernel sums (a density), not means.
+
+   call self%ensure_panels
+   associate(dg => self%panels(self%current)%dgrid3d)
+      dg%on = .true.
+      if (present(on)) dg%on = on
+      if (present(rows)) dg%rows = rows
+      if (present(cols)) dg%cols = cols
+      if (present(norm)) dg%norm = norm
+      if (present(scale)) dg%scale = scale
+      if (present(kdensity)) dg%kdensity = kdensity
+      if (present(mode)) then
+         select case (mode)
+         case ('qnorm')
+            dg%mode = DGRID_QNORM
+         case ('splines')
+            dg%mode = DGRID_SPLINES
+         case ('gauss')
+            dg%mode = DGRID_GAUSS
+         case ('cauchy')
+            dg%mode = DGRID_CAUCHY
+         case ('exp')
+            dg%mode = DGRID_EXP
+         case ('box')
+            dg%mode = DGRID_BOX
+         case ('hann')
+            dg%mode = DGRID_HANN
+         case default
+            error stop 'foresight: set_dgrid3d: mode must be qnorm, splines, gauss, cauchy, exp, box or hann'
+         endselect
+      endif
+      if (dg%rows < 2_I4P .or. dg%cols < 2_I4P) error stop 'foresight: set_dgrid3d: rows and cols must be at least 2'
+   endassociate
+   endsubroutine set_dgrid3d
 
    subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in)
    !< gnuplot `set pm3d`: `implicit` every surface drawn as colored quadrangles too (`set pm3d`; false: only the items

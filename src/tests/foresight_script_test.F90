@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(250)                           !< Per-check outcome.
+logical                       :: test_passed(251)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6321,6 +6321,74 @@ block
    test_passed(250) = test_passed(250) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%contour%on
 endblock
 
+! set dgrid3d (a port of gnuplot 6.0's grid_nongrid_data) as gnuplot tabulates it: qnorm 1 and 2, gauss, kdensity, thin
+! plate splines, box (a node out of reach undefined); nogrid; with mask and the mask option of pm3d
+block
+   character(len=:), allocatable :: tab   !< Table.
+   character(len=:), allocatable :: svg   !< Rendering.
+   character(len=:), allocatable :: data  !< Scattered points.
+   integer(I4P)                  :: whole !< Quadrangles unmasked.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   data = "$d << EOD"//nl//"0 0 1"//nl//"1 0.3 2"//nl//"0.4 1 3"//nl//"1.2 1.4 0.5"//nl//"0.7 0.6 2.5"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text(data//"set dgrid3d 4,3; set table 'foresight_script_test.dat'; splot $d using 1:2:3; "// &
+                             "unset table", iostat, iomsg)
+   tab = read_text('foresight_script_test.dat')
+   test_passed(251) = iostat == 0_I4P .and. index(tab, '# IsoCurve 0, 4 points'//nl//'# x y z type'//nl// &
+                     ' 1.2  0  1.92421 i'//nl//' 1.2  0.466667  1.95642 i'//nl//' 1.2  0.933333  1.75134 i'//nl// &
+                     ' 1.2  1.4  0.5 i') > 0 .and. index(tab, ' 0  0  1 i'//nl//' 0  0.466667  1.86131 i') > 0 .and. &
+                     index(tab, '# IsoCurve 3') == 0
+   call interpreter%run_text("set dgrid3d 4,3 qnorm 2; set table 'foresight_script_test.dat'; splot $d using 1:2:3; "// &
+                             "unset table", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     ' 0  0.466667  1.80364 i'//nl//' 0  0.933333  2.47603 i') > 0
+   call interpreter%run_text("set dgrid3d 3,4 gauss 0.5,0.7; set table 'foresight_script_test.dat'; "// &
+                             "splot $d using 1:2:3; unset table", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     ' 1.2  0.7  1.78104 i') > 0
+   call interpreter%run_text("set dgrid3d 3,3 gauss kdensity 0.5; set table 'foresight_script_test.dat'; "// &
+                             "splot $d using 1:2:(1); unset table", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     ' 1.2  0  0.686642 i'//nl//' 1.2  0.7  0.99802 i'//nl//' 1.2  1.4  1.07594 i') > 0
+   call interpreter%run_text("set dgrid3d 3,3 splines; set table 'foresight_script_test.dat'; "// &
+                             "splot $d using 1:2:3; unset table", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     ' 1.2  0  1.42185 i'//nl//' 1.2  0.7  1.57401 i'//nl//' 1.2  1.4  0.5 i') > 0
+   call interpreter%run_text("set dgrid3d 3,3 box 0.3; set table 'foresight_script_test.dat'; "// &
+                             "splot $d using 1:2:3; unset table", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     ' 0.6  0.7  2.5 i'//nl//' 0.6  1.4  NaN u') > 0
+   ! nogrid: the item's points as they are; unset dgrid3d
+   call interpreter%run_text("set table 'foresight_script_test.dat'; splot $d using 1:2:3 nogrid; unset table", &
+                             iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     '# IsoCurve 0, 5 points') > 0
+   call interpreter%run_text("set dgrid3d 1,3", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat /= 0_I4P
+   call interpreter%run_text("set dgrid3d 3,3 sideways", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat /= 0_I4P .and. index(iomsg, 'unrecognized keyword') > 0
+   call interpreter%run_text("unset dgrid3d", iostat, iomsg)
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%dgrid3d%on
+   ! with mask: not drawn, its key entry a text alone; a pm3d item `mask` keeps the quadrangles inside its polygons
+   call interpreter%init(scratch)
+   call interpreter%run_text("$m << EOD"//nl//"-2 -2"//nl//"2 -2"//nl//"0 2"//nl//nl//"1.5 1.5"//nl//"2.5 1.5"//nl// &
+                             "2.5 2.5"//nl//"EOD"//nl//"set terminal svg; set output 'foresight_script_test.svg'; "// &
+                             "set view map; set isosamples 6,6; set xrange [-3:3]; set yrange [-3:3]; "// &
+                             "splot x*y with pm3d", iostat, iomsg)
+   whole = count_text(read_text('foresight_script_test.svg'), '<path')
+   call interpreter%run_text("splot $m using 1:2:(0) with mask title 'mask', x*y mask with pm3d title 'surf'", &
+                             iostat, iomsg)
+   svg = read_text('foresight_script_test.svg')
+   test_passed(251) = test_passed(251) .and. iostat == 0_I4P .and. whole > 0_I4P .and. &
+                     count_text(svg, '<path') > 0_I4P .and. count_text(svg, '<path') < whole .and. &
+                     index(svg, '>mask<') > 0 .and. index(svg, '>surf<') > 0
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(251) = test_passed(251) .and. series(1)%key_blank .and. .not. series(1)%masked .and. &
+                        series(2)%masked
+   endassociate
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -6397,6 +6465,25 @@ contains
    enddo
    close(unit)
    endfunction series_polylines
+
+   pure function count_text(text, part) result(n)
+   !< Occurrences of `part` in `text`.
+   character(len=*), intent(in) :: text !< Text.
+   character(len=*), intent(in) :: part !< Part sought.
+   integer(I4P)                 :: n    !< Occurrences.
+   integer(I4P)                 :: k    !< Search start.
+   integer(I4P)                 :: at   !< Position found.
+
+   n = 0_I4P
+   k = 1_I4P
+   do
+      at = index(text(k:), part)
+      if (at == 0) exit
+      n = n + 1_I4P
+      k = k + at - 1_I4P + len(part)
+      if (k > len(text)) exit
+   enddo
+   endfunction count_text
 
    pure function same(values, expected) result(equal)
    !< Whether `values` equal the integers `expected` to rounding, -1 standing for NaN.

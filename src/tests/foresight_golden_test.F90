@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(121)                  !< Per-figure outcome.
+logical                     :: test_passed(124)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -151,7 +151,10 @@ test_passed(118) = check('map_pm3d_interpolate.svg', figure_map_pm3d(4_I4P))
 test_passed(119) = check('map_contour.svg', figure_map_contour())
 test_passed(120) = check('map_contour.html', figure_map_contour())
 test_passed(121) = check('map_contour.txt', figure_map_contour())
-write(output_unit, '(A,121L2)') 'foresight golden checks:', test_passed
+test_passed(122) = check('map_dgrid3d.svg', figure_map_dgrid3d())
+test_passed(123) = check('map_dgrid3d.html', figure_map_dgrid3d())
+test_passed(124) = check('map_dgrid3d.txt', figure_map_dgrid3d())
+write(output_unit, '(A,124L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -926,6 +929,26 @@ contains
    call fig%set_title('contours')
    call fig%splot(x, y, z, title='x exp(-r^2/2)', lc='#c0c0c0')
    endfunction figure_map_contour
+
+   function figure_map_dgrid3d() result(fig)
+   !< A map view of scattered points gridded (gnuplot `set dgrid3d`, a Gaussian kernel) and drawn with pm3d: 60 points
+   !< on a sunflower spiral, their heights a tilted saddle.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:)   !< Heights.
+   real(R8P), parameter   :: GOLDEN_ANGLE = 2.399963229728653_R8P !< Spiral step [rad].
+   integer(I4P)           :: k      !< Point counter.
+
+   call fig%init(width=500_I4P, height=360_I4P)
+   x = [(sqrt(real(k, R8P) / 60.0_R8P) * 2.0_R8P * cos(GOLDEN_ANGLE * real(k, R8P)), k = 1, 60)]
+   y = [(sqrt(real(k, R8P) / 60.0_R8P) * 2.0_R8P * sin(GOLDEN_ANGLE * real(k, R8P)), k = 1, 60)]
+   z = x * y + 0.5_R8P * x
+   call fig%set_view(map=.true.)
+   call fig%set_dgrid3d(rows=25_I4P, cols=25_I4P, mode='gauss', scale=[0.6_R8P, 0.6_R8P])
+   call fig%set_title('dgrid3d')
+   call fig%splot(x, y, z, with='pm3d', title='saddle')
+   endfunction figure_map_dgrid3d
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

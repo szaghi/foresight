@@ -25,7 +25,7 @@ public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
-          WITH_FILLSTEPS, WITH_PM3D, &
+          WITH_FILLSTEPS, WITH_PM3D, WITH_MASK, &
           WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
           WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
           WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT
@@ -80,6 +80,7 @@ integer(I4P), parameter :: WITH_SPIDERPLOT  = 37_I4P !< gnuplot `with spiderplot
                                                     !< per row.
 integer(I4P), parameter :: WITH_FILLSTEPS   = 38_I4P !< gnuplot `with fillsteps`: the area under `steps` filled.
 integer(I4P), parameter :: WITH_PM3D        = 39_I4P !< gnuplot `with pm3d` (splot): a surface as colored quadrangles.
+integer(I4P), parameter :: WITH_MASK        = 40_I4P !< gnuplot `with mask`: polygons masking the `mask` items, not drawn.
 character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, '// &
                                              'fillsteps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
@@ -349,6 +350,8 @@ contains
       name = 'boxplot'
    elseif (gnuplot_abbreviates(word, 'pm$3d')) then
       name = 'pm3d'
+   elseif (word == 'mask') then
+      name = 'mask'
    elseif (gnuplot_abbreviates(word, 'poly$gons')) then
       name = 'polygons'
    elseif (gnuplot_abbreviates(word, 'labels')) then
@@ -377,8 +380,6 @@ contains
    elseif (gnuplot_abbreviates(word, 'table')) then
       name = ''
    elseif (gnuplot_abbreviates(word, 'zerror$fill')) then
-      name = ''
-   elseif (gnuplot_abbreviates(word, 'mask')) then
       name = ''
    elseif (gnuplot_abbreviates(word, 'contourfill')) then
       name = ''
@@ -492,6 +493,8 @@ contains
       with = WITH_POLYGONS
    case ('pm3d')
       with = WITH_PM3D
+   case ('mask')
+      with = WITH_MASK
    case ('labels')
       with = WITH_LABELS
    case ('sectors')
@@ -588,7 +591,7 @@ contains
                                     WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                                     WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, &
                                     WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT, &
-                                    WITH_FILLSTEPS, WITH_PM3D])
+                                    WITH_FILLSTEPS, WITH_PM3D, WITH_MASK])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)

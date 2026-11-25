@@ -55,8 +55,9 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_object
-use foresight_pm3d, only : pm3d_object, pm3d_polygons
+use foresight_pm3d, only : masked, pm3d_object, pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
+use foresight_dgrid3d, only : dgrid3d_object
 use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -75,7 +76,7 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, WITH_PM3D, &
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
-                            WITH_PARALLELAXES, WITH_SPIDERPLOT
+                            WITH_PARALLELAXES, WITH_SPIDERPLOT, WITH_MASK
 use foresight_ticks, only : labels_attribute, linear_ticks, merge_list, MINOR_DEFAULT, push, tic_item, tick_object, &
                             tics_object, TICS_AUTO, TICS_FIXED, &
                            TICS_NONE
@@ -328,6 +329,7 @@ type :: axes_object
    type(pm3d_object)                :: pm3d              !< pm3d settings of a 3D panel: `set pm3d`.
    type(contour_object)             :: contour           !< Contour settings of a 3D panel: `set contour`, `set
                                                          !< cntrparam`.
+   type(dgrid3d_object)             :: dgrid3d           !< Gridding of the scattered 3D data: `set dgrid3d`.
    type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
    logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
    type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.
@@ -420,6 +422,7 @@ type :: axes_object
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: map_geometry_of    !< Geometry of a map view.
       procedure, pass(self), private :: map_surfaces       !< Series of a map view as drawn (pm3d quadrangles).
+      procedure, pass(self), private :: mask_polygons      !< Polygons of the last `with mask` item.
       procedure, pass(self), private :: draw_map_frame     !< Border, ticks, labels and title of a map view.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
@@ -2324,17 +2327,25 @@ contains
    type(series_object), allocatable  :: drawn(:) !< Series as drawn.
    type(series_object)               :: quads   !< Quadrangles of a surface.
    type(series_object)               :: blank   !< A series of default components (never assigned).
+   real(R8P), allocatable            :: mx(:)   !< Mask polygons abscissae.
+   real(R8P), allocatable            :: my(:)   !< Mask polygons ordinates.
    integer(I4P)                      :: s       !< Series counter.
    logical                           :: pm3d    !< A `with pm3d` item.
 
+   call self%mask_polygons(mx, my)
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
       pm3d = self%series(s)%style%with == WITH_PM3D
+      if (self%series(s)%style%with == WITH_MASK) then
+         ! a mask: not drawn, its key entry a text alone
+         call push(drawn, self%series(s))
+         cycle
+      endif
       ! a `with pm3d` item is a surface (`unset surface` hides it, as gnuplot); the implicit pm3d of any surface is not
       if (allocated(self%series(s)%scans)) then
          if ((pm3d .and. self%view3d%surface .and. .not. self%series(s)%no_surface) .or. &
              (.not. pm3d .and. self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
-            call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, quads)
+            call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads)
             call push(drawn, quads)
          endif
       endif
@@ -2363,6 +2374,23 @@ contains
    enddo
    call move_alloc(drawn, self%series)
    endsubroutine map_surfaces
+
+   subroutine mask_polygons(self, mx, my)
+   !< The polygons of the panel's last `with mask` item (NaN separated: its blocks, or scans), none without one; gnuplot
+   !< keeps the last mask read.
+   class(axes_object),     intent(in)  :: self  !< Panel.
+   real(R8P), allocatable, intent(out) :: mx(:) !< Polygons abscissae.
+   real(R8P), allocatable, intent(out) :: my(:) !< Polygons ordinates.
+   integer(I4P)                        :: s     !< Series counter.
+
+   allocate(mx(0), my(0))
+   do s = size(self%series, kind=I4P), 1_I4P, -1_I4P
+      if (self%series(s)%style%with /= WITH_MASK) cycle
+      mx = self%series(s)%x
+      my = self%series(s)%y
+      exit
+   enddo
+   endsubroutine mask_polygons
 
    subroutine contour_series(self, s, drawn)
    !< The contour lines of the surface `s` as lines, gnuplot's: a series per level in linetypes after the surface's (or
@@ -2513,20 +2541,24 @@ contains
    if (len(sup) > 0) label = label//'^{'//sup//'}'
    endfunction contour_label
 
-   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, quads)
+   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, mx, my, quads)
    !< The pm3d quadrangles of a 3D `series` as a series of polygons (see map_surfaces); `titled` keeps its key entry
-   !< (a `with pm3d` item; the quadrangles of an implicit pm3d have none).
+   !< (a `with pm3d` item; the quadrangles of an implicit pm3d have none); a `mask` item keeps the quadrangles whose
+   !< first corner lies in a mask polygon (`mx`, `my`), as gnuplot's pm3d_plot.
    type(series_object), intent(in)  :: series   !< Surface.
    type(pm3d_object),   intent(in)  :: settings !< pm3d settings.
    type(axis_object),   intent(in)  :: xaxis    !< Horizontal axis.
    type(axis_object),   intent(in)  :: yaxis    !< Vertical axis.
    logical,             intent(in)  :: titled   !< Keep the title.
+   real(R8P),           intent(in)  :: mx(:)    !< Mask polygons abscissae, NaN separated.
+   real(R8P),           intent(in)  :: my(:)    !< Mask polygons ordinates.
    type(series_object), intent(out) :: quads    !< Quadrangles.
    real(R8P), allocatable           :: c(:)     !< Color values of the points.
    real(R8P), allocatable           :: px(:)    !< Polygon abscissae.
    real(R8P), allocatable           :: py(:)    !< Polygon ordinates.
    real(R8P), allocatable           :: pc(:)    !< Polygon color values.
    logical, allocatable             :: inrange(:) !< Points within the fixed x and y ranges.
+   logical, allocatable             :: keep(:)  !< Polygon rows kept (mask).
    real(R8P)                        :: nan      !< NaN.
    integer(I4P)                     :: k        !< A defined point.
 
@@ -2547,6 +2579,17 @@ contains
    enddo
    call pm3d_polygons(series%x, series%y, series%z, c, series%scans, series%scan_sets, series%grid_scans, settings, &
                       inrange, px, py, pc)
+   if (series%masked) then
+      ! the quadrangles (4 corners and a NaN row each) of a masked first corner dropped
+      allocate(keep(size(px)))
+      keep = .true.
+      do k = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
+         if (masked(px(k), py(k), mx, my)) keep(k:k + 4_I4P) = .false.
+      enddo
+      px = pack(px, keep)
+      py = pack(py, keep)
+      pc = pack(pc, keep)
+   endif
    quads%style = series%style
    quads%style%with = WITH_POLYGONS
    quads%style%fill = FILL_SOLID
@@ -3918,6 +3961,8 @@ contains
          call draw_image
          return
       endif
+      ! a mask is not drawn (gnuplot's `with mask`)
+      if (series%style%with == WITH_MASK) return
       if (series%style%with == WITH_CIRCLES) then
          call draw_circles
          return
@@ -4949,6 +4994,32 @@ contains
                endif
             enddo
          enddo
+         if (series%masked) then
+            ! `mask`: a pixel whose corner (its far one along the grid, gnuplot's p_corners[0]) lies in no mask polygon
+            ! is transparent
+            block
+               real(R8P), allocatable :: mx(:) !< Mask polygons abscissae.
+               real(R8P), allocatable :: my(:) !< Mask polygons ordinates.
+               real(R8P)              :: cx    !< Pixel corner abscissa.
+               real(R8P)              :: cy    !< Pixel corner ordinate.
+
+               call self%mask_polygons(mx, my)
+               do j = 1_I4P, size(series%grid, 2, kind=I4P)
+                  cy = series%y(1) + (series%y(2) - series%y(1)) * real(j, R8P) / &
+                       real(size(series%grid, 2, kind=I4P), R8P)
+                  do i = 1_I4P, size(series%grid, 1, kind=I4P)
+                     cx = series%x(1) + (series%x(2) - series%x(1)) * real(i, R8P) / &
+                          real(size(series%grid, 1, kind=I4P), R8P)
+                     if (.not. masked(cx, cy, mx, my)) cycle
+                     ii = i
+                     if (u(1) > u(2)) ii = size(series%grid, 1, kind=I4P) - i + 1_I4P
+                     jj = size(series%grid, 2, kind=I4P) - j + 1_I4P
+                     if (w(1) > w(2)) jj = j
+                     rgba(:, ii, jj) = 0_I4P
+                  enddo
+               enddo
+            endblock
+         endif
          if (allocated(xaxis%map_x) .or. allocated(yaxis%map_x)) then
             ! a nonlinear axis (`set nonlinear`): each pixel a rectangle of mapped edges, as gnuplot's `pixels`
             block

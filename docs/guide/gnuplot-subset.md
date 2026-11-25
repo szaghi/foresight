@@ -115,6 +115,7 @@ that did what it says.
 | **cont**our [`base`\|`surface`\|`both`] | the [contour lines](#contours) of the 3D surfaces (`base` by default; in a map view the three are the same picture) | no contour lines |
 | **cntrp**aram [`linear`\|`cubicspline`\|`bspline`] [`points N`] [`order N`] [`levels` [`auto` [`N`]\|`N`\|`discrete z1, z2, ...`\|`incremental start, step`[`, end`]]] [`firstlinetype N`] [`sorted`\|`unsorted`] | the [contour](#contours) lines: linear segments, a cubic spline through their points or a B-spline approximation (`order` 2 to 10, 4 by default; `points` per interval, 5); about N automatic levels (5), or the levels given; the first level's linetype; levels high to low; alone, the defaults | — |
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
+| **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
 | **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; the drawing order options (`scans...`, `depthorder`, `flush`, `ftriangles`) and the border are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D plots](#3d-plots): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
@@ -204,13 +205,14 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **nonuni**form **mat**rix | the first row of the matrix holds the x of the columns (after a value ignored), the first column the y of the rows, as gnuplot; for `with image`, evenly spaced (uneven pixels are not supported) |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1`; the fields may be expressions, `every ::j:0:j:0` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
-| `nocontours`, `nosurface` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn |
+| `nocontours`, `nosurface`, `nogrid` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn; the item's points as they are, not [gridded](#gridded-and-masked-surfaces) by `set dgrid3d` |
+| `mask` | the item (`with pm3d`, `with image`, `rgbimage`, `rgbalpha`) drawn only inside the polygons of the `with mask` item, see [Gridded and masked surfaces](#gridded-and-masked-surfaces) |
 | `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; the linetype of the next item, not used up; with the other styles of a plot panel its sample is a filled box (polygons, boxplots, circles, ellipses, candlesticks, the box styles, histograms, sectors), a line and points (error lines) or a line; with `spiderplot` a key entry of a [spider plot](#parallel-axes-and-spider-plots) set |
 | **newspider**plot | the next spider plot items a new set of polygons on the same axes, see [Parallel axes and spider plots](#parallel-axes-and-spider-plots) |
 | `sharpen` | of a function: the extrema between its samples found (gnuplot 6.0's filter: a golden section search where the 5-term Savitzky-Golay second derivative turns) and added; ignored on data, as gnuplot |
 | **fc** / **fillc**olor `COLOR` | the fill's own color (styles with a fill), its border too (over `lc`, unless `fs border lc` gives one, as gnuplot 6.0): `with filledcurves fc rgb "#80e0a080"`; `fc palette cb V`, `fc palette frac F` one palette color for the item |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, `path`, see [below](#smoothing); `bins` see [Bins](#bins) |
-| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `surface` (`sur`) on a polar panel, see [below](#polar-plots); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table) |
+| **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `surface` (`sur`) on a polar panel, see [below](#polar-plots); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table); `splot`'s `pm3d`, see [3D plots](#3d-plots); `mask`, polygons masking the `mask` items, see [below](#gridded-and-masked-surfaces) |
 | **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle [`columnhead`] | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x`; `notitle columnhead`: none, the first row still a header; `title columnhead(N)[i:j]` a substring of the header |
@@ -2228,6 +2230,30 @@ levels high first, lines in chunks of at most 99 points); 2D scripts read them b
 `unset surface` keeps the contours, `nocontours` and `nosurface` select per item. Labels on the lines (`with labels`
 on contours, `cntrlabel start interval`) are not drawn.
 
+### Gridded and masked surfaces
+
+```gnuplot
+set view map
+set dgrid3d 50,50 gauss 0.6                       # the scattered points gridded, a Gaussian kernel
+set table $HULL
+plot 'points.dat' using 1:2 convexhull with lines # the hull of the points, a polygon
+unset table
+splot $HULL using 1:2:(0) with mask, 'points.dat' using 1:2:3 mask with pm3d
+```
+
+`set dgrid3d` turns the scattered data of every `splot` item into a grid, a port of gnuplot 6.0's grid_nongrid_data:
+COLS iso-curves of x, ROWS points along y each, over the points' bounding box; each node is a weighted mean of the
+points, by the inverse distance to the power Q (`qnorm Q`, the default with Q 1; a point on a node gives its value), a
+kernel of the distance scaled by DX, DY (`gauss`, `cauchy`, `exp`, `box`, `hann`: a node out of every point's reach is
+undefined) or the thin plate splines through them (`splines`); `kdensity` keeps the kernel's weighted sums, a density
+of the points (`using 1:2:(1)`). The grid is drawn and tabulated as any surface (`set table` writes it as gnuplot
+does); functions, `nogrid` items and masks are not gridded; `unset dgrid3d` stops it.
+
+`with mask` reads polygons (blocks of x, y; a polygon need not be closed) that are not drawn: an item with the `mask`
+option is drawn only inside them, gnuplot's even-odd interior test. A pm3d quadrangle is kept when its first corner
+is inside a polygon, an image pixel when its far corner is; without a `with mask` item nothing is masked. The last
+`with mask` item of a plot is the mask; its key entry is its title alone.
+
 The map view (`set view map`) is drawn as gnuplot 6.0 draws it: its plot area is the projection of the x and y
 ranges (gnuplot's 3D layout, narrower than a 2D plot's: `set view map scale S` scales it), ticks inward on all four
 sides with lengths by the projection, the tick labels, axis labels, title, key and color box at gnuplot's map places
@@ -2237,8 +2263,9 @@ matrix), `lc palette` by z, `ps variable`. The HTML page zooms a map as a 2D plo
 own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error); `pt variable`,
 sparse matrices are not supported. `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
 `vrange` iso-curves.
-In the library, `fig%splot(x, y, z)` adds scattered points (a scan) and `fig%splot(x, y, z2d)` a grid `z(i, j)` at
-`(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set the z axis.
+In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
+`fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set
+the z axis.
 
 ## Polar plots
 
@@ -2341,7 +2368,7 @@ text). Zooming magnifies the cells with the data.
 
 ## Not supported
 
-3D views other than the [map view](#3d-plots) (`splot` with `set view ROT_X,ROT_Z`), `set parametric` surfaces,
+3D views other than the [map view](#3d-plots) (`splot` with `set view ROT_X,ROT_Z`),
 `fit` beyond [its subset](#fit), log bases other than 10; `set rlabel`,
 the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `axis` of the

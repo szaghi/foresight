@@ -13,6 +13,7 @@ implicit none
 private
 public :: pm3d_object
 public :: pm3d_polygons
+public :: masked
 public :: CORNERS_MEAN, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_RMS, CORNERS_MEDIAN, CORNERS_MIN, CORNERS_MAX, &
           CORNERS_C1
 
@@ -155,6 +156,48 @@ contains
    py = py(1:n)
    pc = pc(1:n)
    endsubroutine pm3d_polygons
+
+   pure function masked(x, y, mx, my) result(yes)
+   !< Whether the point (`x`, `y`) is masked: inside none of the mask polygons (`mx`, `my`, NaN separated, closed or
+   !< not), gnuplot's masked() over its interior() even-odd test (gadgets.c); no polygon masks nothing.
+   real(R8P), intent(in) :: x     !< Abscissa.
+   real(R8P), intent(in) :: y     !< Ordinate.
+   real(R8P), intent(in) :: mx(:) !< Polygon abscissae.
+   real(R8P), intent(in) :: my(:) !< Polygon ordinates.
+   logical               :: yes   !< Masked.
+   integer(I4P)          :: a     !< First vertex of a polygon.
+   integer(I4P)          :: b     !< Last one.
+   integer(I4P)          :: i, j  !< Edge ends.
+   logical               :: inside !< Odd crossings so far.
+   logical               :: any_polygon !< A polygon seen.
+
+   yes = .false.
+   any_polygon = .false.
+   a = 1_I4P
+   do while (a <= size(mx, kind=I4P))
+      if (.not. (ieee_is_finite(mx(a)) .and. ieee_is_finite(my(a)))) then
+         a = a + 1_I4P
+         cycle
+      endif
+      b = a
+      do while (b < size(mx, kind=I4P))
+         if (.not. (ieee_is_finite(mx(b + 1_I4P)) .and. ieee_is_finite(my(b + 1_I4P)))) exit
+         b = b + 1_I4P
+      enddo
+      any_polygon = .true.
+      inside = .false.
+      j = b
+      do i = a, b
+         if ((my(i) > y) .neqv. (my(j) > y)) then
+            if (x < (mx(j) - mx(i)) * (y - my(i)) / (my(j) - my(i)) + mx(i)) inside = .not. inside
+         endif
+         j = i
+      enddo
+      if (inside) return
+      a = b + 1_I4P
+   enddo
+   yes = any_polygon
+   endfunction masked
 
    pure function defined(x, y, z, c, k) result(yes)
    !< Whether point `k` is defined: its coordinates and color finite.
