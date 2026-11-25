@@ -24,18 +24,18 @@ public :: math_function
 public :: math_order
 
 !< gnuplot's names (case matters: EllipticK), their arguments, and which take an integer order first
-character(len=*), parameter :: MATH_FUNCTIONS(46) = [character(len=12) :: &
+character(len=*), parameter :: MATH_FUNCTIONS(47) = [character(len=12) :: &
    'round', 'cbrt', 'asinh', 'acosh', 'atanh', &
    'erf', 'erfc', 'gamma', 'lgamma', 'norm', 'invnorm', 'inverf', 'igamma', 'uigamma', 'invigamma', 'ibeta', 'invibeta', &
    'besj0', 'besj1', 'besy0', 'besy1', 'besjn', 'besyn', 'besi0', 'besi1', 'besin', &
    'lambertw', 'airy', 'expint', 'EllipticK', 'EllipticE', 'EllipticPi', 'voigt', 'zeta', 'SynchrotronF', &
    'tm_sec', 'tm_min', 'tm_hour', 'tm_mday', 'tm_mon', 'tm_year', 'tm_wday', 'tm_yday', 'tm_week', &
-   'weekdate_iso', 'weekdate_cdc'] !< Names (weekdate_*: the day, the third argument, 1 when omitted).
-integer(I4P), parameter :: MATH_ARGS(46) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
+   'weekdate_iso', 'weekdate_cdc', 'hsv2rgb'] !< Names (weekdate_*: the day, the third argument, 1 when omitted).
+integer(I4P), parameter :: MATH_ARGS(47) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 2_I4P, 3_I4P, 3_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, &
    1_I4P, 1_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, &
-   1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 3_I4P, 3_I4P] !< Arguments.
+   1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 3_I4P, 3_I4P, 3_I4P] !< Arguments.
 
 interface
    pure function c_cbrt(x) bind(C, name='cbrt') result(y)
@@ -139,6 +139,10 @@ contains
       call gp_invigamma(x(1), x(2), r, status)
    case ('ibeta')
       call gp_ibeta(x(1), x(2), x(3), r, status)
+   case ('hsv2rgb')
+      ! an integer, as gnuplot's
+      r = hsv_packed(x(1:3))
+      is_int = .true.
    case ('invibeta')
       call gp_invibeta(x(1), x(2), x(3), r, status)
    case ('besj0')
@@ -299,4 +303,45 @@ contains
    endif
    t = t + real(week - 1_I8P, R8P) * WEEK_SEC + real(day - 1_I8P, R8P) * DAY_SEC
    endfunction week_date
+
+   pure function hsv_packed(hsv) result(rgb)
+   !< gnuplot's hsv2rgb(h, s, v): the components clamped to 0..1, hue 0..1 (not degrees), to red, green and blue
+   !< (getcolor.c HSV_2_RGB) packed as 0xRRGGBB, each channel int(255 c).
+   real(R8P), intent(in) :: hsv(3) !< Hue, saturation, value.
+   real(R8P)             :: rgb    !< Packed color.
+   real(R8P)             :: c(3)   !< Clamped components.
+   real(R8P)             :: f(3)   !< Red, green, blue.
+   real(R8P)             :: h      !< Hue sextant position.
+   real(R8P)             :: d      !< Fraction in the sextant.
+   real(R8P)             :: p, q, t !< Low, falling and rising channels.
+   integer(I4P)          :: i      !< Sextant.
+
+   c = min(1.0_R8P, max(0.0_R8P, hsv))
+   if (c(2) == 0.0_R8P) then
+      f = c(3)
+   else
+      h = c(1) * 6.0_R8P
+      i = floor(h, I4P)
+      d = h - real(i, R8P)
+      p = c(3) * (1.0_R8P - c(2))
+      q = c(3) * (1.0_R8P - c(2) * d)
+      t = c(3) * (1.0_R8P - c(2) * (1.0_R8P - d))
+      select case (modulo(i, 6_I4P))
+      case (0_I4P)
+         f = [c(3), t, p]
+      case (1_I4P)
+         f = [q, c(3), p]
+      case (2_I4P)
+         f = [p, c(3), t]
+      case (3_I4P)
+         f = [p, q, c(3)]
+      case (4_I4P)
+         f = [t, p, c(3)]
+      case default
+         f = [c(3), p, q]
+      endselect
+   endif
+   rgb = real(int(255.0_R8P * f(1), I8P) * 65536_I8P + int(255.0_R8P * f(2), I8P) * 256_I8P + int(255.0_R8P * f(3), I8P), &
+              R8P)
+   endfunction hsv_packed
 endmodule foresight_mathlib

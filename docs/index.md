@@ -373,6 +373,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_polar_labels" svg :width="480" :height="420" caption="named angles on a polar plot" />
   <Plot name="cb_polar_db" svg :width="520" :height="400" caption="a polar level in decibels (rrange, trange)" />
   <Plot name="cb_windrose" svg :width="520" :height="420" caption="a wind rose of sectors" />
+  <Plot name="cb_sectors_heatmap" svg :width="560" :height="400" caption="a polar heat map of sectors" />
   <Plot name="cb_radar" svg :width="480" :height="320" caption="a radar" />
   <Plot name="cb_rose" svg :width="480" :height="320" caption="a rose" />
   <Plot name="cb_spider" svg :width="560" :height="400" caption="a spider plot" />

@@ -86,6 +86,9 @@ type :: series_object
    real(R8P)                     :: at = 0.0_R8P  !< Position of a parallel axis (gnuplot `at`); 0 for its number.
    integer(I4P)                  :: hist_group = 0_I4P !< Histogram group (gnuplot `newhistogram`), 0 the first.
    real(R8P), allocatable        :: rows(:)           !< Rows of a histogram (its abscissae as given), from 0.
+   integer(I4P), allocatable     :: vertex_rows(:)    !< Data row of each vertex of `sectors` (0 for a separator).
+   real(R8P), allocatable        :: vertex_centres(:,:) !< Centre (2, vertex) of the sector of each vertex (cartesian
+                                                        !< `sectors`; NaN for a separator), for `units xx|yy`.
    logical                       :: hist_at_set = .false. !< The group starts at `hist_at`, else after the previous one.
    real(R8P)                     :: hist_at = 0.0_R8P  !< Start of the histogram group (gnuplot `newhistogram at X`).
    character(len=:), allocatable :: hist_title         !< Title of the histogram group, below the x axis.

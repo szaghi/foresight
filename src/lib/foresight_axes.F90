@@ -130,7 +130,7 @@ character(len=*), parameter :: WINDOW_FILL   = 'white'   !< Readout window fill:
 real(R8P),        parameter :: DIGIT_HEIGHT  = 2.5_R8P   !< Default readout digit height [font size].
 real(R8P),        parameter :: COLORBOX_SIZE = 1.5_R8P   !< Color box width [font size].
 character(len=*), parameter :: POLAR_STYLES  = 'a polar panel takes lines, points, linespoints, impulses, yerrorbars, '// &
-                                               'labels, closed filledcurves, sectors, polygons and readouts, on the '// &
+                                               'labels, closed filledcurves, sectors, polygons, vectors and readouts, on the '// &
                                                'first axes' !<
                                                                                                               !< Polar styles.
 integer(I4P),     parameter :: CIRCLE_SIDES  = 180_I4P   !< Sides of the polygon drawing a circle.
@@ -941,14 +941,20 @@ contains
       subroutine sector_vertices
       !< The outline of each sector as a run of vertices (runs separated by NaN): the arc at the outer radius from the
       !< azimuth `x` over `angle`, back along the inner radius `y`. Angles in the panel angle unit, oriented by its
-      !< theta origin and direction, as gnuplot. On a polar panel the vertices are theta:r (no `origins`), else x:y.
+      !< theta origin and direction, as gnuplot. On a polar panel the vertices are theta:r, else x:y; there `origins` are
+   !< the centres as theta:r points, the sectors drawn about them (gnuplot's sectors.dem).
       real(R8P), allocatable :: vx(:)  !< Vertex abscissae.
       real(R8P), allocatable :: vy(:)  !< Vertex ordinates.
+      integer(I4P), allocatable :: vr(:) !< Data row of each vertex.
+      real(R8P), allocatable :: vc(:,:) !< Centre of each vertex's sector (cartesian).
       real(R8P)              :: unit   !< Angle unit [rad].
       real(R8P)              :: t      !< Vertex azimuth [angle unit].
       real(R8P)              :: r      !< Vertex radius.
       real(R8P)              :: phi    !< Vertex page angle [rad].
       real(R8P)              :: c(2)   !< Centre.
+      real(R8P)              :: dir    !< Theta direction: 1 counterclockwise, -1 clockwise.
+      real(R8P)              :: page_x !< Vertex abscissa about the pole.
+      real(R8P)              :: page_y !< Vertex ordinate about the pole.
       real(R8P)              :: nan    !< Separator.
       integer(I4P)           :: m      !< Arc steps.
       integer(I4P)           :: i      !< Sector counter.
@@ -969,19 +975,21 @@ contains
             bad = 'origins must be (2, size(x))'
             return
          endif
-         if (self%polar) then
-            bad = 'sectors on a polar panel take no origins'
-            return
-         endif
       endif
       unit = merge(PI_R8 / 180.0_R8P, 1.0_R8P, self%degrees)
       nan = ieee_value(1.0_R8P, ieee_quiet_nan)
-      allocate(vx(0), vy(0))
+      allocate(vx(0), vy(0), vr(0), vc(2, 0))
       do i = 1_I4P, size(x, kind=I4P)
          if (.not. (ieee_is_finite(x(i)) .and. ieee_is_finite(y(i)) .and. ieee_is_finite(angle(i)) .and. &
                     ieee_is_finite(width(i)))) cycle
          c = 0.0_R8P
          if (present(origins)) c = origins(:, i)
+         dir = merge(-1.0_R8P, 1.0_R8P, self%theta_clockwise)
+         ! a polar panel: the centre given as theta:r, to the plane about the pole
+         if (self%polar .and. present(origins)) then
+            phi = (self%theta_origin * (PI_R8 / 180.0_R8P)) + dir * origins(1, i) * unit
+            c = origins(2, i) * [cos(phi), sin(phi)]
+         endif
          ! an arc vertex every 5 degrees at most
          m = max(1_I4P, ceiling(abs(angle(i) * unit) / (5.0_R8P * PI_R8 / 180.0_R8P), I4P))
          do side = 1_I4P, 2_I4P
@@ -993,22 +1001,36 @@ contains
                   t = x(i) + angle(i) * real(m - k, R8P) / real(m, R8P)
                   r = y(i)
                endif
-               if (self%polar) then
+               if (self%polar .and. .not. present(origins)) then
                   vx = [vx, t]
                   vy = [vy, r]
+               elseif (self%polar) then
+                  ! about a centre off the pole: the vertex in the plane, back to theta:r
+                  phi = (self%theta_origin * (PI_R8 / 180.0_R8P)) + dir * t * unit
+                  page_x = c(1) + r * cos(phi)
+                  page_y = c(2) + r * sin(phi)
+                  vx = [vx, (atan2(page_y, page_x) - self%theta_origin * (PI_R8 / 180.0_R8P)) / (dir * unit)]
+                  vy = [vy, hypot(page_x, page_y)]
                else
                   phi = (self%theta_origin * (PI_R8 / 180.0_R8P)) + merge(-1.0_R8P, 1.0_R8P, self%theta_clockwise) * &
                         t * unit
                   vx = [vx, c(1) + r * cos(phi)]
                   vy = [vy, c(2) + r * sin(phi)]
                endif
+               vr = [vr, i]
+               vc = reshape([vc, c], [2, size(vc, 2) + 1])
             enddo
          enddo
          vx = [vx, nan]
          vy = [vy, nan]
+         vr = [vr, 0_I4P]
+         vc = reshape([vc, [nan, nan]], [2, size(vc, 2) + 1])
       enddo
       series%x = vx
       series%y = vy
+      ! the row of each vertex: per row colors (lc variable, lc palette z) given to its sector's vertices
+      series%vertex_rows = vr
+      if (.not. self%polar) series%vertex_centres = vc
       endsubroutine sector_vertices
 
       subroutine boxplot_stats
@@ -4561,12 +4583,30 @@ contains
 
       subroutine draw_polygons
       !< `polygons` and `sectors`: each run of placeable points (blocks of the data, or the vertices of a sector) a
-      !< closed polygon in the fill style (its first point's color with `lc variable`).
+      !< closed polygon in the fill style (its first point's color with `lc variable`); sectors `units xx` (`yy`): their
+      !< offsets from their centre along y (x) at the x (y) axis scale, round on the page (gnuplot's).
       integer(I4P)       :: i1  !< First point of a run.
       integer(I4P)       :: i2  !< Last point of a run.
       type(style_object) :: row !< Style of a polygon.
+      real(R8P)          :: k   !< Page length of a y unit per x unit.
+      integer(I4P)       :: j   !< Vertex counter.
 
       associate(series => self%series(s))
+         if (series%style%with == WITH_SECTORS .and. series%ellipse_units /= 'xy' .and. &
+             allocated(series%vertex_centres)) then
+            if (size(series%vertex_centres, 2) == n .and. xaxis%hi /= xaxis%lo .and. yaxis%hi /= yaxis%lo) then
+               ! pixels per x unit over pixels per y unit
+               k = ((area(2) - area(1)) / abs(xaxis%hi - xaxis%lo)) / ((area(4) - area(3)) / abs(yaxis%hi - yaxis%lo))
+               do j = 1_I4P, n
+                  if (.not. valid(j)) cycle
+                  if (series%ellipse_units == 'xx') then
+                     v(j) = yaxis%to_unit(series%vertex_centres(2, j) + (series%y(j) - series%vertex_centres(2, j)) * k)
+                  else
+                     u(j) = xaxis%to_unit(series%vertex_centres(1, j) + (series%x(j) - series%vertex_centres(1, j)) / k)
+                  endif
+               enddo
+            endif
+         endif
          ! the cells of a polar gridded surface with crisp edges, no seams between them, as gnuplot's svg
          if (series%crisp) call backend%begin_group('fs-crisp')
          i1 = 1_I4P
@@ -6050,6 +6090,12 @@ contains
          if (.not. (ieee_is_finite(all(s)%x(i)) .and. ieee_is_finite(all(s)%y(i)))) cycle
          rmax = max(rmax, abs(all(s)%y(i)))
          found = .true.
+         ! the tips of vectors
+         if (all(s)%style%with == WITH_VECTORS .and. allocated(all(s)%tips)) then
+            if (i <= size(all(s)%tips, 2)) then
+               if (ieee_is_finite(all(s)%tips(2, i))) rmax = max(rmax, abs(all(s)%tips(2, i)))
+            endif
+         endif
          ! the radial error bars
          if (all(s)%style%with == WITH_YERRORBARS .and. allocated(all(s)%yhigh)) then
             if (i <= size(all(s)%yhigh)) then
@@ -6247,6 +6293,14 @@ contains
             call project(all(s)%x(i), r, all(s)%xhigh(i), all(s)%yhigh(i))
          enddo
          all(s)%radial_bars = .true.
+      endif
+      ! vectors: the tips (theta + dtheta, r + dr) too, as gnuplot's polar vectors
+      if (all(s)%style%with == WITH_VECTORS .and. allocated(all(s)%tips)) then
+         do i = 1_I4P, min(size(all(s)%x), size(all(s)%tips, 2))
+            phi = all(s)%tips(1, i)
+            r = all(s)%tips(2, i)
+            call project(phi, r, all(s)%tips(1, i), all(s)%tips(2, i))
+         enddo
       endif
       do i = 1_I4P, size(all(s)%x, kind=I4P)
          phi = all(s)%x(i)
@@ -6710,8 +6764,9 @@ contains
 
    select case (series%style%with)
    case (WITH_LINES, WITH_POINTS, WITH_LINESPOINTS, WITH_READOUT, WITH_SECTORS, WITH_IMPULSES, WITH_YERRORBARS, &
-         WITH_LABELS, WITH_POLYGONS)
-      ! yerrorbars: radial bars, r low to r high at theta (gnuplot's polar error bars)
+         WITH_LABELS, WITH_POLYGONS, WITH_VECTORS)
+      ! yerrorbars: radial bars, r low to r high at theta (gnuplot's polar error bars); vectors: from theta:r to
+      ! theta+dtheta:r+dr
       ok = .true.
    case (WITH_FILLEDCURVES)
       ! a base (ylow) is the circle of `r=V`

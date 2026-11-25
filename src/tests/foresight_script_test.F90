@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(256)                           !< Per-check outcome.
+logical                       :: test_passed(257)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -3236,7 +3236,7 @@ if (test_passed(150)) then
    endassociate
 endif
 call interpreter%run_text('plot $C using 1:2:3 with steps lc variable', iostat, iomsg)
-test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'polygons, the error bars') > 0
+test_passed(150) = test_passed(150) .and. iostat /= 0_I4P .and. index(iomsg, 'polygons, sectors, the error bars') > 0
 
 ! set key columns N (gnuplot's user columns: N columns, filled top down), maxcol and maxrow abbreviations
 call interpreter%init(scratch)
@@ -6516,6 +6516,55 @@ block
       test_passed(256) = test_passed(256) .and. iostat == 0_I4P .and. panel%yaxis%tics%rotate == 0.0_R8P .and. &
                         panel%y2axis%tics%justify == 'center'
    endassociate
+endblock
+
+! sectors.dem's needs, as gnuplot 6.0: sectors colored per row (lc rgb variable, fc palette), about centres on a polar
+! panel, units xx; vectors on a polar panel; hsv2rgb; fill style abbreviations; a layout after set size; reset of set
+! size; a using field reading a variable a later field assigns (the previous row's value)
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+   character(len=:), allocatable :: tab !< Table.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("$S << EOD"//nl//"0 1 90 1 1"//nl//"90 1 90 1 2"//nl//"EOD"//nl// &
+                             "set angles degrees; plot $S using 1:2:3:4:(hsv2rgb($5/4.0,1,1)) with sectors "// &
+                             "fc rgb variable fs solid bo lc 'black'", iostat, iomsg)
+   test_passed(257) = iostat == 0_I4P
+   if (test_passed(257)) test_passed(257) = size(interpreter%figure%panels(1)%series) == 1
+   if (test_passed(257)) then
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(257) = allocated(series(1)%colors) .and. allocated(series(1)%vertex_rows)
+      if (test_passed(257)) test_passed(257) = series(1)%colors(1) == '#7fff00' .and. &
+                                                series(1)%colors(size(series(1)%colors) - 1) == '#00ffff' .and. &
+                                                series(1)%style%border
+   endassociate
+   endif
+   call interpreter%run_text("plot $S using 1:2:3:4:5 with sectors units xx lc palette z", iostat, iomsg)
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P
+   if (test_passed(257)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(257) = series(1)%ellipse_units == 'xx' .and. allocated(series(1)%zvalues)
+         if (test_passed(257)) test_passed(257) = series(1)%zvalues(1) == 1.0_R8P .and. &
+                                                   series(1)%zvalues(size(series(1)%zvalues) - 1) == 2.0_R8P
+      endassociate
+   endif
+   call interpreter%run_text("set polar; plot $S using 1:2:3:(0.5):(45):(3) with sectors, "// &
+                             "$S using 1:2:(10):(1) with vectors", iostat, iomsg)
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P
+   call interpreter%run_text("print hsv2rgb(0, 1, 1)", iostat, iomsg)
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P
+   call interpreter%init(scratch)
+   call interpreter%run_text("set size 0.5,0.5; set multiplot layout 1,2; plot x; plot x; unset multiplot", iostat, iomsg)
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P .and. &
+                     all(interpreter%figure%panels(1)%size == [0.5_R8P, 0.5_R8P])
+   call interpreter%run_text("reset", iostat, iomsg)
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P .and. all(interpreter%figure%panels(1)%size == 1.0_R8P)
+   call interpreter%run_text("$data << EOD"//nl//"A 12"//nl//"B 20"//nl//"C 25"//nl//"EOD"//nl// &
+                             "set table $T; plot r=0 $data using 2:(r):(dr=$2,r=r+dr,dr) with table; unset table; "// &
+                             "set print 'foresight_script_test.dat'; print $T; unset print", iostat, iomsg)
+   tab = read_text('foresight_script_test.dat')
+   test_passed(257) = test_passed(257) .and. iostat == 0_I4P .and. index(tab, '20 '//achar(9)//' 12') > 0 .and. &
+                     index(tab, '25 '//achar(9)//' 32') > 0
 endblock
 
 if (all(test_passed)) then

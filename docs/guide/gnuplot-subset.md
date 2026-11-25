@@ -213,7 +213,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | **fc** / **fillc**olor `COLOR` | the fill's own color (styles with a fill), its border too (over `lc`, unless `fs border lc` gives one, as gnuplot 6.0): `with filledcurves fc rgb "#80e0a080"`; `fc palette cb V`, `fc palette frac F` one palette color for the item |
 | **s**mooth `FILTER` | `unique`, `frequency`, `fnormal`, `cumulative`, `cnormal`, `csplines`, `acsplines`, `mcsplines`, `bezier`, `sbezier`, `kdensity [bandwidth B]`, `path`, see [below](#smoothing); `bins` see [Bins](#bins) |
 | **w**ith `STYLE` | `lines` (`l`), `points` (`p`), `linespoints` (`lp`), `impulses` (`i`), `steps` (`st`), `fsteps` (`fs`), `histeps` (`his`), `dots` (`d`), see [below](#lines-steps-and-impulses); `yerrorbars` (`yerr`), `xerrorbars` (`xerr`), `xyerrorbars` (`xyerr`), `yerrorlines` (`yerrorl`), `xerrorlines` (`xerrorl`), `xyerrorlines` (`xyerrorl`), `boxes`, `boxerrorbars` (`boxer`), `boxxyerror` (`boxx`), `candlesticks` (`can`) [`whiskerbars` [`F`]], `financebars` (`fin`), `boxplot`, see [below](#box-finance-and-boxplot-styles); `vectors` (`vec`), `arrows`, `ellipses` (`ell`), `polygons` (`poly`), `labels`, `sectors` (`sec`), see [below](#vectors-ellipses-polygons-labels-and-sectors); `parallelaxes` (`parallel`) [`at X`], `spiderplot` (`spider`), see [below](#parallel-axes-and-spider-plots); `filledcurves` (`filledc`) [`closed`\|`x1`\|`x2`\|`y1`\|`y2`\|`y=V`\|`x=V`\|`xy=X,Y`] [`above`\|`below`], see [below](#boxes-and-filled-curves); `histograms` (`hist`), see [below](#histograms); `image` (`ima`), `rgbimage`, `rgbalpha` (`rgba`), see [below](#images-and-palettes); `surface` (`sur`) on a polar panel, see [below](#polar-plots); `circles` (`cir`), foresight's `pie [donut F]`, see [below](#circles-pies-and-donuts); foresight's `gauge range [A:B] [segments N]`, `radar`, `rose [linear]`, see [below](#gauges-radars-and-roses); foresight's `readout`, see [below](#readouts); `table` [`if COND`], the rows as [text](#with-table); `splot`'s `pm3d`, see [3D plots](#3d-plots); `mask`, polygons masking the `mask` items, see [below](#gridded-and-masked-surfaces) |
-| **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` |
+| **fs** / **fills**tyle `FILL` | fill of a box or filled curve item, words as `set style fill` (gnuplot's abbreviations: `bo`, `nobo`, `tr`, `so`, `e`mpty, `pa`) |
 | `format "fmt"` | foresight extension, readouts and gauges: the glass of the [readout](#readouts), `%10.3e` by default |
 | **t**itle `"text"` / **not**itle [`columnhead`] | key entry; by default the item as written, as gnuplot: `'run.dat' u 1:($2*1e3)`, `sin(x)/x`; `notitle columnhead`: none, the first row still a header; `title columnhead(N)[i:j]` a substring of the header |
 | **t**itle **col**umnhead[`(N)`] | key entry from the [column header](#column-headers) of column `N` (an expression: `columnhead(i)` in a loop), or of the y column; `col`, `columnheader` as gnuplot |
@@ -335,8 +335,10 @@ The rules are gnuplot's, checked against gnuplot 6.0:
   `plot abs(A(w)), 180/pi*arg(A(w))` plots a transfer function.
 - An assignment inside an expression sets the user variable when it runs: on each data row in `using`, so a running
   sum advances along the file; a variable assigned in a user function body is read when run wherever it is used
-  (`avg5(x) = (shift5(x), (b1+b2+b3+b4+b5)/5)`), and so is one assigned in a `using` field by the next fields
-  (`using 2:1:(T = $4 + $5, sqrt(T)):($6/T)`); `A[i] = value` assigns an element of an [array](#arrays).
+  (`avg5(x) = (shift5(x), (b1+b2+b3+b4+b5)/5)`), and so is one assigned in a `using` field by every field, the next
+  ones (`using 2:1:(T = $4 + $5, sqrt(T)):($6/T)`) and the earlier ones, which read the previous row's value, as gnuplot
+  evaluates the fields in order (`plot r=0 $D using (r):(dr = $2, r = r + dr, dr)`: the running start of each row);
+  `A[i] = value` assigns an element of an [array](#arrays).
 
 A field must be a column number or one parenthesized expression, as in gnuplot: `using 1:$2` and `using 1:2*3` are
 errors. A spec broken after a colon by a line continuation (`using 2:1:\` and the next line) is joined, as gnuplot, and
@@ -413,6 +415,7 @@ A variable holds a string as well as a number, a user function may return one, `
 | `gprintf(format, x)` | `x` with a [`set format`](#ticks-and-label-formats) format |
 | `value("name")`, `exists("name")` | the variable's value (NaN if none); 1 if it exists |
 | `rgbcolor("name")` | gnuplot 6.0's: the 24-bit RGB of a color name or `"#RRGGBB"` (`"#AARRGGBB"`: the alpha in the top byte) |
+| `hsv2rgb(h, s, v)` | gnuplot's: the 24-bit RGB (an integer) of a hue, saturation and value, each clamped to 0..1 (the hue not in degrees), for `lc rgb variable` |
 | `int(s)`, `real(s)` | the number a string starts with, truncated or real |
 
 Arithmetic and `==` read a string's leading number, as gnuplot: `"3" + 1` is 4, `"2" / "4"` is 0 (two integers),
@@ -1534,7 +1537,7 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 | `ellipses` | `x:y`, `x:y:diameter`, `x:y:major:minor[:angle]` | an ellipse in the fill style, the major diameter in x units and the minor one in y units, rotated on the page (gnuplot `units xy`; `units xx` and `units yy` both in x, or y, units); without diameters (or a negative one) 5% x 3% of the plot; the autoscale takes gnuplot's empirical box: half the larger diameter about the centre, times 1.1 on x for `units xx` and 1.4 on y but for `units yy` (rotated ellipses on unequal scales fit) |
 | `polygons` | `x:y` | a closed polygon per block of the data (blocks end at single blank lines), in the fill style |
 | `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `rotate variable` (the angle of a fourth column, `x:y:text:angle`), `offset X,Y` (characters; `offset X` alone, Y 0), `point` (with `pt`, `ps`, `ps variable`; the point in the item's `lc`, black without one, as gnuplot), `hypertext` (the texts not drawn but shown on mouse-over of their points: the browser's tooltip, gnuplot's svg hypertext), `tc "color"`, `tc variable`, `tc palette z` (the color of the last column) anywhere in the item; further columns are read and ignored, as gnuplot; `xticlabels(N)`, `yticlabels(N)` after them name the axes too (`using 0:1:(text):xticlabels(2)`); a text on several lines (`"a\nb"`) one below the other; enhanced text as the other labels |
-| `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r |
+| `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r; `lc variable`, `lc rgb variable`, `lc palette z` (`fc` too: the last column) color each sector, as gnuplot; `units xx` (`yy`) draws them round at the x (y) axis scale; on a polar panel x0:y0 are a theta:r centre, the sector drawn about it (gnuplot's sectors.dem) |
 
 Arrowheads are gnuplot's unless `size` is given: barbs 15 degrees off the shaft, 0.3 of its length, within 2.7 and
 18 px (gnuplot's svg), so the heads of arrows shorter than 60 px shrink with them. As label texts they are drawn in
@@ -1804,7 +1807,9 @@ Each `plot` fills the next panel with the settings in force. The advance happens
 panel is an error.
 
 Without `layout`, each panel lies in the box of its `set origin` and `set size`, fractions of the page below the
-multiplot title, from the bottom left as gnuplot. Panels may overlap: an inset. A multiplot title on several lines
+multiplot title, from the bottom left as gnuplot. A `layout` places the panels itself: a `set size` or `set origin`
+given before it comes back after `unset multiplot`, as gnuplot's; `reset` outside a multiplot restores size 1,1 and
+origin 0,0. Panels may overlap: an inset. A multiplot title on several lines
 (`"a\nb"`) takes a row per line, as gnuplot.
 
 ```gnuplot
@@ -2314,7 +2319,8 @@ plot 'directivity.dat' u 1:2 w lp t 'probe', 1+cos(t) t 'cardioid'
 - the items are `lines`, `points`, `linespoints`, `impulses` (from the pole), `yerrorbars` (`theta:r:dr` or
   `theta:r:rlow:rhigh`, each bar along the radius with its caps across it, as gnuplot's poldat.dem), `filledcurves`
   (closed, `using theta:r`, or `[above|below] r=V`: the band between the curve and the circle of radius V, where the
-  curve is above, or below, it, as gnuplot), `polygons`, `with surface` (below) or readouts (of r), on the first
+  curve is above, or below, it, as gnuplot), `polygons`, `sectors`, `vectors` (`theta:r:dtheta:dr`, from theta:r to
+  theta+dtheta:r+dr), `with surface` (below) or readouts (of r), on the first
   axes; x and y stay linear; `using theta:r:z` with points or lines reads the z and ignores it, as gnuplot;
 - a curve leaving the r range is cut where it crosses the rim, as gnuplot clips it, a point beyond the rim not drawn;
   `title ... at beginning|end [left|right]` names a curve at its first or last point (on the rim for a cut one);

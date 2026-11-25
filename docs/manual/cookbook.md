@@ -1704,6 +1704,17 @@ the upper half only, and leaves out the data beyond it too, as gnuplot.
 `sectors` draws annular sectors from `azimuth:radius:angle:width`, angles in the `set angles` unit oriented by
 `set theta`; on a polar panel they stack into a wind rose (two speed classes, one on top of the other).
 
+
+### A polar heat map
+
+<<< @/examples/snippets/cb_sectors_heatmap.gp{gnuplot}
+
+<Plot name="cb_sectors_heatmap" svg :width="560" :height="400" />
+
+Each (theta, r) cell of a polar grid is one annular sector, filled from the palette by a value: the last `using`
+column with `fc palette` (or `lc palette z`; `lc rgb variable` takes packed colors, `hsv2rgb(h, s, v)` makes them),
+on cartesian axes kept round by `set size ratio -1`. See
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
 ### A radar and a rose
 
 <<< @/examples/snippets/cb_radar.gp{gnuplot}

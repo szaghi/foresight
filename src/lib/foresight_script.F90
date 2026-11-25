@@ -241,6 +241,9 @@ type :: script_object
    type(token_object), allocatable :: data_files(:)            !< Data files read, for watching.
    integer(I4P)                    :: live_refresh = 0_I4P     !< HTML reload period applied when none is set [s].
    logical                         :: multiplot = .false.      !< Inside `set multiplot`.
+   logical                         :: layout_kept = .false.    !< An origin and size set before a multiplot layout.
+   real(R8P)                       :: kept_origin(2) = 0.0_R8P !< That origin, back after `unset multiplot`.
+   real(R8P)                       :: kept_size(2) = 1.0_R8P   !< That size, back after `unset multiplot`.
    logical                         :: parametric = .false.     !< gnuplot `set parametric`: function items in pairs,
                                                                 !< x(t), y(t) over trange.
    logical                         :: advance_pending = .false. !< A multiplot panel was plotted: the next command
@@ -384,6 +387,7 @@ contains
    self%default_output = output
    self%output_set = .false.
    self%multiplot = .false.
+   self%layout_kept = .false.
    self%advance_pending = .false.
    self%previous_file = ''
    self%last_plot = ''
@@ -4059,15 +4063,15 @@ contains
                   endif
                enddo
             endif
-            if (with == 'ellipses' .and. i < size(tokens, kind=I4P)) then
+            if ((with == 'ellipses' .or. with == 'sectors') .and. i < size(tokens, kind=I4P)) then
                if (tokens(i + 1_I4P)%text == 'units') then
                   i = i + 2_I4P
                   if (i > size(tokens, kind=I4P)) then
-                     call fail('plot: ellipses units xy expected', iostat, iomsg)
+                     call fail('plot: '//with//' units xy expected', iostat, iomsg)
                      return
                   endif
                   if (.not. is_word(tokens(i)%text, 'xy xx yy')) then
-                     call fail('plot: ellipses take units xy, xx or yy (the axes of the two diameters)', iostat, iomsg)
+                     call fail('plot: '//with//' take units xy, xx or yy (the axes of the two diameters)', iostat, iomsg)
                      return
                   endif
                   ellipse_units = tokens(i)%text
@@ -4572,7 +4576,7 @@ contains
       associate(panel => self%figure%panels(self%figure%current))
          if (panel%polar) then
             polar_ok = is_word(with, 'lines points linespoints impulses yerrorbars labels filledcurves sectors readout '// &
-                               'polygons surface') &
+                               'polygons surface vectors') &
                        .and. &
                        (.not. allocated(base) .or. polar_base)
             if (allocated(axes)) polar_ok = polar_ok .and. axes == 'x1y1'
@@ -4913,10 +4917,11 @@ contains
          if (.not. is_word(with, 'lines points linespoints impulses vectors arrows circles ellipses boxes '// &
                            'candlesticks financebars boxxyerror boxerrorbars histograms filledcurves polygons '// &
                            'xerrorbars yerrorbars xyerrorbars xerrorlines yerrorlines xyerrorlines labels '// &
-                           'parallelaxes pm3d')) then
+                           'parallelaxes pm3d sectors')) then
             call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors, arrows, circles, '// &
                       'ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, filledcurves, '// &
-                      'polygons, the error bars, parallel axes and labels (tc variable), not to '//with, iostat, iomsg)
+                      'polygons, sectors, the error bars, parallel axes and labels (tc variable), not to '//with, iostat, &
+                      iomsg)
             return
          endif
          if (one_field .or. size(fields) < 3) then
@@ -5431,6 +5436,8 @@ contains
          if (allocated(fs)) then
             if (.not. fill_ok(fs)) return
          endif
+         ! lc variable: each sector its row's color (color_last spreads them on the vertices)
+         if (lcvar) deallocate(line%lc)
          if (nbar == 4_I4P) then
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
                                   angle=xlow, width=xhigh, origins=arcs)
@@ -5438,6 +5445,7 @@ contains
             call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, axes=axes, fs=fs, &
                                   angle=xlow, width=xhigh)
          endif
+         if (lcvar) call color_last
       elseif (with == 'labels') then
          if (lcvar) deallocate(line%lc)
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, ps=line%ps, pt=line%pt, &
@@ -6504,6 +6512,24 @@ contains
       !< (gnuplot).
       associate(panel => self%figure%panels(self%figure%current))
          associate(last => panel%series(size(panel%series)))
+            if (allocated(last%vertex_rows)) then
+               ! sectors: each vertex in its row's color (separators blank)
+               if (size(last%vertex_rows) == size(last%x)) then
+                  block
+                     integer(I4P) :: k !< Vertex counter.
+
+                     if (allocated(last%colors)) deallocate(last%colors)
+                     allocate(character(len=len(point_colors)) :: last%colors(size(last%x)))
+                     do k = 1_I4P, size(last%x, kind=I4P)
+                        last%colors(k) = ''
+                        if (last%vertex_rows(k) > 0_I4P .and. last%vertex_rows(k) <= size(point_colors, kind=I4P)) &
+                           last%colors(k) = point_colors(last%vertex_rows(k))
+                     enddo
+                     if (size(point_colors) > 0) last%style%color = trim(point_colors(1))
+                  endblock
+               endif
+               return
+            endif
             if (size(point_colors) /= size(last%x)) return
             last%colors = point_colors
             if (size(point_colors) > 0) last%style%color = trim(point_colors(1))
@@ -6666,6 +6692,11 @@ contains
          case (LC_PALETTE_Z)
             panel%series(last)%palette_mode = 1_I4P
             panel%series(last)%zvalues = zcolors
+            ! sectors: each vertex the value of its row (separators undefined)
+            if (allocated(panel%series(last)%vertex_rows)) then
+               if (size(panel%series(last)%vertex_rows) == size(panel%series(last)%x)) &
+                  panel%series(last)%zvalues = sector_values(zcolors, panel%series(last)%vertex_rows)
+            endif
             if (allocated(line%colormap)) then
                ! a named colormap: a copy in the panel, the series pointing at it
                block
@@ -7766,6 +7797,23 @@ contains
       do while (i < size(tokens, kind=I4P))
          if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) exit
          w = tokens(i + 1_I4P)%text
+         ! gnuplot's abbreviations (parse_fillstyle): bo$rder, nobo$rder, tr$ansparent, s$olid, e$mpty, p$attern
+         if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. prev /= 'lc' .and. prev /= 'linecolor' .and. &
+             prev /= 'rgb' .and. prev /= 'rgbcolor') then
+            if (keyword(w, 'border', 2_I4P)) then
+               w = 'border'
+            elseif (keyword(w, 'noborder', 4_I4P)) then
+               w = 'noborder'
+            elseif (keyword(w, 'transparent', 2_I4P)) then
+               w = 'transparent'
+            elseif (keyword(w, 'solid', 2_I4P)) then
+               w = 'solid'
+            elseif (keyword(w, 'empty', 2_I4P)) then
+               w = 'empty'
+            elseif (keyword(w, 'pattern', 2_I4P)) then
+               w = 'pattern'
+            endif
+         endif
          if (tokens(i + 1_I4P)%kind == TOKEN_STRING .or. prev == 'rgb' .or. prev == 'rgbcolor' .or. &
              ((prev == 'lc' .or. prev == 'linecolor') .and. w /= 'rgb' .and. w /= 'rgbcolor')) then
             ! a color: only after lc or rgb
@@ -8252,13 +8300,16 @@ contains
       self%minus_sign = .false.
       self%micro = .false.
    endif
-   ! the current panel: its plot, place and linetypes kept
+   ! the current panel: its plot and linetypes kept, its place in a multiplot (the layout's); outside one `set size`
+   ! and `set origin` back to 1,1 and 0,0, as gnuplot's reset
    kept = self%figure%panels(self%figure%current)
    self%figure%panels(self%figure%current) = fresh
    call self%figure%panels(self%figure%current)%set_defaults
    if (allocated(kept%series)) self%figure%panels(self%figure%current)%series = kept%series
-   self%figure%panels(self%figure%current)%origin = kept%origin
-   self%figure%panels(self%figure%current)%size = kept%size
+   if (self%multiplot) then
+      self%figure%panels(self%figure%current)%origin = kept%origin
+      self%figure%panels(self%figure%current)%size = kept%size
+   endif
    ! gnuplot's linetypes (and `set colorsequence`) survive `reset`, not `reset session`
    if (size(tokens) == 0) then
       if (allocated(kept%linecolors)) self%figure%panels(self%figure%current)%linecolors = kept%linecolors
@@ -10447,11 +10498,14 @@ contains
             call fail('set multiplot: layout ROWS,COLS needs positive values', iostat, iomsg)
             return
          endif
+         ! the layout places the panels, a set origin and size kept for after `unset multiplot` (gnuplot's)
          associate(panel => self%figure%panels(self%figure%current))
-            if (any(panel%origin /= 0.0_R8P) .or. any(panel%size /= 1.0_R8P)) then
-               call fail('set multiplot: a layout needs the default origin and size (set origin 0,0; set size 1,1)', &
-                         iostat, iomsg)
-               return
+            self%layout_kept = any(panel%origin /= 0.0_R8P) .or. any(panel%size /= 1.0_R8P)
+            if (self%layout_kept) then
+               self%kept_origin = panel%origin
+               self%kept_size = panel%size
+               panel%origin = 0.0_R8P
+               panel%size = 1.0_R8P
             endif
          endassociate
          call self%figure%set_multiplot(rows, cols, text)
@@ -15352,6 +15406,12 @@ contains
          if (iostat /= 0_I4P) return
       endif
       call self%figure%unset_multiplot
+      ! the origin and size set before a layout, back
+      if (self%layout_kept) then
+         self%figure%panels(self%figure%current)%origin = self%kept_origin
+         self%figure%panels(self%figure%current)%size = self%kept_size
+         self%layout_kept = .false.
+      endif
       self%multiplot = .false.
       self%advance_pending = .false.
    elseif (keyword(option, 'title', 3_I4P)) then
@@ -15698,6 +15758,20 @@ contains
       title = text(first:last)
    endif
    endsubroutine item_auto_title
+
+   pure function sector_values(rows_values, vertex_rows) result(values)
+   !< Per vertex values of sectors from their rows' (`vertex_rows`, 0 a separator: NaN).
+   real(R8P),    intent(in) :: rows_values(:) !< Value of each data row.
+   integer(I4P), intent(in) :: vertex_rows(:) !< Row of each vertex.
+   real(R8P), allocatable   :: values(:)      !< Value of each vertex.
+   integer(I4P)             :: k              !< Vertex counter.
+
+   allocate(values(size(vertex_rows)))
+   values = ieee_value(1.0_R8P, ieee_quiet_nan)
+   do k = 1_I4P, size(vertex_rows, kind=I4P)
+      if (vertex_rows(k) > 0_I4P .and. vertex_rows(k) <= size(rows_values, kind=I4P)) values(k) = rows_values(vertex_rows(k))
+   enddo
+   endfunction sector_values
 
    pure function exact_real(v) result(text)
    !< `v` written to its last bit (17 significant digits), read back the same.
@@ -17079,6 +17153,37 @@ contains
    iostat = 0_I4P
    iomsg = ''
    allocate(fields(0))
+   ! first the variables any field assigns, read when run by every field, before it too (gnuplot evaluates the fields
+   ! in order, row after row: `(r):(dr = $2, r = r + dr, dr)` reads the r of the previous row)
+   if (index(spec, '=') > 0) then
+      start = 1_I4P
+      do while (start <= len(spec) + 1)
+         depth = 0_I4P
+         quote = ' '
+         finish = start
+         do while (finish <= len(spec))
+            if (quote /= ' ') then
+               if (spec(finish:finish) == quote) quote = ' '
+            elseif (spec(finish:finish) == '"' .or. spec(finish:finish) == "'") then
+               quote = spec(finish:finish)
+            else
+               if (spec(finish:finish) == '(') depth = depth + 1_I4P
+               if (spec(finish:finish) == ')') depth = depth - 1_I4P
+               if (spec(finish:finish) == ':' .and. depth == 0_I4P) exit
+            endif
+            finish = finish + 1_I4P
+         enddo
+         text = spec(start:finish - 1_I4P)
+         if (text(1:min(1, len(text))) == '(' .and. index(text, '=') > 0) then
+            ! errors are reported by the pass below
+            call field%compile(text, iostat, iomsg, degrees=degrees, symbols=symbols, sampled=sampled)
+            if (iostat == 0_I4P) call symbols%learn_assigned(field)
+            iostat = 0_I4P
+            iomsg = ''
+         endif
+         start = finish + 1_I4P
+      enddo
+   endif
    start = 1_I4P
    do while (start <= len(spec) + 1)
       ! the field ends at the first ':' outside parentheses (a ?: inside an expression is not a separator)
