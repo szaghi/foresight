@@ -35,8 +35,8 @@ module foresight_axes
 !< clockwise, each in its linetype color, a key entry per slice with its percentage; `donut` leaves a hole.
 !<
 !< Images (`with image`) color a regular grid of values by the panel palette (foresight_palette) over the color axis
-!< `cbaxis`, autoscaled to the values or set (`cbrange`), its ends never extended to ticks; the x and y axes of a panel
-!< with an image fit its pixel edges, unextended, as gnuplot. The color box lies at the right of the plot area. A theme
+!< `cbaxis`, autoscaled to the values or set (`cbrange`), extended to its ticks with the color box; the x and y axes of
+!< a panel with an image fit its pixel edges, unextended, as gnuplot. The color box lies at the right of the plot area. A theme
 !< other than classic replaces the default palette with its own (dark glass to emissive colors for `vfd`).
 !<
 !< A polar panel (`polar`, gnuplot `set polar`) keeps its series as theta:r and projects them at each rendering about
@@ -7856,7 +7856,8 @@ contains
 
       subroutine setup_colors
       !< The color axis over the finite values of the images (the positive ones on a log axis; or `cbrange`), a linear
-      !< one extended to its ticks as gnuplot 6.0 (not a log one, nor with `noextend` or `set autoscale cbfix`).
+      !< one extended to its ticks as gnuplot 6.0 (not a log one, nor with `noextend` or `set autoscale cbfix`, nor
+      !< without a color box: gnuplot extends the range to the ticks it draws).
       real(R8P) :: zmin  !< Smallest value.
       real(R8P) :: zmax  !< Largest value.
       logical   :: any_z !< Any finite value.
@@ -7869,7 +7870,7 @@ contains
       else
          npx = merge(area(2) - area(1), area(4) - area(3), self%cbox%horizontal)
       endif
-      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend
+      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend .or. .not. self%colorbox
       call self%cbaxis%setup(zmin, zmax, any_z, npx)
       endsubroutine setup_colors
 

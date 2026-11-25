@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(260)                           !< Per-check outcome.
+logical                       :: test_passed(261)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6659,6 +6659,17 @@ block
       endassociate
    endif
 endblock
+
+
+! without a color box the autoscaled color axis keeps the data range (gnuplot 6.0 extends it to the ticks it draws:
+! probed, data 100..255 gives GPVAL_CB 100..260 with the box, 100..255 without, images and lc palette alike)
+open(newunit=unit, file=data_file, action='write', status='replace')
+write(unit, '(A)') '0 0 0.13', '1 0 0.5', '', '0 1 0.6', '1 1 0.87'
+close(unit)
+test_passed(261) = colorbox_labels("unset colorbox", [character(len=1) ::], ['0.1', '0.9'])
+associate(panel => interpreter%figure%panels(1))
+   test_passed(261) = test_passed(261) .and. panel%cbaxis%lo == 0.13_R8P .and. panel%cbaxis%hi == 0.87_R8P
+endassociate
 
 if (all(test_passed)) then
    open(newunit=unit, file=output)

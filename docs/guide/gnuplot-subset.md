@@ -2005,7 +2005,7 @@ box, where gnuplot's has none). Each pixel's fields as the format (`%char`, `%uc
 skips it; one specifier for every field, floats by default; rgbimage reads 3, rgbalpha 4, or as many as the `using`
 reads). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of the pixels implied. Not supported: `filetype=` (png, ...) and the general binary records without `array`.
 
-The palette maps the values over `cbrange` (autoscaled to the values and, a linear one, extended to its ticks; `noextend` or `set autoscale cbfix` keeps the values) to colors, as gnuplot 6.0 (its
+The palette maps the values over `cbrange` (autoscaled to the values and, a linear one with its color box drawn, extended to its ticks; `noextend`, `set autoscale cbfix` or `unset colorbox` keeps the values) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
 (a negative number for the formula of 1 - gray), `defined (0 "blue", 1 "white", 2 "red")` interpolated in RGB (colors
 `#rrggbb`, `0xrrggbb` or one of gnuplot's 111 [color names](#color-names)), `cubehelix` (Dave Green's helix through the color cube, lightness
