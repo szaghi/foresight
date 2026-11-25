@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(251)                           !< Per-check outcome.
+logical                       :: test_passed(252)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6386,6 +6386,43 @@ block
    associate(series => interpreter%figure%panels(1)%series)
       test_passed(251) = test_passed(251) .and. series(1)%key_blank .and. .not. series(1)%masked .and. &
                         series(2)%masked
+   endassociate
+endblock
+
+! pt variable: each point's type from a column (gnuplot's int(v), a dot for 0 and less), after the sizes of ps variable
+! and before the colors of lc rgb variable; the key sample a dot
+block
+   character(len=:), allocatable :: svg  !< Rendering.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("$D << EOD"//nl//"1 1 0 2 0xee0000"//nl//"2 1 1 3 0x00dd00"//nl//"3 1 7.6 1 0x0000ee"// &
+                             nl//"4 1 16 2 0xee00ee"//nl//"5 1 -2 1 0xddaa00"//nl//"EOD"//nl// &
+                             "set terminal svg; set output 'foresight_script_test.svg'; "// &
+                             "plot $D using 1:2:3 with points pt variable title 'v'", iostat, iomsg)
+   svg = read_text('foresight_script_test.svg')
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(252) = iostat == 0_I4P .and. allocated(series(1)%point_types)
+      if (test_passed(252)) test_passed(252) = all(series(1)%point_types == [0, 1, 7, 16, 0]) .and. &
+                                                .not. allocated(series(1)%point_sizes)
+   endassociate
+   test_passed(252) = test_passed(252) .and. index(svg, 'data-pt="7"') > 0
+   call interpreter%run_text("plot $D using 1:2:4:3:5 with points ps var pt var lc rgb var notitle", iostat, iomsg)
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(252) = test_passed(252) .and. iostat == 0_I4P .and. allocated(series(1)%point_types) .and. &
+                        allocated(series(1)%point_sizes) .and. allocated(series(1)%colors)
+      if (test_passed(252)) test_passed(252) = all(series(1)%point_types == [0, 1, 7, 16, 0]) .and. &
+                                                all(series(1)%point_sizes == [2.0_R8P, 3.0_R8P, 1.0_R8P, 2.0_R8P, &
+                                                                              1.0_R8P])
+   endassociate
+   call interpreter%run_text("plot $D using 1:2:(0.5):(1.5):3 with yerrorbars pt var notitle", iostat, iomsg)
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(252) = test_passed(252) .and. iostat == 0_I4P .and. allocated(series(1)%point_types)
+   endassociate
+   call interpreter%run_text("set view map; splot $D using 1:2:(0):3 with points pt var notitle", iostat, iomsg)
+   associate(series => interpreter%figure%panels(1)%series)
+      test_passed(252) = test_passed(252) .and. iostat == 0_I4P .and. allocated(series(1)%point_types)
+      if (test_passed(252)) test_passed(252) = all(series(1)%point_types == [0, 1, 7, 16, 0])
    endassociate
 endblock
 

@@ -227,6 +227,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `pi` `N` / **pointi**nterval `N` | a point on the first point and every N-th after it (`linespoints`, error bar styles); a negative N every \|N\|-th, the line blanked under each point (a disk of the background), as gnuplot |
 | **noauto**scale | the item out of the autoscaling of its axes (a boxplot still widens x, as gnuplot places every box) |
 | `ps` **var**iable | each point's size from the column after the style's (before an `lc variable` one), as gnuplot |
+| `pt` **var**iable | each point's [type](#point-types) from the column after the sizes of `ps variable` (before an `lc variable` one): its integer part, a dot for 0 and less, as gnuplot |
 | **convexhull** / **concavehull** [`expand D`] / **delaunay** | gnuplot 6.0's hull filters of the item's points, right after they are read: the convex hull (clockwise, closed), a chi-shape (concave hull: its length the real variable `chi_length` if positive, else `set chi_shape fraction F` of the longest hull edge, 0.6, the one used in `GPVAL_CHI_LENGTH`), `expand D` pushing the hull out by D (before or after `smooth path`), `delaunay` the triangles; every column follows its point. `smooth convexhull` is `convexhull smooth path` |
 | **zsort** | the points of each curve drawn in the order of their z (the third column, `using x:y:z[:color]`), the highest last, as gnuplot 6.0 (also `smooth zsort`) |
 | **bin**ary `array=(W,H)` ... | gnuplot's binary data arrays, see [Images and palettes](#images-and-palettes) |
@@ -1721,7 +1722,10 @@ The shapes are those of gnuplot's svg terminal: `pt 0` a dot, 1 plus, 2 cross, 3
 8 triangle, 10 inverted triangle, 12 diamond, 14 pentagon, each odd type from 5 the filled shape before it; beyond 15
 they cycle. A marker is 9 px wide at `ps 1`, its lines about `ps` px wide whatever `lw`, as gnuplot's svg (0.222 of the half width; the dot 0.5 px). Without `pt` an item draws the point type of its
 linetype, as gnuplot 6.0: the k-th item type k (cycling every 15), `lt N` of the eight predefined linetypes type N,
-`ls N` the point type of its style (of its `lt`, else type N up to 8, else 1); a keyentry does not use one up. The
+`ls N` the point type of its style (of its `lt`, else type N up to 8, else 1); a keyentry does not use one up.
+`pt variable` takes each point's type from a column (after the sizes of `ps variable`, before the colors of
+`lc rgb variable`: `using 1:2:size:type:color`), its integer part, a dot for 0 and less; its key sample is a dot, as
+gnuplot's. The
 library's own `plot` keeps foresight's round dot, 6 px at `ps 1`, without `pt`. In the HTML page markers keep their shape and size under zoom; the text terminal draws every point
 with the symbol of its color. `set pointsize S` sets the size of the points without their own `ps` (an item's `ps`
 replaces it, as gnuplot's); `unset pointsize` and `reset` restore 1.
@@ -2259,9 +2263,9 @@ ranges (gnuplot's 3D layout, narrower than a 2D plot's: `set view map scale S` s
 sides with lengths by the projection, the tick labels, axis labels, title, key and color box at gnuplot's map places
 (the color box a character width farther right than a 2D plot's, its ticks on both sides). The items keep their
 `plot` styles: points, lines, labels, vectors, images (`with image`, from data `x:y:value`, `x:y:z:value` or a
-matrix), `lc palette` by z, `ps variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
-own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error); `pt variable`,
-sparse matrices are not supported. `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
+matrix), `lc palette` by z, `ps variable`, `pt variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
+own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error); sparse matrices are
+not supported. `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
 `vrange` iso-curves.
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
 `fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set

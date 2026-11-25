@@ -3529,8 +3529,13 @@ contains
             return
          endif
       endif
-      call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
-                        pt=series%style%pointtype)
+      ! `pt variable`: a dot, as gnuplot's
+      if (allocated(series%point_types)) then
+         call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), pt=0_I4P)
+      else
+         call backend%dots([0.5_R8P * (xs(1) + xs(2))], [yc], sample, series%style%point_diameter(), &
+                           pt=series%style%pointtype)
+      endif
    endif
    endsubroutine key_sample_marks
 
@@ -4077,8 +4082,8 @@ contains
                enddo
                backend%literal = .false.
             endblock
-         elseif (allocated(series%point_sizes)) then
-            ! ps variable: each point its own size
+         elseif (allocated(series%point_sizes) .or. allocated(series%point_types)) then
+            ! ps variable, pt variable: each point its own size, its own type
             call sized_dots(series%style%color, marked)
          elseif (allocated(series%colors)) then
             ! lc variable: each point in its color, consecutive points of one color together
@@ -4529,15 +4534,25 @@ contains
             if (allocated(series%colors)) then
                if (i <= size(series%colors, kind=I4P)) then
                   if (series%colors(i) == 'none') cycle
-                  call backend%data_dots(u(i:i), v(i:i), trim(series%colors(i)), point_size(i), &
-                                         pt=series%style%pointtype)
+                  call backend%data_dots(u(i:i), v(i:i), trim(series%colors(i)), point_size(i), pt=point_type(i))
                   cycle
                endif
             endif
-            call backend%data_dots(u(i:i), v(i:i), color, point_size(i), pt=series%style%pointtype)
+            call backend%data_dots(u(i:i), v(i:i), color, point_size(i), pt=point_type(i))
          enddo
       endassociate
       endsubroutine sized_dots
+
+      function point_type(i) result(pt)
+      !< Type of point `i`: its `pt variable` type (0 a dot), else the style's.
+      integer(I4P), intent(in) :: i  !< Point.
+      integer(I4P)             :: pt !< Type.
+
+      pt = self%series(s)%style%pointtype
+      if (.not. allocated(self%series(s)%point_types)) return
+      if (i > size(self%series(s)%point_types, kind=I4P)) return
+      pt = self%series(s)%point_types(i)
+      endfunction point_type
 
       function point_size(i) result(diameter)
       !< Marker width of point `i` [px]: its `ps variable` size, else the style's.

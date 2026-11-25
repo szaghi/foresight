@@ -724,6 +724,16 @@ background, nothing and black. See [Line properties](/guide/gnuplot-subset#style
 of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`). See
 [Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
 
+### A type, size and color per point
+
+<<< @/examples/snippets/cb_pt_variable.gp{gnuplot}
+
+<Plot name="cb_pt_variable" svg :width="560" :height="360" />
+
+`pt variable` reads each point's type from a column, after the sizes of `ps variable` and before the colors of
+`lc rgb variable`: `using x:y:size:type:color`. The key sample of such an item is a dot, as gnuplot's. See
+[Point types](/guide/gnuplot-subset#point-types).
+
 ### High values on top
 
 <<< @/examples/snippets/cb_zsort.gp{gnuplot}

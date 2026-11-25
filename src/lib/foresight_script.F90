@@ -3210,9 +3210,11 @@ contains
    real(R8P)                                    :: hull_expand !< `expand D` of the hull, 0 for none.
    logical                                      :: surface_item !< A polar gridded surface (`with surface`).
    logical                                      :: ps_var    !< `ps variable`: each point's size from a column.
+   logical                                      :: pt_var    !< `pt variable`: each point's type from a column.
    logical                                      :: zsort_item !< `zsort`: the points drawn in the order of their z.
    logical                                      :: hypertext !< `with labels hypertext`: the texts on mouse-over.
    real(R8P), allocatable                       :: point_sizes(:) !< The sizes of `ps variable`.
+   integer(I4P), allocatable                    :: point_types(:) !< The types of `pt variable`.
    character(len=:), allocatable                :: axes      !< Item axes, `x1y1`, `x1y2`, `x2y1` or `x2y2`.
    character(len=:), allocatable                :: file      !< Item data file.
    character(len=:), allocatable                :: written   !< Item data file as written, for the automatic title.
@@ -3802,9 +3804,11 @@ contains
       hull_expand = 0.0_R8P
       surface_item = .false.
       ps_var = .false.
+      pt_var = .false.
       zsort_item = .false.
       hypertext = .false.
       if (allocated(point_sizes)) deallocate(point_sizes)
+      if (allocated(point_types)) deallocate(point_types)
       band_smooth = .false.
       polar_base = .false.
       rotate_var = .false.
@@ -4397,6 +4401,11 @@ contains
             ! gnuplot `ps variable`: each point's size from the column after the style's
             ps_var = .true.
             i = i + 1_I4P
+         elseif ((word == 'pt' .or. keyword(word, 'pointtype', 6_I4P)) .and. i < size(tokens, kind=I4P) .and. &
+                 is_word(tokens(min(i + 1_I4P, size(tokens, kind=I4P)))%text, 'var variable')) then
+            ! gnuplot `pt variable`: each point's type from the column after the sizes' (`ps variable`)
+            pt_var = .true.
+            i = i + 1_I4P
          elseif (is_line_option(word)) then
             if (.not. (word == 'lc' .or. keyword(word, 'linecolor', 5_I4P) .or. word == 'lt' .or. &
                        keyword(word, 'linetype', 5_I4P))) shaping = word
@@ -4738,7 +4747,8 @@ contains
             label_col = 3_I4P
             call label_field%set_column(label_col)
          elseif (size(fields) >= 3_I4P + merge(1_I4P, 0_I4P, rotate_var) + merge(1_I4P, 0_I4P, ps_var) + &
-                                   merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc())) then
+                                   merge(1_I4P, 0_I4P, pt_var) + merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc())) &
+            then
             ! a column number (its text) or an expression: a string (`(sprintf(...))`, `(strcol(1))`), or a number
             ! written as the text of the first column it reads, as gnuplot; the rotation (`rotate variable`) and the
             ! color (tc variable) columns after it
@@ -4757,6 +4767,7 @@ contains
             endif
             ! further columns read and ignored, as gnuplot (circles.dem's x:y:text:0)
             kept = [fields(1:2), fields(4:3_I4P + merge(1_I4P, 0_I4P, rotate_var) + merge(1_I4P, 0_I4P, ps_var) + &
+                                             merge(1_I4P, 0_I4P, pt_var) + &
                                              merge(1_I4P, 0_I4P, variable_lc() .or. palette_z_lc()))]
             call move_alloc(kept, fields)
          else
@@ -4917,7 +4928,8 @@ contains
             return
          endif
       endif
-      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar .or. lcz) - merge(1_I4P, 0_I4P, ps_var)
+      nbar = size(fields, kind=I4P) - 2_I4P - merge(1_I4P, 0_I4P, lcvar .or. lcz) - merge(1_I4P, 0_I4P, ps_var) - &
+             merge(1_I4P, 0_I4P, pt_var)
       if (binned .and. nbar /= 0_I4P) then
          call fail('plot: bins need using X or X:Y', iostat, iomsg)
          return
@@ -5101,6 +5113,26 @@ contains
       if (weight_one) then
          values(:, 1) = values(:, 2)
          values(:, 2) = 1.0_R8P
+      endif
+      ! pt variable: the types column (the last, or before the color one) out of the values: gnuplot's int(v), a dot
+      ! for 0 and less
+      if (pt_var .and. size(values, 2) >= 3) then
+         block
+            integer(I4P)              :: c    !< Types column.
+            integer(I4P), allocatable :: rest(:) !< The other columns.
+            integer(I4P)              :: k    !< Column counter.
+
+            c = size(values, 2, kind=I4P) - merge(1_I4P, 0_I4P, lcvar .or. lcz)
+            allocate(point_types(size(values, 1)))
+            do k = 1_I4P, size(values, 1, kind=I4P)
+               point_types(k) = 0_I4P
+               if (ieee_is_finite(values(k, c))) then
+                  if (abs(values(k, c)) < 1.0e9_R8P) point_types(k) = max(0_I4P, int(values(k, c), I4P))
+               endif
+            enddo
+            rest = pack([(k, k = 1_I4P, size(values, 2, kind=I4P))], [(k /= c, k = 1_I4P, size(values, 2, kind=I4P))])
+            values = values(:, rest)
+         endblock
       endif
       ! ps variable: the sizes column (the last, or before the color one) out of the values
       if (ps_var .and. size(values, 2) >= 3) then
@@ -5703,7 +5735,8 @@ contains
       ! lc palette (z): the z as the color column, unless the item gives one after its plot fields
       if (allocated(line%lc)) then
          if (line%lc == LC_PALETTE_Z) then
-            needed = 3_I4P + merge(1_I4P, 0_I4P, ps_var) + merge(1_I4P, 0_I4P, with == 'labels') + &
+            needed = 3_I4P + merge(1_I4P, 0_I4P, ps_var) + merge(1_I4P, 0_I4P, pt_var) + &
+                     merge(1_I4P, 0_I4P, with == 'labels') + &
                      merge(1_I4P, 0_I4P, rotate_var) + merge(2_I4P, 0_I4P, with == 'vectors')
             if (word_count(replace_colons(rest)) < needed) rest = rest//':'//zspec
          endif
@@ -6532,6 +6565,9 @@ contains
          panel%series(last)%crisp = surface_item
          if (allocated(point_sizes)) then
             if (size(point_sizes) == size(panel%series(last)%x)) panel%series(last)%point_sizes = point_sizes
+         endif
+         if (allocated(point_types)) then
+            if (size(point_types) == size(panel%series(last)%x)) panel%series(last)%point_types = point_types
          endif
          panel%series(last)%hypertext = hypertext
          ! the points of labels in the item's lc, black without one (gnuplot); the text in its tc

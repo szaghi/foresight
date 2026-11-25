@@ -113,6 +113,8 @@ type :: series_object
    logical                       :: crisp = .false. !< Polygons drawn with crisp edges, no antialiased seams between
                                                     !< them (gnuplot's svg cells of a polar gridded surface).
    real(R8P),        allocatable :: point_sizes(:)  !< Each point's size (gnuplot `ps variable`), else the style's.
+   integer(I4P),     allocatable :: point_types(:)  !< Each point's type (gnuplot `pt variable`; 0 a dot), else
+                                                    !< the style's.
    logical                       :: hypertext = .false. !< Labels shown on mouse-over of their points (`hypertext`).
    character(len=:), allocatable :: point_color     !< Color of the points of labels (their `lc`), black if unset.
    integer(I4P)                  :: title_justify = 0_I4P !< `title at beginning|end left|right`: 1 left, 2 right,

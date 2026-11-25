@@ -230,6 +230,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_point_types" svg :width="640" :height="300" caption="point and dash types" />
   <Plot name="cb_dashes" svg :width="560" :height="320" caption="dash patterns of your own" />
   <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />
+  <Plot name="cb_pt_variable" svg :width="560" :height="360" caption="a type, size and color per point" />
   <Plot name="cb_lc_styles" svg :width="560" :height="320" caption="candles colored by a column" />
   <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
   <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
