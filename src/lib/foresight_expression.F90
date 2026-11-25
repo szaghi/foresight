@@ -750,6 +750,14 @@ contains
          do
             ! unterminated: the string ends with the text, as gnuplot's scanner closes it
             if (pos > n) exit
+            ! a doubled single quote is a quote, as gnuplot's 'it''s'
+            if (quote == "'" .and. src(pos:pos) == "'" .and. pos < n) then
+               if (src(pos + 1_I4P:pos + 1_I4P) == "'") then
+                  token = token//"'"
+                  pos = pos + 2_I4P
+                  cycle
+               endif
+            endif
             if (src(pos:pos) == quote) exit
             if (quote == '"' .and. src(pos:pos) == '\' .and. pos < n) then
                pos = pos + 1_I4P

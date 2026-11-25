@@ -258,13 +258,30 @@ contains
          token%text = ','
          i = i + 1_I4P
       case ("'")
-         j = index(statement(i + 1_I4P:), "'", kind=I4P)
-         ! unterminated: the string ends with the line, as gnuplot's scanner closes it
-         if (j == 0_I4P) j = n - i + 1_I4P
+         ! a doubled quote is a quote, as gnuplot's 'it''s'
          token%kind = TOKEN_STRING
          token%quote = c
-         token%text = statement(i + 1_I4P:i + j - 1_I4P)
-         i = i + j + 1_I4P
+         token%text = ''
+         i = i + 1_I4P
+         do
+            j = index(statement(i:), "'", kind=I4P)
+            ! unterminated: the string ends with the line, as gnuplot's scanner closes it
+            if (j == 0_I4P) then
+               token%text = token%text//statement(i:n)
+               i = n + 1_I4P
+               exit
+            endif
+            token%text = token%text//statement(i:i + j - 2_I4P)
+            i = i + j
+            if (i <= n) then
+               if (statement(i:i) == "'") then
+                  token%text = token%text//"'"
+                  i = i + 1_I4P
+                  cycle
+               endif
+            endif
+            exit
+         enddo
       case ('"')
          token%kind = TOKEN_STRING
          token%quote = c
@@ -336,7 +353,16 @@ contains
             close = close + 2_I4P
             cycle
          endif
-         if (statement(close:close) == statement(open:open)) return
+         if (statement(close:close) == statement(open:open)) then
+            ! a doubled single quote is a quote of the string
+            if (statement(open:open) == "'" .and. close < n) then
+               if (statement(close + 1_I4P:close + 1_I4P) == "'") then
+                  close = close + 2_I4P
+                  cycle
+               endif
+            endif
+            return
+         endif
          close = close + 1_I4P
       enddo
       close = 0_I4P

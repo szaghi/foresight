@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(264)                           !< Per-check outcome.
+logical                       :: test_passed(265)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2715,8 +2715,9 @@ call interpreter%run_text('set xrange [0:1]; plot t**2', iostat, iomsg)
 test_passed(126) = test_passed(126) .and. iostat == 0_I4P
 call interpreter%run_text('print rand(1.5)', iostat, iomsg)
 test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'Illegal seed value') > 0
-call interpreter%run_text('set xrange [0:1] writeback', iostat, iomsg)
-test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "writeback"') > 0
+! writeback read (check 265), another option refused
+call interpreter%run_text('set xrange [0:1] backwrite', iostat, iomsg)
+test_passed(126) = test_passed(126) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "backwrite"') > 0
 open(newunit=unit, file='foresight_script_test_batch.txt')
 close(unit, status='delete')
 
@@ -6796,6 +6797,48 @@ block
    test_passed(264) = test_passed(264) .and. iostat == 0_I4P
    call interpreter%symbols%string_of('msg', text, found)
    test_passed(264) = test_passed(264) .and. found .and. text == 'l(x) = y0 + m*x'
+endblock
+
+
+! what gnuplot 6.0's tier-B demos (issue #4) read: splot with surface (the mesh lines) and its error bar styles
+! (points), set termoption solid, set border -1 lt black, an object's border lt, a range's writeback, the second
+! dummy of set dummy u, v, the pseudo-column -2 as a bare using field, a doubled quote in a single-quoted string
+block
+   character(len=:), allocatable :: text  !< A string variable.
+   logical                       :: found !< Defined.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set isosamples 3; splot [0:1][0:1] x*y with surface"// &
+                             "; unset table", iostat, iomsg)
+   test_passed(265) = iostat == 0_I4P
+   if (test_passed(265)) test_passed(265) = interpreter%figure%panels(1)%series(1)%style%with == WITH_LINES
+   call interpreter%run_text("$e << EOD"//nl//"0 0 1 0.1"//nl//"1 1 2 0.2"//nl//"EOD"//nl// &
+                             "set table 'foresight_script_test.dat'; splot $e using 1:2:3 with yerrorbars; unset table", &
+                             iostat, iomsg)
+   test_passed(265) = test_passed(265) .and. iostat == 0_I4P
+   if (test_passed(265)) test_passed(265) = interpreter%figure%panels(1)%series(1)%style%with == WITH_POINTS
+   call interpreter%run_text("set termoption solid; set border -1 front lt black; set xrange [0:1] writeback; "// &
+                             "set object 1 circle at 0,0 radius 1 fs solid border lt -1 fc rgb 'red'", iostat, iomsg)
+   test_passed(265) = test_passed(265) .and. iostat == 0_I4P
+   if (test_passed(265)) test_passed(265) = interpreter%figure%panels(1)%border == 4095_I4P .and. &
+                                          interpreter%figure%panels(1)%border_dt == 1_I4P
+   call interpreter%run_text("set dummy u, v; set table 'foresight_script_test.dat'; splot [0:1][0:1] u+v; "// &
+                             "unset table; set dummy x, y", iostat, iomsg)
+   test_passed(265) = test_passed(265) .and. iostat == 0_I4P
+   call interpreter%run_text("$f << EOD"//nl//"1 2"//nl//"2 3"//nl//nl//nl//"3 4"//nl//"EOD"//nl// &
+                             "set table 'foresight_script_test.dat'; plot $f using 1:-2; unset table", iostat, iomsg)
+   test_passed(265) = test_passed(265) .and. iostat == 0_I4P
+   if (test_passed(265)) then
+      associate(y => interpreter%figure%panels(1)%series(1)%y)
+         ! the datasets of the points (a break between them)
+         test_passed(265) = y(1) == 0.0_R8P .and. y(2) == 0.0_R8P .and. y(size(y)) == 1.0_R8P
+      endassociate
+   endif
+   call interpreter%run_text("s = 'it''s'", iostat, iomsg)
+   test_passed(265) = test_passed(265) .and. iostat == 0_I4P
+   call interpreter%symbols%string_of('s', text, found)
+   test_passed(265) = test_passed(265) .and. found .and. text == "it's"
 endblock
 
 if (all(test_passed)) then

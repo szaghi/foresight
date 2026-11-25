@@ -4918,6 +4918,11 @@ contains
                call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
                return
             endif
+            ! splot's `with surface`: gnuplot's surface grid, the mesh lines; its error bar styles points (gnuplot's
+            ! "ignored; treat like points")
+            if (splot_mode .and. with == 'surface') with = 'lines'
+            if (splot_mode .and. is_word(with, 'yerrorbars xerrorbars xyerrorbars yerrorlines xerrorlines '// &
+                                           'xyerrorlines boxxyerror boxerrorbars')) with = 'points'
             if (with == 'table') then
                if (.not. self%table) then
                   call fail("plot: 'with table' requires a previous 'set table'", iostat, iomsg)
@@ -5564,8 +5569,9 @@ contains
             names = 'x y'
             if (len_trim(self%dummies) > 0) then
                if (word_count(self%dummies) >= 2) then
-                  names = trim(first_word(self%dummies))//' '// &
-                          trim(first_word(adjustl(self%dummies(index(adjustl(self%dummies), ' '):))))
+                  ! the first two names (the list starts with a blank)
+                  names = adjustl(self%dummies)
+                  names = trim(first_word(names))//' '//trim(first_word(adjustl(names(index(names, ' '):))))
                else
                   names = trim(first_word(self%dummies))//' y'
                endif
@@ -10469,10 +10475,11 @@ contains
          elseif (word == 'fs' .or. keyword(word, 'fillstyle', 5_I4P)) then
             fill = ''
             do while (i < size(tokens, kind=I4P))
-               ! the fill words, `border lc COLOR` included
+               ! the fill words, `border lc COLOR` and `border lt N` included
                if (is_annotation_word(tokens(i + 1_I4P)%text) .and. .not. is_word(tokens(i + 1_I4P)%text, &
                    'empty noborder') .and. .not. (is_word(tokens(i + 1_I4P)%text, 'lc linecolor rgb rgbcolor') .and. &
-                   (tokens(i)%text == 'border' .or. is_word(tokens(i)%text, 'lc linecolor')))) exit
+                   (tokens(i)%text == 'border' .or. is_word(tokens(i)%text, 'lc linecolor'))) .and. &
+                   .not. (is_word(tokens(i + 1_I4P)%text, 'lt linetype') .and. tokens(i)%text == 'border')) exit
                i = i + 1_I4P
                if (tokens(i)%kind == TOKEN_STRING) then
                   fill = fill//' "'//tokens(i)%text//'"'
@@ -11268,7 +11275,8 @@ contains
       i = 2_I4P
       do while (i <= size(tokens, kind=I4P))
          select case (tokens(i)%text)
-         case ('dash', 'dashed')
+         case ('dash', 'dashed', 'solid')
+            ! solid: gnuplot's svg draws the dash types anyway
             continue
          case ('noenhanced', 'noenh')
             call self%figure%set_enhanced(.false.)
@@ -11287,8 +11295,8 @@ contains
                self%figure%font_family = font%family
             endblock
          case default
-            call fail('set termoption: unsupported option "'//tokens(i)%text//'" (dash, noenhanced, font)', iostat, &
-                      iomsg)
+            call fail('set termoption: unsupported option "'//tokens(i)%text//'" (dash, solid, noenhanced, font)', &
+                      iostat, iomsg)
             return
          endselect
          i = i + 1_I4P
@@ -11700,11 +11708,12 @@ contains
                call fail('set '//option//': reverse applies to x, y, x2, y2 and cb', iostat, iomsg)
                return
             endif
-         case ('nowriteback')
+         case ('nowriteback', 'writeback')
+            ! the range kept by an autoscaled plot: foresight's ranges are not written back
             continue
          case default
             call fail('set '//option//': unsupported option "'//tokens(k)%text//'" (noextend, extend, reverse, '// &
-                      'noreverse, nowriteback)', iostat, iomsg)
+                      'noreverse, [no]writeback)', iostat, iomsg)
             return
          endselect
       enddo
@@ -14706,7 +14715,17 @@ contains
       ok = .true.
       w = toks(k)%text
       if (keyword(w, 'linetype', 5_I4P) .or. w == 'lt') then
-         ok = next_real(toks, k, v, iostat, iomsg, self%symbols)
+         ! lt black: gnuplot's -1
+         v = -1.0_R8P
+         if (k < size(toks, kind=I4P)) then
+            if (toks(k + 1_I4P)%text == 'black') then
+               k = k + 1_I4P
+            else
+               ok = next_real(toks, k, v, iostat, iomsg, self%symbols)
+            endif
+         else
+            ok = next_real(toks, k, v, iostat, iomsg, self%symbols)
+         endif
          if (.not. ok) return
          select case (nint(v))
          case (0)
@@ -18169,6 +18188,13 @@ contains
       if (len(text) > 0 .and. verify(text, '0123456789') == 0 .and. len(text) < 10) then
          read(text, *) c
          call field%set_column(c)
+      elseif (text == '-1' .or. text == '-2') then
+         ! gnuplot's pseudo-columns: the block (-1) and the dataset (-2) of the point, from 0
+         call field%compile('(column('//text//'))', iostat, iomsg, degrees=degrees, symbols=symbols, sampled=sampled)
+         if (iostat /= 0_I4P) then
+            iomsg = 'using: '//iomsg
+            return
+         endif
       elseif (is_quoted(text)) then
          ! a column header name, gnuplot `using 1:"residual"`
          call field%set_name(text(2:len(text) - 1))
