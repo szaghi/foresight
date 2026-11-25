@@ -38,6 +38,10 @@ type :: view3d_object
    logical      :: grid_vertical = .false. !< Vertical grid lines on the back walls at the x and y ticks (`set grid
                                            !< vertical`).
    logical      :: grid_z = .false. !< Grid lines at the z ticks on the back walls (`set grid ztics`).
+   logical      :: hidden3d = .false. !< Hidden lines removed (`set hidden3d`): the surfaces drawn opaque, back to
+                                      !< front (a painter's algorithm, not gnuplot's hidden3d.c).
+   integer(I4P) :: hidden_offset = 1_I4P !< Linetype of the underside of a surface after its own (`set hidden3d
+                                         !< offset N`; 0 the same, `nooffset`).
 endtype view3d_object
 
 type :: map_geometry
@@ -229,11 +233,12 @@ contains
    endfunction map_layout
 
    pure function view3d_setup(view, box, page, font_size, title_lines, xr, yr, zr, logs, base_drawn, margins, screen, &
-                              key_side) result(f)
+                              key_side, key_below) result(f)
    !< The 3D view of a panel in the `box` (left, top, width, height [px]) of a `page` (width, height [px]), as gnuplot
    !< 6.0's do_3dplot and boundary3d set it up in the svg terminal units (font metrics as map_layout's): the plot bounds
    !< within the default margins (characters or `at screen` ones on the left, screen ones elsewhere), a key outside at
-   !< the right or left (`key_side`, its width [units], negative at the left), squared by `set view equal`; the scales
+   !< the right or left (`key_side`, its width [units], negative at the left) or below (`key_below`, its height),
+   !< squared by `set view equal`; the scales
    !< 4/7 of them; the transform rot_z, rot_x, half the view scale, then the azimuth; the base plane (`set xyplane`)
    !< and the box (`base_drawn`: x or y ticks or a base border draw it, so the box reaches it); the axis scales,
    !< `set view equal xy|xyz`; the corners of the axes by the quadrant of rot_z (and rot_x).
@@ -250,6 +255,7 @@ contains
    real(R8P),           intent(in) :: margins(4)  !< Left, right, top, bottom margins, negative for the default.
    logical,             intent(in) :: screen(4)   !< The margin a page fraction (`at screen`), else characters.
    real(R8P),           intent(in) :: key_side    !< Width of a key outside [units], at the right (negative: left).
+   real(R8P),           intent(in) :: key_below   !< Height of a key below the plot [units] (gnuplot's bottom margin key).
    type(view3d_frame)              :: f           !< The view.
    real(R8P)                       :: m(4,4)      !< A transform.
    real(R8P)                       :: xmax, ymax  !< Page size [units].
@@ -295,6 +301,7 @@ contains
       else
          ybot = aint(f%vchar * 2.5_R8P + 1.0_R8P)
       endif
+      if (key_below > 0.0_R8P) ybot = ybot + aint(key_below)
       if (screen(3)) then
          ytop = aint(margins(3) * ymax + 0.5_R8P)
       else

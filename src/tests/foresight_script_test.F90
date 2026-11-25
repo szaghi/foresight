@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(266)                           !< Per-check outcome.
+logical                       :: test_passed(267)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6873,6 +6873,42 @@ block
    test_passed(266) = test_passed(266) .and. iostat /= 0_I4P .and. index(iomsg, 'cartesian, spherical or cylindrical') > 0
    call interpreter%run_text("unset mapping", iostat, iomsg)
    test_passed(266) = test_passed(266) .and. iostat == 0_I4P .and. interpreter%mapping == 0_I4P
+endblock
+
+
+! set hidden3d, as gnuplot 6.0 (a painter's algorithm here): a function's grid of isosamples points both ways and no
+! crossing curves, its underside in the linetype after its own (the next item's linetype one further), the surface
+! drawn as opaque quadrangles; the key below the plot at gnuplot's place (probed: the title's end at 486.66, 349.89);
+! set autoscale z
+block
+   character(len=:), allocatable :: svg !< Rendered SVG.
+   integer(I4P)                  :: u   !< File unit.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_hid.svg'; "// &
+                             "set parametric; set isosamples 50,10; set hidden; set key below; "// &
+                             "set urange [-pi/2:pi/2]; set vrange [0:2*pi]; set ztics nomirror -1.0,0.25,1.0; "// &
+                             "set view 45,50; splot cos(u)*cos(v),cos(u)*sin(v),sin(u)", iostat, iomsg)
+   test_passed(267) = iostat == 0_I4P
+   if (test_passed(267)) then
+      svg = read_text('foresight_script_test_hid.svg')
+      test_passed(267) = index(svg, 'fs-hidden3d') > 0 .and. &
+                        index(svg, '<text x="486.66" y="349.89" text-anchor="end">cos(u)*cos(v),cos(u)*sin(v),sin(u)<') > 0
+      associate(series => interpreter%figure%panels(1)%series(1))
+         test_passed(267) = test_passed(267) .and. series%grid_scans == 10_I4P .and. size(series%scans, 2) == 10 .and. &
+                           series%scans(2, 1) - series%scans(1, 1) + 1_I4P == 50_I4P .and. allocated(series%back_color)
+      endassociate
+      if (.not. test_passed(267)) write(error_unit, '(A)') 'check 267: '//svg
+   endif
+   open(newunit=u, file='foresight_script_test_hid.svg')
+   close(u, status='delete')
+   call interpreter%run_text("set hidden3d offset 2 trianglepattern 3 undefined 1 altdiagonal bentover; "// &
+                             "set zrange [0:1]; set autoscale z", iostat, iomsg)
+   test_passed(267) = test_passed(267) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%view3d%hidden_offset == 2_I4P .and. &
+                     .not. interpreter%figure%panels(1)%zaxis%min_fixed
+   call interpreter%run_text("unset hidden3d", iostat, iomsg)
+   test_passed(267) = test_passed(267) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%view3d%hidden3d
 endblock
 
 if (all(test_passed)) then

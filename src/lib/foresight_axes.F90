@@ -2902,6 +2902,12 @@ contains
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    type(series_object), allocatable     :: raw(:)    !< Series as given, restored after.
    type(label_object), allocatable      :: notes(:)  !< Labels as given, restored after.
+   real(R8P), allocatable               :: qx(:,:)   !< Hidden surface quadrangles, page abscissae (4, quadrangle).
+   real(R8P), allocatable               :: qy(:,:)   !< Their page ordinates.
+   real(R8P), allocatable               :: qdepth(:) !< Their depths (view z, the nearest largest).
+   character(len=24), allocatable       :: qcolor(:) !< Their line colors.
+   real(R8P), allocatable               :: qlw(:)    !< Their line widths [px].
+   integer(I4P), allocatable            :: order(:)  !< Painting order of the quadrangles.
    type(arrow_object), allocatable      :: arrows(:) !< Arrows as given, restored after.
    type(shape_object), allocatable      :: shapes(:) !< Objects as given, restored after.
    type(view3d_frame)                   :: f         !< The view.
@@ -2912,8 +2918,11 @@ contains
    real(R8P)                            :: key(2)    !< Key width and height [px].
    real(R8P)                            :: zr(2)     !< z extent of the series.
    real(R8P)                            :: spacing   !< The key spacing, restored after.
-   real(R8P)                            :: dx        !< Key shift from the right [px].
-   real(R8P)                            :: dy        !< Key shift from the top [px].
+   real(R8P)                            :: dx        !< gnuplot's xinkey [units].
+   real(R8P)                            :: dy        !< gnuplot's yinkey [units].
+   real(R8P)                            :: km(6)     !< gnuplot's key metrics (key3d_metrics) [units].
+   real(R8P)                            :: side      !< Width of a key outside, right (negative: left) [units].
+   real(R8P)                            :: below     !< Height of a key below [units].
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
    integer(I4P)                         :: lines     !< Title lines.
    integer(I4P)                         :: s         !< Series counter.
@@ -2935,6 +2944,25 @@ contains
    if (backend%enhanced) call plain_ticks(self)
    lines = 0_I4P
    if (self%has_title()) lines = 1_I4P + count([(self%title(k:k) == '\', k = 1_I4P, len(self%title, kind=I4P))])
+   ! the key's entries (gnuplot's 3D key rows are a character height apart: 1.5 font sizes, not 1.25, restored after)
+   ! and gnuplot's room for a key outside (boundary3d): below the plot, at its right or left
+   spacing = self%key_spacing
+   self%key_spacing = spacing * 1.5_R8P / LINE_HEIGHT
+   call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
+                        tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
+   call key3d_metrics(self, font_size, grid, km)
+   side = 0.0_R8P
+   below = 0.0_R8P
+   if (self%key .and. grid(1) > 0_I4P .and. .not. self%key_at) then
+      select case (self%key_place())
+      case ('bottom')
+         below = real(grid(3), R8P) * km(2) + km(5)
+      case ('right')
+         side = km(4) * real(grid(2), R8P) - 2.0_R8P * km(1)
+      case ('left')
+         side = -(km(4) * real(grid(2), R8P) - 2.0_R8P * km(1))
+      endselect
+   endif
    ! gnuplot's panel box (a multiplot layout's: its title band one character high), else the rendering one
    box = [x0, y0, width, height]
    if (self%box3d(1) >= 0.0_R8P) box = [self%box3d(1) * self%canvas(1), &
@@ -2944,8 +2972,11 @@ contains
                     [self%xaxis%lo, self%xaxis%hi], [self%yaxis%lo, self%yaxis%hi], [self%zaxis%lo, self%zaxis%hi], &
                     [self%xaxis%log, self%yaxis%log, self%zaxis%log], &
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
-                    iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, 0.0_R8P)
+                    iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
    call view3d_project(self%series, f, self%view3d%surface)
+   ! set hidden3d: the grid surfaces as opaque quadrangles, painted back to front (their own lines not drawn)
+   if (self%view3d%hidden3d .and. self%view3d%surface) call hidden_quads(raw, f, self%series, qx, qy, qdepth, qcolor, &
+                                                                         qlw)
    ! the annotations at their projected positions (screen fractions), restored after
    if (allocated(self%notes)) then
       notes = self%notes
@@ -2997,11 +3028,6 @@ contains
    self%page_y%lo = -area(4)
    self%page_y%hi = -area(3)
    self%page_y%log = .false.
-   ! gnuplot's 3D key rows are a character height apart (1.5 font sizes, not 1.25): restored after
-   spacing = self%key_spacing
-   self%key_spacing = spacing * 1.5_R8P / LINE_HEIGHT
-   call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
-                        tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    view = axes_view(area=area, x=[area(1), area(2)], y=[-area(4), -area(3)], font_size=font_size)
    view%three_d = .true.
    call backend%begin_axes(view)
@@ -3010,6 +3036,17 @@ contains
    call annotate3d('behind')
    call self%draw_view3d_frame(backend, f, .false., font_size, raw)
    call annotate3d('back')
+   if (allocated(qdepth)) then
+      if (size(qdepth) > 0) then
+         order = sorted(qdepth)
+         call backend%begin_group('fs-hidden3d')
+         do k = 1_I4P, size(order, kind=I4P)
+            call backend%polygon(qx(:, order(k)), qy(:, order(k)), 'white', 1.0_R8P, trim(qcolor(order(k))), &
+                                 qlw(order(k)))
+         enddo
+         call backend%end_group
+      endif
+   endif
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
@@ -3024,16 +3061,19 @@ contains
    bounds = [f%bounds(1) * 0.01_R8P, f%bounds(2) * 0.01_R8P, f%height - f%bounds(4) * 0.01_R8P, &
              f%height - f%bounds(3) * 0.01_R8P]
    if (self%key .and. grid(1) > 0_I4P) then
-      if (.not. (self%key_at .or. self%key_outside)) then
-         ! gnuplot's 3D key (do_3dkey_layout): its titles end 2 tick lengths and 6 characters left of the bounds, its
-         ! first row a tick length and half a character below their top (as the map's)
-         dx = (2.0_R8P * f%vtic + 6.0_R8P * f%hchar) * 0.01_R8P - 52.0_R8P / 12.0_R8P * font_size
-         dy = (f%vtic + 0.5_R8P * f%vchar) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * font_size
-         call self%draw_key(backend, [bounds(1) + dx, bounds(2) - dx, bounds(3) + dy, bounds(4) - dy], &
-                            [x0, y0, x0 + width, y0 + height], element_px(backend, self%key_font, font_size), grid, key)
-      else
+      if (self%key_at) then
          call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
                             element_px(backend, self%key_font, font_size), grid, key)
+      else
+         ! gnuplot's do_3dkey_layout: the first entry's text ends a character left of its sample (xinkey), its row
+         ! centred half an entry below the top of the entries (yinkey), placed in the plot bounds; foresight's key box
+         ! drawn so that its first entry lands there
+         call key3d_origin(self, f, km, grid, dx, dy)
+         call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
+                            element_px(backend, self%key_font, font_size), grid, key, &
+                            origin=[(dx - km(1)) * 0.01_R8P - key(1) + 52.0_R8P / 12.0_R8P * font_size - PAD, &
+                                    f%height - (dy - 0.5_R8P * km(2)) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * &
+                                    font_size + GAP])
       endif
    endif
    if (self%has_title()) then
@@ -3863,9 +3903,10 @@ contains
    a = (self%theta_origin + merge(-theta, theta, self%theta_clockwise)) * (PI_R8 / 180.0_R8P)
    endfunction page_angle
 
-   subroutine draw_key(self, backend, area, box, font_size, grid, extent)
-   !< Draw the key at its place (`key_place`): right-aligned titles, style samples on their right; entries in a column,
-   !< or row after row (`key_horizontal`).
+   subroutine draw_key(self, backend, area, box, font_size, grid, extent, origin)
+   !< Draw the key at its place (`key_place`), or with its top left corner at `origin` (a 3D view's, gnuplot's
+   !< do_3dkey_layout): right-aligned titles, style samples on their right; entries in a column, or row after row
+   !< (`key_horizontal`).
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
@@ -3873,6 +3914,7 @@ contains
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    integer(I4P),          intent(in)    :: grid(3)   !< Entries, columns, rows (`key_layout`).
    real(R8P),             intent(in)    :: extent(2) !< Key width and height [px] (`key_layout`).
+   real(R8P),             intent(in), optional :: origin(2) !< Key top left corner [px], instead of its place.
    real(R8P)                            :: xs(2)     !< Sample abscissae [px].
    real(R8P)                            :: yc        !< Row centre ordinate [px].
    real(R8P)                            :: entry     !< Entry width, spacing included [px].
@@ -3887,7 +3929,10 @@ contains
    backend%font = self%key_font
    associate(width => extent(1), height => extent(2))
       entry = (width + GAP) / real(grid(2), R8P)
-      if (self%key_at) then
+      if (present(origin)) then
+         left = origin(1)
+         top = origin(2)
+      elseif (self%key_at) then
          ! gnuplot `set key at`: the key box aligned on the position as a text, by left/right/center, top/bottom/center
          call key_anchor(left, top)
       else
@@ -9175,6 +9220,202 @@ contains
    endif
    shape%clip = .false.
    endsubroutine view3d_shape
+
+   subroutine hidden_quads(raw, f, series, qx, qy, depth, color, lw)
+   !< The quadrangles of the grid surfaces of a 3D view with `set hidden3d` (lines and linespoints of a grid: the first
+   !< `grid_scans` scans, of one length), each to be filled with the page color and stroked, painted from the farthest
+   !< (`depth` the mean view z of its corners, the nearest largest): gnuplot's hidden3d by a painter's algorithm. A
+   !< quadrangle facing away (clockwise on the page, the scans in gnuplot's order, data ones last first) takes the
+   !< surface's underside color (`back_color`, the linetype after its own). A quadrangle with a corner undefined or
+   !< outside the box is dropped. The projected lines of those surfaces are emptied in `series` (their key kept).
+   type(series_object),            intent(in)    :: raw(:)    !< Series as given.
+   type(view3d_frame),             intent(in)    :: f         !< The view.
+   type(series_object),            intent(inout) :: series(:) !< Projected series.
+   real(R8P), allocatable,         intent(out)   :: qx(:,:)   !< Page abscissae (4, quadrangle) [px].
+   real(R8P), allocatable,         intent(out)   :: qy(:,:)   !< Page ordinates.
+   real(R8P), allocatable,         intent(out)   :: depth(:)  !< Depths.
+   character(len=24), allocatable, intent(out)   :: color(:)  !< Line colors.
+   real(R8P), allocatable,         intent(out)   :: lw(:)     !< Line widths [px].
+   real(R8P)                                     :: lo(3)     !< Box start (linear spaces).
+   real(R8P)                                     :: hi(3)     !< Box end.
+   real(R8P)                                     :: v(3, 4)   !< Corners in the view.
+   real(R8P)                                     :: p(3)      !< A corner (linear spaces).
+   real(R8P)                                     :: page(2)   !< A page position.
+   real(R8P)                                     :: area      !< Twice the signed area on the page (y up).
+   integer(I4P)                                  :: s         !< Series counter.
+   integer(I4P)                                  :: nscan     !< Grid scans.
+   integer(I4P)                                  :: npts      !< Points per scan.
+   integer(I4P)                                  :: i, j, c   !< Counters.
+   integer(I4P)                                  :: n         !< Quadrangles.
+   integer(I4P)                                  :: idx(4)    !< Corner points.
+   integer(I4P)                                  :: j1, j2    !< Scans of a quadrangle (gnuplot's order).
+   logical                                       :: ok        !< A drawable quadrangle.
+
+   lo = [min(f%x(1), f%x(2)), min(f%y(1), f%y(2)), min(f%z(1), f%z(2))]
+   hi = [max(f%x(1), f%x(2)), max(f%y(1), f%y(2)), max(f%z(1), f%z(2))]
+   n = 0_I4P
+   do s = 1_I4P, size(raw, kind=I4P)
+      call grid_of(raw(s), nscan, npts, ok)
+      if (ok) n = n + (nscan - 1_I4P) * (npts - 1_I4P)
+   enddo
+   allocate(qx(4, n), qy(4, n), depth(n), color(n), lw(n))
+   n = 0_I4P
+   do s = 1_I4P, size(raw, kind=I4P)
+      call grid_of(raw(s), nscan, npts, ok)
+      if (.not. ok) cycle
+      series(s)%x = ieee_value(1.0_R8P, ieee_quiet_nan) + 0.0_R8P * series(s)%x
+      series(s)%y = series(s)%x
+      do j = 1_I4P, nscan - 1_I4P
+         ! gnuplot's order of the scans: a data item's last first
+         if (raw(s)%data_scans) then
+            j1 = nscan + 1_I4P - j
+            j2 = nscan - j
+         else
+            j1 = j
+            j2 = j + 1_I4P
+         endif
+         do i = 1_I4P, npts - 1_I4P
+            idx = [raw(s)%scans(1, j1) + i - 1_I4P, raw(s)%scans(1, j1) + i, raw(s)%scans(1, j2) + i, &
+                   raw(s)%scans(1, j2) + i - 1_I4P]
+            ok = .true.
+            do c = 1_I4P, 4_I4P
+               p = [view3d_lin(raw(s)%x(idx(c)), f%log(1)), view3d_lin(raw(s)%y(idx(c)), f%log(2)), &
+                    view3d_lin(raw(s)%z(idx(c)), f%log(3))]
+               if (.not. all(ieee_is_finite(p))) then
+                  ok = .false.
+                  exit
+               endif
+               if (any(p < lo - 1.0e-12_R8P * (hi - lo)) .or. any(p > hi + 1.0e-12_R8P * (hi - lo))) then
+                  ok = .false.
+                  exit
+               endif
+               v(:, c) = view3d_xyz(f, p(1), p(2), p(3), linear=.true.)
+            enddo
+            if (.not. ok) cycle
+            n = n + 1_I4P
+            do c = 1_I4P, 4_I4P
+               page = view3d_page(f, v(:, c), truncate=.true.)
+               qx(c, n) = page(1)
+               qy(c, n) = page(2)
+            enddo
+            depth(n) = 0.25_R8P * sum(v(3, :))
+            area = 0.0_R8P
+            do c = 1_I4P, 4_I4P
+               area = area + v(1, c) * v(2, modulo(c, 4_I4P) + 1_I4P) - v(1, modulo(c, 4_I4P) + 1_I4P) * v(2, c)
+            enddo
+            color(n) = raw(s)%style%color
+            if (area < 0.0_R8P .and. allocated(raw(s)%back_color)) color(n) = raw(s)%back_color
+            lw(n) = raw(s)%style%linewidth
+         enddo
+      enddo
+   enddo
+   qx = qx(:, 1:n)
+   qy = qy(:, 1:n)
+   depth = depth(1:n)
+   color = color(1:n)
+   lw = lw(1:n)
+   contains
+      pure subroutine grid_of(one, nsc, np, yes)
+      !< Whether `one` is a grid surface drawn by hidden3d: lines or linespoints, its grid scans of one length.
+      type(series_object), intent(in)  :: one !< Series.
+      integer(I4P),        intent(out) :: nsc !< Grid scans.
+      integer(I4P),        intent(out) :: np  !< Points per scan.
+      logical,             intent(out) :: yes !< A grid surface.
+
+      yes = .false.
+      nsc = 0_I4P
+      np = 0_I4P
+      if (.not. allocated(one%z) .or. .not. allocated(one%scans)) return
+      if (one%no_surface) return
+      if (.not. any(one%style%with == [WITH_LINES, WITH_LINESPOINTS])) return
+      nsc = one%grid_scans
+      if (nsc < 2_I4P .or. nsc > size(one%scans, 2)) return
+      np = one%scans(2, 1) - one%scans(1, 1) + 1_I4P
+      if (np < 2_I4P) return
+      yes = all(one%scans(2, 1:nsc) - one%scans(1, 1:nsc) + 1_I4P == np)
+      endsubroutine grid_of
+   endsubroutine hidden_quads
+
+   pure subroutine key3d_metrics(self, font_size, grid, km)
+   !< gnuplot's 3D key metrics (boundary3d, do_3dkey_layout) in its svg terminal units: `km` = the key character width,
+   !< an entry's height (the character height), the sample width (4 characters and a tick), a column's width (the longest
+   !< title and 4 characters, the sample), the key title's height, the key's width.
+   class(axes_object), intent(in)  :: self      !< Panel.
+   real(R8P),          intent(in)  :: font_size !< Font size [px].
+   integer(I4P),       intent(in)  :: grid(3)   !< Key entries, columns, rows.
+   real(R8P),          intent(out) :: km(6)     !< Metrics [units].
+   real(R8P)                       :: hchar     !< Character width.
+   real(R8P)                       :: vchar     !< Character height.
+   real(R8P)                       :: htic      !< Tick length.
+   integer(I4P)                    :: longest   !< Longest title [characters].
+   integer(I4P)                    :: s         !< Series counter.
+
+   vchar = real(int(font_size * 0.90_R8P * 100.0_R8P + font_size * 0.25_R8P * 100.0_R8P + &
+                    font_size * 0.35_R8P * 100.0_R8P, I8P), R8P)
+   hchar = real(int(self%key_font%size_px(font_size) * 0.70_R8P * 100.0_R8P, I8P), R8P)
+   htic = real(int(vchar, I8P) / 2_I8P, R8P)
+   longest = 0_I4P
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (allocated(self%series(s)%title)) longest = max(longest, len_trim(self%series(s)%title, kind=I4P))
+   enddo
+   km(1) = hchar
+   km(2) = vchar
+   km(3) = 4.0_R8P * hchar + htic
+   km(4) = real(longest + 4_I4P, R8P) * hchar + km(3)
+   km(5) = 0.0_R8P
+   if (allocated(self%key_title)) then
+      if (len_trim(self%key_title) > 0) km(5) = vchar
+   endif
+   km(6) = km(4) * real(max(grid(2), 1_I4P) - 1_I4P, R8P) + (hchar + km(3)) + hchar * real(longest + 2_I4P, R8P)
+   endsubroutine key3d_metrics
+
+   pure subroutine key3d_origin(self, f, km, grid, xinkey, yinkey)
+   !< gnuplot's do_3dkey_layout: the anchor of the first key entry (its sample's left, its row's top) [units] in the
+   !< plot bounds (gnuplot's page bounds, the key `fixed`): below the plot (`below`), centred by its parts; inside at the
+   !< top or bottom, a tick length in, at the left or right; outside at the right or left, a tick length away.
+   class(axes_object), intent(in)  :: self    !< Panel.
+   type(view3d_frame), intent(in)  :: f       !< The view.
+   real(R8P),          intent(in)  :: km(6)   !< Key metrics (key3d_metrics).
+   integer(I4P),       intent(in)  :: grid(3) !< Key entries, columns, rows.
+   real(R8P),          intent(out) :: xinkey  !< First entry anchor abscissa [units].
+   real(R8P),          intent(out) :: yinkey  !< Its ordinate [units].
+   real(R8P)                       :: size_left  !< gnuplot's key_size_left.
+   real(R8P)                       :: size_right !< gnuplot's key_size_right.
+   real(R8P)                       :: height     !< Key height.
+   integer(I4P)                    :: longest    !< Longest title [characters].
+
+   longest = nint((km(4) - km(3)) / km(1)) - 4_I4P
+   size_left = km(1) * real(longest + 2_I4P, R8P)
+   size_right = km(1) + km(3)
+   height = km(5) + km(2) * real(grid(3), R8P)
+   associate(xleft => f%bounds(1), xright => f%bounds(2), ybot => f%bounds(3), ytop => f%bounds(4))
+      select case (self%key_place())
+      case ('bottom')
+         xinkey = xleft + aint((xright - xleft) * size_left / (real(max(grid(2), 1_I4P), R8P) * &
+                               (size_left + size_right)))
+         yinkey = ybot - km(5)
+      case ('right')
+         xinkey = xright + f%htic + size_left
+         yinkey = ytop - f%vtic - km(5)
+         if (trim(self%key_v) == 'bottom') yinkey = ybot + f%vtic + height - km(5)
+      case ('left')
+         xinkey = xleft - f%htic - km(6) + size_left
+         yinkey = ytop - f%vtic - km(5)
+         if (trim(self%key_v) == 'bottom') yinkey = ybot + f%vtic + height - km(5)
+      case default
+         if (trim(self%key_v) == 'top') then
+            yinkey = ytop - f%vtic - km(5)
+         else
+            yinkey = ybot + f%vtic + height - km(5)
+         endif
+         if (trim(self%key_h) == 'left') then
+            xinkey = xleft + f%htic + size_left
+         else
+            xinkey = xright - f%htic - km(6) + size_left
+         endif
+      endselect
+   endassociate
+   endsubroutine key3d_origin
 
    pure subroutine view3d_zextent(series, logarithmic, zr, found)
    !< The z extent of the 3D `series` (their finite heights, positive ones on a log axis), the autoscaling ones.

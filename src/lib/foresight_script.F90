@@ -6805,19 +6805,30 @@ contains
       real(R8P)                                  :: v      !< y sample.
       integer(I4P)                               :: j      !< Curve counter.
       integer(I4P)                               :: k      !< Sample counter.
+      integer(I4P)                               :: along  !< Samples along a grid curve.
+      logical                                    :: hidden !< `set hidden3d`.
 
       call surface_range(1_I4P, lo(1), hi(1))
       call surface_range(2_I4P, lo(2), hi(2))
       ! gnuplot's samples, min + i step with the step computed first, written to the last bit
       used = 0_I4P
+      ! set hidden3d: the grid alone, its curves of N1 points (gnuplot's iso_samples_1), no crossing curves
+      hidden = self%figure%panels(self%figure%current)%view3d%hidden3d
+      along = self%samples
+      if (hidden) along = self%isosamples1
       do j = 0_I4P, self%isosamples - 1_I4P
          v = lo(2) + real(j, R8P) * ((hi(2) - lo(2)) / real(self%isosamples - 1_I4P, R8P))
-         do k = 0_I4P, self%samples - 1_I4P
-            u = lo(1) + real(k, R8P) * ((hi(1) - lo(1)) / real(self%samples - 1_I4P, R8P))
+         do k = 0_I4P, along - 1_I4P
+            u = lo(1) + real(k, R8P) * ((hi(1) - lo(1)) / real(along - 1_I4P, R8P))
             call append_text(buffer, used, exact_real(u)//' '//exact_real(v)//new_line('a'))
          enddo
          call append_text(buffer, used, new_line('a'))
       enddo
+      if (hidden) then
+         rows = buffer(1:used)
+         grid_rows = self%isosamples
+         return
+      endif
       do j = 0_I4P, self%isosamples1 - 1_I4P
          u = lo(1) + real(j, R8P) * ((hi(1) - lo(1)) / real(self%isosamples1 - 1_I4P, R8P))
          do k = 0_I4P, self%samples2 - 1_I4P
@@ -6935,6 +6946,12 @@ contains
          ! set mapping: the data's theta:phi:r or theta:z:r made x, y, z (gnuplot's get_3ddata), not a function's
          if (self%mapping /= 0_I4P .and. pseudo /= 3_I4P) call map_points(panel%series(last), self%mapping, &
                                                                          panel%degrees)
+         ! set hidden3d: the underside in the linetype `offset` after the item's, a linetype reserved for it (gnuplot)
+         if (panel%view3d%hidden3d .and. panel%view3d%hidden_offset /= 0_I4P) then
+            panel%series(last)%back_color = default_color(last + panel%color_shift + panel%view3d%hidden_offset, &
+                                                          panel%linecolors)
+            panel%color_shift = panel%color_shift + 1_I4P
+         endif
          panel%series(last)%no_contours = item_nocontours
          panel%series(last)%no_surface = item_nosurface
          ! set dgrid3d: the data (not a function's samples) gridded, gnuplot's grid_nongrid_data
@@ -11645,6 +11662,34 @@ contains
       endif
    elseif (keyword(option, 'mttics', 3_I4P)) then
       call minor_option(self%figure%panels(self%figure%current)%ttics)
+   elseif (keyword(option, 'hidden3d', 3_I4P)) then
+      ! gnuplot's set hidden3d: the surfaces opaque (a painter's algorithm here), the underside in the linetype offset
+      ! after the surface's own; the other options read
+      associate(view => self%figure%panels(self%figure%current)%view3d)
+         view%hidden3d = .true.
+         i = 1_I4P
+         do while (i < size(tokens, kind=I4P))
+            i = i + 1_I4P
+            select case (tokens(i)%text)
+            case ('defaults')
+               view%hidden_offset = 1_I4P
+            case ('offset')
+               if (.not. next_integer(tokens, i, k, iostat, iomsg, self%symbols)) return
+               view%hidden_offset = k
+            case ('nooffset')
+               view%hidden_offset = 0_I4P
+            case ('trianglepattern', 'undefined')
+               if (.not. next_integer(tokens, i, k, iostat, iomsg, self%symbols)) return
+            case ('noundefined', 'altdiagonal', 'noaltdiagonal', 'bentover', 'nobentover', 'front', 'back')
+               continue
+            case default
+               call fail('set hidden3d: unsupported option "'//tokens(i)%text//'" (defaults, offset N, nooffset, '// &
+                         'trianglepattern N, undefined N, noundefined, [no]altdiagonal, [no]bentover, front, back)', &
+                         iostat, iomsg)
+               return
+            endselect
+         enddo
+      endassociate
    elseif (keyword(option, 'mapping', 3_I4P)) then
       ! gnuplot's set mapping: the columns of splot's data, x:y:z, theta:phi:r or theta:z:r
       if (size(tokens) < 2) then
@@ -14817,12 +14862,12 @@ contains
       endsubroutine zeroaxis_option
 
       subroutine autoscale_option
-      !< gnuplot `set autoscale [AXES|AXESmin|AXESmax|AXESfix|fix|noextend|keepfix]...` (AXES x, y, x2, y2, cb, xy):
+      !< gnuplot `set autoscale [AXES|AXESmin|AXESmax|AXESfix|fix|noextend|keepfix]...` (AXES x, y, x2, y2, cb, z, xy):
       !< the named axes (all without one) autoscaled again, `fix` and `noextend` their ends not extended to the ticks.
-      logical :: named(5)  !< x, y, x2, y2, cb named.
+      logical :: named(6)  !< x, y, x2, y2, cb, z named.
       logical :: tight     !< fix or noextend.
       character(len=:), allocatable :: w !< Word.
-      character(len=*), parameter   :: AXES(5) = [character(len=2) :: 'x', 'y', 'x2', 'y2', 'cb'] !< Axis names.
+      character(len=*), parameter   :: AXES(6) = [character(len=2) :: 'x', 'y', 'x2', 'y2', 'cb', 'z'] !< Axis names.
       integer(I4P) :: a    !< Axis counter.
       integer(I4P) :: k    !< Token counter.
       logical      :: ends(2) !< min, max autoscaled.
@@ -14843,7 +14888,7 @@ contains
             call autoscale(2_I4P, ends, .false.)
             cycle
          endif
-         do a = 1_I4P, 5_I4P
+         do a = 1_I4P, 6_I4P
             if (index(w, trim(AXES(a))) /= 1) cycle
             select case (w(len_trim(AXES(a)) + 1:))
             case ('')
@@ -14858,8 +14903,8 @@ contains
                exit
             endselect
          enddo
-         if (a > 5_I4P) then
-            call fail('set autoscale: unsupported option "'//w//'" (x, y, x2, y2, cb, xy with min, max, fix; fix, '// &
+         if (a > 6_I4P) then
+            call fail('set autoscale: unsupported option "'//w//'" (x, y, x2, y2, cb, z, xy with min, max, fix; fix, '// &
                       'noextend)', iostat, iomsg)
             return
          endif
@@ -14869,18 +14914,18 @@ contains
          if (w == trim(AXES(a))) call forget_limits(a)
       enddo
       if (.not. any(named)) then
-         do a = 1_I4P, 5_I4P
+         do a = 1_I4P, 6_I4P
             call autoscale(a, [.true., .true.], tight)
          enddo
       elseif (tight) then
-         do a = 1_I4P, 5_I4P
+         do a = 1_I4P, 6_I4P
             if (named(a)) call autoscale(a, [.false., .false.], .true.)
          enddo
       endif
       endsubroutine autoscale_option
 
       subroutine forget_limits(a)
-      !< The limits of the autoscaled ends of axis `a` (x, y, x2, y2, cb) forgotten.
+      !< The limits of the autoscaled ends of axis `a` (x, y, x2, y2, cb, z) forgotten.
       integer(I4P), intent(in) :: a !< Axis.
 
       associate(panel => self%figure%panels(self%figure%current))
@@ -14893,6 +14938,8 @@ contains
             panel%x2axis%bounded = .false.
          case (4_I4P)
             panel%y2axis%bounded = .false.
+         case (6_I4P)
+            panel%zaxis%bounded = .false.
          case default
             panel%cbaxis%bounded = .false.
          endselect
@@ -14900,7 +14947,7 @@ contains
       endsubroutine forget_limits
 
       subroutine autoscale(a, ends, fix)
-      !< Axis `a` (x, y, x2, y2, cb) autoscaled at its `ends` (min, max), not extended to the ticks with `fix`.
+      !< Axis `a` (x, y, x2, y2, cb, z) autoscaled at its `ends` (min, max), not extended to the ticks with `fix`.
       integer(I4P), intent(in) :: a       !< Axis.
       logical,      intent(in) :: ends(2) !< min, max autoscaled.
       logical,      intent(in) :: fix     !< Ends at the data.
@@ -14915,6 +14962,8 @@ contains
             call autoscale_axis(panel%x2axis, ends, fix)
          case (4_I4P)
             call autoscale_axis(panel%y2axis, ends, fix)
+         case (6_I4P)
+            call autoscale_axis(panel%zaxis, ends, fix)
          case default
             call autoscale_axis(panel%cbaxis, ends, fix)
          endselect
@@ -16342,6 +16391,9 @@ contains
       return
    elseif (keyword(option, 'mapping', 3_I4P)) then
       self%mapping = 0_I4P
+      return
+   elseif (keyword(option, 'hidden3d', 3_I4P)) then
+      self%figure%panels(self%figure%current)%view3d%hidden3d = .false.
       return
    elseif (keyword(option, 'parametric', 3_I4P)) then
       ! gnuplot's unset parametric: the dummy variables back to x and y

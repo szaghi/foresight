@@ -175,6 +175,8 @@ type :: series_object
    logical                       :: no_contours = .false. !< No contour lines (gnuplot's item option `nocontours`).
    logical                       :: no_surface = .false.  !< Its surface not drawn (gnuplot's item option `nosurface`).
    logical                       :: masked = .false.      !< Masked by the `with mask` polygons (item option `mask`).
+   character(len=:), allocatable :: back_color !< Color of the underside of a surface with `set hidden3d`, unallocated
+                                               !< for its own.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

@@ -1635,6 +1635,16 @@ ones fractions of the three axes, `screen` ones as they are), here the axes draw
 `set angles` unit, as gnuplot: the `'++'` grid of longitudes and latitudes is a sphere, the cities its labelled
 points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot-subset#3d-views).
 
+### Hidden lines
+
+<<< @/examples/snippets/cb_view3d_hidden.gp{gnuplot}
+
+<Plot name="cb_view3d_hidden" svg :width="560" :height="400" />
+
+`set hidden3d` draws the surface opaque, painted from the farthest quadrangle to the nearest; the side seen from below
+takes the next linetype, so the Moebius strip shows its single side in two colors where it twists. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
 ### A field seen from above
 
 <<< @/examples/snippets/cb_map_points.gp{gnuplot}

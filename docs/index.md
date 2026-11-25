@@ -367,6 +367,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_view3d_views" svg :width="760" :height="400" caption="one surface, two views (set view)" />
   <Plot name="cb_view3d_arrows" svg :width="560" :height="400" caption="arrows and labels in 3D" />
   <Plot name="cb_view3d_sphere" svg :width="560" :height="420" caption="points on a sphere (set mapping)" />
+  <Plot name="cb_view3d_hidden" svg :width="560" :height="400" caption="hidden lines (set hidden3d)" />
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
   <Plot name="cb_map_contour" svg :width="560" :height="400" caption="contour lines over a map" />

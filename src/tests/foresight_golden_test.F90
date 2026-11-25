@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(127)                  !< Per-figure outcome.
+logical                     :: test_passed(128)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -160,7 +160,10 @@ test_passed(125) = check('view3d_frame.svg', figure_view3d_frame())
 ! the 3D view on the HTML page (static: data-3d, the viewer leaves it) and on the dumb device
 test_passed(126) = check('view3d_frame.html', figure_view3d_frame())
 test_passed(127) = check('view3d_frame.txt', figure_view3d_frame())
-write(output_unit, '(A,127L2)') 'foresight golden checks:', test_passed
+! hidden lines (gnuplot's set hidden3d, a painter's algorithm): the surface opaque, its underside in the next color,
+! the key below the plot
+test_passed(128) = check('view3d_hidden.svg', figure_view3d_hidden())
+write(output_unit, '(A,128L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -981,6 +984,31 @@ contains
    call fig%set_zlabel('z')
    call fig%splot(x, y, z, title='surface')
    endfunction figure_view3d_frame
+
+   function figure_view3d_hidden() result(fig)
+   !< A 3D view with hidden lines (gnuplot `set hidden3d`): a saddle seen from below its rim, its top in the first
+   !< color and its underside in the next one, the key below the plot.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(-1.0_R8P + 0.125_R8P * real(i, R8P), i = 0, 16)]
+   y = [(-1.0_R8P + 0.125_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = x(i)**2 - y(j)**2
+      enddo
+   enddo
+   call fig%set_view(rot_x=75.0_R8P, rot_z=35.0_R8P)
+   call fig%set_hidden3d()
+   call fig%set_key(position='below')
+   call fig%splot(x, y, z, title='saddle')
+   endfunction figure_view3d_hidden
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

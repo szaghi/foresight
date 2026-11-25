@@ -92,7 +92,7 @@ that did what it says.
 | **lmar**gin / **rmar**gin / **tmar**gin / **bmar**gin [[`at`] `screen` `N` \| `N`] | a margin set: `N` characters from the panel's edge, or the border at the page fraction `N` (from the bottom left); bare or negative, computed, see [below](#margins) | computed |
 | **marg**ins `L, R, B, T` | the four margins, each [`at screen`] `N` | all computed |
 | **zero**axis / **xzero**axis / **yzero**axis / **x2zero**axis / **y2zero**axis [`lt N`] [`lc C`] [`lw W`] [`dt N`] | lines at the zero of the axes (`xzeroaxis`: y = 0), gnuplot's black dots by default | no line |
-| **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | the ranges fixed as they are (all axes without one), as gnuplot |
+| **auto**scale [`x`\|`y`\|`x2`\|`y2`\|`cb`\|`z`\|`xy`][`min`\|`max`\|`fix`] [`fix`\|`noextend`] | the axes autoscaled again (all without one), `fix` and `noextend` their ends kept at the data | the ranges fixed as they are (all axes without one), as gnuplot |
 | **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
 | **enc**oding [`default`\|`utf8`\|`locale`\|`iso_8859_1`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8: with `iso_8859_1` the bytes of the texts (an octal `"\351"`) are written as their Latin-1 characters (gnuplot declares its output's encoding instead); other encodings are refused | `default` |
 | **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font "name,size"` the page's [font](#fonts) (also `set terminal svg font ...`) | — |
@@ -117,6 +117,7 @@ that did what it says.
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
 | **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; the drawing order options (`scans...`, `depthorder`, `flush`, `ftriangles`) and the border are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
+| **hid**den3d [`offset N`\|`nooffset`] [...] | the hidden lines of the [3D views](#3d-views) removed (a painter's algorithm): grid surfaces opaque, their underside in the next linetype | no hidden lines |
 | **map**ping [`cartesian`\|`spherical`\|`cylindrical`] | splot's data columns: x:y:z, theta:phi:r or theta:z:r ([3D views](#3d-views)) | `cartesian` |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
@@ -2272,6 +2273,18 @@ as gnuplot's (the x axis length on the page). `set mapping spherical` reads splo
 theta cos phi, y = r sin theta cos phi, z = r sin phi), `set mapping cylindrical` as theta:z:r (x = r cos theta,
 y = r sin theta), r 1 when the data have two columns, the angles in the `set angles` unit; functions are not mapped
 (`set parametric` draws a sphere of them).
+
+The key of a 3D view lies where gnuplot's do_3dkey_layout puts it: inside at the top right by default (`left`,
+`bottom` move it), `below` the plot (which rises by its rows), `outside` at the right or left (the plot narrowed by
+its width); `at` places it as in 2D.
+
+`set hidden3d` removes the hidden lines by a painter's algorithm, not gnuplot's hidden3d.c: each grid surface (lines
+or linespoints of a function or of scans of one length) is drawn as quadrangles filled with the page color and stroked,
+painted from the farthest; a quadrangle seen from below (its scans in gnuplot's order) takes the surface's underside
+color, the linetype after its own (`offset N`; `nooffset` the same; gnuplot reserves that linetype, the next item
+taking the one after). A function is then sampled on its `isosamples` grid both ways, without crossing curves. Points,
+labels, other lines and the box are not hidden by the surfaces (gnuplot hides them); `trianglepattern`, `undefined`,
+`altdiagonal`, `bentover`, `front`, `back` are read. `unset hidden3d` draws the meshes again.
 
 ### Contours
 

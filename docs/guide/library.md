@@ -34,6 +34,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_pm3d([implicit], [interpolate], [corners2color], [clip4in])` | `set pm3d` (`implicit=.true.`), `unset pm3d` (`.false.`), `set pm3d interpolate 4,4` (`interpolate=[4, 4]`), `corners2color='c1'`: the [pm3d surfaces](gnuplot-subset#3d-plots), `splot(x, y, z2d, with='pm3d')` |
 | `set_view([map], [rot_x], [rot_z], [scale], [zscale], [map_scale], [equal], [azimuth])` | `set view map` (`map=.true.`), `set view map scale 1.2`, `set view 60, 30, 1, 1`, `set view equal xy` (`equal=1`, `2` for `xyz`), `set view azimuth 30` |
 | `set_xyplane([at], [relative])` | `set xyplane at 0`, `set xyplane relative 0.5` (`set ticslevel 0.5`) |
+| `set_hidden3d([on], [offset])` | `set hidden3d`, `set hidden3d offset 2`, `unset hidden3d` (`on=.false.`) |
 | `set_zrange([min], [max])`, `set_zlabel(label)`, `set_ztics([step], [start], [end], [positions], [labels], [minor], [add])` | `set zrange`, `set zlabel`, `set ztics` of the 3D plots |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |

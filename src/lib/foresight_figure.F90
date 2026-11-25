@@ -25,7 +25,7 @@ use foresight_backend_html, only : backend_html
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_time, only : time_format_check
-use foresight_style, only : fill_style, sequence_colors, style_object, FILL_EMPTY, FILL_SOLID, WITH_HISTOGRAMS
+use foresight_style, only : default_color, fill_style, sequence_colors, style_object, FILL_EMPTY, FILL_SOLID, WITH_HISTOGRAMS
 use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
@@ -101,6 +101,7 @@ type :: figure_object
       generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
       procedure, pass(self) :: set_view        !< gnuplot `set view`.
       procedure, pass(self) :: set_xyplane     !< gnuplot `set xyplane`.
+      procedure, pass(self) :: set_hidden3d    !< gnuplot `set hidden3d`.
       procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
       procedure, pass(self) :: set_contour     !< gnuplot `set contour`, `set cntrparam`, `set cntrlabel`.
       procedure, pass(self) :: set_dgrid3d     !< gnuplot `set dgrid3d`.
@@ -1924,6 +1925,12 @@ contains
       last = size(panel%series, kind=I4P)
       panel%series(last)%z = z
       panel%series(last)%scans = scans
+      ! set_hidden3d: the underside in the linetype `offset` after the surface's, a linetype reserved for it (gnuplot)
+      if (panel%view3d%hidden3d .and. panel%view3d%hidden_offset /= 0_I4P) then
+         panel%series(last)%back_color = default_color(last + panel%color_shift + panel%view3d%hidden_offset, &
+                                                       panel%linecolors)
+         panel%color_shift = panel%color_shift + 1_I4P
+      endif
       allocate(panel%series(last)%scan_sets(size(scans, 2)))
       panel%series(last)%scan_sets = 0_I4P
       panel%series(last)%grid_scans = size(scans, 2, kind=I4P)
@@ -2106,6 +2113,21 @@ contains
       if (present(azimuth)) view%azimuth = azimuth
    endassociate
    endsubroutine set_view
+
+   subroutine set_hidden3d(self, on, offset)
+   !< Hidden lines of the 3D views, as gnuplot `set hidden3d [offset N]` (`on` false: `unset hidden3d`): the grid
+   !< surfaces drawn opaque, their underside in the linetype `offset` (1) after their own; for the surfaces added after.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   logical,              intent(in), optional :: on     !< Hidden lines removed.
+   integer(I4P),         intent(in), optional :: offset !< Linetype offset of the underside (0 the same).
+
+   call self%ensure_panels
+   associate(view => self%panels(self%current)%view3d)
+      view%hidden3d = .true.
+      if (present(on)) view%hidden3d = on
+      if (present(offset)) view%hidden_offset = offset
+   endassociate
+   endsubroutine set_hidden3d
 
    subroutine set_xyplane(self, at, relative)
    !< The base plane of the 3D views: at the height `at` (gnuplot `set xyplane at Z`), or below the z range by the
