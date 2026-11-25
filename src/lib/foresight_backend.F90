@@ -22,7 +22,7 @@ public :: arrow_head
 public :: sized_head
 public :: HEAD_ANGLE, HEAD_LENGTH
 
-real(R8P), parameter :: HEAD_LENGTH = 18.0_R8P !< Arrowhead barb length [px], gnuplot svg default.
+real(R8P), parameter :: HEAD_LENGTH = 18.0_R8P !< Longest default arrowhead barb [px], gnuplot svg (2 tics).
 real(R8P), parameter :: HEAD_ANGLE  = 15.0_R8P !< Arrowhead barb angle off the shaft [deg], gnuplot default.
 
 type :: axes_view
@@ -369,19 +369,35 @@ contains
    endfunction row_height
 
    pure subroutine arrow_head(tail, tip, barbs)
-   !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation]: HEAD_LENGTH px long,
-   !< HEAD_ANGLE degrees off the shaft, as gnuplot's default head; `barbs(:, 1)` and `barbs(:, 2)`. A zero length
-   !< shaft points right.
+   !< The barbs of gnuplot's default arrowhead at `tip` pointing away from `tail` [px, any orientation], HEAD_ANGLE
+   !< degrees off the shaft, `barbs(:, 1)` and `barbs(:, 2)`: gnuplot's do_arrow (term.c) scales the head with the
+   !< shaft, 0.3 of its length L, within 0.3 and 2 average tic lengths (HEAD_LENGTH is the longest), so heads shrink on
+   !< arrows shorter than about 60 px and stop shrinking at 2.7 px. A zero length shaft has no head (both barbs at the
+   !< tip), as gnuplot's.
    real(R8P), intent(in)  :: tail(2)     !< Tail [px].
    real(R8P), intent(in)  :: tip(2)      !< Tip [px].
    real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
+   real(R8P)              :: shaft       !< Shaft length [px].
 
-   call sized_head(tail, tip, HEAD_LENGTH, HEAD_ANGLE, barbs)
+   shaft = norm2(tip - tail)
+   call sized_head(tail, tip, default_head_length(shaft), HEAD_ANGLE, barbs)
    endsubroutine arrow_head
+
+   elemental function default_head_length(shaft) result(length)
+   !< Barb length of gnuplot's default arrowhead on a shaft `shaft` px long (term.c do_arrow): HEAD_COEFF (0.3) of the
+   !< shaft, at least HEAD_SHORT_LIMIT (0.3) and at most HEAD_LONG_LIMIT (2) average tic lengths, the tic HEAD_LENGTH/2
+   !< (9 px, gnuplot's svg).
+   real(R8P), intent(in) :: shaft  !< Shaft length [px].
+   real(R8P)             :: length !< Barb length [px].
+   real(R8P), parameter  :: TIC = HEAD_LENGTH / 2.0_R8P !< Average tic length [px].
+
+   length = max(0.3_R8P * TIC, min(0.3_R8P * shaft, 2.0_R8P * TIC))
+   endfunction default_head_length
 
    pure subroutine sized_head(tail, tip, length, angle, barbs)
    !< The barbs of an arrowhead at `tip` pointing away from `tail` [px, any orientation], `length` px long, `angle`
-   !< degrees off the shaft: `barbs(:, 1)` and `barbs(:, 2)`. A zero length shaft points right.
+   !< degrees off the shaft: `barbs(:, 1)` and `barbs(:, 2)`. A zero length shaft has no head (both barbs at the tip),
+   !< as gnuplot's do_arrow.
    real(R8P), intent(in)  :: tail(2)     !< Tail [px].
    real(R8P), intent(in)  :: tip(2)      !< Tip [px].
    real(R8P), intent(in)  :: length      !< Barb length [px].
@@ -390,9 +406,12 @@ contains
    real(R8P)              :: a           !< Shaft direction, tip to tail [rad].
    real(R8P)              :: h           !< Barb half angle [rad].
 
-   a = 0.0_R8P
-   if (any(tip /= tail)) a = atan2(tail(2) - tip(2), tail(1) - tip(1))
-   if (all(tip == tail)) a = 4.0_R8P * atan(1.0_R8P)
+   if (all(tip == tail)) then
+      barbs(:, 1) = tip
+      barbs(:, 2) = tip
+      return
+   endif
+   a = atan2(tail(2) - tip(2), tail(1) - tip(1))
    h = angle * atan(1.0_R8P) / 45.0_R8P
    barbs(:, 1) = tip + length * [cos(a + h), sin(a + h)]
    barbs(:, 2) = tip + length * [cos(a - h), sin(a - h)]

@@ -249,7 +249,7 @@
   var TOL = 1e-9, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
   var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
-  var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // arrowheads, as arrow_head in foresight_backend
+  var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // longest default head barb [px], angle: as Fortran
   // frame and grid colors; a themed page overrides them (data-frame, data-grid-color of its svg)
   var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
   var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
@@ -1594,7 +1594,7 @@
       var style = {head: Number(path.getAttribute("data-head")), series: seriesOf(path),
         filled: path.getAttribute("data-filled") === "1", color: path.getAttribute("stroke"),
         width: path.getAttribute("stroke-width"),
-        length: Number(path.getAttribute("data-length") || HEAD_LENGTH),
+        length: Number(path.getAttribute("data-length") || 0),
         angle: Number(path.getAttribute("data-angle") || HEAD_ANGLE)};
       while ((m = pattern.exec(d)) !== null) {
         vectors.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
@@ -1604,12 +1604,14 @@
   }
 
   // barbs of an arrowhead at tip, pointing away from tail (mirror of sized_head): length [px]
-  // and angle [deg], gnuplot's default head without them
+  // and angle [deg]; without a length gnuplot's default head (mirror of arrow_head): 0.3 of the
+  // shaft, within 0.3 and 2 tics (HEAD_LENGTH / 2 each); none on a zero length shaft (gnuplot)
   function arrowHead(tail, tip, length, angle) {
-    var l = length || HEAD_LENGTH, a = Math.PI, h = (angle || HEAD_ANGLE) * Math.PI / 180;
-    if (tail[0] !== tip[0] || tail[1] !== tip[1]) {
-      a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
-    }
+    var shaft = Math.hypot(tip[0] - tail[0], tip[1] - tail[1]), tic = HEAD_LENGTH / 2;
+    var l = length || Math.max(0.3 * tic, Math.min(0.3 * shaft, 2 * tic));
+    var a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
+    var h = (angle || HEAD_ANGLE) * Math.PI / 180;
+    if (shaft === 0) return [tip, tip];
     return [[tip[0] + l * Math.cos(a + h), tip[1] + l * Math.sin(a + h)],
       [tip[0] + l * Math.cos(a - h), tip[1] + l * Math.sin(a - h)]];
   }

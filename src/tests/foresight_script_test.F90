@@ -8,6 +8,7 @@ program foresight_script_test
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use foresight, only : figure_object, fit, fit_result, I4P, I8P, R8P, script_object, stats, stats_result
+use foresight_backend, only : arrow_head
 use foresight_expression, only : value_object
 use foresight_font, only : font_object, font_of
 use foresight_ticks, only : MINOR_AUTO, TICS_FIXED, TICS_NONE
@@ -41,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(254)                           !< Per-check outcome.
+logical                       :: test_passed(255)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6469,6 +6470,24 @@ block
    test_passed(254) = test_passed(254) .and. iostat == 0_I4P .and. &
                      all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [0, 255, 128]) .and. &
                      all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P) == [255, 255, 255])
+endblock
+
+! gnuplot's default arrowhead (term.c do_arrow): barbs 0.3 of the shaft within 2.7 and 18 px, 15 degrees off it; a zero
+! length shaft has no head; with vectors of gnuplot's svg sizes (probed: a 5.28 px shaft, barbs 2.6 px back, 0.69 px
+! aside)
+block
+   real(R8P) :: barbs(2, 2) !< Barb ends [px].
+
+   call arrow_head([0.0_R8P, 0.0_R8P], [5.28_R8P, 0.0_R8P], barbs)
+   test_passed(255) = abs(barbs(1, 1) - (5.28_R8P - 2.7_R8P * cos(acos(-1.0_R8P) / 12.0_R8P))) < 1.0e-9_R8P .and. &
+                      abs(abs(barbs(2, 1)) - 2.7_R8P * sin(acos(-1.0_R8P) / 12.0_R8P)) < 1.0e-9_R8P
+   call arrow_head([0.0_R8P, 0.0_R8P], [30.0_R8P, 0.0_R8P], barbs)
+   test_passed(255) = test_passed(255) .and. abs(norm2(barbs(:, 1) - [30.0_R8P, 0.0_R8P]) - 9.0_R8P) < 1.0e-9_R8P
+   call arrow_head([0.0_R8P, 0.0_R8P], [0.0_R8P, 200.0_R8P], barbs)
+   test_passed(255) = test_passed(255) .and. abs(norm2(barbs(:, 2) - [0.0_R8P, 200.0_R8P]) - 18.0_R8P) < 1.0e-9_R8P
+   call arrow_head([3.0_R8P, 4.0_R8P], [3.0_R8P, 4.0_R8P], barbs)
+   test_passed(255) = test_passed(255) .and. all(barbs(:, 1) == [3.0_R8P, 4.0_R8P]) .and. &
+                      all(barbs(:, 2) == [3.0_R8P, 4.0_R8P])
 endblock
 
 if (all(test_passed)) then

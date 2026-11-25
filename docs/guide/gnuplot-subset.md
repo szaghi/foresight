@@ -1533,9 +1533,10 @@ set polar; set angles degrees; plot 'wind.dat' u 1:(0):(40):2 w sectors
 | `labels` | `x:y:column` | the text of the column at each point; `left`, `center`, `right`, `rotate by A`, `rotate variable` (the angle of a fourth column, `x:y:text:angle`), `offset X,Y` (characters; `offset X` alone, Y 0), `point` (with `pt`, `ps`, `ps variable`; the point in the item's `lc`, black without one, as gnuplot), `hypertext` (the texts not drawn but shown on mouse-over of their points: the browser's tooltip, gnuplot's svg hypertext), `tc "color"`, `tc variable`, `tc palette z` (the color of the last column) anywhere in the item; further columns are read and ignored, as gnuplot; `xticlabels(N)`, `yticlabels(N)` after them name the axes too (`using 0:1:(text):xticlabels(2)`); a text on several lines (`"a\nb"`) one below the other; enhanced text as the other labels |
 | `sectors` | `azimuth:radius:angle:width[:x0:y0]` | the annular sector from the azimuth over `angle`, from `radius` over `width`, about x0:y0 (0:0), angles in the `set angles` unit oriented by `set theta`; on a polar panel azimuth:radius are theta:r |
 
-Arrowheads are gnuplot's (18 px, 15 degrees) unless `size` is given and, as label texts, keep their pixel size: in
-the HTML page a zoom moves them with the data. `fixed` is read: foresight's heads never shrink on short arrows (gnuplot
-shrinks them without it). `lc variable`, `lc rgb variable` (0xAARRGGBB, AA the transparency) and `lc palette z` color
+Arrowheads are gnuplot's unless `size` is given: barbs 15 degrees off the shaft, 0.3 of its length, within 2.7 and
+18 px (gnuplot's svg), so the heads of arrows shorter than 60 px shrink with them. As label texts they are drawn in
+pixels: in the HTML page a zoom moves them with the data and sizes them by the arrows as zoomed. A head with `size`
+keeps it; `fixed` is read (gnuplot also shrinks a sized head on an arrow shorter than twice it, foresight does not). `lc variable`, `lc rgb variable` (0xAARRGGBB, AA the transparency) and `lc palette z` color
 each vector or arrow from the last `using` column; a row with an undefined field is no point and out of the color
 range, as gnuplot. A second `set style arrow N` changes style N (`default` resets it), as gnuplot. Labels are black
 (the frame color of a theme) unless `tc` is given, as gnuplot. Unlike gnuplot, sectors widen the autoscale to their
