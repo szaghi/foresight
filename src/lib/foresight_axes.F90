@@ -55,6 +55,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_object
+use foresight_pm3d, only : pm3d_object, pm3d_polygons
 use foresight_font, only : font_object
 use foresight_time, only : now_seconds, strftime
 use foresight_smooth, only : sorted
@@ -70,7 +71,7 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
                             WITH_FILLSTEPS, WITH_XERRORBARS, WITH_YERRORBARS, WITH_XYERRORBARS, WITH_XERRORLINES, &
                             WITH_YERRORLINES, WITH_XYERRORLINES, &
                             WITH_HISTOGRAMS, WITH_IMAGE, WITH_IMPULSES, WITH_LINES, WITH_LINESPOINTS, WITH_PIE, &
-                            WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, &
+                            WITH_POINTS, WITH_RADAR, WITH_READOUT, WITH_ROSE, WITH_STEPS, WITH_BOXERRORBARS, WITH_PM3D, &
                             WITH_BOXXYERROR, WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, &
                             WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, &
                             WITH_PARALLELAXES, WITH_SPIDERPLOT
@@ -321,6 +322,7 @@ type :: axes_object
                                                          !< drawn through its view.
    type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
    type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
+   type(pm3d_object)                :: pm3d              !< pm3d settings of a 3D panel: `set pm3d`.
    type(axis_object)                :: raxis             !< Radial axis: `rrange`, `rtics`.
    logical                          :: raxis_on = .true. !< Draw the radial axis (`set|unset raxis`).
    type(axis_object)                :: taxis             !< Angle range of the plotted functions, `trange`.
@@ -412,6 +414,7 @@ type :: axes_object
       procedure, pass(self), private :: colorbox_height    !< Room of a horizontal color box below the plot [px].
       procedure, pass(self), private :: place_plot_area    !< Plot area from the margins.
       procedure, pass(self), private :: map_geometry_of    !< Geometry of a map view.
+      procedure, pass(self), private :: map_surfaces       !< Series of a map view as drawn (pm3d quadrangles).
       procedure, pass(self), private :: draw_map_frame     !< Border, ticks, labels and title of a map view.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
@@ -1458,6 +1461,9 @@ contains
    if (self%polar) raw = self%series
    map = self%three_d .and. self%view3d%map
    if (map) then
+      ! the pm3d surfaces as colored quadrangles, the surfaces drawn or not (`set surface`): restored after the drawing
+      raw = self%series
+      call self%map_surfaces
       ! gnuplot's map view: the area its 3D layout, independent of the tick labels (the ranges only, for `ratio -1`)
       area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, y0 + 2.0_R8P * font_size, &
               y0 + height - 4.0_R8P * font_size]
@@ -1672,7 +1678,7 @@ contains
    if (self%readout .and. any([(self%is_readout(s), s = 1_I4P, size(self%series, kind=I4P))])) &
       call self%draw_readouts(backend, area, font_size, .false.)
    call backend%end_axes
-   if (self%polar) call move_alloc(raw, self%series)
+   if (self%polar .or. map) call move_alloc(raw, self%series)
    contains
       subroutine annotate(layer, data_space)
       !< The annotations of `layer`: the objects in data space (`data_space`), or the page ones with the labels and
@@ -2295,6 +2301,104 @@ contains
       ends = [min(area(4), max(ends(1), ends(2))), max(area(3), min(ends(1), ends(2)))]
       endfunction vertical_span
    endsubroutine draw_frame
+
+   subroutine map_surfaces(self)
+   !< The series of a map view as drawn: the pm3d surfaces (`with pm3d`, or every surface with `set pm3d implicit`) as
+   !< colored quadrangles (foresight_pm3d) before their surface, filled solid, unbordered, with crisp edges, colored by
+   !< the palette over their corners' values (or in their `fc` color); each carries two lone points (not drawn) of the
+   !< whole surface's color range, the color axis autoscaled on the data as gnuplot's. The surfaces themselves are drawn
+   !< unless `unset surface`, a `with pm3d` item never.
+   class(axes_object), intent(inout) :: self    !< Panel.
+   type(series_object), allocatable  :: drawn(:) !< Series as drawn.
+   type(series_object)               :: quads   !< Quadrangles of a surface.
+   integer(I4P)                      :: s       !< Series counter.
+   logical                           :: pm3d    !< A `with pm3d` item.
+
+   allocate(drawn(0))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      pm3d = self%series(s)%style%with == WITH_PM3D
+      if (allocated(self%series(s)%scans)) then
+         if (pm3d .or. (self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
+            call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, quads)
+            call push(drawn, quads)
+         endif
+      endif
+      if (pm3d) cycle
+      if (allocated(self%series(s)%z) .and. .not. self%view3d%surface) cycle
+      call push(drawn, self%series(s))
+   enddo
+   call move_alloc(drawn, self%series)
+   endsubroutine map_surfaces
+
+   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, quads)
+   !< The pm3d quadrangles of a 3D `series` as a series of polygons (see map_surfaces); `titled` keeps its key entry
+   !< (a `with pm3d` item; the quadrangles of an implicit pm3d have none).
+   type(series_object), intent(in)  :: series   !< Surface.
+   type(pm3d_object),   intent(in)  :: settings !< pm3d settings.
+   type(axis_object),   intent(in)  :: xaxis    !< Horizontal axis.
+   type(axis_object),   intent(in)  :: yaxis    !< Vertical axis.
+   logical,             intent(in)  :: titled   !< Keep the title.
+   type(series_object), intent(out) :: quads    !< Quadrangles.
+   real(R8P), allocatable           :: c(:)     !< Color values of the points.
+   real(R8P), allocatable           :: px(:)    !< Polygon abscissae.
+   real(R8P), allocatable           :: py(:)    !< Polygon ordinates.
+   real(R8P), allocatable           :: pc(:)    !< Polygon color values.
+   logical, allocatable             :: inrange(:) !< Points within the fixed x and y ranges.
+   real(R8P)                        :: nan      !< NaN.
+   integer(I4P)                     :: k        !< A defined point.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   c = series%z
+   if (allocated(series%zvalues)) then
+      if (size(series%zvalues) == size(series%z)) c = series%zvalues
+   endif
+   inrange = ieee_is_finite(series%x) .and. ieee_is_finite(series%y)
+   ! within the x and y ranges set (both ends), as gnuplot's INRANGE points; element-wise, never comparing a NaN
+   do k = 1_I4P, size(inrange, kind=I4P)
+      if (.not. inrange(k)) cycle
+      if (xaxis%min_fixed .and. xaxis%max_fixed) inrange(k) = series%x(k) >= min(xaxis%min_user, xaxis%max_user) .and. &
+                                                          series%x(k) <= max(xaxis%min_user, xaxis%max_user)
+      if (.not. inrange(k)) cycle
+      if (yaxis%min_fixed .and. yaxis%max_fixed) inrange(k) = series%y(k) >= min(yaxis%min_user, yaxis%max_user) .and. &
+                                                          series%y(k) <= max(yaxis%min_user, yaxis%max_user)
+   enddo
+   call pm3d_polygons(series%x, series%y, series%z, c, series%scans, series%scan_sets, series%grid_scans, settings, &
+                      inrange, px, py, pc)
+   quads%style = series%style
+   quads%style%with = WITH_POLYGONS
+   quads%style%fill = FILL_SOLID
+   quads%style%density = 1.0_R8P
+   quads%style%border = .false.
+   quads%crisp = .true.
+   quads%key_blank = .true.
+   quads%title = ''
+   if (titled .and. allocated(series%title)) quads%title = series%title
+   quads%title_plain = series%title_plain
+   quads%x2 = series%x2
+   quads%y2 = series%y2
+   ! two lone points of the surface's color range at a defined point (one row each: no polygon)
+   ! a loop: nvfortran 26.9 refuses findloc on a logical array
+   do k = 1_I4P, size(c, kind=I4P)
+      if (ieee_is_finite(c(k)) .and. ieee_is_finite(series%x(k)) .and. ieee_is_finite(series%y(k))) exit
+   enddo
+   if (k <= size(c, kind=I4P)) then
+      quads%x = [px, series%x(k), nan, series%x(k)]
+      quads%y = [py, series%y(k), nan, series%y(k)]
+      quads%zvalues = [pc, minval(c, mask=ieee_is_finite(c)), nan, maxval(c, mask=ieee_is_finite(c))]
+   else
+      quads%x = px
+      quads%y = py
+      quads%zvalues = pc
+   endif
+   ! `fc` the fill color, else the palette (gnuplot's lc palette of the quadrangles)
+   quads%palette_mode = 1_I4P
+   if (allocated(series%style%fill_rgb)) then
+      if (len(series%style%fill_rgb) > 0) then
+         quads%palette_mode = 0_I4P
+         deallocate(quads%zvalues)
+      endif
+   endif
+   endsubroutine pm3d_series
 
    function map_geometry_of(self, x0, y0, width, height, font_size) result(geo)
    !< The geometry of the panel's map view in the box of top-left corner (`x0`, `y0`) and size `width` x `height`
@@ -3145,6 +3249,7 @@ contains
    character(len=:), allocatable        :: sample    !< Color of the point sample.
    type(style_object)                   :: edged     !< Style of the fill sample.
 
+   if (series%key_blank) return
    if (series%style%fills()) then
       edged = series%style
       ! a script's filledcurves: its fill border around the sample, as gnuplot 6.0

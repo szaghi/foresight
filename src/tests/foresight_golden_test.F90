@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(114)                  !< Per-figure outcome.
+logical                     :: test_passed(118)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -142,7 +142,12 @@ test_passed(111) = check('map_points.txt', figure_map_points())
 test_passed(112) = check('map_image.svg', figure_map_image())
 test_passed(113) = check('map_image.html', figure_map_image())
 test_passed(114) = check('map_image.txt', figure_map_image())
-write(output_unit, '(A,114L2)') 'foresight golden checks:', test_passed
+! pm3d in the map view: a surface as colored quadrangles, and subdivided (interpolate 4,4)
+test_passed(115) = check('map_pm3d.svg', figure_map_pm3d(1_I4P))
+test_passed(116) = check('map_pm3d.html', figure_map_pm3d(1_I4P))
+test_passed(117) = check('map_pm3d.txt', figure_map_pm3d(1_I4P))
+test_passed(118) = check('map_pm3d_interpolate.svg', figure_map_pm3d(4_I4P))
+write(output_unit, '(A,118L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -866,6 +871,32 @@ contains
    call fig%set_cblabel('w')
    call fig%splot(x, y, z, with='image', title='w')
    endfunction figure_map_image
+
+   function figure_map_pm3d(steps) result(fig)
+   !< A map view of a surface drawn with pm3d (gnuplot `splot ... with pm3d`): a 9 x 7 grid of a Gaussian bump, each
+   !< quadrangle in the palette color of its corners' mean, subdivided `steps` times each way (`set pm3d interpolate`).
+   integer(I4P), intent(in) :: steps  !< Interpolation steps.
+   type(figure_object)      :: fig    !< Figure.
+   real(R8P), allocatable   :: x(:)   !< Abscissae.
+   real(R8P), allocatable   :: y(:)   !< Ordinates.
+   real(R8P), allocatable   :: z(:,:) !< Heights.
+   integer(I4P)             :: i      !< Column counter.
+   integer(I4P)             :: j      !< Row counter.
+
+   call fig%init(width=500_I4P, height=360_I4P)
+   x = [(-2.0_R8P + 0.5_R8P * real(i, R8P), i = 0, 8)]
+   y = [(-1.5_R8P + 0.5_R8P * real(j, R8P), j = 0, 6)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = exp(-(x(i)**2 + 2.0_R8P * y(j)**2))
+      enddo
+   enddo
+   call fig%set_view(map=.true.)
+   call fig%set_pm3d(interpolate=[steps, steps])
+   call fig%set_title('pm3d')
+   call fig%splot(x, y, z, with='pm3d', title='bump')
+   endfunction figure_map_pm3d
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

@@ -80,8 +80,10 @@ type :: palette_object
    logical                :: negative = .false.          !< Gray axis reversed.
    integer(I4P)           :: maxcolors = 0_I4P           !< Colors of a quantized palette, 0 for continuous.
    logical                :: hsv = .false.               !< `model HSV`: the components are hue, saturation, value.
+   logical                :: cmy = .false.               !< `model CMY`: the components are cyan, magenta, yellow.
    integer(I4P)           :: table = 0_I4P               !< Named palette (foresight_colormaps index), `PAL_TABLE`.
    real(R8P)              :: cubehelix(3) = CUBEHELIX_DEFAULT !< `cubehelix` start, cycles, saturation.
+   real(R8P)              :: gamma = 1.5_R8P             !< Gamma of the gray and cubehelix palettes (`gamma G`).
    integer(I4P)           :: color_mode = PAL_FORMULAE   !< Mode `color` restores: the last set by `rgbformulae`,
                                                          !< `defined` or a name (as gnuplot's last gradient or formulae).
    real(R8P), allocatable :: positions(:)                !< `defined` positions, increasing.
@@ -136,13 +138,13 @@ contains
    case (PAL_CUBEHELIX)
       ! gnuplot's: the angle from the gray level, the gamma (1.5) on the lightness only
       phi = 2.0_R8P * PI * (self%cubehelix(1) / 3.0_R8P + g * self%cubehelix(2))
-      t = g**(1.0_R8P / 1.5_R8P)
+      t = g**(1.0_R8P / self%gamma)
       a = self%cubehelix(3) * t * (1.0_R8P - t) / 2.0_R8P
       f(1) = t + a * (-0.14861_R8P * cos(phi) + 1.78277_R8P * sin(phi))
       f(2) = t + a * (-0.29227_R8P * cos(phi) - 0.90649_R8P * sin(phi))
       f(3) = t + a * (1.97294_R8P * cos(phi))
    case (PAL_GRAY)
-      f = g**(1.0_R8P / 1.5_R8P)
+      f = g**(1.0_R8P / self%gamma)
    case (PAL_TABLE)
       f = hex_channels(colormap_hex(self%table, nint(g * 255.0_R8P, I4P))) / 255.0_R8P
    case default
@@ -152,6 +154,8 @@ contains
    endselect
    ! gnuplot `model HSV`: the components (clamped) are hue, saturation and value, the gray palette excepted
    if (self%hsv .and. self%mode /= PAL_GRAY) f = hsv_rgb(min(1.0_R8P, max(0.0_R8P, f)))
+   ! gnuplot `model CMY`: the components (clamped) are cyan, magenta and yellow, 1 minus red, green and blue
+   if (self%cmy .and. self%mode /= PAL_GRAY) f = 1.0_R8P - min(1.0_R8P, max(0.0_R8P, f))
    c = nint(255.0_R8P * min(1.0_R8P, max(0.0_R8P, f)), I4P)
    endfunction rgb
 
@@ -353,6 +357,12 @@ contains
       case ('defined')
          ! the list runs to its closing parenthesis, blanks included
          rest = trim(adjustl(rest))
+         if (len(rest) == 0) then
+            ! no list: gnuplot's default gradient, black, blue, green, red, white
+            call defined_list('(0 0 0 0, 1 0 0 1, 3 0 1 0, 4 1 0 0, 6 1 1 1)')
+            if (len(bad) > 0) return
+            cycle
+         endif
          k = index(rest, ')', kind=I4P)
          if (len(rest) == 0 .or. k == 0_I4P) then
             bad = 'defined (a list (v1 "color1", v2 "color2", ...) is expected)'
@@ -369,6 +379,15 @@ contains
          if (len(bad) > 0) return
       case ('gray', 'grey')
          palette%mode = PAL_GRAY
+      case ('gamma')
+         ! gnuplot's gamma of the gray and cubehelix palettes, 1.5 by default
+         call next(w)
+         call real_from_decimal(w, v, ok)
+         if (.not. ok .or. v <= 0.0_R8P) then
+            bad = 'gamma '//w//' (a positive number is expected)'
+            return
+         endif
+         palette%gamma = v
       case ('color')
          palette%mode = palette%color_mode
       case ('positive')
@@ -389,10 +408,15 @@ contains
          select case (w)
          case ('RGB', 'rgb')
             palette%hsv = .false.
+            palette%cmy = .false.
          case ('HSV', 'hsv')
             palette%hsv = .true.
+            palette%cmy = .false.
+         case ('CMY', 'cmy')
+            palette%hsv = .false.
+            palette%cmy = .true.
          case default
-            bad = 'model '//w//' (RGB and HSV are supported)'
+            bad = 'model '//w//' (RGB, HSV and CMY are supported, as gnuplot 6.0)'
             return
          endselect
       case default

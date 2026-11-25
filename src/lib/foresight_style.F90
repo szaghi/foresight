@@ -25,7 +25,7 @@ public :: style_with
 public :: WITH_BOXES, WITH_CIRCLES, WITH_FILLEDCURVES, WITH_HISTOGRAMS, WITH_IMAGE, WITH_LINES, WITH_PIE, &
           WITH_LINESPOINTS, WITH_POINTS, WITH_READOUT, WITH_GAUGE, WITH_RADAR, WITH_ROSE, &
           WITH_XERRORBARS, WITH_XYERRORBARS, WITH_YERRORBARS, WITH_IMPULSES, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS, &
-          WITH_FILLSTEPS, &
+          WITH_FILLSTEPS, WITH_PM3D, &
           WITH_DOTS, WITH_YERRORLINES, WITH_XERRORLINES, WITH_XYERRORLINES, WITH_BOXERRORBARS, WITH_BOXXYERROR, &
           WITH_CANDLESTICKS, WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, WITH_POLYGONS, &
           WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT
@@ -79,6 +79,7 @@ integer(I4P), parameter :: WITH_PARALLELAXES = 36_I4P !< gnuplot `with parallela
 integer(I4P), parameter :: WITH_SPIDERPLOT  = 37_I4P !< gnuplot `with spiderplot`: a radial axis per item, a polygon
                                                     !< per row.
 integer(I4P), parameter :: WITH_FILLSTEPS   = 38_I4P !< gnuplot `with fillsteps`: the area under `steps` filled.
+integer(I4P), parameter :: WITH_PM3D        = 39_I4P !< gnuplot `with pm3d` (splot): a surface as colored quadrangles.
 character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, '// &
                                              'fillsteps, dots, '// &
                                              'yerrorbars, xerrorbars, xyerrorbars, yerrorlines, xerrorlines, '// &
@@ -87,7 +88,7 @@ character(len=*), parameter :: STYLE_NAMES = 'lines, points, linespoints, impuls
                                              'sectors, parallelaxes, spiderplot, filledcurves, histograms, image, '// &
                                              'rgbimage, rgbalpha, '// &
                                              'circles, pie, '// &
-                                             'gauge, radar, rose, readout' !< Supported style names.
+                                             'gauge, radar, rose, readout, pm3d (splot)' !< Supported style names.
 integer(I4P), parameter :: FILL_EMPTY       = 0_I4P !< gnuplot `set style fill empty`: no fill.
 integer(I4P), parameter :: FILL_SOLID       = 1_I4P !< gnuplot `set style fill solid`.
 integer(I4P), parameter :: FILL_PATTERN     = 2_I4P !< gnuplot `set style fill pattern N`.
@@ -347,7 +348,7 @@ contains
    elseif (gnuplot_abbreviates(word, 'boxplot')) then
       name = 'boxplot'
    elseif (gnuplot_abbreviates(word, 'pm$3d')) then
-      name = ''
+      name = 'pm3d'
    elseif (gnuplot_abbreviates(word, 'poly$gons')) then
       name = 'polygons'
    elseif (gnuplot_abbreviates(word, 'labels')) then
@@ -489,6 +490,8 @@ contains
       with = WITH_ELLIPSES
    case ('polygons')
       with = WITH_POLYGONS
+   case ('pm3d')
+      with = WITH_PM3D
    case ('labels')
       with = WITH_LABELS
    case ('sectors')
@@ -585,7 +588,7 @@ contains
                                     WITH_FSTEPS, WITH_HISTEPS, WITH_BOXERRORBARS, WITH_BOXXYERROR, WITH_CANDLESTICKS, &
                                     WITH_FINANCEBARS, WITH_BOXPLOT, WITH_VECTORS, WITH_ARROWS, WITH_ELLIPSES, &
                                     WITH_POLYGONS, WITH_LABELS, WITH_SECTORS, WITH_PARALLELAXES, WITH_SPIDERPLOT, &
-                                    WITH_FILLSTEPS])
+                                    WITH_FILLSTEPS, WITH_PM3D])
    endfunction draws_points
 
    elemental function draws_xbars(self) result(bars)

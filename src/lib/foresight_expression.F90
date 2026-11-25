@@ -51,6 +51,7 @@ use foresight_format, only : c_integer, c_real, c_string, decimal_of, format_che
                              gnuplot_real, int_str, real_from_decimal
 use foresight_mathlib, only : MATH_ARGS, MATH_FUNCTIONS, math_function, math_order
 use foresight_sys, only : command_output
+use foresight_palette, only : gnuplot_color
 use foresight_tokens, only : gnuplot_escape, UNAME_CHARS, UNAME_START
 use foresight_time, only : civil_time, strftime, strptime
 use penf, only : I4P, I8P, R8P
@@ -169,11 +170,13 @@ character(len=*), parameter :: FUNCTIONS(22) = [character(len=5) :: 'abs', 'acos
                                                 'sqrt', 'tan', 'tanh', 'real', 'imag', 'arg', 'conj']
 
 ! functions of strings, the `OP_CALL` argument is the index; their least and most arguments
-character(len=*), parameter :: STRING_FUNCTIONS(10) = [character(len=8) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
-                                                       'strstrt', 'words', 'word', 'trim', 'strftime', 'strptime']
-integer(I4P),     parameter :: LEAST_ARGS(10) = [1_I4P, 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, 2_I4P]
-integer(I4P),     parameter :: MOST_ARGS(10)  = [huge(1_I4P), 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, &
-                                                 2_I4P]
+character(len=*), parameter :: STRING_FUNCTIONS(11) = [character(len=8) :: 'sprintf', 'gprintf', 'strlen', 'substr', &
+                                                       'strstrt', 'words', 'word', 'trim', 'strftime', 'strptime', &
+                                                       'rgbcolor']
+integer(I4P),     parameter :: LEAST_ARGS(11) = [1_I4P, 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, 2_I4P, &
+                                                 1_I4P]
+integer(I4P),     parameter :: MOST_ARGS(11)  = [huge(1_I4P), 2_I4P, 1_I4P, 3_I4P, 2_I4P, 1_I4P, 2_I4P, 1_I4P, 2_I4P, &
+                                                 2_I4P, 1_I4P]
 
 ! errors of typed values (a constant expression reports them, a data row is undefined)
 integer(I4P), parameter :: E_NONE       = 0_I4P !< No error.
@@ -5163,7 +5166,7 @@ contains
    c = value_object()
    ! the string arguments (sprintf and gprintf check their own)
    select case (trim(STRING_FUNCTIONS(f)))
-   case ('strlen', 'substr', 'words', 'word', 'trim', 'strftime')
+   case ('strlen', 'substr', 'words', 'word', 'trim', 'strftime', 'rgbcolor')
       ok = args(1)%is_string
    case ('strptime')
       ok = args(1)%is_string .and. args(2)%is_string
@@ -5199,6 +5202,26 @@ contains
       c = string_value(label)
    case ('strlen')
       c = int_value(int(len(args(1)%s), I8P))
+   case ('rgbcolor')
+      ! gnuplot's: the 24-bit RGB of a color name or "#RRGGBB", alpha (transparency) in the top byte of "#AARRGGBB"
+      block
+         character(len=:), allocatable :: svg  !< SVG color, #rrggbb or #rrggbbaa (opacity).
+         integer(I8P)                  :: rgb  !< Value.
+         integer(I4P)                  :: ios  !< Read status.
+         logical                       :: known !< A color.
+
+         call gnuplot_color(args(1)%s, svg, known)
+         rgb = 0_I8P
+         if (svg == 'white') rgb = 16777215_I8P
+         if (known .and. len(svg) >= 7) then
+            read(svg(2:7), '(Z6)', iostat=ios) rgb
+            if (len(svg) == 9) then
+               read(svg(8:9), '(Z2)', iostat=ios) n
+               rgb = rgb + ishft(255_I8P - n, 24)
+            endif
+         endif
+         c = int_value(rgb)
+      endblock
    case ('substr')
       call substring(args(1), args(2), args(3), c, ok, error)
    case ('strstrt')

@@ -129,6 +129,8 @@ use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
 use foresight_series, only : series_object
 use foresight_view3d, only : view3d_object
+use foresight_pm3d, only : pm3d_object, CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, &
+                            CORNERS_MEDIAN, CORNERS_MIN, CORNERS_RMS
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
                              real_from_decimal
 use foresight_readout, only : readout_check
@@ -173,7 +175,7 @@ real(R8P),         parameter :: PI_SCRIPT       = 4.0_R8P * atan(1.0_R8P) !< pi.
 character(len=12), parameter :: LC_PALETTE_CB   = '*palettecb'   !< `lc palette cb V` marker in a line color.
 character(len=12), parameter :: LC_PALETTE_FRAC = '*palettefrac' !< `lc palette frac F` marker in a line color.
 character(len=*), parameter :: FUNCTION_STYLES = 'lines, points, linespoints, impulses, steps, fsteps, histeps, dots, '// &
-                                                  'boxes or filledcurves' !< Styles
+                                                  'boxes, filledcurves or pm3d (splot)' !< Styles
                                                  !< drawing functions.
 
 type :: line_style_object
@@ -3175,6 +3177,8 @@ contains
    character(len=:), allocatable                :: generated !< Rows of a splot function or matrix.
    integer(I4P)                                 :: grid_rows !< Scans of a splot function's grid, 0: all scans.
    character(len=:), allocatable                :: shown_spec !< The using spec as written, for the title.
+   character(len=:), allocatable                :: para_fields !< A parametric splot item: its x, y, z functions as
+                                                               !< using fields of its u, v grid.
    integer(I4P)                                 :: item_first !< First token of the item (its file).
    integer(I4P)                                 :: title_to  !< Last token of the automatic title: the file and its
                                                              !< data options after it (index, every, using, matrix).
@@ -3357,10 +3361,6 @@ contains
    spider_group = 0_I4P
    call self%figure%clear
    self%figure%panels(self%figure%current)%three_d = splot_mode
-   if (splot_mode .and. self%parametric) then
-      call fail('splot: parametric surfaces are not supported yet (foresight 3D support, phase 2)', iostat, iomsg)
-      return
-   endif
    if (size(tokens) == 0) then
       call fail('plot: nothing to plot', iostat, iomsg)
       return
@@ -3604,8 +3604,40 @@ contains
             endif
          endblock
          if (is_function .and. splot_mode) then
-            ! a function of x and y, read as the third field of its sampled grid (function_rows)
-            continue
+            ! a function of x and y, read as the third field of its sampled grid (function_rows); in parametric mode
+            ! three, x(u,v), y(u,v), z(u,v), the fields of its u, v grid
+            para_fields = ''
+            if (self%parametric) then
+               block
+                  integer(I4P)                  :: part  !< Function counter.
+                  integer(I4P)                  :: first !< First token of a function.
+                  character(len=:), allocatable :: f     !< The functions as fields.
+
+                  f = '('//written//')'
+                  do part = 2_I4P, 3_I4P
+                     if (i + 2_I4P > size(tokens, kind=I4P)) then
+                        call fail('splot: parametric function not fully specified: x(u,v), y(u,v), z(u,v) expected', &
+                                  iostat, iomsg)
+                        return
+                     endif
+                     if (tokens(i + 1_I4P)%kind /= TOKEN_COMMA) then
+                        call fail('splot: parametric function not fully specified: x(u,v), y(u,v), z(u,v) expected', &
+                                  iostat, iomsg)
+                        return
+                     endif
+                     i = i + 2_I4P
+                     first = i
+                     do while (i < size(tokens, kind=I4P))
+                        if (tokens(i + 1_I4P)%kind /= TOKEN_WORD) exit
+                        if (is_item_option(tokens(i + 1_I4P)%text)) exit
+                        i = i + 1_I4P
+                     enddo
+                     f = f//':('//text(tokens(first)%first:tokens(i)%last)//')'
+                  enddo
+                  written = text(tokens(head)%first:tokens(i)%last)
+                  para_fields = f
+               endblock
+            endif
          elseif (is_function) then
             associate(panel => self%figure%panels(self%figure%current))
                call func%compile(written, iostat, iomsg, variable=item_dummy, degrees=panel%degrees, &
@@ -4421,6 +4453,10 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      if (with == 'pm3d' .and. .not. splot_mode) then
+         call fail('plot: with pm3d draws the surfaces of splot', iostat, iomsg)
+         return
+      endif
       if (with == 'readout') then
          if (len(shaping) > 0) then
             call fail('plot: a readout takes lc only among the style options, not "'//shaping//'"', iostat, iomsg)
@@ -4535,6 +4571,11 @@ contains
                endif
             endif
             spec = '1:2:('//written//')'
+            if (len(para_fields) > 0) then
+               ! parametric: the u, v grid, the three functions the fields
+               names = 'u v'
+               spec = para_fields
+            endif
             using = 'using'
             sampled = names
             call parse_using(spec, fields, iostat, iomsg, self%figure%panels(self%figure%current)%degrees, &
@@ -4829,7 +4870,7 @@ contains
          if (.not. is_word(with, 'lines points linespoints impulses vectors arrows circles ellipses boxes '// &
                            'candlesticks financebars boxxyerror boxerrorbars histograms filledcurves polygons '// &
                            'xerrorbars yerrorbars xyerrorbars xerrorlines yerrorlines xyerrorlines labels '// &
-                           'parallelaxes')) then
+                           'parallelaxes pm3d')) then
             call fail('plot: '//word//' applies to lines, points, linespoints, impulses, vectors, arrows, circles, '// &
                       'ellipses, boxes, boxerrorbars, boxxyerror, candlesticks, financebars, histograms, filledcurves, '// &
                       'polygons, the error bars, parallel axes and labels (tc variable), not to '//with, iostat, iomsg)
@@ -5625,6 +5666,8 @@ contains
             rest = rest//':'//trim(parts(k))
          enddo
       endif
+      ! pm3d: a fourth field is the color of the points (gnuplot's color from a column), read as lc palette z's
+      if (with == 'pm3d' .and. n >= 4_I4P .and. .not. allocated(line%lc)) line%lc = LC_PALETTE_Z
       ! lc palette (z): the z as the color column, unless the item gives one after its plot fields
       if (allocated(line%lc)) then
          if (line%lc == LC_PALETTE_Z) then
@@ -5752,6 +5795,12 @@ contains
       real(R8P)                 :: x0(2), x1(2), y0(2), y1(2) !< Data extent.
       logical                   :: found(2), xfound(2)        !< Any data.
 
+      if (self%parametric) then
+         ! the u and v ranges of the parametric surfaces
+         lo = self%uv_range(1, axis)
+         hi = self%uv_range(2, axis)
+         return
+      endif
       associate(panel => self%figure%panels(self%figure%current))
          call panel%axes_extent(x0, x1, y0, y1, found, xfound)
          lo = -10.0_R8P
@@ -10295,6 +10344,8 @@ contains
    elseif (keyword(option, 'isosamples', 3_I4P)) then
       ! the surfaces' (splot, not in foresight); M the v samples of the `'++'` pseudo-file
       call samples_option(.false.)
+   elseif (keyword(option, 'pm3d', 2_I4P)) then
+      call pm3d_option(tokens)
    elseif (option == 'view') then
       call view_option(tokens)
    elseif (keyword(option, 'xyplane', 3_I4P) .or. keyword(option, 'ticslevel', 5_I4P)) then
@@ -11262,6 +11313,137 @@ contains
       self%figure%panels(self%figure%current)%label_font(axis) = font
       ok = .true.
       endfunction axis_label
+
+      subroutine pm3d_option(toks)
+      !< gnuplot `set pm3d [at b|s|t...] [interpolate N,M] [corners2color mean|geomean|harmean|rms|median|min|max|c1..c4]
+      !< [implicit|explicit] [map] [clip|clip1in|clip4in] [border ...|noborder] [scansforward|scansbackward|
+      !< scansautomatic|depthorder [base]] [flush begin|center|end] [[no]ftriangles] [[no]clipcb] [nohidden3d]`: the
+      !< drawing order options and the border are read (a map view needs none); `set pm3d` alone is gnuplot's defaults,
+      !< implicit, as `at` first; `map` is `at b` with `set view map` and the pm3d data and function styles.
+      type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
+      type(pm3d_object)              :: fresh   !< Defaults.
+      integer(I4P)                   :: k       !< Token counter.
+      integer(I4P)                   :: n       !< A step count.
+      character(len=:), allocatable  :: w       !< Option word.
+      real(R8P)                      :: v       !< A number read.
+
+      associate(pm => self%figure%panels(self%figure%current)%pm3d)
+         if (size(toks) < 2) then
+            pm = fresh
+            pm%implicit = .true.
+            return
+         endif
+         k = 2_I4P
+         do while (k <= size(toks, kind=I4P))
+            w = toks(k)%text
+            if (w == 'at') then
+               if (k == size(toks, kind=I4P)) then
+                  call fail('set pm3d: at needs b, s or t', iostat, iomsg)
+                  return
+               endif
+               k = k + 1_I4P
+               if (verify(toks(k)%text, 'bst') /= 0 .or. len(toks(k)%text) > 3) then
+                  call fail('set pm3d: at needs b, s or t, found "'//toks(k)%text//'"', iostat, iomsg)
+                  return
+               endif
+               pm%at = toks(k)%text
+               if (k == 3_I4P) pm%implicit = .true.
+            elseif (keyword(w, 'interpolate', 6_I4P)) then
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               pm%interp(1) = n
+               if (k >= size(toks, kind=I4P)) then
+                  call fail('set pm3d: interpolate needs N,M', iostat, iomsg)
+                  return
+               endif
+               if (toks(k + 1_I4P)%kind /= TOKEN_COMMA) then
+                  call fail('set pm3d: interpolate needs N,M', iostat, iomsg)
+                  return
+               endif
+               k = k + 1_I4P
+               if (.not. next_integer(toks, k, n, iostat, iomsg, self%symbols)) return
+               pm%interp(2) = n
+            elseif (keyword(w, 'corners2color', 9_I4P) .or. w == 'c2c') then
+               if (k == size(toks, kind=I4P)) then
+                  call fail('set pm3d: corners2color needs mean, geomean, harmean, rms, median, min, max, c1, c2, '// &
+                            'c3 or c4', iostat, iomsg)
+                  return
+               endif
+               k = k + 1_I4P
+               select case (toks(k)%text)
+               case ('mean')
+                  pm%corners = CORNERS_MEAN
+               case ('geomean')
+                  pm%corners = CORNERS_GEOMEAN
+               case ('harmean')
+                  pm%corners = CORNERS_HARMEAN
+               case ('rms')
+                  pm%corners = CORNERS_RMS
+               case ('median')
+                  pm%corners = CORNERS_MEDIAN
+               case ('min')
+                  pm%corners = CORNERS_MIN
+               case ('max')
+                  pm%corners = CORNERS_MAX
+               case ('c1', 'c2', 'c3', 'c4')
+                  pm%corners = CORNERS_C1 + iachar(toks(k)%text(2:2)) - iachar('1')
+               case default
+                  call fail('set pm3d: corners2color needs mean, geomean, harmean, rms, median, min, max, c1, c2, '// &
+                            'c3 or c4, found "'//toks(k)%text//'"', iostat, iomsg)
+                  return
+               endselect
+            elseif (keyword(w, 'implicit', 1_I4P) .or. keyword(w, 'noexplicit', 3_I4P)) then
+               pm%implicit = .true.
+            elseif (keyword(w, 'explicit', 1_I4P) .or. keyword(w, 'noimplicit', 3_I4P)) then
+               pm%implicit = .false.
+            elseif (w == 'map') then
+               pm%at = 'b'
+               self%data_style = 'pm3d'
+               self%function_style = 'pm3d'
+               self%figure%panels(self%figure%current)%view3d%map = .true.
+            elseif (w == 'clip4in' .or. keyword(w, 'clip4in', 5_I4P)) then
+               pm%clip4in = .true.
+            elseif (w == 'clip' .or. keyword(w, 'clip1in', 5_I4P)) then
+               pm%clip4in = .false.
+            elseif (keyword(w, 'border', 2_I4P)) then
+               ! its line properties read, the border not drawn
+               pm%border = .true.
+               do while (k < size(toks, kind=I4P))
+                  if (toks(k + 1_I4P)%kind /= TOKEN_WORD) then
+                     k = k + 1_I4P
+                     cycle
+                  endif
+                  if (.not. (is_line_option(toks(k + 1_I4P)%text) .or. toks(k + 1_I4P)%text == 'retrace' .or. &
+                             toks(k + 1_I4P)%text == 'rgb' .or. toks(k + 1_I4P)%text == 'rgbcolor' .or. &
+                             toks(k + 1_I4P)%text == 'palette' .or. toks(k + 1_I4P)%text == 'variable' .or. &
+                             to_number(toks(k + 1_I4P)%text, v))) exit
+                  k = k + 1_I4P
+               enddo
+            elseif (keyword(w, 'noborder', 4_I4P)) then
+               pm%border = .false.
+            elseif (keyword(w, 'flush', 2_I4P)) then
+               k = k + 1_I4P
+            elseif (keyword(w, 'depthorder', 3_I4P)) then
+               if (k < size(toks, kind=I4P)) then
+                  if (toks(k + 1_I4P)%text == 'base') k = k + 1_I4P
+               endif
+            elseif (keyword(w, 'scansforward', 8_I4P) .or. keyword(w, 'scansbackward', 9_I4P) .or. &
+                    keyword(w, 'scansautomatic', 9_I4P) .or. keyword(w, 'ftriangles', 3_I4P) .or. &
+                    keyword(w, 'noftriangles', 5_I4P) .or. w == 'clipcb' .or. w == 'noclipcb' .or. &
+                    keyword(w, 'nohidden3d', 4_I4P) .or. keyword(w, 'nolighting', 7_I4P)) then
+               continue
+            elseif (keyword(w, 'hidden3d', 2_I4P)) then
+               ! deprecated: hidden3d N, the border linetype
+               if (k < size(toks, kind=I4P)) then
+                  if (to_number(toks(k + 1_I4P)%text, v)) k = k + 1_I4P
+               endif
+            else
+               call fail('set pm3d: unsupported option "'//w//'"', iostat, iomsg)
+               return
+            endif
+            k = k + 1_I4P
+         enddo
+      endassociate
+      endsubroutine pm3d_option
 
       subroutine view_option(toks)
       !< gnuplot `set view ROT_X[,ROT_Z[,SCALE[,SCALE_Z]]]` (empty fields keep theirs), `set view map [scale S]`,
@@ -12275,7 +12457,12 @@ contains
          call self%figure%set_palette(words)
          return
       endif
-      call self%load_data(pdata, file, iostat, iomsg)
+      if (allocated(pfields)) then
+         ! the cell texts kept for a field reading them (`rgbcolor(strcol(2))`)
+         call self%load_data(pdata, file, iostat, iomsg, keep_text=any(pfields%uses_text()))
+      else
+         call self%load_data(pdata, file, iostat, iomsg)
+      endif
       if (iostat /= 0_I4P) then
          iomsg = 'set palette file: '//iomsg
          return
@@ -12292,8 +12479,8 @@ contains
             pfields = plain_columns([1_I4P, 2_I4P, 3_I4P])
          endif
       endif
-      if (size(pfields) /= 3 .and. size(pfields) /= 4) then
-         call fail('set palette file: using needs r:g:b or gray:r:g:b', iostat, iomsg)
+      if (size(pfields) < 2 .or. size(pfields) > 4) then
+         call fail('set palette file: using needs r:g:b, gray:r:g:b or gray:rgb', iostat, iomsg)
          return
       endif
       call pdata%table(pfields, pindex, pevery, rows)
@@ -12312,6 +12499,20 @@ contains
       if (size(pfields) == 4) then
          pos = rows(:, 1)
          call palette_gradient(probe, pos, transpose(rows(:, 2:4)), bad)
+      elseif (size(pfields) == 2) then
+         ! gray:rgb, the 24-bit RGB packed (gnuplot's `using 1:(rgbcolor(strcol(2)))`)
+         pos = rows(:, 1)
+         block
+            real(R8P), allocatable :: rgb(:,:) !< Channels 0..1 (3, row).
+            integer(I8P)           :: packed   !< Packed RGB.
+
+            allocate(rgb(3, n))
+            do k = 1_I4P, n
+               packed = int(rows(k, 2), I8P)
+               rgb(:, k) = real([ibits(packed, 16, 8), ibits(packed, 8, 8), ibits(packed, 0, 8)], R8P) / 255.0_R8P
+            enddo
+            call palette_gradient(probe, pos, rgb, bad)
+         endblock
       else
          pos = [(real(k, R8P), k = 0_I4P, n - 1_I4P)]
          call palette_gradient(probe, pos, transpose(rows(:, 1:3)), bad)
@@ -13349,6 +13550,26 @@ contains
                panel%yaxis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
                panel%x2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
                panel%y2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
+            elseif (toks(i)%kind == TOKEN_WORD .and. (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
+               ! the x and x2 labels turned (`rotate` 90 degrees, `rotate by A`); the y ones are not (read)
+               block
+                  real(R8P) :: angle !< Angle [deg].
+
+                  angle = merge(90.0_R8P, 0.0_R8P, toks(i)%text == 'rotate')
+                  if (toks(i)%text == 'rotate' .and. i + 1_I4P < size(toks, kind=I4P)) then
+                     if (toks(i + 1_I4P)%text == 'by') then
+                        i = i + 1_I4P
+                        if (.not. next_real(toks, i, angle, iostat, iomsg, self%symbols)) return
+                     endif
+                  endif
+                  panel%xaxis%tics%rotate = angle
+                  panel%x2axis%tics%rotate = angle
+               endblock
+            elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'nooffset') then
+               panel%xaxis%tics%offset = 0.0_R8P
+               panel%yaxis%tics%offset = 0.0_R8P
+               panel%x2axis%tics%offset = 0.0_R8P
+               panel%y2axis%tics%offset = 0.0_R8P
             elseif (label_option(toks, i, labels, fmt)) then
                if (iostat /= 0_I4P) return
                styled = .true.
@@ -14642,6 +14863,11 @@ contains
       self%figure%panels(self%figure%current)%stamp = .false.
       return
    elseif (keyword(option, 'parametric', 3_I4P)) then
+      ! gnuplot's unset parametric: the dummy variables back to x and y
+      if (self%parametric) then
+         self%dummy = ''
+         self%dummies = ''
+      endif
       self%parametric = .false.
       return
    elseif (keyword(option, 'jitter', 3_I4P)) then
@@ -14903,6 +15129,12 @@ contains
             endif
          endassociate
       endblock
+   elseif (keyword(option, 'pm3d', 2_I4P)) then
+      ! the surfaces no more drawn with pm3d (gnuplot: explicit), the pm3d data and function styles back to the defaults
+      ! (lines, foresight's data style)
+      self%figure%panels(self%figure%current)%pm3d%implicit = .false.
+      if (self%data_style == 'pm3d') self%data_style = 'lines'
+      if (self%function_style == 'pm3d') self%function_style = 'lines'
    elseif (keyword(option, 'zrange', 2_I4P)) then
       self%figure%panels(self%figure%current)%zaxis%min_fixed = .false.
       self%figure%panels(self%figure%current)%zaxis%max_fixed = .false.
@@ -15434,6 +15666,17 @@ contains
    if (index(line, '-') == 0) return
    word = leading_word(line)
    if (len(word) == 0) return
+   ! `set palette file '-'`: its file the inline data that follow
+   if (keyword(word, 'set', 2_I4P) .and. index(line, 'palette') > 0) then
+      i = index(line, "file '-'", kind=I4P)
+      if (i == 0_I4P) i = index(line, 'file "-"', kind=I4P)
+      if (i > 0_I4P) then
+         quotes = quotes//line(i + 5_I4P:i + 5_I4P)
+         rewritten = line(1:i + 4_I4P)//inline_name(line(i + 5_I4P:i + 5_I4P), len(quotes, kind=I4P))// &
+                     line(i + 8_I4P:)
+      endif
+      return
+   endif
    if (.not. (keyword(word, 'plot', 1_I4P) .or. keyword(word, 'replot', 3_I4P) .or. word == 'fit' .or. &
               keyword(word, 'stats', 2_I4P) .or. keyword(word, 'splot', 2_I4P))) return
    i = index(line, word, kind=I4P) + len(word, kind=I4P)
@@ -16576,7 +16819,7 @@ contains
    character(len=*), intent(in) :: with !< Full style name.
    logical                      :: yes  !< Usable for functions.
 
-   yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots boxes filledcurves')
+   yes = is_word(with, 'lines points linespoints impulses steps fsteps histeps dots boxes filledcurves pm3d')
    endfunction function_drawable
 
    pure function colormap_index(self, name) result(k)

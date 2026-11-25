@@ -164,6 +164,8 @@ type :: series_object
                                                        !< cross iso-curves of a function (drawn, not gridded).
    logical                       :: data_scans = .false. !< Scans read from data, which gnuplot keeps last first (its
                                                          !< table order); a function's are in order.
+   logical                       :: key_blank = .false. !< A key entry of its title alone, no sample (gnuplot's pm3d
+                                                        !< surfaces).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

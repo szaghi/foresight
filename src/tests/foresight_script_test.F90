@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(247)                           !< Per-check outcome.
+logical                       :: test_passed(249)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -776,7 +776,7 @@ if (test_passed(67)) test_passed(67) = interpreter%figure%panels(1)%series(1)%st
 call interpreter%run_text("plot '"//data_file//"' u 1:2 w yerrorl", iostat, iomsg)
 test_passed(68) = iostat /= 0_I4P .and. index(iomsg, 'yerrorlines needs using x:y:delta') > 0
 call interpreter%run_text("plot x w xyerrorlines", iostat, iomsg)
-test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'histeps, dots, boxes or filledcurves') > 0
+test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'dots, boxes, filledcurves or pm3d') > 0
 call interpreter%run_text("plot x w hi", iostat, iomsg)
 test_passed(68) = test_passed(68) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported style "hi"') > 0
 open(newunit=unit, file=scratch)
@@ -1001,8 +1001,8 @@ write(unit, '(A)') '0 0 0 1', '2 1 0 0', '1 1 1 1'
 close(unit)
 call interpreter%run_text("set palette file '"//data_file//"'", iostat, iomsg)
 test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'the values must increase') > 0
-call interpreter%run_text("set palette file '"//data_file//"' using 1:2", iostat, iomsg)
-test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'r:g:b or gray:r:g:b') > 0
+call interpreter%run_text("set palette file '"//data_file//"' using 1", iostat, iomsg)
+test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'r:g:b, gray:r:g:b or gray:rgb') > 0
 call interpreter%run_text("set palette file 'foresight_no_such_palette.dat'", iostat, iomsg)
 test_passed(77) = test_passed(77) .and. iostat /= 0_I4P .and. index(iomsg, 'set palette file:') > 0
 ! set colorsequence: gnuplot 6.0's podo and classic (svg terminal) linetype colors, `colors` abbreviated, a categorical
@@ -3213,7 +3213,7 @@ if (test_passed(149)) test_passed(149) = size(interpreter%figure%panels(1)%serie
 call interpreter%run_text('plot x with filledcurves above x=1', iostat, iomsg)
 test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'need y=V for a function') > 0
 call interpreter%run_text('plot x with yerrorbars', iostat, iomsg)
-test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes or filledcurves') > 0
+test_passed(149) = test_passed(149) .and. iostat /= 0_I4P .and. index(iomsg, 'boxes, filledcurves or pm3d') > 0
 
 ! lc variable on circles, ellipses and boxes: each shape in its point's color, the key sample in the first one's
 call interpreter%init(scratch)
@@ -3415,8 +3415,8 @@ if (test_passed(158)) test_passed(158) = all(interpreter%figure%panels(1)%palett
                                        all(interpreter%figure%panels(1)%palette%rgb(0.5_R8P) == [0, 255, 255])
 call interpreter%run_text('set palette model RGB', iostat, iomsg)
 test_passed(158) = test_passed(158) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%palette%hsv
-call interpreter%run_text('set palette model CMY', iostat, iomsg)
-test_passed(158) = test_passed(158) .and. iostat /= 0_I4P .and. index(iomsg, 'RGB and HSV are supported') > 0
+call interpreter%run_text('set palette model XYZ', iostat, iomsg)
+test_passed(158) = test_passed(158) .and. iostat /= 0_I4P .and. index(iomsg, 'RGB, HSV and CMY are supported') > 0
 
 
 ! settings that leave gnuplot's 2D svg unchanged (isosamples, mouse, macros, pointintervalbox, zrange, minussign with
@@ -6157,6 +6157,110 @@ block
    test_passed(247) = test_passed(247) .and. iostat == 0_I4P
 endblock
 
+
+! pm3d in the map view (gnuplot 6.0's colors, probed): the quadrangles of a 3 x 3 grid by their corners' mean, c1, and
+! interpolated 2,2; implicit pm3d with the points over it; set pm3d options, map, unset pm3d; plot with pm3d refused
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: grid !< The grid datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   grid = "$g << EOD"//nl//"0 0 0"//nl//"1 0 1"//nl//"2 0 2"//nl//nl//"0 1 3"//nl//"1 1 4"//nl//"2 1 8"//nl//nl// &
+          "0 2 6"//nl//"1 2 7"//nl//"2 2 9"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pm3d.svg'; "// &
+                             "set view map"//nl//grid//"splot $g using 1:2:3 with pm3d notitle", iostat, iomsg)
+   test_passed(248) = iostat == 0_I4P
+   if (test_passed(248)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(248) = index(svg, 'fill="#7803fb"') > 0 .and. index(svg, 'fill="#a5127f"') > 0 .and. &
+                        index(svg, 'fill="#be2c00"') > 0 .and. index(svg, 'fill="#e17800"') > 0
+   endif
+   call interpreter%run_text("set pm3d corners2color c1; replot", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat == 0_I4P
+   if (test_passed(248)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(248) = index(svg, 'fill="#5500a4"') > 0 .and. index(svg, 'fill="#9309dd"') > 0 .and. &
+                        index(svg, 'fill="#aa1657"') > 0
+   endif
+   call interpreter%run_text("set pm3d interpolate 2,2 corners2color mean; replot", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat == 0_I4P
+   if (test_passed(248)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(248) = index(svg, 'fill="#6801dd"') > 0 .and. index(svg, 'fill="#f2bc00"') > 0 .and. &
+                        index(svg, 'fill="#cb4000"') > 0
+   endif
+   ! implicit: a surface drawn with pm3d and as itself (points over the quadrangles)
+   call interpreter%run_text("set pm3d; splot $g using 1:2:3 title 'g'", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%implicit
+   if (test_passed(248)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(248) = index(svg, 'fill="#7803fb"') > 0 .and. index(svg, '<g class="fs-series" data-series="2">'// &
+                         new_line('a')//'<polyline') > 0
+   endif
+   call interpreter%run_text("set pm3d map clip4in interpolate 0,-50", iostat, iomsg)
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(248) = test_passed(248) .and. iostat == 0_I4P .and. panel%pm3d%at == 'b' .and. panel%view3d%map .and. &
+                        panel%pm3d%clip4in .and. all(panel%pm3d%interp == [0, -50]) .and. &
+                        interpreter%data_style == 'pm3d' .and. interpreter%function_style == 'pm3d'
+   endassociate
+   call interpreter%run_text("unset pm3d", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%pm3d%implicit .and. &
+                     interpreter%data_style == 'lines' .and. interpreter%function_style == 'lines'
+   call interpreter%run_text("plot x with pm3d", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat /= 0_I4P .and. index(iomsg, 'pm3d draws the surfaces of splot') > 0
+   call interpreter%run_text("set pm3d corners2color avg", iostat, iomsg)
+   test_passed(248) = test_passed(248) .and. iostat /= 0_I4P .and. index(iomsg, 'corners2color needs') > 0
+endblock
+
+
+! palettes and functions for pm3d demos: set palette gamma, model CMY, defined alone (gnuplot's default gradient), file
+! gray:rgb with rgbcolor(), file '-'; parametric surfaces (u, v) as gnuplot tabulates them; unset parametric resets the
+! dummy variables; set tics rotate
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+   real(R8P)                   :: v     !< A value.
+   logical                     :: found !< Variable found.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set palette gray gamma 0.75", iostat, iomsg)
+   test_passed(249) = iostat == 0_I4P .and. interpreter%figure%panels(1)%palette%gamma == 0.75_R8P .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.5_R8P) == nint(255.0_R8P * 0.5_R8P**(1.0_R8P/0.75_R8P)))
+   call interpreter%run_text("set palette color model CMY rgbformulae 7,5,15", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%palette%cmy .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [255, 255, 255])
+   call interpreter%run_text("set palette model RGB defined", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P / 6.0_R8P) == [0, 0, 255])
+   call interpreter%run_text("r = rgbcolor('red'); w = rgbcolor('white')", iostat, iomsg)
+   call interpreter%symbols%value_of('r', v, found)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. found .and. v == 16711680.0_R8P
+   call interpreter%symbols%value_of('w', v, found)
+   test_passed(249) = test_passed(249) .and. found .and. v == 16777215.0_R8P
+   call interpreter%run_text("$C << EOD"//nl//"0 black"//nl//"1 red"//nl//"EOD"//nl// &
+                             "set palette file $C using 1:(rgbcolor(strcol(2)))", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(1.0_R8P) == [255, 0, 0])
+   call interpreter%run_text("set palette file '-'"//nl//"0 0 1"//nl//"1 1 0"//nl//"e", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [0, 0, 255])
+   ! a parametric surface: x(u,v), y(u,v), z(u,v) on the u, v grid
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; set parametric; set isosamples 2,2; "// &
+                             "set samples 2,2; set urange [0:1]; set vrange [0:2]; splot u, v, u+v; unset table", &
+                             iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. read_text('foresight_script_test.dat') == nl// &
+                     '# Surface 0 of 1 surfaces'//nl//nl//'# Curve title: "u, v, u+v"'//nl//nl// &
+                     '# IsoCurve 0, 2 points'//nl//'# x y z type'//nl//' 0  0  0 i'//nl//' 1  0  1 i'//nl//nl// &
+                     '# IsoCurve 1, 2 points'//nl//'# x y z type'//nl//' 0  2  2 i'//nl//' 1  2  3 i'//nl//nl
+   call interpreter%run_text("set dummy u,v; unset parametric; set table 'foresight_script_test.dat'; plot x; "// &
+                             "unset table", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P
+   call interpreter%run_text("set tics rotate by 45 nooffset", iostat, iomsg)
+   test_passed(249) = test_passed(249) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%xaxis%tics%rotate == 45.0_R8P
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -6165,7 +6269,7 @@ if (all(test_passed)) then
    open(newunit=unit, file=y2)
    close(unit, status='delete')
 endif
-write(output_unit, '(A,247L2)') 'foresight_script checks:', test_passed
+write(output_unit, '(A,249L2)') 'foresight_script checks:', test_passed
 do i = 1, size(test_passed)
    if (.not. test_passed(i)) write(error_unit, '(A,I0)') 'failed check ', i
 enddo

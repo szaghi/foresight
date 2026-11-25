@@ -31,6 +31,8 @@ use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
 use foresight_font, only : font_object
+use foresight_pm3d, only : CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, CORNERS_MEDIAN, &
+                           CORNERS_MIN, CORNERS_RMS
 use penf, only : I4P, R8P
 
 implicit none
@@ -94,6 +96,7 @@ type :: figure_object
       procedure, pass(self), private :: splot_grid   !< gnuplot `splot` of a grid.
       generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
       procedure, pass(self) :: set_view        !< gnuplot `set view`.
+      procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
       procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
       procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
       procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
@@ -1915,6 +1918,48 @@ contains
       panel%series(last)%grid_scans = size(scans, 2, kind=I4P)
    endassociate
    endsubroutine heights_of_last
+
+   subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in)
+   !< gnuplot `set pm3d`: `implicit` every surface drawn as colored quadrangles too (`set pm3d`; false: only the items
+   !< `with='pm3d'`, `unset pm3d`), `interpolate` the steps along and between the scans (`interpolate N,M`, 0 or
+   !< negative for gnuplot's automatic counts), `corners2color` the color of a quadrangle from its corners (`mean`,
+   !< `geomean`, `harmean`, `rms`, `median`, `min`, `max`, `c1` to `c4`), `clip4in` its 4 corners in range.
+   class(figure_object), intent(inout)        :: self           !< Figure.
+   logical,              intent(in), optional :: implicit       !< Every surface drawn with pm3d.
+   integer(I4P),         intent(in), optional :: interpolate(2) !< Interpolation steps.
+   character(len=*),     intent(in), optional :: corners2color  !< Color of a quadrangle from its corners.
+   logical,              intent(in), optional :: clip4in        !< Its 4 corners in range.
+
+   call self%ensure_panels
+   associate(pm => self%panels(self%current)%pm3d)
+      if (present(implicit)) pm%implicit = implicit
+      if (present(interpolate)) pm%interp = interpolate
+      if (present(clip4in)) pm%clip4in = clip4in
+      if (present(corners2color)) then
+         select case (corners2color)
+         case ('mean')
+            pm%corners = CORNERS_MEAN
+         case ('geomean')
+            pm%corners = CORNERS_GEOMEAN
+         case ('harmean')
+            pm%corners = CORNERS_HARMEAN
+         case ('rms')
+            pm%corners = CORNERS_RMS
+         case ('median')
+            pm%corners = CORNERS_MEDIAN
+         case ('min')
+            pm%corners = CORNERS_MIN
+         case ('max')
+            pm%corners = CORNERS_MAX
+         case ('c1', 'c2', 'c3', 'c4')
+            pm%corners = CORNERS_C1 + iachar(corners2color(2:2)) - iachar('1')
+         case default
+            error stop 'foresight: set_pm3d: corners2color must be mean, geomean, harmean, rms, median, min, max, '// &
+                       'c1, c2, c3 or c4'
+         endselect
+      endif
+   endassociate
+   endsubroutine set_pm3d
 
    subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal)
    !< The view of the 3D panels, as gnuplot `set view ROT_X, ROT_Z, SCALE, SCALE_Z` (each kept if absent) or `set view

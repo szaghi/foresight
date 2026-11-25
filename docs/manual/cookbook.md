@@ -1545,6 +1545,16 @@ for fractions), without palette nor color box.
 map (its plot area, ticks and color box), `lc palette` coloring each point by its z. The `using` fields are `plot`'s
 with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
 
+### A function as a colored map
+
+<<< @/examples/snippets/cb_map_pm3d.gp{gnuplot}
+
+<Plot name="cb_map_pm3d" svg :width="560" :height="400" />
+
+`with pm3d` draws a surface as quadrangles colored by the palette, gnuplot's pm3d: seen from above it is a heatmap of
+the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`set pm3d interpolate 2,2`). See
+[3D plots](/guide/gnuplot-subset#3d-plots).
+
 ## Polar and radial charts
 
 ### A polar plot
