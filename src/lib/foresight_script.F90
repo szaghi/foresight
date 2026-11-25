@@ -6446,11 +6446,6 @@ contains
       call self%write_table(iostat, iomsg)
       return
    endif
-   if (splot_mode .and. .not. self%figure%panels(self%figure%current)%view3d%map) then
-      call fail('splot: 3D views are not drawn yet (foresight 3D support, phase 2): set view map draws the map view', &
-                iostat, iomsg)
-      return
-   endif
    if (self%multiplot) self%advance_pending = .true.
    ! a multiplot on the standard output is printed once, complete, at unset multiplot (as gnuplot); files are rewritten
    ! at each plot, so that a watched page shows the panels done so far
@@ -14109,10 +14104,12 @@ contains
       character(len=:), allocatable :: base   !< Word without no.
       type(line_style_object)       :: style  !< Line properties.
       integer(I4P)                  :: k      !< Line index.
+      logical                       :: z_named !< The z grid named.
 
       associate(panel => self%figure%panels(self%figure%current))
          lines = panel%grid_lines
       endassociate
+      z_named = .false.
       polar = .false.
       tokens_black = .false.
       rings = .false.
@@ -14128,6 +14125,13 @@ contains
          k = grid_line_index(base)
          if (k > 0_I4P) then
             lines(k) = base == w
+         elseif (is_word(base, 'z ztics mz mztics')) then
+            ! the z grid of the 3D views, at the z ticks on the back walls
+            self%figure%panels(self%figure%current)%view3d%grid_z = base == w
+            z_named = .true.
+         elseif (keyword(base, 'vertical', 4_I4P)) then
+            ! the vertical grid lines of the 3D views, at the x and y ticks on the back walls
+            self%figure%panels(self%figure%current)%view3d%grid_vertical = base == w
          elseif (is_word(w, 'front back layerdefault')) then
             call self%figure%set_grid(front=w == 'front')
          elseif (keyword(w, 'spiderplot', 6_I4P)) then
@@ -14187,13 +14191,14 @@ contains
             ! the minor grid's style follows: the same here
             continue
          else
-            call fail('set grid: unsupported option "'//w//'" (x, y, x2, y2, mx, my and their {no}{m}tics forms, '// &
-                      'r, front, back, layerdefault, lt, lc, lw, dt, polar [STEP], spiderplot)', iostat, iomsg)
+            call fail('set grid: unsupported option "'//w//'" (x, y, z, x2, y2, mx, my, mz and their {no}{m}tics '// &
+                      'forms, vertical, r, front, back, layerdefault, lt, lc, lw, dt, polar [STEP], spiderplot)', &
+                      iostat, iomsg)
             return
          endif
          i = i + 1_I4P
       enddo
-      if (.not. any(lines)) lines(1:2) = .true.
+      if (.not. any(lines) .and. .not. z_named) lines(1:2) = .true.
       if (polar) then
          call self%figure%set_grid(.true., polar=step, lines=lines)
       elseif (rings) then
@@ -14502,11 +14507,12 @@ contains
                   endif
                endblock
             endif
-            if (v < 0.0_R8P .or. v > 4095.0_R8P .or. v /= aint(v)) then
-               call fail('set border: the mask is an integer 0 to 4095', iostat, iomsg)
+            if (v < -4096.0_R8P .or. v > 4095.0_R8P .or. v /= aint(v)) then
+               call fail('set border: the mask is an integer -4096 to 4095', iostat, iomsg)
                return
             endif
-            mask = int(v, I4P)
+            ! a negative mask its bits, as gnuplot's integer (-1: every side of the 2D and 3D borders)
+            mask = iand(int(v, I4P), 4095_I4P)
          endif
       enddo
       if (mask >= 0_I4P) then
@@ -15080,9 +15086,9 @@ contains
             endif
             ! cbtics: `in` is the color box's own direction (read), `out` not supported
             if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P), &
-                           keyword(option, 'x2tics', 4_I4P)]) &
+                           keyword(option, 'x2tics', 4_I4P), keyword(option, 'ztics', 3_I4P)]) &
                 .and. (toks(i)%text == 'out' .or. (toks(i)%text == 'in' .and. .not. keyword(option, 'cbtics', 4_I4P)))) then
-               call fail('set '//option//': in and out are supported on xtics, ytics, y2tics and x2tics only', iostat, &
+               call fail('set '//option//': in and out are supported on xtics, ytics, y2tics, x2tics and ztics only', iostat, &
                          iomsg)
                return
             endif

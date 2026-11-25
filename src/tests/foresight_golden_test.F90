@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(124)                  !< Per-figure outcome.
+logical                     :: test_passed(125)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -154,7 +154,10 @@ test_passed(121) = check('map_contour.txt', figure_map_contour())
 test_passed(122) = check('map_dgrid3d.svg', figure_map_dgrid3d())
 test_passed(123) = check('map_dgrid3d.html', figure_map_dgrid3d())
 test_passed(124) = check('map_dgrid3d.txt', figure_map_dgrid3d())
-write(output_unit, '(A,124L2)') 'foresight golden checks:', test_passed
+! a 3D view (gnuplot's default view 60, 30): a surface mesh in its box, the ticks and labels of the three axes, the key
+! and the title at gnuplot's places
+test_passed(125) = check('view3d_frame.svg', figure_view3d_frame())
+write(output_unit, '(A,125L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -949,6 +952,32 @@ contains
    call fig%set_title('dgrid3d')
    call fig%splot(x, y, z, with='pm3d', title='saddle')
    endfunction figure_map_dgrid3d
+
+   function figure_view3d_frame() result(fig)
+   !< A 3D view of a surface (gnuplot `splot` of a grid, its default view): the mesh of the grid, the box, the x, y and
+   !< z ticks and labels, the key and the title.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(-2.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 16)]
+   y = [(-3.0_R8P + 0.375_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = sin(x(i)) * cos(y(j))
+      enddo
+   enddo
+   call fig%set_title('sin(x) cos(y)')
+   call fig%set_xlabel('x')
+   call fig%set_ylabel('y')
+   call fig%set_zlabel('z')
+   call fig%splot(x, y, z, title='surface')
+   endfunction figure_view3d_frame
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

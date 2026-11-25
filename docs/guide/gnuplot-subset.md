@@ -29,7 +29,7 @@ that did what it says.
 | Command | Effect |
 |---|---|
 | **p**lot *items* | replace the current plot and render it to the output |
-| **sp**lot *items* | a [3D plot](#3d-plots): items with a height z, functions of x and y; drawn in the map view (`set view map`) |
+| **sp**lot *items* | a [3D plot](#3d-plots): items with a height z, functions of x and y; drawn in a [3D view](#3d-views) or the map view (`set view map`) |
 | **rep**lot [*items*] | render the last plot again (re-reading its data), optionally adding items |
 | **ref**resh | the last plot again, without new items (gnuplot redraws its stored data; the files are read again here) |
 | **se**t *option* | set an option |
@@ -72,7 +72,7 @@ that did what it says.
 | **linet**ype `N` [`lc`] [`lw`] [`dt`] [`pt`] [`ps`]\|`cycle N` | redefine linetype N, see [Styles](#styles); its color may have an alpha channel (`"#80bb33bb"`) | — |
 | **jit**ter [`overlap` [`first`] `N`] [`spread S`] [`wrap W`] [`swarm`\|`square`\|`vertical`] | overlapping points spread out, see [Point types](#point-types) | no jitter |
 | **log**scale [*axes*] [`10`] | base-10 log axes; *axes* concatenates `x`, `y`, `y2`, `x2`, `cb` (`y`, `xy2`, `cb`: the [color axis](#images-and-palettes)), all when absent; `r` alone the [polar](#polar-plots) radius | linear axes |
-| **gr**id [[`no`][`m`]`x`\|`y`\|`x2`\|`y2`[`tics`]]... [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|`r`\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` or `lt black` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit; a `STEP` beyond a full turn of radians is in degrees, as gnuplot) instead; `r` the rings alone (with `polar`, as `polar`), `nor` none | no grid |
+| **gr**id [[`no`][`m`]`x`\|`y`\|`z`\|`x2`\|`y2`[`tics`]]... [[`no`]**vert**ical] [`front`\|`back`\|`layerdefault`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] [**po**lar [`STEP`]\|`r`\|**spider**plot] | grid lines at the ticks of the axes named (`m`: minor; the others kept; x and y when none), over the data with `front`, in its line (`lt 0` dots, the default, `lt -1` or `lt black` black); `polar`: on a [polar](#polar-plots) panel, rings at the r ticks and spokes every `STEP` (30 degrees by default, in the angle unit; a `STEP` beyond a full turn of radians is in degrees, as gnuplot) instead; `r` the rings alone (with `polar`, as `polar`), `nor` none; in a [3D view](#3d-views) the x and y lines on the base plane, `z` at the z ticks and `vertical` at the x and y ticks on the back walls | no grid |
 | **pol**ar | [polar](#polar-plots) coordinates: items are theta:r, functions of `t`; `set polar grid ...` the grid of `with surface` (polar on) | x:y coordinates |
 | **rl**abel `"text"` [`offset X,Y`] [`tc C`] ... | the label of the radial axis of a [polar](#polar-plots) plot | none |
 | `isotropic` | equal unit lengths on x and y (`set size ratio -1`; `unset isotropic` frees them), gnuplot 6.0 | free |
@@ -84,7 +84,7 @@ that did what it says.
 | **tti**cs [[`START,`]`STEP`] [`format "fmt"`] \| [`add`] `("label" angle [level], ...)` | theta labels around the polar plot, in degrees; every 45 degrees without `STEP` (gnuplot: none); a list replaces them, or with `add` its items replace the labels at their angles | no theta labels (the default) |
 | **mtt**ics [`N`] | minor theta ticks: `N` intervals between the labels, ticks on the polar border only, as gnuplot | none |
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
-| **bor**der [`MASK`] [**po**lar] [`front`\|`back`\|`behind`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default; `MASK` a number or a constant expression), in their line; `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given; the layer is read and ignored (the border over the data) | no border |
+| **bor**der [`MASK`] [**po**lar] [`front`\|`back`\|`behind`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default; `MASK` a number or a constant expression, a negative one its bits: -1 all); in a [3D view](#3d-views) the base edges (1 to 8), verticals (16 to 128) and top edges (256 to 2048); in their line; `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given; the layer is read and ignored (the border over the data) | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box` [`lt`\|`lw`\|`lc`\|`dt`\|`ls` ...]\|`nobox`] [`opaque`] [`reverse`] [`Left`\|`Right`] [`invert`] [`samplen L`] [`spacing S`] [`width W`] [`height H`] [`maxrows N`\|`maxcols N`] [`columns N`] [`offset X,Y`] [`title "text"` [`left`\|`center`\|`right`]] [`font F`] [`textcolor C`\|`tc variable`\|`tc rgb variable`] [`noenhanced`] [`default`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, in its layout, see [below](#key); untitled items: as written, by [column header](#column-headers), or none; the title centred over the key, `left` or `right` at its left or right side, as gnuplot | hide the key |
 | **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] [`axis`\|`border`] [`rangelimited`] [`format "f"`] [`font F`] [`offset X,Y`] [`textcolor C`] [`noenhanced`] | tick positions, see [below](#ticks-and-label-formats); `time`\|`timedate`\|`numeric`: the axis ticked as times or not ([time data](#time-data)); `logscale`\|`nologscale`: on a log axis the step a factor, or added; `noenhanced`: the labels as they are, not as [enhanced text](#enhanced-text); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **tic**s [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`border`] [`rotate` [`by A`]\|`norotate`] [`nooffset`] | the options of every axis' ticks (the scale of the color box's too); bare, the x and y ticks on, see [below](#ticks-and-label-formats) | no ticks on any axis |
@@ -111,13 +111,13 @@ that did what it says.
 | **dataf**ile **columnhead**ers \| **nocolumnhead**ers | the first row of each dataset is a header, in plots, `stats` and `fit` (other datafile options may follow) | not a header |
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` the points along y of the [`splot` functions](#3d-plots)' iso-curves of x (N by default); expressions truncated to integers, as gnuplot | 100 |
 | **iso**samples `N`[`,M`] | the iso-curves of the [`splot` functions](#3d-plots): M curves of y (the surface grid), N of x; 10 by default; M also the v samples of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | 10 |
-| `view` *rot_x*[`,` *rot_z*[`,` *scale*[`,` *scale_z*]]] \| `map` [`scale S`] \| [`no`]`equal` [`xy`\|`xyz`] \| `azimuth A` \| `projection xy` | the view of the [3D plots](#3d-plots), gnuplot's `60, 30, 1, 1` by default (an empty field keeps its value); `map` seen from above, as a 2D plot | `60, 30, 1, 1`, no map |
+| `view` *rot_x*[`,` *rot_z*[`,` *scale*[`,` *scale_z*]]] \| `map` [`scale S`] \| [`no`]`equal` [`xy`\|`xyz`] \| `azimuth A` \| `projection xy` | the [view](#3d-views) of the 3D plots, gnuplot's `60, 30, 1, 1` by default (an empty field keeps its value); `azimuth` a rotation about the line of sight; `equal` the same unit on x and y (`xyz`: and z); `map` seen from above, as a 2D plot | `60, 30, 1, 1`, no map |
 | **cont**our [`base`\|`surface`\|`both`] | the [contour lines](#contours) of the 3D surfaces (`base` by default; in a map view the three are the same picture) | no contour lines |
 | **cntrp**aram [`linear`\|`cubicspline`\|`bspline`] [`points N`] [`order N`] [`levels` [`auto` [`N`]\|`N`\|`discrete z1, z2, ...`\|`incremental start, step`[`, end`]]] [`firstlinetype N`] [`sorted`\|`unsorted`] | the [contour](#contours) lines: linear segments, a cubic spline through their points or a B-spline approximation (`order` 2 to 10, 4 by default; `points` per interval, 5); about N automatic levels (5), or the levels given; the first level's linetype; levels high to low; alone, the defaults | — |
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
 | **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; the drawing order options (`scans...`, `depthorder`, `flush`, `ftriangles`) and the border are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
-| **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D plots](#3d-plots): at the height Z, or F times the z range below it (0.5 by default) | — |
+| **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
 | **zr**ange, **zl**abel, **zti**cs, **mzti**cs, **zzero**axis | the z axis of the [3D plots](#3d-plots): its range (the options of `xrange`), label (those of `xlabel`), ticks (those of `xtics`), minor ticks and zero axis | as the x ones |
 | **ov**erflow [`float`\|`undefined`\|`NaN`] | an integer overflow of `+ - * **` gives a real (the default), an undefined value or NaN, see [Expressions](#expressions-in-using) | `+` and `-` wrap around (two's complement), `*` and `**` give a real, as gnuplot |
@@ -2211,7 +2211,7 @@ splot x*exp(-x**2-y**2) with points pt 7 ps 0.5 lc palette
 Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them). `set table` writes
 the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of each item, its grid iso-curves (the
 scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,
-`set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` are kept for the 3D view.
+`set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` set the [3D views](#3d-views).
 
 `with pm3d` draws a surface as colored quadrangles, gnuplot's pm3d: each pair of neighbouring scans joined point by
 point, each quadrangle in the palette color of its corners (`set pm3d corners2color`, their mean by default; with a
@@ -2226,6 +2226,33 @@ set pm3d interpolate 4,4
 set isosamples 30, 30
 splot sin(x)*cos(y) with pm3d notitle
 ```
+
+### 3D views
+
+```gnuplot
+set view 70, 120, 1, 1.2       # rot_x, rot_z, scale, z scale
+set xyplane at 0               # the base plane at z = 0 (default: half the z range below it)
+set border 4095                # the whole box
+set xlabel 'x'; set ylabel 'y'; set zlabel 'z'
+splot sin(x)*cos(y) title 'surface'
+```
+
+A `splot` without `set view map` is drawn in a 3D view as gnuplot 6.0 draws it (graph3d.c, util3d.c), positions to its
+terminal unit: the box of the x, y and z ranges turned by `set view ROT_X, ROT_Z` (60, 30 by default: rot_x about the
+horizontal axis, then rot_z about the vertical one), scaled by `SCALE` and the z axis by `SCALE_Z`, `set view azimuth A`
+turning it about the line of sight; `set view equal xy` (`xyz`) gives x and y (and z) the same unit. The base plane
+lies below the z range by half of it (`set xyplane relative F`, `set ticslevel F`) or at a height
+(`set xyplane at Z`). `set border` bits 1 to 4095 draw the base edges (1 to 8), the verticals (16 to 128; an unset
+one goes from the base to the surface's corner, as gnuplot's) and the top edges (256 to 2048); the default 31 is the
+base and the vertical at the z axis. The x and y ticks lie along the front edges of the base (the back ones beyond
+rot_x 90), mirrored on the opposite edges, their labels beside them; the z ticks at the left corner, labels at their
+left (`set ztics mirror` at the right corner too); `in`, `out`, `axis` and the tick scales as in 2D. The axis labels
+sit beyond the tick labels (the z label seven characters left of the z axis), the title above the box, the key at
+the top right of the plot. `set grid` draws the x and y grid on the base (`set grid vertical` on the back walls too,
+`set grid ztics` the z levels); `set xzeroaxis`, `set yzeroaxis` and `set zzeroaxis` the zero lines. Lines, linespoints,
+points, dots and labels are drawn in the view, a data grid (scans of one length) as a mesh of its scans and the curves
+across them, lines clipped to the box, points outside it dropped; impulses rise from z = 0 (the z range then includes
+it). `set multiplot` places the views in gnuplot's cells.
 
 ### Contours
 
@@ -2280,11 +2307,11 @@ sides with lengths by the projection, the tick labels, axis labels, title, key a
 (the color box a character width farther right than a 2D plot's, its ticks on both sides). The items keep their
 `plot` styles: points, lines, labels, vectors, images (`with image`, from data `x:y:value`, `x:y:z:value` or a
 matrix), `lc palette` by z, `ps variable`, `pt variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
-own layout (gnuplot's dumb map is not followed). The other 3D views are not drawn yet (an error). `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
+own layout (gnuplot's dumb map is not followed). The other views are [3D views](#3d-views). `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
 `vrange` iso-curves.
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
 `fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set
-the z axis.
+the z axis, `set_view` and `set_xyplane` the view.
 
 ## Polar plots
 

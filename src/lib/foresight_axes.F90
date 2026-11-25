@@ -54,7 +54,8 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
                                   has_shapes, label_object, pixmap_object, shape_object, &
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
-use foresight_view3d, only : map_geometry, map_layout, view3d_object
+use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
+                             view3d_setup, view3d_xyz
 use foresight_pm3d, only : masked, pm3d_object, pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
 use foresight_dgrid3d, only : dgrid3d_object
@@ -326,6 +327,12 @@ type :: axes_object
                                                          !< drawn through its view.
    type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
    type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
+   real(R8P)                        :: box3d(4) = -1.0_R8P !< gnuplot's panel box (`set origin`, `set size`: left,
+                                                           !< bottom, width, height [page fractions]) where a 3D view
+                                                           !< lies; negative: the rendering box.
+   type(axis_object)                :: page_x            !< Page abscissa [px] of the projected series of a 3D view.
+   type(axis_object)                :: page_y            !< Page ordinate [px, negated] of the projected series of a
+                                                         !< 3D view.
    type(pm3d_object)                :: pm3d              !< pm3d settings of a 3D panel: `set pm3d`.
    type(contour_object)             :: contour           !< Contour settings of a 3D panel: `set contour`, `set
                                                          !< cntrparam`.
@@ -424,6 +431,8 @@ type :: axes_object
       procedure, pass(self), private :: map_surfaces       !< Series of a map view as drawn (pm3d quadrangles).
       procedure, pass(self), private :: mask_polygons      !< Polygons of the last `with mask` item.
       procedure, pass(self), private :: draw_map_frame     !< Border, ticks, labels and title of a map view.
+      procedure, pass(self), private :: render_view3d      !< Render a 3D view.
+      procedure, pass(self), private :: draw_view3d_frame  !< Box, ticks and labels of a 3D view.
       procedure, pass(self), private :: setup_axes         !< Effective ranges and ticks.
 endtype axes_object
 
@@ -1381,6 +1390,8 @@ contains
    self%x2axis%tics%mirror = .false.
    self%cbaxis%tight = .true.
    self%ttics%mode = TICS_NONE
+   ! the z ticks of the 3D views not mirrored (gnuplot's `set ztics border nomirror`)
+   self%zaxis%tics%mirror = .false.
    endsubroutine set_defaults
 
    subroutine render(self, backend, x0, y0, width, height, font_size, canvas)
@@ -1470,6 +1481,11 @@ contains
          if (self%readout) call self%draw_readouts(backend, area, font_size, .true.)
          return
       endif
+   endif
+   ! a 3D view: drawn apart (gnuplot's do_3dplot)
+   if (self%three_d .and. .not. self%view3d%map) then
+      call self%render_view3d(backend, x0, y0, width, height, font_size)
+      return
    endif
    ! a map view's series as drawn (pm3d quadrangles, contour levels), before the key counts its entries: restored after
    map = self%three_d .and. self%view3d%map
@@ -2870,6 +2886,516 @@ contains
       backend%font = font_object()
       endsubroutine map_text
    endsubroutine draw_map_frame
+
+   subroutine render_view3d(self, backend, x0, y0, width, height, font_size)
+   !< Render a 3D view of the panel into the pixel box of top-left corner (`x0`, `y0`) and size `width` x `height`, as
+   !< gnuplot 6.0's do_3dplot draws it (foresight_view3d's view3d_setup): the x, y and z ranges of the series, the back
+   !< of the box (its back edges and verticals, the ticks and their labels), the series projected on the page and drawn
+   !< as 2D series of page coordinates, the front of the box (its front edges, the axis labels), the key at the top right
+   !< of the plot bounds and the title above them.
+   class(axes_object),    intent(inout) :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   real(R8P),             intent(in)    :: x0        !< Box left side [px].
+   real(R8P),             intent(in)    :: y0        !< Box top side [px].
+   real(R8P),             intent(in)    :: width     !< Box width [px].
+   real(R8P),             intent(in)    :: height    !< Box height [px].
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(series_object), allocatable     :: raw(:)    !< Series as given, restored after.
+   type(view3d_frame)                   :: f         !< The view.
+   type(axes_view)                      :: view      !< Panel geometry for the device.
+   real(R8P)                            :: area(4)   !< A plot area guess, then the panel box [px].
+   real(R8P)                            :: bounds(4) !< gnuplot's plot bounds: left, right, top, bottom [px].
+   real(R8P)                            :: box(4)    !< gnuplot's panel box: left, top, width, height [px].
+   real(R8P)                            :: key(2)    !< Key width and height [px].
+   real(R8P)                            :: zr(2)     !< z extent of the series.
+   real(R8P)                            :: spacing   !< The key spacing, restored after.
+   real(R8P)                            :: dx        !< Key shift from the right [px].
+   real(R8P)                            :: dy        !< Key shift from the top [px].
+   integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
+   integer(I4P)                         :: lines     !< Title lines.
+   integer(I4P)                         :: s         !< Series counter.
+   integer(I4P)                         :: k         !< Character counter.
+   logical                              :: zfound    !< Any z value.
+
+   raw = self%series
+   ! the ranges of the 3D points alone (not the baselines of the 2D styles: impulses, boxes)
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (.not. allocated(self%series(s)%z)) cycle
+      if (allocated(self%series(s)%ylow)) deallocate(self%series(s)%ylow)
+      if (allocated(self%series(s)%yhigh)) deallocate(self%series(s)%yhigh)
+   enddo
+   area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, y0 + 2.0_R8P * font_size, &
+           y0 + height - 4.0_R8P * font_size]
+   call self%setup_axes(area, raw)
+   call view3d_zextent(self%series, self%zaxis%log, zr, zfound)
+   call self%zaxis%setup(zr(1), zr(2), zfound, area(4) - area(3))
+   if (backend%enhanced) call plain_ticks(self)
+   lines = 0_I4P
+   if (self%has_title()) lines = 1_I4P + count([(self%title(k:k) == '\', k = 1_I4P, len(self%title, kind=I4P))])
+   ! gnuplot's panel box (a multiplot layout's: its title band one character high), else the rendering one
+   box = [x0, y0, width, height]
+   if (self%box3d(1) >= 0.0_R8P) box = [self%box3d(1) * self%canvas(1), &
+                                        (1.0_R8P - self%box3d(2) - self%box3d(4)) * self%canvas(2), &
+                                        self%box3d(3) * self%canvas(1), self%box3d(4) * self%canvas(2)]
+   f = view3d_setup(self%view3d, box, self%canvas, font_size, lines, &
+                    [self%xaxis%lo, self%xaxis%hi], [self%yaxis%lo, self%yaxis%hi], [self%zaxis%lo, self%zaxis%hi], &
+                    [self%xaxis%log, self%yaxis%log, self%zaxis%log], &
+                    self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
+                    iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, 0.0_R8P)
+   call view3d_project(self%series, f, self%view3d%surface)
+   ! the series colored by the palette, over the color axis set up with the ranges
+   if (self%has_image(palette=.true.)) then
+      if (allocated(self%colormaps)) then
+         call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis, self%colormaps)
+      else
+         call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis)
+      endif
+   endif
+   ! the projected series are page coordinates: the page axes map them one to one
+   area = [x0, x0 + width, y0, y0 + height]
+   self%page_x%lo = area(1)
+   self%page_x%hi = area(2)
+   self%page_x%log = .false.
+   self%page_y%lo = -area(4)
+   self%page_y%hi = -area(3)
+   self%page_y%log = .false.
+   ! gnuplot's 3D key rows are a character height apart (1.5 font sizes, not 1.25): restored after
+   spacing = self%key_spacing
+   self%key_spacing = spacing * 1.5_R8P / LINE_HEIGHT
+   call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
+                        tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
+   view = axes_view(area=area, x=[area(1), area(2)], y=[-area(4), -area(3)], font_size=font_size)
+   call backend%begin_axes(view)
+   call self%draw_view3d_frame(backend, f, .false., font_size, raw)
+   call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%is_readout(s)) cycle
+      call backend%begin_group('fs-series', series=s)
+      call self%draw_series(backend, s, self%page_x, self%page_y, area, font_size)
+      call backend%end_group
+   enddo
+   call backend%end_plot_area
+   call self%draw_view3d_frame(backend, f, .true., font_size, raw)
+   ! the plot bounds (gnuplot's page_bounds, the key's) [px]
+   bounds = [f%bounds(1) * 0.01_R8P, f%bounds(2) * 0.01_R8P, f%height - f%bounds(4) * 0.01_R8P, &
+             f%height - f%bounds(3) * 0.01_R8P]
+   if (self%key .and. grid(1) > 0_I4P) then
+      if (.not. (self%key_at .or. self%key_outside)) then
+         ! gnuplot's 3D key (do_3dkey_layout): its titles end 2 tick lengths and 6 characters left of the bounds, its
+         ! first row a tick length and half a character below their top (as the map's)
+         dx = (2.0_R8P * f%vtic + 6.0_R8P * f%hchar) * 0.01_R8P - 52.0_R8P / 12.0_R8P * font_size
+         dy = (f%vtic + 0.5_R8P * f%vchar) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * font_size
+         call self%draw_key(backend, [bounds(1) + dx, bounds(2) - dx, bounds(3) + dy, bounds(4) - dy], &
+                            [x0, y0, x0 + width, y0 + height], element_px(backend, self%key_font, font_size), grid, key)
+      else
+         call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
+                            element_px(backend, self%key_font, font_size), grid, key)
+      endif
+   endif
+   if (self%has_title()) then
+      backend%literal = self%title_plain
+      backend%boxed = self%title_boxed
+      backend%font = self%title_font
+      call text_rows(backend, f%title(1) * 0.01_R8P + self%title_offset(1) * CHAR_WIDTH * font_size, &
+                     f%height - f%title(2) * 0.01_R8P + f%shift - self%title_offset(2) * font_size, self%title, &
+                     trim(self%title_anchor), f%vchar * 0.01_R8P, trim(self%title_color))
+      backend%literal = .false.
+      backend%boxed = .false.
+      backend%font = font_object()
+   endif
+   call backend%end_axes
+   self%key_spacing = spacing
+   self%series = raw
+   endsubroutine render_view3d
+
+   subroutine draw_view3d_frame(self, backend, f, front, font_size, raw)
+   !< The box of a 3D view, gnuplot 6.0's draw_3d_graphbox in its two passes (`front`: the front part, else the back):
+   !< the base edges (border bits 1 to 8: front left, back left, front right, back right), the verticals (16 to 128:
+   !< the z axis corner, back, right, front; unset ones from the base to the surface corners), the top edges (256 to
+   !< 2048); the x and y ticks along the front (or back) base edges with their labels, the z ticks at the z axis
+   !< corner, the grid on the base and the zero axes (back pass); the x, y and z labels (front pass).
+   class(axes_object),    intent(in)    :: self      !< Panel.
+   class(backend_object), intent(inout) :: backend   !< Output device.
+   type(view3d_frame),    intent(in)    :: f         !< The view.
+   logical,               intent(in)    :: front     !< The front pass, else the back one.
+   real(R8P),             intent(in)    :: font_size !< Font size [px].
+   type(series_object),   intent(in)    :: raw(:)    !< Series as given (their corner heights).
+   character(len=:), allocatable        :: bcolor    !< Border color.
+   character(len=:), allocatable        :: gcolor    !< Grid color.
+   character(len=:), allocatable        :: bdash     !< Border dashes.
+   character(len=:), allocatable        :: zero_dashes !< Zero axes dashes.
+   type(style_object)                   :: bline     !< Border line.
+   real(R8P)                            :: base(3, 4)  !< Base corners in the view: z axis corner, back, right, front.
+   real(R8P)                            :: bottom(3, 4) !< Floor corners.
+   real(R8P)                            :: top(3, 4)   !< Ceiling corners.
+   real(R8P)                            :: corners(2, 4) !< Corner x, y (axis values).
+   real(R8P)                            :: heights(2, 2) !< Surface heights at the xy corners (linear z).
+   real(R8P)                            :: depths(2, 2)  !< Surface depths at the xy corners.
+   real(R8P)                            :: v0(3), v1(3), v2(3), v3(3) !< View points.
+   real(R8P)                            :: unit(3)   !< Unit tick direction (gnuplot's tic_unitx..z).
+   real(R8P)                            :: p(2)      !< Page position [px].
+   real(R8P)                            :: mid       !< Middle of an axis (axis value).
+   real(R8P)                            :: other     !< Other end of the base (axis value).
+   real(R8P)                            :: place     !< Tick value.
+   real(R8P)                            :: sc        !< Tick scale, negative outward.
+   real(R8P)                            :: zlo, zhi  !< z axis ends (linear).
+   character(len=6)                     :: anchor    !< Text anchor.
+   logical                              :: surface   !< The surfaces drawn (the rest of the box with them).
+   logical                              :: ticks     !< This pass draws the ticks.
+   logical                              :: labels    !< This pass draws the x and y labels.
+   integer(I4P)                         :: c         !< Corner counter.
+   integer(I4P)                         :: t         !< Tick counter.
+
+   bcolor = FRAME_COLOR
+   if (allocated(self%border_lc)) bcolor = self%border_lc
+   bline%dashtype = self%border_dt
+   bline%linewidth = self%border_lw
+   bdash = bline%dasharray()
+   bline%dashtype = self%zero_dt
+   zero_dashes = bline%dasharray()
+   gcolor = GRID_COLOR
+   if (allocated(self%grid_lc)) gcolor = self%grid_lc
+   surface = self%view3d%surface
+   ticks = (self%view3d%rot_x <= 90.0_R8P .neqv. front)
+   labels = .not. ticks
+   zlo = view3d_lin(self%zaxis%lo, self%zaxis%log)
+   zhi = view3d_lin(self%zaxis%hi, self%zaxis%log)
+   corners(:, 1) = f%zaxis_xy
+   corners(:, 2) = f%back_xy
+   corners(:, 3) = f%right_xy
+   corners(:, 4) = f%front_xy
+   do c = 1_I4P, 4_I4P
+      base(:, c) = view3d_xyz(f, corners(1, c), corners(2, c), f%base_z, base=.true.)
+      bottom(:, c) = view3d_xyz(f, corners(1, c), corners(2, c), f%floor_z, base=.true.)
+      top(:, c) = view3d_xyz(f, corners(1, c), corners(2, c), f%ceiling_z, base=.true.)
+   enddo
+   call backend%begin_group('fs-border')
+   if (self%border /= 0_I4P) then
+      if (front) then
+         if (btest(self%border, 2)) call line3(base(:, 3), base(:, 4), bcolor, self%border_lw, bdash)
+         if (btest(self%border, 0)) call line3(base(:, 1), base(:, 4), bcolor, self%border_lw, bdash)
+      else
+         if (btest(self%border, 1)) call line3(base(:, 1), base(:, 2), bcolor, self%border_lw, bdash)
+         if (btest(self%border, 3)) call line3(base(:, 3), base(:, 2), bcolor, self%border_lw, bdash)
+      endif
+      if (surface) then
+         if (iand(self%border, 240_I4P) == 240_I4P) then
+            if (front) then
+               call line3(bottom(:, 4), top(:, 4), bcolor, self%border_lw, bdash)
+            else
+               call line3(bottom(:, 1), top(:, 1), bcolor, self%border_lw, bdash)
+               call line3(bottom(:, 2), top(:, 2), bcolor, self%border_lw, bdash)
+               call line3(bottom(:, 3), top(:, 3), bcolor, self%border_lw, bdash)
+            endif
+         else
+            call corner_heights(raw, f, self%xaxis, self%yaxis, heights, depths)
+            if (front) then
+               call vertical(4_I4P, 7_I4P)
+            else
+               call vertical(1_I4P, 4_I4P)
+               call vertical(2_I4P, 5_I4P)
+               call vertical(3_I4P, 6_I4P)
+            endif
+         endif
+         if (front) then
+            if (btest(self%border, 10)) call line3(top(:, 1), top(:, 4), bcolor, self%border_lw, bdash)
+            if (btest(self%border, 11)) call line3(top(:, 3), top(:, 4), bcolor, self%border_lw, bdash)
+         else
+            if (btest(self%border, 8)) call line3(top(:, 1), top(:, 2), bcolor, self%border_lw, bdash)
+            if (btest(self%border, 9)) call line3(top(:, 3), top(:, 2), bcolor, self%border_lw, bdash)
+         endif
+      endif
+   endif
+   call backend%end_group
+   ! the x axis: ticks along the base edge at xaxis_y, inward toward the other edge
+   if ((self%xaxis%tics%mode /= TICS_NONE .or. self%xaxis%has_label()) .and. .not. f%yz_plane) then
+      mid = axis_middle(self%xaxis)
+      other = self%yaxis%lo + self%yaxis%hi - f%xaxis_y
+      v0 = view3d_xyz(f, mid, f%xaxis_y, f%base_z, base=.true.)
+      v1 = view3d_xyz(f, mid, other, f%base_z, base=.true.)
+      if (f%xz_plane) v1 = view3d_xyz(f, mid, f%xaxis_y, f%z(1) + f%z(2) - f%base_z, base=.true.)
+      unit = (v1 - v0) / f%xyscaler
+      if (ticks .and. self%xaxis%tics%mode /= TICS_NONE) then
+         call backend%begin_group('fs-xticks')
+         do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
+            place = self%xaxis%ticks(t)%value
+            if (.not. in_range(self%xaxis, place)) cycle
+            v1 = view3d_xyz(f, place, f%xaxis_y, f%base_z, base=.true.)
+            if (self%grid .and. self%grid_lines(merge(1_I4P, 5_I4P, self%xaxis%ticks(t)%major))) then
+               v3 = view3d_xyz(f, place, other, f%base_z, base=.true.)
+               call line3(v1, v3, gcolor, self%grid_lw, self%grid_dash_array())
+            endif
+            if (self%grid .and. self%view3d%grid_vertical .and. &
+                self%grid_lines(merge(1_I4P, 5_I4P, self%xaxis%ticks(t)%major))) then
+               if (self%view3d%rot_x > 90.0_R8P .and. self%view3d%rot_x < 270.0_R8P) then
+                  v2 = view3d_xyz(f, place, f%xaxis_y, zlo, base=.true.)
+                  v3 = view3d_xyz(f, place, f%xaxis_y, f%ceiling_z, base=.true.)
+               else
+                  v2 = view3d_xyz(f, place, other, zlo, base=.true.)
+                  v3 = view3d_xyz(f, place, other, f%ceiling_z, base=.true.)
+               endif
+               call line3(v2, v3, gcolor, self%grid_lw, self%grid_dash_array())
+            endif
+            if (self%xaxis%tics%on_axis .and. .not. self%yaxis%log .and. in_range(self%yaxis, 0.0_R8P)) &
+               v1 = view3d_xyz(f, place, 0.0_R8P, f%base_z, base=.true.)
+            sc = merge(self%xaxis%tics%scale(1), self%xaxis%tics%scale(2), self%xaxis%ticks(t)%major)
+            if (self%xaxis%tics%out) sc = -sc
+            call line3(v1, v1 + unit * sc * f%vtic, FRAME_COLOR, 1.0_R8P, '')
+            if (self%xaxis%tics%mirror) then
+               v3 = view3d_xyz(f, place, other, f%base_z, base=.true.)
+               call line3(v3, v3 - unit * sc * f%vtic, FRAME_COLOR, 1.0_R8P, '')
+            endif
+            if (.not. self%xaxis%ticks(t)%major) cycle
+            if (unit(1) * f%xscaler < -0.9_R8P) then
+               anchor = 'start'
+            elseif (unit(1) * f%xscaler < 0.9_R8P) then
+               anchor = 'middle'
+            else
+               anchor = 'end'
+            endif
+            v2 = v1
+            v2(1) = v1(1) - unit(1) * f%hchar
+            v2(2) = v1(2) - unit(2) * f%vchar
+            if (self%xaxis%tics%out) v2(1:2) = v2(1:2) - unit(1:2) * f%vtic * self%xaxis%tics%scale(1)
+            p = view3d_page(f, v2, truncate=.true.)
+            call tick_label(backend, self%xaxis%tics, font_size, p(1), p(2) + f%shift, self%xaxis%ticks(t)%label, &
+                            trim(anchor), self%xaxis%ticks(t)%sup, 0.0_R8P)
+         enddo
+         call backend%end_group
+      endif
+      if (labels .and. self%xaxis%has_label()) then
+         if (self%xaxis%tics%on_axis) then
+            v1 = view3d_xyz(f, mid, 0.0_R8P, f%base_z, base=.true.)
+            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%xaxis%tics%out) * unit(1:2)
+         else
+            v1 = view3d_xyz(f, mid, f%xaxis_y, f%base_z, base=.true.)
+            v1(1:2) = v1(1:2) - 10.0_R8P * f%htic * unit(1:2)
+         endif
+         if (self%xaxis%tics%out) v1(1:2) = v1(1:2) - unit(1:2) * self%xaxis%tics%scale(1) * f%htic
+         p = view3d_page(f, v1, truncate=.true.)
+         call axis_text(p, self%xaxis%label, 1_I4P)
+      endif
+   endif
+   ! the y axis: ticks along the base edge at yaxis_x
+   if ((self%yaxis%tics%mode /= TICS_NONE .or. self%yaxis%has_label()) .and. .not. f%xz_plane) then
+      mid = axis_middle(self%yaxis)
+      other = self%xaxis%lo + self%xaxis%hi - f%yaxis_x
+      v0 = view3d_xyz(f, f%yaxis_x, mid, f%base_z, base=.true.)
+      v1 = view3d_xyz(f, other, mid, f%base_z, base=.true.)
+      if (f%yz_plane) v1 = view3d_xyz(f, f%yaxis_x, mid, f%z(1) + f%z(2) - f%base_z, base=.true.)
+      unit = (v1 - v0) / f%xyscaler
+      if (ticks .and. self%yaxis%tics%mode /= TICS_NONE) then
+         call backend%begin_group('fs-yticks')
+         do t = 1_I4P, size(self%yaxis%ticks, kind=I4P)
+            place = self%yaxis%ticks(t)%value
+            if (.not. in_range(self%yaxis, place)) cycle
+            v1 = view3d_xyz(f, f%yaxis_x, place, f%base_z, base=.true.)
+            if (self%grid .and. self%grid_lines(merge(2_I4P, 6_I4P, self%yaxis%ticks(t)%major))) then
+               v3 = view3d_xyz(f, other, place, f%base_z, base=.true.)
+               call line3(v1, v3, gcolor, self%grid_lw, self%grid_dash_array())
+            endif
+            if (self%grid .and. self%view3d%grid_vertical .and. &
+                self%grid_lines(merge(2_I4P, 6_I4P, self%yaxis%ticks(t)%major))) then
+               if (self%view3d%rot_x > 90.0_R8P .and. self%view3d%rot_x < 270.0_R8P) then
+                  v2 = view3d_xyz(f, f%yaxis_x, place, zlo, base=.true.)
+                  v3 = view3d_xyz(f, f%yaxis_x, place, f%ceiling_z, base=.true.)
+               else
+                  v2 = view3d_xyz(f, other, place, zlo, base=.true.)
+                  v3 = view3d_xyz(f, other, place, f%ceiling_z, base=.true.)
+               endif
+               call line3(v2, v3, gcolor, self%grid_lw, self%grid_dash_array())
+            endif
+            if (self%yaxis%tics%on_axis .and. .not. self%xaxis%log .and. in_range(self%xaxis, 0.0_R8P)) &
+               v1 = view3d_xyz(f, 0.0_R8P, place, f%base_z, base=.true.)
+            sc = merge(self%yaxis%tics%scale(1), self%yaxis%tics%scale(2), self%yaxis%ticks(t)%major)
+            if (self%yaxis%tics%out) sc = -sc
+            call line3(v1, v1 + unit * sc * f%htic, FRAME_COLOR, 1.0_R8P, '')
+            if (self%yaxis%tics%mirror) then
+               v3 = view3d_xyz(f, other, place, f%base_z, base=.true.)
+               call line3(v3, v3 - unit * sc * f%htic, FRAME_COLOR, 1.0_R8P, '')
+            endif
+            if (.not. self%yaxis%ticks(t)%major) cycle
+            if (unit(1) * f%xscaler < -0.9_R8P) then
+               anchor = 'start'
+            elseif (unit(1) * f%xscaler < 0.9_R8P) then
+               anchor = 'middle'
+            else
+               anchor = 'end'
+            endif
+            v2 = v1
+            v2(1) = v1(1) - unit(1) * f%hchar
+            v2(2) = v1(2) - unit(2) * f%vchar
+            if (self%yaxis%tics%out) then
+               v2(1) = v2(1) - unit(1) * f%htic * self%yaxis%tics%scale(1)
+               v2(2) = v2(2) - unit(2) * f%vtic * self%yaxis%tics%scale(1)
+            endif
+            p = view3d_page(f, v2, truncate=.true.)
+            call tick_label(backend, self%yaxis%tics, font_size, p(1), p(2) + f%shift, self%yaxis%ticks(t)%label, &
+                            trim(anchor), self%yaxis%ticks(t)%sup, 0.0_R8P)
+         enddo
+         call backend%end_group
+      endif
+      if (labels .and. self%yaxis%has_label()) then
+         if (self%yaxis%tics%on_axis) then
+            v1 = view3d_xyz(f, 0.0_R8P, mid, f%base_z, base=.true.)
+            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%yaxis%tics%out) * unit(1:2)
+         else
+            v1 = view3d_xyz(f, f%yaxis_x, mid, f%base_z, base=.true.)
+            v1(1:2) = v1(1:2) - 10.0_R8P * f%htic * unit(1:2)
+         endif
+         if (self%yaxis%tics%out) v1(1:2) = v1(1:2) - unit(1:2) * self%yaxis%tics%scale(1) * f%vtic
+         p = view3d_page(f, v1, truncate=.true.)
+         call axis_text(p, self%yaxis%label, 2_I4P)
+      endif
+   endif
+   ! the z ticks at the z axis corner, their labels two tick lengths left (the back pass), with the surfaces
+   if (.not. front .and. self%zaxis%tics%mode /= TICS_NONE .and. self%view3d%rot_x /= 0.0_R8P .and. surface) then
+      call backend%begin_group('fs-zticks')
+      do t = 1_I4P, size(self%zaxis%ticks, kind=I4P)
+         place = view3d_lin(self%zaxis%ticks(t)%value, self%zaxis%log)
+         if (.not. in_range(self%zaxis, self%zaxis%ticks(t)%value)) cycle
+         if (self%zaxis%tics%on_axis) then
+            v1 = view3d_xyz(f, 0.0_R8P, 0.0_R8P, place, base=.true.)
+         else
+            v1 = view3d_xyz(f, f%zaxis_xy(1), f%zaxis_xy(2), place, base=.true.)
+         endif
+         v3 = view3d_xyz(f, f%right_xy(1), f%right_xy(2), place, base=.true.)
+         if (self%grid .and. self%view3d%grid_z) then
+            v2 = view3d_xyz(f, f%back_xy(1), f%back_xy(2), place, base=.true.)
+            call line3(v1, v2, gcolor, self%grid_lw, self%grid_dash_array())
+            call line3(v2, v3, gcolor, self%grid_lw, self%grid_dash_array())
+         endif
+         sc = merge(self%zaxis%tics%scale(1), self%zaxis%tics%scale(2), self%zaxis%ticks(t)%major) * f%htic
+         if (self%zaxis%tics%out) sc = -sc
+         v2 = v1
+         if (self%view3d%azimuth /= 0.0_R8P) then
+            v2 = v1 + (v3 - v1) * sc / f%xyscaler
+         else
+            v2(1) = v1(1) + sc / f%xscaler
+         endif
+         call line3(v1, v2, FRAME_COLOR, 1.0_R8P, '')
+         if (self%zaxis%tics%mirror) then
+            if (self%view3d%azimuth /= 0.0_R8P) then
+               call line3(v3, v3 + (v1 - v3) * sc / f%xyscaler, FRAME_COLOR, 1.0_R8P, '')
+            else
+               v2 = v3
+               v2(1) = v3(1) - sc / f%xscaler
+               call line3(v3, v2, FRAME_COLOR, 1.0_R8P, '')
+            endif
+         endif
+         if (.not. self%zaxis%ticks(t)%major) cycle
+         p = view3d_page(f, v1, truncate=.true.)
+         if (abs(self%view3d%azimuth) > 80.0_R8P) then
+            p(2) = p(2) - sign(1.0_R8P, self%view3d%azimuth) * f%vtic * 2.0_R8P * 0.01_R8P
+         else
+            p(1) = p(1) - f%htic * 2.0_R8P * 0.01_R8P
+            if (self%zaxis%tics%out) p(1) = p(1) - f%htic * self%zaxis%tics%scale(1) * 0.01_R8P
+         endif
+         call tick_label(backend, self%zaxis%tics, font_size, p(1), p(2) + f%shift, self%zaxis%ticks(t)%label, 'end', &
+                         self%zaxis%ticks(t)%sup, 0.0_R8P)
+      enddo
+      call backend%end_group
+   endif
+   ! the zero axes: y = 0 along y, x = y = 0 along z, y = 0 along x (gnuplot's order)
+   if (.not. front) then
+      if (self%zero_axes(2) .and. .not. self%xaxis%log .and. in_range(self%xaxis, 0.0_R8P)) &
+         call line3(view3d_xyz(f, 0.0_R8P, self%yaxis%lo, f%base_z, base=.true.), &
+                    view3d_xyz(f, 0.0_R8P, self%yaxis%hi, f%base_z, base=.true.), zero_color(), self%zero_lw, &
+                    zero_dashes)
+      if (self%view3d%zzeroaxis .and. .not. self%xaxis%log .and. in_range(self%xaxis, 0.0_R8P)) &
+         call line3(view3d_xyz(f, 0.0_R8P, 0.0_R8P, zlo, base=.true.), &
+                    view3d_xyz(f, 0.0_R8P, 0.0_R8P, zhi, base=.true.), zero_color(), self%zero_lw, &
+                    zero_dashes)
+      if (self%zero_axes(1) .and. .not. self%yaxis%log .and. in_range(self%yaxis, 0.0_R8P)) &
+         call line3(view3d_xyz(f, self%xaxis%lo, 0.0_R8P, f%base_z, base=.true.), &
+                    view3d_xyz(f, self%xaxis%hi, 0.0_R8P, f%base_z, base=.true.), zero_color(), self%zero_lw, &
+                    zero_dashes)
+   endif
+   ! the z label beside the middle of the z axis, 7 characters left (front pass)
+   if (front .and. self%zaxis%has_label() .and. surface) then
+      mid = 0.5_R8P * (zlo + zhi)
+      if (self%zaxis%tics%on_axis) then
+         p = view3d_page(f, view3d_xyz(f, 0.0_R8P, 0.0_R8P, mid, base=.true.), truncate=.true.)
+         p(1) = p(1) - 5.0_R8P * f%hchar * 0.01_R8P
+      else
+         p = view3d_page(f, view3d_xyz(f, f%zaxis_xy(1), f%zaxis_xy(2), mid, base=.true.), truncate=.true.)
+         if (abs(self%view3d%azimuth) > 80.0_R8P) then
+            p(2) = p(2) - 2.0_R8P * sign(1.0_R8P, self%view3d%azimuth) * f%vchar * 0.01_R8P
+         else
+            p(1) = p(1) - 7.0_R8P * f%hchar * 0.01_R8P
+         endif
+      endif
+      call axis_text(p, self%zaxis%label, 6_I4P)
+   endif
+   contains
+      subroutine line3(a, b, color, lw, dashes)
+      !< A line between the view points `a` and `b` (gnuplot's draw3d_line: its terminal units, truncated by
+      !< draw_clip_line).
+      real(R8P),        intent(in) :: a(3)   !< Start.
+      real(R8P),        intent(in) :: b(3)   !< End.
+      character(len=*), intent(in) :: color  !< Color.
+      real(R8P),        intent(in) :: lw     !< Line width [px].
+      character(len=*), intent(in) :: dashes !< Dash array.
+      real(R8P)                    :: pa(2)  !< Start [px].
+      real(R8P)                    :: pb(2)  !< End [px].
+
+      pa = view3d_page(f, a, whole=.true.)
+      pb = view3d_page(f, b, whole=.true.)
+      call backend%polyline([pa(1), pb(1)], [pa(2), pb(2)], color, lw, dashes)
+      endsubroutine line3
+
+      subroutine vertical(corner, bit)
+      !< A vertical edge at `corner` (1 z axis, 2 back, 3 right, 4 front): floor to ceiling with its border `bit`,
+      !< else from the depth to the height of the surfaces there (gnuplot's VERTICAL), with the base drawn.
+      integer(I4P), intent(in) :: corner !< Corner.
+      integer(I4P), intent(in) :: bit    !< Border bit (from 0).
+      integer(I4P)             :: i, j   !< Height indices.
+
+      if (btest(self%border, bit)) then
+         call line3(bottom(:, corner), top(:, corner), bcolor, self%border_lw, bdash)
+         return
+      endif
+      i = corner_index(corners(1, corner), self%xaxis)
+      j = corner_index(corners(2, corner), self%yaxis)
+      if (heights(i, j) /= depths(i, j) .and. (self%xaxis%tics%mode /= TICS_NONE .or. &
+          self%yaxis%tics%mode /= TICS_NONE .or. iand(self%border, 15_I4P) /= 0_I4P)) &
+         call line3(view3d_xyz(f, corners(1, corner), corners(2, corner), depths(i, j), base=.true.), &
+                    view3d_xyz(f, corners(1, corner), corners(2, corner), heights(i, j), base=.true.), bcolor, &
+                    self%border_lw, bdash)
+      endsubroutine vertical
+
+      subroutine axis_text(at, string, k)
+      !< Axis label `k` (1 x, 2 y, 6 z) anchored at `at` [px] (gnuplot's write_label: centred, its first line at the
+      !< anchor), moved by its offset [characters, y up], in its font and color.
+      real(R8P),        intent(in) :: at(2)  !< Anchor [px].
+      character(len=*), intent(in) :: string !< Label.
+      integer(I4P),     intent(in) :: k      !< Label.
+      real(R8P)                    :: px     !< Abscissa [px].
+      real(R8P)                    :: py     !< Ordinate [px].
+
+      px = at(1) + self%label_offset(1, k) * f%hchar * 0.01_R8P
+      py = at(2) - self%label_offset(2, k) * f%vchar * 0.01_R8P + f%shift
+      backend%literal = self%label_plain(k)
+      backend%boxed = btest(self%label_boxed, k - 1_I4P)
+      backend%font = self%label_font(k)
+      if (len_trim(self%label_color(k)) > 0) then
+         call text_rows(backend, px, py, string, 'middle', f%vchar * 0.01_R8P, trim(self%label_color(k)))
+      else
+         call text_rows(backend, px, py, string, 'middle', f%vchar * 0.01_R8P, '')
+      endif
+      backend%literal = .false.
+      backend%boxed = .false.
+      backend%font = font_object()
+      endsubroutine axis_text
+
+      function zero_color() result(color)
+      !< Color of the zero axes.
+      character(len=:), allocatable :: color !< Color.
+
+      color = FRAME_COLOR
+      if (allocated(self%zero_lc)) color = self%zero_lc
+      endfunction zero_color
+   endsubroutine draw_view3d_frame
 
    subroutine draw_grid(self, backend, area)
    !< Draw grid lines at the ticks of `grid_lines` (the x and y major ones by default), in the grid style.
@@ -8517,6 +9043,411 @@ contains
 
    yes = axis%tics%rangelimited .and. axis%has_data
    endfunction limits
+
+   pure subroutine view3d_zextent(series, logarithmic, zr, found)
+   !< The z extent of the 3D `series` (their finite heights, positive ones on a log axis), the autoscaling ones.
+   type(series_object), intent(in)  :: series(:)   !< Series.
+   logical,             intent(in)  :: logarithmic !< A log z axis.
+   real(R8P),           intent(out) :: zr(2)       !< Smallest and largest height.
+   logical,             intent(out) :: found       !< Any height.
+   integer(I4P)                     :: s           !< Series counter.
+   integer(I4P)                     :: i           !< Point counter.
+
+   zr = [huge(1.0_R8P), -huge(1.0_R8P)]
+   found = .false.
+   do s = 1_I4P, size(series, kind=I4P)
+      if (.not. allocated(series(s)%z) .or. series(s)%noautoscale) cycle
+      do i = 1_I4P, size(series(s)%z, kind=I4P)
+         if (.not. ieee_is_finite(series(s)%z(i))) cycle
+         if (logarithmic .and. series(s)%z(i) <= 0.0_R8P) cycle
+         zr(1) = min(zr(1), series(s)%z(i))
+         zr(2) = max(zr(2), series(s)%z(i))
+         found = .true.
+      enddo
+   enddo
+   if (.not. found) zr = [-10.0_R8P, 10.0_R8P]
+   ! impulses and boxes reach z = 0 on a linear axis (gnuplot's range fiddling)
+   if (.not. logarithmic .and. any([(allocated(series(s)%z) .and. any(series(s)%style%with == [WITH_IMPULSES, WITH_BOXES]) &
+                                    .and. .not. series(s)%noautoscale, s = 1_I4P, size(series, kind=I4P))])) then
+      zr(1) = min(zr(1), 0.0_R8P)
+      zr(2) = max(zr(2), 0.0_R8P)
+   endif
+   endsubroutine view3d_zextent
+
+   pure function axis_middle(axis) result(mid)
+   !< The middle of `axis` (in its linear space: the geometric middle of a log axis).
+   type(axis_object), intent(in) :: axis !< Axis.
+   real(R8P)                     :: mid  !< Middle value.
+
+   if (axis%log) then
+      mid = 10.0_R8P ** (0.5_R8P * (log10(axis%lo) + log10(axis%hi)))
+   else
+      mid = 0.5_R8P * (axis%lo + axis%hi)
+   endif
+   endfunction axis_middle
+
+   pure function in_range(axis, v) result(yes)
+   !< Whether `v` lies within the range of `axis` (its ends included, a hair of tolerance).
+   type(axis_object), intent(in) :: axis !< Axis.
+   real(R8P),         intent(in) :: v    !< Value.
+   logical                       :: yes  !< Inside.
+   real(R8P)                     :: tol  !< Tolerance.
+
+   tol = 1.0e-9_R8P * abs(axis%hi - axis%lo)
+   yes = v >= min(axis%lo, axis%hi) - tol .and. v <= max(axis%lo, axis%hi) + tol
+   endfunction in_range
+
+   pure function corner_index(v, axis) result(i)
+   !< gnuplot's MAP_HEIGHT_X: 2 for a value at the far end of `axis` (beyond 0.9 of it), else 1.
+   real(R8P),         intent(in) :: v    !< Value.
+   type(axis_object), intent(in) :: axis !< Axis.
+   integer(I4P)                  :: i    !< Index.
+
+   i = merge(2_I4P, 1_I4P, (v - axis%lo) / (axis%hi - axis%lo) > 0.9_R8P)
+   endfunction corner_index
+
+   pure subroutine corner_heights(series, f, xaxis, yaxis, heights, depths)
+   !< The highest and lowest surface points at the xy corners of the box (gnuplot's check_corner_height): the first and
+   !< last points of the first and last grid scans of every surface, when they lie on a corner; the base plane else.
+   type(series_object), intent(in)  :: series(:)     !< Series as given.
+   type(view3d_frame),  intent(in)  :: f             !< The view.
+   type(axis_object),   intent(in)  :: xaxis         !< x axis.
+   type(axis_object),   intent(in)  :: yaxis         !< y axis.
+   real(R8P),           intent(out) :: heights(2, 2) !< Highest point per corner (linear z).
+   real(R8P),           intent(out) :: depths(2, 2)  !< Lowest point per corner.
+   integer(I4P)                     :: s             !< Series counter.
+   integer(I4P)                     :: last          !< Last grid scan.
+   integer(I4P)                     :: ends(4)       !< The corner point indices.
+   integer(I4P)                     :: e             !< Counter.
+   integer(I4P)                     :: i, j          !< Corner indices.
+   real(R8P)                        :: z             !< Height (linear).
+
+   heights = f%base_z
+   depths = f%base_z
+   do s = 1_I4P, size(series, kind=I4P)
+      if (.not. allocated(series(s)%z) .or. .not. allocated(series(s)%scans)) cycle
+      if (size(series(s)%scans, 2) == 0) cycle
+      last = max(1_I4P, series(s)%grid_scans)
+      if (series(s)%style%with == WITH_PM3D .or. series(s)%style%with == WITH_MASK) cycle
+      ends = [series(s)%scans(1, 1), series(s)%scans(2, 1), series(s)%scans(1, last), series(s)%scans(2, last)]
+      do e = 1_I4P, 4_I4P
+         associate(x => series(s)%x(ends(e)), y => series(s)%y(ends(e)), zz => series(s)%z(ends(e)))
+            if (.not. (ieee_is_finite(x) .and. ieee_is_finite(y) .and. ieee_is_finite(zz))) cycle
+            if (.not. (in_range(xaxis, x) .and. in_range(yaxis, y))) cycle
+            if (.not. ((abs(x - xaxis%lo) < 1.0e-8_R8P .or. abs(x - xaxis%hi) < 1.0e-8_R8P) .and. &
+                       (abs(y - yaxis%lo) < 1.0e-8_R8P .or. abs(y - yaxis%hi) < 1.0e-8_R8P))) cycle
+            z = view3d_lin(zz, f%log(3))
+            if (z < min(f%z(1), f%z(2)) .or. z > max(f%z(1), f%z(2))) cycle
+            i = corner_index(x, xaxis)
+            j = corner_index(y, yaxis)
+            heights(i, j) = max(heights(i, j), z)
+            depths(i, j) = min(depths(i, j), z)
+         endassociate
+      enddo
+   enddo
+   endsubroutine corner_heights
+
+   subroutine view3d_project(series, f, surface)
+   !< The 3D `series` projected on the page by the view `f` (project_series).
+   type(series_object), intent(inout) :: series(:) !< Series.
+   type(view3d_frame),  intent(in)    :: f         !< The view.
+   logical,             intent(in)    :: surface   !< Surfaces drawn.
+   real(R8P)                          :: lo(3)     !< Box start (linear spaces).
+   real(R8P)                          :: hi(3)     !< Box end.
+   integer(I4P)                       :: s         !< Series counter.
+
+   lo = [min(f%x(1), f%x(2)), min(f%y(1), f%y(2)), min(f%z(1), f%z(2))]
+   hi = [max(f%x(1), f%x(2)), max(f%y(1), f%y(2)), max(f%z(1), f%z(2))]
+   do s = 1_I4P, size(series, kind=I4P)
+      if (allocated(series(s)%z)) call project_series(series(s), f, surface, lo, hi)
+   enddo
+   endsubroutine view3d_project
+
+   subroutine project_series(one, f, surface, lo, hi)
+   !< A 3D series projected on the page by the view `f` (gnuplot's map3d_xy, truncated to its terminal units): its x
+   !< and y become page coordinates [px] (y negated, for the page axes of render_view3d). Points, dots and labels keep
+   !< their points (out of the box `lo`-`hi`: undefined); lines and linespoints are their scans, then the crossing
+   !< curves of a data grid (gnuplot's iso-curves), each segment clipped to the box (a segment from inside to outside
+   !< ends on the box, one outside altogether is dropped); impulses are segments from z = 0 (clipped to the z range) to
+   !< the point. The per point arrays follow their points. `surface` false (`unset surface`) leaves the lines and
+   !< points undrawn.
+   type(series_object), intent(inout) :: one       !< Series.
+   type(view3d_frame),  intent(in)    :: f         !< The view.
+   logical,             intent(in)    :: surface   !< Surfaces drawn.
+   real(R8P),           intent(in)    :: lo(3)     !< Box start (linear spaces).
+   real(R8P),           intent(in)    :: hi(3)     !< Box end.
+   real(R8P), allocatable             :: px(:)     !< Projected abscissae.
+   real(R8P), allocatable             :: py(:)     !< Projected ordinates.
+   integer(I4P), allocatable          :: origin(:) !< The point each projected one comes from (0: a break).
+   real(R8P)                          :: a(3)      !< Segment start (linear).
+   real(R8P)                          :: b(3)      !< Segment end.
+   real(R8P)                          :: t(2)      !< Clipped parameter range.
+   real(R8P)                          :: q(2)      !< A page position [px].
+   real(R8P)                          :: zb        !< Impulse base.
+   integer(I4P)                       :: n         !< Points.
+   integer(I4P)                       :: m         !< Projected points.
+   integer(I4P)                       :: c         !< Scan counter.
+   integer(I4P)                       :: i         !< Point counter.
+   integer(I4P)                       :: k         !< Point in a scan.
+   integer(I4P)                       :: nscan     !< Grid scans.
+   integer(I4P)                       :: npts      !< Points per grid scan.
+   integer(I4P)                       :: prev      !< Previous point of a curve.
+   logical                            :: open_run  !< The current polyline open at `prev`.
+   logical                            :: grid      !< A data grid (scans of one length): crossing curves too.
+
+   n = size(one%x, kind=I4P)
+   select case (one%style%with)
+   case (WITH_LINES, WITH_LINESPOINTS, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS)
+      allocate(px(4_I4P * n + 8_I4P), py(4_I4P * n + 8_I4P), origin(4_I4P * n + 8_I4P))
+      m = 0_I4P
+      if (surface .and. .not. one%no_surface) then
+         if (allocated(one%scans)) then
+            do c = 1_I4P, size(one%scans, 2, kind=I4P)
+               call curve(one%scans(1, c), one%scans(2, c), 1_I4P)
+            enddo
+            ! a grid of scans (data, a library grid; a function's crossing curves are scans already): the crossing
+            ! curves, point by point across the scans
+            nscan = one%grid_scans
+            grid = nscan > 1_I4P .and. nscan == size(one%scans, 2)
+            if (grid) then
+               npts = one%scans(2, 1) - one%scans(1, 1) + 1_I4P
+               grid = all(one%scans(2, 1:nscan) - one%scans(1, 1:nscan) + 1_I4P == npts)
+            endif
+            if (grid) then
+               if (size(px) < m + nscan * npts * 3_I4P + npts) call grow(m + nscan * npts * 3_I4P + npts)
+               do k = npts - 1_I4P, 0_I4P, -1_I4P
+                  call cross(k, nscan)
+               enddo
+            endif
+         else
+            call curve(1_I4P, n, 1_I4P)
+         endif
+      endif
+      call replace(m)
+   case (WITH_IMPULSES)
+      allocate(px(3_I4P * n + 1_I4P), py(3_I4P * n + 1_I4P), origin(3_I4P * n + 1_I4P))
+      m = 0_I4P
+      do i = 1_I4P, n
+         a = point(i)
+         if (.not. all(ieee_is_finite(a))) cycle
+         if (a(1) < lo(1) .or. a(1) > hi(1) .or. a(2) < lo(2) .or. a(2) > hi(2)) cycle
+         zb = min(max(0.0_R8P, lo(3)), hi(3))
+         if (f%log(3)) zb = lo(3)
+         b = [a(1), a(2), zb]
+         t = [0.0_R8P, 1.0_R8P]
+         if (.not. clipped(b, a, t)) cycle
+         call put_break
+         call put(b + t(1) * (a - b), i)
+         call put(b + t(2) * (a - b), i)
+      enddo
+      call replace(m)
+      one%style%with = WITH_LINES
+   case (WITH_POINTS, WITH_DOTS, WITH_LABELS)
+      allocate(px(n), py(n))
+      do i = 1_I4P, n
+         a = point(i)
+         px(i) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         py(i) = px(i)
+         if (.not. (surface .and. .not. one%no_surface) .and. one%style%with /= WITH_LABELS) cycle
+         if (.not. all(ieee_is_finite(a))) cycle
+         if (.not. inbox(a)) cycle
+         q = view3d_page(f, view3d_xyz(f, a(1), a(2), a(3), linear=.true.), truncate=.true.)
+         px(i) = q(1)
+         py(i) = -q(2)
+      enddo
+      call move_alloc(px, one%x)
+      call move_alloc(py, one%y)
+   case default
+      ! not drawn in a 3D view yet
+      one%x = ieee_value(1.0_R8P, ieee_quiet_nan) + 0.0_R8P * one%x
+      one%y = one%x
+   endselect
+   contains
+      function point(j) result(p)
+      !< Point `j` of the series in the linear spaces of the axes.
+      integer(I4P), intent(in) :: j    !< Point.
+      real(R8P)                :: p(3) !< Point.
+
+      p = [view3d_lin(one%x(j), f%log(1)), view3d_lin(one%y(j), f%log(2)), &
+           view3d_lin(one%z(j), f%log(3))]
+      endfunction point
+
+      function clipped(p1, p2, range) result(visible)
+      !< Clip the segment `p1`-`p2` to the box (Liang-Barsky): `range` narrowed to its visible part.
+      real(R8P), intent(in)    :: p1(3)    !< Start.
+      real(R8P), intent(in)    :: p2(3)    !< End.
+      real(R8P), intent(inout) :: range(2) !< Parameter range.
+      logical                  :: visible  !< Any part visible.
+      real(R8P)                :: d        !< Direction component.
+      real(R8P)                :: r        !< Crossing parameter.
+      integer(I4P)             :: axis     !< Axis counter.
+
+      visible = .true.
+      do axis = 1_I4P, 3_I4P
+         d = p2(axis) - p1(axis)
+         if (d == 0.0_R8P) then
+            if (p1(axis) < lo(axis) .or. p1(axis) > hi(axis)) visible = .false.
+            cycle
+         endif
+         r = (lo(axis) - p1(axis)) / d
+         if (d > 0.0_R8P) then
+            range(1) = max(range(1), r)
+         else
+            range(2) = min(range(2), r)
+         endif
+         r = (hi(axis) - p1(axis)) / d
+         if (d > 0.0_R8P) then
+            range(2) = min(range(2), r)
+         else
+            range(1) = max(range(1), r)
+         endif
+      enddo
+      visible = visible .and. range(1) <= range(2)
+      endfunction clipped
+
+      function inbox(p) result(yes)
+      !< Whether `p` lies in the box.
+      real(R8P), intent(in) :: p(3) !< Point.
+      logical               :: yes  !< Inside.
+
+      yes = all(p >= lo - 1.0e-12_R8P * (hi - lo)) .and. all(p <= hi + 1.0e-12_R8P * (hi - lo))
+      endfunction inbox
+
+      subroutine curve(first, last, step)
+      !< The points `first` to `last` (by `step`) of the series as a curve, segment by segment clipped to the box; a
+      !< segment with both ends outside is dropped (gnuplot's clip one, not two).
+      integer(I4P), intent(in) :: first !< First point.
+      integer(I4P), intent(in) :: last  !< Last point.
+      integer(I4P), intent(in) :: step  !< Step.
+      integer(I4P)             :: j     !< Point counter.
+
+      open_run = .false.
+      prev = 0_I4P
+      do j = first, last, step
+         call segment_to(j)
+      enddo
+      endsubroutine curve
+
+      subroutine cross(k0, nsc)
+      !< The crossing curve through point `k0` (from 0) of each of the `nsc` grid scans, from the last scan.
+      integer(I4P), intent(in) :: k0  !< Point within a scan.
+      integer(I4P), intent(in) :: nsc !< Scans.
+      integer(I4P)             :: j   !< Scan counter.
+
+      open_run = .false.
+      prev = 0_I4P
+      do j = nsc, 1_I4P, -1_I4P
+         call segment_to(one%scans(1, j) + k0)
+      enddo
+      endsubroutine cross
+
+      subroutine segment_to(j)
+      !< Extend the current curve to point `j`.
+      integer(I4P), intent(in) :: j  !< Point.
+      real(R8P)                :: e(3) !< Point.
+      real(R8P)                :: g(3) !< Previous point.
+
+      e = point(j)
+      if (.not. all(ieee_is_finite(e))) then
+         open_run = .false.
+         prev = 0_I4P
+         return
+      endif
+      if (prev == 0_I4P) then
+         prev = j
+         if (inbox(e)) then
+            call put_break
+            call put(e, j)
+            open_run = .true.
+         endif
+         return
+      endif
+      g = point(prev)
+      if (inbox(g) .and. inbox(e)) then
+         if (.not. open_run) then
+            call put_break
+            call put(g, prev)
+         endif
+         call put(e, j)
+         open_run = .true.
+      elseif (inbox(g) .or. inbox(e)) then
+         t = [0.0_R8P, 1.0_R8P]
+         if (clipped(g, e, t)) then
+            if (.not. open_run) then
+               call put_break
+               call put(g + t(1) * (e - g), prev)
+            endif
+            call put(g + t(2) * (e - g), j)
+            open_run = inbox(e)
+         endif
+      else
+         open_run = .false.
+      endif
+      prev = j
+      endsubroutine segment_to
+
+      subroutine put(p, j)
+      !< Append the projection of `p` (from point `j`).
+      real(R8P),    intent(in) :: p(3) !< Point (linear spaces).
+      integer(I4P), intent(in) :: j    !< Source point.
+      real(R8P)                :: w(2) !< Page position.
+
+      if (m + 1_I4P > size(px)) call grow(2_I4P * size(px) + 8_I4P)
+      w = view3d_page(f, view3d_xyz(f, p(1), p(2), p(3), linear=.true.), truncate=.true.)
+      m = m + 1_I4P
+      px(m) = w(1)
+      py(m) = -w(2)
+      origin(m) = j
+      endsubroutine put
+
+      subroutine put_break
+      !< Append a break (unless at the start or after one).
+      if (m == 0_I4P) return
+      if (origin(m) == 0_I4P) return
+      if (m + 1_I4P > size(px)) call grow(2_I4P * size(px) + 8_I4P)
+      m = m + 1_I4P
+      px(m) = ieee_value(1.0_R8P, ieee_quiet_nan)
+      py(m) = px(m)
+      origin(m) = 0_I4P
+      endsubroutine put_break
+
+      subroutine grow(size_new)
+      !< Grow the buffers to `size_new`.
+      integer(I4P), intent(in)  :: size_new !< New size.
+      real(R8P), allocatable    :: r(:)     !< Buffer.
+      integer(I4P), allocatable :: o(:)     !< Buffer.
+
+      if (size_new <= size(px)) return
+      allocate(r(size_new))
+      r(1:m) = px(1:m)
+      call move_alloc(r, px)
+      allocate(r(size_new))
+      r(1:m) = py(1:m)
+      call move_alloc(r, py)
+      allocate(o(size_new))
+      o(1:m) = origin(1:m)
+      call move_alloc(o, origin)
+      endsubroutine grow
+
+      subroutine replace(count)
+      !< The series' points replaced by the `count` projected ones, its per point arrays following them.
+      integer(I4P), intent(in)  :: count !< Projected points.
+      integer(I4P), allocatable :: from(:) !< Source points (1 at the breaks).
+      character(len=24), allocatable :: colors(:) !< Colors.
+
+      from = max(1_I4P, origin(1:count))
+      one%x = px(1:count)
+      one%y = py(1:count)
+      if (allocated(one%zvalues)) one%zvalues = one%zvalues(from)
+      if (allocated(one%colors)) then
+         colors = one%colors(from)
+         call move_alloc(colors, one%colors)
+      endif
+      if (allocated(one%point_sizes)) one%point_sizes = one%point_sizes(from)
+      if (allocated(one%point_types)) one%point_types = one%point_types(from)
+      if (allocated(one%texts)) deallocate(one%texts)
+      endsubroutine replace
+   endsubroutine project_series
 
    pure function within(axis, v) result(yes)
    !< Whether a tick at `v` is drawn: always, or within the data range of a `rangelimited` axis (a hair of tolerance).

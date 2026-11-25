@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(261)                           !< Per-check outcome.
+logical                       :: test_passed(262)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2734,8 +2734,12 @@ call interpreter%run_text('unset grid; set grid lt -1 back; set output "foresigh
                           iostat, iomsg)
 test_passed(127) = test_passed(127) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%grid_front .and. &
                    file_has('foresight_script_test_grid.svg', 'data-grid-style="black 2e0 "')
-call interpreter%run_text('set grid ztics', iostat, iomsg)
-test_passed(127) = test_passed(127) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "ztics"') > 0
+! the z and vertical grids of the 3D views
+call interpreter%run_text('set grid ztics vertical', iostat, iomsg)
+test_passed(127) = test_passed(127) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%view3d%grid_z .and. &
+                   interpreter%figure%panels(1)%view3d%grid_vertical
+call interpreter%run_text('set grid wtics', iostat, iomsg)
+test_passed(127) = test_passed(127) .and. iostat /= 0_I4P .and. index(iomsg, 'unsupported option "wtics"') > 0
 open(newunit=unit, file='foresight_script_test_grid.svg')
 close(unit, status='delete')
 
@@ -6080,8 +6084,9 @@ associate(panel => interpreter%figure%panels(1))
 endassociate
 call interpreter%run_text("unset view", iostat, iomsg)
 test_passed(245) = test_passed(245) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%view3d%map
+! a 3D view is drawn (check 262)
 call interpreter%run_text("splot x*y", iostat, iomsg)
-test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'set view map draws the map view') > 0
+test_passed(245) = test_passed(245) .and. iostat == 0_I4P
 call interpreter%run_text("set view 400", iostat, iomsg)
 test_passed(245) = test_passed(245) .and. iostat /= 0_I4P .and. index(iomsg, 'rot_x must be in [0:360]') > 0
 call interpreter%run_text("set view map; splot [0:1] [0:1] [0:1] [0:1] x*y", iostat, iomsg)
@@ -6670,6 +6675,45 @@ test_passed(261) = colorbox_labels("unset colorbox", [character(len=1) ::], ['0.
 associate(panel => interpreter%figure%panels(1))
    test_passed(261) = test_passed(261) .and. panel%cbaxis%lo == 0.13_R8P .and. panel%cbaxis%hi == 0.87_R8P
 endassociate
+
+
+! a 3D view as gnuplot 6.0 draws it (do_3dplot, svg terminal): its default view 60, 30 of x*y over [-10:10]^2 places
+! the first x tick label, the first y tick label, the first z tick label, the key title and the title where gnuplot's
+! svg does (probed, to 0.01 px); the left base edge from the z axis corner to the back one
+block
+   character(len=:), allocatable :: svg !< Rendered SVG.
+   integer(I4P)                  :: u   !< File unit.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_3d.svg'; "// &
+                             "set title 'A title'; splot x*y", iostat, iomsg)
+   test_passed(262) = iostat == 0_I4P
+   if (test_passed(262)) then
+      svg = read_text('foresight_script_test_3d.svg')
+      test_passed(262) = index(svg, '<text x="80.38" y="302.66" text-anchor="middle">-10<') > 0 .and. &
+                        index(svg, '<text x="367.01" y="344.47">-10<') > 0 .and. &
+                        index(svg, '<text x="67.96" y="245.67" text-anchor="end">-100<') > 0 .and. &
+                        index(svg, '<text x="505.88" y="66.91" text-anchor="end">x*y<') > 0 .and. &
+                        index(svg, '<text x="300" y="40.52" text-anchor="middle">A title<') > 0 .and. &
+                        index(svg, 'points="85.95,292.91 242.64,216.21"') > 0
+      if (.not. test_passed(262)) write(error_unit, '(A)') 'check 262: '//svg
+   endif
+   open(newunit=u, file='foresight_script_test_3d.svg')
+   close(u, status='delete')
+   ! set xyplane, set view azimuth and equal read; ztics in and out
+   call interpreter%run_text("set xyplane at -1; set view 70, 120, 1.2, 0.8; set view azimuth 30; set view equal xyz; "// &
+                             "set ztics out mirror", iostat, iomsg)
+   test_passed(262) = test_passed(262) .and. iostat == 0_I4P
+   if (test_passed(262)) then
+      associate(panel => interpreter%figure%panels(1))
+         test_passed(262) = panel%view3d%xyplane_at .and. panel%view3d%xyplane_z == -1.0_R8P .and. &
+                           panel%view3d%rot_x == 70.0_R8P .and. panel%view3d%rot_z == 120.0_R8P .and. &
+                           panel%view3d%scale == 1.2_R8P .and. panel%view3d%zscale == 0.8_R8P .and. &
+                           panel%view3d%azimuth == 30.0_R8P .and. panel%view3d%equal == 2_I4P .and. &
+                           panel%zaxis%tics%out .and. panel%zaxis%tics%mirror
+      endassociate
+   endif
+endblock
 
 if (all(test_passed)) then
    open(newunit=unit, file=output)

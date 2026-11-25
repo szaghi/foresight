@@ -100,6 +100,7 @@ type :: figure_object
       procedure, pass(self), private :: splot_grid   !< gnuplot `splot` of a grid.
       generic :: splot => splot_points, splot_grid   !< gnuplot `splot`, one surface or set of points per call.
       procedure, pass(self) :: set_view        !< gnuplot `set view`.
+      procedure, pass(self) :: set_xyplane     !< gnuplot `set xyplane`.
       procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
       procedure, pass(self) :: set_contour     !< gnuplot `set contour`, `set cntrparam`, `set cntrlabel`.
       procedure, pass(self) :: set_dgrid3d     !< gnuplot `set dgrid3d`.
@@ -2079,9 +2080,10 @@ contains
    endassociate
    endsubroutine set_pm3d
 
-   subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal)
+   subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal, azimuth)
    !< The view of the 3D panels, as gnuplot `set view ROT_X, ROT_Z, SCALE, SCALE_Z` (each kept if absent) or `set view
-   !< map [scale S]` (`map` true; false back to the 3D view); `equal` 0 none, 1 `equal xy`, 2 `equal xyz`.
+   !< map [scale S]` (`map` true; false back to the 3D view); `equal` 0 none, 1 `equal xy`, 2 `equal xyz`; `azimuth`
+   !< a rotation about the line of sight (`set view azimuth A`).
    class(figure_object), intent(inout)        :: self      !< Figure.
    logical,              intent(in), optional :: map       !< Seen from above, as a map.
    real(R8P),            intent(in), optional :: rot_x     !< Rotation about x [deg].
@@ -2090,6 +2092,7 @@ contains
    real(R8P),            intent(in), optional :: zscale    !< Scale of z.
    real(R8P),            intent(in), optional :: map_scale !< Scale of the map view.
    integer(I4P),         intent(in), optional :: equal     !< Equal axes.
+   real(R8P),            intent(in), optional :: azimuth   !< Rotation about the line of sight [deg].
 
    call self%ensure_panels
    associate(view => self%panels(self%current)%view3d)
@@ -2100,8 +2103,29 @@ contains
       if (present(zscale)) view%zscale = zscale
       if (present(map_scale)) view%map_scale = map_scale
       if (present(equal)) view%equal = equal
+      if (present(azimuth)) view%azimuth = azimuth
    endassociate
    endsubroutine set_view
+
+   subroutine set_xyplane(self, at, relative)
+   !< The base plane of the 3D views: at the height `at` (gnuplot `set xyplane at Z`), or below the z range by the
+   !< fraction `relative` of it (`set xyplane relative F`, `set ticslevel F`; 0.5 by default).
+   class(figure_object), intent(inout)        :: self     !< Figure.
+   real(R8P),            intent(in), optional :: at       !< Height.
+   real(R8P),            intent(in), optional :: relative !< Fraction of the z range.
+
+   call self%ensure_panels
+   associate(view => self%panels(self%current)%view3d)
+      if (present(at)) then
+         view%xyplane_at = .true.
+         view%xyplane_z = at
+      endif
+      if (present(relative)) then
+         view%xyplane_at = .false.
+         view%ticslevel = relative
+      endif
+   endassociate
+   endsubroutine set_xyplane
 
    subroutine set_zlabel(self, label)
    !< Set the z axis label of the current panel (a 3D one), empty for none.
@@ -2610,6 +2634,7 @@ contains
             panel%y2axis%tics%per_label = .true.
             panel%cbaxis%tics%per_label = .true.
             panel%raxis%tics%per_label = .true.
+            panel%zaxis%tics%per_label = .true.
             ! a vertical key taller than the panel wraps into columns, as gnuplot
             panel%gnuplot_key = .true.
          endif
@@ -2621,6 +2646,20 @@ contains
                rc = [(p - 1_I4P) / self%cols, modulo(p - 1_I4P, self%cols)]
             endif
             if (self%upwards) rc(1) = self%rows - 1_I4P - rc(1)
+            ! gnuplot's cell (mp_layout_size_and_offset), where a 3D view lies: the title band its lines of gnuplot's
+            ! character height
+            block
+               real(R8P)    :: band !< Title band [page fraction].
+               integer(I4P) :: e    !< Character counter.
+
+               band = 0.0_R8P
+               if (len(self%title) > 0) band = real(1_I4P + count([(self%title(e:e) == new_line('a'), &
+                                                     e = 1_I4P, len(self%title, kind=I4P))]), R8P) * 1.5_R8P * &
+                                                     self%title_font%size_px(self%font_size) / self%height
+               panel%box3d = [real(rc(2), R8P) / real(self%cols, R8P), &
+                              (1.0_R8P - real(rc(1) + 1_I4P, R8P) / real(self%rows, R8P)) * (1.0_R8P - band), &
+                              1.0_R8P / real(self%cols, R8P), (1.0_R8P - band) / real(self%rows, R8P)]
+            endblock
             if (self%layout_margins(1) >= 0.0_R8P) then
                ! gnuplot `margins` (and `spacing`): the plot area of the cell set at screen fractions, the panel's own
                ! margins kept apart
@@ -2642,6 +2681,7 @@ contains
                                  cell(2), self%font_size, canvas=[self%width, self%height])
             endif
          else
+            panel%box3d = [panel%origin(1), panel%origin(2), panel%size(1), panel%size(2)]
             ! fractions from the bottom left of the page below the multiplot title, as gnuplot
             call panel%render(backend, panel%origin(1) * self%width, &
                               top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (self%height - top), &

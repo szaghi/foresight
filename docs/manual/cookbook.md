@@ -1584,6 +1584,27 @@ for fractions), without palette nor color box.
 
 ## 3D plots
 
+### A surface in 3D
+
+<<< @/examples/snippets/cb_view3d_surface.gp{gnuplot}
+
+<Plot name="cb_view3d_surface" svg :width="560" :height="400" />
+
+`splot` of a function of x and y draws it as a mesh of iso-curves (`set isosamples`) in gnuplot's default view,
+`set view 60, 30`: the box, its base plane below the z range (`set xyplane relative 0.5`), the x and y ticks along
+the front of the base, the z ticks at its left corner, the key at the top right, as gnuplot 6.0 places them. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
+### One surface, two views
+
+<<< @/examples/snippets/cb_view3d_views.gp{gnuplot}
+
+<Plot name="cb_view3d_views" svg :width="760" :height="400" />
+
+`set view ROT_X, ROT_Z, SCALE, SCALE_Z` turns the box (rot_x about the horizontal, then rot_z about the vertical) and
+scales it, the z axis apart; `set xyplane at 0` puts the base plane at z = 0, `set border 4095` draws the whole box.
+See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### A field seen from above
 
 <<< @/examples/snippets/cb_map_points.gp{gnuplot}

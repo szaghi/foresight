@@ -32,7 +32,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_contour([on], [place], [kind], [levels], [discrete], [incremental], [points], [order], [firstlinetype], [sorted], [format], [onecolor])` | `set contour base`, `set cntrparam levels auto 6` (`levels=6`), `discrete=[0.5_R8P, 1._R8P]`, `incremental=[0._R8P, 0.25_R8P]`, `kind='bspline'`, `set cntrlabel format '%.2f' onecolor`: the [contour lines](gnuplot-subset#contours) of the 3D surfaces |
 | `set_dgrid3d([on], [rows], [cols], [mode], [norm], [scale], [kdensity])` | `set dgrid3d 30,30 gauss 0.5` (`rows=30, cols=30, mode='gauss', scale=[0.5_R8P, 0.5_R8P]`), `kdensity=.true.`, `unset dgrid3d` (`on=.false.`): the scattered points of `splot(x, y, z)` [gridded](gnuplot-subset#gridded-and-masked-surfaces) |
 | `set_pm3d([implicit], [interpolate], [corners2color], [clip4in])` | `set pm3d` (`implicit=.true.`), `unset pm3d` (`.false.`), `set pm3d interpolate 4,4` (`interpolate=[4, 4]`), `corners2color='c1'`: the [pm3d surfaces](gnuplot-subset#3d-plots), `splot(x, y, z2d, with='pm3d')` |
-| `set_view([map], [rot_x], [rot_z], [scale], [zscale], [map_scale], [equal])` | `set view map` (`map=.true.`), `set view map scale 1.2`, `set view 60, 30, 1, 1`, `set view equal xy` (`equal=1`, `2` for `xyz`) |
+| `set_view([map], [rot_x], [rot_z], [scale], [zscale], [map_scale], [equal], [azimuth])` | `set view map` (`map=.true.`), `set view map scale 1.2`, `set view 60, 30, 1, 1`, `set view equal xy` (`equal=1`, `2` for `xyz`), `set view azimuth 30` |
+| `set_xyplane([at], [relative])` | `set xyplane at 0`, `set xyplane relative 0.5` (`set ticslevel 0.5`) |
 | `set_zrange([min], [max])`, `set_zlabel(label)`, `set_ztics([step], [start], [end], [positions], [labels], [minor], [add])` | `set zrange`, `set zlabel`, `set ztics` of the 3D plots |
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
