@@ -51,7 +51,7 @@ module foresight_axes
 !< of readouts alone has no axes: its block grows to fill the panel, unless a digit size is set.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_quiet_nan, ieee_value
 use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows, draw_notes => draw_labels, draw_shapes, &
-                                  has_shapes, label_object, pixmap_object, shape_object, &
+                                  has_shapes, label_object, pixmap_object, place_object, shape_object, &
                                   draw_pixmaps
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
@@ -2901,6 +2901,9 @@ contains
    real(R8P),             intent(in)    :: height    !< Box height [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    type(series_object), allocatable     :: raw(:)    !< Series as given, restored after.
+   type(label_object), allocatable      :: notes(:)  !< Labels as given, restored after.
+   type(arrow_object), allocatable      :: arrows(:) !< Arrows as given, restored after.
+   type(shape_object), allocatable      :: shapes(:) !< Objects as given, restored after.
    type(view3d_frame)                   :: f         !< The view.
    type(axes_view)                      :: view      !< Panel geometry for the device.
    real(R8P)                            :: area(4)   !< A plot area guess, then the panel box [px].
@@ -2943,6 +2946,41 @@ contains
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, 0.0_R8P)
    call view3d_project(self%series, f, self%view3d%surface)
+   ! the annotations at their projected positions (screen fractions), restored after
+   if (allocated(self%notes)) then
+      notes = self%notes
+      do k = 1_I4P, size(self%notes, kind=I4P)
+         self%notes(k)%at = view3d_place(f, self%notes(k)%at, self%canvas, self%xaxis, self%yaxis, &
+                                         self%zaxis)
+      enddo
+   endif
+   if (allocated(self%arrows)) then
+      arrows = self%arrows
+      do k = 1_I4P, size(self%arrows, kind=I4P)
+         if (self%arrows(k)%relative) then
+            ! rto: the tip the tail moved by the relative vector, in each coordinate's system
+            self%arrows(k)%to%x = self%arrows(k)%from%x + self%arrows(k)%to%x
+            self%arrows(k)%to%y = self%arrows(k)%from%y + self%arrows(k)%to%y
+            self%arrows(k)%to%z = self%arrows(k)%from%z + self%arrows(k)%to%z
+            self%arrows(k)%to%sx = self%arrows(k)%from%sx
+            self%arrows(k)%to%sy = self%arrows(k)%from%sy
+            self%arrows(k)%to%sz = self%arrows(k)%from%sz
+            self%arrows(k)%relative = .false.
+         endif
+         self%arrows(k)%from = view3d_place(f, self%arrows(k)%from, self%canvas, self%xaxis, self%yaxis, &
+                                            self%zaxis)
+         if (.not. self%arrows(k)%polar) &
+            self%arrows(k)%to = view3d_place(f, self%arrows(k)%to, self%canvas, self%xaxis, self%yaxis, &
+                                             self%zaxis)
+      enddo
+   endif
+   if (allocated(self%objects)) then
+      shapes = self%objects
+      do k = 1_I4P, size(self%objects, kind=I4P)
+         call view3d_shape(f, self%objects(k), self%canvas, self%xaxis, self%yaxis, self%zaxis, &
+                           self%view3d%scale)
+      enddo
+   endif
    ! the series colored by the palette, over the color axis set up with the ranges
    if (self%has_image(palette=.true.)) then
       if (allocated(self%colormaps)) then
@@ -2966,7 +3004,11 @@ contains
                         tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    view = axes_view(area=area, x=[area(1), area(2)], y=[-area(4), -area(3)], font_size=font_size)
    call backend%begin_axes(view)
+   ! gnuplot's order: the objects behind, the back of the box, the back objects, labels and arrows, the series, the
+   ! front of the box, the front objects, labels and arrows
+   call annotate3d('behind')
    call self%draw_view3d_frame(backend, f, .false., font_size, raw)
+   call annotate3d('back')
    call backend%begin_plot_area(area(1), area(3), area(2) - area(1), area(4) - area(3))
    do s = 1_I4P, size(self%series, kind=I4P)
       if (self%is_readout(s)) cycle
@@ -2976,6 +3018,7 @@ contains
    enddo
    call backend%end_plot_area
    call self%draw_view3d_frame(backend, f, .true., font_size, raw)
+   call annotate3d('front')
    ! the plot bounds (gnuplot's page_bounds, the key's) [px]
    bounds = [f%bounds(1) * 0.01_R8P, f%bounds(2) * 0.01_R8P, f%height - f%bounds(4) * 0.01_R8P, &
              f%height - f%bounds(3) * 0.01_R8P]
@@ -3006,6 +3049,24 @@ contains
    call backend%end_axes
    self%key_spacing = spacing
    self%series = raw
+   if (allocated(notes)) self%notes = notes
+   if (allocated(arrows)) self%arrows = arrows
+   if (allocated(shapes)) self%objects = shapes
+   contains
+      subroutine annotate3d(layer)
+      !< The annotations of `layer` (`behind`, `back`, `front`), their positions on the page already.
+      character(len=*), intent(in) :: layer !< Layer.
+
+      if (allocated(self%pixmaps)) call draw_pixmaps(self%pixmaps, layer, backend, area, self%canvas, font_size, &
+                                                     self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (allocated(self%objects)) call draw_shapes(self%objects, layer, .false., backend, area, self%canvas, font_size, &
+                                                    self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (layer == 'behind') return
+      if (allocated(self%notes)) call draw_notes(self%notes, layer == 'front', backend, area, self%canvas, font_size, &
+                                                 self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (allocated(self%arrows)) call draw_note_arrows(self%arrows, layer == 'front', backend, area, self%canvas, &
+                                                        font_size, self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      endsubroutine annotate3d
    endsubroutine render_view3d
 
    subroutine draw_view3d_frame(self, backend, f, front, font_size, raw)
@@ -9043,6 +9104,76 @@ contains
 
    yes = axis%tics%rangelimited .and. axis%has_data
    endfunction limits
+
+   pure function view3d_place(f, p, canvas, xaxis, yaxis, zaxis) result(q)
+   !< The position `p` of an annotation in a 3D view as screen fractions (gnuplot's map3d_position): page systems
+   !< (`screen`, `character`) as they are; else x, y and z in axis values (`graph`: fractions of the axes; `screen` and
+   !< `character` along a projected one read as graph fractions) projected by the view.
+   type(view3d_frame), intent(in) :: f         !< The view.
+   type(place_object), intent(in) :: p         !< Position.
+   real(R8P),          intent(in) :: canvas(2) !< Page width and height [px].
+   type(axis_object),  intent(in) :: xaxis     !< x axis.
+   type(axis_object),  intent(in) :: yaxis     !< y axis.
+   type(axis_object),  intent(in) :: zaxis     !< z axis.
+   type(place_object)             :: q         !< Position on the page.
+   real(R8P)                      :: px(2)     !< Page position [px].
+
+   q = p
+   if ((p%sx == 'screen' .or. p%sx == 'character') .and. (p%sy == 'screen' .or. p%sy == 'character')) return
+   px = view3d_page(f, view3d_xyz(f, value3(p%x, p%sx, xaxis), value3(p%y, p%sy, yaxis), value3(p%z, p%sz, zaxis)), &
+                    truncate=.true.)
+   q%x = px(1) / canvas(1)
+   q%y = 1.0_R8P - px(2) / canvas(2)
+   q%sx = 'screen'
+   q%sy = 'screen'
+   contains
+      pure function value3(v, system, axis) result(a)
+      !< An axis value of the coordinate `v` in its `system`.
+      real(R8P),         intent(in) :: v      !< Coordinate.
+      character(len=*),  intent(in) :: system !< System.
+      type(axis_object), intent(in) :: axis   !< Its axis.
+      real(R8P)                     :: a      !< Axis value.
+
+      select case (trim(system))
+      case ('first', 'second')
+         a = v
+      case default
+         if (axis%log) then
+            a = 10.0_R8P ** (log10(axis%lo) + v * (log10(axis%hi) - log10(axis%lo)))
+         else
+            a = axis%lo + v * (axis%hi - axis%lo)
+         endif
+      endselect
+      endfunction value3
+   endfunction view3d_place
+
+   pure subroutine view3d_shape(f, shape, canvas, xaxis, yaxis, zaxis, scale)
+   !< An object of a 3D view on the page: its points projected (view3d_place), a circle's radius in x units scaled as
+   !< gnuplot's (its radius_scaler: the x axis length on the page at the view `scale`); in screen fractions.
+   type(view3d_frame), intent(in)    :: f         !< The view.
+   type(shape_object), intent(inout) :: shape     !< Object.
+   real(R8P),          intent(in)    :: canvas(2) !< Page width and height [px].
+   type(axis_object),  intent(in)    :: xaxis     !< x axis.
+   type(axis_object),  intent(in)    :: yaxis     !< y axis.
+   type(axis_object),  intent(in)    :: zaxis     !< z axis.
+   real(R8P),          intent(in)    :: scale     !< View scale.
+   integer(I4P)                      :: k         !< Point counter.
+
+   if (allocated(shape%points)) then
+      do k = 1_I4P, size(shape%points, kind=I4P)
+         shape%points(k) = view3d_place(f, shape%points(k), canvas, xaxis, yaxis, zaxis)
+      enddo
+   endif
+   if (shape%size%sx == 'first' .or. shape%size%sx == 'second') then
+      shape%size%x = shape%size%x * f%xscaler * scale / (xaxis%hi - xaxis%lo) * 0.01_R8P / canvas(1)
+      shape%size%sx = 'screen'
+   endif
+   if (shape%size%sy == 'first' .or. shape%size%sy == 'second') then
+      shape%size%y = shape%size%y * f%xscaler * scale / (xaxis%hi - xaxis%lo) * 0.01_R8P / canvas(2)
+      shape%size%sy = 'screen'
+   endif
+   shape%clip = .false.
+   endsubroutine view3d_shape
 
    pure subroutine view3d_zextent(series, logarithmic, zr, found)
    !< The z extent of the 3D `series` (their finite heights, positive ones on a log axis), the autoscaling ones.

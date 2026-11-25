@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(262)                           !< Per-check outcome.
+logical                       :: test_passed(263)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6713,6 +6713,38 @@ block
                            panel%zaxis%tics%out .and. panel%zaxis%tics%mirror
       endassociate
    endif
+endblock
+
+
+! labels, arrows and objects in a 3D view at their projected positions, as gnuplot's map3d_position: x, y, z axis
+! values (probed: "X" at 1.2,0,0 centred at 397.34 px, "Z" at 0,0,23 at 299.90 px), graph fractions of the three
+! axes, screen positions as they are; the third coordinate read (its system the y one's unless given)
+block
+   character(len=:), allocatable :: svg !< Rendered SVG.
+   integer(I4P)                  :: u   !< File unit.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_3dl.svg'; "// &
+                             "set view equal xy; set xyplane at 0; unset border; unset key; unset xtics; "// &
+                             "unset ytics; set ztics axis; set arrow 1 from 0,0,0 to 1,0,0 head filled lw 1.5; "// &
+                             "set label 1 at 1.2,0,0 'X' center; set label 3 at 0,0,23 'Z' center; "// &
+                             "set label 4 'screen' at screen 0.1, 0.9; set label 5 'graph' at graph 0.5, 0.5, 1; "// &
+                             "set view 60, 30, 1., 1.75; "// &
+                             "splot sample [t=0:20] '+' using (cos($1)):(sin($1)):($1) with lines lw 2", iostat, iomsg)
+   test_passed(263) = iostat == 0_I4P
+   if (test_passed(263)) then
+      svg = read_text('foresight_script_test_3dl.svg')
+      test_passed(263) = index(svg, '<text x="397.34" ') > 0 .and. index(svg, '<text x="299.9" ') > 0 .and. &
+                        index(svg, '<text x="60" ') > 0 .and. index(svg, '<text x="300" ') > 0
+      if (.not. test_passed(263)) write(error_unit, '(A)') 'check 263: '//svg
+      associate(panel => interpreter%figure%panels(1))
+         test_passed(263) = test_passed(263) .and. panel%notes(2)%at%z == 23.0_R8P .and. &
+                           panel%notes(2)%at%sz == 'first' .and. panel%notes(4)%at%sz == 'graph' .and. &
+                           panel%arrows(1)%to%x == 1.0_R8P
+      endassociate
+   endif
+   open(newunit=u, file='foresight_script_test_3dl.svg')
+   close(u, status='delete')
 endblock
 
 if (all(test_passed)) then

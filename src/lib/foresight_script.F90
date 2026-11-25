@@ -9898,17 +9898,12 @@ contains
                q%sy = 'first'
             endblock
          endassociate
-         ! a third coordinate (gnuplot's z): read and ignored
+         ! a third coordinate: gnuplot's z, of the 3D views
+         q%sz = 'first'
          if (i < size(tokens, kind=I4P)) then
             if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
-               block
-                  real(R8P)        :: z  !< Ignored.
-                  character(len=9) :: sz !< Its system.
-
-                  sz = 'first'
-                  i = i + 1_I4P
-                  call coordinate(z, sz)
-               endblock
+               i = i + 1_I4P
+               call coordinate(q%z, q%sz)
             endif
          endif
          return
@@ -9927,17 +9922,12 @@ contains
       i = i + 1_I4P
       call coordinate(q%y, q%sy)
       if (iostat /= 0_I4P) return
-      ! a third coordinate (gnuplot's z, for splot): read and ignored
+      ! a third coordinate: gnuplot's z, of the 3D views (its system the y one's unless given)
+      q%sz = q%sy
       if (i < size(tokens, kind=I4P)) then
          if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
-            block
-               real(R8P)        :: z  !< Ignored.
-               character(len=9) :: sz !< Its system.
-
-               sz = q%sy
-               i = i + 1_I4P
-               call coordinate(z, sz)
-            endblock
+            i = i + 1_I4P
+            call coordinate(q%z, q%sz)
          endif
       endif
       endsubroutine position

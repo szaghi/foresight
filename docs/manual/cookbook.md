@@ -1605,6 +1605,16 @@ the front of the base, the z ticks at its left corner, the key at the top right,
 scales it, the z axis apart; `set xyplane at 0` puts the base plane at z = 0, `set border 4095` draws the whole box.
 See [3D views](/guide/gnuplot-subset#3d-views).
 
+### Arrows and labels in 3D
+
+<<< @/examples/snippets/cb_view3d_arrows.gp{gnuplot}
+
+<Plot name="cb_view3d_arrows" svg :width="560" :height="400" />
+
+`set arrow` and `set label` take a third coordinate in a 3D view: x, y, z axis values projected as the data (`graph`
+ones fractions of the three axes, `screen` ones as they are), here the axes drawn as arrows from the origin;
+`set ztics axis` puts the z ticks on the z axis through x = y = 0. See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### A field seen from above
 
 <<< @/examples/snippets/cb_map_points.gp{gnuplot}

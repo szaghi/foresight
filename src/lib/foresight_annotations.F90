@@ -49,6 +49,8 @@ type :: place_object
    real(R8P)        :: y  = 0.0_R8P   !< Ordinate.
    character(len=9) :: sx = 'first'   !< System of the abscissa: `first`, `second`, `graph`, `screen`, `character`.
    character(len=9) :: sy = 'first'   !< System of the ordinate.
+   real(R8P)        :: z  = 0.0_R8P   !< Height (gnuplot's third coordinate, the 3D views').
+   character(len=9) :: sz = 'first'   !< System of the height: `first` (z axis values), `graph`, `screen`.
 endtype place_object
 
 type :: label_object

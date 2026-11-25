@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="400" viewBox="0 0 560 400" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#e8ecf0" data-theme="night" data-frame="#e8ecf0" data-grid-color="#5c4950">
+<rect x="0" y="0" width="560" height="400" fill="#130d0f" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="0 560 0 400" data-x="0 5.6e2" data-y="-4e2 0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-border">
+</g>
+<g class="fs-zticks">
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="279.89,333.05 288.89,333.05"/>
+<text x="261.9" y="336.94" text-anchor="end">0</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="279.89,262.04 288.89,262.04"/>
+<text x="261.9" y="265.93" text-anchor="end">5</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="279.89,191.03 288.89,191.03"/>
+<text x="261.9" y="194.92" text-anchor="end">10</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="279.89,120.03 288.89,120.03"/>
+<text x="261.9" y="123.93" text-anchor="end">15</text>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="279.89,49.02 288.89,49.02"/>
+<text x="261.9" y="52.92" text-anchor="end">20</text>
+</g>
+<g class="fs-annotations">
+<text x="377.34" y="365.37" text-anchor="middle" fill="#e8ecf0">x</text>
+<text x="336.15" y="288.52" text-anchor="middle" fill="#e8ecf0">y</text>
+<text x="279.9" y="10.62" text-anchor="middle" fill="#e8ecf0">z</text>
+</g>
+<g class="fs-anchored">
+</g>
+<g class="fs-annotations">
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1.5" points="279.9,333.04 361.1,356.48"/>
+<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="1.5" stroke-linejoin="miter" d="M345.69,347.18 361.1,356.48 343.1,356.13Z"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1.5" points="279.9,333.04 326.78,292.44"/>
+<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="1.5" stroke-linejoin="miter" d="M310.59,300.3 326.78,292.44 316.69,307.34Z"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="1.5" points="279.9,333.04 279.9,34.82"/>
+<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="1.5" stroke-linejoin="miter" d="M275.24,52.21 279.9,34.82 284.56,52.21Z"/>
+</g>
+<g class="fs-anchored">
+</g>
+<svg class="fs-plot" x="0" y="0" width="560" height="400" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-series" data-series="1">
+<polyline fill="none" stroke="#ff7092" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0.644821,0.8912 0.658661,0.862475 0.666054,0.832225 0.666679,0.801425 0.660518,0.771 0.647821,0.741925 0.629107,0.7151 0.605125,0.691275
+0.576875,0.671175 0.545464,0.655275 0.512214,0.644 0.478482,0.63745 0.445589,0.63565 0.414911,0.63835 0.387696,0.64515 0.365018,0.6555
+0.347839,0.668675 0.336839,0.68385 0.332464,0.700125 0.334893,0.716525 0.344036,0.7321 0.359518,0.745925 0.380714,0.757175 0.40675,0.76505
+0.436554,0.768975 0.468946,0.768475 0.502571,0.7633 0.536107,0.75335 0.568179,0.73875 0.597446,0.7198 0.62275,0.696975 0.643054,0.670925
+0.657536,0.6424 0.665607,0.612275 0.666929,0.581475 0.661446,0.550975 0.649393,0.521725 0.631268,0.494625 0.607786,0.4705 0.579911,0.449975
+0.548768,0.43365 0.515661,0.421875 0.481911,0.41485 0.448857,0.412575 0.417893,0.414825 0.390268,0.421225 0.367089,0.43125 0.349321,0.444175
+0.337661,0.4592 0.332607,0.475375 0.334339,0.4918 0.342821,0.5075 0.357679,0.52155 0.378321,0.5331 0.403893,0.54135 0.433393,0.5457
+0.465571,0.545675 0.499161,0.540975 0.53275,0.5315 0.565018,0.517375 0.594625,0.49885 0.620393,0.476425 0.64125,0.45065 0.656357,0.42235
+0.665089,0.392325 0.667107,0.361575 0.662304,0.331 0.650911,0.301575 0.633357,0.2742 0.610393,0.249725 0.582911,0.2288 0.552054,0.212025
+0.519071,0.199775 0.485321,0.192275 0.452161,0.1895 0.420929,0.191325 0.392893,0.197325 0.369214,0.207 0.350857,0.219675 0.338554,0.234525
+0.332804,0.250625 0.333857,0.2671 0.341661,0.282925 0.355893,0.297175 0.375982,0.309 0.401107,0.317625 0.430232,0.3224 0.462214,0.322825
+0.495714,0.318625 0.529357,0.30965 0.561839,0.295975 0.591768,0.277875 0.617982,0.2558 0.639375,0.230325 0.655089,0.20225 0.6645,0.172375
+0.667214,0.141625 0.663107,0.111 0.652357,0.081425 0.635411,0.0538"/>
+</g>
+</svg>
+<g class="fs-border">
+</g>
+<g class="fs-anchored">
+</g>
+<g class="fs-anchored">
+</g>
+</g>
+</svg>
