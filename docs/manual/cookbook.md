@@ -1625,6 +1625,16 @@ See [3D views](/guide/gnuplot-subset#3d-views).
 ones fractions of the three axes, `screen` ones as they are), here the axes drawn as arrows from the origin;
 `set ztics axis` puts the z ticks on the z axis through x = y = 0. See [3D views](/guide/gnuplot-subset#3d-views).
 
+### Points on a sphere
+
+<<< @/examples/snippets/cb_view3d_sphere.gp{gnuplot}
+
+<Plot name="cb_view3d_sphere" svg :width="560" :height="420" />
+
+`set mapping spherical` reads splot's data as longitude, latitude and radius (1 when there are two columns), in the
+`set angles` unit, as gnuplot: the `'++'` grid of longitudes and latitudes is a sphere, the cities its labelled
+points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### A field seen from above
 
 <<< @/examples/snippets/cb_map_points.gp{gnuplot}

@@ -69,6 +69,7 @@ type :: datafile_object
    contains
       procedure, pass(self) :: column_header !< Header name of a column.
       procedure, pass(self) :: columns       !< Extract a (x, y) series.
+      procedure, pass(self) :: leading_cells !< Cells of the first row.
       procedure, pass(self) :: default_using !< gnuplot default columns.
       procedure, pass(self) :: header_names  !< Header names of a dataset.
       procedure, pass(self) :: load          !< Read a file.
@@ -368,6 +369,15 @@ contains
       endif
    endif
    endsubroutine default_using
+
+   pure function leading_cells(self) result(n)
+   !< The cells of the first data row, 0 without data.
+   class(datafile_object), intent(in) :: self !< Data.
+   integer(I4P)                       :: n    !< Cells.
+
+   n = 0_I4P
+   if (self%nrows > 0_I4P) n = self%first(2) - self%first(1)
+   endfunction leading_cells
 
    subroutine columns(self, ux, uy, index, every, x, y)
    !< Series of columns (`ux`, `uy`) of dataset `index` (all if negative), one point every `every` in each block.

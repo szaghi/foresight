@@ -310,6 +310,8 @@ type :: script_object
                                                                !< of the data filledcurves given none.
    character(len=:), allocatable   :: function_curve           !< The same of the functions (`set style function`).
    character(len=64), allocatable  :: colormap_names(:)        !< Named colormaps (`set colormap new NAME`).
+   integer(I4P)                    :: mapping = 0_I4P          !< `set mapping`: 0 cartesian, 1 spherical (theta,
+                                                               !< phi, r), 2 cylindrical (theta, z, r) splot data.
    character(len=:), allocatable   :: dummies                  !< `set dummy` names, blank separated (the variables of
                                                                !< a fit of several), empty for gnuplot's x y.
    type(colormap_object), allocatable :: colormaps(:)          !< Their palettes and ranges.
@@ -445,6 +447,7 @@ contains
    self%exit_status = 0_I4P
    self%dummy = ''
    self%dummies = ''
+   self%mapping = 0_I4P
    self%parametric = .false.
    self%encoding = 'default'
    self%term_name = 'html'
@@ -6677,6 +6680,10 @@ contains
                spec = '1:2:3:4:5:6'
             case default
                spec = '1:2:3'
+               ! spherical and cylindrical data of two columns: a radius of 1 (gnuplot's)
+               if (self%mapping /= 0_I4P .and. pseudo == 0_I4P) then
+                  if (data%leading_cells() == 2_I4P) spec = '1:2:(1)'
+               endif
             endselect
          endif
       endif
@@ -6685,6 +6692,10 @@ contains
       if (with == 'image' .and. n == 3_I4P) then
          zspec = '(0)'
          rest = trim(parts(1))//':'//trim(parts(2))//':'//trim(parts(3))
+      elseif (n == 2_I4P .and. self%mapping /= 0_I4P .and. pseudo /= 3_I4P) then
+         ! spherical and cylindrical data: a radius of 1 when not given (gnuplot's)
+         zspec = '(1)'
+         rest = trim(parts(1))//':'//trim(parts(2))
       elseif (n < 3_I4P) then
          call fail('splot: using needs x:y:z, found "'//spec//'"', iostat, iomsg)
          return
@@ -6921,6 +6932,9 @@ contains
          if (size(panel%series(last)%x) /= size(heights)) return
          call set_heights(panel%series(last), heights, bounds(:, 1:n), sets(1:n), &
                           merge(grid_rows, n, grid_rows > 0_I4P .and. grid_rows <= n), pseudo /= 3_I4P)
+         ! set mapping: the data's theta:phi:r or theta:z:r made x, y, z (gnuplot's get_3ddata), not a function's
+         if (self%mapping /= 0_I4P .and. pseudo /= 3_I4P) call map_points(panel%series(last), self%mapping, &
+                                                                         panel%degrees)
          panel%series(last)%no_contours = item_nocontours
          panel%series(last)%no_surface = item_nosurface
          ! set dgrid3d: the data (not a function's samples) gridded, gnuplot's grid_nongrid_data
@@ -9300,6 +9314,7 @@ contains
    self%time_data = .false.
    self%dummy = ''
    self%dummies = ''
+   self%mapping = 0_I4P
    self%parametric = .false.
    call default_styles(self)
    contains
@@ -11630,6 +11645,24 @@ contains
       endif
    elseif (keyword(option, 'mttics', 3_I4P)) then
       call minor_option(self%figure%panels(self%figure%current)%ttics)
+   elseif (keyword(option, 'mapping', 3_I4P)) then
+      ! gnuplot's set mapping: the columns of splot's data, x:y:z, theta:phi:r or theta:z:r
+      if (size(tokens) < 2) then
+         self%mapping = 0_I4P
+      elseif (keyword(tokens(2)%text, 'cartesian', 2_I4P)) then
+         self%mapping = 0_I4P
+      elseif (keyword(tokens(2)%text, 'spherical', 1_I4P)) then
+         self%mapping = 1_I4P
+      elseif (keyword(tokens(2)%text, 'cylindrical', 2_I4P)) then
+         self%mapping = 2_I4P
+      else
+         call fail('set mapping: cartesian, spherical or cylindrical expected, found "'//tokens(2)%text//'"', &
+                   iostat, iomsg)
+         return
+      endif
+      if (size(tokens) > 2) then
+         if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+      endif
    else
       call fail('unsupported option "set '//option//'"', iostat, iomsg)
    endif
@@ -16307,6 +16340,9 @@ contains
    elseif (keyword(option, 'timestamp', 5_I4P)) then
       self%figure%panels(self%figure%current)%stamp = .false.
       return
+   elseif (keyword(option, 'mapping', 3_I4P)) then
+      self%mapping = 0_I4P
+      return
    elseif (keyword(option, 'parametric', 3_I4P)) then
       ! gnuplot's unset parametric: the dummy variables back to x and y
       if (self%parametric) then
@@ -16764,6 +16800,41 @@ contains
    write(buf, '(ES25.17E3)') v
    text = trim(adjustl(buf))
    endfunction exact_real
+
+   pure subroutine map_points(series, mapping, degrees)
+   !< The points of a 3D `series` read in spherical (`mapping` 1: theta, phi, r) or cylindrical (2: theta, z, r)
+   !< coordinates made cartesian, as gnuplot's get_3ddata: x = r cos(theta) cos(phi), y = r sin(theta) cos(phi),
+   !< z = r sin(phi); x = r cos(theta), y = r sin(theta), z the second. Angles in degrees with `degrees`.
+   type(series_object), intent(inout) :: series  !< Series.
+   integer(I4P),        intent(in)    :: mapping !< Mapping.
+   logical,             intent(in)    :: degrees !< Angles in degrees.
+   real(R8P)                          :: a       !< First column (theta) [rad].
+   real(R8P)                          :: b       !< Second column.
+   real(R8P)                          :: r       !< Radius.
+   real(R8P)                          :: unit    !< Angle unit [rad].
+   integer(I4P)                       :: i       !< Point counter.
+
+   unit = 1.0_R8P
+   if (degrees) unit = 4.0_R8P * atan(1.0_R8P) / 180.0_R8P
+   ! scalar loops, not vectorized: gfortran's vector sin and cos (glibc's libmvec) are not correctly rounded, and the
+   ! last digit decides the range of the axes (sin(pi/2) 1, as gnuplot's)
+!GCC$ novector
+   do i = 1_I4P, size(series%x, kind=I4P)
+      a = series%x(i) * unit
+      b = series%y(i)
+      r = series%z(i)
+      if (mapping == 1_I4P) then
+         b = b * unit
+         series%x(i) = r * cos(a) * cos(b)
+         series%y(i) = r * sin(a) * cos(b)
+         series%z(i) = r * sin(b)
+      else
+         series%x(i) = r * cos(a)
+         series%y(i) = r * sin(a)
+         series%z(i) = b
+      endif
+   enddo
+   endsubroutine map_points
 
    pure subroutine set_heights(series, z, scans, sets, grid, read)
    !< Give `series` its heights `z` and its `scans` (first and last point of each) in their datasets `sets`, the first

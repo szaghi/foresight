@@ -117,6 +117,7 @@ that did what it says.
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
 | **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; the drawing order options (`scans...`, `depthorder`, `flush`, `ftriangles`) and the border are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
+| **map**ping [`cartesian`\|`spherical`\|`cylindrical`] | splot's data columns: x:y:z, theta:phi:r or theta:z:r ([3D views](#3d-views)) | `cartesian` |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
 | **zr**ange, **zl**abel, **zti**cs, **mzti**cs, **zzero**axis | the z axis of the [3D plots](#3d-plots): its range (the options of `xrange`), label (those of `xlabel`), ticks (those of `xtics`), minor ticks and zero axis | as the x ones |
@@ -2266,7 +2267,10 @@ across them, lines clipped to the box, points outside it dropped; impulses rise 
 it). `set multiplot` places the views in gnuplot's cells. `set label`, `set arrow` and `set object` positions take a
 third coordinate (`at x, y, z`; z 0 when absent): axis values are projected as the data, `graph` ones are fractions of
 the x, y and z axes, `screen` and `character` ones are page positions as in 2D; a circle's radius in x units is scaled
-as gnuplot's (the x axis length on the page).
+as gnuplot's (the x axis length on the page). `set mapping spherical` reads splot's data as theta:phi:r (x = r cos
+theta cos phi, y = r sin theta cos phi, z = r sin phi), `set mapping cylindrical` as theta:z:r (x = r cos theta,
+y = r sin theta), r 1 when the data have two columns, the angles in the `set angles` unit; functions are not mapped
+(`set parametric` draws a sphere of them).
 
 ### Contours
 

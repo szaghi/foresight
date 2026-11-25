@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(265)                           !< Per-check outcome.
+logical                       :: test_passed(266)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6839,6 +6839,40 @@ block
    test_passed(265) = test_passed(265) .and. iostat == 0_I4P
    call interpreter%symbols%string_of('s', text, found)
    test_passed(265) = test_passed(265) .and. found .and. text == "it's"
+endblock
+
+
+! set mapping spherical|cylindrical: splot's data columns theta:phi:r (r 1 for two columns) or theta:z:r made x, y, z
+! as gnuplot's get_3ddata, in the angle unit; a function's samples not mapped; unset mapping back to cartesian
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("$s << EOD"//nl//"90 0"//nl//"0 90"//nl//"EOD"//nl//"$c << EOD"//nl//"90 5 2"//nl// &
+                             "EOD"//nl//"set angles degrees; set mapping spherical; "// &
+                             "set table 'foresight_script_test.dat'; splot $s, $c; unset table", iostat, iomsg)
+   test_passed(266) = iostat == 0_I4P
+   if (test_passed(266)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(266) = abs(series(1)%x(1)) < 1.0e-15_R8P .and. abs(series(1)%y(1) - 1.0_R8P) < 1.0e-15_R8P .and. &
+                           abs(series(1)%z(1)) < 1.0e-15_R8P .and. series(1)%z(2) == 1.0_R8P .and. &
+                           abs(series(2)%x(1)) < 1.0e-15_R8P .and. &
+                           abs(series(2)%z(1) - 2.0_R8P * sin(5.0_R8P * atan(1.0_R8P) / 45.0_R8P)) < 1.0e-15_R8P
+      endassociate
+   endif
+   call interpreter%run_text("set mapping cylindrical; set table 'foresight_script_test.dat'; splot $c; unset table", &
+                             iostat, iomsg)
+   test_passed(266) = test_passed(266) .and. iostat == 0_I4P
+   if (test_passed(266)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(266) = abs(series(1)%x(1)) < 1.0e-15_R8P .and. abs(series(1)%y(1) - 2.0_R8P) < 1.0e-15_R8P .and. &
+                           series(1)%z(1) == 5.0_R8P
+      endassociate
+   endif
+   call interpreter%run_text("set mapping bogus", iostat, iomsg)
+   test_passed(266) = test_passed(266) .and. iostat /= 0_I4P .and. index(iomsg, 'cartesian, spherical or cylindrical') > 0
+   call interpreter%run_text("unset mapping", iostat, iomsg)
+   test_passed(266) = test_passed(266) .and. iostat == 0_I4P .and. interpreter%mapping == 0_I4P
 endblock
 
 if (all(test_passed)) then
