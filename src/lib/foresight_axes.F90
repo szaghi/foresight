@@ -1753,6 +1753,66 @@ contains
    y = base + GAP + 0.35_R8P * font_size * (1.0_R8P + cos(angle * PI_R8 / 180.0_R8P))
    endsubroutine rotated_anchor
 
+   pure subroutine y_rotated_anchor(tics, base, p, second, font_size, x, y, anchor)
+   !< Baseline anchor and text anchor of a y (`second`: y2) tick label rotated by `tics%rotate` [deg, counterclockwise] at
+   !< the tick ordinate `p` [px], `base` the border (moved by outward ticks) [px], as gnuplot 6.0's svg places them:
+   !< `rotate` (justified `center`, 90 degrees) reads upward centred on the tick, its baseline 1.925 (y2: 1.825) font
+   !< sizes out of the border; `rotate by A` has its glyph band centred on the tick, from a point 1.253 (y2: 1.5) font
+   !< sizes out, right-justified (y2: left) unless justified.
+   type(tics_object), intent(in)  :: tics      !< Axis tick settings.
+   real(R8P),         intent(in)  :: base      !< Border abscissa, moved by outward ticks [px].
+   real(R8P),         intent(in)  :: p         !< Tick ordinate [px].
+   logical,           intent(in)  :: second    !< The y2 axis.
+   real(R8P),         intent(in)  :: font_size !< Font size [px].
+   real(R8P),         intent(out) :: x         !< Baseline anchor abscissa [px].
+   real(R8P),         intent(out) :: y         !< Baseline anchor ordinate [px].
+   character(len=6),  intent(out) :: anchor    !< `start`, `middle` or `end`.
+   real(R8P)                      :: a         !< Angle [rad].
+
+   if (trim(tics%justify) == 'center' .and. tics%rotate == 90.0_R8P) then
+      anchor = 'middle'
+      x = base - 1.925_R8P * font_size
+      if (second) x = base + 1.825_R8P * font_size
+      y = p
+      return
+   endif
+   anchor = tics%anchor()
+   if (len_trim(tics%justify) == 0) anchor = trim(merge('start', 'end  ', second))
+   a = tics%rotate * PI_R8 / 180.0_R8P
+   x = base - 1.253_R8P * font_size
+   if (second) x = base + 1.5_R8P * font_size
+   x = x + 0.35_R8P * font_size * sin(a)
+   y = p + 0.35_R8P * font_size * cos(a)
+   endsubroutine y_rotated_anchor
+
+   pure function rotated_span(width, angle, anchor, font_size) result(span)
+   !< Leftmost and rightmost page abscissae [px] from its baseline anchor of a label `width` [px] wide rotated by
+   !< `angle` [deg, counterclockwise] with `anchor`, its glyphs from 0.25 font sizes below the baseline to 0.75 above.
+   real(R8P),        intent(in) :: width     !< Label width [px].
+   real(R8P),        intent(in) :: angle     !< Angle [deg].
+   character(len=*), intent(in) :: anchor    !< `start`, `middle` or `end`.
+   real(R8P),        intent(in) :: font_size !< Font size [px].
+   real(R8P)                    :: span(2)   !< Leftmost, rightmost [px].
+   real(R8P)                    :: s(2)      !< Text extent along the baseline [px].
+   real(R8P)                    :: t(2)      !< Glyph band across it [px].
+   real(R8P)                    :: c(4)      !< Corner abscissae [px].
+   real(R8P)                    :: a         !< Angle [rad].
+
+   select case (trim(anchor))
+   case ('end')
+      s = [-width, 0.0_R8P]
+   case ('middle')
+      s = [-0.5_R8P * width, 0.5_R8P * width]
+   case default
+      s = [0.0_R8P, width]
+   endselect
+   t = [-0.25_R8P * font_size, 0.75_R8P * font_size]
+   a = angle * PI_R8 / 180.0_R8P
+   c = [s(1) * cos(a) - t(1) * sin(a), s(1) * cos(a) - t(2) * sin(a), s(2) * cos(a) - t(1) * sin(a), &
+        s(2) * cos(a) - t(2) * sin(a)]
+   span = [minval(c), maxval(c)]
+   endfunction rotated_span
+
    pure function rotated_extent(width, angle, anchor, font_size) result(extent)
    !< Extent of an x tick label `width` [px] wide rotated by `angle` [deg] with `anchor`, from its tick at the base
    !< ordinate (see `rotated_anchor`): depth below the base, then reach left and right of the tick [px]; the glyphs
@@ -2026,6 +2086,7 @@ contains
    real(R8P)                            :: title_y   !< Baseline of the title [px].
    real(R8P)                            :: ax        !< Label anchor abscissa [px].
    real(R8P)                            :: ay        !< Label anchor ordinate [px].
+   character(len=6)                     :: text_anchor !< Text anchor of a rotated y label.
    real(R8P)                            :: extent(3) !< Rotated x labels extent [px].
    integer(I4P)                         :: t         !< Tick counter.
    character(len=:), allocatable        :: bcolor    !< Border color.
@@ -2135,17 +2196,23 @@ contains
             call backend%polyline([base, base - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
             if (self%yaxis%tics%mirror .and. base == left) &
                call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, &
-                                                           base - GAP - out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, &
-                                                           self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, 0.0_R8P)
-            cycle
+         else
+            call backend%polyline([base, base + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+            if (self%yaxis%tics%mirror .and. base == left) &
+               call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
          endif
-         call backend%polyline([base, base + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         if (self%yaxis%tics%mirror .and. base == left) &
-            call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-         if (self%yaxis%ticks(t)%major) call tick_label(backend, self%yaxis%tics, font_size, base - GAP, &
-                                                        p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', &
-                                                        self%yaxis%ticks(t)%sup, 0.0_R8P)
+         if (.not. self%yaxis%ticks(t)%major) cycle
+         if (self%yaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+            ! rotated (gnuplot `set ytics rotate [by A]`)
+            call y_rotated_anchor(self%yaxis%tics, base - out_shift(self%yaxis%tics), p, .false., font_size, ax, ay, &
+                                  text_anchor)
+            call tick_label(backend, self%yaxis%tics, font_size, ax, ay, self%yaxis%ticks(t)%label, trim(text_anchor), &
+                            self%yaxis%ticks(t)%sup, -self%yaxis%tics%rotate)
+         else
+            call tick_label(backend, self%yaxis%tics, font_size, base - GAP - out_shift(self%yaxis%tics), &
+                            p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, &
+                            0.0_R8P)
+         endif
       enddo
       call backend%end_group
       if (self%y2_active) then
@@ -2158,17 +2225,22 @@ contains
                call backend%polyline([right, right + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
                if (self%y2axis%tics%mirror) &
                   call backend%polyline([left, left - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-               if (self%y2axis%ticks(t)%major) call tick_label(backend, self%y2axis%tics, font_size, &
-                                                               right + GAP + out_shift(self%y2axis%tics), &
-                                                               p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, &
-                                                               'start', self%y2axis%ticks(t)%sup, 0.0_R8P)
-               cycle
+            else
+               call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
+               if (self%y2axis%tics%mirror) call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, &
+                                                                  '')
             endif
-            call backend%polyline([right, right - length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%y2axis%tics%mirror) call backend%polyline([left, left + length], [p, p], FRAME_COLOR, 1.0_R8P, '')
-            if (self%y2axis%ticks(t)%major) call tick_label(backend, self%y2axis%tics, font_size, right + GAP, &
-                                                            p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, &
-                                                            'start', self%y2axis%ticks(t)%sup, 0.0_R8P)
+            if (.not. self%y2axis%ticks(t)%major) cycle
+            if (self%y2axis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+               call y_rotated_anchor(self%y2axis%tics, right + out_shift(self%y2axis%tics), p, .true., font_size, ax, &
+                                     ay, text_anchor)
+               call tick_label(backend, self%y2axis%tics, font_size, ax, ay, self%y2axis%ticks(t)%label, &
+                               trim(text_anchor), self%y2axis%ticks(t)%sup, -self%y2axis%tics%rotate)
+            else
+               call tick_label(backend, self%y2axis%tics, font_size, right + GAP + out_shift(self%y2axis%tics), &
+                               p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, 'start', self%y2axis%ticks(t)%sup, &
+                               0.0_R8P)
+            endif
          enddo
          call backend%end_group
       endif
@@ -7252,7 +7324,12 @@ contains
    if (on_zero(self%yaxis%tics, self%xaxis)) then
       margins(1) = PAD
    else
-      margins(1) = PAD + labels_width(self%yaxis) + GAP
+      if (self%yaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+         ! rotated (gnuplot `set ytics rotate`): the leftmost reach of the labels from the border
+         margins(1) = PAD + rotated_room(self%yaxis, .false.)
+      else
+         margins(1) = PAD + labels_width(self%yaxis) + GAP
+      endif
       if (self%yaxis%tics%out) margins(1) = margins(1) + tick_length(self%yaxis%tics, .true.)
    endif
    if (self%yaxis%has_label()) margins(1) = margins(1) + LINE_HEIGHT * font_size + GAP
@@ -7271,7 +7348,13 @@ contains
    if (self%y2_active .or. self%y2axis%has_label()) then
       y2_margin = PAD
       if (self%y2_active) then
-         if (any(self%y2axis%ticks%major)) y2_margin = y2_margin + labels_width(self%y2axis) + GAP
+         if (any(self%y2axis%ticks%major)) then
+            if (self%y2axis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+               y2_margin = y2_margin + rotated_room(self%y2axis, .true.)
+            else
+               y2_margin = y2_margin + labels_width(self%y2axis) + GAP
+            endif
+         endif
          if (self%y2axis%tics%out) y2_margin = y2_margin + tick_length(self%y2axis%tics, .true.)
       endif
       if (self%y2axis%has_label()) y2_margin = y2_margin + LINE_HEIGHT * font_size + GAP
@@ -7391,6 +7474,31 @@ contains
                                                                           font_size))
       enddo
       endfunction labels_width
+
+      pure function rotated_room(axis, second) result(room)
+      !< Room [px] out of the border of the rotated major tick labels of a vertical `axis` (`second`: the y2 one, at the
+      !< right), placed as `y_rotated_anchor` places them, at least GAP.
+      type(axis_object), intent(in) :: axis   !< Axis.
+      logical,           intent(in) :: second !< The y2 axis.
+      real(R8P)                     :: room   !< Room [px].
+      real(R8P)                     :: ax, ay !< Baseline anchor, from a border at 0 [px].
+      real(R8P)                     :: span(2) !< Leftmost and rightmost of a label from its anchor [px].
+      character(len=6)              :: anchor !< Text anchor.
+      integer(I4P)                  :: k      !< Tick counter.
+
+      room = GAP
+      call y_rotated_anchor(axis%tics, 0.0_R8P, 0.0_R8P, second, font_size, ax, ay, anchor)
+      do k = 1_I4P, size(axis%ticks, kind=I4P)
+         if (.not. axis%ticks(k)%major) cycle
+         span = rotated_span(backend%text_width(axis%ticks(k)%label, axis%ticks(k)%sup, font_size), axis%tics%rotate, &
+                             anchor, font_size)
+         if (second) then
+            room = max(room, ax + span(2))
+         else
+            room = max(room, -(ax + span(1)))
+         endif
+      enddo
+      endfunction rotated_room
    endfunction place_plot_area
 
    pure function colorbox_width(self, backend, font_size) result(room)

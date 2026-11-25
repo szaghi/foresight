@@ -13947,19 +13947,27 @@ contains
                panel%x2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
                panel%y2axis%tics%rangelimited = toks(i)%text(1:2) /= 'no'
             elseif (toks(i)%kind == TOKEN_WORD .and. (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
-               ! the x and x2 labels turned (`rotate` 90 degrees, `rotate by A`); the y ones are not (read)
+               ! the x, x2, y and y2 labels turned (`rotate` 90 degrees, `rotate by A`), as `set xtics rotate`...
                block
                   real(R8P) :: angle !< Angle [deg].
+                  logical   :: by    !< `rotate by A`.
 
                   angle = merge(90.0_R8P, 0.0_R8P, toks(i)%text == 'rotate')
+                  by = .false.
                   if (toks(i)%text == 'rotate' .and. i + 1_I4P < size(toks, kind=I4P)) then
                      if (toks(i + 1_I4P)%text == 'by') then
                         i = i + 1_I4P
                         if (.not. next_real(toks, i, angle, iostat, iomsg, self%symbols)) return
+                        by = .true.
                      endif
                   endif
                   panel%xaxis%tics%rotate = angle
                   panel%x2axis%tics%rotate = angle
+                  panel%yaxis%tics%rotate = angle
+                  panel%y2axis%tics%rotate = angle
+                  ! y labels: `rotate` upward and centred, `rotate by A` right-justified (y2: left)
+                  panel%yaxis%tics%justify = trim(merge('center', '      ', angle /= 0.0_R8P .and. .not. by))
+                  panel%y2axis%tics%justify = panel%yaxis%tics%justify
                endblock
             elseif (toks(i)%kind == TOKEN_WORD .and. toks(i)%text == 'nooffset') then
                panel%xaxis%tics%offset = 0.0_R8P
@@ -14219,14 +14227,17 @@ contains
       do while (i <= size(toks, kind=I4P))
          if (toks(i)%kind == TOKEN_WORD .and. any(toks(i)%text == ['in      ', 'out     ', 'rotate  ', 'norotate'])) then
             if (.not. (keyword(option, 'xtics', 3_I4P) .or. keyword(option, 'x2tics', 4_I4P) .or. &
-                       keyword(option, 'rtics', 3_I4P)) .and. &
+                       keyword(option, 'rtics', 3_I4P) .or. keyword(option, 'ytics', 3_I4P) .or. &
+                       keyword(option, 'y2tics', 4_I4P)) .and. &
                 (toks(i)%text == 'rotate' .or. toks(i)%text == 'norotate')) then
-               call fail('set '//option//': rotate is supported on xtics, x2tics and rtics only', iostat, iomsg)
+               call fail('set '//option//': rotate is supported on xtics, x2tics, ytics, y2tics and rtics only', &
+                         iostat, iomsg)
                return
             endif
+            ! cbtics: `in` is the color box's own direction (read), `out` not supported
             if (.not. any([keyword(option, 'xtics', 3_I4P), keyword(option, 'ytics', 3_I4P), keyword(option, 'y2tics', 4_I4P), &
                            keyword(option, 'x2tics', 4_I4P)]) &
-                .and. (toks(i)%text == 'in' .or. toks(i)%text == 'out')) then
+                .and. (toks(i)%text == 'out' .or. (toks(i)%text == 'in' .and. .not. keyword(option, 'cbtics', 4_I4P)))) then
                call fail('set '//option//': in and out are supported on xtics, ytics, y2tics and x2tics only', iostat, &
                          iomsg)
                return
@@ -14241,9 +14252,11 @@ contains
                tics%justify = ''
             case default
                ! rotate: 90 degrees, right-justified below the plot, from the tick above it; rotate by ANGLE:
-               ! left-justified (gnuplot)
+               ! left-justified (gnuplot); y and y2 labels: rotate reads upward centred on the tick (gnuplot's
+               ! TEXT_VERTICAL), rotate by ANGLE right-justified (y2: left)
                tics%rotate = 90.0_R8P
                tics%justify = trim(merge('     ', 'right', keyword(option, 'x2tics', 4_I4P)))
+               if (keyword(option, 'ytics', 3_I4P) .or. keyword(option, 'y2tics', 4_I4P)) tics%justify = 'center'
                if (i < size(toks, kind=I4P)) then
                   if (toks(i + 1_I4P)%text == 'by') then
                      if (i + 2_I4P > size(toks, kind=I4P)) then

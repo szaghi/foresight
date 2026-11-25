@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(255)                           !< Per-check outcome.
+logical                       :: test_passed(256)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1234,9 +1234,9 @@ endassociate
 call interpreter%run_text('set ytics out; set y2tics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%yaxis%tics%out .and. &
                   interpreter%figure%panels(1)%y2axis%tics%out
-call interpreter%run_text('set ytics rotate', iostat, iomsg)
+call interpreter%run_text('set ztics rotate', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. &
-                  index(iomsg, 'rotate is supported on xtics, x2tics and rtics only') > 0
+                  index(iomsg, 'rotate is supported on xtics, x2tics, ytics, y2tics and rtics only') > 0
 call interpreter%run_text('set cbtics out', iostat, iomsg)
 test_passed(84) = test_passed(84) .and. iostat /= 0_I4P .and. index(iomsg, 'in and out are supported on xtics') > 0
 ! a justification of unrotated labels is read (gnuplot also moves them), kept for a rotation
@@ -1386,9 +1386,9 @@ call interpreter%run_text('set x2tics rotate by 45 right', iostat, iomsg)
 test_passed(89) = test_passed(89) .and. iostat == 0_I4P .and. &
                   interpreter%figure%panels(1)%x2axis%tics%rotate == 45.0_R8P .and. &
                   interpreter%figure%panels(1)%x2axis%tics%anchor() == 'end'
-call interpreter%run_text('set y2tics rotate', iostat, iomsg)
+call interpreter%run_text('set cbtics rotate', iostat, iomsg)
 test_passed(89) = test_passed(89) .and. iostat /= 0_I4P .and. &
-                  index(iomsg, 'rotate is supported on xtics, x2tics and rtics only') > 0
+                  index(iomsg, 'rotate is supported on xtics, x2tics, ytics, y2tics and rtics only') > 0
 
 ! the identity themes washi and night; a default theme given to init (foresight --theme), which a script overrides
 call interpreter%init(scratch, theme='night')
@@ -6488,6 +6488,34 @@ block
    call arrow_head([3.0_R8P, 4.0_R8P], [3.0_R8P, 4.0_R8P], barbs)
    test_passed(255) = test_passed(255) .and. all(barbs(:, 1) == [3.0_R8P, 4.0_R8P]) .and. &
                       all(barbs(:, 2) == [3.0_R8P, 4.0_R8P])
+endblock
+
+! rotated y and y2 tick labels, as gnuplot 6.0: `rotate` upward and centred on the tick, `rotate by A` right-justified
+! (y2: left), `set tics rotate` on the four axes; the margin grows to their reach
+block
+   character(len=:), allocatable :: svg !< Rendering.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set ytics rotate; set y2tics rotate by 45; set y2range [0:10]; set terminal svg; "// &
+                             "set output 'foresight_script_test.svg'; plot x", iostat, iomsg)
+   svg = read_text('foresight_script_test.svg')
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(256) = iostat == 0_I4P .and. panel%yaxis%tics%rotate == 90.0_R8P .and. &
+                        panel%yaxis%tics%justify == 'center' .and. panel%y2axis%tics%rotate == 45.0_R8P .and. &
+                        len_trim(panel%y2axis%tics%justify) == 0
+   endassociate
+   test_passed(256) = test_passed(256) .and. index(svg, 'text-anchor="middle" transform="rotate(-90') > 0 .and. &
+                     index(svg, 'transform="rotate(-45') > 0
+   call interpreter%run_text("set tics rotate by 30", iostat, iomsg)
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(256) = test_passed(256) .and. iostat == 0_I4P .and. panel%yaxis%tics%rotate == 30.0_R8P .and. &
+                        panel%xaxis%tics%rotate == 30.0_R8P .and. len_trim(panel%yaxis%tics%justify) == 0
+   endassociate
+   call interpreter%run_text("set tics rotate; set ytics norotate; set cbtics in", iostat, iomsg)
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(256) = test_passed(256) .and. iostat == 0_I4P .and. panel%yaxis%tics%rotate == 0.0_R8P .and. &
+                        panel%y2axis%tics%justify == 'center'
+   endassociate
 endblock
 
 if (all(test_passed)) then

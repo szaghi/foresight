@@ -193,6 +193,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_ytic" svg :width="560" :height="320" caption="names on the y axis (ytic)" />
   <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
   <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />
+  <Plot name="cb_ytics_rotate" svg :width="560" :height="320" caption="rotated y labels" />
   <Plot name="cb_time" svg :width="640" :height="480" caption="a time axis (set xdata time)" />
   <Plot name="cb_time_minor" svg :width="640" :height="260" caption="minor ticks in time units" />
   <Plot name="cb_weekdates" svg :width="640" :height="300" caption="ISO 8601 week dates" />

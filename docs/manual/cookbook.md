@@ -307,6 +307,16 @@ An empty tic label is still a tick: `xtic("")` and `ytic("")` mark every row on 
 Long category names fit rotated: `rotate by 30 right` ends each label at its tick, below the axis. `out` points the
 ticks away from the plot; `nomirror` leaves the opposite border bare.
 
+### Rotated y labels
+
+<<< @/examples/snippets/cb_ytics_rotate.gp{gnuplot}
+
+<Plot name="cb_ytics_rotate" svg :width="560" :height="320" />
+
+`set ytics rotate` turns long y labels to read upward, centred on their ticks, so the left margin stays narrow;
+`rotate by 45` turns them by an angle, right-justified (on y2, left-justified), as gnuplot places them. See
+[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+
 ### A time axis
 
 <<< @/examples/snippets/cb_time.gp{gnuplot}

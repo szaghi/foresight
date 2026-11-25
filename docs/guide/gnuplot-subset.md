@@ -1242,7 +1242,10 @@ into the plot: give it `right`, or a negative angle. The bottom margin grows to 
 `set x2tics rotate` turns the x2 tick labels the same way above the plot: from their tick, reading away from it
 (`rotate` is 90 degrees, left-justified there, as gnuplot), the top margin growing to them and the right one to the
 reach of the last label. Unlike gnuplot, a negative angle keeps them above the border (gnuplot lets them run into
-the plot). Text devices write the labels upright, as gnuplot's dumb terminal.
+the plot). `set ytics rotate` turns the y tick labels to read upward, centred on their tick; `rotate by A` turns
+them by `A` degrees, their glyphs centred on the tick and right-justified (y2: left) unless justified, at gnuplot's
+distances from the border; the left (right) margin grows to their reach. `set tics rotate [by A]` turns the labels
+of the four axes. Text devices write the labels upright, as gnuplot's dumb terminal.
 
 ```gnuplot
 set xtics rotate by 30 right out nomirror   # long category names, outward ticks
@@ -2376,7 +2379,7 @@ text). Zooming magnifies the cells with the data.
 3D views other than the [map view](#3d-plots) (`splot` with `set view ROT_X,ROT_Z`),
 `fit` beyond [its subset](#fit), log bases other than 10; `set rlabel`,
 the `rtics` placement options; in `set xtics`, positions and a list together
-(`set xtics 0,1 ("a" 2)`), `rotate` of the y, y2 and color box labels, `out` of the color box ticks, `axis` of the
+(`set xtics 0,1 ("a" 2)`), `rotate` of the color box labels, `out` of the color box ticks, `axis` of the
 x2 and y2 ticks; the complex forms of the functions but `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
 `exp`, `log`, `log10`, `sin`, `cos`, `tan`, `sinh`, `cosh` (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
 (`VP`, `erfi`, `FresnelC`, ...);
