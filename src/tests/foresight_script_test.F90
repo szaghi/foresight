@@ -41,7 +41,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(252)                           !< Per-check outcome.
+logical                       :: test_passed(253)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6424,6 +6424,34 @@ block
       test_passed(252) = test_passed(252) .and. iostat == 0_I4P .and. allocated(series(1)%point_types)
       if (test_passed(252)) test_passed(252) = all(series(1)%point_types == [0, 1, 7, 16, 0])
    endassociate
+endblock
+
+! set table writes a negative zero with its sign, as gnuplot's printf: `% h`, a width, a left-justified field
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test.dat'; plot '+' using 1:(-1*0.0) every ::0::1; "// &
+                             "unset table", iostat, iomsg)
+   test_passed(253) = iostat == 0_I4P .and. read_text('foresight_script_test.dat') == nl// &
+                     '# Curve 0 of 1, 2 points'//nl//'# Curve title: "''+'' using 1:(-1*0.0) every ::0::1"'//nl// &
+                     '# x y type'//nl//'-10 -0  i'//nl//'-9.79798 -0  i'//nl//nl
+   call interpreter%run_text("set format y '%8.3f'; set format x '%-6g|'; set table 'foresight_script_test.dat'; "// &
+                             "plot '+' using (-1*0.0):(-1*0.0) every ::0::0; unset table", iostat, iomsg)
+   test_passed(253) = test_passed(253) .and. iostat == 0_I4P .and. index(read_text('foresight_script_test.dat'), &
+                     nl//'-0    |   -0.000  i'//nl) > 0
+endblock
+
+! a "-" within the string of another option (a title) is not the inline file of `set palette file '-'`
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set title 'set palette file ""-"" (3 columns)'"//nl//"set palette file ""-"""//nl// &
+                             "0 0 1"//nl//"1 1 0"//nl//"e", iostat, iomsg)
+   test_passed(253) = test_passed(253) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%title == 'set palette file "-" (3 columns)' .and. &
+                     all(interpreter%figure%panels(1)%palette%rgb(0.0_R8P) == [0, 0, 255])
 endblock
 
 if (all(test_passed)) then

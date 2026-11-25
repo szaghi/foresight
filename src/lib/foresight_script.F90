@@ -8541,6 +8541,8 @@ contains
       character(len=:), allocatable :: sup    !< `%h` exponent.
       integer(I8P)                  :: mantissa !< Decimal mantissa.
       integer(I4P)                  :: e        !< Decimal exponent.
+      integer(I4P)                  :: p        !< First non-blank character.
+      integer(I4P)                  :: q        !< First blank after it.
 
       if (.not. ieee_is_finite(v)) then
          t = 'NaN'
@@ -8550,6 +8552,25 @@ contains
       call decimal_of(v, mantissa, e)
       call format_decimal(table_conversions(format), mantissa, e, t, sup)
       if (len(sup) > 0) t = t//'e'//sup
+      ! a negative zero keeps its sign, as C's printf (x*y at y = 0 and x < 0): right before the digits, over the plus
+      ! flag or a blank of the padding (space flag, width), else added (a left-justified field keeps its width)
+      if (v == 0.0_R8P .and. sign(1.0_R8P, v) < 0.0_R8P .and. len_trim(t) > 0) then
+         p = verify(t, ' ')
+         if (t(p:p) == '+') then
+            t(p:p) = '-'
+         elseif (t(p:p) /= '-') then
+            q = scan(t(p:), ' ')
+            if (p > 1_I4P) then
+               t(p - 1_I4P:p - 1_I4P) = '-'
+            elseif (q > 0_I4P) then
+               ! left-justified: a blank of the padding after the digits taken
+               q = p + q - 1_I4P
+               t = '-'//t(1:q - 1_I4P)//t(q + 1_I4P:)
+            else
+               t = '-'//t
+            endif
+         endif
+      endif
       endfunction number
 
       pure function table_conversions(format) result(f)
@@ -16060,13 +16081,19 @@ contains
    integer(I4P)                               :: e         !< Closing bracket or quote.
    integer(I4P)                               :: depth     !< Parentheses depth.
    logical                                    :: expect    !< A file item may start here.
+   character(len=:), allocatable              :: after     !< The statement from its first word.
 
    rewritten = line
    if (index(line, '-') == 0) return
    word = leading_word(line)
    if (len(word) == 0) return
-   ! `set palette file '-'`: its file the inline data that follow
+   ! `set palette file '-'`: its file the inline data that follow (a `set palette` statement, not a `"-"` within the
+   ! string of another option, such as a title)
    if (keyword(word, 'set', 2_I4P) .and. index(line, 'palette') > 0) then
+      after = adjustl(line)
+      i = index(after, ' ', kind=I4P)
+      if (i == 0_I4P) return
+      if (.not. keyword(leading_word(after(i:)), 'palette', 3_I4P)) return
       i = index(line, "file '-'", kind=I4P)
       if (i == 0_I4P) i = index(line, 'file "-"', kind=I4P)
       if (i > 0_I4P) then
