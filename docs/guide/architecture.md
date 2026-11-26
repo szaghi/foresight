@@ -11,12 +11,18 @@ flowchart TD
     SCRIPT --> DATA["foresight_datafile<br/>data files"]
     DATA --> EXPR["foresight_expression<br/>using expressions"]
     SCRIPT --> SMOOTH["foresight_smooth<br/>smooth filters"]
+    SCRIPT --> CALC["foresight_fit / _stats<br/>fit, stats"]
+    EXPR --> MATH["foresight_mathlib<br/>special functions"]
     SCRIPT --> FIG
     USER["your Fortran code"] --> FIG
     FIG["foresight_figure<br/>panels, gnuplot-like API"] --> AXES
     AXES["foresight_axes<br/>layout, key, series drawing"] --> AXIS["foresight_axis<br/>ranges, autoscale"]
     AXES --> SERIES["foresight_series / _style"]
     AXES --> READOUT["foresight_readout<br/>seven-segment glass"]
+    AXES --> VIEW3D["foresight_view3d<br/>3D transform, layout"]
+    AXES --> PM3D["foresight_pm3d<br/>pm3d quadrangles, clipping"]
+    AXES --> CONTOUR["foresight_contour / _dgrid3d<br/>contours, gridding"]
+    AXES --> NOTES["foresight_annotations<br/>labels, arrows, objects"]
     AXIS --> TICKS["foresight_ticks<br/>gnuplot steps, exact labels"]
     AXES --> BACKEND
     BACKEND["foresight_backend<br/>abstract device"] --> SVG["backend_svg"]
@@ -28,15 +34,24 @@ flowchart TD
 ## Layers
 
 - **Interpreter** (`foresight_script`, `foresight_tokens`, `foresight_datafile`, `foresight_expression`,
-  `foresight_smooth`): turns gnuplot
+  `foresight_smooth`, `foresight_hulls`, `foresight_time`, `foresight_fit`, `foresight_stats`): turns gnuplot
   statements into calls of the figure API. It lives in the library, so the command line tool is a thin shell and Fortran code can run
   scripts too. Errors are returned, not stopped on, which lets a watch loop survive a bad cycle.
 - **Model** (`foresight_figure`, `foresight_axes`, `foresight_axis`, `foresight_series`, `foresight_style`,
-  `foresight_theme`): panels, axes with gnuplot range semantics, series with their style, the page colors of a theme.
-- **Rules** (`foresight_ticks`, `foresight_format`, `foresight_readout`, `foresight_palette`, `foresight_colormaps`):
+  `foresight_theme`, `foresight_annotations`): panels, axes with gnuplot range semantics, series with their style,
+  labels, arrows and objects, the page colors of a theme.
+- **3D** (`foresight_view3d`, `foresight_pm3d`, `foresight_contour`, `foresight_dgrid3d`): gnuplot's
+  3D transform and layout (graph3d), the pm3d quadrangles in gnuplot's order with its z clipping and lighting
+  (pm3d.c), the contour lines (contour.c), the gridding of scattered data (dgrid3d). A 3D view is
+  drawn as gnuplot's painter does: series projected to the page, the pm3d, zerrorfill, boxes and polygons of a view in
+  one depth queue (`pm3d_queue`) sorted farthest first.
+- **Math** (`foresight_mathlib`, `foresight_specfun`, `foresight_gammafun`, `foresight_bessel`): gnuplot's special
+  functions to its digits.
+- **Rules** (`foresight_ticks`, `foresight_format`, `foresight_readout`, `foresight_palette`, `foresight_colormaps`,
+  `foresight_enhanced`, `foresight_font`):
   tick placement and labels, number formatting, the seven-segment cells a readout format makes and the segments a value
   lights, the palettes from a value to a color (gnuplot's formulae, gradients and cubehelix; the tables of the named
-  palettes, generated).
+  palettes, generated); gnuplot's enhanced text and the font metrics of its layout.
 - **Devices** (`foresight_backend` and its extensions): an abstract drawing interface with two coordinate spaces —
   page pixels for decorations, the unit square of the plot area for data. Readouts are a semantic primitive
   (`readout`, `readout_extent`), not polygons: each device draws digits its own way, hexagons in SVG, `_` and `|` in

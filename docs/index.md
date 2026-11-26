@@ -64,6 +64,15 @@ features:
     link: /manual/cookbook
     linkText: The cookbook
   - icon:
+      light: /icons/views3d.svg
+      dark: /icons/views3d-dark.svg
+      width: 44
+      height: 44
+    title: 3D views
+    details: splot as gnuplot draws it, checked polygon by polygon — meshes with hidden lines, contours, pm3d surfaces depth sorted and lit, filled contours, error bands, 3D bars, polygons and grid walls, or the map view seen from above.
+    link: /guide/gnuplot-subset#3d-views
+    linkText: 3D views
+  - icon:
       light: /icons/dashboards.svg
       dark: /icons/dashboards-dark.svg
       width: 44
