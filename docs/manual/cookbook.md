@@ -540,6 +540,17 @@ wider. See [Margins](/guide/gnuplot-subset#margins).
 `downwards` are the defaults). See [Multiplot](/guide/gnuplot-subset#multiplot).
 
 
+
+### An inset on a cleared box
+
+<<< @/examples/snippets/cb_inset_clear.gp{gnuplot}
+
+<Plot name="cb_inset_clear" svg :width="560" :height="400" />
+
+In a multiplot, `clear` paints the box of the next plot (`set origin`, `set size`) with the page color, so the inset
+is not crossed by the curve below, as gnuplot. `keyentry "text"` adds a key entry whose sample is the text itself, a
+header for the entries after it. See [Multiplot](/guide/gnuplot-subset#multiplot).
+
 ### Panels with margins and spacing
 
 <<< @/examples/snippets/cb_multiplot_margins.gp{gnuplot}
@@ -1694,6 +1705,16 @@ the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`
 `lc rgb variable` (or `fc rgb variable`) colors each quadrangle of a pm3d surface by the fourth `using` field, a packed
 color 0xRRGGBB (0xAARRGGBB with a transparency): a quadrangle takes the mean of its corners channel by channel, as
 gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plots](/guide/gnuplot-subset#3d-plots).
+
+### Colors from the palette
+
+<<< @/examples/snippets/cb_palette_function.gp{gnuplot}
+
+<Plot name="cb_palette_function" svg :width="560" :height="400" />
+
+`palette(z)` is the 24-bit color of z in the current palette over `cbrange`, as gnuplot 6.0: added to a transparency
+in the top byte (0x80000000, half) it colors the points through `lc rgb variable`. See
+[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 ### Labels in palette colors
 

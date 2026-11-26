@@ -181,6 +181,10 @@ type :: series_object
                                                           !< `lc rgb variable`), not palette values.
    logical                       :: colors_kept = .false. !< `colors` set per point; the palette paints only the points
                                                           !< of a finite `zvalues` (the color range of pm3d quads).
+   logical                       :: no_hidden = .false.   !< Out of the hidden surfaces of `set hidden3d` (item option
+                                                          !< `nohidden3d`): drawn as it is.
+   character(len=:), allocatable :: key_text !< A text as the key sample (gnuplot's `keyentry "text"`), unallocated if
+                                             !< none.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

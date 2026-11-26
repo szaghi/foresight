@@ -262,6 +262,8 @@ type :: axes_object
    character(len=24)                :: label_color(7) = ''     !< x, y, y2, x2, r, z, cb label colors, `set xlabel tc`.
    logical                          :: cblabel_norotate = .false. !< The color box label horizontal (`set cblabel
                                                                   !< norotate`; gnuplot's is vertical by default).
+   logical                          :: cleared = .false. !< Its box painted with the page color first (gnuplot's `clear`
+                                                         !< in a multiplot).
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
                                                                   !< `set lmargin`...): characters, or a page fraction
                                                                   !< with `margin_screen`; negative: computed.
@@ -1425,6 +1427,8 @@ contains
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
+   ! gnuplot's `clear` in a multiplot: the panel's box in the page color, over the panels drawn before
+   if (self%cleared) call backend%rect(x0, y0, width, height, 'none', backend%theme%background, 0.0_R8P)
    if (.not. allocated(self%series)) allocate(self%series(0))
    if (size(self%series) > 0) then
       if (is_panel_chart(self%series(1)%style%with)) then
@@ -4262,6 +4266,19 @@ contains
                            [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
                             yc - 0.35_R8P * font_size], edged%fill_color(), edged%density, &
                            edged%stroke_color(), edged%linewidth)
+   endif
+   if (allocated(series%key_text)) then
+      ! `keyentry "text"`: the text from the sample's start, in the item's font and color (gnuplot 6.0)
+      backend%font = series%font
+      backend%boxed = series%text_boxed
+      if (allocated(series%text_color)) then
+         call backend%text(xs(1), yc + 0.35_R8P * font_size, series%key_text, 'start', color=series%text_color)
+      else
+         call backend%text(xs(1), yc + 0.35_R8P * font_size, series%key_text, 'start')
+      endif
+      backend%font = font_object()
+      backend%boxed = .false.
+      return
    endif
    if (series%style%with == WITH_LABELS .and. series%gnuplot_sample) then
       ! no sample, the point of `labels point` alone, as gnuplot 6.0
@@ -9446,7 +9463,7 @@ contains
       nsc = 0_I4P
       np = 0_I4P
       if (.not. allocated(one%z) .or. .not. allocated(one%scans)) return
-      if (one%no_surface) return
+      if (one%no_surface .or. one%no_hidden) return
       if (.not. any(one%style%with == [WITH_LINES, WITH_LINESPOINTS])) return
       nsc = one%grid_scans
       if (nsc < 2_I4P .or. nsc > size(one%scans, 2)) return

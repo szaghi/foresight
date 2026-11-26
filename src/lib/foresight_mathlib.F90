@@ -14,6 +14,7 @@ use foresight_gammafun, only : gp_erf, gp_erfc, gp_gamma, gp_ibeta, gp_igamma, g
 use foresight_time, only : DAY_SEC, WEEK_SEC, civil_time, time_parts
 use foresight_specfun, only : gp_airy, gp_EllipticE, gp_EllipticK, gp_EllipticPi, gp_expint, gp_lambertw, gp_SynchrotronF, &
                               gp_voigt, gp_zeta
+use foresight_palette, only : palette_object
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -22,20 +23,25 @@ public :: MATH_FUNCTIONS
 public :: MATH_ARGS
 public :: math_function
 public :: math_order
+public :: set_palette_function
 
 !< gnuplot's names (case matters: EllipticK), their arguments, and which take an integer order first
-character(len=*), parameter :: MATH_FUNCTIONS(47) = [character(len=12) :: &
+character(len=*), parameter :: MATH_FUNCTIONS(48) = [character(len=12) :: &
    'round', 'cbrt', 'asinh', 'acosh', 'atanh', &
    'erf', 'erfc', 'gamma', 'lgamma', 'norm', 'invnorm', 'inverf', 'igamma', 'uigamma', 'invigamma', 'ibeta', 'invibeta', &
    'besj0', 'besj1', 'besy0', 'besy1', 'besjn', 'besyn', 'besi0', 'besi1', 'besin', &
    'lambertw', 'airy', 'expint', 'EllipticK', 'EllipticE', 'EllipticPi', 'voigt', 'zeta', 'SynchrotronF', &
    'tm_sec', 'tm_min', 'tm_hour', 'tm_mday', 'tm_mon', 'tm_year', 'tm_wday', 'tm_yday', 'tm_week', &
-   'weekdate_iso', 'weekdate_cdc', 'hsv2rgb'] !< Names (weekdate_*: the day, the third argument, 1 when omitted).
-integer(I4P), parameter :: MATH_ARGS(47) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
+   'weekdate_iso', 'weekdate_cdc', 'hsv2rgb', 'palette'] !< Names (weekdate_*: the day, the third argument, 1 when omitted).
+integer(I4P), parameter :: MATH_ARGS(48) = [1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 2_I4P, 3_I4P, 3_I4P, &
    1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, &
    1_I4P, 1_I4P, 2_I4P, 1_I4P, 1_I4P, 2_I4P, 2_I4P, 1_I4P, 1_I4P, &
-   1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 3_I4P, 3_I4P, 3_I4P] !< Arguments.
+   1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 1_I4P, 2_I4P, 3_I4P, 3_I4P, 3_I4P, 1_I4P] !< Arguments.
+
+type(palette_object), save :: palette_now        !< The palette of gnuplot's `palette(z)` (the current panel's).
+real(R8P),            save :: palette_cb(2) = [0.0_R8P, 1.0_R8P] !< Its color axis range (cb2gray).
+logical,              save :: palette_log = .false. !< A log color axis.
 
 interface
    pure function c_cbrt(x) bind(C, name='cbrt') result(y)
@@ -143,6 +149,24 @@ contains
       ! an integer, as gnuplot's
       r = hsv_packed(x(1:3))
       is_int = .true.
+   case ('palette')
+      ! gnuplot 6.0's palette(z): the packed 24-bit color of z in the current palette over the current color axis
+      block
+         real(R8P)    :: g    !< Gray level.
+         integer(I4P) :: c(3) !< Channels.
+
+         g = 0.0_R8P
+         if (palette_log) then
+            if (x(1) > 0.0_R8P .and. palette_cb(1) > 0.0_R8P .and. palette_cb(2) > 0.0_R8P .and. &
+                palette_cb(2) /= palette_cb(1)) &
+               g = (log10(x(1)) - log10(palette_cb(1))) / (log10(palette_cb(2)) - log10(palette_cb(1)))
+         elseif (palette_cb(2) /= palette_cb(1)) then
+            g = (x(1) - palette_cb(1)) / (palette_cb(2) - palette_cb(1))
+         endif
+         c = palette_now%rgb(min(1.0_R8P, max(0.0_R8P, g)))
+         r = real(c(1) * 65536_I4P + c(2) * 256_I4P + c(3), R8P)
+         is_int = .true.
+      endblock
    case ('invibeta')
       call gp_invibeta(x(1), x(2), x(3), r, status)
    case ('besj0')
@@ -344,4 +368,16 @@ contains
    rgb = real(int(255.0_R8P * f(1), I8P) * 65536_I8P + int(255.0_R8P * f(2), I8P) * 256_I8P + int(255.0_R8P * f(3), I8P), &
               R8P)
    endfunction hsv_packed
+
+   subroutine set_palette_function(p, cb, log_axis)
+   !< The palette `p` and color axis range `cb` (`log_axis` a log one) of gnuplot's `palette(z)`: the current panel's,
+   !< set by the interpreter before each statement.
+   type(palette_object), intent(in) :: p        !< Palette.
+   real(R8P),            intent(in) :: cb(2)    !< Color axis range.
+   logical,              intent(in) :: log_axis !< Log color axis.
+
+   palette_now = p
+   palette_cb = cb
+   palette_log = log_axis
+   endsubroutine set_palette_function
 endmodule foresight_mathlib

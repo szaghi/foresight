@@ -41,10 +41,11 @@ that did what it says.
 | **pr**int *expression*`,` ... | [print](#print) values |
 | `do for [`*i*`=`*a*`:`*b*`] {` ... `}`, `while (`*c*`) {` ... `}`, `if (`*c*`) {` ... `} else {` ... `}` | [blocks](#blocks-and-loops): loops and conditions, `break`, `continue` |
 | `$NAME << WORD` ... `WORD` | a [datablock](#datablocks-and-scripts): data inside the script, `plot $NAME` |
-| `function $NAME << WORD` ... `WORD` | a [function block](#function-blocks), called as `$NAME(args)`; inside it `local` *name* `=` ..., `return` [*expression*] |
+| `function $NAME`[`(`*p1*`, ...)`] `<< WORD` ... `WORD` | a [function block](#function-blocks), called as `$NAME(args)`; inside it `local` *name* `=` ..., `return` [*expression*] |
 | **l**oad `'file'` | run a [script file](#datablocks-and-scripts) |
 | **cal**l `'file'` [*arg* ...] | run a script file with arguments: `ARG1` ... `ARG9`, `ARGC` |
-| **eva**l *string* | run a string as script lines |
+| **eva**l *string*, `eval(`*string*`)` | run a string as script lines |
+| **cl**ear | in a [multiplot](#multiplot), the box of the next plot (`set origin`, `set size`) painted with the page color first, an inset over the plots below; otherwise nothing (each plot replaces the page) |
 | **undef**ine *name* ... | forget variables (`name*`: those starting with `name`), arrays and datablocks (`$NAME`) |
 | `array` *A*`[`*N*`]` [`= [`*e1*`, ...]`], `array` *A* `= [`*e1*`, ...]`, `array` *A* `=` *B*`[`*i*`:`*j*`]`, *A*`[`*i*`] =` *expression* | an [array](#arrays) |
 | **sy**stem `"command"` | run a [shell command](#shell-commands-reset-and-pause), its output on the standard output |
@@ -209,9 +210,9 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `sparse matrix=(C,R)` [`origin=(X0,Y0)`] [`dx=DX`] [`dy=DY`] | the points (`using x:y:value`, 1:2:3 by default) fill a grid of C columns and R rows at X0 + i DX, Y0 + j DY (origin 0,0, DX 1, DY = DX), each in the cell nearest to its x:y, the other cells undefined: a heat map of unordered or incomplete data (`with image`), as gnuplot's; a point off its cell's centre is drawn at the centre |
 | **ev**ery `I:J:K:L:M:N` | gnuplot's `point_incr:block_incr:start_point:start_block:end_point:end_block`, empty fields default: `every 2`, `every ::1::10`, `every :::1::1`; the fields may be expressions, `every ::j:0:j:0` |
 | `skip N` | the first `N` lines of the file are not read, whatever they hold (also in `stats` and `fit`) |
-| `nocontours`, `nosurface`, `nogrid` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn; the item's points as they are, not [gridded](#gridded-and-masked-surfaces) by `set dgrid3d` |
+| `nocontours`, `nosurface`, `nogrid`, `nohidden3d` | `splot`'s: no [contour lines](#contours) of the item; the item's contours only, its surface not drawn; the item's points as they are, not [gridded](#gridded-and-masked-surfaces) by `set dgrid3d`; the item out of the hidden surfaces of `set hidden3d`, drawn as it is |
 | `mask` | the item (`with pm3d`, `with image`, `rgbimage`, `rgbalpha`) drawn only inside the polygons of the `with mask` item, see [Gridded and masked surfaces](#gridded-and-masked-surfaces) |
-| `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; the linetype of the next item, not used up; with the other styles of a plot panel its sample is a filled box (polygons, boxplots, circles, ellipses, candlesticks, the box styles, histograms, sectors), a line and points (error lines) or a line; with `spiderplot` a key entry of a [spider plot](#parallel-axes-and-spider-plots) set |
+| `keyentry` | an item without points, its key entry only (`plot keyentry with boxes lc "red" title "x"`), untitled unless titled, as gnuplot 6.0; `keyentry "text"` [`font F`] its sample the text, titled blank unless titled; the linetype of the next item, not used up; with the other styles of a plot panel its sample is a filled box (polygons, boxplots, circles, ellipses, candlesticks, the box styles, histograms, sectors), a line and points (error lines) or a line; with `spiderplot` a key entry of a [spider plot](#parallel-axes-and-spider-plots) set |
 | **newspider**plot | the next spider plot items a new set of polygons on the same axes, see [Parallel axes and spider plots](#parallel-axes-and-spider-plots) |
 | `sharpen` | of a function: the extrema between its samples found (gnuplot 6.0's filter: a golden section search where the 5-term Savitzky-Golay second derivative turns) and added; ignored on data, as gnuplot |
 | **fc** / **fillc**olor `COLOR` | the fill's own color (styles with a fill), its border too (over `lc`, unless `fs border lc` gives one, as gnuplot 6.0): `with filledcurves fc rgb "#80e0a080"`; `fc palette cb V`, `fc palette frac F` one palette color for the item |
@@ -249,7 +250,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `boxes` | `x:y` or `x:y:width` |
 | `filledcurves` | `x:y` (to `y=V`, `x=V`, a border, or the closed polygon), `x:y1:y2` (a band) |
 | `histograms` | `y`, the rows at the point numbers 0, 1, ... |
-| `image` | `x:y:z` on a regular grid (default `1:2:3`), or a `matrix` file |
+| `image` | `x:y:z` on a regular grid (default `1:2:3`), or a `matrix` file; a complete grid of uneven spacing (2 x 2 at least) is drawn with its pixels evenly spread between the first and last values, as gnuplot |
 | `circles` | `x:y` (default radius), `x:y:radius`, `x:y:radius:start:end` (wedges, degrees) |
 | `pie` | `y`, one slice per row; `y:xtic(N)` names the slices |
 | `gauge` | `y` (the last finite value), or `x:y` |
@@ -421,6 +422,7 @@ A variable holds a string as well as a number, a user function may return one, `
 | `value("name")`, `exists("name")` | the variable's value (NaN if none); 1 if it exists |
 | `rgbcolor("name")` | gnuplot 6.0's: the 24-bit RGB of a color name or `"#RRGGBB"` (`"#AARRGGBB"`: the alpha in the top byte) |
 | `hsv2rgb(h, s, v)` | gnuplot's: the 24-bit RGB (an integer) of a hue, saturation and value, each clamped to 0..1 (the hue not in degrees), for `lc rgb variable` |
+| `palette(z)` | gnuplot 6.0's: the 24-bit RGB of z in the current palette over the color axis as it stands (the last plot's; -10 to 10 before any; `set cbrange` in a plot command), for `lc rgb variable` |
 | `int(s)`, `real(s)` | the number a string starts with, truncated or real |
 
 Arithmetic and `==` read a string's leading number, as gnuplot: `"3" + 1` is 4, `"2" / "4"` is 0 (two integers),
@@ -750,7 +752,8 @@ plot $cbrt(x)                                # in plotted functions and using fi
 
 A function block is gnuplot 6.0's: `function $NAME << WORD`, then lines of script up to one starting with WORD. A call
 `$NAME(args)` in any expression (printed, assigned, plotted, a `using` field) runs those lines with `ARGC` the number of
-arguments and the array `ARGV` their values (both restored after); `return EXPR` ends the block with its value, from
+arguments and the array `ARGV` their values (both restored after); named parameters, `function $NAME(a, b) << WORD`,
+are local variables holding the arguments given (`local a = ARGV[1]`, as gnuplot); `return EXPR` ends the block with its value, from
 inside loops and `if` blocks too, and a block without one gives the [undefined value](#arrays). `local NAME = ...` (or
 `local array A[N]`) makes a variable that the end of the block restores; the other variables a block sets stay set,
 as gnuplot. Blocks may call themselves and each other (250 deep at most). `print $NAME` shows `function $NAME( )` and
@@ -2237,7 +2240,8 @@ set xrange [-3:3]; set yrange [-3:3]
 splot x*exp(-x**2-y**2) with points pt 7 ps 0.5 lc palette
 ```
 
-Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them; `[NAME=a:b]` names
+`using N` alone reads the heights from column N, x the point number in its scan and y the scan number in its dataset,
+as gnuplot. Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them; `[NAME=a:b]` names
 them for the plot, `splot [x=-3:3] [y=-3:3] sin(x)*cos(y)`). `set table` writes
 the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of each item, its grid iso-curves (the
 scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,

@@ -144,6 +144,7 @@ use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
 use foresight_stats, only : stats, stats_column, stats_report, stats_result
 use foresight_smooth, only : bin_values, CURVE_MODES, path_spline, smooth, smooth_curve, SMOOTH_MODES, spline_curve3d
+use foresight_mathlib, only : set_palette_function
 use foresight_palette, only : gnuplot_color, hex_color, named_color, palette_gradient, palette_object, palette_words
 use foresight_theme, only : THEMES
 use foresight_style, only : custom_dashtype, default_color, fill_style, &
@@ -583,6 +584,32 @@ contains
    enddo
    argv%set = .true.
    call active%symbols%store_array('ARGV', argv, iostat, msg)
+   ! named parameters (`function $F(a, b) << EOD`): `local NAME = ARGV[k]` for each argument given, as gnuplot
+   if (len(body) > 8) then
+      if (body(1:8) == '#params ') then
+         block
+            character(len=:), allocatable :: names !< Parameter names.
+            character(len=:), allocatable :: one   !< One name.
+            integer(I4P)                  :: e     !< End of the first line.
+            integer(I4P)                  :: c     !< Comma.
+            integer(I4P)                  :: n     !< Parameter counter.
+
+            e = index(body, new_line('a'), kind=I4P)
+            if (e == 0_I4P) e = len(body, kind=I4P) + 1_I4P
+            names = body(9:e - 1_I4P)
+            n = 0_I4P
+            do while (len_trim(names) > 0 .and. n < size(args, kind=I4P))
+               c = index(names, ',', kind=I4P)
+               if (c == 0_I4P) c = len(names, kind=I4P) + 1_I4P
+               one = trim(adjustl(names(1:c - 1_I4P)))
+               n = n + 1_I4P
+               if (len(one) > 0) body = 'local '//one//' = ARGV['//int_str(int(n, I8P))//']'//new_line('a')//body
+               if (c > len(names)) exit
+               names = names(c + 1_I4P:)
+            enddo
+         endblock
+      endif
+   endif
    first = size(active%locals, kind=I4P)
    active%block_depth = active%block_depth + 1_I4P
    active%returned = .false.
@@ -686,6 +713,7 @@ contains
    character(len=:), allocatable                       :: here_text  !< Its lines.
    integer(I4P)                                        :: here_line  !< Its first line.
    logical                                             :: here_function !< A function block, not a datablock.
+   character(len=:), allocatable                       :: here_params   !< Its parameter names, comma separated.
    integer(I4P)                                        :: semicolon     !< Last statement separator of the line.
    character(len=:), allocatable                       :: inline_quotes !< Quotes of the inline data items (`'-'`) of
                                                                         !< the pending line, empty if none.
@@ -699,6 +727,7 @@ contains
    ! after quit (or exit status N), nothing more runs
    if (self%loop_signal == 4_I4P) return
    here_function = .false.
+   here_params = ''
    iostat = 0_I4P
    iomsg = ''
    inline_quotes = ''
@@ -764,6 +793,7 @@ contains
          endif
          if (index(line, here_end) == 1) then
             if (here_function) then
+               if (len(here_params) > 0) here_text = '#params '//here_params//new_line('a')//here_text
                call self%symbols%define_block(here_name, here_text)
             else
                call self%symbols%set_string(here_name, here_text)
@@ -789,8 +819,27 @@ contains
       endif
       here_function = .false.
       if (len(block) == 0 .and. leading_word(line) == 'function') then
-         ! function $NAME << WORD
-         here_function = heredoc(trim(adjustl(line(index(line, 'function') + 8:))), here_name, here_end)
+         ! function $NAME[(P1, ...)] << WORD: the parameter names kept as a first comment line of the body (`#params`),
+         ! each bound to its argument when called (gnuplot 6.0's parnames)
+         block
+            character(len=:), allocatable :: head   !< The definition after `function`.
+            integer(I4P)                  :: open   !< Opening parenthesis.
+            integer(I4P)                  :: close  !< Closing parenthesis.
+            integer(I4P)                  :: marker !< The `<<`.
+
+            head = trim(adjustl(line(index(line, 'function') + 8:)))
+            here_params = ''
+            open = index(head, '(', kind=I4P)
+            marker = index(head, '<<', kind=I4P)
+            if (open > 0_I4P .and. marker > open) then
+               close = index(head(1:marker - 1_I4P), ')', back=.true., kind=I4P)
+               if (close > open) then
+                  here_params = trim(adjustl(head(open + 1_I4P:close - 1_I4P)))
+                  head = head(1:open - 1_I4P)//' '//head(marker:)
+               endif
+            endif
+            here_function = heredoc(head, here_name, here_end)
+         endblock
          if (.not. here_function) then
             call fail('function: function $NAME << WORD expected', iostat, iomsg)
             iomsg = name//':'//int_str(int(first_line, I8P))//': '//iomsg
@@ -926,6 +975,22 @@ contains
    active => self
    ! blocks, flow control (their bodies are expanded statement by statement, when they run)
    command = leading_word(statement)
+   ! gnuplot's palette(z): the current panel's palette over its color axis as it stands (the last plot's, -10 to 10
+   ! before any), a range set taking effect in a plot command, as gnuplot's axis setup before reading the data
+   if (allocated(self%figure%panels)) then
+      if (self%figure%current >= 1 .and. self%figure%current <= size(self%figure%panels)) then
+      associate(cb => self%figure%panels(self%figure%current)%cbaxis)
+         if (cb%min_fixed .and. cb%max_fixed .and. (keyword(command, 'plot', 1_I4P) .or. &
+                                                     keyword(command, 'splot', 2_I4P) .or. &
+                                                     keyword(command, 'replot', 3_I4P))) then
+            call set_palette_function(self%figure%panels(self%figure%current)%palette, [cb%min_user, cb%max_user], &
+                                      cb%log)
+         else
+            call set_palette_function(self%figure%panels(self%figure%current)%palette, [cb%lo, cb%hi], cb%log)
+         endif
+      endassociate
+      endif
+   endif
    if (.not. is_word(command, 'do while if else')) then
       call self%expand_macros(statement, expanded, iostat, iomsg)
       if (iostat /= 0_I4P) return
@@ -939,6 +1004,20 @@ contains
          call self%execute(expanded, iostat, iomsg)
          return
       endif
+   endif
+   ! `eval(EXPR)`: the command and its parenthesized string, as `eval (EXPR)` (gnuplot's polygons.dem)
+   if (command == 'eval') then
+      block
+         character(len=:), allocatable :: t !< Statement without leading blanks.
+
+         t = trim(adjustl(statement))
+         if (len(t) > 4) then
+            if (t(5:5) == '(') then
+               call self%execute('eval '//t(5:), iostat, iomsg)
+               return
+            endif
+         endif
+      endblock
    endif
    ! `set for [...] ...`, `unset for [...] ...` (not `set format`)
    if (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P)) then
@@ -1058,7 +1137,7 @@ contains
    ! in a multiplot, the first command after a plot opens the next panel (the multiplot options excepted)
    if (self%advance_pending .and. (keyword(command, 'set', 2_I4P) .or. keyword(command, 'unset', 3_I4P) .or. &
                                    keyword(command, 'plot', 1_I4P) .or. keyword(command, 'splot', 2_I4P) .or. &
-                                   keyword(command, 'reset', 3_I4P))) then
+                                   keyword(command, 'reset', 3_I4P) .or. keyword(command, 'clear', 2_I4P))) then
       if (.not. is_multiplot_option(tokens)) then
          if (self%figure%layout .and. self%figure%current >= size(self%figure%panels, kind=I4P)) then
             call fail('multiplot: the layout is full', iostat, iomsg)
@@ -1115,6 +1194,14 @@ contains
    elseif (command == 'array') then
       call array_command(self%symbols, after_command(statement), self%figure%panels(self%figure%current)%degrees, &
                          iostat, iomsg)
+   elseif (keyword(command, 'clear', 2_I4P)) then
+      ! gnuplot's `clear`: in a multiplot, the area of the next plot (its origin and size) painted with the page color
+      ! before it is drawn; otherwise nothing to do, a plot replacing the page
+      if (size(tokens) > 1) then
+         call fail('clear: unexpected "'//tokens(2)%text//'"', iostat, iomsg)
+         return
+      endif
+      if (self%multiplot) self%figure%panels(self%figure%current)%cleared = .true.
    elseif (keyword(command, 'eval', 3_I4P)) then
       ! the string, run as script lines
       i = 2_I4P
@@ -2907,7 +2994,7 @@ contains
    endsubroutine get_parameter
 
    ! private procedures
-   function assignment(self, statement, iostat, iomsg) result(done)
+   recursive function assignment(self, statement, iostat, iomsg) result(done)
    !< gnuplot's `NAME = expression` (a user variable, its value now) or `NAME(P1, ...) = expression` (a user function):
    !< an `=` right after the name or the parameter list, not `==`. False if `statement` is neither.
    class(script_object),          intent(inout) :: self      !< Interpreter.
@@ -4125,13 +4212,56 @@ contains
       return
    endif
    if (.not. binary) then
-      call self%plot_items(tokens, text, iostat, iomsg, splot_mode)
+      ! an array element at an item's start (`splot for [i=1:3] U[i], v, ...`) one word, as in an expression
+      call array_elements(self, tokens, text, items)
+      call self%plot_items(items, text, iostat, iomsg, splot_mode)
       return
    endif
    call self%binary_items(tokens, splot_mode, items, iostat, iomsg)
    if (iostat /= 0_I4P) return
    call self%plot_items(items, text, iostat, iomsg, splot_mode)
    endsubroutine plot_command
+
+   subroutine array_elements(self, tokens, text, merged)
+   !< The `tokens` of a plot command with each array name followed at once by its brackets (`U[i]`, no blank between)
+   !< joined into one word, the element: the tokenizer ends a word at `[`, a range of the plot otherwise.
+   class(script_object),            intent(in)  :: self      !< Interpreter.
+   type(token_object),              intent(in)  :: tokens(:) !< Tokens.
+   character(len=*),                intent(in)  :: text      !< The statement.
+   type(token_object), allocatable, intent(out) :: merged(:) !< Tokens, the elements joined.
+   integer(I4P)                                 :: k         !< Token counter.
+   integer(I4P)                                 :: n         !< Tokens kept.
+   logical                                      :: join      !< Join the next token.
+
+   allocate(merged(size(tokens)))
+   n = 0_I4P
+   k = 1_I4P
+   do while (k <= size(tokens, kind=I4P))
+      n = n + 1_I4P
+      merged(n) = tokens(k)
+      join = .false.
+      if (k < size(tokens, kind=I4P) .and. tokens(k)%kind == TOKEN_WORD) then
+         if (tokens(k + 1_I4P)%kind == TOKEN_RANGE .and. tokens(k + 1_I4P)%first == tokens(k)%last + 1_I4P .and. &
+             tokens(k)%last >= tokens(k)%first .and. tokens(k + 1_I4P)%last <= len(text)) &
+            join = self%symbols%is_array(tokens(k)%text)
+      endif
+      if (join) then
+         merged(n)%text = text(tokens(k)%first:tokens(k + 1_I4P)%last)
+         merged(n)%last = tokens(k + 1_I4P)%last
+         k = k + 2_I4P
+      else
+         k = k + 1_I4P
+      endif
+   enddo
+   ! through a temporary (nvfortran 26.9: no self-assignment of a section)
+   block
+      type(token_object), allocatable :: kept(:) !< The tokens kept.
+
+      allocate(kept(n))
+      if (n > 0_I4P) kept(:) = merged(1:n)
+      call move_alloc(kept, merged)
+   endblock
+   endsubroutine array_elements
 
    subroutine plot_items(self, tokens, text, iostat, iomsg, splot_mode)
    !< `plot` items: each a data file or a function with modifiers, comma separated; replaces the previous plot and
@@ -4170,6 +4300,7 @@ contains
    logical                                      :: other_seen !< An option other than the data ones met.
    character(len=:), allocatable                :: option_word !< The current option as written.
    logical                                      :: item_nocontours !< `nocontours`: no contour lines of the item.
+   logical                                      :: item_nohidden !< `nohidden3d`: the item out of the hidden surfaces.
    logical                                      :: item_nosurface  !< `nosurface`: the item's surface not drawn.
    logical                                      :: item_nogrid     !< `nogrid`: the item's data not gridded (dgrid3d).
    logical                                      :: item_mask       !< `mask`: the item masked by the `with mask` polygons.
@@ -4201,6 +4332,7 @@ contains
    character(len=:), allocatable                :: fill_rgb  !< Fill color of the item (`fc`), unallocated if none.
    logical                                      :: head_skipped !< `notitle columnhead`: the first row a header.
    logical                                      :: keyentry  !< The item is gnuplot's `keyentry`.
+   character(len=:), allocatable                :: keyentry_text !< Its text sample (`keyentry "text"`), empty if none.
    logical                                      :: keyentry_blank !< A keyentry without sample (`with labels`, or
                                                                   !< no `with`).
    logical                                      :: with_given !< The item has its `with`.
@@ -4556,6 +4688,7 @@ contains
       is_function = tokens(i)%kind == TOKEN_WORD
       keyentry = .false.
       keyentry_blank = .false.
+      keyentry_text = ''
       quote = ' '
       ! a word joined to strings or substrings is a string expression, a file name: d[1:3] . "x.dat"
       if (is_function) is_function = all(tokens(i:expression_end(tokens, i))%kind == TOKEN_WORD)
@@ -4576,6 +4709,13 @@ contains
          is_function = .true.
          written = 'NaN'
          keyentry = .true.
+         ! `keyentry "text"`: the text the sample, a label (gnuplot 6.0's keyentry.dem)
+         if (i < size(tokens, kind=I4P)) then
+            if (tokens(i + 1_I4P)%kind == TOKEN_STRING) then
+               i = i + 1_I4P
+               keyentry_text = tokens(i)%text
+            endif
+         endif
          ! its own function (a keyentry first in the plot has no other)
          call func%compile(written, iostat, iomsg)
          if (iostat /= 0_I4P) return
@@ -4769,6 +4909,11 @@ contains
       auto_title = .false.
       plain_item = .false.
       title = ''
+      ! a keyentry of a text: its sample the text with the label options, titled blank unless titled (gnuplot's)
+      if (len(keyentry_text) > 0) then
+         title = ' '
+         has_title = .true.
+      endif
       title_column = -1_I4P
       head_piece = 0_I4P
       axes = 'x1y1'
@@ -4827,6 +4972,7 @@ contains
       title_to = i
       other_seen = .false.
       item_nocontours = .false.
+      item_nohidden = .false.
       item_nosurface = .false.
       item_nogrid = .false.
       item_mask = .false.
@@ -5226,8 +5372,8 @@ contains
          elseif (with == 'labels' .and. word == 'hypertext') then
             ! gnuplot's hypertext: the texts shown on mouse-over of their points, not drawn
             hypertext = .true.
-         elseif (with == 'labels' .and. is_word(word, 'left center centre right norotate point nopoint rotate offset '// &
-                                                'tc textcolor boxed')) then
+         elseif ((with == 'labels' .or. len(keyentry_text) > 0) .and. &
+                 is_word(word, 'left center centre right norotate point nopoint rotate offset tc textcolor boxed')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
             if (.not. label_option()) return
          elseif (word == 'at' .and. with == 'parallelaxes') then
@@ -5470,6 +5616,9 @@ contains
          elseif (splot_mode .and. word == 'nogrid') then
             ! splot's: the item's data as they are, not gridded by set dgrid3d
             item_nogrid = .true.
+         elseif (splot_mode .and. keyword(word, 'nohidden3d', 8_I4P)) then
+            ! splot's: the item not hidden by (nor hiding) the surfaces of set hidden3d
+            item_nohidden = .true.
          elseif (word == 'mask') then
             ! gnuplot's: the item (pm3d, image) drawn only inside the polygons of the `with mask` item
             item_mask = .true.
@@ -6786,6 +6935,12 @@ contains
          ! spherical and cylindrical data: a radius of 1 when not given (gnuplot's)
          zspec = '(1)'
          rest = trim(parts(1))//':'//trim(parts(2))
+      elseif (n == 1_I4P .and. pseudo == 0_I4P) then
+         ! one field: the height, at the point number in its scan and the scan number in its dataset (gnuplot's
+         ! `using 1` of splot: x $0, y $-1)
+         zspec = trim(parts(1))
+         rest = trim(parts(1))//':'//trim(parts(1))
+         one_column3d = .true.
       elseif (n < 3_I4P) then
          call fail('splot: using needs x:y:z, found "'//spec//'"', iostat, iomsg)
          return
@@ -7067,6 +7222,7 @@ contains
             panel%color_shift = panel%color_shift + 1_I4P
          endif
          panel%series(last)%no_contours = item_nocontours
+         panel%series(last)%no_hidden = item_nohidden
          panel%series(last)%no_surface = item_nosurface
          ! set dgrid3d: the data (not a function's samples) gridded, gnuplot's grid_nongrid_data
          ! a mask is never gridded (gnuplot's opt_out_of_dgrid3d)
@@ -7729,8 +7885,9 @@ contains
                if (line%lc(1:1) /= '*') panel%series(last)%point_color = line%lc
             endif
          endif
-         ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0
+         ! a keyentry of labels, or of no style: no sample, as gnuplot 6.0; of a text, the text the sample
          if (keyentry_blank .or. (keyentry .and. .not. with_given)) panel%series(last)%style%color = 'none'
+         if (len(keyentry_text) > 0) panel%series(last)%key_text = keyentry_text
          panel%series(last)%gnuplot_sample = .true.
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_auto = auto_title
@@ -18241,11 +18398,6 @@ contains
       allocate(grid(0, 0))
       return
    endif
-   if (.not. (even(xs) .and. even(ys))) then
-      problem = 'the points are not on a regular grid (evenly spaced x and y)'
-      allocate(grid(0, 0))
-      return
-   endif
    allocate(grid(size(xs), size(ys)))
    grid = ieee_value(1.0_R8P, ieee_quiet_nan)
    do k = 1_I4P, size(x, kind=I4P)
@@ -18254,6 +18406,19 @@ contains
       j = findloc(ys, y(k), dim=1)
       grid(i, j) = z(k)
    enddo
+   if (.not. (even(xs) .and. even(ys))) then
+      ! unevenly spaced: a complete grid (as many points as cells, 2 x 2 at least) is still an image, its pixels evenly
+      ! spread between the first and last values, as gnuplot places them by the corner points (sampling.dem's
+      ! `[v=25:75:4]`: 25, 31, 35, ...)
+      if (count(ok) /= size(xs) * size(ys) .or. size(xs) < 2 .or. size(ys) < 2) then
+         problem = 'the points are not on a regular grid (evenly spaced x and y)'
+         deallocate(grid)
+         allocate(grid(0, 0))
+         return
+      endif
+      xs = spread_evenly(xs)
+      ys = spread_evenly(ys)
+   endif
    contains
       pure function distinct(v) result(d)
       !< Sorted distinct values of `v`.
@@ -18300,6 +18465,22 @@ contains
          if (abs(v(a) - v(a - 1_I4P) - step) > 1.0e-6_R8P * step) yes = .false.
       enddo
       endfunction even
+
+      pure function spread_evenly(v) result(e)
+      !< The increasing `v` replaced by as many values evenly spaced from its first to its last.
+      real(R8P), intent(in)  :: v(:) !< Values.
+      real(R8P), allocatable :: e(:) !< Evenly spaced values.
+      integer(I4P)           :: a    !< Counter.
+
+      allocate(e(size(v)))
+      if (size(v) < 2) then
+         e = v
+         return
+      endif
+      do a = 1_I4P, size(v, kind=I4P)
+         e(a) = v(1) + (v(size(v)) - v(1)) * real(a - 1_I4P, R8P) / real(size(v) - 1, R8P)
+      enddo
+      endfunction spread_evenly
    endsubroutine regular_grid
 
    function style_code(name) result(code)

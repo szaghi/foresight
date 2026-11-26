@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(272)                           !< Per-check outcome.
+logical                       :: test_passed(273)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7106,6 +7106,61 @@ block
                              "splot $q using 1:2:3 with pm3d lc rgb variable", iostat, iomsg)
    test_passed(272) = test_passed(272) .and. iostat == 0_I4P
    if (test_passed(272)) test_passed(272) = index(read_text('foresight_script_test_tc.svg'), 'fill="#7f7f7fdf"') > 0
+endblock
+
+
+
+! plot items and commands of gnuplot 6.0's demos (probed): `eval(EXPR)`; function blocks with named parameters
+! (`function $F(a, b) << EOD`, each `local NAME = ARGV[k]`); `splot 'f' using 1`, x the point in its scan and y the
+! scan in its dataset (gnuplot's table: 0 1 8 after 0 0 5..7); an array element starting an item (`U[2]*x`);
+! `nohidden3d`; `clear` in a multiplot (the next box painted, 60,80 180x120 as gnuplot); `keyentry "text"` its text the
+! sample; `palette(z)` over the color axis as it stands (-10 to 10 before a plot: palette(5) dd6c00, as gnuplot); an
+! unevenly sampled complete grid as an image (sampling.dem: 25, 31, 35, ... spread evenly)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   real(R8P)                     :: v    !< A value.
+   logical                       :: found !< Variable found.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("eval(sprintf('k = %d', 7))"//nl//"function $F(a, b) << EOD"//nl//"  return a*10 + b"//nl// &
+                             "EOD"//nl//"r = $F(3, 4)"//nl//"p = palette(5)", iostat, iomsg)
+   test_passed(273) = iostat == 0_I4P
+   call interpreter%symbols%value_of('k', v, found)
+   test_passed(273) = test_passed(273) .and. found .and. v == 7.0_R8P
+   call interpreter%symbols%value_of('r', v, found)
+   test_passed(273) = test_passed(273) .and. found .and. v == 34.0_R8P
+   call interpreter%symbols%value_of('p', v, found)
+   test_passed(273) = test_passed(273) .and. found .and. v == 14511104.0_R8P
+   call interpreter%run_text("$o << EOD"//nl//"5"//nl//"6"//nl//"7"//nl//nl//"8"//nl//"9"//nl//"EOD"//nl// &
+                             "set table 'foresight_script_test.dat'; splot $o using 1 nohidden3d; unset table", &
+                             iostat, iomsg)
+   test_passed(273) = test_passed(273) .and. iostat == 0_I4P
+   if (test_passed(273)) then
+      associate(series => interpreter%figure%panels(1)%series(1))
+         test_passed(273) = series%x(5) == 0.0_R8P .and. series%y(5) == 1.0_R8P .and. series%z(5) == 8.0_R8P .and. &
+                           series%x(3) == 2.0_R8P .and. series%no_hidden
+      endassociate
+   endif
+   call interpreter%run_text("array U[3] = [0.1, 0.2, 0.3]; set table 'foresight_script_test.dat'; "// &
+                             "plot [0:1] U[2]*x; unset table", iostat, iomsg)
+   test_passed(273) = test_passed(273) .and. iostat == 0_I4P
+   if (test_passed(273)) test_passed(273) = abs(maxval(interpreter%figure%panels(1)%series(1)%y, &
+                                                     mask=ieee_is_finite(interpreter%figure%panels(1)%series(1)%y)) - &
+                                              0.2_R8P) < 1.0e-12_R8P
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_clear.svg'"//nl// &
+                             "set multiplot; plot x; set origin 0.1,0.5; set size 0.3,0.3; clear; "// &
+                             "plot x**2, keyentry 'Secondary' font ':Bold'; unset multiplot", iostat, iomsg)
+   test_passed(273) = test_passed(273) .and. iostat == 0_I4P
+   if (test_passed(273)) then
+      svg = read_text('foresight_script_test_clear.svg')
+      test_passed(273) = index(svg, '<rect x="60" y="80" width="180" height="120" fill="#ffffff"') > 0 .and. &
+                        index(svg, 'font-weight="bold">Secondary</text>') > 0
+   endif
+   call interpreter%run_text("reset; set output 'foresight_script_test_clear.svg'; set view map; "// &
+                             "splot sample [u=25:75:1][v=25:75:4] '++' using 1:2:0:(u):(v):(0):(255) with rgbalpha", &
+                             iostat, iomsg)
+   test_passed(273) = test_passed(273) .and. iostat == 0_I4P
 endblock
 
 if (all(test_passed)) then
