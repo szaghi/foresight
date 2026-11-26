@@ -4482,14 +4482,15 @@ contains
    character(len=:), allocatable                :: sampled   !< Its sample variables.
    character(len=:), allocatable                :: item_dummy !< The dummy variable of the item's function.
    logical                                      :: sample_first !< `plot sample [...] ...`: no plot range.
-   character(len=:), allocatable                :: range_names(:) !< splot's dummy variables named by the inline
-                                                                  !< ranges (`splot [u=0:1] [v=0:2] ...`), blank if not.
+   character(len=64)                            :: range_names(2) !< splot's dummy variables named by the inline
+                                                                  !< ranges (`splot [u=0:1] [v=0:2] ...`), blank if not
+                                                                  !< (fixed length: `= ''` on a deferred-length array
+                                                                  !< reallocates it to length 0).
 
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
    loaded_skip = 0_I4P
-   allocate(character(len=64) :: range_names(2))
    range_names = ''
    allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0), sharpens(0))
    spider_group = 0_I4P
