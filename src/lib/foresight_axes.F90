@@ -282,6 +282,8 @@ type :: axes_object
    type(style_object)               :: fill_default     !< Fill of the filled styles, `set style fill` (its fill
                                                         !< components only).
    real(R8P)                        :: boxwidth = 0.0_R8P !< Box width, `set boxwidth`; 0 for auto (boxes touching).
+   real(R8P)                        :: boxdepth = 0.0_R8P !< Box depth of `splot with boxes` (`set boxdepth`): 0 a
+                                                          !< flat front face, -1 `square`.
    logical                          :: boxwidth_relative = .false. !< `boxwidth` scales the auto width.
    logical                          :: histogram_rowstacked = .false. !< Histograms stacked by row, else clustered.
    real(R8P)                        :: histogram_gap = 2.0_R8P !< Gap between clusters [bar slots].
@@ -2571,6 +2573,13 @@ contains
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
+      ! splot with boxes: its faces pending (gnuplot's plot3d_boxes)
+      if (self%series(s)%style%with == WITH_BOXES .and. allocated(self%series(s)%z)) then
+         pending = self%series(s)
+         pending%pm3d_pending = .true.
+         call push(drawn, pending)
+         cycle
+      endif
       ! zerrorfill: its quadrangles pending (with its key entry, a fill sample), then its line through z
       if (self%series(s)%zerrorfill .and. allocated(self%series(s)%zlow) .and. allocated(self%series(s)%zhigh)) then
          pending = self%series(s)
@@ -2667,7 +2676,19 @@ contains
          call push(drawn, self%series(s))
          cycle
       endif
-      if (self%series(s)%zerrorfill) then
+      if (self%series(s)%style%with == WITH_BOXES) then
+         ! its key entry apart (a fill sample, unbordered as gnuplot's), then its faces
+         block
+            type(series_object) :: keyed !< The key entry.
+
+            call box3d_quads(self%pm3d, self%series(s), f, depth, self%xaxis, self%yaxis, self%zaxis, self%boxwidth, &
+                             self%boxdepth, self%view3d%rot_x, self%view3d%rot_z, quads, keyed, qx, qy, qd, qc, nq)
+            if (len(keyed%title) > 0) call push(drawn, keyed)
+         endblock
+         if (depth) cycle
+         call push(drawn, quads)
+         cycle
+      elseif (self%series(s)%zerrorfill) then
          call zerror_quads(self%pm3d, self%series(s), f, depth, quads, qx, qy, qd, qc, nq)
       elseif (self%series(s)%contourfill) then
          call contourfill_slices(self, self%zaxis, self%cbaxis, p, lows, highs, mids, scol)
@@ -2693,6 +2714,181 @@ contains
    endif
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_quads
+
+   subroutine box3d_quads(pm, one, f, depth, xaxis, yaxis, zaxis, boxwidth, boxdepth, rot_x, rot_z, quads, keyed, qx, &
+                          qy, qd, qc, nq)
+   !< The faces of `splot with boxes` (gnuplot's plot3d_boxes): for each point a front face from z = 0 (clipped to the z
+   !< range) to its height, x the box width about it (`set boxwidth`, else 1), clipped to the x range; with `set
+   !< boxdepth D` (`square`: the width scaled by the y and x ranges) its back, left, right and top faces, y +- D/2
+   !< clipped to the y range. Each in the point's color (`lc variable`, `fc rgb variable`; lit with `set pm3d lighting`,
+   !< gnuplot's illuminate_one_quadrangle) or the item's fill (else line) color, in its fill style, bordered by its fill
+   !< border. Queued with `depth`, else sorted among themselves by the depth of their base (gnuplot's flush with
+   !< base_sort). `keyed` the key entry: a fill sample alone.
+   type(pm3d_object),              intent(in)    :: pm       !< pm3d settings.
+   type(series_object),            intent(in)    :: one      !< The item.
+   type(view3d_frame),             intent(in)    :: f        !< The view.
+   logical,                        intent(in)    :: depth    !< Queued, not drawn in place.
+   type(axis_object),              intent(in)    :: xaxis    !< x axis.
+   type(axis_object),              intent(in)    :: yaxis    !< y axis.
+   type(axis_object),              intent(in)    :: zaxis    !< z axis.
+   real(R8P),                      intent(in)    :: boxwidth !< `set boxwidth`, 0 none.
+   real(R8P),                      intent(in)    :: boxdepth !< `set boxdepth`, 0 none, -1 square.
+   real(R8P),                      intent(in)    :: rot_x    !< View rotation about x [deg].
+   real(R8P),                      intent(in)    :: rot_z    !< View rotation about z [deg].
+   type(series_object),            intent(out)   :: quads    !< Its faces (in place).
+   type(series_object),            intent(out)   :: keyed    !< Its key entry.
+   real(R8P), allocatable,         intent(inout) :: qx(:)    !< Queued corner abscissae [px].
+   real(R8P), allocatable,         intent(inout) :: qy(:)    !< Queued corner ordinates [px].
+   real(R8P), allocatable,         intent(inout) :: qd(:)    !< Queued depths.
+   character(len=24), allocatable, intent(inout) :: qc(:)    !< Queued colors.
+   integer(I4P),                   intent(inout) :: nq       !< Queued quadrangles.
+   real(R8P), allocatable                        :: lx(:), ly(:), ld(:) !< The item's own queue.
+   character(len=24), allocatable                :: lc(:)    !< Its colors.
+   character(len=24)                             :: color    !< A box's color.
+   real(R8P)                                     :: cx(4), cy(4), cz(4) !< A face.
+   real(R8P)                                     :: dxl, dxh, dyl, dyh, zbase, dz, d, width !< A box.
+   real(R8P)                                     :: xlo, xhi, ylo, yhi, zlo, zhi !< Axis ranges.
+   real(R8P)                                     :: v(3)     !< View coordinates.
+   real(R8P)                                     :: w(2)     !< Page position.
+   real(R8P)                                     :: dsum     !< Depth sum.
+   real(R8P)                                     :: vv(3, 4) !< Face corners in the view (lighting).
+   integer(I4P)                                  :: i, k, nl, face, nfaces !< Counters.
+   logical                                       :: column_color !< A color per point.
+
+   xlo = min(xaxis%lo, xaxis%hi)
+   xhi = max(xaxis%lo, xaxis%hi)
+   ylo = min(yaxis%lo, yaxis%hi)
+   yhi = max(yaxis%lo, yaxis%hi)
+   zlo = min(zaxis%lo, zaxis%hi)
+   zhi = max(zaxis%lo, zaxis%hi)
+   width = merge(boxwidth, 1.0_R8P, boxwidth > 0.0_R8P)
+   d = boxdepth
+   if (boxdepth < 0.0_R8P) d = width * (yhi - ylo) / (xhi - xlo)
+   nfaces = merge(5_I4P, 1_I4P, boxdepth /= 0.0_R8P)
+   column_color = .false.
+   if (allocated(one%colors)) column_color = size(one%colors) == size(one%x)
+   allocate(lx(6 * nfaces * size(one%x)), ly(6 * nfaces * size(one%x)), ld(nfaces * size(one%x)), &
+            lc(nfaces * size(one%x)))
+   nl = 0_I4P
+   do i = 1_I4P, size(one%x, kind=I4P)
+      if (.not. (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i)) .and. ieee_is_finite(one%z(i)))) cycle
+      dxl = one%x(i) - width / 2.0_R8P
+      dxh = one%x(i) + width / 2.0_R8P
+      dyl = one%y(i)
+      dyh = one%y(i)
+      dz = one%z(i)
+      ! out of the y range
+      if ((dyl > ylo .and. dyl > yhi) .or. (dyl < ylo .and. dyl < yhi)) cycle
+      if (boxdepth /= 0.0_R8P) then
+         dyl = min(max(dyl - d / 2.0_R8P, ylo), yhi)
+         dyh = min(max(dyh + d / 2.0_R8P, ylo), yhi)
+      endif
+      dxl = min(max(dxl, xlo), xhi)
+      dxh = min(max(dxh, xlo), xhi)
+      if (dxl == dxh .and. (dxl == xlo .or. dxl == xhi)) cycle
+      zbase = min(max(0.0_R8P, zlo), zhi)
+      color = 'black'
+      if (allocated(one%style%color)) color = one%style%color
+      if (allocated(one%style%fill_rgb)) then
+         if (len(one%style%fill_rgb) > 0) color = one%style%fill_rgb
+      endif
+      if (column_color) color = one%colors(i)
+      do face = 1_I4P, nfaces
+         select case (face)
+         case (1_I4P)
+            cx = [dxl, dxl, dxh, dxh]
+            cy = [dyl, dyl, dyl, dyl]
+            cz = [zbase, dz, dz, zbase]
+         case (2_I4P)
+            cy = [dyh, dyh, dyh, dyh]
+         case (3_I4P)
+            cx = [dxl, dxl, dxl, dxl]
+            cy = [dyl, dyl, dyh, dyh]
+            cz = [zbase, dz, dz, zbase]
+         case (4_I4P)
+            cx = [dxh, dxh, dxh, dxh]
+         case (5_I4P)
+            cx = [dxl, dxl, dxh, dxh]
+            cy = [dyl, dyh, dyh, dyl]
+            cz = [dz, dz, dz, dz]
+         endselect
+         nl = nl + 1_I4P
+         lx(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         ly(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         dsum = 0.0_R8P
+         do k = 1_I4P, 4_I4P
+            v = view3d_xyz(f, cx(k), cy(k), cz(k))
+            vv(:, k) = v
+            w = view3d_page(f, v, truncate=.true.)
+            lx(6 * nl - 6 + k) = w(1)
+            ly(6 * nl - 6 + k) = -w(2)
+            ! the depth of the base below (gnuplot's flush with base_sort, or `depthorder base`)
+            if (pm%base_sort .or. .not. depth) v = view3d_xyz(f, cx(k), cy(k), &
+                                                         min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), &
+                                                         base=.true.)
+            dsum = dsum + v(3)
+         enddo
+         ld(nl) = 0.25_R8P * dsum
+         lc(nl) = color
+         ! a color per point lit (gnuplot's illuminate_one_quadrangle: the corners in the view)
+         if (column_color .and. pm%strength > 0.0_R8P) then
+            block
+               integer(I4P) :: c3(3) !< Channels.
+               logical      :: ok    !< Known.
+               integer(I8P) :: code  !< Packed color.
+
+               call named_color(trim(color(1:7)), c3, ok)
+               if (ok) then
+                  code = lit_color(real(c3, R8P) / 255.0_R8P, 0_I8P, vv(:, 1), vv(:, 2), vv(:, 3), vv(:, 4), pm, &
+                                   f%scale3d, rot_x, rot_z)
+                  lc(nl) = packed_hex(real(code, R8P))
+                  if (len_trim(color) > 7) lc(nl) = trim(lc(nl))//color(8:9)
+               endif
+            endblock
+         endif
+      enddo
+   enddo
+   quads%style = one%style
+   quads%style%with = WITH_POLYGONS
+   if (quads%style%fill == FILL_EMPTY) then
+      quads%style%fill = FILL_SOLID
+      quads%style%density = 1.0_R8P
+   endif
+   if (allocated(quads%style%fill_rgb)) deallocate(quads%style%fill_rgb)
+   quads%crisp = .true.
+   quads%key_blank = .true.
+   quads%title = ''
+   keyed%style = quads%style
+   keyed%style%border = .false.
+   keyed%style%fill_rgb = trim(color)
+   if (nl > 0_I4P) keyed%style%fill_rgb = trim(lc(1))
+   keyed%x = [real(R8P) :: ]
+   keyed%y = [real(R8P) :: ]
+   keyed%title = ''
+   if (allocated(one%title)) keyed%title = one%title
+   keyed%title_plain = one%title_plain
+   if (depth) then
+      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + nl)
+      do k = 1_I4P, nl
+         nq = nq + 1_I4P
+         qx(6 * nq - 5:6 * nq) = lx(6 * k - 5:6 * k)
+         qy(6 * nq - 5:6 * nq) = ly(6 * k - 5:6 * k)
+         qd(nq) = ld(k)
+         qc(nq) = lc(k)
+      enddo
+   else
+      block
+         type(series_object) :: sorted !< Its faces, sorted.
+
+         call pm3d_sorted_queue(pm, lx, ly, ld, lc, nl, sorted)
+         quads%x = sorted%x
+         quads%y = sorted%y
+         quads%colors = sorted%colors
+         quads%colors_kept = .true.
+      endblock
+   endif
+   quads%palette_mode = 0_I4P
+   endsubroutine box3d_quads
 
    subroutine zerror_quads(pm, one, f, depth, quads, qx, qy, qd, qc, nq)
    !< The quadrangles of `with zerrorfill` (gnuplot's plot3d_zerrorfill): between each two defined points of the item

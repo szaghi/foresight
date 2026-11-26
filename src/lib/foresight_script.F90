@@ -11877,6 +11877,19 @@ contains
       call all_tics_option(scale_only=.true.)
    elseif (keyword(option, 'tics', 3_I4P)) then
       call all_tics_option(scale_only=.false.)
+   elseif (is_word(option, 'xtics xtic ytics ytic ztics ztic x2tics x2tic y2tics y2tic cbtics cbtic') .and. &
+           tics_add_after()) then
+      ! `set xtics START,INCR,END ... add (LIST)`: the ticks, then the list added (gnuplot's one command)
+      block
+         integer(I4P) :: k !< The `add` token.
+
+         do k = 3_I4P, size(tokens, kind=I4P) - 1_I4P
+            if (tokens(k)%text == 'add' .and. tokens(k + 1_I4P)%text(1:min(1, len(tokens(k + 1_I4P)%text))) == '(') &
+               exit
+         enddo
+         call self%set_command([tokens(1:k - 1_I4P), tokens(k + 2_I4P:)], iostat, iomsg)
+         if (iostat == 0_I4P) call self%set_command([tokens(1), tokens(k:k + 1_I4P)], iostat, iomsg)
+      endblock
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call tics_option(self%figure%panels(self%figure%current)%xaxis%tics)
    elseif (keyword(option, 'ytics', 3_I4P)) then
@@ -12078,6 +12091,27 @@ contains
       endassociate
    elseif (keyword(option, 'walls', 4_I4P)) then
       call self%wall_option(tokens, iostat, iomsg)
+   elseif (option == 'boxdepth') then
+      ! gnuplot's set_boxdepth: the depth of splot's boxes, `square` as wide as deep on the page, none bare
+      associate(panel => self%figure%panels(self%figure%current))
+         panel%boxdepth = 0.0_R8P
+         if (size(tokens) >= 2) then
+            if (tokens(2)%text == 'square') then
+               panel%boxdepth = -1.0_R8P
+               if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
+            else
+               block
+                  integer(I4P) :: i !< Token.
+                  real(R8P)    :: v !< Depth.
+
+                  i = 1_I4P
+                  if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) return
+                  panel%boxdepth = v
+                  if (.not. no_more(tokens, i + 1_I4P, iostat, iomsg)) return
+               endblock
+            endif
+         endif
+      endassociate
    elseif (option == 'contourfill') then
       ! gnuplot's set_contourfill: the slices of `with contourfill`, one option per command
       cfill_set: block
@@ -15714,6 +15748,19 @@ contains
       call self%figure%set_margin(side, value=v, screen=screen)
       endfunction margin_value
 
+      function tics_add_after() result(yes)
+      !< Whether an `add (LIST)` follows other tick options in the command (from token 3).
+      logical      :: yes !< Found.
+      integer(I4P) :: k   !< Token counter.
+
+      yes = .false.
+      do k = 3_I4P, size(tokens, kind=I4P) - 1_I4P
+         if (tokens(k)%text /= 'add') cycle
+         if (len(tokens(k + 1_I4P)%text) == 0) cycle
+         if (tokens(k + 1_I4P)%text(1:1) == '(') yes = .true.
+      enddo
+      endfunction tics_add_after
+
       subroutine all_tics_option(scale_only)
       !< gnuplot `set tics [mirror|nomirror] [in|out] [scale MAJOR[,MINOR]|default] [border]`: the options of every axis
       !< (scale also the color box's); bare, the x and y ticks on. `set ticscale MAJOR [MINOR]` (`scale_only`) its scale.
@@ -17548,6 +17595,8 @@ contains
    elseif (keyword(option, 'walls', 4_I4P)) then
       ! every grid wall off
       self%figure%panels(self%figure%current)%wall_on = .false.
+   elseif (option == 'boxdepth') then
+      self%figure%panels(self%figure%current)%boxdepth = 0.0_R8P
    elseif (option == 'contourfill') then
       ! gnuplot's unset_contourfill: auto 5, the palette
       self%figure%panels(self%figure%current)%cfill_mode = 0_I4P

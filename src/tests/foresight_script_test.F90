@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(278)                           !< Per-check outcome.
+logical                       :: test_passed(279)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7439,6 +7439,47 @@ block
                      .not. interpreter%figure%panels(1)%view3d%grid_mz
    call interpreter%run_text("set grid mz", iostat, iomsg)
    test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%view3d%grid_mz
+endblock
+
+
+
+! `splot with boxes`, gnuplot 6.0's plot3d_boxes (probed on its svg, 600 x 400, view 59, 24): a front face from z = 0
+! to each height, x the box width about the point (189.29,273.74 189.29,193.42 225.08,198.33 225.08,278.65 in
+! rgb(148,0,211)); `set boxdepth 0.6` the back, sides and top too, `fc rgb variable` lit by `set pm3d lighting`
+! (gnuplot's illuminate_one_quadrangle: rgb(14,61,59) first), sorted by their base with `depthorder base`; `set boxdepth
+! square`, `unset boxdepth`; `set xtics 0,1,4 add ("" 0)` the ticks then the list added
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: pts  !< The points datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   pts = "$b << EOD"//nl//"1 2"//nl//"2 4"//nl//"3 3"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_bx.svg'"//nl//pts// &
+                             "set boxwidth 0.5 abs; set xyplane at 0; set yrange [0:3]; set xrange [0:4]"//nl// &
+                             "set view 59, 24; set style fill solid 1.0 border lc black"//nl// &
+                             "splot $b using 1:(1):2 with boxes notitle", iostat, iomsg)
+   test_passed(279) = iostat == 0_I4P
+   if (test_passed(279)) then
+      svg = read_text('foresight_script_test_bx.svg')
+      test_passed(279) = index(svg, 'fill="#9400d3" stroke="black" stroke-width="1" stroke-linejoin="miter" '// &
+                                   'vector-effect="non-scaling-stroke" d="M0.315483,0.68435 0.315483,0.48355 '// &
+                                   '0.375133,0.495825 0.375133,0.696625Z"') > 0
+   endif
+   call interpreter%run_text("set boxdepth 0.6; set pm3d lighting; set pm3d depthorder base"//nl// &
+                             "splot $b using 1:(1):2:($1*1000000) with boxes fc rgb variable notitle", iostat, iomsg)
+   test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%boxdepth == 0.6_R8P
+   if (test_passed(279)) then
+      svg = read_text('foresight_script_test_bx.svg')
+      test_passed(279) = index(svg, 'fill="#0e3d3b" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.336733,0.662325 0.336733,0.461525 0.396383,0.4738 0.396383,0.674575Z"') > 0
+   endif
+   call interpreter%run_text("set boxdepth square", iostat, iomsg)
+   test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%boxdepth == -1.0_R8P
+   call interpreter%run_text("unset boxdepth", iostat, iomsg)
+   test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%boxdepth == 0.0_R8P
+   call interpreter%run_text("set xtics 0,1,4 offset 0,-0.5 add ('' 0)", iostat, iomsg)
+   test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%tics%mode == TICS_FIXED
 endblock
 
 if (all(test_passed)) then

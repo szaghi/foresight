@@ -123,6 +123,7 @@ that did what it says.
 | **map**ping [`cartesian`\|`spherical`\|`cylindrical`] | splot's data columns: x:y:z, theta:phi:r or theta:z:r ([3D views](#3d-views)) | `cartesian` |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
 | **wall**[`s`] [`y0`\|`x0`\|`y1`\|`x1`\|`z0`] [`fs ...`] [`fc C`] [`lw W`] | the [grid walls](#3d-views) of a 3D view, polygons over the planes x = 0, y = 0, x = 1, y = 1 and z = 0 of the graph, half transparent in gnuplot's colors by default, drawn behind the plot or over it as they face; bare, `y0`, `x0` and `z0` | no walls |
+| **boxd**epth `D`\|`square` | the depth of `splot ... with boxes` along y: the boxes [in 3D](#3d-views) with their back, sides and top (`square` as deep as wide on the page) | flat boxes (their front face) |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
 | **zr**ange, **zl**abel, **zti**cs, **mzti**cs, **zzero**axis | the z axis of the [3D plots](#3d-plots): its range (the options of `xrange`), label (those of `xlabel`), ticks (those of `xtics`), minor ticks and zero axis | as the x ones |
 | **ov**erflow [`float`\|`undefined`\|`NaN`] | an integer overflow of `+ - * **` gives a real (the default), an undefined value or NaN, see [Expressions](#expressions-in-using) | `+` and `-` wrap around (two's complement), `*` and `**` give a real, as gnuplot |
@@ -1147,6 +1148,7 @@ set ytics 10 logscale    # on a log axis the step a factor (the default)
 set ytics 0.1 nologscale # ... or added: 0.1, 0.2, ..., 1 on a log axis
 set xtics ("Jan" 1, "Feb" 2, "Mar" 3)   # an explicit list replaces the ticks
 set ytics add ("limit" 7.5)             # ... or is added to them
+set xtics 0,1,10 add ("" 0)             # a series and a list in one command: the list added
 set tics out nomirror scale 1.5, 0.75   # every axis: outward, not mirrored, longer ticks
 unset tics                              # no ticks on any axis
 ```
@@ -2348,6 +2350,14 @@ quadrangle; in a 3D view or a map, its contours left to `set contour` items (gnu
 base and the top (`at b`, `t`) the slices are drawn clipped too (gnuplot draws every quadrangle whole there, slice
 after slice). With `set hidden3d` the mesh of a pm3d surface is hidden by it, its lines not drawn over it
 (gnuplot draws the visible segments of the mesh on top).
+
+`splot ... with boxes` draws gnuplot's 3D boxes (plot3d_boxes): for each point a face from z = 0 (within the z range)
+to its height, as wide as `set boxwidth` (1 without), in the y = constant plane of the point; with `set boxdepth D` a
+box D deep along y (`square`: as deep as wide on the page) with its back, sides and top. Each in the point's color
+(`lc variable`, `fc rgb variable`, lit by `set pm3d lighting`) or the item's fill color, in its fill style and border;
+an item's faces are sorted by the depth of their base, or with `set pm3d depthorder base` with every pm3d surface
+(there their outlines are `set pm3d border`'s: gnuplot strokes each with its fill border). The key sample is the fill
+alone.
 
 `splot ... with zerrorfill` draws a line with its z errors, gnuplot's plot3d_zerrorfill: between each two points a
 quadrangle from their low ends to their high ones (`x:y:z:dz` from z - dz to z + dz, or `x:y:z:zlow:zhigh`), in the
