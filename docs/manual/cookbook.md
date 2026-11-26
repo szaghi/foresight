@@ -1775,6 +1775,16 @@ over it as it faces. See [3D views](/guide/gnuplot-subset#3d-views).
 base` the faces of every bar are drawn from the farthest, and `set pm3d lighting` shades them. See
 [3D views](/guide/gnuplot-subset#3d-views).
 
+### Solids from polygons
+
+<<< @/examples/snippets/cb_view3d_polygons.gp{gnuplot}
+
+<Plot name="cb_view3d_polygons" svg :width="560" :height="400" />
+
+`splot ... with polygons` draws a polygon per block of the data; with `set pm3d depthorder` they are drawn from the
+farthest, and `set pm3d lighting` shades each face. `set object N polygon ... depthorder` joins the same sort. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
 ### Contours in a 3D view
 
 <<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}

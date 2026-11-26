@@ -111,8 +111,11 @@ type :: shape_object
    real(R8P)                       :: angle = 0.0_R8P    !< Ellipse orientation [deg].
    real(R8P)                       :: arc(2) = [0.0_R8P, 360.0_R8P] !< Circle arc [deg].
    type(style_object)              :: style              !< Fill, border, color, line width.
-   character(len=6)                :: layer = 'back'     !< `behind`, `back` or `front`.
+   character(len=6)                :: layer = 'back'     !< `behind`, `back`, `front`, `depth` (gnuplot's depthorder: a
+                                                         !< 3D polygon sorted with the pm3d quadrangles), `fb` (a wall).
    logical                         :: clip = .true.      !< Clipped by the plot area (axis coordinates only).
+   character(len=:), allocatable   :: back_color         !< `fc ls N` of a depthorder polygon: the color of its back
+                                                         !< (line style N+1, gnuplot's 2-sided coloring).
 endtype shape_object
 
 type :: pixmap_object

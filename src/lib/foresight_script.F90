@@ -10454,6 +10454,8 @@ contains
       call self%figure%add_arrow(arrow)
    case default
       if (.not. allocated(object%points)) then
+         ! a polygon without vertices yet: nothing to draw, accepted as gnuplot does
+         if (trim(object%kind) == 'polygon') return
          call fail('set object: a rectangle, circle, ellipse or polygon with its position expected', iostat, iomsg)
          return
       endif
@@ -10958,9 +10960,13 @@ contains
                object%kind = word
                call default_object(object)
                if (allocated(object%points)) deallocate(object%points)
+               call default_object_style(object)
+            elseif (.not. kind_set) then
+               object%kind = word
+               call default_object_style(object)
             endif
+            ! the same kind again: the object as it is, the options given changing it (gnuplot's)
             object%kind = word
-            call default_object_style(object)
             kind_set = .true.
          elseif (word == 'from') then
             call position(p)
@@ -11032,6 +11038,35 @@ contains
             continue
          elseif (is_word(word, 'front back behind')) then
             object%layer = word
+         elseif (keyword(word, 'depthorder', 5_I4P)) then
+            ! gnuplot's LAYER_DEPTHORDER: a 3D polygon sorted with the pm3d quadrangles (`set pm3d depthorder`)
+            object%layer = 'depth'
+         elseif ((word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) .and. i < size(tokens, kind=I4P) .and. &
+                 is_word(tokens(min(i + 1_I4P, size(tokens, kind=I4P)))%text, 'ls linestyle')) then
+            ! `fc ls N`: the color of line style N, its back that of N+1 (gnuplot's 2-sided coloring of depthorder)
+            i = i + 1_I4P
+            block
+               real(R8P)               :: v     !< Style number.
+               type(line_style_object) :: probe !< A style.
+
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'set object: fc ls: '//iomsg
+                  return
+               endif
+               call apply_line_style(self%line_styles, nint(v, I4P), probe, &
+                                     self%figure%panels(self%figure%current)%linecolors)
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') /= 1) object%style%color = probe%lc
+               endif
+               probe = line_style_object()
+               call apply_line_style(self%line_styles, nint(v, I4P) + 1_I4P, probe, &
+                                     self%figure%panels(self%figure%current)%linecolors)
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') /= 1) object%back_color = probe%lc
+               endif
+               if (trim(object%kind) /= 'rectangle' .and. allocated(object%style%border_color)) &
+                  deallocate(object%style%border_color)
+            endblock
          elseif (word == 'clip' .or. word == 'noclip') then
             object%clip = word == 'clip'
          elseif (word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) then
@@ -11056,6 +11091,27 @@ contains
                i = i + 1_I4P
                if (tokens(i)%kind == TOKEN_STRING) then
                   fill = fill//' "'//tokens(i)%text//'"'
+               elseif ((tokens(i - 1_I4P)%text == 'pattern' .or. tokens(i - 1_I4P)%text == 'solid') .and. &
+                       tokens(i)%kind == TOKEN_WORD .and. verify(tokens(i)%text(1:1), '0123456789.') /= 0 .and. &
+                       .not. is_annotation_word(tokens(i)%text) .and. &
+                       .not. is_word(tokens(i)%text, 'border noborder transparent solid pattern empty')) then
+                  ! the density or pattern an expression (`fs pattern o` in a loop over o), its value; a word that is
+                  ! no constant as it is
+                  block
+                     real(R8P)         :: v    !< Value.
+                     integer(I4P)      :: k    !< Token.
+                     character(len=32) :: text !< Its text.
+
+                     k = i - 1_I4P
+                     if (next_real(tokens, k, v, iostat, iomsg, self%symbols)) then
+                        i = k
+                        write(text, '(G0)') v
+                        fill = fill//' '//trim(adjustl(text))
+                     else
+                        iostat = 0_I4P
+                        fill = fill//' '//tokens(i)%text
+                     endif
+                  endblock
                else
                   fill = fill//' '//tokens(i)%text
                endif
@@ -13028,6 +13084,10 @@ contains
          i = i + 1_I4P
       enddo
       associate(panel => self%figure%panels(self%figure%current))
+         ! `lc palette frac F`: the color of the current palette there (gnuplot's linetype of a palette fraction)
+         if (allocated(lt%lc)) then
+            if (lt%lc == trim(LC_PALETTE_FRAC)) lt%lc = hex_color(panel%palette%rgb(lt%palette))
+         endif
          if (allocated(lt%lc)) then
             ! the names kept for the themes (black, white) as their #rrggbb; gnuplot's #AARRGGBB is kept as #rrggbbaa
             if (.not. ((len(lt%lc) == 7 .or. len(lt%lc) == 9) .and. lt%lc(1:1) == '#')) then
@@ -17544,6 +17604,7 @@ contains
       call self%figure%unset_x2tics
       call self%figure%unset_y2tics
       call self%figure%unset_cbtics
+      call self%figure%panels(self%figure%current)%zaxis%tics%disable
    elseif (keyword(option, 'xtics', 3_I4P)) then
       call self%figure%unset_xtics
    elseif (keyword(option, 'ytics', 3_I4P)) then
@@ -19581,11 +19642,11 @@ contains
                   i = i + 1_I4P
                case ('cb')
                   i = i + 1_I4P
-                  ok = next_real(tokens, i, line%palette, iostat, iomsg)
+                  ok = next_real(tokens, i, line%palette, iostat, iomsg, symbols)
                   line%lc = trim(LC_PALETTE_CB)
                case ('frac')
                   i = i + 1_I4P
-                  ok = next_real(tokens, i, line%palette, iostat, iomsg)
+                  ok = next_real(tokens, i, line%palette, iostat, iomsg, symbols)
                   if (ok .and. (line%palette < 0.0_R8P .or. line%palette > 1.0_R8P)) then
                      call fail('lc palette frac needs a fraction from 0 to 1', iostat, iomsg)
                      ok = .false.

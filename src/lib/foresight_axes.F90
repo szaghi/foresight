@@ -175,6 +175,20 @@ type :: colormap_object
    real(R8P)            :: range(2) = 0.0_R8P    !< That range.
 endtype colormap_object
 
+type :: pm3d_queue
+   !< gnuplot's pm3d depth queue of a 3D view: polygons on the page (pm3d quadrangles, contourfill slices, zerrorfill,
+   !< 3D boxes, splot polygons, depthorder objects), each with its depth, color and style, drawn farthest first.
+   real(R8P), allocatable          :: x(:)          !< Corner abscissae [px].
+   real(R8P), allocatable          :: y(:)          !< Corner ordinates [px].
+   integer(I4P), allocatable       :: off(:)        !< First corner of each polygon (one more: the end).
+   real(R8P), allocatable          :: d(:)          !< Depths.
+   character(len=24), allocatable  :: c(:)          !< Colors.
+   integer(I4P), allocatable       :: s(:)          !< Styles (indexes of `styles`, 0 none yet).
+   type(style_object), allocatable :: styles(:)     !< Styles.
+   integer(I4P)                    :: n = 0_I4P     !< Polygons.
+   integer(I4P)                    :: nv = 0_I4P    !< Corners.
+endtype pm3d_queue
+
 type :: axes_object
    !< Plot panel.
    type(axis_object)                :: xaxis          !< Horizontal axis.
@@ -2573,8 +2587,9 @@ contains
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
-      ! splot with boxes: its faces pending (gnuplot's plot3d_boxes)
-      if (self%series(s)%style%with == WITH_BOXES .and. allocated(self%series(s)%z)) then
+      ! splot with boxes, with polygons: pending (gnuplot's plot3d_boxes, plot3d_polygons)
+      if ((self%series(s)%style%with == WITH_BOXES .or. self%series(s)%style%with == WITH_POLYGONS) .and. &
+          allocated(self%series(s)%z) .and. allocated(self%series(s)%scans)) then
          pending = self%series(s)
          pending%pm3d_pending = .true.
          call push(drawn, pending)
@@ -2659,46 +2674,52 @@ contains
    type(palette_object), intent(in)    :: p       !< Effective palette.
    type(series_object), allocatable    :: drawn(:) !< Series as drawn.
    type(series_object)                 :: quads   !< Quadrangles of a surface.
-   type(series_object)                 :: queue   !< The depth-sorted quadrangles of every surface.
-   real(R8P), allocatable              :: qx(:), qy(:), qd(:) !< Queued corners [px], and their depths.
-   character(len=24), allocatable      :: qc(:)   !< Queued colors.
+   type(pm3d_queue)                    :: q       !< The depth queue.
    real(R8P), allocatable              :: lows(:), highs(:), mids(:) !< Slices of `with contourfill`.
    character(len=24), allocatable      :: scol(:) !< Their colors.
-   integer(I4P)                        :: nq      !< Queued quadrangles.
+   integer(I4P)                        :: n0      !< Queued before an item.
    integer(I4P)                        :: s       !< Series counter.
    logical                             :: depth   !< `depthorder`.
 
    depth = self%pm3d%direction == 3_I4P
-   nq = 0_I4P
-   allocate(qx(0), qy(0), qd(0), qc(0), drawn(0))
+   allocate(drawn(0))
+   call queue_init(q)
+   ! the depthorder polygons (`set object N polygon depthorder`) queued first, as gnuplot's
+   if (depth) call depth_objects(self, f, q)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (.not. self%series(s)%pm3d_pending) then
          call push(drawn, self%series(s))
          cycle
       endif
+      n0 = q%n
       if (self%series(s)%style%with == WITH_BOXES) then
          ! its key entry apart (a fill sample, unbordered as gnuplot's), then its faces
          block
             type(series_object) :: keyed !< The key entry.
 
             call box3d_quads(self%pm3d, self%series(s), f, depth, self%xaxis, self%yaxis, self%zaxis, self%boxwidth, &
-                             self%boxdepth, self%view3d%rot_x, self%view3d%rot_z, quads, keyed, qx, qy, qd, qc, nq)
+                             self%boxdepth, self%view3d%rot_x, self%view3d%rot_z, quads, keyed, q)
             if (len(keyed%title) > 0) call push(drawn, keyed)
          endblock
+         ! queued in the item's own style (its fill border, gnuplot's BOXES in filled_polygon)
+         if (q%n > n0) call queue_tag(q, n0, quads%style)
          if (depth) cycle
          call push(drawn, quads)
          cycle
+      elseif (self%series(s)%style%with == WITH_POLYGONS) then
+         call polygon3d_quads(self%pm3d, self%series(s), f, depth, self%view3d%rot_x, self%view3d%rot_z, quads, q)
       elseif (self%series(s)%zerrorfill) then
-         call zerror_quads(self%pm3d, self%series(s), f, depth, quads, qx, qy, qd, qc, nq)
+         call zerror_quads(self%pm3d, self%series(s), f, depth, quads, q)
       elseif (self%series(s)%contourfill) then
          call contourfill_slices(self, self%zaxis, self%cbaxis, p, lows, highs, mids, scol)
          call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
-                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq, lows=lows, &
-                                 highs=highs, slice_colors=scol)
+                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, q, lows=lows, highs=highs, &
+                                 slice_colors=scol)
       else
          call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
-                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq)
+                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, q)
       endif
+      if (q%n > n0) call queue_tag(q, n0, quads%style)
       if (depth) then
          ! queued: its key entry kept in place, a text alone
          if (len(quads%title) == 0) cycle
@@ -2708,15 +2729,94 @@ contains
       endif
       call push(drawn, quads)
    enddo
-   if (depth .and. nq > 0_I4P) then
-      call pm3d_sorted_queue(self%pm3d, qx, qy, qd, qc, nq, queue)
-      call push(drawn, queue)
-   endif
+   if (depth .and. q%n > 0_I4P) call queue_runs(q, drawn)
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_quads
 
-   subroutine box3d_quads(pm, one, f, depth, xaxis, yaxis, zaxis, boxwidth, boxdepth, rot_x, rot_z, quads, keyed, qx, &
-                          qy, qd, qc, nq)
+   pure function has_depth_objects(self) result(yes)
+   !< Whether the panel has depthorder polygons (`set object N polygon depthorder`).
+   class(axes_object), intent(in) :: self !< Panel.
+   logical                        :: yes  !< Some.
+   integer(I4P)                   :: k    !< Counter.
+
+   yes = .false.
+   if (.not. allocated(self%objects)) return
+   do k = 1_I4P, size(self%objects, kind=I4P)
+      if (trim(self%objects(k)%layer) == 'depth') yes = .true.
+   enddo
+   endfunction has_depth_objects
+
+   subroutine depth_objects(self, f, q)
+   !< The depthorder polygons of a 3D view (`set object N polygon depthorder`) queued with the pm3d quadrangles, as
+   !< gnuplot's do_polygon: their corners in the view (axis values or graph fractions), the mean depth of their corners,
+   !< their fill color (`fc ls N`: line style N+1's on their back, gnuplot's pm3d_side), their fill style, outlined by
+   !< `set pm3d border`. Up to 12 corners (gnuplot's).
+   class(axes_object), intent(in)    :: self       !< Panel.
+   type(view3d_frame), intent(in)    :: f          !< The view.
+   type(pm3d_queue),   intent(inout) :: q          !< Depth queue.
+   type(style_object)                :: st         !< A polygon's style.
+   real(R8P)                         :: v(3, 12)   !< Its corners in the view.
+   real(R8P)                         :: px(12), py(12) !< On the page.
+   real(R8P)                         :: w(2)       !< A page position.
+   real(R8P)                         :: dsum       !< Depth sum.
+   character(len=24)                 :: color      !< Its color.
+   integer(I4P)                      :: k, j, nv, n0 !< Counters.
+
+   if (.not. allocated(self%objects)) return
+   do k = 1_I4P, size(self%objects, kind=I4P)
+      if (trim(self%objects(k)%layer) /= 'depth' .or. trim(self%objects(k)%kind) /= 'polygon') cycle
+      if (.not. allocated(self%objects(k)%points)) cycle
+      nv = size(self%objects(k)%points, kind=I4P)
+      if (nv < 3_I4P .or. nv >= 12_I4P) cycle
+      do j = 1_I4P, nv
+         v(:, j) = view3d_xyz(f, coord3(self%objects(k)%points(j)%x, self%objects(k)%points(j)%sx, self%xaxis), &
+                              coord3(self%objects(k)%points(j)%y, self%objects(k)%points(j)%sy, self%yaxis), &
+                              coord3(self%objects(k)%points(j)%z, self%objects(k)%points(j)%sz, self%zaxis))
+      enddo
+      n0 = q%n
+      ! closed, as gnuplot stores a polygon object (its first corner again at the end)
+      if (any(v(:, nv) /= v(:, 1))) then
+         nv = nv + 1_I4P
+         v(:, nv) = v(:, 1)
+      endif
+      dsum = 0.0_R8P
+      do j = 1_I4P, nv
+         w = view3d_page(f, v(:, j), truncate=.true.)
+         px(j) = w(1)
+         py(j) = -w(2)
+         dsum = dsum + v(3, j)
+      enddo
+      color = 'black'
+      if (allocated(self%objects(k)%style%color)) color = self%objects(k)%style%color
+      ! gnuplot's pm3d_side of the first three corners: the back in line style N+1's color
+      if (allocated(self%objects(k)%back_color)) then
+         if ((v(1, 2) - v(1, 1)) * (v(2, 3) - v(2, 1)) - (v(2, 2) - v(2, 1)) * (v(1, 3) - v(1, 1)) < 0.0_R8P) &
+            color = self%objects(k)%back_color
+      endif
+      ! gnuplot's depth of a polygon: the mean of its corners (the closing one included)
+      call queue_add(q, px(1:nv), py(1:nv), dsum / real(nv, R8P), color)
+      st = self%objects(k)%style
+      st%border = self%pm3d%border
+      if (st%border) then
+         st%border_color = trim(self%pm3d%border_color)
+         st%linewidth = self%pm3d%border_lw
+      endif
+      call queue_tag(q, n0, st)
+   enddo
+   contains
+      pure function coord3(value, system, axis) result(c)
+      !< An axis value from a coordinate in `system` (`graph`: a fraction of the axis range).
+      real(R8P),         intent(in) :: value  !< Coordinate.
+      character(len=*),  intent(in) :: system !< System.
+      type(axis_object), intent(in) :: axis   !< Axis.
+      real(R8P)                     :: c      !< Axis value.
+
+      c = value
+      if (trim(system) == 'graph') c = axis%lo + value * (axis%hi - axis%lo)
+      endfunction coord3
+   endsubroutine depth_objects
+
+   subroutine box3d_quads(pm, one, f, depth, xaxis, yaxis, zaxis, boxwidth, boxdepth, rot_x, rot_z, quads, keyed, q)
    !< The faces of `splot with boxes` (gnuplot's plot3d_boxes): for each point a front face from z = 0 (clipped to the z
    !< range) to its height, x the box width about it (`set boxwidth`, else 1), clipped to the x range; with `set
    !< boxdepth D` (`square`: the width scaled by the y and x ranges) its back, left, right and top faces, y +- D/2
@@ -2737,13 +2837,10 @@ contains
    real(R8P),                      intent(in)    :: rot_z    !< View rotation about z [deg].
    type(series_object),            intent(out)   :: quads    !< Its faces (in place).
    type(series_object),            intent(out)   :: keyed    !< Its key entry.
-   real(R8P), allocatable,         intent(inout) :: qx(:)    !< Queued corner abscissae [px].
-   real(R8P), allocatable,         intent(inout) :: qy(:)    !< Queued corner ordinates [px].
-   real(R8P), allocatable,         intent(inout) :: qd(:)    !< Queued depths.
-   character(len=24), allocatable, intent(inout) :: qc(:)    !< Queued colors.
-   integer(I4P),                   intent(inout) :: nq       !< Queued quadrangles.
-   real(R8P), allocatable                        :: lx(:), ly(:), ld(:) !< The item's own queue.
-   character(len=24), allocatable                :: lc(:)    !< Its colors.
+   type(pm3d_queue),               intent(inout) :: q        !< Depth queue.
+   type(pm3d_queue)                              :: lq       !< The item's own queue.
+   real(R8P)                                     :: fx(4), fy(4) !< A face on the page.
+   character(len=24)                             :: fc       !< Its color.
    character(len=24)                             :: color    !< A box's color.
    real(R8P)                                     :: cx(4), cy(4), cz(4) !< A face.
    real(R8P)                                     :: dxl, dxh, dyl, dyh, zbase, dz, d, width !< A box.
@@ -2767,8 +2864,7 @@ contains
    nfaces = merge(5_I4P, 1_I4P, boxdepth /= 0.0_R8P)
    column_color = .false.
    if (allocated(one%colors)) column_color = size(one%colors) == size(one%x)
-   allocate(lx(6 * nfaces * size(one%x)), ly(6 * nfaces * size(one%x)), ld(nfaces * size(one%x)), &
-            lc(nfaces * size(one%x)))
+   call queue_init(lq)
    nl = 0_I4P
    do i = 1_I4P, size(one%x, kind=I4P)
       if (.not. (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i)) .and. ieee_is_finite(one%z(i)))) cycle
@@ -2813,23 +2909,20 @@ contains
             cz = [dz, dz, dz, dz]
          endselect
          nl = nl + 1_I4P
-         lx(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
-         ly(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
          dsum = 0.0_R8P
          do k = 1_I4P, 4_I4P
             v = view3d_xyz(f, cx(k), cy(k), cz(k))
             vv(:, k) = v
             w = view3d_page(f, v, truncate=.true.)
-            lx(6 * nl - 6 + k) = w(1)
-            ly(6 * nl - 6 + k) = -w(2)
+            fx(k) = w(1)
+            fy(k) = -w(2)
             ! the depth of the base below (gnuplot's flush with base_sort, or `depthorder base`)
             if (pm%base_sort .or. .not. depth) v = view3d_xyz(f, cx(k), cy(k), &
                                                          min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), &
                                                          base=.true.)
             dsum = dsum + v(3)
          enddo
-         ld(nl) = 0.25_R8P * dsum
-         lc(nl) = color
+         fc = color
          ! a color per point lit (gnuplot's illuminate_one_quadrangle: the corners in the view)
          if (column_color .and. pm%strength > 0.0_R8P) then
             block
@@ -2841,11 +2934,12 @@ contains
                if (ok) then
                   code = lit_color(real(c3, R8P) / 255.0_R8P, 0_I8P, vv(:, 1), vv(:, 2), vv(:, 3), vv(:, 4), pm, &
                                    f%scale3d, rot_x, rot_z)
-                  lc(nl) = packed_hex(real(code, R8P))
-                  if (len_trim(color) > 7) lc(nl) = trim(lc(nl))//color(8:9)
+                  fc = packed_hex(real(code, R8P))
+                  if (len_trim(color) > 7) fc = trim(fc)//color(8:9)
                endif
             endblock
          endif
+         call queue_add(lq, fx, fy, 0.25_R8P * dsum, fc)
       enddo
    enddo
    quads%style = one%style
@@ -2861,36 +2955,118 @@ contains
    keyed%style = quads%style
    keyed%style%border = .false.
    keyed%style%fill_rgb = trim(color)
-   if (nl > 0_I4P) keyed%style%fill_rgb = trim(lc(1))
+   if (lq%n > 0_I4P) keyed%style%fill_rgb = trim(lq%c(1))
    keyed%x = [real(R8P) :: ]
    keyed%y = [real(R8P) :: ]
    keyed%title = ''
    if (allocated(one%title)) keyed%title = one%title
    keyed%title_plain = one%title_plain
    if (depth) then
-      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + nl)
-      do k = 1_I4P, nl
-         nq = nq + 1_I4P
-         qx(6 * nq - 5:6 * nq) = lx(6 * k - 5:6 * k)
-         qy(6 * nq - 5:6 * nq) = ly(6 * k - 5:6 * k)
-         qd(nq) = ld(k)
-         qc(nq) = lc(k)
-      enddo
+      call queue_append(q, lq)
    else
-      block
-         type(series_object) :: sorted !< Its faces, sorted.
-
-         call pm3d_sorted_queue(pm, lx, ly, ld, lc, nl, sorted)
-         quads%x = sorted%x
-         quads%y = sorted%y
-         quads%colors = sorted%colors
-         quads%colors_kept = .true.
-      endblock
+      call queue_sorted(lq, quads)
+      quads%colors_kept = .true.
    endif
    quads%palette_mode = 0_I4P
    endsubroutine box3d_quads
 
-   subroutine zerror_quads(pm, one, f, depth, quads, qx, qy, qd, qc, nq)
+   subroutine polygon3d_quads(pm, one, f, depth, rot_x, rot_z, quads, q)
+   !< The polygons of `splot ... with polygons` (gnuplot's plot3d_polygons): each scan of the item (its blocks) one
+   !< polygon, a triangle a quadrangle with its first corner again; in the first point's color (`lc variable`, `fc rgb
+   !< variable`) or the fill color, lit by `set pm3d lighting` (gnuplot's illuminate_one_quadrangle: its first 4
+   !< corners in the view); its depth the mean of its corners; queued with `depth`, else sorted among themselves.
+   type(pm3d_object),   intent(in)    :: pm      !< pm3d settings.
+   type(series_object), intent(in)    :: one     !< The item.
+   type(view3d_frame),  intent(in)    :: f       !< The view.
+   logical,             intent(in)    :: depth   !< Queued, not drawn in place.
+   real(R8P),           intent(in)    :: rot_x   !< View rotation about x [deg].
+   real(R8P),           intent(in)    :: rot_z   !< View rotation about z [deg].
+   type(series_object), intent(out)   :: quads   !< Its polygons (in place).
+   type(pm3d_queue),    intent(inout) :: q       !< Depth queue.
+   type(pm3d_queue)                   :: lq      !< The item's own queue.
+   real(R8P), allocatable             :: v(:,:)  !< Corners in the view.
+   real(R8P), allocatable             :: px(:), py(:) !< On the page.
+   real(R8P)                          :: w(2)    !< A page position.
+   character(len=24)                  :: color   !< Fill color.
+   character(len=24)                  :: pc      !< A polygon's color.
+   integer(I4P)                       :: k, j, i1, nv, nc !< Counters.
+   logical                            :: column_color !< A color per point.
+
+   color = 'black'
+   if (allocated(one%style%color)) color = one%style%color
+   if (allocated(one%style%fill_rgb)) then
+      if (len(one%style%fill_rgb) > 0) color = one%style%fill_rgb
+   endif
+   column_color = .false.
+   if (allocated(one%colors)) column_color = size(one%colors) == size(one%x)
+   call queue_init(lq)
+   do k = 1_I4P, size(one%scans, 2, kind=I4P)
+      i1 = one%scans(1, k)
+      nv = one%scans(2, k) - i1 + 1_I4P
+      if (nv < 3_I4P) cycle
+      nc = max(nv, 4_I4P)
+      allocate(v(3, nc), px(nc), py(nc))
+      do j = 1_I4P, nv
+         v(:, j) = view3d_xyz(f, one%x(i1 + j - 1_I4P), one%y(i1 + j - 1_I4P), one%z(i1 + j - 1_I4P))
+      enddo
+      ! a triangle: gnuplot's degenerate quadrangle, its first corner again
+      if (nv == 3_I4P) v(:, 4) = v(:, 1)
+      do j = 1_I4P, nc
+         w = view3d_page(f, v(:, j), truncate=.true.)
+         px(j) = w(1)
+         py(j) = -w(2)
+      enddo
+      pc = color
+      if (column_color) pc = one%colors(i1)
+      if (pm%strength > 0.0_R8P) then
+         block
+            integer(I4P) :: c3(3) !< Channels.
+            logical      :: ok    !< Known.
+            integer(I8P) :: code  !< Packed color.
+
+            call named_color(trim(pc(1:7)), c3, ok)
+            if (ok) then
+               code = lit_color(real(c3, R8P) / 255.0_R8P, 0_I8P, v(:, 1), v(:, 2), v(:, 3), v(:, 4), pm, &
+                                f%scale3d, rot_x, rot_z)
+               if (len_trim(pc) > 7) then
+                  pc = trim(packed_hex(real(code, R8P)))//pc(8:9)
+               else
+                  pc = packed_hex(real(code, R8P))
+               endif
+            endif
+         endblock
+      endif
+      call queue_add(lq, px, py, sum(v(3, :)) / real(nc, R8P), pc)
+      deallocate(v, px, py)
+   enddo
+   quads%style = one%style
+   quads%style%with = WITH_POLYGONS
+   if (quads%style%fill == FILL_EMPTY) then
+      quads%style%fill = FILL_SOLID
+      quads%style%density = 1.0_R8P
+   endif
+   if (allocated(quads%style%fill_rgb)) deallocate(quads%style%fill_rgb)
+   quads%style%border = pm%border
+   if (pm%border) then
+      quads%style%border_color = trim(pm%border_color)
+      quads%style%linewidth = pm%border_lw
+   endif
+   quads%crisp = .true.
+   quads%title = ''
+   if (allocated(one%title)) quads%title = one%title
+   quads%title_plain = one%title_plain
+   if (depth) then
+      call queue_append(q, lq)
+      quads%x = [real(R8P) :: ]
+      quads%y = [real(R8P) :: ]
+   else
+      call queue_sorted(lq, quads)
+      quads%colors_kept = .true.
+   endif
+   quads%palette_mode = 0_I4P
+   endsubroutine polygon3d_quads
+
+   subroutine zerror_quads(pm, one, f, depth, quads, q)
    !< The quadrangles of `with zerrorfill` (gnuplot's plot3d_zerrorfill): between each two defined points of the item
    !< in turn, from their low ends to their high ones, in its fill color (`fc`, else its line color); appended to the
    !< depth queue with `depth` (`set pm3d depthorder`, its base too), else sorted among themselves by their mean depth
@@ -2900,13 +3076,9 @@ contains
    type(view3d_frame),             intent(in)    :: f       !< The view.
    logical,                        intent(in)    :: depth   !< Queued, not drawn in place.
    type(series_object),            intent(out)   :: quads   !< Its quadrangles (in place).
-   real(R8P), allocatable,         intent(inout) :: qx(:)   !< Queued corner abscissae [px].
-   real(R8P), allocatable,         intent(inout) :: qy(:)   !< Queued corner ordinates [px].
-   real(R8P), allocatable,         intent(inout) :: qd(:)   !< Queued depths.
-   character(len=24), allocatable, intent(inout) :: qc(:)   !< Queued colors.
-   integer(I4P),                   intent(inout) :: nq      !< Queued quadrangles.
-   real(R8P), allocatable                        :: lx(:), ly(:), ld(:) !< The item's own queue.
-   character(len=24), allocatable                :: lc(:)   !< Its colors.
+   type(pm3d_queue),               intent(inout) :: q       !< Depth queue.
+   type(pm3d_queue)                              :: lq      !< The item's own queue.
+   real(R8P)                                     :: fx(4), fy(4) !< A quadrangle on the page.
    character(len=24)                             :: color   !< Fill color.
    real(R8P)                                     :: cx(4), cy(4), cz(4) !< A quadrangle.
    real(R8P)                                     :: v(3)    !< View coordinates.
@@ -2920,7 +3092,7 @@ contains
       if (len(one%style%fill_rgb) > 0) color = one%style%fill_rgb
    endif
    n = size(one%x, kind=I4P)
-   allocate(lx(6 * n), ly(6 * n), ld(n), lc(n))
+   call queue_init(lq)
    nl = 0_I4P
    i1 = 0_I4P
    do i2 = 1_I4P, n
@@ -2932,20 +3104,17 @@ contains
          cy = [one%y(i1), one%y(i1), one%y(i2), one%y(i2)]
          cz = [one%zlow(i1), one%zhigh(i1), one%zhigh(i2), one%zlow(i2)]
          nl = nl + 1_I4P
-         lx(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
-         ly(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
          dsum = 0.0_R8P
          do k = 1_I4P, 4_I4P
             v = view3d_xyz(f, cx(k), cy(k), cz(k))
             w = view3d_page(f, v, truncate=.true.)
-            lx(6 * nl - 6 + k) = w(1)
-            ly(6 * nl - 6 + k) = -w(2)
+            fx(k) = w(1)
+            fy(k) = -w(2)
             if (pm%base_sort) v = view3d_xyz(f, cx(k), cy(k), &
                                              min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), base=.true.)
             dsum = dsum + v(3)
          enddo
-         ld(nl) = 0.25_R8P * dsum
-         lc(nl) = color
+         call queue_add(lq, fx, fy, 0.25_R8P * dsum, color)
       endif
       i1 = i2
    enddo
@@ -2968,36 +3137,22 @@ contains
    quads%style%fill_rgb = trim(color)
    quads%zerrorfill = .true.
    if (depth) then
-      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + nl)
-      do k = 1_I4P, nl
-         nq = nq + 1_I4P
-         qx(6 * nq - 5:6 * nq) = lx(6 * k - 5:6 * k)
-         qy(6 * nq - 5:6 * nq) = ly(6 * k - 5:6 * k)
-         qd(nq) = ld(k)
-         qc(nq) = lc(k)
-      enddo
+      call queue_append(q, lq)
       quads%x = [real(R8P) :: ]
       quads%y = [real(R8P) :: ]
    else
       ! gnuplot's pm3d_depth_queue_flush of this item alone
-      block
-         type(series_object) :: sorted !< Its quadrangles, sorted.
-
-         call pm3d_sorted_queue(pm, lx, ly, ld, lc, nl, sorted)
-         quads%x = sorted%x
-         quads%y = sorted%y
-         quads%colors = sorted%colors
-         quads%colors_kept = .true.
-      endblock
+      call queue_sorted(lq, quads)
+      quads%colors_kept = .true.
    endif
    quads%palette_mode = 0_I4P
    endsubroutine zerror_quads
 
-   subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, qx, qy, qd, qc, &
-                                 nq, lows, highs, slice_colors)
+   subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, q, lows, highs, &
+                                 slice_colors)
    !< The pm3d quadrangles of the surface `one` in the view `f` (view3d_pm3d_quads): projected, in its colors (those
-   !< at the surface lit with `set pm3d lighting`, gnuplot's apply_lighting_model), appended to the depth queue (`qx`,
-   !< `qy` corners, `qd` depths, `qc` colors, `nq` quadrangles) with `depth`.
+   !< at the surface lit with `set pm3d lighting`, gnuplot's apply_lighting_model), appended to the depth queue `q`
+   !< with `depth`.
    type(pm3d_object),              intent(in)    :: pm      !< pm3d settings.
    type(axis_object),              intent(in)    :: xaxis   !< x axis.
    type(axis_object),              intent(in)    :: yaxis   !< y axis.
@@ -3010,11 +3165,7 @@ contains
    real(R8P),                      intent(in)    :: rot_x   !< View rotation about x [deg].
    real(R8P),                      intent(in)    :: rot_z   !< View rotation about z [deg].
    type(series_object),            intent(out)   :: quads   !< Its quadrangles (in place).
-   real(R8P), allocatable,         intent(inout) :: qx(:)   !< Queued corner abscissae [px].
-   real(R8P), allocatable,         intent(inout) :: qy(:)   !< Queued corner ordinates [px].
-   real(R8P), allocatable,         intent(inout) :: qd(:)   !< Queued depths.
-   character(len=24), allocatable, intent(inout) :: qc(:)   !< Queued colors.
-   integer(I4P),                   intent(inout) :: nq      !< Queued quadrangles.
+   type(pm3d_queue),               intent(inout) :: q       !< Depth queue.
    real(R8P),         optional,    intent(in)    :: lows(:) !< `with contourfill`: slice lows.
    real(R8P),         optional,    intent(in)    :: highs(:) !< Slice highs.
    character(len=24), optional,    intent(in)    :: slice_colors(:) !< Slice colors.
@@ -3259,9 +3410,8 @@ contains
          uy(m) = -w(2)
       enddo
       if (.not. depth) cycle
-      ! queued, up to 6 corners each, with the mean depth of the corners of their quadrangle (unclipped, as gnuplot's;
-      ! of the base below them with `base`)
-      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + size(lx, kind=I4P) / 4_I4P + 1_I4P)
+      ! queued with the mean depth of the corners of their quadrangle (unclipped, as gnuplot's; of the base below them
+      ! with `base`)
       r = 1_I4P
       do while (r <= size(lx, kind=I4P))
          if (.not. ieee_is_finite(lx(r))) then
@@ -3273,7 +3423,6 @@ contains
             if (.not. ieee_is_finite(lx(r + nv))) exit
             nv = nv + 1_I4P
          enddo
-         nv = min(nv, 6_I4P)
          dsum = 0.0_R8P
          do k = lsrc(r), lsrc(r) + 3_I4P
             if (pm%base_sort) then
@@ -3286,13 +3435,8 @@ contains
             endif
             dsum = dsum + v(3)
          enddo
-         nq = nq + 1_I4P
-         qx(6 * nq - 5:6 * nq) = ieee_value(1.0_R8P, ieee_quiet_nan)
-         qy(6 * nq - 5:6 * nq) = ieee_value(1.0_R8P, ieee_quiet_nan)
-         qx(6 * nq - 5:6 * nq - 6 + nv) = ux(m0 + r:m0 + r + nv - 1)
-         qy(6 * nq - 5:6 * nq - 6 + nv) = uy(m0 + r:m0 + r + nv - 1)
-         qd(nq) = 0.25_R8P * dsum
-         qc(nq) = all_colors(m0 + r)
+         call queue_add(q, ux(m0 + r:m0 + r + nv - 1), uy(m0 + r:m0 + r + nv - 1), 0.25_R8P * dsum, &
+                        all_colors(m0 + r))
          r = r + nv
       enddo
    enddo
@@ -3418,39 +3562,6 @@ contains
    enddo
    endsubroutine contourfill_slices
 
-   pure subroutine pm3d_grow_queue(qx, qy, qd, qc, nq, n)
-   !< The depth queue room for `n` quadrangles at least, its `nq` first kept (through temporaries: nvfortran 26.9, bug
-   !< 31).
-   real(R8P), allocatable,         intent(inout) :: qx(:) !< Corner abscissae.
-   real(R8P), allocatable,         intent(inout) :: qy(:) !< Corner ordinates.
-   real(R8P), allocatable,         intent(inout) :: qd(:) !< Depths.
-   character(len=24), allocatable, intent(inout) :: qc(:) !< Colors.
-   integer(I4P),                   intent(in)    :: nq    !< Quadrangles queued.
-   integer(I4P),                   intent(in)    :: n     !< Room needed.
-   real(R8P), allocatable                        :: tr(:) !< Temporary.
-   character(len=24), allocatable                :: tc(:) !< Temporary.
-
-   if (size(qd) >= n) return
-   allocate(tr(6 * n))
-   if (nq > 0_I4P) tr(1:6 * nq) = qx(1:6 * nq)
-   deallocate(qx)
-   allocate(qx(6 * n))
-   if (nq > 0_I4P) qx(1:6 * nq) = tr(1:6 * nq)
-   if (nq > 0_I4P) tr(1:6 * nq) = qy(1:6 * nq)
-   deallocate(qy)
-   allocate(qy(6 * n))
-   if (nq > 0_I4P) qy(1:6 * nq) = tr(1:6 * nq)
-   if (nq > 0_I4P) tr(1:nq) = qd(1:nq)
-   deallocate(qd)
-   allocate(qd(n))
-   if (nq > 0_I4P) qd(1:nq) = tr(1:nq)
-   allocate(tc(n))
-   if (nq > 0_I4P) tc(1:nq) = qc(1:nq)
-   deallocate(qc)
-   allocate(qc(n))
-   if (nq > 0_I4P) qc(1:nq) = tc(1:nq)
-   endsubroutine pm3d_grow_queue
-
    pure subroutine pm3d_scan_order(pm, one, f, swap, back)
    !< gnuplot's order of the scans and points of the surface `one` (pm3d_rearrange_part): `scansforward` the file's,
    !< `scansbackward` and `depthorder` from the last scan; `scansautomatic` from the depths (at the floor) of the first
@@ -3516,70 +3627,216 @@ contains
    enddo
    endsubroutine pm3d_scan_order
 
-   subroutine pm3d_sorted_queue(pm, qx, qy, qd, qc, nq, q)
-   !< The queued quadrangles as one series, sorted by depth, farthest first (gnuplot's compare_quadrangles; stable on
-   !< ties).
-   type(pm3d_object),   intent(in)  :: pm    !< pm3d settings.
-   real(R8P),           intent(in)  :: qx(:) !< Corner abscissae [px].
-   real(R8P),           intent(in)  :: qy(:) !< Corner ordinates [px].
-   real(R8P),           intent(in)  :: qd(:) !< Depths.
-   character(len=24),   intent(in)  :: qc(:) !< Colors.
-   integer(I4P),        intent(in)  :: nq    !< Quadrangles.
-   type(series_object), intent(out) :: q     !< Quadrangles.
-   integer(I4P), allocatable        :: order(:) !< Sorted order.
-   integer(I4P)                     :: i, j, t, k !< Counters.
-   real(R8P)                        :: nan   !< NaN.
+   pure subroutine queue_init(q)
+   !< An empty depth queue.
+   type(pm3d_queue), intent(out) :: q !< Queue.
 
-   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
-   allocate(order(nq))
-   do i = 1_I4P, nq
+   allocate(q%x(64), q%y(64), q%off(17), q%d(16), q%c(16), q%s(16), q%styles(0))
+   q%off(1) = 1_I4P
+   q%n = 0_I4P
+   q%nv = 0_I4P
+   endsubroutine queue_init
+
+   pure subroutine queue_add(q, px, py, depth, color)
+   !< A polygon `px`, `py` [px] of `depth` in `color` queued (its style set by queue_tag); the arrays grown by doubling,
+   !< through temporaries (nvfortran 26.9, bug 31).
+   type(pm3d_queue),  intent(inout) :: q      !< Queue.
+   real(R8P),         intent(in)    :: px(:)  !< Corner abscissae.
+   real(R8P),         intent(in)    :: py(:)  !< Corner ordinates.
+   real(R8P),         intent(in)    :: depth  !< Depth.
+   character(len=*),  intent(in)    :: color  !< Color.
+   real(R8P), allocatable           :: tr(:)  !< Temporary.
+   integer(I4P), allocatable        :: ti(:)  !< Temporary.
+   character(len=24), allocatable   :: tc(:)  !< Temporary.
+   integer(I4P)                     :: k      !< Corners.
+   integer(I4P)                     :: m      !< New size.
+
+   k = size(px, kind=I4P)
+   if (q%nv + k > size(q%x)) then
+      m = max(2_I4P * size(q%x, kind=I4P), q%nv + k)
+      allocate(tr(m))
+      tr(1:q%nv) = q%x(1:q%nv)
+      deallocate(q%x)
+      allocate(q%x(m))
+      q%x(1:q%nv) = tr(1:q%nv)
+      tr(1:q%nv) = q%y(1:q%nv)
+      deallocate(q%y)
+      allocate(q%y(m))
+      q%y(1:q%nv) = tr(1:q%nv)
+   endif
+   if (q%n + 1_I4P > size(q%d)) then
+      m = 2_I4P * size(q%d, kind=I4P)
+      if (allocated(tr)) deallocate(tr)
+      allocate(tr(m), ti(m + 1), tc(m))
+      tr(1:q%n) = q%d(1:q%n)
+      deallocate(q%d)
+      allocate(q%d(m))
+      q%d(1:q%n) = tr(1:q%n)
+      ti(1:q%n + 1) = q%off(1:q%n + 1)
+      deallocate(q%off)
+      allocate(q%off(m + 1))
+      q%off(1:q%n + 1) = ti(1:q%n + 1)
+      ti(1:q%n) = q%s(1:q%n)
+      deallocate(q%s)
+      allocate(q%s(m))
+      q%s(1:q%n) = ti(1:q%n)
+      tc(1:q%n) = q%c(1:q%n)
+      deallocate(q%c)
+      allocate(q%c(m))
+      q%c(1:q%n) = tc(1:q%n)
+   endif
+   q%x(q%nv + 1:q%nv + k) = px
+   q%y(q%nv + 1:q%nv + k) = py
+   q%nv = q%nv + k
+   q%n = q%n + 1_I4P
+   q%off(q%n + 1) = q%nv + 1_I4P
+   q%d(q%n) = depth
+   q%c(q%n) = color
+   q%s(q%n) = 0_I4P
+   endsubroutine queue_add
+
+   pure subroutine queue_tag(q, n0, style)
+   !< The polygons queued after the first `n0` in `style` (appended to the styles, through temporaries).
+   type(pm3d_queue),   intent(inout) :: q     !< Queue.
+   integer(I4P),       intent(in)    :: n0    !< Queued before.
+   type(style_object), intent(in)    :: style !< Their style.
+   type(style_object), allocatable   :: ts(:) !< Temporary.
+   integer(I4P)                      :: k     !< Counter.
+
+   ! a style that looks the same reused: the polygons of items alike drawn as one run
+   do k = 1_I4P, size(q%styles, kind=I4P)
+      if (q%styles(k)%fill /= style%fill .or. q%styles(k)%pattern /= style%pattern .or. &
+          (q%styles(k)%border .neqv. style%border) .or. q%styles(k)%dashtype /= style%dashtype) cycle
+      if (q%styles(k)%density /= style%density .or. q%styles(k)%linewidth /= style%linewidth) cycle
+      if (q%styles(k)%stroke_color() /= style%stroke_color()) cycle
+      q%s(n0 + 1:q%n) = k
+      return
+   enddo
+   allocate(ts(size(q%styles) + 1))
+   do k = 1_I4P, size(q%styles, kind=I4P)
+      ts(k) = q%styles(k)
+   enddo
+   ts(size(ts)) = style
+   deallocate(q%styles)
+   allocate(q%styles(size(ts)))
+   do k = 1_I4P, size(ts, kind=I4P)
+      q%styles(k) = ts(k)
+   enddo
+   q%s(n0 + 1:q%n) = size(q%styles, kind=I4P)
+   endsubroutine queue_tag
+
+   pure subroutine queue_order(q, order)
+   !< The queued polygons by depth, farthest first (gnuplot's compare_quadrangles; stable on ties: insertion).
+   type(pm3d_queue),          intent(in)  :: q        !< Queue.
+   integer(I4P), allocatable, intent(out) :: order(:) !< Sorted order.
+   integer(I4P)                           :: i, j, t  !< Counters.
+
+   allocate(order(q%n))
+   do i = 1_I4P, q%n
       order(i) = i
    enddo
-   do i = 2_I4P, nq
+   do i = 2_I4P, q%n
       t = order(i)
       j = i - 1_I4P
       do while (j >= 1_I4P)
-         if (qd(order(j)) <= qd(t)) exit
+         if (q%d(order(j)) <= q%d(t)) exit
          order(j + 1_I4P) = order(j)
          j = j - 1_I4P
       enddo
       order(j + 1_I4P) = t
    enddo
-   ! each polygon its corners (up to 6, NaN padded in the queue) and a NaN row
-   j = nq
-   do k = 1_I4P, 6_I4P * nq
-      if (ieee_is_finite(qx(k))) j = j + 1_I4P
-   enddo
-   allocate(q%x(j), q%y(j), q%colors(j))
-   j = 0_I4P
-   do i = 1_I4P, nq
+   endsubroutine queue_order
+
+   pure subroutine queue_series(q, order, first, last, run)
+   !< The sorted polygons `first` to `last` of `order` as one series of polygons (corners and a NaN row each, each row
+   !< its polygon's color).
+   type(pm3d_queue),    intent(in)    :: q        !< Queue.
+   integer(I4P),        intent(in)    :: order(:) !< Sorted order.
+   integer(I4P),        intent(in)    :: first    !< First.
+   integer(I4P),        intent(in)    :: last     !< Last.
+   type(series_object), intent(inout) :: run      !< Polygons.
+   integer(I4P)                       :: i, k, m, t !< Counters.
+
+   m = 0_I4P
+   do i = first, last
       t = order(i)
-      do k = 6_I4P * t - 5_I4P, 6_I4P * t
-         if (.not. ieee_is_finite(qx(k))) exit
-         j = j + 1_I4P
-         q%x(j) = qx(k)
-         q%y(j) = qy(k)
-         q%colors(j) = qc(t)
-      enddo
-      j = j + 1_I4P
-      q%x(j) = nan
-      q%y(j) = nan
-      q%colors(j) = qc(t)
+      m = m + q%off(t + 1) - q%off(t) + 1_I4P
    enddo
-   q%style%with = WITH_POLYGONS
-   q%style%fill = FILL_SOLID
-   q%style%density = 1.0_R8P
-   q%style%border = pm%border
-   if (pm%border) then
-      q%style%border_color = trim(pm%border_color)
-      q%style%linewidth = pm%border_lw
-   endif
-   q%crisp = .true.
-   q%key_blank = .true.
-   q%title = ''
-   q%colors_kept = .true.
-   q%palette_mode = 0_I4P
-   endsubroutine pm3d_sorted_queue
+   allocate(run%x(m), run%y(m), run%colors(m))
+   m = 0_I4P
+   do i = first, last
+      t = order(i)
+      do k = q%off(t), q%off(t + 1) - 1_I4P
+         m = m + 1_I4P
+         run%x(m) = q%x(k)
+         run%y(m) = q%y(k)
+         run%colors(m) = q%c(t)
+      enddo
+      m = m + 1_I4P
+      run%x(m) = ieee_value(1.0_R8P, ieee_quiet_nan)
+      run%y(m) = ieee_value(1.0_R8P, ieee_quiet_nan)
+      run%colors(m) = q%c(t)
+   enddo
+   endsubroutine queue_series
+
+   subroutine queue_runs(q, drawn)
+   !< The queue sorted by depth appended to `drawn` as series of polygons, a new one where the style changes (each
+   !< polygon its item's fill and border).
+   type(pm3d_queue),                 intent(in)    :: q        !< Queue.
+   type(series_object), allocatable, intent(inout) :: drawn(:) !< Series as drawn.
+   type(series_object)                             :: run      !< A run of one style.
+   type(series_object)                             :: blank    !< Default components (never assigned).
+   integer(I4P), allocatable                       :: order(:) !< Sorted order.
+   integer(I4P)                                    :: first, last !< A run.
+
+   call queue_order(q, order)
+   first = 1_I4P
+   do while (first <= q%n)
+      last = first
+      do while (last < q%n)
+         if (q%s(order(last + 1_I4P)) /= q%s(order(first))) exit
+         last = last + 1_I4P
+      enddo
+      run = blank
+      call queue_series(q, order, first, last, run)
+      if (q%s(order(first)) > 0_I4P) run%style = q%styles(q%s(order(first)))
+      run%style%with = WITH_POLYGONS
+      if (run%style%fill == FILL_EMPTY) then
+         run%style%fill = FILL_SOLID
+         run%style%density = 1.0_R8P
+      endif
+      if (allocated(run%style%fill_rgb)) deallocate(run%style%fill_rgb)
+      run%crisp = .true.
+      run%key_blank = .true.
+      run%title = ''
+      run%colors_kept = .true.
+      run%palette_mode = 0_I4P
+      call push(drawn, run)
+      first = last + 1_I4P
+   enddo
+   endsubroutine queue_runs
+
+   pure subroutine queue_sorted(q, run)
+   !< The queue (one item's) sorted by depth as one series of polygons (gnuplot's flush of a zerrorfill or boxes item).
+   type(pm3d_queue),    intent(in)    :: q     !< Queue.
+   type(series_object), intent(inout) :: run   !< Polygons.
+   integer(I4P), allocatable          :: order(:) !< Sorted order.
+
+   call queue_order(q, order)
+   call queue_series(q, order, 1_I4P, q%n, run)
+   endsubroutine queue_sorted
+
+   pure subroutine queue_append(q, local)
+   !< The polygons of `local` queued in `q`.
+   type(pm3d_queue), intent(inout) :: q     !< Queue.
+   type(pm3d_queue), intent(in)    :: local !< An item's queue.
+   integer(I4P)                    :: k     !< Counter.
+
+   do k = 1_I4P, local%n
+      call queue_add(q, local%x(local%off(k):local%off(k + 1) - 1), local%y(local%off(k):local%off(k + 1) - 1), &
+                     local%d(k), local%c(k))
+   enddo
+   endsubroutine queue_append
 
    subroutine view3d_contours(self)
    !< The contour lines of the surfaces of a 3D view as lines with their heights after each surface (contour_series):
@@ -4243,7 +4500,8 @@ contains
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
    ! the pm3d quadrangles of the pending surfaces, projected (gnuplot's pm3d_plot)
-   if (any(self%series%pm3d_pending)) call view3d_pm3d_quads(self, f, pal3)
+   if (any(self%series%pm3d_pending) .or. (self%pm3d%direction == 3_I4P .and. has_depth_objects(self))) &
+      call view3d_pm3d_quads(self, f, pal3)
    ! the contours on the base plane (gnuplot's cntr3d_lines: x, y at base_z)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (.not. self%series(s)%contour_base) cycle

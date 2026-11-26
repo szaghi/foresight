@@ -1150,7 +1150,7 @@ set xtics ("Jan" 1, "Feb" 2, "Mar" 3)   # an explicit list replaces the ticks
 set ytics add ("limit" 7.5)             # ... or is added to them
 set xtics 0,1,10 add ("" 0)             # a series and a list in one command: the list added
 set tics out nomirror scale 1.5, 0.75   # every axis: outward, not mirrored, longer ticks
-unset tics                              # no ticks on any axis
+unset tics                              # no ticks on any axis (z and cb too)
 ```
 
 `set tics` sets the options of every axis at once, as gnuplot: `mirror`/`nomirror`, `in`/`out`, `scale MAJOR[,MINOR]`
@@ -1465,7 +1465,7 @@ size the defaults of the series of that linetype (`lc`, `lw`, `dt`, `pt`, `ps`; 
 redefinitions are persistent: `reset` keeps them (`reset session` too, as the color sequence). `set linetype cycle N`
 reuses the first N colors for the higher linetypes. An item's `lt N` takes the color of linetype N; `lt rgb COLOR`
 (and `lt palette`) is a line color, as `lc`. A linetype color may have an alpha channel (`set linetype 9 lc
-"#80bb33bb"`).
+"#80bb33bb"`), or be a palette fraction (`lc palette frac F`, the color of the current palette there).
 
 ### Color names
 
@@ -1624,7 +1624,7 @@ cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system o
 | `set style rectangle` | `fc`, `fs`, `lw`, `dt`: the look of the rectangles set next (their layer is not taken, as gnuplot 6.0) |
 | `set object [N] circle [at POS] size R [arc [A:B]]` | as rectangle; empty with a black border; `R` in x axis values (round on the page), `radius R` the same, an arc a wedge from the centre |
 | `set object [N] ellipse [at POS] size W,H [angle A]` | as circle; the axes in the units of x and y, turned by `A` in those units (gnuplot's `units xy`) |
-| `set object [N] polygon from POS to POS to POS ...` | as circle |
+| `set object [N] polygon from POS to POS to POS ...` | as circle; in a [3D view](#3d-views) `depthorder` sorts it with the pm3d quadrangles (`set pm3d depthorder`), `fc ls N` colors its back in line style N+1's; options without vertices change an existing one (or are accepted, nothing drawn) |
 | `set pixmap N "file.png" [at POS] [size W,H \| width W \| height H] [center]` | a PNG image, gnuplot 6.0's: `at` its lower left corner (`center` its centre), its own pixels without a size, `width` or `height` alone the other side by its aspect; W, H in any system (`first` by default, `char` cells); `behind`, `back`, `front` (the default) its layer; `unset pixmap N`, `unset pixmaps`. PNG only (gnuplot also reads JPEG and GIF); the SVG holds the file, text devices draw nothing |
 
 `N` is a tag: an existing one is replaced, or changed when no position is given (`set object 3 fc rgb "red"`), as
@@ -2355,9 +2355,16 @@ after slice). With `set hidden3d` the mesh of a pm3d surface is hidden by it, it
 to its height, as wide as `set boxwidth` (1 without), in the y = constant plane of the point; with `set boxdepth D` a
 box D deep along y (`square`: as deep as wide on the page) with its back, sides and top. Each in the point's color
 (`lc variable`, `fc rgb variable`, lit by `set pm3d lighting`) or the item's fill color, in its fill style and border;
-an item's faces are sorted by the depth of their base, or with `set pm3d depthorder base` with every pm3d surface
-(there their outlines are `set pm3d border`'s: gnuplot strokes each with its fill border). The key sample is the fill
-alone.
+an item's faces are sorted by the depth of their base, or with `set pm3d depthorder base` with every pm3d surface.
+The key sample is the fill alone.
+
+`splot ... with polygons` draws a polygon per block of the data (gnuplot's plot3d_polygons): in the first point's color
+(`lc variable`, `fc rgb variable`) or its fill color, lit by `set pm3d lighting`, outlined by `set pm3d border`; an
+item's polygons are sorted by their depth, or with `set pm3d depthorder` with every pm3d surface and the `depthorder`
+polygon objects (`set object N polygon ... depthorder`: closed, in their fill style, line style N+1's color on the
+back of `fc ls N`, gnuplot's 2-sided coloring). The depth-sorted polygons keep each its item's fill style and outline
+(a box its fill border). A polygon of 3 corners is gnuplot's quadrangle with its first corner again; an object of more
+than 11 corners is not drawn.
 
 `splot ... with zerrorfill` draws a line with its z errors, gnuplot's plot3d_zerrorfill: between each two points a
 quadrangle from their low ends to their high ones (`x:y:z:dz` from z - dz to z + dz, or `x:y:z:zlow:zhigh`), in the

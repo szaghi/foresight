@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(279)                           !< Per-check outcome.
+logical                       :: test_passed(280)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7471,7 +7471,8 @@ block
    test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%boxdepth == 0.6_R8P
    if (test_passed(279)) then
       svg = read_text('foresight_script_test_bx.svg')
-      test_passed(279) = index(svg, 'fill="#0e3d3b" stroke="none" vector-effect="non-scaling-stroke" '// &
+      test_passed(279) = index(svg, 'fill="#0e3d3b" stroke="black" stroke-width="1" stroke-linejoin="miter" '// &
+                                    'vector-effect="non-scaling-stroke" '// &
                                    'd="M0.336733,0.662325 0.336733,0.461525 0.396383,0.4738 0.396383,0.674575Z"') > 0
    endif
    call interpreter%run_text("set boxdepth square", iostat, iomsg)
@@ -7480,6 +7481,61 @@ block
    test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%boxdepth == 0.0_R8P
    call interpreter%run_text("set xtics 0,1,4 offset 0,-0.5 add ('' 0)", iostat, iomsg)
    test_passed(279) = test_passed(279) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%xaxis%tics%mode == TICS_FIXED
+endblock
+
+
+
+! 3D polygons, gnuplot 6.0's (probed on its svg, 600 x 400): `set object N polygon depthorder` sorted with the pm3d
+! quadrangles (`set pm3d depthorder`), closed, outlined by `set pm3d border`, `fc ls N` line style N+1's color on the
+! back (rgb(255,192,32) of goldenrod on object 2), each in its fill style (object 2 half transparent); `splot ... with
+! polygons` a polygon per block, a triangle a quadrangle with its first corner again, lit by `set pm3d lighting`
+! (rgb(95,95,95)); the depth queue in runs of one style; `set object N polygon` options without vertices (accepted,
+! nothing drawn), `fs pattern EXPR`; `unset tics` the z ticks too; `set linetype N lc palette frac F` the palette color
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: pts  !< The polygons datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   pts = "$P << EOD"//nl//"0 0 1"//nl//"1 0 1"//nl//"1 1 1.5"//nl//nl//"0 1 0"//nl//"1 1 0"//nl//"1 2 0.5"//nl// &
+         "0 2 0.5"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pg.svg'"//nl//pts// &
+                             "set style line 101 lc 'forest-green'; set style line 102 lc 'goldenrod'"//nl// &
+                             "set obj 1 polygon from 0,0,0 to 1,0,0 to 0,1,1 depthorder fs solid fc ls 101"//nl// &
+                             "set obj 2 polygon from 0,0,0 to 0,1,1 to 1,0,0 depthorder fs transparent solid 0.5 "// &
+                             "fc ls 101"//nl//"set pm3d depthorder border lc 'black' lw 2"//nl// &
+                             "set xrange [-1:2]; set yrange [-1:2]; set zrange [-1:2]; set pm3d lighting"//nl// &
+                             "splot $P with polygons fc 'gray75' notitle", iostat, iomsg)
+   test_passed(280) = iostat == 0_I4P .and. trim(interpreter%figure%panels(1)%objects(1)%layer) == 'depth'
+   if (test_passed(280)) then
+      svg = read_text('foresight_script_test_pg.svg')
+      test_passed(280) = index(svg, '<path fill="#5f5f5f" stroke="black" stroke-width="2" stroke-linejoin="miter" '// &
+                                   'vector-effect="non-scaling-stroke" d="M0.46815,0.401625 0.6189,0.440675 '// &
+                                   '0.705967,0.327975 0.555183,0.288925Z"') > 0 .and. &
+                        index(svg, '<path fill="#ffc020" fill-opacity="0.5" stroke="black" stroke-width="2" '// &
+                                   'stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.3811,0.46925 '// &
+                                   '0.46815,0.311475 0.53185,0.508275 0.3811,0.46925Z"') > 0 .and. &
+                        index(svg, '<path fill="#228b22" stroke="black" stroke-width="2" stroke-linejoin="miter" '// &
+                                   'vector-effect="non-scaling-stroke" d="M0.3811,0.46925 0.53185,0.508275 '// &
+                                   '0.46815,0.311475 0.3811,0.46925Z"') > 0
+      test_passed(280) = test_passed(280) .and. index(svg, '#ffc020') < index(svg, '#228b22')
+   endif
+   ! options without vertices: accepted; a pattern given by an expression
+   call interpreter%run_text("o = 3"//nl//"set obj 9 polygon depthorder fs transparent pattern o fc 'red'", iostat, &
+                             iomsg)
+   test_passed(280) = test_passed(280) .and. iostat == 0_I4P
+   call interpreter%run_text("set obj 2 polygon depthorder fs transparent pattern o", iostat, iomsg)
+   test_passed(280) = test_passed(280) .and. iostat == 0_I4P .and. &
+                     allocated(interpreter%figure%panels(1)%objects(2)%points)
+   if (test_passed(280)) test_passed(280) = interpreter%figure%panels(1)%objects(2)%style%pattern == 3_I4P .and. &
+                                          size(interpreter%figure%panels(1)%objects(2)%points) == 3
+   ! unset tics: the z ticks too; a linetype in a palette fraction
+   call interpreter%run_text("unset tics", iostat, iomsg)
+   test_passed(280) = test_passed(280) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%zaxis%tics%mode == TICS_NONE
+   call interpreter%run_text("set palette defined (0 'black', 1 'white')"//nl//"i = 2"//nl// &
+                             "set linetype 77 lc palette frac i/4.", iostat, iomsg)
+   test_passed(280) = test_passed(280) .and. iostat == 0_I4P
 endblock
 
 if (all(test_passed)) then

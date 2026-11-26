@@ -378,6 +378,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_view3d_zerrorfill" svg :width="560" :height="400" caption="error bands in 3D (zerrorfill)" />
   <Plot name="cb_view3d_walls" svg :width="560" :height="400" caption="grid walls" />
   <Plot name="cb_view3d_boxes" svg :width="560" :height="400" caption="bars in 3D (boxes, boxdepth)" />
+  <Plot name="cb_view3d_polygons" svg :width="560" :height="400" caption="a solid from its faces (polygons)" />
   <Plot name="cb_view3d_smooth" svg :width="560" :height="400" caption="smoothed profiles in 3D" />
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
