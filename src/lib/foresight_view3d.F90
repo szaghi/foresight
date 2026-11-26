@@ -38,6 +38,7 @@ type :: view3d_object
    logical      :: grid_vertical = .false. !< Vertical grid lines on the back walls at the x and y ticks (`set grid
                                            !< vertical`).
    logical      :: grid_z = .false. !< Grid lines at the z ticks on the back walls (`set grid ztics`).
+   logical      :: grid_mz = .false. !< Grid lines at the minor z ticks (`set grid mztics`).
    logical      :: hidden3d = .false. !< Hidden lines removed (`set hidden3d`): the surfaces drawn opaque, back to
                                       !< front (a painter's algorithm, not gnuplot's hidden3d.c).
    integer(I4P) :: hidden_offset = 1_I4P !< Linetype of the underside of a surface after its own (`set hidden3d

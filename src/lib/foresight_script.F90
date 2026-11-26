@@ -340,6 +340,7 @@ type :: script_object
       procedure, pass(self), private :: range_value   !< Value of a range end.
       procedure, pass(self), private :: colormap_index !< Index of a named colormap, 0 if none.
       procedure, pass(self), private :: annotation_option !< `set label`, `set arrow`, `set object`.
+      procedure, pass(self), private :: wall_option       !< `set wall`.
       procedure, pass(self), private :: call_command  !< `load`, `call`.
       procedure, pass(self), private :: expand_macros !< `@name` substitution.
       procedure, pass(self), private :: do_block      !< `do for [...] { ... }`.
@@ -4345,6 +4346,9 @@ contains
                                                                   !< no `with`).
    logical                                      :: with_given !< The item has its `with`.
    logical                                      :: cfill      !< `with contourfill`.
+   logical                                      :: zerr       !< `with zerrorfill`.
+   real(R8P),        allocatable                :: zerr_lo(:) !< Its low ends.
+   real(R8P),        allocatable                :: zerr_hi(:) !< Its high ends.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -4916,6 +4920,7 @@ contains
       if (is_function) with = self%function_style
       with_given = .false.
       cfill = .false.
+      zerr = .false.
       has_table_if = .false.
       has_title = .false.
       auto_title = .false.
@@ -5105,6 +5110,9 @@ contains
             ! splot's `with contourfill`: a pm3d surface in z slices (gnuplot's CONTOURFILL)
             cfill = splot_mode .and. word == 'contourfill'
             if (cfill) with = 'pm3d'
+            ! splot's `with zerrorfill`: a line with its z errors filled (gnuplot's ZERRORFILL)
+            zerr = splot_mode .and. keyword(word, 'zerrorfill', 6_I4P)
+            if (zerr) with = 'lines'
             with_given = .true.
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
@@ -5380,6 +5388,25 @@ contains
                endif
                call apply_line_style(self%line_styles, nint(v, I4P), probe, &
                                      self%figure%panels(self%figure%current)%linecolors)
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') /= 1) fill_rgb = probe%lc
+               endif
+            endblock
+         elseif ((word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) .and. i < size(tokens, kind=I4P) .and. &
+                 is_word(tokens(min(i + 1_I4P, size(tokens, kind=I4P)))%text, 'lt linetype')) then
+            ! `fc lt N`: the fill in the color of linetype N (gnuplot's)
+            i = i + 1_I4P
+            block
+               type(token_object), allocatable :: copy(:) !< Tokens, `lt` for the word.
+               type(line_style_object)         :: probe   !< The linetype.
+
+               copy = tokens
+               copy(i)%text = 'lt'
+               if (.not. line_option(copy, i, probe, iostat, iomsg, &
+                                     self%figure%panels(self%figure%current)%linecolors, self%symbols)) then
+                  iomsg = 'plot: fc lt: '//iomsg
+                  return
+               endif
                if (allocated(probe%lc)) then
                   if (index(probe%lc, '*') /= 1) fill_rgb = probe%lc
                endif
@@ -6252,7 +6279,7 @@ contains
          ! demos) drawn as points or lines, the z ignored as gnuplot
          if (nbar /= 0_I4P .and. .not. (nbar == 1_I4P .and. filter == 'acsplines') .and. .not. (nbar == 1_I4P .and. &
              self%figure%panels(self%figure%current)%polar .and. is_word(with, 'points lines linespoints')) .and. &
-             .not. (nbar == 1_I4P .and. zsort_item)) then
+             .not. (nbar == 1_I4P .and. zsort_item) .and. .not. ((nbar == 1_I4P .or. nbar == 2_I4P) .and. zerr)) then
             call fail('plot: '//with//' needs using X:Y or Y', iostat, iomsg)
             return
          endif
@@ -6322,6 +6349,20 @@ contains
          ! in a block here
          z3 = values(:, size(values, 2))
          values = values(:, 1:size(values, 2) - 1)
+         ! zerrorfill: x:y:z:dz (z - dz to z + dz) or x:y:z:zlow:zhigh, gnuplot's
+         if (zerr) then
+            if (size(values, 2) == 3) then
+               zerr_lo = z3 - values(:, 3)
+               zerr_hi = z3 + values(:, 3)
+            elseif (size(values, 2) == 4) then
+               zerr_lo = values(:, 3)
+               zerr_hi = values(:, 4)
+            else
+               call fail('splot: zerrorfill wants 4 or 5 input columns', iostat, iomsg)
+               return
+            endif
+            values = values(:, 1:2)
+         endif
          if (smooth3d_on()) then
             w3 = values(:, size(values, 2))
             values = values(:, 1:size(values, 2) - 1)
@@ -6830,6 +6871,15 @@ contains
       call mark_last
       call fill_last
       if (z_read) call attach_z(z3, row_sets)
+      if (zerr .and. z_read) then
+         associate(panel => self%figure%panels(self%figure%current))
+            if (size(zerr_lo) == size(panel%series(size(panel%series))%x)) then
+               panel%series(size(panel%series))%zlow = zerr_lo
+               panel%series(size(panel%series))%zhigh = zerr_hi
+               panel%series(size(panel%series))%zerrorfill = .true.
+            endif
+         endassociate
+      endif
       if (lcvar .and. with == 'pm3d' .and. z_read) then
          associate(panel => self%figure%panels(self%figure%current))
             if (size(rgb_packed) == size(panel%series(size(panel%series))%x)) then
@@ -10118,6 +10168,89 @@ contains
    enddo
    endsubroutine expand_macros
 
+   subroutine wall_option(self, tokens, iostat, iomsg)
+   !< gnuplot `set wall [y0|x0|y1|x1|z0] [fs ...] [fc C] [lw W] ...`: the grid walls of a 3D view, polygons over the
+   !< planes x = 0, y = 0, x = 1, y = 1, z = 0 of the graph, drawn behind or in front of the plot as they face (gnuplot's
+   !< LAYER_FRONTBACK); half transparent, unbordered, in gnuplot's colors by default. Bare, y0, x0 and z0 on. Read as a
+   !< `set object polygon` of graph corners (its options), kept apart from the objects.
+   class(script_object), intent(inout) :: self      !< Interpreter.
+   type(token_object),   intent(in)    :: tokens(:) !< Tokens, `wall` first.
+   integer(I4P),         intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out) :: iomsg !< Error message.
+   character(len=2), parameter :: NAMES(5) = ['y0', 'x0', 'y1', 'x1', 'z0'] !< gnuplot's wall tags, in order.
+   character(len=*), parameter :: CORNERS(5) = [character(len=120) :: &
+      'graph 0,graph 0,graph 0 to graph 0,graph 0,graph 1 to graph 1,graph 0,graph 1 to graph 1,graph 0,graph 0', &
+      'graph 0,graph 0,graph 0 to graph 0,graph 1,graph 0 to graph 0,graph 1,graph 1 to graph 0,graph 0,graph 1', &
+      'graph 0,graph 1,graph 0 to graph 1,graph 1,graph 0 to graph 1,graph 1,graph 1 to graph 0,graph 1,graph 1', &
+      'graph 1,graph 0,graph 0 to graph 1,graph 0,graph 1 to graph 1,graph 1,graph 1 to graph 1,graph 1,graph 0', &
+      'graph 0,graph 0,graph 0 to graph 1,graph 0,graph 0 to graph 1,graph 1,graph 0 to graph 0,graph 1,graph 0'] !< As
+                                                                                                    !< gnuplot's.
+   character(len=*), parameter :: COLORS(5) = [character(len=7) :: '#cdb79e', '#228b22', '#cdb79e', '#228b22', &
+                                                '#a0b6cd'] !< gnuplot's WALL_Y_COLOR, WALL_X_COLOR, WALL_Z_COLOR.
+   integer(I4P), parameter     :: TAG = 2000000000_I4P !< A tag no script uses, the wall built as an object.
+   type(token_object), allocatable :: built(:) !< The object command.
+   character(len=:), allocatable   :: text     !< Its text.
+   integer(I4P)                    :: k, i, j  !< Counters.
+
+   iostat = 0_I4P
+   iomsg = ''
+   if (size(tokens) == 1) then
+      do k = 1_I4P, 5_I4P
+         if (k == 3_I4P .or. k == 4_I4P) cycle
+         call build(k, 2_I4P)
+         if (iostat /= 0_I4P) return
+      enddo
+      return
+   endif
+   k = 0_I4P
+   do i = 1_I4P, 5_I4P
+      if (tokens(2)%text == NAMES(i)) k = i
+   enddo
+   if (k == 0_I4P) then
+      call fail('set wall: y0, x0, y1, x1 or z0 expected, found "'//tokens(2)%text//'"', iostat, iomsg)
+      return
+   endif
+   call build(k, 3_I4P)
+   contains
+      subroutine build(w, first)
+      !< Wall `w` from its corners, gnuplot's default style and the options from token `first`.
+      integer(I4P), intent(in) :: w     !< Wall.
+      integer(I4P), intent(in) :: first !< First option token.
+
+      text = 'object 2000000000 polygon from '//trim(CORNERS(w))//' to '// &
+             trim(CORNERS(w)(1:index(CORNERS(w), ' to ') - 1))//' fs transparent solid 0.5 noborder fc rgb "'// &
+             COLORS(w)//'"'
+      do j = first, size(tokens, kind=I4P)
+         if (tokens(j)%kind == TOKEN_STRING) then
+            text = text//' "'//tokens(j)%text//'"'
+         else
+            text = text//' '//tokens(j)%text
+         endif
+      enddo
+      call tokenize(text, built, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      call self%annotation_option(built, iostat, iomsg)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set wall: '//iomsg
+         return
+      endif
+      associate(panel => self%figure%panels(self%figure%current))
+         do j = 1_I4P, size(panel%objects, kind=I4P)
+            if (panel%objects(j)%tag /= TAG) cycle
+            panel%walls(w) = panel%objects(j)
+            panel%walls(w)%layer = 'fb'
+            ! a wall's border black unless a color is given (gnuplot's: the wall's line properties)
+            if (panel%walls(w)%style%border) then
+               if (.not. allocated(panel%walls(w)%style%border_color)) panel%walls(w)%style%border_color = 'black'
+            endif
+            panel%wall_on(w) = .true.
+            panel%objects = [panel%objects(1:j - 1), panel%objects(j + 1:)]
+            exit
+         enddo
+      endassociate
+      endsubroutine build
+   endsubroutine wall_option
+
    subroutine annotation_option(self, tokens, iostat, iomsg)
    !< `set label [N] ["text"] [at POS] [left|center|right] [norotate|rotate [by A]] [front|back] [tc COLOR] [point
    !< [pt N] [ps S] [lc C]|nopoint] [offset X,Y] [font F] [noenhanced]`,
@@ -11943,6 +12076,8 @@ contains
          endif
          cnt%on = .true.
       endassociate
+   elseif (keyword(option, 'walls', 4_I4P)) then
+      call self%wall_option(tokens, iostat, iomsg)
    elseif (option == 'contourfill') then
       ! gnuplot's set_contourfill: the slices of `with contourfill`, one option per command
       cfill_set: block
@@ -14938,9 +15073,13 @@ contains
          k = grid_line_index(base)
          if (k > 0_I4P) then
             lines(k) = base == w
-         elseif (is_word(base, 'z ztics mz mztics')) then
+         elseif (is_word(base, 'z ztics')) then
             ! the z grid of the 3D views, at the z ticks on the back walls
             self%figure%panels(self%figure%current)%view3d%grid_z = base == w
+            z_named = .true.
+         elseif (is_word(base, 'mz mztics')) then
+            ! at the minor z ticks
+            self%figure%panels(self%figure%current)%view3d%grid_mz = base == w
             z_named = .true.
          elseif (is_word(base, 'cb cbtics mcb mcbtics')) then
             ! lines across the color box at its (minor) ticks
@@ -17406,6 +17545,9 @@ contains
       overflow_mode = OVERFLOW_IGNORE
    elseif (keyword(option, 'mttics', 3_I4P)) then
       self%figure%panels(self%figure%current)%ttics%minor = MINOR_NONE
+   elseif (keyword(option, 'walls', 4_I4P)) then
+      ! every grid wall off
+      self%figure%panels(self%figure%current)%wall_on = .false.
    elseif (option == 'contourfill') then
       ! gnuplot's unset_contourfill: auto 5, the palette
       self%figure%panels(self%figure%current)%cfill_mode = 0_I4P

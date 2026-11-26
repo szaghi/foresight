@@ -190,6 +190,10 @@ type :: series_object
    logical                       :: contour_base = .false. !< Those on the base plane (`set contour base`).
    logical                       :: contour_labels = .false. !< Its contours drawn as labels of their levels (a function
                                                              !< `with labels`, gnuplot's cntr3d_labels).
+   real(R8P), allocatable        :: zlow(:)  !< `with zerrorfill`: the low ends of the z errors.
+   real(R8P), allocatable        :: zhigh(:) !< Their high ends.
+   logical                       :: zerrorfill = .false. !< `with zerrorfill`: quadrangles from zlow to zhigh between
+                                                         !< the points (gnuplot's plot3d_zerrorfill), the line through z.
    logical                       :: contourfill = .false. !< `with contourfill`: pm3d quadrangles clipped to z slices,
                                                           !< each slice in one color (gnuplot's plot3d_contourfill).
    real(R8P), allocatable        :: rgb_values(:) !< The packed colors 0xAARRGGBB of `lc rgb variable` lines (those of an

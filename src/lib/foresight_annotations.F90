@@ -560,10 +560,22 @@ contains
    frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
    drawn = .false.
    do k = 1_I4P, size(shapes, kind=I4P)
-      if (trim(shapes(k)%layer) /= layer) cycle
+      if (trim(shapes(k)%layer) == 'fb') then
+         ! gnuplot's LAYER_FRONTBACK (the grid walls): back or front as it faces, on the page (y down)
+         if (layer /= 'back' .and. layer /= 'front') cycle
+      elseif (trim(shapes(k)%layer) /= layer) then
+         cycle
+      endif
       if (in_space(shapes(k)) .neqv. data_space) cycle
       call outline(shapes(k), px, py)
       if (size(px) < 2) cycle
+      if (trim(shapes(k)%layer) == 'fb' .and. size(px) >= 3) then
+         ! gnuplot's do_polygon: the cross product of the first edge and of the corner before the last (y up)
+         if (layer == 'front' .and. -((px(2) - px(1)) * (py(size(px) - 1) - py(1)) - &
+                                      (py(2) - py(1)) * (px(size(px) - 1) - px(1))) > 0.0_R8P) cycle
+         if (layer == 'back' .and. -((px(2) - px(1)) * (py(size(px) - 1) - py(1)) - &
+                                     (py(2) - py(1)) * (px(size(px) - 1) - px(1))) < 0.0_R8P) cycle
+      endif
       if (.not. drawn) then
          call backend%begin_group('fs-objects')
          drawn = .true.

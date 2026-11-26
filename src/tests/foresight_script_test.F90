@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(277)                           !< Per-check outcome.
+logical                       :: test_passed(278)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7379,6 +7379,66 @@ block
    test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. &
                      interpreter%figure%panels(1)%xaxis%tics%mode /= TICS_NONE .and. &
                      interpreter%figure%panels(1)%yaxis%tics%mode /= TICS_NONE
+endblock
+
+
+
+! `with zerrorfill`, gnuplot 6.0's plot3d_zerrorfill (probed on its svg, 600 x 400): a quadrangle from the low to the
+! high ends between each two points (x:y:z:dz, or x:y:z:zlow:zhigh), in the fill color (164.30,212.65 164.30,176.60
+! 254.77,138.11 254.77,210.24 in rgb(255,215,0)), the line through z in the line color, the key sample the fill and the
+! line; `fc lt N` the color of linetype N; `set wall` the walls y0, x0, z0 as gnuplot's (half transparent, in its
+! colors, back or front as they face: x0 at 85.96,235.19 242.65,154.05 242.65,45.85 85.96,127), `border -1` black,
+! `unset wall`; `set grid z` at the major z ticks only, `mz` the minor ones
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: pts  !< The points datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   pts = "$z << EOD"//nl//"1 1 3 0.5"//nl//"2 1 4 1"//nl//"3 1 2 0.5"//nl//"4 1 5 1"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_ze.svg'"//nl//pts// &
+                             "set xyplane 0"//nl//"splot $z using 1:2:3:4 with zerrorfill lt 7 fc 'gold' title 'err'", &
+                             iostat, iomsg)
+   test_passed(278) = iostat == 0_I4P
+   if (test_passed(278)) then
+      svg = read_text('foresight_script_test_ze.svg')
+      test_passed(278) = index(svg, 'fill="#ffd700" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.273833,0.531625 0.273833,0.4415 0.424617,0.345275 0.424617,0.5256Z"') > 0 .and. &
+                        index(svg, 'stroke="#e51e10"') > 0
+   endif
+   call interpreter%run_text("splot $z using 1:2:3:($3-$4):($3+$4) with zerrorf fc lt 3 notitle", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P
+   if (test_passed(278)) then
+      svg = read_text('foresight_script_test_ze.svg')
+      test_passed(278) = index(svg, 'fill="#56b4e9" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.273833,0.531625 0.273833,0.4415 0.424617,0.345275 0.424617,0.5256Z"') > 0
+   endif
+   call interpreter%run_text("splot $z using 1:2:3 with zerrorfill", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat /= 0_I4P
+   ! the grid walls
+   call interpreter%run_text("set xyplane relative 0.5; set wall"//nl//"splot x*y notitle", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. count(interpreter%figure%panels(1)%wall_on) == 3
+   if (test_passed(278)) then
+      svg = read_text('foresight_script_test_ze.svg')
+      test_passed(278) = index(svg, '<path fill="#228b22" fill-opacity="0.5" stroke="none" '// &
+                                   'd="M85.96,235.19 242.65,154.05 242.65,45.85 85.96,127 85.96,235.19Z"') > 0 .and. &
+                        index(svg, 'fill="#228b22"') < index(svg, 'fill="#a0b6cd"') .and. &
+                        index(svg, 'fill="#a0b6cd"') < index(svg, 'fill="#cdb79e"')
+   endif
+   call interpreter%run_text("set wall x1 fs transparent solid 0.5 border -1 fc 'red'", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%wall_on(4) .and. &
+                     interpreter%figure%panels(1)%walls(4)%style%border
+   if (test_passed(278)) test_passed(278) = interpreter%figure%panels(1)%walls(4)%style%border_color == 'black'
+   call interpreter%run_text("set wall q0", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat /= 0_I4P
+   call interpreter%run_text("unset wall", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. .not. any(interpreter%figure%panels(1)%wall_on)
+   ! the z grid at the major ticks, mz at the minor ones
+   call interpreter%run_text("set grid z", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%view3d%grid_z .and. &
+                     .not. interpreter%figure%panels(1)%view3d%grid_mz
+   call interpreter%run_text("set grid mz", iostat, iomsg)
+   test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%view3d%grid_mz
 endblock
 
 if (all(test_passed)) then

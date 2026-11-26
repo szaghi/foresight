@@ -1747,6 +1747,24 @@ spotlight` moves and colors it). A fill color (`fc`) is lit as the palette color
 ztics` slices it at the z ticks (`cbtics` at the color box's, `auto N` in N equal slices). In a map view
 (`set view map`) it is a filled contour map. See [3D views](/guide/gnuplot-subset#3d-views).
 
+### Error bands in 3D
+
+<<< @/examples/snippets/cb_view3d_zerrorfill.gp{gnuplot}
+
+<Plot name="cb_view3d_zerrorfill" svg :width="560" :height="400" />
+
+`with zerrorfill` draws each curve with a band from its low to its high z ends, in its fill color, and the line through
+z in its line color; the items are plotted back to front. See [3D views](/guide/gnuplot-subset#3d-views).
+
+### Grid walls
+
+<<< @/examples/snippets/cb_view3d_walls.gp{gnuplot}
+
+<Plot name="cb_view3d_walls" svg :width="560" :height="400" />
+
+`set wall` fills the planes of the graph box (x0, y0, z0, x1, y1) half transparent; each is drawn behind the plot or
+over it as it faces. See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### Contours in a 3D view
 
 <<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}

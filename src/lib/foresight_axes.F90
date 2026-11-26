@@ -377,6 +377,8 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    logical                          :: grid_cb(2) = .false. !< Grid lines across the color box at its major and minor
                                                             !< ticks (`set grid cb mcb`).
+   type(shape_object)               :: walls(5)           !< The grid walls of a 3D view (`set wall y0|x0|y1|x1|z0`).
+   logical                          :: wall_on(5) = .false. !< Those drawn.
    integer(I4P)                     :: cfill_mode = 0_I4P  !< `set contourfill`: 0 `auto N`, 1 `ztics`, 2 `cbtics`.
    integer(I4P)                     :: cfill_n = 5_I4P     !< `set contourfill auto N`: the slices.
    integer(I4P)                     :: cfill_lt = -1_I4P   !< `set contourfill firstlinetype N` (-1: `palette`).
@@ -2569,6 +2571,19 @@ contains
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
+      ! zerrorfill: its quadrangles pending (with its key entry, a fill sample), then its line through z
+      if (self%series(s)%zerrorfill .and. allocated(self%series(s)%zlow) .and. allocated(self%series(s)%zhigh)) then
+         pending = self%series(s)
+         pending%pm3d_pending = .true.
+         pending%style%with = WITH_PM3D
+         call push(drawn, pending)
+         pending = self%series(s)
+         pending%zerrorfill = .false.
+         deallocate(pending%zlow, pending%zhigh)
+         pending%title = ''
+         call push(drawn, pending)
+         cycle
+      endif
       pm3d = self%series(s)%style%with == WITH_PM3D
       if (allocated(self%series(s)%scans) .and. allocated(self%series(s)%z)) then
          if ((pm3d .and. self%view3d%surface .and. .not. self%series(s)%no_surface) .or. &
@@ -2652,7 +2667,9 @@ contains
          call push(drawn, self%series(s))
          cycle
       endif
-      if (self%series(s)%contourfill) then
+      if (self%series(s)%zerrorfill) then
+         call zerror_quads(self%pm3d, self%series(s), f, depth, quads, qx, qy, qd, qc, nq)
+      elseif (self%series(s)%contourfill) then
          call contourfill_slices(self, self%zaxis, self%cbaxis, p, lows, highs, mids, scol)
          call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
                                  depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq, lows=lows, &
@@ -2666,7 +2683,7 @@ contains
          if (len(quads%title) == 0) cycle
          quads%x = [real(R8P) :: ]
          quads%y = [real(R8P) :: ]
-         deallocate(quads%colors)
+         if (allocated(quads%colors)) deallocate(quads%colors)
       endif
       call push(drawn, quads)
    enddo
@@ -2676,6 +2693,109 @@ contains
    endif
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_quads
+
+   subroutine zerror_quads(pm, one, f, depth, quads, qx, qy, qd, qc, nq)
+   !< The quadrangles of `with zerrorfill` (gnuplot's plot3d_zerrorfill): between each two defined points of the item
+   !< in turn, from their low ends to their high ones, in its fill color (`fc`, else its line color); appended to the
+   !< depth queue with `depth` (`set pm3d depthorder`, its base too), else sorted among themselves by their mean depth
+   !< (gnuplot flushes the queue after each zerrorfill item: later items cover earlier ones).
+   type(pm3d_object),              intent(in)    :: pm      !< pm3d settings.
+   type(series_object),            intent(in)    :: one     !< The item.
+   type(view3d_frame),             intent(in)    :: f       !< The view.
+   logical,                        intent(in)    :: depth   !< Queued, not drawn in place.
+   type(series_object),            intent(out)   :: quads   !< Its quadrangles (in place).
+   real(R8P), allocatable,         intent(inout) :: qx(:)   !< Queued corner abscissae [px].
+   real(R8P), allocatable,         intent(inout) :: qy(:)   !< Queued corner ordinates [px].
+   real(R8P), allocatable,         intent(inout) :: qd(:)   !< Queued depths.
+   character(len=24), allocatable, intent(inout) :: qc(:)   !< Queued colors.
+   integer(I4P),                   intent(inout) :: nq      !< Queued quadrangles.
+   real(R8P), allocatable                        :: lx(:), ly(:), ld(:) !< The item's own queue.
+   character(len=24), allocatable                :: lc(:)   !< Its colors.
+   character(len=24)                             :: color   !< Fill color.
+   real(R8P)                                     :: cx(4), cy(4), cz(4) !< A quadrangle.
+   real(R8P)                                     :: v(3)    !< View coordinates.
+   real(R8P)                                     :: w(2)    !< Page position.
+   real(R8P)                                     :: dsum    !< Depth sum.
+   integer(I4P)                                  :: i1, i2, k, n, nl !< Counters.
+
+   color = 'black'
+   if (allocated(one%style%color)) color = one%style%color
+   if (allocated(one%style%fill_rgb)) then
+      if (len(one%style%fill_rgb) > 0) color = one%style%fill_rgb
+   endif
+   n = size(one%x, kind=I4P)
+   allocate(lx(6 * n), ly(6 * n), ld(n), lc(n))
+   nl = 0_I4P
+   i1 = 0_I4P
+   do i2 = 1_I4P, n
+      if (.not. (ieee_is_finite(one%x(i2)) .and. ieee_is_finite(one%y(i2)) .and. ieee_is_finite(one%zlow(i2)) .and. &
+                 ieee_is_finite(one%zhigh(i2)))) cycle
+      if (i1 > 0_I4P) then
+         ! gnuplot's corners: (i1, zlow), (i1, zhigh), (i2, zhigh), (i2, zlow)
+         cx = [one%x(i1), one%x(i1), one%x(i2), one%x(i2)]
+         cy = [one%y(i1), one%y(i1), one%y(i2), one%y(i2)]
+         cz = [one%zlow(i1), one%zhigh(i1), one%zhigh(i2), one%zlow(i2)]
+         nl = nl + 1_I4P
+         lx(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         ly(6 * nl - 5:6 * nl) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         dsum = 0.0_R8P
+         do k = 1_I4P, 4_I4P
+            v = view3d_xyz(f, cx(k), cy(k), cz(k))
+            w = view3d_page(f, v, truncate=.true.)
+            lx(6 * nl - 6 + k) = w(1)
+            ly(6 * nl - 6 + k) = -w(2)
+            if (pm%base_sort) v = view3d_xyz(f, cx(k), cy(k), &
+                                             min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), base=.true.)
+            dsum = dsum + v(3)
+         enddo
+         ld(nl) = 0.25_R8P * dsum
+         lc(nl) = color
+      endif
+      i1 = i2
+   enddo
+   quads%style = one%style
+   quads%style%with = WITH_POLYGONS
+   if (quads%style%fill == FILL_EMPTY) then
+      quads%style%fill = FILL_SOLID
+      quads%style%density = 1.0_R8P
+   endif
+   if (allocated(quads%style%fill_rgb)) deallocate(quads%style%fill_rgb)
+   quads%style%border = pm%border
+   if (pm%border) then
+      quads%style%border_color = trim(pm%border_color)
+      quads%style%linewidth = pm%border_lw
+   endif
+   quads%crisp = .true.
+   quads%title = ''
+   if (allocated(one%title)) quads%title = one%title
+   quads%title_plain = one%title_plain
+   quads%style%fill_rgb = trim(color)
+   quads%zerrorfill = .true.
+   if (depth) then
+      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + nl)
+      do k = 1_I4P, nl
+         nq = nq + 1_I4P
+         qx(6 * nq - 5:6 * nq) = lx(6 * k - 5:6 * k)
+         qy(6 * nq - 5:6 * nq) = ly(6 * k - 5:6 * k)
+         qd(nq) = ld(k)
+         qc(nq) = lc(k)
+      enddo
+      quads%x = [real(R8P) :: ]
+      quads%y = [real(R8P) :: ]
+   else
+      ! gnuplot's pm3d_depth_queue_flush of this item alone
+      block
+         type(series_object) :: sorted !< Its quadrangles, sorted.
+
+         call pm3d_sorted_queue(pm, lx, ly, ld, lc, nl, sorted)
+         quads%x = sorted%x
+         quads%y = sorted%y
+         quads%colors = sorted%colors
+         quads%colors_kept = .true.
+      endblock
+   endif
+   quads%palette_mode = 0_I4P
+   endsubroutine zerror_quads
 
    subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, qx, qy, qd, qc, &
                                  nq, lows, highs, slice_colors)
@@ -3839,6 +3959,8 @@ contains
    integer(I4P), allocatable            :: order(:)  !< Painting order of the quadrangles.
    type(arrow_object), allocatable      :: arrows(:) !< Arrows as given, restored after.
    type(shape_object), allocatable      :: shapes(:) !< Objects as given, restored after.
+   type(shape_object), allocatable      :: walls(:)  !< The grid walls drawn, on the page.
+   integer(I4P)                         :: jw        !< Walls drawn.
    type(view3d_frame)                   :: f         !< The view.
    type(axes_view)                      :: view      !< Panel geometry for the device.
    real(R8P)                            :: area(4)   !< A plot area guess, then the panel box [px].
@@ -3973,6 +4095,15 @@ contains
                            self%view3d%scale)
       enddo
    endif
+   ! the grid walls on the page (`set wall`)
+   allocate(walls(count(self%wall_on)))
+   jw = 0_I4P
+   do k = 1_I4P, 5_I4P
+      if (.not. self%wall_on(k)) cycle
+      jw = jw + 1_I4P
+      walls(jw) = self%walls(k)
+      call view3d_shape(f, walls(jw), self%canvas, self%xaxis, self%yaxis, self%zaxis, self%view3d%scale)
+   enddo
    ! the series colored by the palette, over the color axis set up with the ranges
    if (self%has_image(palette=.true.)) then
       if (allocated(self%colormaps)) then
@@ -4084,10 +4215,17 @@ contains
       !< The annotations of `layer` (`behind`, `back`, `front`), their positions on the page already.
       character(len=*), intent(in) :: layer !< Layer.
 
+      ! gnuplot's order: the back walls before the back pixmaps and objects, the front ones after the front objects
+      if (layer == 'back' .and. size(walls) > 0) call draw_shapes(walls, layer, .false., backend, area, self%canvas, &
+                                                                  font_size, self%xaxis, self%yaxis, self%x2axis, &
+                                                                  self%y2axis)
       if (allocated(self%pixmaps)) call draw_pixmaps(self%pixmaps, layer, backend, area, self%canvas, font_size, &
                                                      self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       if (allocated(self%objects)) call draw_shapes(self%objects, layer, .false., backend, area, self%canvas, font_size, &
                                                     self%xaxis, self%yaxis, self%x2axis, self%y2axis)
+      if (layer == 'front' .and. size(walls) > 0) call draw_shapes(walls, layer, .false., backend, area, self%canvas, &
+                                                                   font_size, self%xaxis, self%yaxis, self%x2axis, &
+                                                                   self%y2axis)
       if (layer == 'behind') return
       if (allocated(self%notes)) call draw_notes(self%notes, layer == 'front', backend, area, self%canvas, font_size, &
                                                  self%xaxis, self%yaxis, self%x2axis, self%y2axis)
@@ -4348,7 +4486,7 @@ contains
             v1 = view3d_xyz(f, f%zaxis_xy(1), f%zaxis_xy(2), place, base=.true.)
          endif
          v3 = view3d_xyz(f, f%right_xy(1), f%right_xy(2), place, base=.true.)
-         if (self%grid .and. self%view3d%grid_z) then
+         if (self%grid .and. merge(self%view3d%grid_z, self%view3d%grid_mz, self%zaxis%ticks(t)%major)) then
             v2 = view3d_xyz(f, f%back_xy(1), f%back_xy(2), place, base=.true.)
             call line3(v1, v2, gcolor, self%grid_lw, self%grid_dash_array())
             call line3(v2, v3, gcolor, self%grid_lw, self%grid_dash_array())
@@ -5197,6 +5335,11 @@ contains
                            [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
                             yc - 0.35_R8P * font_size], edged%fill_color(), edged%density, &
                            edged%stroke_color(), edged%linewidth)
+      ! zerrorfill: its line across the fill, as gnuplot's key sample
+      if (series%zerrorfill .and. allocated(series%style%color)) then
+         if (trim(series%style%color) /= 'none') &
+            call backend%polyline(xs, [yc, yc], series%style%color, series%style%linewidth, series%style%dasharray())
+      endif
    endif
    if (allocated(series%key_text)) then
       ! `keyentry "text"`: the text from the sample's start, in the item's font and color (gnuplot 6.0)
@@ -10526,6 +10669,21 @@ contains
          zr(2) = max(zr(2), series(s)%z(i))
          found = .true.
       enddo
+      ! the ends of zerrorfill's errors (gnuplot's zlow, zhigh autoscale z)
+      if (allocated(series(s)%zlow) .and. allocated(series(s)%zhigh)) then
+         do i = 1_I4P, min(size(series(s)%zlow, kind=I4P), size(series(s)%zhigh, kind=I4P))
+            if (ieee_is_finite(series(s)%zlow(i)) .and. .not. (logarithmic .and. series(s)%zlow(i) <= 0.0_R8P)) then
+               zr(1) = min(zr(1), series(s)%zlow(i))
+               zr(2) = max(zr(2), series(s)%zlow(i))
+               found = .true.
+            endif
+            if (ieee_is_finite(series(s)%zhigh(i)) .and. .not. (logarithmic .and. series(s)%zhigh(i) <= 0.0_R8P)) then
+               zr(1) = min(zr(1), series(s)%zhigh(i))
+               zr(2) = max(zr(2), series(s)%zhigh(i))
+               found = .true.
+            endif
+         enddo
+      endif
    enddo
    if (.not. found) zr = [-10.0_R8P, 10.0_R8P]
    ! impulses and boxes reach z = 0 on a linear axis (gnuplot's range fiddling)
