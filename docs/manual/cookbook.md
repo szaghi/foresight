@@ -1716,6 +1716,16 @@ gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plot
 in the top byte (0x80000000, half) it colors the points through `lc rgb variable`. See
 [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### Contours in a 3D view
+
+<<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}
+
+<Plot name="cb_view3d_contours" svg :width="560" :height="400" />
+
+`set contour base` draws the contour lines of the surface on the base plane of the 3D view, each level in its own
+linetype; the same function `with labels` writes the values on the lines, boxed, from the third point every thirty
+(`set cntrlabel start 3 interval 30`), as gnuplot. See [Contours](/guide/gnuplot-subset#contours).
+
 ### Labels in palette colors
 
 <<< @/examples/snippets/cb_view3d_label_colors.gp{gnuplot}

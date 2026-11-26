@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(273)                           !< Per-check outcome.
+logical                       :: test_passed(274)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7161,6 +7161,51 @@ block
                              "splot sample [u=25:75:1][v=25:75:4] '++' using 1:2:0:(u):(v):(0):(255) with rgbalpha", &
                              iostat, iomsg)
    test_passed(273) = test_passed(273) .and. iostat == 0_I4P
+endblock
+
+
+
+! contours in 3D views, as gnuplot 6.0's graph3d (probed: the same lines and key entries): `set contour[s] base` the
+! levels at the base plane, each its series and key entry (x*y: 100, 50, 0, -50, the surface first), `surface` at
+! their heights, `both`; `unset clabel` (deprecated) one series in the surface's color; a function `with labels` its
+! contour labels alone, centred and boxed at the points start, start + interval, ... (gnuplot's cntr3d_labels)
+block
+   character(len=:), allocatable :: svg !< Page.
+   integer(I4P)                  :: lines !< Polylines of the page.
+   integer(I4P)                  :: k     !< Position.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_c3d.svg'; "// &
+                             "set contours base; splot x*y", iostat, iomsg)
+   test_passed(274) = iostat == 0_I4P
+   if (test_passed(274)) then
+      svg = read_text('foresight_script_test_c3d.svg')
+      lines = 0_I4P
+      k = 1_I4P
+      do while (index(svg(k:), '<polyline') > 0)
+         k = k + index(svg(k:), '<polyline', kind=I4P)
+         lines = lines + 1_I4P
+      enddo
+      test_passed(274) = index(svg, 'data-series="5"') > 0 .and. index(svg, 'data-series="6"') == 0 .and. lines == 64
+   endif
+   call interpreter%run_text("set contour both; replot", iostat, iomsg)
+   test_passed(274) = test_passed(274) .and. iostat == 0_I4P
+   if (test_passed(274)) test_passed(274) = index(read_text('foresight_script_test_c3d.svg'), 'data-series="9"') > 0
+   call interpreter%run_text("set contour base; unset clabel; replot", iostat, iomsg)
+   test_passed(274) = test_passed(274) .and. iostat == 0_I4P
+   if (test_passed(274)) then
+      svg = read_text('foresight_script_test_c3d.svg')
+      test_passed(274) = index(svg, 'data-series="2"') > 0 .and. index(svg, 'data-series="3"') == 0 .and. &
+                        interpreter%figure%panels(1)%contour%onecolor
+   endif
+   call interpreter%run_text("set clabel; set cntrparam levels auto 10; splot x**2-y**2 with labels boxed notitle", &
+                             iostat, iomsg)
+   test_passed(274) = test_passed(274) .and. iostat == 0_I4P
+   if (test_passed(274)) then
+      svg = read_text('foresight_script_test_c3d.svg')
+      test_passed(274) = index(svg, 'filter="url(#textbox)" data-u="0.5451" data-v="0.5625"') > 0 .and. &
+                        .not. interpreter%figure%panels(1)%contour%onecolor
+   endif
 endblock
 
 if (all(test_passed)) then

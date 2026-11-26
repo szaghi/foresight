@@ -185,6 +185,11 @@ type :: series_object
                                                           !< `nohidden3d`): drawn as it is.
    character(len=:), allocatable :: key_text !< A text as the key sample (gnuplot's `keyentry "text"`), unallocated if
                                              !< none.
+   logical                       :: contour = .false.      !< Contour lines of a surface in a 3D view (drawn without its
+                                                           !< surface too).
+   logical                       :: contour_base = .false. !< Those on the base plane (`set contour base`).
+   logical                       :: contour_labels = .false. !< Its contours drawn as labels of their levels (a function
+                                                             !< `with labels`, gnuplot's cntr3d_labels).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

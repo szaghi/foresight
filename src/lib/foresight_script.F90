@@ -4301,6 +4301,8 @@ contains
    character(len=:), allocatable                :: option_word !< The current option as written.
    logical                                      :: item_nocontours !< `nocontours`: no contour lines of the item.
    logical                                      :: item_nohidden !< `nohidden3d`: the item out of the hidden surfaces.
+   logical                                      :: item_contour_labels !< `with labels` of a function: its contour labels.
+   logical                                      :: contour_texts !< `with labels` without texts: contour labels.
    logical                                      :: item_nosurface  !< `nosurface`: the item's surface not drawn.
    logical                                      :: item_nogrid     !< `nogrid`: the item's data not gridded (dgrid3d).
    logical                                      :: item_mask       !< `mask`: the item masked by the `with mask` polygons.
@@ -4973,6 +4975,7 @@ contains
       other_seen = .false.
       item_nocontours = .false.
       item_nohidden = .false.
+      item_contour_labels = .false.
       item_nosurface = .false.
       item_nogrid = .false.
       item_mask = .false.
@@ -5148,6 +5151,17 @@ contains
                   keyentry_blank = .true.
                else
                   with = 'lines'
+               endif
+            endif
+            ! splot's function `with labels`, or data without a text field (`using 1`, `using 1:2:3`), and `set
+            ! contour`: the labels of its contour lines alone (gnuplot's cntr3d_labels), its surface not drawn
+            if (splot_mode .and. with == 'labels' .and. self%figure%panels(self%figure%current)%contour%on) then
+               contour_texts = is_function
+               if (.not. contour_texts .and. len(spec) > 0) contour_texts = word_count(replace_colons(spec)) < 4_I4P
+               if (contour_texts) then
+                  with = 'lines'
+                  item_nosurface = .true.
+                  item_contour_labels = .true.
                endif
             endif
             if (is_function .and. .not. function_drawable(with) .and. with /= 'table' .and. &
@@ -5372,7 +5386,7 @@ contains
          elseif (with == 'labels' .and. word == 'hypertext') then
             ! gnuplot's hypertext: the texts shown on mouse-over of their points, not drawn
             hypertext = .true.
-         elseif ((with == 'labels' .or. len(keyentry_text) > 0) .and. &
+         elseif ((with == 'labels' .or. len(keyentry_text) > 0 .or. item_contour_labels) .and. &
                  is_word(word, 'left center centre right norotate point nopoint rotate offset tc textcolor boxed')) then
             ! label options, in any order among the item options (pt, ps, lc are line options)
             if (.not. label_option()) return
@@ -7223,6 +7237,8 @@ contains
          endif
          panel%series(last)%no_contours = item_nocontours
          panel%series(last)%no_hidden = item_nohidden
+         panel%series(last)%contour_labels = item_contour_labels
+         if (item_contour_labels) panel%series(last)%text_boxed = index(label_opts, 'boxed') > 0
          panel%series(last)%no_surface = item_nosurface
          ! set dgrid3d: the data (not a function's samples) gridded, gnuplot's grid_nongrid_data
          ! a mask is never gridded (gnuplot's opt_out_of_dgrid3d)
@@ -11884,8 +11900,8 @@ contains
       call samples_option(.false.)
    elseif (keyword(option, 'pm3d', 2_I4P)) then
       call pm3d_option(tokens)
-   elseif (keyword(option, 'contour', 3_I4P)) then
-      ! `set contour [base|surface|both]`
+   elseif (keyword(option, 'contours', 3_I4P)) then
+      ! `set contour[s] [base|surface|both]` (gnuplot's cont$ours)
       associate(cnt => self%figure%panels(self%figure%current)%contour)
          cnt%place = 'base'
          if (size(tokens) > 1) then
@@ -11909,6 +11925,17 @@ contains
       call dgrid3d_option(tokens)
    elseif (keyword(option, 'cntrlabel', 5_I4P)) then
       call cntrlabel_option(tokens)
+   elseif (option == 'clabel') then
+      ! gnuplot's deprecated `set clabel ["format"]`: the levels in their own linetypes, the format theirs
+      self%figure%panels(self%figure%current)%contour%onecolor = .false.
+      if (size(tokens) > 1) then
+         i = 2_I4P
+         if (.not. self%string_expression(tokens, i, text, iostat, iomsg)) then
+            iomsg = 'set clabel: '//iomsg
+            return
+         endif
+         self%figure%panels(self%figure%current)%contour%format = text
+      endif
    elseif (option == 'view') then
       call view_option(tokens)
    elseif (keyword(option, 'xyplane', 3_I4P) .or. keyword(option, 'ticslevel', 5_I4P)) then
@@ -17124,8 +17151,11 @@ contains
       endblock
    elseif (keyword(option, 'dgrid3d', 2_I4P)) then
       self%figure%panels(self%figure%current)%dgrid3d%on = .false.
-   elseif (keyword(option, 'contour', 3_I4P)) then
+   elseif (keyword(option, 'contours', 3_I4P)) then
       self%figure%panels(self%figure%current)%contour%on = .false.
+   elseif (option == 'clabel') then
+      ! gnuplot's deprecated `unset clabel`: all the levels in the surface's color, one key entry (`onecolor`)
+      self%figure%panels(self%figure%current)%contour%onecolor = .true.
    elseif (keyword(option, 'pm3d', 2_I4P)) then
       ! the surfaces no more drawn with pm3d (gnuplot: explicit), the pm3d data and function styles back to the defaults
       ! (lines, foresight's data style)

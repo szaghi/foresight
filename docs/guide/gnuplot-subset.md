@@ -113,7 +113,7 @@ that did what it says.
 | **sam**ples `N`[`,M`] | points of each [function](#functions), 100 by default; `M` the points along y of the [`splot` functions](#3d-plots)' iso-curves of x (N by default); expressions truncated to integers, as gnuplot | 100 |
 | **iso**samples `N`[`,M`] | the iso-curves of the [`splot` functions](#3d-plots): M curves of y (the surface grid), N of x; 10 by default; M also the v samples of the [`'++'` pseudo-file](#sampled-pseudo-files-and) | 10 |
 | `view` *rot_x*[`,` *rot_z*[`,` *scale*[`,` *scale_z*]]] \| `map` [`scale S`] \| [`no`]`equal` [`xy`\|`xyz`] \| `azimuth A` \| `projection xy` | the [view](#3d-views) of the 3D plots, gnuplot's `60, 30, 1, 1` by default (an empty field keeps its value); `azimuth` a rotation about the line of sight; `equal` the same unit on x and y (`xyz`: and z); `map` seen from above, as a 2D plot | `60, 30, 1, 1`, no map |
-| **cont**our [`base`\|`surface`\|`both`] | the [contour lines](#contours) of the 3D surfaces (`base` by default; in a map view the three are the same picture) | no contour lines |
+| **cont**our[`s`] [`base`\|`surface`\|`both`] | the [contour lines](#contours) of the 3D surfaces: on the base plane (the default), at their heights, or both (in a map view the three are the same picture); gnuplot's deprecated `set clabel ["format"]` and `unset clabel` are `set cntrlabel format` and `onecolor` | no contour lines |
 | **cntrp**aram [`linear`\|`cubicspline`\|`bspline`] [`points N`] [`order N`] [`levels` [`auto` [`N`]\|`N`\|`discrete z1, z2, ...`\|`incremental start, step`[`, end`]]] [`firstlinetype N`] [`sorted`\|`unsorted`] | the [contour](#contours) lines: linear segments, a cubic spline through their points or a B-spline approximation (`order` 2 to 10, 4 by default; `points` per interval, 5); about N automatic levels (5), or the levels given; the first level's linetype; levels high to low; alone, the defaults | — |
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
@@ -2339,8 +2339,14 @@ a key entry its value in the `set cntrlabel format` (`"%8.3g"`); `set cntrlabel 
 surface's color, without key entries. As gnuplot's, the levels of an untitled surface have no key entries, and the
 contours of a `with pm3d` item are not stroked. `set table` writes them as gnuplot does (`# Contour N, label: L`, the
 levels high first, lines in chunks of at most 99 points); 2D scripts read them back (`plot $CONTOURS with lines`).
-`unset surface` keeps the contours, `nocontours` and `nosurface` select per item. Labels on the lines (`with labels`
-on contours, `cntrlabel start interval`) are not drawn.
+`unset surface` keeps the contours, `nocontours` and `nosurface` select per item. In a 3D view the lines of `set
+contour base` lie on the base plane, those of `surface` at their heights, both with `both` (the key entries once), as
+gnuplot's graph3d; they are not hidden by the surfaces of `set hidden3d`.
+
+A surface `with labels` (a function, or data without a text field: `using 1`, `using 1:2:3`) draws the labels of its
+contour lines alone, as gnuplot's cntr3d_labels: each level's text at the points `start`, `start + interval`, ... of
+every line (`set cntrlabel start 5 interval 20` by default), centred, `boxed` with the item, on the base plane of a 3D
+view; `splot f(x,y) with lines, f(x,y) with labels boxed notitle` draws the contours and their values.
 
 ### Gridded and masked surfaces
 

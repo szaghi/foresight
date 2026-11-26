@@ -2490,9 +2490,17 @@ contains
             call push(drawn, quads)
          endif
       endif
-      ! the contour lines of the surface (`set contour`), a series per level after it
+      ! the contour lines of the surface (`set contour`), a series per level after it; or their labels (`with labels`)
       if (self%contour%on .and. allocated(self%series(s)%scans) .and. .not. self%series(s)%no_contours) then
-         if (self%series(s)%grid_scans > 1_I4P) call contour_series(self, s, drawn)
+         if (self%series(s)%grid_scans > 1_I4P) then
+            if (self%series(s)%contour_labels) then
+               call contour_label_series(self, s, drawn)
+               ! in the map, plain labels at x, y
+               if (allocated(drawn(size(drawn))%z) .and. drawn(size(drawn))%contour) deallocate(drawn(size(drawn))%z)
+            else
+               call contour_series(self, s, drawn)
+            endif
+         endif
       endif
    enddo
    call move_alloc(drawn, self%series)
@@ -2515,13 +2523,119 @@ contains
    enddo
    endsubroutine mask_polygons
 
-   subroutine contour_series(self, s, drawn)
-   !< The contour lines of the surface `s` as lines, gnuplot's: a series per level in linetypes after the surface's (or
-   !< from `firstlinetype`), its width times the surface's, titled by the level's label (`set cntrlabel format`), the
-   !< levels in gnuplot's order; `onecolor`: one series in the surface's color, no key entry.
+   subroutine view3d_contours(self)
+   !< The contour lines of the surfaces of a 3D view as lines with their heights after each surface (contour_series):
+   !< on the base plane (`set contour base`, moved to it once the view is set up), on the surface (`surface`), or both
+   !< (the base ones keeping the key entries).
+   class(axes_object), intent(inout) :: self     !< Panel.
+   type(series_object), allocatable  :: drawn(:) !< Series as drawn.
+   type(series_object)               :: one      !< A surface contour of `both`.
+   integer(I4P)                      :: s        !< Series counter.
+   integer(I4P)                      :: first    !< First contour series of a surface.
+   integer(I4P)                      :: k        !< Counter.
+
+   allocate(drawn(0))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      call push(drawn, self%series(s))
+      if (.not. allocated(self%series(s)%scans) .or. self%series(s)%no_contours) cycle
+      if (self%series(s)%grid_scans < 2_I4P) cycle
+      if (self%series(s)%contour_labels) then
+         call contour_label_series(self, s, drawn)
+         cycle
+      endif
+      first = size(drawn, kind=I4P) + 1_I4P
+      call contour_series(self, s, drawn, heights=.true.)
+      if (self%contour%place == 'surface') cycle
+      do k = first, size(drawn, kind=I4P)
+         drawn(k)%contour_base = .true.
+      enddo
+      if (self%contour%place == 'both') then
+         ! the surface ones too, without key entries
+         do k = first, size(drawn, kind=I4P)
+            if (.not. drawn(k)%contour_base) cycle
+            ! through a copy: never an element of the list pushed onto it
+            one = drawn(k)
+            one%contour_base = .false.
+            one%title = ''
+            call push(drawn, one)
+         enddo
+      endif
+   enddo
+   call move_alloc(drawn, self%series)
+   endsubroutine view3d_contours
+
+   subroutine contour_label_series(self, s, drawn)
+   !< The labels of the contour levels of the surface `s` (a function `with labels`), gnuplot's cntr3d_labels: on the base
+   !< plane, at the points `start`, `start + interval`, ... of each contour line (`set cntrlabel start N interval M`),
+   !< each the level's text (`set cntrlabel format`, leading blanks off), centred, boxed with the item; no key entry.
+   !< Counted first, then filled (nvfortran 26.9: no character array grown by assignment, bug 31).
    class(axes_object),               intent(in)    :: self     !< Panel.
    integer(I4P),                     intent(in)    :: s        !< Surface series.
    type(series_object), allocatable, intent(inout) :: drawn(:) !< Series as drawn.
+   type(series_object)                             :: marks    !< The labels.
+   real(R8P), allocatable                          :: cx(:), cy(:), cz(:) !< Lines, NaN separated.
+   real(R8P), allocatable                          :: level(:) !< Level of each chunk.
+   logical,   allocatable                          :: first(:) !< First chunk of its level.
+   integer(I4P)                                    :: n        !< Labels.
+   integer(I4P)                                    :: pass     !< 1 count, 2 fill.
+   integer(I4P)                                    :: c        !< Chunk counter.
+   integer(I4P)                                    :: r        !< Row.
+   integer(I4P)                                    :: i        !< Point within the chunk.
+   integer(I4P)                                    :: d        !< Dataset.
+   integer(I4P)                                    :: every    !< Interval (999 for none, as gnuplot).
+
+   every = self%contour%label_interval
+   if (every <= 0_I4P) every = 999_I4P
+   do pass = 1_I4P, 2_I4P
+      if (pass == 2_I4P) then
+         if (n == 0_I4P) return
+         allocate(marks%x(n), marks%y(n), marks%z(n), marks%texts(n))
+      endif
+      n = 0_I4P
+      do d = minval(self%series(s)%scan_sets(1:self%series(s)%grid_scans)), &
+             maxval(self%series(s)%scan_sets(1:self%series(s)%grid_scans))
+         call surface_contours(self, self%series(s), d, cx, cy, cz, level, first)
+         if (size(level) == 0) cycle
+         r = 0_I4P
+         do c = 1_I4P, size(level, kind=I4P)
+            i = 0_I4P
+            do
+               r = r + 1_I4P
+               if (r > size(cx, kind=I4P)) exit
+               if (.not. ieee_is_finite(cx(r))) exit
+               if (mod(i - self%contour%label_start, every) == 0_I4P) then
+                  n = n + 1_I4P
+                  if (pass == 2_I4P) then
+                     marks%x(n) = cx(r)
+                     marks%y(n) = cy(r)
+                     marks%z(n) = cz(r)
+                     marks%texts(n) = trim(adjustl(contour_label(self%contour%format, level(c))))
+                  endif
+               endif
+               i = i + 1_I4P
+            enddo
+         enddo
+      enddo
+   enddo
+   marks%style = self%series(s)%style
+   marks%style%with = WITH_LABELS
+   marks%text_anchor = 'middle'
+   marks%text_boxed = self%series(s)%text_boxed
+   marks%title = ''
+   marks%contour = .true.
+   marks%contour_base = .true.
+   call push(drawn, marks)
+   endsubroutine contour_label_series
+
+   subroutine contour_series(self, s, drawn, heights)
+   !< The contour lines of the surface `s` as lines, gnuplot's: a series per level in linetypes after the surface's (or
+   !< from `firstlinetype`), its width times the surface's, titled by the level's label (`set cntrlabel format`), the
+   !< levels in gnuplot's order; `onecolor`: one series in the surface's color, no key entry. With `heights` (a 3D
+   !< view) each keeps the heights of its lines.
+   class(axes_object),               intent(in)    :: self     !< Panel.
+   integer(I4P),                     intent(in)    :: s        !< Surface series.
+   type(series_object), allocatable, intent(inout) :: drawn(:) !< Series as drawn.
+   logical, optional,                intent(in)    :: heights  !< The heights kept.
    type(series_object)                             :: lines    !< A level.
    real(R8P), allocatable                          :: cx(:), cy(:), cz(:) !< Lines, NaN separated.
    real(R8P), allocatable                          :: level(:) !< Level of each chunk.
@@ -2555,6 +2669,12 @@ contains
       ic = ic + 1_I4P
       lines%x = cx(r0:r)
       lines%y = cy(r0:r)
+      if (present(heights)) then
+         if (heights) then
+            lines%z = cz(r0:r)
+            lines%contour = .true.
+         endif
+      endif
       lines%style = self%series(s)%style
       lines%style%with = WITH_LINES
       ! the contours of a pm3d item are not stroked, their key entries a text alone (gnuplot 6.0's svg)
@@ -2965,6 +3085,8 @@ contains
    logical                              :: zfound    !< Any z value.
 
    raw = self%series
+   ! the contour lines of the surfaces (`set contour`), each surface's levels after it, as gnuplot's graph3d
+   if (self%contour%on) call view3d_contours(self)
    ! the ranges of the 3D points alone (not the baselines of the 2D styles: impulses, boxes)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (.not. allocated(self%series(s)%z)) cycle
@@ -3015,6 +3137,12 @@ contains
                     [self%xaxis%log, self%yaxis%log, self%zaxis%log], &
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
+   ! the contours on the base plane (gnuplot's cntr3d_lines: x, y at base_z)
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (.not. self%series(s)%contour_base) cycle
+      if (.not. allocated(self%series(s)%z)) cycle
+      where (ieee_is_finite(self%series(s)%z)) self%series(s)%z = merge(10.0_R8P**f%base_z, f%base_z, f%log(3))
+   enddo
    call view3d_project(self%series, f, self%view3d%surface)
    ! set hidden3d: the grid surfaces as opaque quadrangles, painted back to front (their own lines not drawn)
    if (self%view3d%hidden3d .and. self%view3d%surface) call hidden_quads(raw, f, self%series, qx, qy, qdepth, qcolor, &
@@ -9669,7 +9797,14 @@ contains
    lo = [min(f%x(1), f%x(2)), min(f%y(1), f%y(2)), min(f%z(1), f%z(2))]
    hi = [max(f%x(1), f%x(2)), max(f%y(1), f%y(2)), max(f%z(1), f%z(2))]
    do s = 1_I4P, size(series, kind=I4P)
-      if (allocated(series(s)%z)) call project_series(series(s), f, surface, lo, hi)
+      if (.not. allocated(series(s)%z)) cycle
+      if (series(s)%contour_base) then
+         ! the base plane may lie out of the z range (gnuplot's base_z below it by default): its contours kept
+         call project_series(series(s), f, surface, [lo(1), lo(2), min(lo(3), f%base_z)], &
+                             [hi(1), hi(2), max(hi(3), f%base_z)])
+      else
+         call project_series(series(s), f, surface, lo, hi)
+      endif
    enddo
    endsubroutine view3d_project
 
@@ -9710,7 +9845,7 @@ contains
    case (WITH_LINES, WITH_LINESPOINTS, WITH_STEPS, WITH_FSTEPS, WITH_HISTEPS)
       allocate(px(4_I4P * n + 8_I4P), py(4_I4P * n + 8_I4P), origin(4_I4P * n + 8_I4P))
       m = 0_I4P
-      if (surface .and. .not. one%no_surface) then
+      if ((surface .or. one%contour) .and. .not. one%no_surface) then
          if (allocated(one%scans)) then
             do c = 1_I4P, size(one%scans, 2, kind=I4P)
                call curve(one%scans(1, c), one%scans(2, c), 1_I4P)
