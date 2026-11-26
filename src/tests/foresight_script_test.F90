@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(289)                           !< Per-check outcome.
+logical                       :: test_passed(290)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7912,6 +7912,25 @@ block
    if (test_passed(289)) then
       rows = read_text('foresight_script_test_pr.txt')
       test_passed(289) = index(rows, nl//'-4 -4  0 i'//nl//'-4 -4  0.010101 i'//nl) > 0
+   endif
+endblock
+
+
+! check 290: a point outside the x or y range set does not autoscale z (gnuplot's store_and_update_range): the z axis
+! of `splot` over [1:2]x[1:2] ticked from 1 to 2 (as gnuplot), the point at 0,0,-5 left out
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_za.svg'"//nl// &
+                             "set xrange [1:2]; set yrange [1:2]"//nl//"$D << EOD"//nl//"0 0 -5"//nl//"1 1 1"//nl// &
+                             "2 2 2"//nl//"EOD"//nl//"splot $D notitle", iostat, iomsg)
+   test_passed(290) = iostat == 0_I4P
+   if (test_passed(290)) then
+      svg = read_text('foresight_script_test_za.svg')
+      test_passed(290) = index(svg, '>-5</text>') == 0 .and. index(svg, '>0</text>') == 0 .and. &
+                        index(svg, '>1.8</text>') > 0
    endif
 endblock
 

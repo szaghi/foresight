@@ -3680,7 +3680,7 @@ contains
    type(axis_object)                           :: za        !< z axis.
    logical                                     :: found     !< Any height.
 
-   call view3d_zextent(self%series, self%zaxis%log, zr, found)
+   call view3d_zextent(self%series, self%zaxis%log, self%xaxis, self%yaxis, zr, found)
    za = self%zaxis
    call za%setup(zr(1), zr(2), found, 400.0_R8P)
    call map_contourfill_cb(self, za, lows, highs, mids, colors)
@@ -3699,7 +3699,7 @@ contains
    real(R8P)                                   :: zr(2)     !< z extent.
    logical                                     :: found     !< Any height.
 
-   call view3d_zextent(self%series, self%zaxis%log, zr, found)
+   call view3d_zextent(self%series, self%zaxis%log, self%xaxis, self%yaxis, zr, found)
    ca = self%cbaxis
    call ca%setup(zr(1), zr(2), found, 400.0_R8P)
    call contourfill_slices(self, za, ca, effective_palette(self%palette, ''), lows, highs, mids, colors)
@@ -4758,7 +4758,7 @@ contains
    area = [x0 + 6.0_R8P * font_size, x0 + width - 2.0_R8P * font_size, y0 + 2.0_R8P * font_size, &
            y0 + height - 4.0_R8P * font_size]
    call self%setup_axes(area, raw)
-   call view3d_zextent(self%series, self%zaxis%log, zr, zfound)
+   call view3d_zextent(self%series, self%zaxis%log, self%xaxis, self%yaxis, zr, zfound)
    call self%zaxis%setup(zr(1), zr(2), zfound, area(4) - area(3))
    ! labels in palette colors without a palette series: the color axis autoscaled over the heights of the data (not
    ! the z range), as gnuplot's
@@ -11634,10 +11634,14 @@ contains
    endassociate
    endsubroutine key3d_origin
 
-   pure subroutine view3d_zextent(series, logarithmic, zr, found)
-   !< The z extent of the 3D `series` (their finite heights, positive ones on a log axis), the autoscaling ones.
+   pure subroutine view3d_zextent(series, logarithmic, xaxis, yaxis, zr, found)
+   !< The z extent of the 3D `series` (their finite heights, positive ones on a log axis), the autoscaling ones; a point
+   !< outside the x or y range set does not count (gnuplot's store_and_update_range: "don't set y range if x is
+   !< outrange").
    type(series_object), intent(in)  :: series(:)   !< Series.
    logical,             intent(in)  :: logarithmic !< A log z axis.
+   type(axis_object),   intent(in)  :: xaxis       !< x axis.
+   type(axis_object),   intent(in)  :: yaxis       !< y axis.
    real(R8P),           intent(out) :: zr(2)       !< Smallest and largest height.
    logical,             intent(out) :: found       !< Any height.
    integer(I4P)                     :: s           !< Series counter.
@@ -11649,6 +11653,7 @@ contains
       if (.not. allocated(series(s)%z) .or. series(s)%noautoscale) cycle
       do i = 1_I4P, size(series(s)%z, kind=I4P)
          if (.not. ieee_is_finite(series(s)%z(i))) cycle
+         if (.not. point_in_xy(series(s), i, xaxis, yaxis)) cycle
          if (logarithmic .and. series(s)%z(i) <= 0.0_R8P) cycle
          zr(1) = min(zr(1), series(s)%z(i))
          zr(2) = max(zr(2), series(s)%z(i))
@@ -11657,6 +11662,7 @@ contains
       ! the ends of zerrorfill's errors (gnuplot's zlow, zhigh autoscale z)
       if (allocated(series(s)%zlow) .and. allocated(series(s)%zhigh)) then
          do i = 1_I4P, min(size(series(s)%zlow, kind=I4P), size(series(s)%zhigh, kind=I4P))
+            if (.not. point_in_xy(series(s), i, xaxis, yaxis)) cycle
             if (ieee_is_finite(series(s)%zlow(i)) .and. .not. (logarithmic .and. series(s)%zlow(i) <= 0.0_R8P)) then
                zr(1) = min(zr(1), series(s)%zlow(i))
                zr(2) = max(zr(2), series(s)%zlow(i))
@@ -11678,6 +11684,28 @@ contains
       zr(2) = max(zr(2), 0.0_R8P)
    endif
    endsubroutine view3d_zextent
+
+   pure function point_in_xy(one, i, xaxis, yaxis) result(inside)
+   !< Whether point `i` of `one` lies within the x and y ranges set (a point without coordinates counts).
+   type(series_object), intent(in) :: one    !< Series.
+   integer(I4P),        intent(in) :: i      !< Point.
+   type(axis_object),   intent(in) :: xaxis  !< x axis.
+   type(axis_object),   intent(in) :: yaxis  !< y axis.
+   logical                         :: inside !< Within.
+
+   inside = .true.
+   if (allocated(one%x)) then
+      if (i <= size(one%x, kind=I4P)) then
+         if (ieee_is_finite(one%x(i))) inside = in_set_range(xaxis, one%x(i))
+      endif
+   endif
+   if (.not. inside) return
+   if (allocated(one%y)) then
+      if (i <= size(one%y, kind=I4P)) then
+         if (ieee_is_finite(one%y(i))) inside = in_set_range(yaxis, one%y(i))
+      endif
+   endif
+   endfunction point_in_xy
 
    pure function axis_middle(axis) result(mid)
    !< The middle of `axis` (in its linear space: the geometric middle of a log axis).

@@ -2260,6 +2260,8 @@ them for the plot, `splot [x=-3:3] [y=-3:3] sin(x)*cos(y)`). `set table` writes
 the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of each item, its grid iso-curves (the
 scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,
 `set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` set the [3D views](#3d-views).
+An autoscaled z axis spans the heights of the points within the x and y ranges set, as gnuplot's (a point outside
+them does not count).
 
 `with pm3d` draws a surface as colored quadrangles, gnuplot's pm3d: each pair of neighbouring scans joined point by
 point, each quadrangle in the palette color of its corners (`set pm3d corners2color`, their mean by default; with a
