@@ -29,6 +29,8 @@ type :: view3d_object
    real(R8P)    :: map_scale = 1.0_R8P !< Scale of the map view (`set view map scale S`).
    integer(I4P) :: equal = 0_I4P      !< Equal axes: 0 none, 1 x and y (`set view equal xy`), 2 x, y and z (`xyz`).
    real(R8P)    :: azimuth = 0.0_R8P  !< Rotation about the line of sight [deg] (`set view azimuth A`).
+   integer(I4P) :: projection = 0_I4P !< Projection onto a plane: 0 none (or the map), 1 xz, 2 yz (`set view projection
+                                      !< xz|yz`: gnuplot's fixed rotations, the yz one with the z axis reversed).
    logical      :: xyplane_at = .false. !< The base plane at the height `xyplane_z` (`set xyplane at Z`), else
                                         !< relative to the z range (`set xyplane relative F`, `set ticslevel F`).
    real(R8P)    :: ticslevel = 0.5_R8P !< Base plane below the z range, a fraction of it.
@@ -98,6 +100,7 @@ type :: view3d_frame
    logical   :: xz_plane = .false.       !< Seen edge-on along y (rot_x 90 or 270, rot_z 0 or 180).
    logical   :: yz_plane = .false.       !< Seen edge-on along x (rot_x 90 or 270, rot_z 90 or 270).
    real(R8P) :: title(2) = 0.0_R8P       !< Title anchor (gnuplot's title_x, title_y) [units].
+   integer(I4P) :: projection = 0_I4P    !< `set view projection`: 0 none, 1 xz, 2 yz.
 endtype view3d_frame
 
 contains
@@ -330,6 +333,7 @@ contains
       f%xscaler = real((int(xright - xleft, I8P) * 4_I8P) / 7_I8P, R8P)
       f%yscaler = real((int(ytop - ybot, I8P) * 4_I8P) / 7_I8P, R8P)
       surface = real(real(view%scale, R4P), R8P)
+      if (view%projection /= 0_I4P) surface = real(real(1.425_R8P * real(real(view%map_scale, R4P), R8P), R4P), R8P)
       if (screen(3) .and. screen(4)) f%yscaler = aint((ytop - ybot) / surface)
       if (screen(1) .and. screen(2)) f%xscaler = aint((xright - xleft) / surface)
       if (f%yscaler == 0.0_R8P) f%yscaler = 1.0_R8P
@@ -347,9 +351,12 @@ contains
    if (view%azimuth /= 0.0_R8P) f%mat = matmul(f%mat, rot_z(real(real(view%azimuth, R4P), R8P)))
    ! the axes, in their linear space (log10 of a log axis)
    f%log = logs
+   f%projection = view%projection
    f%x = lin(xr, logs(1))
    f%y = lin(yr, logs(2))
    f%z = lin(zr, logs(3))
+   ! `set view projection yz`: the z axis reversed (gnuplot's flip_projection_axis)
+   if (view%projection == 2_I4P) f%z = f%z([2, 1])
    zmin = f%z(1)
    zmax = f%z(2)
    ! the base plane: absolute (`set xyplane at Z`, the z axis start for a non positive Z on a log axis) or relative
@@ -385,7 +392,7 @@ contains
       endif
       if (view%rot_z == 90.0_R8P .or. view%rot_z == 270.0_R8P) then
          f%yz_plane = .true.
-         if (view%rot_x == 270.0_R8P) f%base_z = f%ceiling_z
+         if (view%rot_x == 270.0_R8P .or. view%projection == 2_I4P) f%base_z = f%ceiling_z
       endif
    endif
    ! the scales, `set view equal`

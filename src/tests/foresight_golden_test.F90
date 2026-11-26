@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(131)                  !< Per-figure outcome.
+logical                     :: test_passed(133)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -168,7 +168,11 @@ test_passed(128) = check('view3d_hidden.svg', figure_view3d_hidden())
 test_passed(129) = check('view3d_pm3d.svg', figure_view3d_pm3d())
 test_passed(130) = check('view3d_pm3d.html', figure_view3d_pm3d())
 test_passed(131) = check('view3d_pm3d.txt', figure_view3d_pm3d())
-write(output_unit, '(A,131L2)') 'foresight golden checks:', test_passed
+! the xz and yz projections (gnuplot's set view projection): the planes seen edge-on side by side, their borders, the
+! ticks and labels where gnuplot puts them (the y label rotated, the z axis of the yz plane reversed)
+test_passed(132) = check('view3d_projection.svg', figure_view3d_projection())
+test_passed(133) = check('view3d_projection.txt', figure_view3d_projection())
+write(output_unit, '(A,133L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -1038,6 +1042,38 @@ contains
    call fig%set_pm3d(at='bs')
    call fig%splot(x, y, z, title='bump', with='pm3d')
    endfunction figure_view3d_pm3d
+
+   function figure_view3d_projection() result(fig)
+   !< The projections of a surface onto the xz and yz planes (gnuplot `set view projection xz|yz`) side by side: the
+   !< planes seen edge-on in their borders, x (y) vertical and z horizontal, the z axis of the yz plane reversed.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=800_I4P, height=400_I4P)
+   x = [(-2.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 16)]
+   y = [(-3.0_R8P + 0.375_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = 0.5_R8P * x(i) + sin(y(j))
+      enddo
+   enddo
+   call fig%set_multiplot(rows=1_I4P, cols=2_I4P)
+   call fig%set_xlabel('x')
+   call fig%set_ylabel('y')
+   call fig%set_zlabel('z')
+   call fig%set_title('projection xz')
+   call fig%set_view(projection='xz')
+   call fig%splot(x, y, z, title='surface')
+   call fig%next_panel
+   call fig%set_title('projection yz')
+   call fig%set_view(projection='yz')
+   call fig%splot(x, y, z, title='surface')
+   endfunction figure_view3d_projection
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

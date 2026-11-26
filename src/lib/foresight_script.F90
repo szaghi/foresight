@@ -13208,18 +13208,33 @@ contains
                return
             endif
          case ('rotate')
-            ! rotate parallel, rotate by A; the color box label vertical (its default)
-            if (axis == 7_I4P) self%figure%panels(self%figure%current)%cblabel_norotate = .false.
-            if (k < size(tokens, kind=I4P)) then
-               if (tokens(k + 1_I4P)%text == 'parallel') then
-                  k = k + 1_I4P
-               elseif (tokens(k + 1_I4P)%text == 'by') then
-                  k = k + 2_I4P
+            ! rotate parallel, rotate by A; the color box label vertical (its default); kept for the 3D views
+            associate(panel => self%figure%panels(self%figure%current))
+               if (axis == 7_I4P) panel%cblabel_norotate = .false.
+               panel%label_rotated(axis) = .true.
+               panel%label_rotate(axis) = 90.0_R8P
+               panel%label_parallel(axis) = .false.
+               if (k < size(tokens, kind=I4P)) then
+                  if (tokens(k + 1_I4P)%text == 'parallel') then
+                     k = k + 1_I4P
+                     panel%label_parallel(axis) = .true.
+                  elseif (tokens(k + 1_I4P)%text == 'by') then
+                     k = k + 1_I4P
+                     if (.not. next_real(tokens, k, panel%label_rotate(axis), iostat, iomsg, self%symbols)) then
+                        iomsg = 'set '//tokens(1)%text//': rotate by: '//iomsg
+                        return
+                     endif
+                  endif
                endif
-            endif
+            endassociate
          case ('norotate')
             ! the color box label horizontal
-            if (axis == 7_I4P) self%figure%panels(self%figure%current)%cblabel_norotate = .true.
+            associate(panel => self%figure%panels(self%figure%current))
+               if (axis == 7_I4P) panel%cblabel_norotate = .true.
+               panel%label_rotated(axis) = .true.
+               panel%label_rotate(axis) = 0.0_R8P
+               panel%label_parallel(axis) = .false.
+            endassociate
          case ('left', 'right', 'center', 'centre')
          case ('noenhanced', 'noenh')
             plain = .true.
@@ -13723,8 +13738,8 @@ contains
 
       subroutine view_option(toks)
       !< gnuplot `set view ROT_X[,ROT_Z[,SCALE[,SCALE_Z]]]` (empty fields keep theirs), `set view map [scale S]`,
-      !< `set view [no]equal [xy|xyz]`, `set view azimuth A`, `set view projection xy` (the map); `set view` alone keeps
-      !< the view.
+      !< `set view [no]equal [xy|xyz]`, `set view azimuth A`, `set view projection xy` (the map) or `xz|yz`; `set view`
+      !< alone keeps the view.
       type(token_object), intent(in) :: toks(:) !< The option tokens (passed: nvfortran 26.9 misreads host dummies).
       real(R8P)    :: v    !< A value.
       integer(I4P) :: f    !< Field: 1 rot_x, 2 rot_z, 3 scale, 4 scale_z.
@@ -13735,6 +13750,8 @@ contains
          case ('map')
             view%map = .true.
             view%map_scale = 1.0_R8P
+            view%projection = 0_I4P
+            view%azimuth = 0.0_R8P
             i = 2_I4P
             if (size(toks) > 2) then
                if (toks(3)%text /= 'scale') then
@@ -13767,13 +13784,13 @@ contains
                call fail('set view projection: xy, xz or yz expected', iostat, iomsg)
                return
             endif
-            if (toks(3)%text /= 'xy') then
-               call fail('set view projection '//toks(3)%text//': not supported yet (the xy projection is the '// &
-                         'map view)', iostat, iomsg)
+            if (.not. is_word(toks(3)%text, 'xy xz yz')) then
+               call fail('set view projection: xy, xz or yz expected, found "'//toks(3)%text//'"', iostat, iomsg)
                return
             endif
-            view%map = .true.
-            view%map_scale = 1.0_R8P
+            call self%figure%set_view(projection=toks(3)%text)
+            if (toks(3)%text == 'xy') view%map_scale = 1.0_R8P
+            if (.not. no_more(toks, 4_I4P, iostat, iomsg)) return
          case default
             ! ROT_X, ROT_Z, SCALE, SCALE_Z, each may be empty
             f = 1_I4P
@@ -13820,6 +13837,7 @@ contains
                endselect
             enddo
             view%map = .false.
+            view%projection = 0_I4P
          endselect
       endassociate
       endsubroutine view_option

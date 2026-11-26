@@ -376,6 +376,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_view3d_surface" svg :width="560" :height="400" caption="a surface in 3D" />
   <Plot name="cb_view3d_views" svg :width="760" :height="400" caption="one surface, two views (set view)" />
+  <Plot name="cb_view3d_projection" svg :width="900" :height="340" caption="side projections (set view projection)" />
   <Plot name="cb_view3d_arrows" svg :width="560" :height="400" caption="arrows and labels in 3D" />
   <Plot name="cb_view3d_sphere" svg :width="560" :height="420" caption="points on a sphere (set mapping)" />
   <Plot name="cb_view3d_hidden" svg :width="560" :height="400" caption="hidden lines (set hidden3d)" />

@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(280)                           !< Per-check outcome.
+logical                       :: test_passed(281)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7536,6 +7536,47 @@ block
    call interpreter%run_text("set palette defined (0 'black', 1 'white')"//nl//"i = 2"//nl// &
                              "set linetype 77 lc palette frac i/4.", iostat, iomsg)
    test_passed(280) = test_passed(280) .and. iostat == 0_I4P
+endblock
+
+! check 281: `set view projection yz|xz` (gnuplot's xz_projection, yz_projection): the fixed rotations, the line of sight
+! turned by -90 degrees, the base plane at the bottom of the z range; the plane's border (a rectangle), a flat graph
+! label read on the plane (x fraction along z); `set xlabel rotate by A` drawn rotated in the xz plane; the rotations
+! end the projection; an unknown plane rejected
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pj.svg'"//nl// &
+                             "set xlabel 'X' rotate by 45"//nl//"set view projection yz"//nl// &
+                             "set label 1 'G' at graph 0.1, 0.8"//nl//"splot x*y notitle", iostat, iomsg)
+   test_passed(281) = iostat == 0_I4P
+   if (test_passed(281)) then
+      associate(view => interpreter%figure%panels(1)%view3d)
+         test_passed(281) = view%projection == 2_I4P .and. view%rot_x == 90.0_R8P .and. view%rot_z == 90.0_R8P .and. &
+                           view%azimuth == -90.0_R8P .and. view%ticslevel == 0.0_R8P .and. .not. view%map
+      endassociate
+      svg = read_text('foresight_script_test_pj.svg')
+      test_passed(281) = test_passed(281) .and. &
+                        index(svg, 'points="523.29,324.53 523.29,57.48"') > 0 .and. &
+                        index(svg, 'points="76.7,324.53 523.29,324.53"') > 0 .and. &
+                        index(svg, '<text x="121.37" y="115.09" fill="black">G</text>') > 0
+   endif
+   call interpreter%run_text("set output 'foresight_script_test_pj.svg'"//nl//"set view projection xz"//nl// &
+                             "unset label"//nl//"splot x*y notitle", iostat, iomsg)
+   test_passed(281) = test_passed(281) .and. iostat == 0_I4P
+   if (test_passed(281)) then
+      svg = read_text('foresight_script_test_pj.svg')
+      test_passed(281) = interpreter%figure%panels(1)%view3d%projection == 1_I4P .and. &
+                        index(svg, '<text x="29.72" y="193.76" text-anchor="middle" transform="rotate(-45 29.72 '// &
+                                   '193.76)">X</text>') > 0
+   endif
+   call interpreter%run_text("set view 60, 30", iostat, iomsg)
+   test_passed(281) = test_passed(281) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%view3d%projection == 0_I4P
+   call interpreter%run_text("set view projection xw", iostat, iomsg)
+   test_passed(281) = test_passed(281) .and. iostat /= 0_I4P
+   iostat = 0_I4P
 endblock
 
 if (all(test_passed)) then

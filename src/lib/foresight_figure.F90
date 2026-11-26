@@ -2133,23 +2133,31 @@ contains
    endassociate
    endsubroutine set_pm3d
 
-   subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal, azimuth)
+   subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal, azimuth, projection)
    !< The view of the 3D panels, as gnuplot `set view ROT_X, ROT_Z, SCALE, SCALE_Z` (each kept if absent) or `set view
    !< map [scale S]` (`map` true; false back to the 3D view); `equal` 0 none, 1 `equal xy`, 2 `equal xyz`; `azimuth`
-   !< a rotation about the line of sight (`set view azimuth A`).
-   class(figure_object), intent(inout)        :: self      !< Figure.
-   logical,              intent(in), optional :: map       !< Seen from above, as a map.
-   real(R8P),            intent(in), optional :: rot_x     !< Rotation about x [deg].
-   real(R8P),            intent(in), optional :: rot_z     !< Rotation about z [deg].
-   real(R8P),            intent(in), optional :: scale     !< Scale.
-   real(R8P),            intent(in), optional :: zscale    !< Scale of z.
-   real(R8P),            intent(in), optional :: map_scale !< Scale of the map view.
-   integer(I4P),         intent(in), optional :: equal     !< Equal axes.
-   real(R8P),            intent(in), optional :: azimuth   !< Rotation about the line of sight [deg].
+   !< a rotation about the line of sight (`set view azimuth A`); `projection` `xy` (the map), `xz` or `yz` (`set view
+   !< projection`: the plane seen edge-on, gnuplot's fixed rotations, the line of sight turned by -90 degrees, the base
+   !< plane at the bottom of the z range and the z tick labels centred; the yz plane with the z axis reversed). The
+   !< rotations or the map end a projection.
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   logical,              intent(in), optional :: map        !< Seen from above, as a map.
+   real(R8P),            intent(in), optional :: rot_x      !< Rotation about x [deg].
+   real(R8P),            intent(in), optional :: rot_z      !< Rotation about z [deg].
+   real(R8P),            intent(in), optional :: scale      !< Scale.
+   real(R8P),            intent(in), optional :: zscale     !< Scale of z.
+   real(R8P),            intent(in), optional :: map_scale  !< Scale of the map view.
+   integer(I4P),         intent(in), optional :: equal      !< Equal axes.
+   real(R8P),            intent(in), optional :: azimuth    !< Rotation about the line of sight [deg].
+   character(len=*),     intent(in), optional :: projection !< `xy`, `xz` or `yz`.
 
    call self%ensure_panels
    associate(view => self%panels(self%current)%view3d)
-      if (present(map)) view%map = map
+      if (present(map)) then
+         view%map = map
+         view%projection = 0_I4P
+      endif
+      if (present(rot_x) .or. present(rot_z)) view%projection = 0_I4P
       if (present(rot_x)) view%rot_x = rot_x
       if (present(rot_z)) view%rot_z = rot_z
       if (present(scale)) view%scale = scale
@@ -2157,6 +2165,27 @@ contains
       if (present(map_scale)) view%map_scale = map_scale
       if (present(equal)) view%equal = equal
       if (present(azimuth)) view%azimuth = azimuth
+      if (present(projection)) then
+         select case (projection)
+         case ('xy')
+            view%map = .true.
+            view%projection = 0_I4P
+            view%azimuth = 0.0_R8P
+         case ('xz', 'yz')
+            ! gnuplot's do_3dplot rotations, the view scale 1.425 times the map one when drawn (1 after)
+            view%map = .false.
+            view%projection = merge(1_I4P, 2_I4P, projection == 'xz')
+            view%rot_x = merge(270.0_R8P, 90.0_R8P, view%projection == 1_I4P)
+            view%rot_z = merge(0.0_R8P, 90.0_R8P, view%projection == 1_I4P)
+            view%scale = 1.0_R8P
+            view%azimuth = -90.0_R8P
+            view%xyplane_at = .false.
+            view%ticslevel = 0.0_R8P
+            self%panels(self%current)%zaxis%tics%justify = 'center'
+         case default
+            error stop 'foresight: set_view: projection must be xy, xz or yz'
+         endselect
+      endif
    endassociate
    endsubroutine set_view
 

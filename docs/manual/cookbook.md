@@ -1636,6 +1636,17 @@ the front of the base, the z ticks at its left corner, the key at the top right,
 scales it, the z axis apart; `set xyplane at 0` puts the base plane at z = 0, `set border 4095` draws the whole box.
 See [3D views](/guide/gnuplot-subset#3d-views).
 
+### A surface and its side projections
+
+<<< @/examples/snippets/cb_view3d_projection.gp{gnuplot}
+
+<Plot name="cb_view3d_projection" svg :width="900" :height="340" />
+
+`set view projection xz` and `set view projection yz` show the surface on the xz and yz planes seen edge-on, as
+gnuplot 6.0 draws them: x (or y) vertical and z horizontal, the plane's border, the ticks on its four sides, the base
+plane at the bottom of the z range; `set view projection xy` is the map view, and `set view 60, 30` turns the box
+again. See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### Arrows and labels in 3D
 
 <<< @/examples/snippets/cb_view3d_arrows.gp{gnuplot}

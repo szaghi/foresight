@@ -275,6 +275,11 @@ type :: axes_object
    real(R8P)                        :: label_offset(2, 7) = 0.0_R8P !< x, y, y2, x2, r, z, cb label shifts [characters,
                                                                     !< y up], `set xlabel offset X,Y`.
    character(len=24)                :: label_color(7) = ''     !< x, y, y2, x2, r, z, cb label colors, `set xlabel tc`.
+   logical                          :: label_rotated(7) = .false. !< x, y, y2, x2, r, z, cb labels rotated as given
+                                                                  !< (`set xlabel rotate [by A]|norotate`), drawn so in
+                                                                  !< 3D views.
+   real(R8P)                        :: label_rotate(7) = 0.0_R8P  !< Their rotations [deg, counterclockwise].
+   logical                          :: label_parallel(7) = .false. !< Along their axes in 3D views (`rotate parallel`).
    logical                          :: cblabel_norotate = .false. !< The color box label horizontal (`set cblabel
                                                                   !< norotate`; gnuplot's is vertical by default).
    logical                          :: cleared = .false. !< Its box painted with the page color first (gnuplot's `clear`
@@ -4723,6 +4728,10 @@ contains
    logical                              :: surface   !< The surfaces drawn (the rest of the box with them).
    logical                              :: ticks     !< This pass draws the ticks.
    logical                              :: labels    !< This pass draws the x and y labels.
+   logical                              :: xzp       !< `set view projection xz` (gnuplot's xz_projection).
+   logical                              :: yzp       !< `set view projection yz`.
+   logical                              :: zxp       !< Seen along y without a projection (rot_x 90 or 270, rot_z 0).
+   real(R8P)                            :: angle     !< Label rotation [deg, counterclockwise].
    integer(I4P)                         :: c         !< Corner counter.
    integer(I4P)                         :: t         !< Tick counter.
 
@@ -4736,6 +4745,10 @@ contains
    gcolor = GRID_COLOR
    if (allocated(self%grid_lc)) gcolor = self%grid_lc
    surface = self%view3d%surface
+   xzp = self%view3d%projection == 1_I4P
+   yzp = self%view3d%projection == 2_I4P
+   zxp = self%view3d%projection == 0_I4P .and. self%view3d%rot_z == 0.0_R8P .and. &
+         (self%view3d%rot_x == 90.0_R8P .or. self%view3d%rot_x == 270.0_R8P)
    ticks = (self%view3d%rot_x <= 90.0_R8P .neqv. front)
    labels = .not. ticks
    zlo = view3d_lin(self%zaxis%lo, self%zaxis%log)
@@ -4750,7 +4763,11 @@ contains
       top(:, c) = view3d_xyz(f, corners(1, c), corners(2, c), f%ceiling_z, base=.true.)
    enddo
    call backend%begin_group('fs-border')
-   if (self%border /= 0_I4P) then
+   if (self%border /= 0_I4P .and. (xzp .or. yzp .or. zxp)) then
+      ! a plane seen edge-on: its rectangle (gnuplot's draw_3d_graphbox, the border's front layer), the border bits 1
+      ! to 4 its sides from the bottom left corner
+      if (front) call plane_border
+   elseif (self%border /= 0_I4P) then
       if (front) then
          if (btest(self%border, 2)) call line3(base(:, 3), base(:, 4), bcolor, self%border_lw, bdash)
          if (btest(self%border, 0)) call line3(base(:, 1), base(:, 4), bcolor, self%border_lw, bdash)
@@ -4823,6 +4840,7 @@ contains
             call line3(v1, v1 + unit * sc * f%vtic, FRAME_COLOR, 1.0_R8P, '')
             if (self%xaxis%tics%mirror) then
                v3 = view3d_xyz(f, place, other, f%base_z, base=.true.)
+               if (xzp .or. zxp) v3 = view3d_xyz(f, place, f%xaxis_y, f%z(2), base=.true.)
                call line3(v3, v3 - unit * sc * f%vtic, FRAME_COLOR, 1.0_R8P, '')
             endif
             if (.not. self%xaxis%ticks(t)%major) cycle
@@ -4846,14 +4864,21 @@ contains
       if (labels .and. self%xaxis%has_label()) then
          if (self%xaxis%tics%on_axis) then
             v1 = view3d_xyz(f, mid, 0.0_R8P, f%base_z, base=.true.)
-            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%xaxis%tics%out) * unit(1:2)
          else
             v1 = view3d_xyz(f, mid, f%xaxis_y, f%base_z, base=.true.)
+         endif
+         if (xzp) then
+            v1(1:2) = v1(1:2) - 3.0_R8P * f%htic * unit(1:2)
+         elseif (zxp) then
+            v1(2) = v1(2) - 5.0_R8P * f%htic * unit(2)
+         elseif (self%xaxis%tics%on_axis) then
+            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%xaxis%tics%out) * unit(1:2)
+         else
             v1(1:2) = v1(1:2) - 10.0_R8P * f%htic * unit(1:2)
          endif
          if (self%xaxis%tics%out) v1(1:2) = v1(1:2) - unit(1:2) * self%xaxis%tics%scale(1) * f%htic
          p = view3d_page(f, v1, truncate=.true.)
-         call axis_text(p, self%xaxis%label, 1_I4P)
+         call axis_text(p, self%xaxis%label, 1_I4P, label_turn(1_I4P, self%xaxis%lo, self%xaxis%hi))
       endif
    endif
    ! the y axis: ticks along the base edge at yaxis_x
@@ -4892,6 +4917,7 @@ contains
             call line3(v1, v1 + unit * sc * f%htic, FRAME_COLOR, 1.0_R8P, '')
             if (self%yaxis%tics%mirror) then
                v3 = view3d_xyz(f, other, place, f%base_z, base=.true.)
+               if (yzp) v3 = view3d_xyz(f, other, place, f%z(1), base=.true.)
                call line3(v3, v3 - unit * sc * f%htic, FRAME_COLOR, 1.0_R8P, '')
             endif
             if (.not. self%yaxis%ticks(t)%major) cycle
@@ -4918,14 +4944,19 @@ contains
       if (labels .and. self%yaxis%has_label()) then
          if (self%yaxis%tics%on_axis) then
             v1 = view3d_xyz(f, 0.0_R8P, mid, f%base_z, base=.true.)
-            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%yaxis%tics%out) * unit(1:2)
          else
             v1 = view3d_xyz(f, f%yaxis_x, mid, f%base_z, base=.true.)
+         endif
+         if (yzp) then
+            v1(1:2) = v1(1:2) - 3.0_R8P * f%htic * unit(1:2)
+         elseif (self%yaxis%tics%on_axis) then
+            v1(1:2) = v1(1:2) + 2.0_R8P * f%htic * merge(-1.0_R8P, 1.0_R8P, self%yaxis%tics%out) * unit(1:2)
+         else
             v1(1:2) = v1(1:2) - 10.0_R8P * f%htic * unit(1:2)
          endif
          if (self%yaxis%tics%out) v1(1:2) = v1(1:2) - unit(1:2) * self%yaxis%tics%scale(1) * f%vtic
          p = view3d_page(f, v1, truncate=.true.)
-         call axis_text(p, self%yaxis%label, 2_I4P)
+         call axis_text(p, self%yaxis%label, 2_I4P, label_turn(2_I4P, self%yaxis%lo, self%yaxis%hi))
       endif
    endif
    ! the z ticks at the z axis corner, their labels two tick lengths left (the back pass), with the surfaces
@@ -4971,8 +5002,18 @@ contains
             p(1) = p(1) - f%htic * 2.0_R8P * 0.01_R8P
             if (self%zaxis%tics%out) p(1) = p(1) - f%htic * self%zaxis%tics%scale(1) * 0.01_R8P
          endif
-         call tick_label(backend, self%zaxis%tics, font_size, p(1), p(2) + f%shift, self%zaxis%ticks(t)%label, 'end', &
-                         self%zaxis%ticks(t)%sup, 0.0_R8P)
+         anchor = 'end'
+         if (xzp .or. yzp) then
+            ! the projections justify them as `set ztics left|right|center` (centred by the projection)
+            select case (trim(self%zaxis%tics%justify))
+            case ('left')
+               anchor = 'start'
+            case ('center')
+               anchor = 'middle'
+            endselect
+         endif
+         call tick_label(backend, self%zaxis%tics, font_size, p(1), p(2) + f%shift, self%zaxis%ticks(t)%label, &
+                         trim(anchor), self%zaxis%ticks(t)%sup, 0.0_R8P)
       enddo
       call backend%end_group
    endif
@@ -5005,9 +5046,68 @@ contains
             p(1) = p(1) - 7.0_R8P * f%hchar * 0.01_R8P
          endif
       endif
-      call axis_text(p, self%zaxis%label, 6_I4P)
+      call axis_text(p, self%zaxis%label, 6_I4P, label_turn(6_I4P, zlo, zhi))
    endif
    contains
+      subroutine plane_border
+      !< The border of a plane seen edge-on (gnuplot's draw_3d_graphbox for the xz and yz projections): the rectangle of
+      !< the x (y) and z ranges, its sides the border bits from the bottom left corner (yz: 8, 4, 2, 1; xz: 2, 4, 8, 1).
+      real(R8P)    :: r(3, 5) !< Corners in the view.
+      integer(I4P) :: bits(4) !< Border bit of each side (from 0).
+      integer(I4P) :: k       !< Side counter.
+
+      if (yzp) then
+         r(:, 1) = view3d_xyz(f, f%yaxis_x, self%yaxis%lo, f%z(1), base=.true.)
+         r(:, 2) = view3d_xyz(f, f%yaxis_x, self%yaxis%hi, f%z(1), base=.true.)
+         r(:, 3) = view3d_xyz(f, f%yaxis_x, self%yaxis%hi, f%z(2), base=.true.)
+         r(:, 4) = view3d_xyz(f, f%yaxis_x, self%yaxis%lo, f%z(2), base=.true.)
+         bits = [3_I4P, 2_I4P, 1_I4P, 0_I4P]
+      else
+         r(:, 1) = view3d_xyz(f, self%xaxis%lo, f%xaxis_y, f%z(1), base=.true.)
+         r(:, 2) = view3d_xyz(f, self%xaxis%hi, f%xaxis_y, f%z(1), base=.true.)
+         r(:, 3) = view3d_xyz(f, self%xaxis%hi, f%xaxis_y, f%z(2), base=.true.)
+         r(:, 4) = view3d_xyz(f, self%xaxis%lo, f%xaxis_y, f%z(2), base=.true.)
+         bits = [1_I4P, 2_I4P, 3_I4P, 0_I4P]
+      endif
+      r(:, 5) = r(:, 1)
+      do k = 1_I4P, 4_I4P
+         if (btest(self%border, bits(k))) call line3(r(:, k), r(:, k + 1_I4P), bcolor, self%border_lw, bdash)
+      enddo
+      endsubroutine plane_border
+
+      function label_turn(k, lo, hi) result(turn)
+      !< Rotation of the axis label `k` (1 x, 2 y, 6 z) [deg, counterclockwise], gnuplot's: `set Xlabel rotate by A`
+      !< (`rotate` 90), `rotate parallel` along the projected axis from `lo` to `hi` (linear z), the y label not
+      !< rotated (its 2D default dropped) but in the yz projection.
+      integer(I4P), intent(in) :: k    !< Label.
+      real(R8P),    intent(in) :: lo   !< Axis start.
+      real(R8P),    intent(in) :: hi   !< Axis end.
+      real(R8P)                :: turn !< Rotation.
+      real(R8P)                :: a(2), b(2) !< Projected axis ends [px].
+
+      turn = 0.0_R8P
+      if (self%label_parallel(k)) then
+         select case (k)
+         case (1_I4P)
+            a = view3d_page(f, view3d_xyz(f, lo, f%xaxis_y, f%base_z, base=.true.))
+            b = view3d_page(f, view3d_xyz(f, hi, f%xaxis_y, f%base_z, base=.true.))
+         case (2_I4P)
+            a = view3d_page(f, view3d_xyz(f, f%yaxis_x, lo, f%base_z, base=.true.))
+            b = view3d_page(f, view3d_xyz(f, f%yaxis_x, hi, f%base_z, base=.true.))
+         case default
+            a = view3d_page(f, view3d_xyz(f, f%zaxis_xy(1), f%zaxis_xy(2), lo, base=.true.))
+            b = view3d_page(f, view3d_xyz(f, f%zaxis_xy(1), f%zaxis_xy(2), hi, base=.true.))
+         endselect
+         turn = atan2(a(2) - b(2), b(1) - a(1)) * 180.0_R8P / PI_R8
+         if (turn < -90.0_R8P) turn = turn + 180.0_R8P
+         if (turn > 90.0_R8P) turn = turn - 180.0_R8P
+      elseif (k == 2_I4P) then
+         if (yzp) turn = merge(self%label_rotate(k), 90.0_R8P, self%label_rotated(k))
+      else
+         if (self%label_rotated(k)) turn = self%label_rotate(k)
+      endif
+      endfunction label_turn
+
       subroutine line3(a, b, color, lw, dashes)
       !< A line between the view points `a` and `b` (gnuplot's draw3d_line: its terminal units, truncated by
       !< draw_clip_line).
@@ -5044,21 +5144,33 @@ contains
                     self%border_lw, bdash)
       endsubroutine vertical
 
-      subroutine axis_text(at, string, k)
+      subroutine axis_text(at, string, k, turn)
       !< Axis label `k` (1 x, 2 y, 6 z) anchored at `at` [px] (gnuplot's write_label: centred, its first line at the
-      !< anchor), moved by its offset [characters, y up], in its font and color.
+      !< anchor), moved by its offset [characters, y up], in its font and color, rotated by `turn` [deg,
+      !< counterclockwise] about the anchor (its vertical centring along the rotated text).
       real(R8P),        intent(in) :: at(2)  !< Anchor [px].
       character(len=*), intent(in) :: string !< Label.
       integer(I4P),     intent(in) :: k      !< Label.
+      real(R8P),        intent(in) :: turn   !< Rotation [deg, counterclockwise].
       real(R8P)                    :: px     !< Abscissa [px].
       real(R8P)                    :: py     !< Ordinate [px].
+      real(R8P)                    :: a      !< Rotation [rad].
 
       px = at(1) + self%label_offset(1, k) * f%hchar * 0.01_R8P
       py = at(2) - self%label_offset(2, k) * f%vchar * 0.01_R8P + f%shift
       backend%literal = self%label_plain(k)
       backend%boxed = btest(self%label_boxed, k - 1_I4P)
       backend%font = self%label_font(k)
-      if (len_trim(self%label_color(k)) > 0) then
+      if (turn /= 0.0_R8P) then
+         a = turn * PI_R8 / 180.0_R8P
+         px = px + f%shift * sin(a)
+         py = py - f%shift + f%shift * cos(a)
+         if (len_trim(self%label_color(k)) > 0) then
+            call backend%text(px, py, string, 'middle', rotate=-turn, color=trim(self%label_color(k)))
+         else
+            call backend%text(px, py, string, 'middle', rotate=-turn)
+         endif
+      elseif (len_trim(self%label_color(k)) > 0) then
          call text_rows(backend, px, py, string, 'middle', f%vchar * 0.01_R8P, trim(self%label_color(k)))
       else
          call text_rows(backend, px, py, string, 'middle', f%vchar * 0.01_R8P, '')
@@ -10837,23 +10949,44 @@ contains
    yes = axis%tics%rangelimited .and. axis%has_data
    endfunction limits
 
-   pure function view3d_place(f, p, canvas, xaxis, yaxis, zaxis) result(q)
+   pure function view3d_place(f, p, canvas, xaxis, yaxis, zaxis, solid) result(q)
    !< The position `p` of an annotation in a 3D view as screen fractions (gnuplot's map3d_position): page systems
    !< (`screen`, `character`) as they are; else x, y and z in axis values (`graph`: fractions of the axes; `screen` and
-   !< `character` along a projected one read as graph fractions) projected by the view.
-   type(view3d_frame), intent(in) :: f         !< The view.
-   type(place_object), intent(in) :: p         !< Position.
-   real(R8P),          intent(in) :: canvas(2) !< Page width and height [px].
-   type(axis_object),  intent(in) :: xaxis     !< x axis.
-   type(axis_object),  intent(in) :: yaxis     !< y axis.
-   type(axis_object),  intent(in) :: zaxis     !< z axis.
-   type(place_object)             :: q         !< Position on the page.
-   real(R8P)                      :: px(2)     !< Page position [px].
+   !< `character` along a projected one read as graph fractions) projected by the view. In the xz and yz projections a
+   !< flat position (x and y graph fractions, z 0 in the graph system) is read on the projection plane, gnuplot's:
+   !< horizontally along z, vertically along x (xz) or y (yz); not the vertices of a polygon (`solid`).
+   type(view3d_frame), intent(in)           :: f         !< The view.
+   type(place_object), intent(in)           :: p         !< Position.
+   real(R8P),          intent(in)           :: canvas(2) !< Page width and height [px].
+   type(axis_object),  intent(in)           :: xaxis     !< x axis.
+   type(axis_object),  intent(in)           :: yaxis     !< y axis.
+   type(axis_object),  intent(in)           :: zaxis     !< z axis.
+   logical,            intent(in), optional :: solid     !< A polygon vertex.
+   type(place_object)                       :: q         !< Position on the page.
+   real(R8P)                                :: px(2)     !< Page position [px].
+   type(place_object)                       :: r         !< The position read on the projection plane.
+   logical                                  :: flat      !< A flat position in a projection.
 
    q = p
    if ((p%sx == 'screen' .or. p%sx == 'character') .and. (p%sy == 'screen' .or. p%sy == 'character')) return
-   px = view3d_page(f, view3d_xyz(f, value3(p%x, p%sx, xaxis), value3(p%y, p%sy, yaxis), value3(p%z, p%sz, zaxis)), &
-                    truncate=.true.)
+   flat = f%projection /= 0_I4P .and. p%sx == 'graph' .and. p%sy == 'graph' .and. p%sz == 'graph' .and. &
+          p%z == 0.0_R8P
+   if (present(solid)) flat = flat .and. .not. solid
+   if (flat) then
+      r = p
+      r%z = p%x
+      if (f%projection == 1_I4P) then
+         r%x = p%y
+         r%y = 0.0_R8P
+      else
+         r%x = 0.0_R8P
+      endif
+      px = view3d_page(f, view3d_xyz(f, value3(r%x, r%sx, xaxis), value3(r%y, r%sy, yaxis), &
+                                     value3(r%z, r%sz, zaxis)), truncate=.true.)
+   else
+      px = view3d_page(f, view3d_xyz(f, value3(p%x, p%sx, xaxis), value3(p%y, p%sy, yaxis), &
+                                     value3(p%z, p%sz, zaxis)), truncate=.true.)
+   endif
    q%x = px(1) / canvas(1)
    q%y = 1.0_R8P - px(2) / canvas(2)
    q%sx = 'screen'
@@ -10893,7 +11026,8 @@ contains
 
    if (allocated(shape%points)) then
       do k = 1_I4P, size(shape%points, kind=I4P)
-         shape%points(k) = view3d_place(f, shape%points(k), canvas, xaxis, yaxis, zaxis)
+         shape%points(k) = view3d_place(f, shape%points(k), canvas, xaxis, yaxis, zaxis, &
+                                        solid=shape%kind == 'polygon')
       enddo
    endif
    if (shape%size%sx == 'first' .or. shape%size%sx == 'second') then
