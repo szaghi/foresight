@@ -4,6 +4,41 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.18.0] — 2026-11-26
+### Added
+- **pm3d**: Lc rgb variable and pm3d border, as gnuplot 6.0
+
+- **view3d**: Warn that pm3d surfaces in 3D views are not drawn yet
+
+- **script**: Label palette colors, geographic ticks, cblabel options
+
+- **script**: Array elements as items, splot using 1, palette(), clear
+
+- **view3d**: Contours in 3D views and their labels, as gnuplot 6.0
+
+- **view3d**: Pm3d surfaces in 3D views, as gnuplot 6.0
+
+- **view3d**: Pm3d lighting and spotlight, as gnuplot 6.0
+
+- **view3d**: Splot with contourfill and pm3d clip z, as gnuplot 6.0
+
+- **view3d**: Splot with zerrorfill and set wall, as gnuplot 6.0
+
+- **view3d**: Splot with boxes and set boxdepth, as gnuplot 6.0
+
+- **view3d**: Splot with polygons and depthorder objects, as gnuplot 6.0
+
+
+### Changed
+- No argument temporaries under ifx's debug check
+
+
+### Fixed
+- **script**: No argument temporary at each statement for palette(z)
+
+- **script**: Splot range names in a fixed-length array
+
+
 ## [0.17.0] — 2026-11-25
 ### Added
 - **script**: Splot items and their data, as gnuplot 6.0
