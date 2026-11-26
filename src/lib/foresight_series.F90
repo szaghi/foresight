@@ -177,6 +177,10 @@ type :: series_object
    logical                       :: masked = .false.      !< Masked by the `with mask` polygons (item option `mask`).
    character(len=:), allocatable :: back_color !< Color of the underside of a surface with `set hidden3d`, unallocated
                                                !< for its own.
+   logical                       :: zvalues_rgb = .false. !< `zvalues` are packed colors 0xAARRGGBB (gnuplot's pm3d
+                                                          !< `lc rgb variable`), not palette values.
+   logical                       :: colors_kept = .false. !< `colors` set per point; the palette paints only the points
+                                                          !< of a finite `zvalues` (the color range of pm3d quads).
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

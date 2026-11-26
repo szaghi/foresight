@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(269)                           !< Per-check outcome.
+logical                       :: test_passed(270)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -6969,6 +6969,51 @@ block
    endif
    call interpreter%run_text("splot $d using 1:2:3 smooth bezier", iostat, iomsg)
    test_passed(269) = test_passed(269) .and. iostat /= 0_I4P .and. index(iomsg, 'csplines and acsplines') > 0
+endblock
+
+
+
+! pm3d `lc rgb variable` (`fc rgb variable`): each quadrangle in the mean of its corners' packed colors channel by
+! channel, the transparency averaged too (gnuplot 6.0, probed: red, blue, green and 0x80ffffff give rgb(127,127,127)
+! at opacity 0.87); `c1` of a surface of 2 scans the later scan's first point (gnuplot's scansautomatic order); `lc
+! variable` the palette of the column (rgb(119,3,250)); `set pm3d border lt black lw 1.5`, `retrace`
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: quad !< The quadrangle datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   quad = "$q << EOD"//nl//"0 0 0 16711680"//nl//"0 1 0 255"//nl//nl//"1 0 0 65280"//nl//"1 1 0 2164260863"//nl// &
+          "EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pm3d.svg'; "// &
+                             "set view map"//nl//quad//"splot $q using 1:2:3:4 with pm3d lc rgb variable", iostat, iomsg)
+   test_passed(270) = iostat == 0_I4P
+   if (test_passed(270)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(270) = index(svg, 'fill="#7f7f7fdf"') > 0
+   endif
+   call interpreter%run_text("splot $q using 1:2:3:4 with pm3d fc rgb variable", iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat == 0_I4P
+   if (test_passed(270)) test_passed(270) = index(read_text('foresight_script_test_pm3d.svg'), 'fill="#7f7f7fdf"') > 0
+   call interpreter%run_text("set pm3d corners2color c1; replot", iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat == 0_I4P
+   if (test_passed(270)) test_passed(270) = index(read_text('foresight_script_test_pm3d.svg'), 'fill="#00ff00"') > 0
+   call interpreter%run_text("set pm3d corners2color mean; splot $q using 1:2:3:4 with pm3d lc variable", iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat == 0_I4P
+   if (test_passed(270)) test_passed(270) = index(read_text('foresight_script_test_pm3d.svg'), 'fill="#7703fa"') > 0
+   call interpreter%run_text("set pm3d border lt black lw 1.5; splot $q using 1:2:3:4 with pm3d lc rgb variable", &
+                             iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat == 0_I4P
+   if (test_passed(270)) then
+      svg = read_text('foresight_script_test_pm3d.svg')
+      test_passed(270) = index(svg, 'fill="#7f7f7fdf" stroke="#000000" stroke-width="1.5"') > 0
+   endif
+   call interpreter%run_text("set pm3d border retrace; replot", iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat == 0_I4P
+   if (test_passed(270)) test_passed(270) = index(read_text('foresight_script_test_pm3d.svg'), &
+                                                'fill="#7f7f7fdf" stroke="#7f7f7fdf"') > 0
+   call interpreter%run_text("set pm3d border lc palette", iostat, iomsg)
+   test_passed(270) = test_passed(270) .and. iostat /= 0_I4P .and. index(iomsg, 'border: a color') > 0
 endblock
 
 if (all(test_passed)) then

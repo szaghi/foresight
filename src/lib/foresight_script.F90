@@ -4224,6 +4224,7 @@ contains
    real(R8P),        allocatable                :: arrow_z(:)    !< Palette value of each arrow (its style's
                                                                   !< `lc palette z`).
    character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
+   real(R8P),        allocatable                :: rgb_packed(:) !< Packed colors of pm3d `lc rgb variable`.
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
@@ -6174,6 +6175,8 @@ contains
          endif
       endassociate
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
+      ! pm3d `lc rgb variable`: the packed colors themselves, each quadrangle colored from its corners' (gnuplot's)
+      if (lcvar .and. with == 'pm3d') rgb_packed = values(:, size(values, 2))
       if (arrow_var) then
          ! the style column, and the palette value of the styles with lc palette z
          arrow_tags = values(:, 5)
@@ -6582,6 +6585,10 @@ contains
          call self%figure%plot(x, y, title=title, with=with, lc=line%lc, lw=line%lw, dt=line%dt, ylow=ylow, axes=axes, &
                                width=widths, base=base, fs=fs, xlabels=xlabels, yhigh=yhigh)
          if (lcvar) call color_last
+      elseif (lcvar .and. with == 'pm3d') then
+         ! pm3d `lc rgb variable`: the packed colors on the item once its heights are read (pm3d_rgb_last)
+         deallocate(line%lc)
+         call self%figure%plot(x, y, title=title, with=with, lw=line%lw, dt=line%dt, axes=axes)
       elseif (lcvar) then
          ! the key sample and the default color of the item: its own, not the marker
          deallocate(line%lc)
@@ -6596,6 +6603,14 @@ contains
       call mark_last
       call fill_last
       if (z_read) call attach_z(z3, row_sets)
+      if (lcvar .and. with == 'pm3d' .and. z_read) then
+         associate(panel => self%figure%panels(self%figure%current))
+            if (size(rgb_packed) == size(panel%series(size(panel%series))%x)) then
+               panel%series(size(panel%series))%zvalues = rgb_packed
+               panel%series(size(panel%series))%zvalues_rgb = .true.
+            endif
+         endassociate
+      endif
       ! smooth csplines|acsplines of splot: each scan smoothed in 3D
       if (z_read .and. smooth3d_on()) then
          associate(panel => self%figure%panels(self%figure%current))
@@ -6759,7 +6774,11 @@ contains
             rest = rest//':'//trim(parts(k))
          enddo
       endif
-      ! pm3d: a fourth field is the color of the points (gnuplot's color from a column), read as lc palette z's
+      ! pm3d: a fourth field is the color of the points (gnuplot's color from a column), read as lc palette z's; so is
+      ! `lc variable` (gnuplot's pm3d takes its column as a palette value, not a linetype)
+      if (with == 'pm3d' .and. allocated(line%lc)) then
+         if (line%lc == LC_VARIABLE) line%lc = LC_PALETTE_Z
+      endif
       if (with == 'pm3d' .and. n >= 4_I4P .and. .not. allocated(line%lc)) line%lc = LC_PALETTE_Z
       ! lc palette (z): the z as the color column, unless the item gives one after its plot fields
       if (allocated(line%lc)) then
@@ -13007,18 +13026,38 @@ contains
             elseif (w == 'clip' .or. keyword(w, 'clip1in', 5_I4P)) then
                pm%clip4in = .false.
             elseif (keyword(w, 'border', 2_I4P)) then
-               ! its line properties read, the border not drawn
+               ! the quadrangles outlined, gnuplot's: black and 1 wide by default, `retrace` in their fill colors,
+               ! else in the line properties given (lc, lt, lw; dt read)
                pm%border = .true.
+               pm%border_color = 'black'
+               pm%border_lw = 1.0_R8P
                do while (k < size(toks, kind=I4P))
-                  if (toks(k + 1_I4P)%kind /= TOKEN_WORD) then
+                  if (toks(k + 1_I4P)%kind /= TOKEN_WORD) exit
+                  if (toks(k + 1_I4P)%text == 'retrace') then
                      k = k + 1_I4P
+                     pm%border_color = ''
                      cycle
                   endif
-                  if (.not. (is_line_option(toks(k + 1_I4P)%text) .or. toks(k + 1_I4P)%text == 'retrace' .or. &
-                             toks(k + 1_I4P)%text == 'rgb' .or. toks(k + 1_I4P)%text == 'rgbcolor' .or. &
-                             toks(k + 1_I4P)%text == 'palette' .or. toks(k + 1_I4P)%text == 'variable' .or. &
-                             to_number(toks(k + 1_I4P)%text, v))) exit
+                  if (.not. is_line_option(toks(k + 1_I4P)%text)) exit
                   k = k + 1_I4P
+                  block
+                     type(line_style_object) :: probe !< Line properties read.
+
+                     if (.not. line_option(toks, k, probe, iostat, iomsg, &
+                                           self%figure%panels(self%figure%current)%linecolors, self%symbols)) then
+                        iomsg = 'set pm3d: border: '//iomsg
+                        return
+                     endif
+                     if (allocated(probe%lc)) then
+                        if (index(probe%lc, '*') == 1) then
+                           call fail('set pm3d: border: a color (lc variable, lc palette are not supported)', &
+                                     iostat, iomsg)
+                           return
+                        endif
+                        pm%border_color = probe%lc
+                     endif
+                     if (allocated(probe%lw)) pm%border_lw = probe%lw
+                  endblock
                enddo
             elseif (keyword(w, 'noborder', 4_I4P)) then
                pm%border = .false.

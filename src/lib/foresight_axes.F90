@@ -56,7 +56,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
                              view3d_setup, view3d_xyz
-use foresight_pm3d, only : masked, pm3d_object, pm3d_polygons
+use foresight_pm3d, only : masked, packed_hex, pm3d_object, pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
 use foresight_dgrid3d, only : dgrid3d_object
 use foresight_font, only : font_object
@@ -2688,7 +2688,7 @@ contains
                                                           series%y(k) <= max(yaxis%min_user, yaxis%max_user)
    enddo
    call pm3d_polygons(series%x, series%y, series%z, c, series%scans, series%scan_sets, series%grid_scans, settings, &
-                      inrange, px, py, pc)
+                      inrange, px, py, pc, rgb=series%zvalues_rgb)
    if (series%masked) then
       ! the quadrangles (4 corners and a NaN row each) of a masked first corner dropped
       allocate(keep(size(px)))
@@ -2704,7 +2704,12 @@ contains
    quads%style%with = WITH_POLYGONS
    quads%style%fill = FILL_SOLID
    quads%style%density = 1.0_R8P
-   quads%style%border = .false.
+   quads%style%border = settings%border
+   if (settings%border) then
+      ! `set pm3d border`: each quadrangle outlined after its fill (gnuplot's), in its fill color with `retrace`
+      quads%style%border_color = trim(settings%border_color)
+      quads%style%linewidth = settings%border_lw
+   endif
    quads%crisp = .true.
    quads%key_blank = .true.
    quads%title = ''
@@ -2728,6 +2733,23 @@ contains
    endif
    ! `fc` the fill color, else the palette (gnuplot's lc palette of the quadrangles)
    quads%palette_mode = 1_I4P
+   if (series%zvalues_rgb) then
+      ! `lc rgb variable`: each quadrangle in its packed color; the color axis from the heights (gnuplot's autoscale),
+      ! the palette painting only the two lone points
+      allocate(quads%colors(size(quads%x)))
+      quads%colors = ''
+      do k = 1_I4P, size(pc, kind=I4P)
+         quads%colors(k) = packed_hex(pc(k))
+      enddo
+      quads%colors_kept = .true.
+      if (size(quads%zvalues) > size(pc)) then
+         quads%zvalues(1:size(pc)) = nan
+         quads%zvalues(size(pc) + 1:) = [minval(series%z, mask=ieee_is_finite(series%z)), nan, &
+                                          maxval(series%z, mask=ieee_is_finite(series%z))]
+      else
+         quads%zvalues = nan
+      endif
+   endif
    if (allocated(series%style%fill_rgb)) then
       if (len(series%style%fill_rgb) > 0) then
          quads%palette_mode = 0_I4P
@@ -7890,8 +7912,9 @@ contains
                cycle
             endif
          endif
-         if (allocated(all(s)%arrow_heads)) then
-            ! arrowstyle variable: only the arrows of a palette style (a z value) take a palette color
+         if (allocated(all(s)%arrow_heads) .or. all(s)%colors_kept) then
+            ! arrowstyle variable: only the arrows of a palette style (a z value) take a palette color; colors kept
+            ! (pm3d lc rgb variable): only the lone points of the color range
             do i = 1_I4P, min(size(all(s)%zvalues, kind=I4P), size(all(s)%colors, kind=I4P))
                if (ieee_is_finite(all(s)%zvalues(i))) all(s)%colors(i) = cb_color(all(s)%zvalues(i))
             enddo

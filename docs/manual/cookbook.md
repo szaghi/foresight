@@ -1675,6 +1675,16 @@ with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
 the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`set pm3d interpolate 2,2`). See
 [3D plots](/guide/gnuplot-subset#3d-plots).
 
+### A map in RGB colors
+
+<<< @/examples/snippets/cb_pm3d_rgb.gp{gnuplot}
+
+<Plot name="cb_pm3d_rgb" svg :width="560" :height="400" />
+
+`lc rgb variable` (or `fc rgb variable`) colors each quadrangle of a pm3d surface by the fourth `using` field, a packed
+color 0xRRGGBB (0xAARRGGBB with a transparency): a quadrangle takes the mean of its corners channel by channel, as
+gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plots](/guide/gnuplot-subset#3d-plots).
+
 ### Contour lines over a map
 
 <<< @/examples/snippets/cb_map_contour.gp{gnuplot}

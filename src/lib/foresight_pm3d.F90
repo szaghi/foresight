@@ -7,12 +7,13 @@ module foresight_pm3d
 !< minimum, maximum, or one corner), optionally subdivided by bilinear interpolation (`interpolate N,M`, gnuplot's
 !< automatic counts for 0 or negative values).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_quiet_nan, ieee_value
-use penf, only : I4P, R8P
+use penf, only : I4P, I8P, R8P
 
 implicit none
 private
 public :: pm3d_object
 public :: pm3d_polygons
+public :: packed_hex
 public :: masked
 public :: CORNERS_MEAN, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_RMS, CORNERS_MEDIAN, CORNERS_MIN, CORNERS_MAX, &
           CORNERS_C1
@@ -35,16 +36,22 @@ type :: pm3d_object
                                             !< gnuplot's automatic counts).
    integer(I4P)     :: corners = CORNERS_MEAN !< `corners2color`.
    logical          :: clip4in = .false.    !< `clip4in`: a quadrangle needs its 4 corners in range, else one.
-   logical          :: border = .false.     !< `border`: the quadrangles outlined (read, not drawn).
+   logical          :: border = .false.     !< `border`: the quadrangles outlined.
+   character(len=24) :: border_color = 'black' !< Color of the outlines (`border lc|lt ...`); blank with `retrace`
+                                            !< (each in its fill color).
+   real(R8P)        :: border_lw = 1.0_R8P  !< Width of the outlines (`border lw W`).
 endtype pm3d_object
 
 contains
-   pure subroutine pm3d_polygons(x, y, z, c, scans, sets, grid, settings, inrange, px, py, pc)
+   pure subroutine pm3d_polygons(x, y, z, c, scans, sets, grid, settings, inrange, px, py, pc, rgb)
    !< The quadrangles of a surface: the points (`x`, `y`, `z`, color values `c`) of its first `grid` `scans` (first and
    !< last point of each), neighbouring scans of a dataset (`sets`) joined point by point over the shorter one, as
    !< gnuplot's pm3d_plot; a quadrangle needs its 4 corners defined and one in range (`inrange`; all 4 with `clip4in`).
    !< The result is a polygon per quadrangle: its 4 corners (`px`, `py`) and a NaN row, each row in the quadrangle's
-   !< color value `pc` (NaN quadrangles left out).
+   !< color value `pc` (NaN quadrangles left out). With `rgb` the color values are packed colors 0xAARRGGBB (gnuplot's
+   !< `lc rgb variable`): a quadrangle takes the mean of its corners channel by channel (or one corner, `c1` ... `c4`),
+   !< as gnuplot's pm3d_plot; the interpolated ones the plain mean of the numbers, as gnuplot's. A surface of fewer
+   !< than 3 scans has its scans in reverse order (gnuplot's scansautomatic), as `c1` ... `c4` show.
    real(R8P),              intent(in)  :: x(:)       !< Abscissae.
    real(R8P),              intent(in)  :: y(:)       !< Ordinates.
    real(R8P),              intent(in)  :: z(:)       !< Heights.
@@ -57,6 +64,7 @@ contains
    real(R8P), allocatable, intent(out) :: px(:)      !< Polygon abscissae.
    real(R8P), allocatable, intent(out) :: py(:)      !< Polygon ordinates.
    real(R8P), allocatable, intent(out) :: pc(:)      !< Polygon color values.
+   logical, optional,      intent(in)  :: rgb        !< Packed colors.
    integer(I4P)                        :: ni         !< Steps along the scans.
    integer(I4P)                        :: nj         !< Steps between them.
    integer(I4P)                        :: s          !< Scan.
@@ -112,6 +120,14 @@ contains
          ia1 = ia + 1_I4P
          ib = b0 + j
          ib1 = ib + 1_I4P
+         if (count(sets(1:grid) == sets(s)) < 3_I4P) then
+            ! a surface of fewer than 3 scans: gnuplot's scansautomatic compares no depths and keeps its scans in the
+            ! reverse order of the file, scan A the later one (pm3d_rearrange_part)
+            ia = b0 + j
+            ia1 = ia + 1_I4P
+            ib = a0 + j
+            ib1 = ib + 1_I4P
+         endif
          if (.not. (defined(x, y, z, c, ia) .and. defined(x, y, z, c, ia1) .and. defined(x, y, z, c, ib) .and. &
                     defined(x, y, z, c, ib1))) cycle
          if (settings%clip4in) then
@@ -126,6 +142,9 @@ contains
          if (ni <= 1_I4P .and. nj <= 1_I4P) then
             ! gnuplot's order for the color: A(i), A(i+1), B(i), B(i+1)
             v = corner_color([c(ia), c(ia1), c(ib), c(ib1)], settings%corners)
+            if (present(rgb)) then
+               if (rgb) v = corner_rgb([c(ia), c(ia1), c(ib), c(ib1)], settings%corners)
+            endif
             call add(px, py, pc, n, cx, cy, v)
             cycle
          endif
@@ -273,4 +292,54 @@ contains
       v = (cb(1) + cb(2) + cb(3) + cb(4)) * 0.25_R8P
    endselect
    endfunction corner_color
+
+   pure function corner_rgb(cb, mode) result(v)
+   !< The packed color 0xAARRGGBB of a quadrangle from its corners' `cb`, gnuplot's (pm3d.c, `lc rgb variable`): one of
+   !< them (`c1` ... `c4`), else the mean of each channel, the sums shifted right by two and masked (the transparency
+   !< as gnuplot's: its sum shifted left by 22).
+   real(R8P),    intent(in) :: cb(4) !< Corner colors.
+   integer(I4P), intent(in) :: mode  !< `corners2color`.
+   real(R8P)                :: v     !< Color.
+   integer(I8P)             :: u(4)  !< Corners as unsigned 32-bit numbers.
+   integer(I8P)             :: r, g, b, a !< Channel sums.
+   integer(I8P)             :: k     !< Corner counter.
+
+   if (mode >= CORNERS_C1 .and. mode <= CORNERS_C1 + 3_I4P) then
+      v = cb(mode - CORNERS_C1 + 1_I4P)
+      return
+   endif
+   do k = 1_I8P, 4_I8P
+      u(k) = iand(int(cb(k), I8P), int(z'FFFFFFFF', I8P))
+   enddo
+   r = sum(iand(u, int(z'FF0000', I8P)))
+   g = sum(iand(u, int(z'FF00', I8P)))
+   b = sum(iand(u, int(z'FF', I8P)))
+   a = sum(iand(ishft(u, -24), 255_I8P))
+   v = real(iand(ishft(r, -2), int(z'FF0000', I8P)) + iand(ishft(g, -2), int(z'FF00', I8P)) + &
+            iand(ishft(b, -2), int(z'FF', I8P)) + iand(ishft(a, 22), int(z'FF000000', I8P)), R8P)
+   endfunction corner_rgb
+
+   pure function packed_hex(v) result(color)
+   !< The SVG color of a packed color 0xAARRGGBB (gnuplot's `rgb variable`), its number truncated to 32 bits:
+   !< `#rrggbb`, with the opacity `aa` = 255 - AA appended unless opaque (`#rrggbbaa`); blank for a NaN.
+   real(R8P), intent(in)       :: v     !< Packed color.
+   character(len=9)            :: color !< SVG color.
+   character(len=*), parameter :: HEX = '0123456789abcdef' !< Hexadecimal digits.
+   integer(I8P)                :: code  !< Packed color as a number.
+   integer(I8P)                :: alpha !< Opacity.
+   integer(I4P)                :: d     !< Digit counter.
+   integer(I4P)                :: digit !< Hexadecimal digit.
+
+   color = ''
+   if (.not. ieee_is_finite(v)) return
+   code = iand(int(v, I8P), int(z'FFFFFFFF', I8P))
+   color(1:1) = '#'
+   do d = 5_I4P, 0_I4P, -1_I4P
+      digit = int(iand(ishft(code, -4_I4P * d), 15_I8P), I4P)
+      color(7 - d:7 - d) = HEX(digit + 1:digit + 1)
+   enddo
+   alpha = 255_I8P - iand(ishft(code, -24_I4P), 255_I8P)
+   if (alpha < 255_I8P) color(8:9) = HEX(alpha / 16_I8P + 1_I8P:alpha / 16_I8P + 1_I8P)// &
+                                     HEX(mod(alpha, 16_I8P) + 1_I8P:mod(alpha, 16_I8P) + 1_I8P)
+   endfunction packed_hex
 endmodule foresight_pm3d

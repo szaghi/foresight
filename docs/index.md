@@ -371,6 +371,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_view3d_smooth" svg :width="560" :height="400" caption="smoothed profiles in 3D" />
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
+  <Plot name="cb_pm3d_rgb" svg :width="560" :height="400" caption="a map in RGB colors (lc rgb variable)" />
   <Plot name="cb_map_contour" svg :width="560" :height="400" caption="contour lines over a map" />
   <Plot name="cb_map_dgrid3d" svg :width="560" :height="400" caption="a density map of scattered points (dgrid3d)" />
   <Plot name="cb_map_mask" svg :width="560" :height="400" caption="a surface masked to its data (with mask)" />
