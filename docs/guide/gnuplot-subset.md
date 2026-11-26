@@ -2296,6 +2296,9 @@ plane of constant x is splined as z of y, of constant y as z of x, of constant z
 its last in `set samples` points; any other as x, y and z of its path length; `acsplines` weighs the points by a fourth
 `using` field (1 without).
 
+pm3d surfaces are drawn in the map view only so far: in a 3D view a `with pm3d` item, or a surface of `set pm3d`, is
+left out with a warning (`foresight: warning: pm3d surfaces in 3D views are not drawn yet`), its key entry kept.
+
 ### Contours
 
 ```gnuplot

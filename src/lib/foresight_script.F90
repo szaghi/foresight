@@ -153,7 +153,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             WITH_XERRORBARS, WITH_MASK, &
                             WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES, &
-                            WITH_POINTS, WITH_LINESPOINTS
+                            WITH_POINTS, WITH_LINESPOINTS, WITH_PM3D
 use foresight_hulls, only : concave_hull, convex_hull, delaunay_triangles, expand_hull
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
@@ -10879,11 +10879,36 @@ contains
          return
       endselect
    endif
+   call warn_pm3d_3d
    self%figure%clear_screen = self%live_refresh > 0_I4P
    refresh = self%figure%refresh
    if (refresh == 0_I4P) call self%figure%set_refresh(self%live_refresh)
    call self%figure%save(self%output)
    call self%figure%set_refresh(refresh)
+   contains
+      subroutine warn_pm3d_3d
+      !< A warning for the pm3d surfaces of a 3D view (not `set view map`), not drawn yet (gnuplot draws them): the
+      !< `with pm3d` items, and the surfaces of `set pm3d` (implicit); once per page.
+      integer(I4P) :: p !< Panel counter.
+      integer(I4P) :: s !< Series counter.
+
+      do p = 1_I4P, size(self%figure%panels, kind=I4P)
+         associate(panel => self%figure%panels(p))
+            if (.not. panel%three_d .or. panel%view3d%map) cycle
+            do s = 1_I4P, size(panel%series, kind=I4P)
+               if (.not. allocated(panel%series(s)%scans)) cycle
+               if ((panel%series(s)%style%with == WITH_PM3D .and. panel%view3d%surface .and. &
+                    .not. panel%series(s)%no_surface) .or. &
+                   (panel%series(s)%style%with /= WITH_PM3D .and. panel%pm3d%implicit .and. &
+                    panel%series(s)%grid_scans > 1_I4P)) then
+                  write(error_unit, '(A)') 'foresight: warning: pm3d surfaces in 3D views are not drawn yet '// &
+                                           '(only in the map view, set view map)'
+                  return
+               endif
+            enddo
+         endassociate
+      enddo
+      endsubroutine warn_pm3d_3d
    endsubroutine save_output
 
    recursive subroutine set_command(self, tokens, iostat, iomsg)
