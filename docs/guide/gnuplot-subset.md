@@ -117,7 +117,7 @@ that did what it says.
 | **cntrp**aram [`linear`\|`cubicspline`\|`bspline`] [`points N`] [`order N`] [`levels` [`auto` [`N`]\|`N`\|`discrete z1, z2, ...`\|`incremental start, step`[`, end`]]] [`firstlinetype N`] [`sorted`\|`unsorted`] | the [contour](#contours) lines: linear segments, a cubic spline through their points or a B-spline approximation (`order` 2 to 10, 4 by default; `points` per interval, 5); about N automatic levels (5), or the levels given; the first level's linetype; levels high to low; alone, the defaults | — |
 | **cntrl**abel [`format "fmt"`] [`onecolor`] [`font "f"`] [`start N`] [`interval N`] | the key labels of the [contour](#contours) levels (`"%8.3g"` by default); `onecolor`: every level in the surface's color, no key entries; font, start and interval (labels on the lines) read | `"%8.3g"`, a color per level |
 | **dgrid3d** [`ROWS`[`,COLS`]] [`qnorm` [`Q`]\|`splines`\|`gauss`\|`cauchy`\|`exp`\|`box`\|`hann` [`kdensity`] [`DX`[`,DY`]]] | the scattered data of `splot` [gridded](#gridded-and-masked-surfaces): COLS iso-curves of x, ROWS points along y each (10, 10), every node a weighted mean of the points: inverse distance to the power Q (`qnorm`, 1), thin plate splines, or a kernel of the distance scaled by DX, DY (1, 1); `kdensity` the kernel's weighted sums, a density | not gridded |
-| **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; `border` [`retrace`] [`lc`\|`lt`\|`lw` ...] outlines the quadrangles (black and 1 wide by default, `retrace` in their fill colors); `scansautomatic`\|`scansforward`\|`scansbackward`\|`depthorder` [`base`] the drawing order in 3D views; `flush`, `ftriangles` are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
+| **pm**3d [`at b`\|`s`\|`t`...] [`interpolate N,M`] [`corners2color mean`\|`geomean`\|`harmean`\|`rms`\|`median`\|`min`\|`max`\|`c1`...`c4`] [`implicit`\|`explicit`] [`map`] [`clip`\|`clip1in`\|`clip4in`] [`border` ...\|`noborder`] | the [pm3d surfaces](#3d-plots): `set pm3d` alone draws every surface with pm3d too (implicit, as gnuplot); `interpolate` subdivides each quadrangle (0 or negative: gnuplot's automatic counts); `map` is `at b`, `set view map` and the pm3d data and function styles; `border` [`retrace`] [`lc`\|`lt`\|`lw` ...] outlines the quadrangles (black and 1 wide by default, `retrace` in their fill colors); `scansautomatic`\|`scansforward`\|`scansbackward`\|`depthorder` [`base`] the drawing order in 3D views; `lighting` [`primary F`] [`spec`[`ular`] `F`] [`spec2 F`] and `nolighting` the [lighting](#3d-views) of the surfaces in 3D views; `spotlight` [`rot_x A`] [`rot_z B`] [`rgbcolor C`] [`Phong P`] [`default`] its second light; `flush`, `ftriangles` are read | only the items `with pm3d` (explicit); the pm3d styles back to lines |
 | **hid**den3d [`offset N`\|`nooffset`] [...] | the hidden lines of the [3D views](#3d-views) removed (a painter's algorithm): grid surfaces opaque, their underside in the next linetype | no hidden lines |
 | **map**ping [`cartesian`\|`spherical`\|`cylindrical`] | splot's data columns: x:y:z, theta:phi:r or theta:z:r ([3D views](#3d-views)) | `cartesian` |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
@@ -583,7 +583,8 @@ datablocks and the script arguments stay); `reset errors` and `reset bind` do no
 
 `pause SECONDS ["message"]` writes the message on the standard error and waits; `pause 0` only writes it; `pause -1`
 waits for a line of the standard input (its end does not wait), `pause mouse [EVENTS]` only writes the message, there
-being no mouse, as gnuplot on a terminal without one. In a loop with a plot, `while (1) { plot ...; pause 5 }`
+being no mouse, as gnuplot on a terminal without one; `bind`, the hot keys of the interactive terminals, is read and
+does nothing. In a loop with a plot, `while (1) { plot ...; pause 5 }`
 rewrites the output every 5 seconds: the plot of a running job, seen live in the HTML page with `set terminal html
 refresh 5` (each output is written whole, atomically). `reread`, the old idiom, is an error: gnuplot 6.0 rejects it as
 deprecated. [`foresight --watch`](cli#options) does the same without a loop, re-running the script when its data
@@ -2324,7 +2325,14 @@ a scan and of the first scan, as pm3d_rearrange_part; `scansforward`, `scansback
 the items (a surface of `set pm3d` just before its own lines); with `depthorder` the quadrangles of every surface are
 sorted by their mean depth and drawn after all the items (`depthorder base`: by the depth of the base below them). The
 color box stands beside the plot at gnuplot's default place for 3D views (from 0.709 to 0.778 of the view's x scale
-right of its middle). With `set hidden3d` the mesh of a pm3d surface is hidden by it, its lines not drawn over it
+right of its middle).
+
+`set pm3d lighting` shades the quadrangles at the surface as gnuplot's apply_lighting_model: the ambient light, a
+primary light from 45 and 85 degrees fixed with respect to the viewer (`primary F`, 0.5 by default), its Phong
+highlights (`specular F`, 0.2) and a colored spotlight on the faces turned away (`spec2 F`, none by default; `set pm3d
+spotlight rot_x A rot_z B rgbcolor C Phong P`, gnuplot's 50, 90, `0xff0044`, 4), on the palette colors, `lc rgb
+variable` and a fill color alike (`fc "gray"`, `fc ls N` that of line style N); the color box keeps the palette.
+`nolighting` turns it off. With `set hidden3d` the mesh of a pm3d surface is hidden by it, its lines not drawn over it
 (gnuplot draws the visible segments of the mesh on top).
 
 ### Contours

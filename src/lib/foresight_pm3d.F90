@@ -14,6 +14,7 @@ private
 public :: pm3d_object
 public :: pm3d_polygons
 public :: packed_hex
+public :: lit_color
 public :: masked
 public :: CORNERS_MEAN, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_RMS, CORNERS_MEDIAN, CORNERS_MIN, CORNERS_MAX, &
           CORNERS_C1
@@ -44,6 +45,12 @@ type :: pm3d_object
    integer(I4P)     :: direction = 0_I4P    !< Drawing order in 3D views: 0 `scansautomatic`, 1 `scansforward`, 2
                                             !< `scansbackward`, 3 `depthorder`.
    logical          :: base_sort = .false.  !< `depthorder base`: sorted by the depth of the base below each.
+   real(R8P)        :: strength = 0.0_R8P   !< `lighting primary F`: the primary light's share, 0 without lighting.
+   real(R8P)        :: spec = 0.0_R8P       !< `lighting specular F`: the specular highlights' share.
+   real(R8P)        :: spec2 = 0.0_R8P      !< `lighting spec2 F`: the spotlight's share.
+   real(R8P)        :: spot_rot(2) = [50.0_R8P, 90.0_R8P] !< `spotlight rot_x A rot_z B` [deg].
+   integer(I4P)     :: spot_rgb = 16711748_I4P !< `spotlight rgbcolor C` (gnuplot's 0xff0044).
+   real(R8P)        :: spot_phong = 4.0_R8P !< `spotlight Phong P`.
 endtype pm3d_object
 
 contains
@@ -387,4 +394,79 @@ contains
    if (alpha < 255_I8P) color(8:9) = HEX(alpha / 16_I8P + 1_I8P:alpha / 16_I8P + 1_I8P)// &
                                      HEX(mod(alpha, 16_I8P) + 1_I8P:mod(alpha, 16_I8P) + 1_I8P)
    endfunction packed_hex
+
+   pure recursive function lit_color(f, alpha, v0, v1, v2, v3, pm, scale3d, rot_x, rot_z) result(packed)
+   !< The packed color 0xAARRGGBB of a pm3d quadrangle of color `f` (red, green, blue from 0 to 1, transparency
+   !< `alpha` in the top byte) lit by gnuplot's apply_lighting_model (`set pm3d lighting`): the normal of its corners
+   !< `v0`, `v1`, `v2` (linear spaces, scaled by the view's `scale3d`) turned to the viewer (`rot_x`, `rot_z` [deg]),
+   !< towards the viewer; the ambient light 1, the primary light (from 45, 85 degrees) of share `strength`, its Phong
+   !< highlights (exponent 5) of share `spec`, the spotlight (`spec2`, from `spot_rot`, in `spot_rgb`, exponent
+   !< `spot_phong`) on the faces turned away; a degenerate corner `v2` replaced by `v3` once.
+   real(R8P),         intent(in) :: f(3)       !< Red, green, blue, 0 to 1.
+   integer(I8P),      intent(in) :: alpha      !< Transparency, in the top byte.
+   real(R8P),         intent(in) :: v0(3)      !< Corner A(i).
+   real(R8P),         intent(in) :: v1(3)      !< Corner A(i+1).
+   real(R8P),         intent(in) :: v2(3)      !< Corner B(i).
+   real(R8P),         intent(in) :: v3(3)      !< Corner B(i+1).
+   type(pm3d_object), intent(in) :: pm         !< pm3d settings.
+   real(R8P),         intent(in) :: scale3d(3) !< The view's x, y, z scales.
+   real(R8P),         intent(in) :: rot_x      !< View rotation about x [deg].
+   real(R8P),         intent(in) :: rot_z      !< View rotation about z [deg].
+   integer(I8P)                  :: packed     !< Lit color.
+   real(R8P), parameter          :: D2R = 3.14159265358979323846_R8P / 180.0_R8P !< Degrees to radians.
+   real(R8P)                     :: n(3), n1(3), light(3), light2(3), refl(3) !< Normal, lights, reflection.
+   real(R8P)                     :: t, psi, phi, dot, shade, spec, tmp(3) !< Work.
+
+   n(1) = (v1(2) - v0(2)) * (v2(3) - v0(3)) * scale3d(2) * scale3d(3) - &
+          (v1(3) - v0(3)) * (v2(2) - v0(2)) * scale3d(2) * scale3d(3)
+   n(2) = (v1(3) - v0(3)) * (v2(1) - v0(1)) * scale3d(1) * scale3d(3) - &
+          (v1(1) - v0(1)) * (v2(3) - v0(3)) * scale3d(1) * scale3d(3)
+   n(3) = (v1(1) - v0(1)) * (v2(2) - v0(2)) * scale3d(1) * scale3d(2) - &
+          (v1(2) - v0(2)) * (v2(1) - v0(1)) * scale3d(1) * scale3d(2)
+   t = sqrt(n(1) * n(1) + n(2) * n(2) + n(3) * n(3))
+   if (t < 1.0e-12_R8P) then
+      if (all(v2 == v3)) then
+         packed = alpha + int(f(1) * 255.0_R8P, I8P) * 65536_I8P + int(f(2) * 255.0_R8P, I8P) * 256_I8P + &
+                  int(f(3) * 255.0_R8P, I8P)
+      else
+         packed = lit_color(f, alpha, v0, v1, v3, v3, pm, scale3d, rot_x, rot_z)
+      endif
+      return
+   endif
+   n = n / t
+   ! the light fixed with respect to the viewer
+   psi = -D2R * rot_z
+   phi = -D2R * rot_x
+   n1 = [cos(psi) * n(1) - sin(psi) * n(2), sin(psi) * n(1) + cos(psi) * n(2), n(3)]
+   n = [n1(1), cos(phi) * n1(2) - sin(phi) * n1(3), sin(phi) * n1(2) + cos(phi) * n1(3)]
+   if (n(3) < 0.0_R8P) n = -n
+   light = [cos(-D2R * 45.0_R8P) * cos(-D2R * 85.0_R8P), sin(-D2R * 45.0_R8P), &
+            cos(-D2R * 45.0_R8P) * sin(-D2R * 85.0_R8P)]
+   dot = n(1) * light(1) + n(2) * light(2) + n(3) * light(3)
+   shade = 0.0_R8P
+   if (dot < 0.0_R8P) shade = -dot
+   tmp = f * (1.0_R8P - pm%strength + shade * pm%strength)
+   if (pm%spec > 0.0_R8P) then
+      refl = -light + 2.0_R8P * dot * n
+      refl = refl / sqrt(refl(1) * refl(1) + refl(2) * refl(2) + refl(3) * refl(3))
+      dot = -refl(3)
+      spec = abs(dot)**5.0_R8P
+      if (dot > 0.0_R8P) tmp = tmp + pm%spec * spec
+   endif
+   if (pm%spec2 > 0.0_R8P) then
+      light2 = [cos(-D2R * pm%spot_rot(1)) * cos(-D2R * pm%spot_rot(2)), sin(-D2R * pm%spot_rot(1)), &
+                cos(-D2R * pm%spot_rot(1)) * sin(-D2R * pm%spot_rot(2))]
+      dot = n(1) * light2(1) + n(2) * light2(2) + n(3) * light2(3)
+      refl = -light2 + 2.0_R8P * dot * n
+      refl = refl / sqrt(refl(1) * refl(1) + refl(2) * refl(2) + refl(3) * refl(3))
+      dot = -refl(3)
+      spec = abs(dot)**pm%spot_phong
+      if (dot < 0.0_R8P) tmp = tmp + pm%spec2 * spec * &
+                                     real([ishft(pm%spot_rgb, -16), iand(ishft(pm%spot_rgb, -8), 255_I4P), &
+                                           iand(pm%spot_rgb, 255_I4P)], R8P) / 255.0_R8P
+   endif
+   tmp = min(1.0_R8P, max(0.0_R8P, tmp))
+   packed = alpha + int(tmp(1) * 255.0_R8P, I8P) * 65536_I8P + int(tmp(2) * 255.0_R8P, I8P) * 256_I8P + &
+            int(tmp(3) * 255.0_R8P, I8P)
+   endfunction lit_color
 endmodule foresight_pm3d

@@ -91,6 +91,7 @@ type :: palette_object
    contains
       procedure, pass(self) :: is_default !< Whether the palette is gnuplot's default.
       procedure, pass(self) :: rgb        !< Color of a gray level, 8-bit channels.
+      procedure, pass(self) :: rgb1       !< Color of a gray level, channels 0..1.
 endtype palette_object
 
 contains
@@ -103,12 +104,20 @@ contains
    endfunction is_default
 
    pure function rgb(self, gray) result(c)
-   !< Color of the gray level `gray` (clamped to 0..1), 8-bit channels.
+   !< Color of the gray level `gray` (clamped to 0..1), 8-bit channels (rgb1 rounded).
    class(palette_object), intent(in) :: self !< Palette.
    real(R8P),             intent(in) :: gray !< Gray level.
    integer(I4P)                      :: c(3) !< Red, green, blue, 0..255.
+
+   c = nint(255.0_R8P * self%rgb1(gray), I4P)
+   endfunction rgb
+
+   pure function rgb1(self, gray) result(f)
+   !< Color of the gray level `gray` (clamped to 0..1), channels from 0 to 1 (gnuplot's rgb1_from_gray).
+   class(palette_object), intent(in) :: self !< Palette.
+   real(R8P),             intent(in) :: gray !< Gray level.
    real(R8P)                         :: g    !< Effective gray.
-   real(R8P)                         :: f(3) !< Channels, 0..1.
+   real(R8P)                         :: f(3) !< Red, green, blue, 0..1.
    real(R8P)                         :: t    !< Interpolation weight.
    real(R8P)                         :: phi  !< Cubehelix angle [rad].
    real(R8P)                         :: a    !< Cubehelix amplitude.
@@ -156,8 +165,8 @@ contains
    if (self%hsv .and. self%mode /= PAL_GRAY) f = hsv_rgb(min(1.0_R8P, max(0.0_R8P, f)))
    ! gnuplot `model CMY`: the components (clamped) are cyan, magenta and yellow, 1 minus red, green and blue
    if (self%cmy .and. self%mode /= PAL_GRAY) f = 1.0_R8P - min(1.0_R8P, max(0.0_R8P, f))
-   c = nint(255.0_R8P * min(1.0_R8P, max(0.0_R8P, f)), I4P)
-   endfunction rgb
+   f = min(1.0_R8P, max(0.0_R8P, f))
+   endfunction rgb1
 
    pure function hsv_rgb(hsv) result(f)
    !< Red, green, blue (0..1) of `hsv`, hue 0..1 (not degrees), as gnuplot's HSV_2_RGB.

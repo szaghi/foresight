@@ -56,7 +56,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
                              view3d_setup, view3d_xyz
-use foresight_pm3d, only : masked, packed_hex, pm3d_object, pm3d_polygons
+use foresight_pm3d, only : lit_color, masked, packed_hex, pm3d_object, pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
 use foresight_dgrid3d, only : dgrid3d_object
 use foresight_font, only : font_object
@@ -66,7 +66,7 @@ use foresight_enhanced, only : has_markup, markup_literal
 use foresight_expression, only : expression_object
 use foresight_format, only : decimal_of, format_value, int_str, real_str
 use foresight_backend, only : axes_view, backend_object
-use foresight_palette, only : hex_color, palette_object, palette_words
+use foresight_palette, only : hex_color, named_color, palette_object, palette_words
 use foresight_readout, only : DEFAULT_READOUT_FORMAT, last_finite, readout_check, readout_glass
 use foresight_series, only : push, series_object
 use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN, FILL_SOLID, style_object, style_with, WITH_BOXES, &
@@ -2578,6 +2578,13 @@ contains
             pending%pm3d_pending = .true.
             pending%style%with = WITH_PM3D
             if (.not. pm3d) pending%title = ''
+            ! an implicit surface of `lc rgb variable` lines: its quadrangles in their packed colors
+            if (.not. pm3d .and. allocated(self%series(s)%rgb_values)) then
+               if (size(self%series(s)%rgb_values) == size(self%series(s)%z)) then
+                  pending%zvalues = self%series(s)%rgb_values
+                  pending%zvalues_rgb = .true.
+               endif
+            endif
             call push(drawn, pending)
             if (pm3d) cycle
          endif
@@ -2617,7 +2624,7 @@ contains
          cycle
       endif
       call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
-                              depth, quads, qx, qy, qd, qc, nq)
+                              depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq)
       if (depth) then
          ! queued: its key entry kept in place, a text alone
          if (len(quads%title) == 0) cycle
@@ -2634,9 +2641,11 @@ contains
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_quads
 
-   subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, quads, qx, qy, qd, qc, nq)
-   !< The pm3d quadrangles of the surface `one` in the view `f` (view3d_pm3d_quads): projected, in its colors, appended
-   !< to the depth queue (`qx`, `qy` corners, `qd` depths, `qc` colors, `nq` quadrangles) with `depth`.
+   subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, qx, qy, qd, qc, &
+                                 nq)
+   !< The pm3d quadrangles of the surface `one` in the view `f` (view3d_pm3d_quads): projected, in its colors (those
+   !< at the surface lit with `set pm3d lighting`, gnuplot's apply_lighting_model), appended to the depth queue (`qx`,
+   !< `qy` corners, `qd` depths, `qc` colors, `nq` quadrangles) with `depth`.
    type(pm3d_object),              intent(in)    :: pm      !< pm3d settings.
    type(axis_object),              intent(in)    :: xaxis   !< x axis.
    type(axis_object),              intent(in)    :: yaxis   !< y axis.
@@ -2646,6 +2655,8 @@ contains
    type(view3d_frame),             intent(in)    :: f       !< The view.
    type(palette_object),           intent(in)    :: p       !< Effective palette.
    logical,                        intent(in)    :: depth   !< Queued, not drawn in place.
+   real(R8P),                      intent(in)    :: rot_x   !< View rotation about x [deg].
+   real(R8P),                      intent(in)    :: rot_z   !< View rotation about z [deg].
    type(series_object),            intent(out)   :: quads   !< Its quadrangles (in place).
    real(R8P), allocatable,         intent(inout) :: qx(:)   !< Queued corner abscissae [px].
    real(R8P), allocatable,         intent(inout) :: qy(:)   !< Queued corner ordinates [px].
@@ -2656,6 +2667,9 @@ contains
    real(R8P), allocatable                        :: px(:), py(:), pz(:), pc(:) !< Polygons.
    real(R8P), allocatable                        :: ux(:), uy(:) !< Projected polygons.
    character(len=24), allocatable                :: colors(:) !< Polygon colors.
+   character(len=24), allocatable                :: lit(:)  !< Polygon colors at the surface (lit).
+   logical                                       :: fill_lit !< The fill color lit.
+   character(len=24), allocatable                :: all_colors(:) !< Colors of the rows drawn.
    logical, allocatable                          :: inrange(:) !< Points within the fixed ranges.
    real(R8P)                                     :: v(3)    !< View coordinates.
    real(R8P)                                     :: w(2)    !< Page position.
@@ -2705,8 +2719,64 @@ contains
    if (allocated(one%style%fill_rgb)) then
       if (len(one%style%fill_rgb) > 0) colors = one%style%fill_rgb
    endif
+   ! `set pm3d lighting`: the quadrangles at the surface lit, from the corners gnuplot passes (A(i), A(i+1), B(i) of a
+   ! quadrangle, rows 1, 4, 2; the first three of an interpolated one)
+   lit = colors
+   if (pm%strength > 0.0_R8P .and. index(pm%at, 's') > 0) then
+      do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
+         if (.not. ieee_is_finite(px(r))) cycle
+         block
+            real(R8P)    :: base(3)      !< Unlit color, 0 to 1.
+            integer(I8P) :: alpha        !< Transparency byte.
+            integer(I8P) :: code         !< Packed color.
+            real(R8P)    :: w0(3), w1(3), w2(3), w3(3) !< Corners (linear spaces).
+            real(R8P)    :: g            !< Gray level.
+
+            alpha = 0_I8P
+            fill_lit = .false.
+            if (allocated(one%style%fill_rgb)) fill_lit = len(one%style%fill_rgb) > 0
+            if (fill_lit) then
+               ! `fc COLOR`: its channels (gnuplot's color_from_fillcolor, an RGB color)
+               block
+                  integer(I4P) :: c(3) !< Channels.
+                  logical      :: ok   !< Known.
+
+                  call named_color(one%style%fill_rgb, c, ok)
+                  if (.not. ok) cycle
+                  base = real(c, R8P) / 255.0_R8P
+               endblock
+            elseif (.not. ieee_is_finite(pc(r))) then
+               cycle
+            elseif (one%zvalues_rgb) then
+               code = iand(int(pc(r), I8P), int(z'FFFFFFFF', I8P))
+               alpha = iand(code, int(z'FF000000', I8P))
+               base = real([iand(ishft(code, -16), 255_I8P), iand(ishft(code, -8), 255_I8P), iand(code, 255_I8P)], &
+                           R8P) / 255.0_R8P
+            else
+               if (cbaxis%log .and. pc(r) <= 0.0_R8P) then
+                  g = merge(0.0_R8P, 1.0_R8P, cbaxis%lo < cbaxis%hi)
+               else
+                  g = min(1.0_R8P, max(0.0_R8P, cbaxis%to_unit(pc(r))))
+               endif
+               base = p%rgb1(g)
+            endif
+            w0 = corner(r)
+            if (pm%interp(1) == 1_I4P .and. pm%interp(2) == 1_I4P) then
+               w1 = corner(r + 3_I4P)
+               w2 = corner(r + 1_I4P)
+               w3 = corner(r + 2_I4P)
+            else
+               w1 = corner(r + 1_I4P)
+               w2 = corner(r + 2_I4P)
+               w3 = corner(r + 3_I4P)
+            endif
+            code = lit_color(base, alpha, w0, w1, w2, w3, pm, f%scale3d, rot_x, rot_z)
+            lit(r:r + 3) = packed_hex(real(code, R8P))
+         endblock
+      enddo
+   endif
    nat = len_trim(pm%at, kind=I4P)
-   allocate(ux(size(px) * nat), uy(size(px) * nat))
+   allocate(ux(size(px) * nat), uy(size(px) * nat), all_colors(size(px) * nat))
    m = 0_I4P
    do a = 1_I4P, nat
       zat = 0.0_R8P
@@ -2715,6 +2785,11 @@ contains
       m0 = m
       do r = 1_I4P, size(px, kind=I4P)
          m = m + 1_I4P
+         if (pm%at(a:a) == 's') then
+            all_colors(m) = lit(r)
+         else
+            all_colors(m) = colors(r)
+         endif
          if (.not. ieee_is_finite(px(r))) then
             ux(m) = px(r)
             uy(m) = px(r)
@@ -2750,13 +2825,15 @@ contains
          qx(4 * nq - 3:4 * nq) = ux(m0 + r:m0 + r + 3)
          qy(4 * nq - 3:4 * nq) = uy(m0 + r:m0 + r + 3)
          qd(nq) = 0.25_R8P * dsum
-         qc(nq) = colors(r)
+         qc(nq) = all_colors(m0 + r)
       enddo
    enddo
    quads%style = one%style
    quads%style%with = WITH_POLYGONS
    quads%style%fill = FILL_SOLID
    quads%style%density = 1.0_R8P
+   ! the colors per quadrangle (a fill color among them, lit or not)
+   if (allocated(quads%style%fill_rgb)) deallocate(quads%style%fill_rgb)
    quads%style%border = pm%border
    if (pm%border) then
       quads%style%border_color = trim(pm%border_color)
@@ -2770,11 +2847,17 @@ contains
    quads%x = ux(1:m)
    quads%y = uy(1:m)
    allocate(quads%colors(m))
-   do r = 1_I4P, m
-      quads%colors(r) = colors(modulo(r - 1_I4P, max(1_I4P, size(colors, kind=I4P))) + 1_I4P)
-   enddo
+   if (m > 0_I4P) quads%colors(1:m) = all_colors(1:m)
    quads%colors_kept = .true.
    quads%palette_mode = 0_I4P
+   contains
+      pure function corner(row) result(w)
+      !< The polygon corner at `row`, in the linear spaces of the axes.
+      integer(I4P), intent(in) :: row  !< Row.
+      real(R8P)                :: w(3) !< Corner.
+
+      w = [view3d_lin(px(row), f%log(1)), view3d_lin(py(row), f%log(2)), view3d_lin(pz(row), f%log(3))]
+      endfunction corner
    endsubroutine pm3d_surface_quads
 
    pure subroutine pm3d_grow_queue(qx, qy, qd, qc, nq, n)

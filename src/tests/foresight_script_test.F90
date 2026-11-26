@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(275)                           !< Per-check outcome.
+logical                       :: test_passed(276)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7246,6 +7246,62 @@ block
    call interpreter%run_text("set pm3d at bstbst scansforward; replot", iostat, iomsg)
    test_passed(275) = test_passed(275) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%at == 'bstbst' .and. &
                      interpreter%figure%panels(1)%pm3d%direction == 1_I4P
+endblock
+
+
+
+! pm3d lighting, gnuplot 6.0's apply_lighting_model (probed: the svg polygons of a 3 x 3 grid, 600 x 400, view 60, 30):
+! `lighting` alone rgb(192,48,5), rgb(218,116,0), rgb(123,8,252); `primary 0.8 specular 0.5` rgb(198,56,13); a fill
+! color lit (`fc "gray"`, `primary 0.5 specular 0.3`) rgb(194,194,194), rgb(184,184,184); `fc ls N` the style's
+! color; `nolighting` back to the palette's rgb(190,44,0); spotlight options read; `bind` a no-op; an implicit pm3d
+! surface of `lc rgb variable` lines in their colors (rgb(170,238,238))
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: grid !< The grid datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   grid = "$g << EOD"//nl//"0 0 0"//nl//"1 0 1"//nl//"2 0 2"//nl//nl//"0 1 3"//nl//"1 1 4"//nl//"2 1 8"//nl//nl// &
+          "0 2 6"//nl//"1 2 7"//nl//"2 2 9"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_lit.svg'"//nl//grid// &
+                             "set pm3d lighting"//nl//"splot $g using 1:2:3 with pm3d notitle", iostat, iomsg)
+   test_passed(276) = iostat == 0_I4P
+   if (test_passed(276)) then
+      svg = read_text('foresight_script_test_lit.svg')
+      test_passed(276) = index(svg, '#c03005') > 0 .and. index(svg, '#c03005') < index(svg, '#da7400') .and. &
+                        index(svg, '#da7400') < index(svg, '#7b08fc') .and. index(svg, '#be2c00') == 0
+   endif
+   call interpreter%run_text("set pm3d lighting primary 0.8 specular 0.5; replot", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P
+   if (test_passed(276)) test_passed(276) = index(read_text('foresight_script_test_lit.svg'), '#c6380d') > 0
+   call interpreter%run_text("set pm3d lighting primary 0.5 specular 0.3"//nl// &
+                             "splot $g using 1:2:3 with pm3d fc 'gray' notitle", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P
+   if (test_passed(276)) then
+      svg = read_text('foresight_script_test_lit.svg')
+      test_passed(276) = index(svg, '#c2c2c2') > 0 .and. index(svg, '#b8b8b8') > 0
+   endif
+   call interpreter%run_text("set pm3d nolighting"//nl//"set style line 3 lc rgb '#336699'"//nl// &
+                             "splot $g using 1:2:3 with pm3d fc ls 3 notitle", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%strength == 0.0_R8P
+   if (test_passed(276)) test_passed(276) = index(read_text('foresight_script_test_lit.svg'), 'fill="#336699"') > 0
+   call interpreter%run_text("bind all 'x' 'replot'"//nl// &
+                             "set pm3d spotlight rot_x 30 rot_z 60 rgbcolor 'blue' Phong 6"//nl// &
+                             "set pm3d lighting spec2 0.4", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P
+   if (test_passed(276)) test_passed(276) = &
+      all(interpreter%figure%panels(1)%pm3d%spot_rot == [30.0_R8P, 60.0_R8P]) .and. &
+      interpreter%figure%panels(1)%pm3d%spot_rgb == 255_I4P .and. interpreter%figure%panels(1)%pm3d%spot_phong == 6.0_R8P &
+      .and. interpreter%figure%panels(1)%pm3d%spec2 == 0.4_R8P .and. interpreter%figure%panels(1)%pm3d%strength == 0.5_R8P
+   call interpreter%run_text("set pm3d spotlight default", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%pm3d%spot_rgb == 16711748_I4P
+   ! an implicit pm3d surface of `lc rgb variable` lines in their packed colors (gnuplot's color_from_rgbvar)
+   call interpreter%run_text("unset pm3d; set pm3d implicit nolighting"//nl// &
+                             "splot $g using 1:2:3:(0xAAEEEE) nosurface lc rgb variable notitle", iostat, iomsg)
+   test_passed(276) = test_passed(276) .and. iostat == 0_I4P
+   if (test_passed(276)) test_passed(276) = index(read_text('foresight_script_test_lit.svg'), 'fill="#aaeeee"') > 0
+
 endblock
 
 if (all(test_passed)) then

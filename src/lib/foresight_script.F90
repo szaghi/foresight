@@ -1191,6 +1191,9 @@ contains
       call self%reset_command(tokens(2:), iostat, iomsg)
    elseif (keyword(command, 'pause', 2_I4P)) then
       call self%pause_command(tokens(2:), iostat, iomsg)
+   elseif (command == 'bind') then
+      ! gnuplot's hot keys of the interactive terminals: nothing to bind on a page
+      continue
    elseif (command == 'reread') then
       call fail('reread is deprecated in gnuplot 6.0, not supported: loop with while (1) { plot ...; pause N }', &
                 iostat, iomsg)
@@ -4371,6 +4374,7 @@ contains
                                                                   !< `lc palette z`).
    character(len=24), allocatable               :: point_colors(:) !< Point colors of lc variable.
    real(R8P),        allocatable                :: rgb_packed(:) !< Packed colors of pm3d `lc rgb variable`.
+   logical                                      :: rgb_lines     !< `lc rgb variable` lines (not pm3d).
    character(len=:), allocatable                :: format    !< Item readout format, unallocated if not given.
    character(len=:), allocatable                :: shaping   !< Item option a readout does not take, empty if none.
    character(len=:), allocatable                :: fs        !< Item fill style words, unallocated if not given.
@@ -5357,6 +5361,24 @@ contains
          elseif (word == 'fs' .or. word == 'fill' .or. keyword(word, 'fillstyle', 5_I4P)) then
             call fill_words(fs)
             if (iostat /= 0_I4P) return
+         elseif ((word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) .and. i < size(tokens, kind=I4P) .and. &
+                 is_word(tokens(min(i + 1_I4P, size(tokens, kind=I4P)))%text, 'ls linestyle')) then
+            ! `fc ls N`: the fill in the color of line style N (gnuplot's pm3d fc linestyle, its top side)
+            i = i + 1_I4P
+            block
+               real(R8P)               :: v     !< Style number.
+               type(line_style_object) :: probe !< The style.
+
+               if (.not. next_real(tokens, i, v, iostat, iomsg, self%symbols)) then
+                  iomsg = 'plot: fc ls: '//iomsg
+                  return
+               endif
+               call apply_line_style(self%line_styles, nint(v, I4P), probe, &
+                                     self%figure%panels(self%figure%current)%linecolors)
+               if (allocated(probe%lc)) then
+                  if (index(probe%lc, '*') /= 1) fill_rgb = probe%lc
+               endif
+            endblock
          elseif (word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)) then
             ! the fill color, gnuplot's: read as a line color, the line keeps its own
             block
@@ -6372,7 +6394,11 @@ contains
       endassociate
       if (lcvar) call variable_colors(values(:, size(values, 2)), line%lc == LC_RGB_VARIABLE)
       ! pm3d `lc rgb variable`: the packed colors themselves, each quadrangle colored from its corners' (gnuplot's)
-      if (lcvar .and. with == 'pm3d') rgb_packed = values(:, size(values, 2))
+      rgb_lines = .false.
+      if (lcvar) then
+         if (allocated(line%lc)) rgb_lines = with /= 'pm3d' .and. line%lc == LC_RGB_VARIABLE
+         if (with == 'pm3d' .or. rgb_lines) rgb_packed = values(:, size(values, 2))
+      endif
       if (arrow_var) then
          ! the style column, and the palette value of the styles with lc palette z
          arrow_tags = values(:, 5)
@@ -6805,6 +6831,12 @@ contains
                panel%series(size(panel%series))%zvalues = rgb_packed
                panel%series(size(panel%series))%zvalues_rgb = .true.
             endif
+         endassociate
+      elseif (rgb_lines .and. z_read) then
+         ! `lc rgb variable` lines: their packed colors kept for an implicit pm3d surface (gnuplot's)
+         associate(panel => self%figure%panels(self%figure%current))
+            if (size(rgb_packed) == size(panel%series(size(panel%series))%x)) &
+               panel%series(size(panel%series))%rgb_values = rgb_packed
          endassociate
       endif
       ! smooth csplines|acsplines of splot: each scan smoothed in 3D
@@ -13330,8 +13362,74 @@ contains
                pm%direction = 0_I4P
             elseif (keyword(w, 'ftriangles', 3_I4P) .or. &
                     keyword(w, 'noftriangles', 5_I4P) .or. w == 'clipcb' .or. w == 'noclipcb' .or. &
-                    keyword(w, 'nohidden3d', 4_I4P) .or. keyword(w, 'nolighting', 7_I4P)) then
+                    keyword(w, 'nohidden3d', 4_I4P)) then
                continue
+            elseif (keyword(w, 'nolighting', 7_I4P)) then
+               pm%strength = 0.0_R8P
+            elseif (keyword(w, 'lighting', 5_I4P)) then
+               ! gnuplot's parse_lighting_options: `lighting` alone primary 0.5, specular 0.2, no spotlight
+               pm%strength = 0.5_R8P
+               pm%spec = 0.2_R8P
+               pm%spec2 = 0.0_R8P
+               do while (k < size(toks, kind=I4P))
+                  if (toks(k + 1_I4P)%text == 'primary') then
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%strength = min(1.0_R8P, max(0.0_R8P, v))
+                  elseif (keyword(toks(k + 1_I4P)%text, 'specular', 4_I4P)) then
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%spec = min(1.0_R8P, max(0.0_R8P, v))
+                  elseif (toks(k + 1_I4P)%text == 'spec2') then
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%spec2 = min(1.0_R8P, max(0.0_R8P, v))
+                  else
+                     exit
+                  endif
+               enddo
+            elseif (keyword(w, 'spotlight', 4_I4P)) then
+               ! gnuplot's parse_spotlight_options: the second light of `lighting spec2`
+               do while (k < size(toks, kind=I4P))
+                  select case (toks(k + 1_I4P)%text)
+                  case ('rot_x')
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%spot_rot(1) = v
+                  case ('rot_z')
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%spot_rot(2) = v
+                  case ('Phong')
+                     k = k + 1_I4P
+                     if (.not. next_real(toks, k, v, iostat, iomsg, self%symbols)) return
+                     pm%spot_phong = abs(v)
+                  case ('default')
+                     k = k + 1_I4P
+                     pm%spot_rot = [50.0_R8P, 90.0_R8P]
+                     pm%spot_rgb = 16711748_I4P
+                     pm%spot_phong = 4.0_R8P
+                  case default
+                     if (.not. keyword(toks(k + 1_I4P)%text, 'rgbcolor', 3_I4P)) exit
+                     k = k + 1_I4P
+                     block
+                        type(line_style_object)         :: probe !< Color read.
+                        type(token_object), allocatable :: copy(:) !< Tokens, `lc` for the word.
+
+                        copy = toks
+                        copy(k)%text = 'lc'
+                        if (.not. line_option(copy, k, probe, iostat, iomsg, &
+                                              self%figure%panels(self%figure%current)%linecolors, self%symbols)) then
+                           iomsg = 'set pm3d spotlight: '//iomsg
+                           return
+                        endif
+                        if (allocated(probe%lc)) then
+                           if (index(probe%lc, '#') == 1 .and. len(probe%lc) >= 7) &
+                              read(probe%lc(2:7), '(Z6)') pm%spot_rgb
+                        endif
+                     endblock
+                  endselect
+               enddo
             elseif (keyword(w, 'hidden3d', 2_I4P)) then
                ! deprecated: hidden3d N, the border linetype
                if (k < size(toks, kind=I4P)) then

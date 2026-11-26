@@ -1726,6 +1726,17 @@ in the top byte (0x80000000, half) it colors the points through `lc rgb variable
 the base plane, a map of the heights, and at the surface, in that order; the color box stands beside the plot. See
 [3D views](/guide/gnuplot-subset#3d-views).
 
+### A lit surface
+
+<<< @/examples/snippets/cb_view3d_lighting.gp{gnuplot}
+
+<Plot name="cb_view3d_lighting" svg :width="560" :height="400" />
+
+`set pm3d lighting` shades the quadrangles of a surface as gnuplot does: `primary` the share of the light fixed with
+respect to the viewer, `specular` its highlights, `spec2` a red spotlight on the faces turned away (`set pm3d
+spotlight` moves and colors it). A fill color (`fc`) is lit as the palette colors are. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
 ### Contours in a 3D view
 
 <<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}
