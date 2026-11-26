@@ -161,7 +161,7 @@ contains
 
    pure function hsv_rgb(hsv) result(f)
    !< Red, green, blue (0..1) of `hsv`, hue 0..1 (not degrees), as gnuplot's HSV_2_RGB.
-   real(R8P), intent(in) :: hsv(3) !< Hue, saturation, value.
+   real(R8P), intent(in) :: hsv(:) !< Hue, saturation, value.
    real(R8P)             :: f(3)   !< Red, green, blue.
    real(R8P)             :: h      !< Hue sextant position.
    real(R8P)             :: r      !< Fraction in the sextant.
@@ -198,7 +198,7 @@ contains
 
    pure function hex_color(c) result(hex)
    !< `#rrggbb` of the 8-bit channels `c`.
-   integer(I4P), intent(in) :: c(3) !< Red, green, blue.
+   integer(I4P), intent(in) :: c(:) !< Red, green, blue.
    character(len=7)         :: hex  !< Color.
    character(len=*), parameter :: DIGITS = '0123456789abcdef' !< Hexadecimal digits.
    integer(I4P)             :: k    !< Channel counter.

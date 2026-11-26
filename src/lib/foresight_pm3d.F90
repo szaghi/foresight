@@ -237,8 +237,8 @@ contains
    real(R8P),    intent(inout) :: py(:) !< Polygon ordinates.
    real(R8P),    intent(inout) :: pc(:) !< Polygon color values.
    integer(I4P), intent(inout) :: n     !< Rows used.
-   real(R8P),    intent(in)    :: qx(4) !< Corner abscissae.
-   real(R8P),    intent(in)    :: qy(4) !< Corner ordinates.
+   real(R8P),    intent(in)    :: qx(:) !< Corner abscissae.
+   real(R8P),    intent(in)    :: qy(:) !< Corner ordinates.
    real(R8P),    intent(in)    :: value !< Color value.
 
    if (ieee_is_nan(value)) return
@@ -255,7 +255,7 @@ contains
    !< The color value of a quadrangle from its corners `cb`, gnuplot's (pm3d.c): their mean, geometric mean (0 for mixed
    !< signs), harmonic mean (NaN unless all positive), rms (half the root of the sum of squares), median, minimum,
    !< maximum, or one of them (`c1` ... `c4`, in gnuplot's corner order).
-   real(R8P),    intent(in) :: cb(4) !< Corner values.
+   real(R8P),    intent(in) :: cb(:) !< Corner values.
    integer(I4P), intent(in) :: mode  !< `corners2color`.
    real(R8P)                :: v     !< Value.
    integer(I4P)             :: neg   !< Negative corners.
@@ -297,7 +297,7 @@ contains
    !< The packed color 0xAARRGGBB of a quadrangle from its corners' `cb`, gnuplot's (pm3d.c, `lc rgb variable`): one of
    !< them (`c1` ... `c4`), else the mean of each channel, the sums shifted right by two and masked (the transparency
    !< as gnuplot's: its sum shifted left by 22).
-   real(R8P),    intent(in) :: cb(4) !< Corner colors.
+   real(R8P),    intent(in) :: cb(:) !< Corner colors.
    integer(I4P), intent(in) :: mode  !< `corners2color`.
    real(R8P)                :: v     !< Color.
    integer(I8P)             :: u(4)  !< Corners as unsigned 32-bit numbers.

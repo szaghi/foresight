@@ -1373,9 +1373,12 @@ contains
       real(R8P),         intent(inout) :: y0    !< Smallest ordinate.
       real(R8P),         intent(inout) :: y1    !< Largest ordinate.
       logical,           intent(inout) :: any   !< A counted point.
+      real(R8P)                        :: window(2) !< The x window.
 
       if (windowed) then
-         call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any, xwindow=[xaxis%lo, xaxis%hi])
+         ! the window through a variable: no argument temporary
+         window = [xaxis%lo, xaxis%hi]
+         call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any, xwindow=window)
       else
          call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any)
       endif
@@ -1424,6 +1427,8 @@ contains
    type(map_geometry)                   :: geo       !< Geometry of a map view.
    logical                              :: map       !< A map view (gnuplot `splot` with `set view map`).
    real(R8P)                            :: spacing   !< The key spacing, a map view's restored after.
+   real(R8P)                            :: karea(4)  !< Key area, and
+   real(R8P)                            :: kbox(4)   !< key box (variables: no argument temporaries).
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
@@ -1723,13 +1728,13 @@ contains
 
             dx = 2.0_R8P * geo%vtic + 6.0_R8P * geo%hchar - 52.0_R8P / 12.0_R8P * font_size
             dy = geo%vtic + 0.5_R8P * geo%vchar + geo%shift - 19.2_R8P / 12.0_R8P * font_size
-            call self%draw_key(backend, [area(1) + dx, area(2) - dx, area(3) + dy, area(4) - dy], &
-                               [x0, y0, x0 + width, y0 + height], element_px(backend, self%key_font, font_size), &
-                               grid, key)
+            karea = [area(1) + dx, area(2) - dx, area(3) + dy, area(4) - dy]
+            kbox = [x0, y0, x0 + width, y0 + height]
+            call self%draw_key(backend, karea, kbox, element_px(backend, self%key_font, font_size), grid, key)
          endblock
       else
-         call self%draw_key(backend, area, [x0, y0, x0 + width, y0 + height], &
-                            element_px(backend, self%key_font, font_size), grid, key)
+         kbox = [x0, y0, x0 + width, y0 + height]
+         call self%draw_key(backend, area, kbox, element_px(backend, self%key_font, font_size), grid, key)
       endif
    endif
    call draw_titles_at(self, backend, area, font_size)
@@ -3073,6 +3078,10 @@ contains
    real(R8P)                            :: key(2)    !< Key width and height [px].
    real(R8P)                            :: zr(2)     !< z extent of the series.
    real(R8P)                            :: spacing   !< The key spacing, restored after.
+   real(R8P)                            :: kbox(4)   !< Key box, and
+   real(R8P)                            :: korigin(2) !< key origin (variables: no argument temporaries).
+   real(R8P)                            :: xr3(2), yr3(2), zr3(2) !< Axis ends of the view, and
+   logical                              :: logs3(3)  !< its log axes (variables: no argument temporaries).
    real(R8P)                            :: dx        !< gnuplot's xinkey [units].
    real(R8P)                            :: dy        !< gnuplot's yinkey [units].
    real(R8P)                            :: km(6)     !< gnuplot's key metrics (key3d_metrics) [units].
@@ -3132,9 +3141,11 @@ contains
    if (self%box3d(1) >= 0.0_R8P) box = [self%box3d(1) * self%canvas(1), &
                                         (1.0_R8P - self%box3d(2) - self%box3d(4)) * self%canvas(2), &
                                         self%box3d(3) * self%canvas(1), self%box3d(4) * self%canvas(2)]
-   f = view3d_setup(self%view3d, box, self%canvas, font_size, lines, &
-                    [self%xaxis%lo, self%xaxis%hi], [self%yaxis%lo, self%yaxis%hi], [self%zaxis%lo, self%zaxis%hi], &
-                    [self%xaxis%log, self%yaxis%log, self%zaxis%log], &
+   xr3 = [self%xaxis%lo, self%xaxis%hi]
+   yr3 = [self%yaxis%lo, self%yaxis%hi]
+   zr3 = [self%zaxis%lo, self%zaxis%hi]
+   logs3 = [self%xaxis%log, self%yaxis%log, self%zaxis%log]
+   f = view3d_setup(self%view3d, box, self%canvas, font_size, lines, xr3, yr3, zr3, logs3, &
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
    ! the contours on the base plane (gnuplot's cntr3d_lines: x, y at base_z)
@@ -3241,8 +3252,8 @@ contains
              f%height - f%bounds(3) * 0.01_R8P]
    if (self%key .and. grid(1) > 0_I4P) then
       if (self%key_at) then
-         call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
-                            element_px(backend, self%key_font, font_size), grid, key)
+         kbox = [x0, y0, x0 + width, y0 + height]
+         call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key)
       else
          ! gnuplot's do_3dkey_layout: the first entry's text ends a character left of its sample (xinkey), its row
          ! centred half an entry below the top of the entries (yinkey), placed in the plot bounds; foresight's key box
@@ -3251,12 +3262,12 @@ contains
          ! below the plot, gnuplot's columns share its width (key_col_wth): foresight's entries as wide
          if (self%key_place() == 'bottom' .and. grid(2) > 1_I4P) &
             key(1) = real(grid(2), R8P) * (f%bounds(2) - f%bounds(1)) / real(grid(2), R8P) * 0.01_R8P - GAP
-         call self%draw_key(backend, bounds, [x0, y0, x0 + width, y0 + height], &
-                            element_px(backend, self%key_font, font_size), grid, key, &
-                            origin=[(dx - km(1)) * 0.01_R8P - (key(1) + GAP) / real(grid(2), R8P) + GAP + &
-                                    52.0_R8P / 12.0_R8P * font_size - PAD, &
-                                    f%height - (dy - 0.5_R8P * km(2)) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * &
-                                    font_size + GAP])
+         kbox = [x0, y0, x0 + width, y0 + height]
+         korigin = [(dx - km(1)) * 0.01_R8P - (key(1) + GAP) / real(grid(2), R8P) + GAP + &
+                    52.0_R8P / 12.0_R8P * font_size - PAD, &
+                    f%height - (dy - 0.5_R8P * km(2)) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * font_size + GAP]
+         call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key, &
+                            origin=korigin)
       endif
    endif
    if (self%has_title()) then
@@ -3616,8 +3627,8 @@ contains
       subroutine line3(a, b, color, lw, dashes)
       !< A line between the view points `a` and `b` (gnuplot's draw3d_line: its terminal units, truncated by
       !< draw_clip_line).
-      real(R8P),        intent(in) :: a(3)   !< Start.
-      real(R8P),        intent(in) :: b(3)   !< End.
+      real(R8P),        intent(in) :: a(:)   !< Start.
+      real(R8P),        intent(in) :: b(:)   !< End.
       character(len=*), intent(in) :: color  !< Color.
       real(R8P),        intent(in) :: lw     !< Line width [px].
       character(len=*), intent(in) :: dashes !< Dash array.
@@ -7056,8 +7067,8 @@ contains
    !< (gnuplot `set trange`, which excludes them from polar data plots); an autoscaled end excludes nothing. Readouts
    !< kept. A module procedure on the series array, as `polar_project`.
    type(series_object), intent(inout) :: all(:)   !< Series, theta:r.
-   logical,             intent(in)    :: fixed(2) !< Start, end of the theta range set.
-   real(R8P),           intent(in)    :: ends(2)  !< Start, end of the theta range.
+   logical,             intent(in)    :: fixed(:) !< Start, end of the theta range set.
+   real(R8P),           intent(in)    :: ends(:)  !< Start, end of the theta range.
    real(R8P)                          :: lo       !< Smallest theta kept.
    real(R8P)                          :: hi       !< Largest theta kept.
    integer(I4P)                       :: s        !< Series counter.
@@ -8466,7 +8477,7 @@ contains
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
-   real(R8P),             intent(in)    :: panel(4)  !< Panel box: left, top, right, bottom [px].
+   real(R8P),             intent(in)    :: panel(:)  !< Panel box: left, top, right, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
    type(map_geometry),    intent(in), optional :: geo !< Geometry of a map view.
    logical                              :: mapped    !< A map view's default box.

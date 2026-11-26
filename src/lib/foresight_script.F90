@@ -14519,7 +14519,7 @@ contains
 
       subroutine pair_option(default, words)
       !< `set origin [X,Y]` and `set size [W,H]`, page fractions; no values restore `default`.
-      real(R8P),          intent(in) :: default(2) !< Default values.
+      real(R8P),          intent(in) :: default(:) !< Default values.
       type(token_object), intent(in) :: words(:)   !< Option tokens (of size, without the aspect words).
       type(token_object), allocatable :: tokens(:) !< Option tokens.
       real(R8P)                       :: pair(2)   !< Values.
@@ -15372,7 +15372,7 @@ contains
       subroutine autoscale(a, ends, fix)
       !< Axis `a` (x, y, x2, y2, cb, z) autoscaled at its `ends` (min, max), not extended to the ticks with `fix`.
       integer(I4P), intent(in) :: a       !< Axis.
-      logical,      intent(in) :: ends(2) !< min, max autoscaled.
+      logical,      intent(in) :: ends(:) !< min, max autoscaled.
       logical,      intent(in) :: fix     !< Ends at the data.
 
       associate(panel => self%figure%panels(self%figure%current))
@@ -17365,7 +17365,7 @@ contains
    real(R8P),           intent(in)    :: w(:)      !< Weights of the points.
    character(len=*),    intent(in)    :: mode      !< Smoothing.
    integer(I4P),        intent(in)    :: samples   !< Points per smoothed scan.
-   real(R8P),           intent(in)    :: ranges(3) !< Axis lengths.
+   real(R8P),           intent(in)    :: ranges(:) !< Axis lengths.
    real(R8P), allocatable             :: xs(:), ys(:), zs(:) !< A smoothed scan.
    real(R8P), allocatable             :: nx(:), ny(:), nz(:) !< The new points.
    integer(I4P), allocatable          :: scans(:,:) !< The new scans.

@@ -376,8 +376,8 @@ contains
    !< shaft, 0.3 of its length L, within 0.3 and 2 average tic lengths (HEAD_LENGTH is the longest), so heads shrink on
    !< arrows shorter than about 60 px and stop shrinking at 2.7 px. A zero length shaft has no head (both barbs at the
    !< tip), as gnuplot's.
-   real(R8P), intent(in)  :: tail(2)     !< Tail [px].
-   real(R8P), intent(in)  :: tip(2)      !< Tip [px].
+   real(R8P), intent(in)  :: tail(:)     !< Tail [px].
+   real(R8P), intent(in)  :: tip(:)      !< Tip [px].
    real(R8P), intent(out) :: barbs(2, 2) !< Barb ends [px].
    real(R8P)              :: shaft       !< Shaft length [px].
 
@@ -402,8 +402,8 @@ contains
    !< degrees off the shaft: `barbs(:, 1)` and `barbs(:, 2)`. A zero length shaft has no head (both barbs at the tip),
    !< as gnuplot's do_arrow. On a shaft shorter than twice the barbs the head shrinks to half the shaft, its angle
    !< widened so the barbs spread as far (gnuplot's effective_length), unless `fixed`.
-   real(R8P), intent(in)           :: tail(2)     !< Tail [px].
-   real(R8P), intent(in)           :: tip(2)      !< Tip [px].
+   real(R8P), intent(in)           :: tail(:)     !< Tail [px].
+   real(R8P), intent(in)           :: tip(:)      !< Tip [px].
    real(R8P), intent(in)           :: length      !< Barb length [px].
    real(R8P), intent(in)           :: angle       !< Barb angle [deg].
    real(R8P), intent(out)          :: barbs(2, 2) !< Barb ends [px].

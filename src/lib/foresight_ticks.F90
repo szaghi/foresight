@@ -1459,7 +1459,7 @@ contains
    !< ends have one sign and P = ceil(-log10(min(|hi - lo|, |lo|))) is 5 to 9 (gnuplot's copy_or_invent_formatstring),
    !< else `%h`, %g per label.
    type(tics_object), intent(in) :: tics    !< Settings.
-   real(R8P),         intent(in) :: span(2) !< Axis start and end.
+   real(R8P),         intent(in) :: span(:) !< Axis start and end.
    character(len=:), allocatable :: format  !< Format.
    integer(I4P)                  :: p       !< gnuplot's precision.
    real(R8P)                     :: d       !< Smaller of the range and the start.
@@ -1491,7 +1491,7 @@ contains
    character(len=:), allocatable, intent(out)          :: label   !< Label text.
    character(len=:), allocatable, intent(out)          :: sup     !< Label superscript.
    type(tics_object),             intent(in), optional :: tics    !< User settings.
-   real(R8P),                     intent(in), optional :: span(2) !< Axis start and end.
+   real(R8P),                     intent(in), optional :: span(:) !< Axis start and end.
 
    if (present(tics)) then
       if (tics%has_format() .and. tics%geographic) then

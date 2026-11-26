@@ -111,7 +111,7 @@ contains
    !< `yspan` ranges) or `set view equal xy`; the area the projection of the x and y ranges, `set view map scale` times
    !< 1.425 of the scales.
    type(view3d_object), intent(in) :: view        !< View.
-   real(R8P),           intent(in) :: box(4)      !< Panel box: left, top, width, height [px].
+   real(R8P),           intent(in) :: box(:)      !< Panel box: left, top, width, height [px].
    real(R8P),           intent(in) :: page(2)     !< Page width and height [px].
    real(R8P),           intent(in) :: font_size   !< Font size [px].
    integer(I4P),        intent(in) :: title_lines !< gnuplot's title lines (0 without a title).
@@ -552,7 +552,7 @@ contains
    !< offset from the middle truncated toward zero to the terminal unit, as points and texts; `whole`: the terminal
    !< position truncated, as the lines of draw_clip_line).
    type(view3d_frame), intent(in)           :: f        !< The view.
-   real(R8P),          intent(in)           :: v(3)     !< View coordinates.
+   real(R8P),          intent(in)           :: v(:)     !< View coordinates.
    logical,            intent(in), optional :: truncate !< Truncate the offset to the terminal unit.
    logical,            intent(in), optional :: whole    !< Truncate the position to the terminal unit.
    real(R8P)                                :: p(2)     !< Page position [px].

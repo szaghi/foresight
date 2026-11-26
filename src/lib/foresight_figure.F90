@@ -1710,7 +1710,7 @@ contains
    real(R8P),            intent(in), optional :: samplen   !< Sample length [character widths].
    real(R8P),            intent(in), optional :: width     !< Width added to the titles [character widths].
    character(len=*),     intent(in), optional :: title     !< Key title.
-   real(R8P),            intent(in), optional :: offset(2) !< Key shift [characters].
+   real(R8P),            intent(in), optional :: offset(:) !< Key shift [characters].
    character(len=*),     intent(in), optional :: title_justify !< Key title justification.
 
    call self%ensure_panels
@@ -2619,12 +2619,14 @@ contains
    real(R8P)                            :: cell(2) !< Grid cell width and height [px].
    integer(I4P)                         :: p       !< Panel counter.
    integer(I4P)                         :: rc(2)   !< Row and column of a panel's cell, from 0.
+   real(R8P)                            :: page(2) !< Page width and height [px] (a variable: no argument temporary).
 
    backend%enhanced = self%enhanced
    backend%latin1 = self%latin1
    backend%text_size = self%font_size
    backend%page_family = self%font_family
    call backend%begin_page(file, self%width, self%height, self%font_size)
+   page = [self%width, self%height]
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
    top = 0.0_R8P
    if (len(self%title) > 0) then
@@ -2710,13 +2712,13 @@ contains
                   panel%margin_user = layout_area(rc)
                   panel%margin_screen = .true.
                   call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
-                                    cell(2), self%font_size, canvas=[self%width, self%height])
+                                    cell(2), self%font_size, canvas=page)
                   panel%margin_user = kept
                   panel%margin_screen = screen
                endblock
             else
                call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
-                                 cell(2), self%font_size, canvas=[self%width, self%height])
+                                 cell(2), self%font_size, canvas=page)
             endif
          else
             panel%box3d = [panel%origin(1), panel%origin(2), panel%size(1), panel%size(2)]
@@ -2724,7 +2726,7 @@ contains
             call panel%render(backend, panel%origin(1) * self%width, &
                               top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (self%height - top), &
                               panel%size(1) * self%width, panel%size(2) * (self%height - top), self%font_size, &
-                              canvas=[self%width, self%height])
+                              canvas=page)
          endif
       endassociate
    enddo
