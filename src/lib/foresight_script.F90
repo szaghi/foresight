@@ -4807,6 +4807,8 @@ contains
    logical                                      :: plain_item !< `noenhanced`: the item's title as it is.
    logical                                      :: has_table_if !< A `with table` condition given.
    integer(I4P)                                 :: nranges   !< Inline ranges read.
+   real(R8P)                                    :: uv_inline(2, 2) !< Parametric splot's inline [u] [v] ranges.
+   logical                                      :: uv_given(2, 2)  !< Their ends given.
    real(R8P),        allocatable                :: own_range(:,:) !< Sampling range of each function, `plot f(x),
                                                                   !< [A:B] g(x)` (`own_set` the ends given).
    logical,          allocatable                :: own_set(:,:) !< Ends of `own_range` given.
@@ -4851,6 +4853,8 @@ contains
    ! `sample` keyword, the first item's sampling ranges
    i = 1_I4P
    nranges = 0_I4P
+   uv_inline = 0.0_R8P
+   uv_given = .false.
    sample_first = .false.
    if (size(tokens) >= 2) then
       if (tokens(1)%kind == TOKEN_WORD .and. tokens(2)%kind == TOKEN_RANGE) sample_first = tokens(1)%text == 'sample'
@@ -4867,7 +4871,29 @@ contains
       endif
       if (tokens(i)%kind /= TOKEN_RANGE) exit
       nranges = nranges + 1_I4P
-      if (splot_mode) then
+      if (splot_mode .and. self%parametric) then
+         ! parametric: [u] [v] [x] [y] [z], as gnuplot
+         if (nranges > 5_I4P) then
+            call fail('splot: at most five inline ranges, [u], [v], [x], [y] and [z], in parametric mode', iostat, &
+                      iomsg)
+            return
+         endif
+         select case (nranges)
+         case (1_I4P)
+            call inline_range(tokens(i)%text, 5_I4P)
+         case (2_I4P)
+            call inline_range(tokens(i)%text, 6_I4P)
+         case (3_I4P)
+            call inline_range(tokens(i)%text, 1_I4P)
+         case (4_I4P)
+            call inline_range(tokens(i)%text, 2_I4P)
+         case default
+            call inline_range(tokens(i)%text, 4_I4P)
+         endselect
+         if (iostat /= 0_I4P) return
+         i = i + 1_I4P
+         cycle
+      elseif (splot_mode) then
          ! [x] [y] [z]
          if (nranges > 3_I4P) then
             call fail('splot: at most three inline ranges, [x], [y] and [z], are supported', iostat, iomsg)
@@ -6196,8 +6222,10 @@ contains
             endif
             spec = '1:2:('//written//')'
             if (len(para_fields) > 0) then
-               ! parametric: the u, v grid, the three functions the fields
+               ! parametric: the u, v grid, the three functions the fields; named by the inline ranges ([s=0:1] [t=0:2])
                names = 'u v'
+               if (len_trim(range_names(1)) > 0) names = trim(range_names(1))//' v'
+               if (len_trim(range_names(2)) > 0) names = first_word(names)//' '//trim(range_names(2))
                spec = para_fields
             endif
             using = 'using'
@@ -7594,9 +7622,11 @@ contains
       logical                   :: found(2), xfound(2)        !< Any data.
 
       if (self%parametric) then
-         ! the u and v ranges of the parametric surfaces
+         ! the u and v ranges of the parametric surfaces: the plot's inline [u] [v], else the set ones
          lo = self%uv_range(1, axis)
          hi = self%uv_range(2, axis)
+         if (uv_given(1, axis)) lo = uv_inline(1, axis)
+         if (uv_given(2, axis)) hi = uv_inline(2, axis)
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))
@@ -9238,8 +9268,9 @@ contains
 
       subroutine inline_range(text, axis)
       !< An inline range `[min:max]` of the plot command (`text` without brackets): of x (`axis` 1), y (2), t (3,
-      !< the first range in parametric mode) or z (4, splot's third); `[name=min:max]` of x or t also names the dummy
-      !< variable; an empty or `*` end keeps the set one, as gnuplot.
+      !< the first range in parametric mode), z (4, splot's third), u (5) or v (6, parametric splot's first two, for this
+      !< plot); `[name=min:max]` of x or t also names the dummy variable; an empty or `*` end keeps the set one, as
+      !< gnuplot.
       character(len=*), intent(in)  :: text  !< Range text.
       integer(I4P),     intent(in)  :: axis  !< 1 x, 2 y, 3 t, 4 z.
       logical                       :: first !< A range of the dummy variable (x or t).
@@ -9247,16 +9278,16 @@ contains
       integer(I4P)                  :: colon !< Separator.
       integer(I4P)                  :: equal !< Dummy variable separator.
 
-      first = axis == 1_I4P .or. axis == 3_I4P
+      first = axis == 1_I4P .or. axis == 3_I4P .or. axis == 5_I4P
       body = text
       equal = index(text, '=', kind=I4P)
       colon = top_colon(text)
       ! a quoted time holds no dummy variable
       if (scan(text, '"'//"'") > 0 .and. equal > scan(text, '"'//"'")) equal = 0_I4P
       ! splot's y range names the second dummy variable too (`splot [x=-3:3] [y=-3:3] ...`, gnuplot)
-      if ((first .or. (axis == 2_I4P .and. self%figure%panels(self%figure%current)%three_d)) .and. &
+      if ((first .or. (axis == 2_I4P .and. self%figure%panels(self%figure%current)%three_d) .or. axis == 6_I4P) .and. &
           equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
-         if (axis == 2_I4P) then
+         if (axis == 2_I4P .or. axis == 6_I4P) then
             range_names(2) = trim(adjustl(text(1:equal - 1_I4P)))
             if (len_trim(range_names(2)) == 0 .or. verify(trim(range_names(2)), UNAME_CHARS) /= 0 .or. &
                 verify(range_names(2)(1:1), '0123456789') == 0) then
@@ -9282,6 +9313,11 @@ contains
       if (len_trim(body) == 0) return
       if (colon == 0_I4P) then
          call fail('plot: inline range "['//text//']": [min:max] expected', iostat, iomsg)
+         return
+      endif
+      if (axis >= 5_I4P) then
+         call inline_end(body(1:colon - 1_I4P), uv_given(1, axis - 4_I4P), uv_inline(1, axis - 4_I4P))
+         if (iostat == 0_I4P) call inline_end(body(colon + 1_I4P:), uv_given(2, axis - 4_I4P), uv_inline(2, axis - 4_I4P))
          return
       endif
       associate(panel => self%figure%panels(self%figure%current))

@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(288)                           !< Per-check outcome.
+logical                       :: test_passed(289)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7894,6 +7894,24 @@ block
       d = anchor_of(svg, 'D')
       test_passed(288) = abs(b(1) - d(1) - 58.48_R8P) < 0.02_R8P .and. abs(d(2) - b(2) - 11.54_R8P) < 0.02_R8P .and. &
                         abs(c(1) - d(1) - 60.0_R8P) < 0.02_R8P .and. abs(d(2) - c(2) - 20.0_R8P) < 0.02_R8P
+   endif
+endblock
+
+
+! check 289: parametric splot's inline ranges are [u] [v] [x] [y] [z] (gnuplot's): `splot [u=0:1][v=-4:4] -4, v, u`
+! samples u over 0..1 and v over -4..4 (the table's first rows as gnuplot's), x keeping `set xrange`
+block
+   character(len=:), allocatable :: rows !< Table.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set parametric"//nl//"set xrange [-5:5]"//nl//"set isosamples 2,3"//nl// &
+                             "set table 'foresight_script_test_pr.txt'"//nl//"splot [u=0:1][v=-4:4] -4, v, u"//nl// &
+                             "unset table", iostat, iomsg)
+   test_passed(289) = iostat == 0_I4P
+   if (test_passed(289)) then
+      rows = read_text('foresight_script_test_pr.txt')
+      test_passed(289) = index(rows, nl//'-4 -4  0 i'//nl//'-4 -4  0.010101 i'//nl) > 0
    endif
 endblock
 

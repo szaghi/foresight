@@ -2334,7 +2334,11 @@ painted from the farthest; a quadrangle seen from below (its scans in gnuplot's 
 color, the linetype after its own (`offset N`; `nooffset` the same; gnuplot reserves that linetype, the next item
 taking the one after). A function is then sampled on its `isosamples` grid both ways, without crossing curves. Points,
 labels, other lines and the box are not hidden by the surfaces (gnuplot hides them); `trianglepattern`, `undefined`,
-`altdiagonal`, `bentover`, `front`, `back` are read. `unset hidden3d` draws the meshes again.
+`altdiagonal`, `bentover`, `front`, `back` are read. `unset hidden3d` draws the meshes again. Measured against
+gnuplot 6.0 over the 11 demos mixing `set hidden3d` and pm3d (2026-11-26): the painter's departure costs one page,
+hidden2's first (0.038 on the fidelity scale, 0 identical, 1 opposite), where `set hidden3d front` draws a mesh over a
+pm3d surface with only its own hidden lines removed; the other pages differ for other reasons. A port of hidden3d.c
+(about 2300 lines) is not scheduled for it (decision D2 of the 3D plan).
 
 `splot ... with lines smooth csplines|acsplines` smooths each scan in 3D as gnuplot's gen_3d_splines: a scan in a
 plane of constant x is splined as z of y, of constant y as z of x, of constant z as y of x, from its first point to
@@ -2459,7 +2463,8 @@ sides with lengths by the projection, the tick labels, axis labels, title, key a
 `plot` styles: points, lines, labels, vectors, images (`with image`, from data `x:y:value`, `x:y:z:value` or a
 matrix), `lc palette` by z, `ps variable`, `pt variable`. The HTML page zooms a map as a 2D plot; the text devices draw it with their
 own layout (gnuplot's dumb map is not followed). The other views are [3D views](#3d-views). `set parametric` surfaces are triples x(u,v), y(u,v), z(u,v) sampled on the `urange`,
-`vrange` iso-curves.
+`vrange` iso-curves; the inline ranges of a parametric `splot` are gnuplot's `[u] [v] [x] [y] [z]` (`splot [u=0:1]
+[v=-5:5] ...`, the names renaming the dummy variables for the plot).
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
 `fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set
 the z axis, `set_view` and `set_xyplane` the view.
