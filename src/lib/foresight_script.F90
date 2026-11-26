@@ -3148,6 +3148,10 @@ contains
    logical                                        :: flip(2)   !< Flipped x, y.
    logical                                        :: big       !< Big endian.
    logical                                        :: has_using !< The item has its using.
+   logical                                        :: array_set !< array= given.
+   logical                                        :: record_set !< record= given.
+   logical                                        :: matrix    !< gnuplot's matrix binary (`binary` alone, `matrix`).
+   integer(I4P), allocatable                      :: records(:) !< Record lengths (`record=N1:N2:...`).
    type(token_object)                             :: t         !< New token.
 
    iostat = 0_I4P
@@ -3173,11 +3177,24 @@ contains
       big = .false.
       skip = 0_I4P
       format = ''
+      array_set = .false.
+      record_set = .false.
+      matrix = .false.
+      if (allocated(records)) deallocate(records)
+      allocate(records(0))
       k = k + 1_I4P
       do while (k <= size(tokens, kind=I4P))
          if (tokens(k)%kind /= TOKEN_WORD) exit
          word = tokens(k)%text
          value = ''
+         ! an option written with blanks about its `=` (`center = (63.5,63.5,50)`): its tokens joined
+         if (index(word, '=') == 0 .and. k + 1_I4P < size(tokens, kind=I4P)) then
+            if (is_word(word, 'center centre array record origin dx dy dz format skip endian rotation rotate rot '// &
+                        'flip filetype') .and. tokens(k + 1_I4P)%text == '=') then
+               k = k + 2_I4P
+               word = word//'='//tokens(k)%text
+            endif
+         endif
          if (index(word, '=') > 0) then
             value = word(index(word, '=') + 1:)
             word = word(1:index(word, '=') - 1)
@@ -3193,7 +3210,8 @@ contains
             endif
          endif
          select case (word)
-         case ('center')
+         case ('center', 'centre')
+            ! x, y (a splot's z, the plane of the image, not read)
             value = strip_parentheses(value)
             read(value, *, iostat=iostat) centre
             if (iostat /= 0_I4P) then
@@ -3232,7 +3250,19 @@ contains
                return
             endif
             angle = v
+         case ('matrix')
+            matrix = .true.
          case ('array', 'record')
+            array_set = array_set .or. word == 'array'
+            record_set = record_set .or. word == 'record'
+            ! a record list N1:N2:... (gnuplot's consecutive records)
+            if (word == 'record' .and. index(value, ':') > 0) then
+               call record_list(value)
+               if (iostat /= 0_I4P) return
+               shape = [maxval(records), 1_I4P]
+               k = k + 1_I4P
+               cycle
+            endif
             ! (W,H) or WxH, or W alone (one line)
             value = strip_parentheses(value)
             do q = 1_I4P, len(value, kind=I4P)
@@ -3282,15 +3312,37 @@ contains
                return
             endif
          case ('endian')
+            ! little, big, default (the machine's, little) or swap (the other one)
             big = value == 'big' .or. value == 'swap'
          case ('filetype')
             call fail('plot: binary filetype='//value//' is not supported (raw arrays only)', iostat, iomsg)
+            return
+         case ('perp', 'perpendicular')
+            call fail('plot: binary perpendicular= is not supported (images in the xy plane only)', iostat, iomsg)
             return
          case default
             exit
          endselect
          k = k + 1_I4P
       enddo
+      ! gnuplot's matrix binary: no array, record nor format given (or `matrix`)
+      if (.not. (array_set .or. record_set .or. len(format) > 0)) matrix = .true.
+      if (matrix) then
+         call matrix_block(tokens, k)
+         if (iostat /= 0_I4P) return
+         k = last_of_item(tokens, k) + 1_I4P
+         cycle
+      endif
+      ! general binary records, as text lines of their fields (no coordinates generated): no array, or a record
+      ! drawn as anything but an image
+      if (.not. array_set) then
+         if (.not. record_set .or. .not. is_word(item_style(tokens, k), 'image rgbimage rgbalpha')) then
+            call records_block(tokens, k)
+            if (iostat /= 0_I4P) return
+            k = last_of_item(tokens, k) + 1_I4P
+            cycle
+         endif
+      endif
       if (any(shape < 1_I4P)) then
          call fail('plot: binary needs array=(W,H) (raw arrays only)', iostat, iomsg)
          return
@@ -3595,6 +3647,288 @@ contains
       k = last + 1_I4P
    enddo
    contains
+      subroutine record_list(text)
+      !< The record lengths of `record=N1:N2:...` into `records`.
+      character(len=*), intent(in)  :: text  !< Value.
+      character(len=:), allocatable :: list  !< Value with a final colon.
+      integer(I4P), allocatable     :: more(:) !< Lengths, one more.
+      integer(I4P)                  :: a, b, n !< Field start, end, length.
+
+      list = strip_parentheses(text)//':'
+      a = 1_I4P
+      do while (a <= len(list, kind=I4P))
+         b = a + index(list(a:), ':', kind=I4P) - 1_I4P
+         read(list(a:b - 1), *, iostat=iostat) n
+         if (iostat /= 0_I4P .or. n < 1_I4P) then
+            call fail('plot: binary record=N1:N2:... expected', iostat, iomsg)
+            return
+         endif
+         allocate(more(size(records) + 1))
+         more(1:size(records)) = records
+         more(size(more)) = n
+         call move_alloc(more, records)
+         a = b + 1_I4P
+      enddo
+      endsubroutine record_list
+
+      function last_of_item(toks, from) result(last_token)
+      !< The last token of the item from `from`: before the next comma, or the last one.
+      type(token_object), intent(in) :: toks(:)    !< Tokens.
+      integer(I4P),       intent(in) :: from       !< First option token after the binary ones.
+      integer(I4P)                   :: last_token !< Last token of the item.
+      integer(I4P)                   :: q          !< Counter.
+
+      last_token = from - 1_I4P
+      do q = from, size(toks, kind=I4P)
+         if (toks(q)%kind == TOKEN_COMMA) exit
+         last_token = q
+      enddo
+      endfunction last_of_item
+
+      function item_style(toks, from) result(sname)
+      !< The style of the item from `from` (`with X`), blank if none.
+      type(token_object), intent(in) :: toks(:) !< Tokens.
+      integer(I4P),       intent(in) :: from    !< First option token after the binary ones.
+      character(len=:), allocatable  :: sname   !< Style.
+      integer(I4P)                   :: q       !< Counter.
+
+      sname = ''
+      do q = from, size(toks, kind=I4P) - 1_I4P
+         if (toks(q)%kind == TOKEN_COMMA) exit
+         if (toks(q)%kind == TOKEN_WORD .and. keyword(toks(q)%text, 'with', 1_I4P)) &
+            sname = style_name(toks(q + 1_I4P)%text)
+      enddo
+      endfunction item_style
+
+      subroutine load_bytes(file)
+      !< The bytes of `file` into `bytes`, the position after the `skip` header bytes.
+      character(len=*), intent(in) :: file !< File.
+
+      if (allocated(bytes)) deallocate(bytes)
+      open(newunit=u, file=file, access='stream', form='unformatted', action='read', status='old', iostat=iostat)
+      if (iostat /= 0_I4P) then
+         call fail('plot: cannot open "'//file//'"', iostat, iomsg)
+         return
+      endif
+      inquire(unit=u, size=nbytes)
+      allocate(character(len=max(nbytes, 0)) :: bytes)
+      if (nbytes > 0) read(u, iostat=iostat) bytes
+      close(u)
+      pos = skip + 1_I4P
+      endsubroutine load_bytes
+
+      subroutine datablock_item(toks, from, text, matrix_words)
+      !< The item's file replaced by a datablock of `text` (`matrix_words`: read as gnuplot's `nonuniform matrix`), its
+      !< tokens from `from` to its end kept; the new words at the source of the last binary option (the automatic title
+      !< the item as written, gnuplot's).
+      type(token_object), intent(in) :: toks(:)      !< Tokens.
+      integer(I4P),       intent(in) :: from         !< First token after the binary options.
+      character(len=*),   intent(in) :: text         !< Datablock text.
+      logical,            intent(in) :: matrix_words !< A nonuniform matrix.
+      integer(I4P)                   :: q            !< Counter.
+
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__binary'//int_str(int(self%binary_count, I8P))
+      call self%symbols%set_string(name, text)
+      items(size(items))%kind = TOKEN_WORD
+      items(size(items))%text = name
+      t%kind = TOKEN_WORD
+      t%quote = ' '
+      t%first = toks(from - 1_I4P)%first
+      t%last = toks(from - 1_I4P)%last
+      if (matrix_words) then
+         t%text = 'nonuniform'
+         call push(items, t)
+         t%text = 'matrix'
+         call push(items, t)
+      endif
+      do q = from, last_of_item(toks, from)
+         call push(items, toks(q))
+      enddo
+      endsubroutine datablock_item
+
+      subroutine matrix_block(toks, from)
+      !< gnuplot's matrix binary (float32 values, little endian unless big): N, the N x of the columns, then rows of
+      !< their y and N values, to the end of the file; as a `nonuniform matrix` datablock.
+      type(token_object), intent(in) :: toks(:) !< Tokens.
+      integer(I4P),       intent(in) :: from    !< First token after the binary options.
+      character(len=32)             :: cell    !< A value written.
+      character(len=:), allocatable :: buffer  !< Datablock text.
+      integer(I4P)                  :: n       !< Columns.
+      integer(I4P)                  :: at      !< Characters written.
+      integer(I4P)                  :: col     !< Column counter.
+      integer(I4P)                  :: row     !< Row counter.
+
+      call load_bytes(items(size(items))%text)
+      if (iostat /= 0_I4P) return
+      call read_field('float32', v)
+      if (iostat /= 0_I4P) return
+      n = nint(v, I4P)
+      if (n < 1_I4P) then
+         call fail('plot: binary matrix: no columns', iostat, iomsg)
+         return
+      endif
+      allocate(character(len=int(len(bytes), I8P) / 4_I8P * 26_I8P + int(n, I8P) * 26_I8P + 64_I8P) :: buffer)
+      at = 0_I4P
+      write(cell, '(I0)') n
+      call put_cell(buffer, at, trim(cell))
+      do col = 1_I4P, n
+         call read_field('float32', v)
+         if (iostat /= 0_I4P) return
+         write(cell, '(ES24.16E3)') v
+         call put_cell(buffer, at, ' '//trim(adjustl(cell)))
+      enddo
+      call put_cell(buffer, at, new_line('a'))
+      row = 0_I4P
+      do while (pos + 4_I4P * (n + 1_I4P) - 1_I4P <= len(bytes, kind=I4P))
+         do col = 0_I4P, n
+            call read_field('float32', v)
+            write(cell, '(ES24.16E3)') v
+            if (col > 0_I4P) call put_cell(buffer, at, ' ')
+            call put_cell(buffer, at, trim(adjustl(cell)))
+         enddo
+         call put_cell(buffer, at, new_line('a'))
+         row = row + 1_I4P
+      enddo
+      if (row == 0_I4P) then
+         call fail('plot: binary matrix: no rows', iostat, iomsg)
+         return
+      endif
+      call datablock_item(toks, from, buffer(1:at), .true.)
+      deallocate(bytes)
+      endsubroutine matrix_block
+
+      subroutine records_block(toks, from)
+      !< gnuplot's general binary records (no coordinates generated): the fields of the format (`%*type` read and
+      !< dropped; a single specifier for every field, as many as the using reads), record after record, to the end of
+      !< the file or for the `record=` lengths (a list N1:N2:... read one after the other, one curve, gnuplot's); one
+      !< line each, a datablock its `using` reads as columns.
+      type(token_object), intent(in) :: toks(:) !< Tokens.
+      integer(I4P),       intent(in) :: from    !< First token after the binary options.
+      character(len=32)             :: cell    !< A value written.
+      character(len=:), allocatable :: buffer  !< Datablock text.
+      integer(I4P)                  :: at      !< Characters written.
+      integer(I4P)                  :: size1   !< Bytes of a record.
+      integer(I4P)                  :: r, g, c2, q2 !< Counters.
+      integer(I4P)                  :: lengths(max(1, size(records))) !< Records of each group.
+      logical                       :: to_end  !< Records to the end of the file.
+
+      ! the field types and the fields of a record
+      nkinds = 0_I4P
+      q2 = 1_I4P
+      do while (q2 <= len(format, kind=I4P) .and. nkinds < size(kinds, kind=I4P))
+         if (format(q2:q2) /= '%') then
+            q2 = q2 + 1_I4P
+            cycle
+         endif
+         c2 = q2 + 1_I4P
+         do while (c2 <= len(format, kind=I4P))
+            if (format(c2:c2) == '%') exit
+            c2 = c2 + 1_I4P
+         enddo
+         nkinds = nkinds + 1_I4P
+         kinds(nkinds) = format(q2 + 1:c2 - 1)
+         q2 = c2
+      enddo
+      if (nkinds == 0_I4P) then
+         nkinds = 1_I4P
+         kinds(1) = 'float'
+      endif
+      nfields = count([(kinds(c2)(1:1) /= '*', c2 = 1_I4P, nkinds)])
+      if (nkinds == 1_I4P) then
+         nfields = 1_I4P
+         do q2 = from + 1_I4P, last_of_item(toks, from)
+            if (toks(q2 - 1_I4P)%kind == TOKEN_WORD .and. keyword(toks(q2 - 1_I4P)%text, 'using', 1_I4P)) &
+               nfields = max(nfields, highest_column(toks(q2)%text))
+         enddo
+      endif
+      size1 = 0_I4P
+      do c2 = 1_I4P, nkinds
+         size1 = size1 + kind_bytes(trim(kinds(c2)(merge(2, 1, kinds(c2)(1:1) == '*'):)))
+      enddo
+      if (nkinds == 1_I4P) size1 = size1 * nfields
+      if (size1 < 1_I4P) then
+         call fail('plot: binary format: unsupported type "%'//trim(kinds(1))//'"', iostat, iomsg)
+         return
+      endif
+      call load_bytes(items(size(items))%text)
+      if (iostat /= 0_I4P) return
+      to_end = .not. record_set
+      lengths = 0_I4P
+      if (size(records) > 0) then
+         lengths = records
+      elseif (record_set) then
+         lengths(1) = shape(1) * max(1_I4P, shape(2))
+      endif
+      allocate(character(len=int(len(bytes), I8P) / max(1_I8P, int(size1, I8P)) * &
+                             (int(nfields, I8P) * 26_I8P + 2_I8P) + 64_I8P) :: buffer)
+      at = 0_I4P
+      do g = 1_I4P, size(lengths, kind=I4P)
+         r = 0_I4P
+         do
+            if (to_end) then
+               if (pos + size1 - 1_I4P > len(bytes, kind=I4P)) exit
+            else
+               if (r >= lengths(g)) exit
+               if (pos + size1 - 1_I4P > len(bytes, kind=I4P)) then
+                  call fail('plot: binary: the file is shorter than its records', iostat, iomsg)
+                  return
+               endif
+            endif
+            f = 0_I4P
+            do c2 = 1_I4P, merge(nfields, nkinds, nkinds == 1_I4P)
+               if (nkinds == 1_I4P) then
+                  call read_field(trim(kinds(1)), v)
+               elseif (kinds(c2)(1:1) == '*') then
+                  call read_field(trim(kinds(c2)(2:)), v)
+                  if (iostat /= 0_I4P) return
+                  cycle
+               else
+                  call read_field(trim(kinds(c2)), v)
+               endif
+               if (iostat /= 0_I4P) return
+               write(cell, '(ES24.16E3)') v
+               if (f > 0_I4P) call put_cell(buffer, at, ' ')
+               call put_cell(buffer, at, trim(adjustl(cell)))
+               f = f + 1_I4P
+            enddo
+            call put_cell(buffer, at, new_line('a'))
+            r = r + 1_I4P
+         enddo
+      enddo
+      call datablock_item(toks, from, buffer(1:at), .false.)
+      deallocate(bytes)
+      endsubroutine records_block
+
+      pure function kind_bytes(kind) result(n)
+      !< The bytes of a field of type `kind` (gnuplot's names), 0 if unknown.
+      character(len=*), intent(in) :: kind !< Type.
+      integer(I4P)                 :: n    !< Bytes.
+
+      select case (kind)
+      case ('char', 'uchar', 'int8', 'uint8')
+         n = 1_I4P
+      case ('short', 'ushort', 'int16', 'uint16')
+         n = 2_I4P
+      case ('int', 'uint', 'int32', 'uint32', 'float', 'float32')
+         n = 4_I4P
+      case ('long', 'ulong', 'int64', 'uint64', 'double', 'float64')
+         n = 8_I4P
+      case default
+         n = 0_I4P
+      endselect
+      endfunction kind_bytes
+
+      pure subroutine put_cell(buffer, at, piece)
+      !< `piece` written at the end of `buffer` (`at` characters so far).
+      character(len=*), intent(inout) :: buffer !< Text.
+      integer(I4P),     intent(inout) :: at     !< Characters written.
+      character(len=*), intent(in)    :: piece  !< Text appended.
+
+      buffer(at + 1:at + len(piece)) = piece
+      at = at + len(piece, kind=I4P)
+      endsubroutine put_cell
+
       pure function strip_parentheses(text) result(inner)
       !< `text` without its surrounding parentheses.
       character(len=*), intent(in)  :: text  !< Text.
@@ -9943,6 +10277,11 @@ contains
                    int_str(int(size(series%x), I8P))//' points'//new_line('a')//'# Curve title: "'// &
                    series%title//'"'//new_line('a')//'# '//names//new_line('a')
             do p = 1_I4P, size(series%x, kind=I4P)
+               ! a break between the blocks of a curve (x and y undefined): a blank line, as gnuplot's
+               if (names /= 'x y label type' .and. ieee_is_nan(series%x(p)) .and. ieee_is_nan(series%y(p))) then
+                  text = text//new_line('a')
+                  cycle
+               endif
                row = number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)
                ! a histogram: its own values, not the stacked tops (gnuplot)
                if (series%style%with == WITH_HISTOGRAMS .and. allocated(series%values)) then
@@ -12221,7 +12560,8 @@ contains
          endif
          self%figure%panels(self%figure%current)%contour%format = text
       endif
-   elseif (option == 'view') then
+   elseif (keyword(option, 'view', 2_I4P)) then
+      ! gnuplot's vi$ew
       call view_option(tokens)
    elseif (keyword(option, 'xyplane', 3_I4P) .or. keyword(option, 'ticslevel', 5_I4P)) then
       call xyplane_option(tokens)
@@ -14923,10 +15263,19 @@ contains
             call fail('set '//option//': two numbers X,Y expected', iostat, iomsg)
             return
          endif
-         if (.not. (to_number(tokens(2)%text, pair(1)) .and. to_number(tokens(4)%text, pair(2)))) then
-            call fail('set '//option//': two numbers X,Y expected', iostat, iomsg)
-            return
-         endif
+         ! numbers or constant expressions (`set size dx,dy`, `set origin 0*dx,1*dy`)
+         block
+            integer(I4P) :: j !< Field.
+            integer(I4P) :: q !< Token.
+
+            do j = 1_I4P, 2_I4P
+               q = 2_I4P * j - 1_I4P
+               if (.not. next_real(tokens, q, pair(j), iostat, iomsg, self%symbols)) then
+                  call fail('set '//option//': two numbers X,Y expected', iostat, iomsg)
+                  return
+               endif
+            enddo
+         endblock
       endif
       if (keyword(option, 'size', 2_I4P)) then
          if (any(pair <= 0.0_R8P)) then
@@ -17591,7 +17940,7 @@ contains
       self%figure%panels(self%figure%current)%view3d%zzeroaxis = .false.
    elseif (keyword(option, 'surface', 2_I4P)) then
       self%figure%panels(self%figure%current)%view3d%surface = .false.
-   elseif (option == 'view') then
+   elseif (keyword(option, 'view', 2_I4P)) then
       ! gnuplot 6.0: unset view is set view 60, 30, 1, 1 (the map off)
       block
          type(view3d_object) :: fresh !< Default view.

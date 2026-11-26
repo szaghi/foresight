@@ -74,6 +74,16 @@ Quoted names select columns by header; `title columnhead` titles with the header
 
 The `-` cells are missing data: those points are left out and the lines go on; `%` starts the comments of this file.
 
+### A binary log
+
+<<< @/examples/snippets/cb_binary_log.gp{gnuplot}
+
+<Plot name="cb_binary_log" svg :width="560" :height="400" />
+
+A solver writes its residuals as binary records (an int32 iteration and two float64 residuals, Fortran's `access=
+'stream'`): `binary format='...'` reads them as gnuplot 6.0 does, `using` taking the fields as columns, `%*float64`
+dropping one. See [Binary files](/guide/data-files#binary-files).
+
 ### Text columns: names and labels
 
 <<< @/examples/snippets/cb_strcol.gp{gnuplot}

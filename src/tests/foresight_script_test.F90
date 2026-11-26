@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(282)                           !< Per-check outcome.
+logical                       :: test_passed(283)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7644,6 +7644,64 @@ block
       svg = read_text('foresight_script_test_pw.svg')
       test_passed(282) = index(svg, '<path d="M0,0 L8,8 M0,8 L8,0" fill="none" stroke="#ff0000" stroke-width="2"/>') > 0
    endif
+endblock
+
+! check 283: binary data files as gnuplot 6.0 reads them, the files written here and tabulated as gnuplot's set table
+! writes them: `splot 'f' binary` the matrix binary (float32: N, the x of the columns, rows of y and values), its
+! rows last first; `binary format='%int32%float64'` records to the end of the file, the fields its columns;
+! `skip=4 record=2 endian=big format='%float'` a header skipped, 2 records, big endian, x the record number;
+! `set vi` (gnuplot's vi$ew); `set size dx,dy` of variables
+block
+   character(len=:), allocatable :: tab  !< Table.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   integer, parameter            :: SP = selected_real_kind(6, 37) !< gnuplot's float32.
+   character(len=4)              :: b4   !< Bytes of a float.
+   integer(I4P)                  :: q    !< Counter.
+
+   open(newunit=unit, file='foresight_script_test_mb.bin', access='stream', form='unformatted', status='replace')
+   write(unit) real([3, 10, 20, 30, 1, 0, 1, 2, 2, 100, 101, 102], SP)
+   close(unit)
+   open(newunit=unit, file='foresight_script_test_gb.bin', access='stream', form='unformatted', status='replace')
+   do q = 1_I4P, 3_I4P
+      write(unit) int(q, I4P), 10.0_R8P ** (-q)
+   enddo
+   close(unit)
+   open(newunit=unit, file='foresight_script_test_eb.bin', access='stream', form='unformatted', status='replace')
+   write(unit) 'HEAD'
+   do q = 1_I4P, 3_I4P
+      b4 = transfer(real(q, SP) + 0.5_SP, b4)
+      write(unit) b4(4:4)//b4(3:3)//b4(2:2)//b4(1:1)
+   enddo
+   close(unit)
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test_bt.txt'"//nl// &
+                             "splot 'foresight_script_test_mb.bin' binary"//nl// &
+                             "plot 'foresight_script_test_gb.bin' binary format='%int32%float64' using 1:2 with lines"// &
+                             nl//"plot 'foresight_script_test_eb.bin' binary skip=4 record=2 endian=big format='%float' "// &
+                             "using 1 with lines"//nl//"unset table", iostat, iomsg)
+   test_passed(283) = iostat == 0_I4P
+   if (test_passed(283)) then
+      tab = read_text('foresight_script_test_bt.txt')
+      test_passed(283) = index(tab, "# Curve title: ""'foresight_script_test_mb.bin' binary"""//nl//nl// &
+                                   "# IsoCurve 0, 3 points"//nl//"# x y z type"//nl//" 10  2  100 i"//nl// &
+                                   " 20  2  101 i"//nl//" 30  2  102 i"//nl//nl//"# IsoCurve 1, 3 points"//nl// &
+                                   "# x y z type"//nl//" 10  1  0 i"//nl//" 20  1  1 i"//nl//" 30  1  2 i") > 0 .and. &
+                        index(tab, "# x y type"//nl//" 1  0.1  i"//nl//" 2  0.01  i"//nl//" 3  0.001  i") > 0 .and. &
+                        index(tab, "# Curve 0 of 1, 2 points"//nl//"# Curve title: ""'foresight_script_test_eb.bin' "// &
+                                   "binary skip=4 record=2 endian=big format='%float' using 1"""//nl//"# x y type"// &
+                                   nl//" 0  1.5  i"//nl//" 1  2.5  i") > 0
+   endif
+   ! gnuplot's abbreviations and expressions
+   call interpreter%run_text("set vi 70,10"//nl//"dx = 0.5; dy = 0.25"//nl//"set size dx,dy", iostat, iomsg)
+   test_passed(283) = test_passed(283) .and. iostat == 0_I4P
+   if (test_passed(283)) test_passed(283) = interpreter%figure%panels(1)%view3d%rot_x == 70.0_R8P .and. &
+                                          interpreter%figure%panels(1)%view3d%rot_z == 10.0_R8P
+   ! an image turned out of the xy plane: not supported, said so
+   call interpreter%run_text("splot 'foresight_script_test_mb.bin' binary array=(2,2) perp=(1,1,1) with image", &
+                             iostat, iomsg)
+   test_passed(283) = test_passed(283) .and. iostat /= 0_I4P
+   if (test_passed(283)) test_passed(283) = index(iomsg, 'perpendicular') > 0
+   iostat = 0_I4P
 endblock
 
 if (all(test_passed)) then

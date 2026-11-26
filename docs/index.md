@@ -176,6 +176,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_filter" svg :width="560" :height="320" caption="only some points" />
   <Plot name="cb_csv_header" svg :width="560" :height="320" caption="CSV with a header row" />
   <Plot name="cb_missing" svg :width="560" :height="320" caption="missing data" />
+  <Plot name="cb_binary_log" svg :width="560" :height="400" caption="a binary log (binary format)" />
   <Plot name="cb_strcol" svg :width="560" :height="320" caption="names and labels from text columns (strcol)" />
   <Plot name="cb_datablock" svg :width="560" :height="320" caption="data inside the script (datablock)" />
   <Plot name="cb_call" svg :width="760" :height="300" caption="a script called with arguments" />

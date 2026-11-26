@@ -239,7 +239,7 @@ plot for [col=2:*] 'run.dat' using 1:col title columnhead
 | `pt` **var**iable | each point's [type](#point-types) from the column after the sizes of `ps variable` (before an `lc variable` one): its integer part, a dot for 0 and less, as gnuplot |
 | **convexhull** / **concavehull** [`expand D`] / **delaunay** | gnuplot 6.0's hull filters of the item's points, right after they are read: the convex hull (clockwise, closed), a chi-shape (concave hull: its length the real variable `chi_length` if positive, else `set chi_shape fraction F` of the longest hull edge, 0.6, the one used in `GPVAL_CHI_LENGTH`), `expand D` pushing the hull out by D (before or after `smooth path`), `delaunay` the triangles; every column follows its point. `smooth convexhull` is `convexhull smooth path` |
 | **zsort** | the points of each curve drawn in the order of their z (the third column, `using x:y:z[:color]`), the highest last, as gnuplot 6.0 (also `smooth zsort`) |
-| **bin**ary `array=(W,H)` ... | gnuplot's binary data arrays, see [Images and palettes](#images-and-palettes) |
+| **bin**ary [`matrix`] \| `array=(W,H)` ... \| `format='...'` [`record=N[:N...]`] [`skip=N`] [`endian=...`] | gnuplot's binary files: the matrix binary (`binary` alone), the general binary records and the data arrays, see [Binary files](data-files#binary-files) and [Images and palettes](#images-and-palettes) |
 | `ls N` | line style `N` of `set style line`; the options after it override it |
 | long forms | **linec**olor, **linet**ype, **linew**idth, **dasht**ype, **points**ize, **lines**tyle (`rgbcolor` for `rgb`), as gnuplot |
 
@@ -2040,7 +2040,9 @@ draws each pixel as the polygon of its corners (colored by the palette or its pa
 box, where gnuplot's has none). Each pixel's fields as the format (`%char`, `%uchar`, `%short`, `%ushort`, `%int`,
 `%uint`, `%long`, `%ulong`, `%float`, `%double` and the sized names `%int8` ... `%float64`; `%*type` reads a field and
 skips it; one specifier for every field, floats by default; rgbimage reads 3, rgbalpha 4, or as many as the `using`
-reads). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of the pixels implied. Not supported: `filetype=` (png, ...) and the general binary records without `array`.
+reads). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of the pixels implied. The matrix
+binary and the general binary records are in [Binary files](data-files#binary-files). Not supported: `filetype=`
+(png, ...) and `perpendicular=` (an image out of the xy plane).
 
 The palette maps the values over `cbrange` (autoscaled to the values and, a linear one with its color box drawn, extended to its ticks; `noextend`, `set autoscale cbfix` or `unset colorbox` keeps the values) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`

@@ -76,6 +76,29 @@ Without a missing string, a cell with no number (`?`, `-`, a word) is skipped in
 through an expression; the missing string is skipped both ways. `NaN` stays a gap that breaks the line unless it is
 the missing string.
 
+## Binary files
+
+`plot` and `splot` read gnuplot 6.0's binary files with `binary`:
+
+```gnuplot
+splot 'surface.bin' binary                                # gnuplot's matrix binary
+plot 'log.bin' binary format='%int32%float64' using 1:2   # records of an int32 and a float64
+plot 'log.bin' binary format='%*int32%float64' using 1    # the int32 skipped, x the record number
+plot 'raw.bin' binary skip=64 record=1000 endian=big format='%float' using 1
+```
+
+| Form | Read as |
+|---|---|
+| `binary` alone, `binary matrix` | gnuplot's matrix binary: float32 values, the first the number N of columns, then the N x of the columns, then rows of their y and N values, to the end of the file; read as a `nonuniform matrix` ([3D plots](gnuplot-subset#3d-plots)) (a splot lists its rows last first, as gnuplot's) |
+| `format='%type...'` | records of the format's fields, to the end of the file: `%char`, `%uchar`, `%short`, `%ushort`, `%int`, `%uint`, `%long`, `%ulong`, `%float`, `%double` and the sized `%int8` ... `%uint64`, `%float32`, `%float64`; `%*type` reads a field and drops it; a single specifier is every field's, as many as the `using` reads (floats without a format) |
+| `record=N` | N records; `record=N1:N2:...` the records one after the other, one curve (gnuplot's) |
+| `skip=N` | N header bytes skipped |
+| `endian=little\|big\|default\|swap` | the byte order (`default` the machine's, little; `swap` the other one) |
+| `array=(W,H)` | a W x H data array, its pixel coordinates generated: [Images and palettes](gnuplot-subset#images-and-palettes) |
+
+The records read as the columns of a text file: `using 1:2` takes the first two fields, `using 1` puts them against the
+record number (column 0), expressions and `every` work as on text. `set table` writes them as gnuplot does.
+
 ## Monitoring logs
 
 A solver that appends one line per iteration and flushes it is all `--watch` needs:
