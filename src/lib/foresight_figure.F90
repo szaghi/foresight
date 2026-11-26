@@ -2061,19 +2061,49 @@ contains
    endassociate
    endsubroutine set_dgrid3d
 
-   subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in)
+   subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in, at, order, border)
    !< gnuplot `set pm3d`: `implicit` every surface drawn as colored quadrangles too (`set pm3d`; false: only the items
    !< `with='pm3d'`, `unset pm3d`), `interpolate` the steps along and between the scans (`interpolate N,M`, 0 or
    !< negative for gnuplot's automatic counts), `corners2color` the color of a quadrangle from its corners (`mean`,
-   !< `geomean`, `harmean`, `rms`, `median`, `min`, `max`, `c1` to `c4`), `clip4in` its 4 corners in range.
+   !< `geomean`, `harmean`, `rms`, `median`, `min`, `max`, `c1` to `c4`), `clip4in` its 4 corners in range. In 3D
+   !< views: `at` where (`b` the base, `s` the surface, `t` the top, combined in drawing order, e.g. `'bs'`), `order`
+   !< the drawing order (`scansautomatic`, `scansforward`, `scansbackward`, `depthorder`), `border` the quadrangles
+   !< outlined in black.
    class(figure_object), intent(inout)        :: self           !< Figure.
    logical,              intent(in), optional :: implicit       !< Every surface drawn with pm3d.
    integer(I4P),         intent(in), optional :: interpolate(2) !< Interpolation steps.
    character(len=*),     intent(in), optional :: corners2color  !< Color of a quadrangle from its corners.
    logical,              intent(in), optional :: clip4in        !< Its 4 corners in range.
+   character(len=*),     intent(in), optional :: at             !< Where: b, s, t combined.
+   character(len=*),     intent(in), optional :: order          !< Drawing order in 3D views.
+   logical,              intent(in), optional :: border         !< Outlined quadrangles.
 
    call self%ensure_panels
    associate(pm => self%panels(self%current)%pm3d)
+      if (present(at)) then
+         if (len(at) == 0 .or. len(at) > 6 .or. verify(at, 'bst') /= 0) &
+            error stop 'foresight: set_pm3d: at must combine b, s and t (6 letters at most)'
+         pm%at = at
+      endif
+      if (present(order)) then
+         select case (order)
+         case ('scansautomatic')
+            pm%direction = 0_I4P
+         case ('scansforward')
+            pm%direction = 1_I4P
+         case ('scansbackward')
+            pm%direction = 2_I4P
+         case ('depthorder')
+            pm%direction = 3_I4P
+         case default
+            error stop 'foresight: set_pm3d: order must be scansautomatic, scansforward, scansbackward or depthorder'
+         endselect
+      endif
+      if (present(border)) then
+         pm%border = border
+         pm%border_color = 'black'
+         pm%border_lw = 1.0_R8P
+      endif
       if (present(implicit)) pm%implicit = implicit
       if (present(interpolate)) pm%interp = interpolate
       if (present(clip4in)) pm%clip4in = clip4in

@@ -154,7 +154,7 @@ use foresight_style, only : custom_dashtype, default_color, fill_style, &
                             WITH_XERRORBARS, WITH_MASK, &
                             WITH_XERRORLINES, &
                             WITH_XYERRORBARS, WITH_XYERRORLINES, WITH_YERRORBARS, WITH_YERRORLINES, &
-                            WITH_POINTS, WITH_LINESPOINTS, WITH_PM3D
+                            WITH_POINTS, WITH_LINESPOINTS
 use foresight_hulls, only : concave_hull, convex_hull, delaunay_triangles, expand_hull
 use foresight_ticks, only : MINOR_AUTO, MINOR_DEFAULT, MINOR_NONE, push, tic_item, tics_object, TICS_NONE
 use foresight_tokens, only : brace_balance, push, split_statements, strip_comment, token_object, tokenize, TOKEN_COMMA, &
@@ -5634,6 +5634,9 @@ contains
          elseif (splot_mode .and. word == 'nogrid') then
             ! splot's: the item's data as they are, not gridded by set dgrid3d
             item_nogrid = .true.
+         elseif (keyword(word, 'palette', 3_I4P)) then
+            ! `with lines palette`: gnuplot's short form of `lc palette z`
+            line%lc = trim(LC_PALETTE_Z)
          elseif (splot_mode .and. keyword(word, 'nohidden3d', 8_I4P)) then
             ! splot's: the item not hidden by (nor hiding) the surfaces of set hidden3d
             item_nohidden = .true.
@@ -11120,36 +11123,11 @@ contains
          return
       endselect
    endif
-   call warn_pm3d_3d
    self%figure%clear_screen = self%live_refresh > 0_I4P
    refresh = self%figure%refresh
    if (refresh == 0_I4P) call self%figure%set_refresh(self%live_refresh)
    call self%figure%save(self%output)
    call self%figure%set_refresh(refresh)
-   contains
-      subroutine warn_pm3d_3d
-      !< A warning for the pm3d surfaces of a 3D view (not `set view map`), not drawn yet (gnuplot draws them): the
-      !< `with pm3d` items, and the surfaces of `set pm3d` (implicit); once per page.
-      integer(I4P) :: p !< Panel counter.
-      integer(I4P) :: s !< Series counter.
-
-      do p = 1_I4P, size(self%figure%panels, kind=I4P)
-         associate(panel => self%figure%panels(p))
-            if (.not. panel%three_d .or. panel%view3d%map) cycle
-            do s = 1_I4P, size(panel%series, kind=I4P)
-               if (.not. allocated(panel%series(s)%scans)) cycle
-               if ((panel%series(s)%style%with == WITH_PM3D .and. panel%view3d%surface .and. &
-                    .not. panel%series(s)%no_surface) .or. &
-                   (panel%series(s)%style%with /= WITH_PM3D .and. panel%pm3d%implicit .and. &
-                    panel%series(s)%grid_scans > 1_I4P)) then
-                  write(error_unit, '(A)') 'foresight: warning: pm3d surfaces in 3D views are not drawn yet '// &
-                                           '(only in the map view, set view map)'
-                  return
-               endif
-            enddo
-         endassociate
-      enddo
-      endsubroutine warn_pm3d_3d
    endsubroutine save_output
 
    recursive subroutine set_command(self, tokens, iostat, iomsg)
@@ -13233,7 +13211,7 @@ contains
                   return
                endif
                k = k + 1_I4P
-               if (verify(toks(k)%text, 'bst') /= 0 .or. len(toks(k)%text) > 3) then
+               if (verify(toks(k)%text, 'bst') /= 0 .or. len(toks(k)%text) > 6) then
                   call fail('set pm3d: at needs b, s or t, found "'//toks(k)%text//'"', iostat, iomsg)
                   return
                endif
@@ -13334,11 +13312,23 @@ contains
             elseif (keyword(w, 'flush', 2_I4P)) then
                k = k + 1_I4P
             elseif (keyword(w, 'depthorder', 3_I4P)) then
+               ! the quadrangles of every surface sorted by depth, drawn after them (gnuplot's depth queue); `base`: by
+               ! the depth of the base below each (3D boxes)
+               pm%direction = 3_I4P
+               pm%base_sort = .false.
                if (k < size(toks, kind=I4P)) then
-                  if (toks(k + 1_I4P)%text == 'base') k = k + 1_I4P
+                  if (toks(k + 1_I4P)%text == 'base') then
+                     k = k + 1_I4P
+                     pm%base_sort = .true.
+                  endif
                endif
-            elseif (keyword(w, 'scansforward', 8_I4P) .or. keyword(w, 'scansbackward', 9_I4P) .or. &
-                    keyword(w, 'scansautomatic', 9_I4P) .or. keyword(w, 'ftriangles', 3_I4P) .or. &
+            elseif (keyword(w, 'scansforward', 8_I4P)) then
+               pm%direction = 1_I4P
+            elseif (keyword(w, 'scansbackward', 9_I4P)) then
+               pm%direction = 2_I4P
+            elseif (keyword(w, 'scansautomatic', 9_I4P)) then
+               pm%direction = 0_I4P
+            elseif (keyword(w, 'ftriangles', 3_I4P) .or. &
                     keyword(w, 'noftriangles', 5_I4P) .or. w == 'clipcb' .or. w == 'noclipcb' .or. &
                     keyword(w, 'nohidden3d', 4_I4P) .or. keyword(w, 'nolighting', 7_I4P)) then
                continue
@@ -14806,6 +14796,9 @@ contains
             ! the z grid of the 3D views, at the z ticks on the back walls
             self%figure%panels(self%figure%current)%view3d%grid_z = base == w
             z_named = .true.
+         elseif (is_word(base, 'cb cbtics mcb mcbtics')) then
+            ! lines across the color box at its (minor) ticks
+            self%figure%panels(self%figure%current)%grid_cb(merge(2_I4P, 1_I4P, base(1:1) == 'm')) = base == w
          elseif (keyword(base, 'vertical', 4_I4P)) then
             ! the vertical grid lines of the 3D views, at the x and y ticks on the back walls
             self%figure%panels(self%figure%current)%view3d%grid_vertical = base == w

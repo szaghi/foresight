@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(274)                           !< Per-check outcome.
+logical                       :: test_passed(275)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7206,6 +7206,46 @@ block
       test_passed(274) = index(svg, 'filter="url(#textbox)" data-u="0.5451" data-v="0.5625"') > 0 .and. &
                         .not. interpreter%figure%panels(1)%contour%onecolor
    endif
+endblock
+
+
+
+! pm3d in a 3D view, gnuplot 6.0's pm3d_plot (probed: the svg polygons of a 3 x 3 grid, default view 60, 30, 600 x 400):
+! the first quadrangle 242.65,81.92 164.30,158.56 300,169.97 378.34,93.32 in rgb(190,44,0), the next in rgb(225,120,0)
+! (scansautomatic: the scans and points in gnuplot's order); `at b` on the base plane (208.14, 248.72, ...);
+! `depthorder` the second drawn rgb(120,3,251); the color box at gnuplot's default place for a 3D plot; the pm3d
+! warning of the repair round gone
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: grid !< The grid datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   grid = "$g << EOD"//nl//"0 0 0"//nl//"1 0 1"//nl//"2 0 2"//nl//nl//"0 1 3"//nl//"1 1 4"//nl//"2 1 8"//nl//nl// &
+          "0 2 6"//nl//"1 2 7"//nl//"2 2 9"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_p3d.svg'"//nl//grid// &
+                             "splot $g using 1:2:3 with pm3d notitle", iostat, iomsg)
+   test_passed(275) = iostat == 0_I4P
+   if (test_passed(275)) then
+      svg = read_text('foresight_script_test_p3d.svg')
+      test_passed(275) = index(svg, 'fill="#be2c00" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.404417,0.2048 0.273833,0.3964 0.5,0.424925 0.630567,0.2333Z"') > 0 .and. &
+                        index(svg, 'class="fs-colorbox"') > 0
+      test_passed(275) = test_passed(275) .and. index(svg, '#be2c00') < index(svg, '#e17800')
+   endif
+   call interpreter%run_text("set pm3d at b; replot", iostat, iomsg)
+   test_passed(275) = test_passed(275) .and. iostat == 0_I4P
+   if (test_passed(275)) test_passed(275) = index(read_text('foresight_script_test_p3d.svg'), &
+                                                'd="M0.404417,0.52035 0.273833,0.6218 0.5,0.680375 0.630567,0.578925Z"') > 0
+   call interpreter%run_text("set pm3d at s depthorder; replot", iostat, iomsg)
+   test_passed(275) = test_passed(275) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%direction == 3_I4P
+   if (test_passed(275)) then
+      svg = read_text('foresight_script_test_p3d.svg')
+      test_passed(275) = index(svg, '#7803fb') < index(svg, '#e17800') .and. index(svg, '#7803fb') > index(svg, '#be2c00')
+   endif
+   call interpreter%run_text("set pm3d at bstbst scansforward; replot", iostat, iomsg)
+   test_passed(275) = test_passed(275) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%at == 'bstbst' .and. &
+                     interpreter%figure%panels(1)%pm3d%direction == 1_I4P
 endblock
 
 if (all(test_passed)) then

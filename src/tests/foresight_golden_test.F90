@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(128)                  !< Per-figure outcome.
+logical                     :: test_passed(131)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -163,7 +163,12 @@ test_passed(127) = check('view3d_frame.txt', figure_view3d_frame())
 ! hidden lines (gnuplot's set hidden3d, a painter's algorithm): the surface opaque, its underside in the next color,
 ! the key below the plot
 test_passed(128) = check('view3d_hidden.svg', figure_view3d_hidden())
-write(output_unit, '(A,128L2)') 'foresight golden checks:', test_passed
+! pm3d in a 3D view (gnuplot's pm3d_plot): the surface as colored quadrangles at the base and at the surface, in
+! gnuplot's order of the scans, the color box at gnuplot's default place for a 3D plot; on the page and the dumb device
+test_passed(129) = check('view3d_pm3d.svg', figure_view3d_pm3d())
+test_passed(130) = check('view3d_pm3d.html', figure_view3d_pm3d())
+test_passed(131) = check('view3d_pm3d.txt', figure_view3d_pm3d())
+write(output_unit, '(A,131L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -1009,6 +1014,30 @@ contains
    call fig%set_key(position='below')
    call fig%splot(x, y, z, title='saddle')
    endfunction figure_view3d_hidden
+
+   function figure_view3d_pm3d() result(fig)
+   !< pm3d in a 3D view (gnuplot `set pm3d at bs`, `splot ... with pm3d`): a Gaussian bump as colored quadrangles on the
+   !< base and at its heights, the color box beside the plot.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(-2.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 16)]
+   y = [(-2.0_R8P + 0.25_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = exp(-(x(i)**2 + y(j)**2))
+      enddo
+   enddo
+   call fig%set_title('pm3d at bs')
+   call fig%set_pm3d(at='bs')
+   call fig%splot(x, y, z, title='bump', with='pm3d')
+   endfunction figure_view3d_pm3d
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

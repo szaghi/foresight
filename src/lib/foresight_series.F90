@@ -190,6 +190,8 @@ type :: series_object
    logical                       :: contour_base = .false. !< Those on the base plane (`set contour base`).
    logical                       :: contour_labels = .false. !< Its contours drawn as labels of their levels (a function
                                                              !< `with labels`, gnuplot's cntr3d_labels).
+   logical                       :: pm3d_pending = .false. !< A surface whose pm3d quadrangles a 3D view draws once its
+                                                           !< projection is known (view3d_pm3d_quads), not drawn itself.
    contains
       procedure, pass(self) :: extent !< Accumulate the data extent.
       procedure, pass(self) :: valid  !< Mask of the placeable points.

@@ -1716,6 +1716,16 @@ gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plot
 in the top byte (0x80000000, half) it colors the points through `lc rgb variable`. See
 [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
+### A colored surface in 3D
+
+<<< @/examples/snippets/cb_view3d_pm3d.gp{gnuplot}
+
+<Plot name="cb_view3d_pm3d" svg :width="560" :height="400" />
+
+`with pm3d` in a 3D view draws the surface as colored quadrangles, gnuplot's pm3d_plot: `set pm3d at bs` puts them on
+the base plane, a map of the heights, and at the surface, in that order; the color box stands beside the plot. See
+[3D views](/guide/gnuplot-subset#3d-views).
+
 ### Contours in a 3D view
 
 <<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}

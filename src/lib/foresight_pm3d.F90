@@ -31,7 +31,8 @@ type :: pm3d_object
    !< pm3d settings of a panel (gnuplot `set pm3d`).
    logical          :: implicit = .false.   !< Every surface drawn with pm3d too (`set pm3d`, `implicit`), else only
                                             !< the items `with pm3d` (`explicit`, `unset pm3d`).
-   character(len=3) :: at = 's'             !< Where: `b` the base, `s` the surface, `t` the top, combined.
+   character(len=6) :: at = 's'             !< Where: `b` the base, `s` the surface, `t` the top, combined (gnuplot's
+                                            !< `at bstbst`: drawn in that order).
    integer(I4P)     :: interp(2) = 1_I4P    !< Steps along and between the scans (`interpolate N,M`; 0 or negative:
                                             !< gnuplot's automatic counts).
    integer(I4P)     :: corners = CORNERS_MEAN !< `corners2color`.
@@ -40,18 +41,25 @@ type :: pm3d_object
    character(len=24) :: border_color = 'black' !< Color of the outlines (`border lc|lt ...`); blank with `retrace`
                                             !< (each in its fill color).
    real(R8P)        :: border_lw = 1.0_R8P  !< Width of the outlines (`border lw W`).
+   integer(I4P)     :: direction = 0_I4P    !< Drawing order in 3D views: 0 `scansautomatic`, 1 `scansforward`, 2
+                                            !< `scansbackward`, 3 `depthorder`.
+   logical          :: base_sort = .false.  !< `depthorder base`: sorted by the depth of the base below each.
 endtype pm3d_object
 
 contains
-   pure subroutine pm3d_polygons(x, y, z, c, scans, sets, grid, settings, inrange, px, py, pc, rgb)
+   pure subroutine pm3d_polygons(x, y, z, c, scans, sets, grid, settings, inrange, px, py, pc, rgb, pz, swap_scans, &
+                                 reverse_points)
    !< The quadrangles of a surface: the points (`x`, `y`, `z`, color values `c`) of its first `grid` `scans` (first and
    !< last point of each), neighbouring scans of a dataset (`sets`) joined point by point over the shorter one, as
    !< gnuplot's pm3d_plot; a quadrangle needs its 4 corners defined and one in range (`inrange`; all 4 with `clip4in`).
-   !< The result is a polygon per quadrangle: its 4 corners (`px`, `py`) and a NaN row, each row in the quadrangle's
-   !< color value `pc` (NaN quadrangles left out). With `rgb` the color values are packed colors 0xAARRGGBB (gnuplot's
-   !< `lc rgb variable`): a quadrangle takes the mean of its corners channel by channel (or one corner, `c1` ... `c4`),
-   !< as gnuplot's pm3d_plot; the interpolated ones the plain mean of the numbers, as gnuplot's. A surface of fewer
-   !< than 3 scans has its scans in reverse order (gnuplot's scansautomatic), as `c1` ... `c4` show.
+   !< The result is a polygon per quadrangle: its 4 corners (`px`, `py`, their heights `pz`) and a NaN row, each row in
+   !< the quadrangle's color value `pc` (NaN quadrangles left out). With `rgb` the color values are packed colors
+   !< 0xAARRGGBB (gnuplot's `lc rgb variable`): a quadrangle takes the mean of its corners channel by channel (or one
+   !< corner, `c1` ... `c4`), as gnuplot's pm3d_plot; the interpolated ones the plain mean of the numbers, as gnuplot's.
+   !< The order of gnuplot's scan array: with `swap_scans` the scans taken from the last (scan A the later of a pair, the
+   !< pairs from the last), with `reverse_points` the points of a pair from the last (gnuplot's pm3d_rearrange_part, the
+   !< 3D views); without them, the map's: a surface of fewer than 3 scans has its scans in reverse order (gnuplot's
+   !< scansautomatic when no depth tells), as `c1` ... `c4` show.
    real(R8P),              intent(in)  :: x(:)       !< Abscissae.
    real(R8P),              intent(in)  :: y(:)       !< Ordinates.
    real(R8P),              intent(in)  :: z(:)       !< Heights.
@@ -65,11 +73,18 @@ contains
    real(R8P), allocatable, intent(out) :: py(:)      !< Polygon ordinates.
    real(R8P), allocatable, intent(out) :: pc(:)      !< Polygon color values.
    logical, optional,      intent(in)  :: rgb        !< Packed colors.
+   real(R8P), allocatable, intent(out), optional :: pz(:) !< Polygon heights.
+   logical, optional,      intent(in)  :: swap_scans !< Scans from the last (scan A the later one).
+   logical, optional,      intent(in)  :: reverse_points !< Points from the last.
+   real(R8P), allocatable              :: hz(:)      !< Polygon heights.
    integer(I4P)                        :: ni         !< Steps along the scans.
    integer(I4P)                        :: nj         !< Steps between them.
    integer(I4P)                        :: s          !< Scan.
+   integer(I4P)                        :: q          !< Pair counter.
    integer(I4P)                        :: j          !< Point step.
+   integer(I4P)                        :: jj         !< Point step counter.
    integer(I4P)                        :: n          !< Polygon rows.
+   integer(I4P)                        :: n0         !< Rows before a quadrangle.
    integer(I4P)                        :: a0, b0     !< First points of the scans A and B.
    integer(I4P)                        :: upto       !< Quadrangles along the pair.
    integer(I4P)                        :: ia, ia1, ib, ib1 !< Corner points.
@@ -78,10 +93,12 @@ contains
    integer(I4P)                        :: pts        !< Points of a scan in range.
    integer(I4P)                        :: max_pts    !< Most of them.
    integer(I4P)                        :: max_scans  !< Scans with any.
-   real(R8P)                           :: cx(4), cy(4), cc(4) !< Corners.
-   real(R8P), allocatable              :: bx(:,:), by(:,:), bc(:,:) !< Interpolated points.
+   real(R8P)                           :: cx(4), cy(4), cc(4), cz(4) !< Corners.
+   real(R8P), allocatable              :: bx(:,:), by(:,:), bc(:,:), bz(:,:) !< Interpolated points.
    real(R8P)                           :: v          !< Quadrangle color value.
    real(R8P)                           :: nan        !< NaN.
+   logical                             :: swap       !< Scan A the later one of the pair.
+   logical                             :: back       !< Points from the last.
 
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
    ni = settings%interp(1)
@@ -106,23 +123,36 @@ contains
       total = total + max(0_I4P, min(scans(2, s) - scans(1, s), scans(2, s + 1_I4P) - scans(1, s + 1_I4P)))
    enddo
    allocate(px(5_I4P * total * max(1_I4P, ni) * max(1_I4P, nj)), py(5_I4P * total * max(1_I4P, ni) * max(1_I4P, nj)))
-   allocate(pc(size(px)))
-   allocate(bx(0:ni, 0:nj), by(0:ni, 0:nj), bc(0:ni, 0:nj))
+   allocate(pc(size(px)), hz(size(px)))
+   allocate(bx(0:ni, 0:nj), by(0:ni, 0:nj), bc(0:ni, 0:nj), bz(0:ni, 0:nj))
+   back = .false.
+   if (present(reverse_points)) back = reverse_points
    n = 0_I4P
-   do s = 1_I4P, grid - 1_I4P
+   do q = 1_I4P, grid - 1_I4P
+      s = q
+      if (present(swap_scans)) then
+         if (swap_scans) s = grid - q
+      endif
       ! the neighbouring scans of one surface (a dataset)
       if (sets(s) /= sets(s + 1_I4P)) cycle
+      if (present(swap_scans)) then
+         swap = swap_scans
+      else
+         ! a surface of fewer than 3 scans: gnuplot's scansautomatic compares no depths and keeps its scans in the
+         ! reverse order of the file, scan A the later one (pm3d_rearrange_part)
+         swap = count(sets(1:grid) == sets(s)) < 3_I4P
+      endif
       a0 = scans(1, s)
       b0 = scans(1, s + 1_I4P)
       upto = min(scans(2, s) - scans(1, s), scans(2, s + 1_I4P) - scans(1, s + 1_I4P))
-      do j = 0_I4P, upto - 1_I4P
+      do jj = 0_I4P, upto - 1_I4P
+         j = jj
+         if (back) j = upto - 1_I4P - jj
          ia = a0 + j
          ia1 = ia + 1_I4P
          ib = b0 + j
          ib1 = ib + 1_I4P
-         if (count(sets(1:grid) == sets(s)) < 3_I4P) then
-            ! a surface of fewer than 3 scans: gnuplot's scansautomatic compares no depths and keeps its scans in the
-            ! reverse order of the file, scan A the later one (pm3d_rearrange_part)
+         if (swap) then
             ia = b0 + j
             ia1 = ia + 1_I4P
             ib = a0 + j
@@ -138,6 +168,7 @@ contains
          ! gnuplot's corners: A(i), B(i), B(i+1), A(i+1)
          cx = [x(ia), x(ib), x(ib1), x(ia1)]
          cy = [y(ia), y(ib), y(ib1), y(ia1)]
+         cz = [z(ia), z(ib), z(ib1), z(ia1)]
          cc = [c(ia), c(ib), c(ib1), c(ia1)]
          if (ni <= 1_I4P .and. nj <= 1_I4P) then
             ! gnuplot's order for the color: A(i), A(i+1), B(i), B(i+1)
@@ -145,7 +176,12 @@ contains
             if (present(rgb)) then
                if (rgb) v = corner_rgb([c(ia), c(ia1), c(ib), c(ib1)], settings%corners)
             endif
+            n0 = n
             call add(px, py, pc, n, cx, cy, v)
+            if (n > n0) then
+               hz(n0 + 1:n0 + 4) = cz
+               hz(n0 + 5) = nan
+            endif
             cycle
          endif
          ! bilinear interpolation: ni points along the scans A and B, nj between them
@@ -154,19 +190,27 @@ contains
             bx(i1, nj) = ((cx(3) - cx(2)) / real(ni, R8P)) * real(i1, R8P) + cx(2)
             by(i1, 0) = ((cy(4) - cy(1)) / real(ni, R8P)) * real(i1, R8P) + cy(1)
             by(i1, nj) = ((cy(3) - cy(2)) / real(ni, R8P)) * real(i1, R8P) + cy(2)
+            bz(i1, 0) = ((cz(4) - cz(1)) / real(ni, R8P)) * real(i1, R8P) + cz(1)
+            bz(i1, nj) = ((cz(3) - cz(2)) / real(ni, R8P)) * real(i1, R8P) + cz(2)
             bc(i1, 0) = ((cc(4) - cc(1)) / real(ni, R8P)) * real(i1, R8P) + cc(1)
             bc(i1, nj) = ((cc(3) - cc(2)) / real(ni, R8P)) * real(i1, R8P) + cc(2)
             do j1 = 1_I4P, nj - 1_I4P
                bx(i1, j1) = ((bx(i1, nj) - bx(i1, 0)) / real(nj, R8P)) * real(j1, R8P) + bx(i1, 0)
                by(i1, j1) = ((by(i1, nj) - by(i1, 0)) / real(nj, R8P)) * real(j1, R8P) + by(i1, 0)
+               bz(i1, j1) = ((bz(i1, nj) - bz(i1, 0)) / real(nj, R8P)) * real(j1, R8P) + bz(i1, 0)
                bc(i1, j1) = ((bc(i1, nj) - bc(i1, 0)) / real(nj, R8P)) * real(j1, R8P) + bc(i1, 0)
             enddo
          enddo
          do i1 = 0_I4P, ni - 1_I4P
             do j1 = 0_I4P, nj - 1_I4P
                v = corner_color([bc(i1, j1), bc(i1 + 1, j1), bc(i1 + 1, j1 + 1), bc(i1, j1 + 1)], settings%corners)
+               n0 = n
                call add(px, py, pc, n, [bx(i1, j1), bx(i1 + 1, j1), bx(i1 + 1, j1 + 1), bx(i1, j1 + 1)], &
                         [by(i1, j1), by(i1 + 1, j1), by(i1 + 1, j1 + 1), by(i1, j1 + 1)], v)
+               if (n > n0) then
+                  hz(n0 + 1:n0 + 4) = [bz(i1, j1), bz(i1 + 1, j1), bz(i1 + 1, j1 + 1), bz(i1, j1 + 1)]
+                  hz(n0 + 5) = nan
+               endif
             enddo
          enddo
       enddo
@@ -174,6 +218,7 @@ contains
    px = px(1:n)
    py = py(1:n)
    pc = pc(1:n)
+   if (present(pz)) pz = hz(1:n)
    endsubroutine pm3d_polygons
 
    pure function masked(x, y, mx, my) result(yes)

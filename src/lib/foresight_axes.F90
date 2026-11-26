@@ -374,6 +374,8 @@ type :: axes_object
    character(len=:), allocatable    :: grid_lc  !< Grid line color, unallocated for the theme's.
    real(R8P)                        :: grid_lw = 0.5_R8P !< Grid line width [px].
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
+   logical                          :: grid_cb(2) = .false. !< Grid lines across the color box at its major and minor
+                                                            !< ticks (`set grid cb mcb`).
    logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
    logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
    integer(I4P)                     :: label_boxed = 0_I4P !< Axis labels on the background (`set xlabel boxed`):
@@ -2528,6 +2530,404 @@ contains
    enddo
    endsubroutine mask_polygons
 
+   subroutine view3d_pm3d_marks(self)
+   !< The pm3d surfaces of a 3D view (`with pm3d` items, the surfaces of `set pm3d` implicit), before the axes are set
+   !< up: each a pending copy (its quadrangles built once the view is known, view3d_pm3d_quads) after two lone points of
+   !< its color range (the color axis autoscaled on them, its box drawn, as gnuplot's); an implicit one before its
+   !< surface, as gnuplot's pm3d_draw_one, a `with pm3d` item in its place.
+   class(axes_object), intent(inout) :: self     !< Panel.
+   type(series_object), allocatable  :: drawn(:) !< Series as drawn.
+   type(series_object)               :: marks    !< The color range of a surface.
+   type(series_object)               :: pending  !< The surface, pending.
+   type(series_object)               :: blank    !< A series of default components (never assigned).
+   real(R8P), allocatable            :: c(:)     !< Color values.
+   real(R8P)                         :: nan      !< NaN.
+   integer(I4P)                      :: s        !< Series counter.
+   integer(I4P)                      :: k        !< A defined point.
+   logical                           :: pm3d     !< A `with pm3d` item.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   allocate(drawn(0))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      pm3d = self%series(s)%style%with == WITH_PM3D
+      if (allocated(self%series(s)%scans) .and. allocated(self%series(s)%z)) then
+         if ((pm3d .and. self%view3d%surface .and. .not. self%series(s)%no_surface) .or. &
+             (.not. pm3d .and. self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
+            c = self%series(s)%z
+            if (allocated(self%series(s)%zvalues) .and. .not. self%series(s)%zvalues_rgb) then
+               if (size(self%series(s)%zvalues) == size(self%series(s)%z)) c = self%series(s)%zvalues
+            endif
+            do k = 1_I4P, size(c, kind=I4P)
+               if (ieee_is_finite(c(k)) .and. ieee_is_finite(self%series(s)%x(k)) .and. &
+                   ieee_is_finite(self%series(s)%y(k))) exit
+            enddo
+            if (k <= size(c, kind=I4P)) then
+               ! not series_object(): nvfortran 26.9's front end crashes on it (bug 30)
+               marks = blank
+               marks%style = self%series(s)%style
+               marks%style%with = WITH_POLYGONS
+               marks%x = [self%series(s)%x(k), nan, self%series(s)%x(k)]
+               marks%y = [self%series(s)%y(k), nan, self%series(s)%y(k)]
+               marks%zvalues = [minval(c, mask=ieee_is_finite(c)), nan, maxval(c, mask=ieee_is_finite(c))]
+               marks%palette_mode = 1_I4P
+               marks%key_blank = .true.
+               marks%title = ''
+               call push(drawn, marks)
+            endif
+            pending = self%series(s)
+            pending%pm3d_pending = .true.
+            pending%style%with = WITH_PM3D
+            if (.not. pm3d) pending%title = ''
+            call push(drawn, pending)
+            if (pm3d) cycle
+         endif
+      endif
+      if (pm3d) cycle
+      call push(drawn, self%series(s))
+   enddo
+   call move_alloc(drawn, self%series)
+   endsubroutine view3d_pm3d_marks
+
+   subroutine view3d_pm3d_quads(self, f, p)
+   !< The pm3d quadrangles of the pending surfaces of a 3D view (view3d_pm3d_marks), gnuplot's pm3d_plot: at the surface,
+   !< the base and the top (`set pm3d at`, in its order), projected on the page; in gnuplot's order of the scans and of
+   !< the points (pm3d_rearrange_part: `scansautomatic` by the depths of the first and last points, `scansforward`,
+   !< `scansbackward`), each surface in its place; with `depthorder` the quadrangles of every surface sorted by their
+   !< mean depth (`base`: of the base below them) and drawn after all the series (gnuplot's depth queue). Each is filled
+   !< in its palette color (or `fc`, or `lc rgb variable`), outlined with `set pm3d border`. Module procedures only
+   !< (nvfortran 26.9, bug 32: no internal procedure in a procedure growing arrays by move_alloc).
+   class(axes_object),   intent(inout) :: self    !< Panel.
+   type(view3d_frame),   intent(in)    :: f       !< The view.
+   type(palette_object), intent(in)    :: p       !< Effective palette.
+   type(series_object), allocatable    :: drawn(:) !< Series as drawn.
+   type(series_object)                 :: quads   !< Quadrangles of a surface.
+   type(series_object)                 :: queue   !< The depth-sorted quadrangles of every surface.
+   real(R8P), allocatable              :: qx(:), qy(:), qd(:) !< Queued corners [px], and their depths.
+   character(len=24), allocatable      :: qc(:)   !< Queued colors.
+   integer(I4P)                        :: nq      !< Queued quadrangles.
+   integer(I4P)                        :: s       !< Series counter.
+   logical                             :: depth   !< `depthorder`.
+
+   depth = self%pm3d%direction == 3_I4P
+   nq = 0_I4P
+   allocate(qx(0), qy(0), qd(0), qc(0), drawn(0))
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (.not. self%series(s)%pm3d_pending) then
+         call push(drawn, self%series(s))
+         cycle
+      endif
+      call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
+                              depth, quads, qx, qy, qd, qc, nq)
+      if (depth) then
+         ! queued: its key entry kept in place, a text alone
+         if (len(quads%title) == 0) cycle
+         quads%x = [real(R8P) :: ]
+         quads%y = [real(R8P) :: ]
+         deallocate(quads%colors)
+      endif
+      call push(drawn, quads)
+   enddo
+   if (depth .and. nq > 0_I4P) then
+      call pm3d_sorted_queue(self%pm3d, qx, qy, qd, qc, nq, queue)
+      call push(drawn, queue)
+   endif
+   call move_alloc(drawn, self%series)
+   endsubroutine view3d_pm3d_quads
+
+   subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, quads, qx, qy, qd, qc, nq)
+   !< The pm3d quadrangles of the surface `one` in the view `f` (view3d_pm3d_quads): projected, in its colors, appended
+   !< to the depth queue (`qx`, `qy` corners, `qd` depths, `qc` colors, `nq` quadrangles) with `depth`.
+   type(pm3d_object),              intent(in)    :: pm      !< pm3d settings.
+   type(axis_object),              intent(in)    :: xaxis   !< x axis.
+   type(axis_object),              intent(in)    :: yaxis   !< y axis.
+   type(axis_object),              intent(in)    :: zaxis   !< z axis.
+   type(axis_object),              intent(in)    :: cbaxis  !< Color axis.
+   type(series_object),            intent(in)    :: one     !< Surface.
+   type(view3d_frame),             intent(in)    :: f       !< The view.
+   type(palette_object),           intent(in)    :: p       !< Effective palette.
+   logical,                        intent(in)    :: depth   !< Queued, not drawn in place.
+   type(series_object),            intent(out)   :: quads   !< Its quadrangles (in place).
+   real(R8P), allocatable,         intent(inout) :: qx(:)   !< Queued corner abscissae [px].
+   real(R8P), allocatable,         intent(inout) :: qy(:)   !< Queued corner ordinates [px].
+   real(R8P), allocatable,         intent(inout) :: qd(:)   !< Queued depths.
+   character(len=24), allocatable, intent(inout) :: qc(:)   !< Queued colors.
+   integer(I4P),                   intent(inout) :: nq      !< Queued quadrangles.
+   real(R8P), allocatable                        :: c(:)    !< Color values of the points.
+   real(R8P), allocatable                        :: px(:), py(:), pz(:), pc(:) !< Polygons.
+   real(R8P), allocatable                        :: ux(:), uy(:) !< Projected polygons.
+   character(len=24), allocatable                :: colors(:) !< Polygon colors.
+   logical, allocatable                          :: inrange(:) !< Points within the fixed ranges.
+   real(R8P)                                     :: v(3)    !< View coordinates.
+   real(R8P)                                     :: w(2)    !< Page position.
+   real(R8P)                                     :: zat     !< Height of the base or top (linear space).
+   real(R8P)                                     :: dsum    !< Depth sum of a quadrangle.
+   logical                                       :: swap    !< Scans from the last.
+   logical                                       :: back    !< Points from the last.
+   integer(I4P)                                  :: a       !< `at` letter.
+   integer(I4P)                                  :: r       !< Row.
+   integer(I4P)                                  :: m       !< Rows written.
+   integer(I4P)                                  :: m0      !< Rows before a letter.
+   integer(I4P)                                  :: k       !< Counter.
+   integer(I4P)                                  :: nat     !< Letters of `at`.
+
+   c = one%z
+   if (allocated(one%zvalues)) then
+      if (size(one%zvalues) == size(one%z)) c = one%zvalues
+   endif
+   inrange = ieee_is_finite(one%x) .and. ieee_is_finite(one%y)
+   do k = 1_I4P, size(inrange, kind=I4P)
+      if (.not. inrange(k)) cycle
+      if (xaxis%min_fixed .and. xaxis%max_fixed) inrange(k) = &
+         one%x(k) >= min(xaxis%min_user, xaxis%max_user) .and. one%x(k) <= max(xaxis%min_user, xaxis%max_user)
+      if (.not. inrange(k)) cycle
+      if (yaxis%min_fixed .and. yaxis%max_fixed) inrange(k) = &
+         one%y(k) >= min(yaxis%min_user, yaxis%max_user) .and. one%y(k) <= max(yaxis%min_user, yaxis%max_user)
+      if (.not. inrange(k)) cycle
+      if (zaxis%min_fixed .and. zaxis%max_fixed) inrange(k) = &
+         one%z(k) >= min(zaxis%min_user, zaxis%max_user) .and. one%z(k) <= max(zaxis%min_user, zaxis%max_user)
+   enddo
+   call pm3d_scan_order(pm, one, f, swap, back)
+   call pm3d_polygons(one%x, one%y, one%z, c, one%scans, one%scan_sets, one%grid_scans, pm, inrange, px, py, pc, &
+                      rgb=one%zvalues_rgb, pz=pz, swap_scans=swap, reverse_points=back)
+   ! the colors: packed ones, the fill color, or the palette over the color axis
+   allocate(colors(size(pc)))
+   do r = 1_I4P, size(pc, kind=I4P)
+      colors(r) = ''
+      if (.not. ieee_is_finite(pc(r))) cycle
+      if (one%zvalues_rgb) then
+         colors(r) = packed_hex(pc(r))
+      elseif (cbaxis%log .and. pc(r) <= 0.0_R8P) then
+         colors(r) = hex_color(p%rgb(merge(0.0_R8P, 1.0_R8P, cbaxis%lo < cbaxis%hi)))
+      else
+         colors(r) = hex_color(p%rgb(cbaxis%to_unit(pc(r))))
+      endif
+   enddo
+   if (allocated(one%style%fill_rgb)) then
+      if (len(one%style%fill_rgb) > 0) colors = one%style%fill_rgb
+   endif
+   nat = len_trim(pm%at, kind=I4P)
+   allocate(ux(size(px) * nat), uy(size(px) * nat))
+   m = 0_I4P
+   do a = 1_I4P, nat
+      zat = 0.0_R8P
+      if (pm%at(a:a) == 'b') zat = f%base_z
+      if (pm%at(a:a) == 't') zat = f%ceiling_z
+      m0 = m
+      do r = 1_I4P, size(px, kind=I4P)
+         m = m + 1_I4P
+         if (.not. ieee_is_finite(px(r))) then
+            ux(m) = px(r)
+            uy(m) = px(r)
+            cycle
+         endif
+         if (pm%at(a:a) == 's') then
+            v = view3d_xyz(f, px(r), py(r), pz(r))
+         else
+            v = view3d_xyz(f, px(r), py(r), zat, base=.true.)
+         endif
+         w = view3d_page(f, v, truncate=.true.)
+         ux(m) = w(1)
+         uy(m) = -w(2)
+      enddo
+      if (.not. depth) cycle
+      ! queued with the mean depth of their corners (of the base below them with `base`)
+      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + size(px, kind=I4P) / 5_I4P)
+      do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
+         if (.not. ieee_is_finite(px(r))) cycle
+         dsum = 0.0_R8P
+         do k = 0_I4P, 3_I4P
+            if (pm%base_sort) then
+               v = view3d_xyz(f, px(r + k), py(r + k), min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), &
+                              base=.true.)
+            elseif (pm%at(a:a) == 's') then
+               v = view3d_xyz(f, px(r + k), py(r + k), pz(r + k))
+            else
+               v = view3d_xyz(f, px(r + k), py(r + k), zat, base=.true.)
+            endif
+            dsum = dsum + v(3)
+         enddo
+         nq = nq + 1_I4P
+         qx(4 * nq - 3:4 * nq) = ux(m0 + r:m0 + r + 3)
+         qy(4 * nq - 3:4 * nq) = uy(m0 + r:m0 + r + 3)
+         qd(nq) = 0.25_R8P * dsum
+         qc(nq) = colors(r)
+      enddo
+   enddo
+   quads%style = one%style
+   quads%style%with = WITH_POLYGONS
+   quads%style%fill = FILL_SOLID
+   quads%style%density = 1.0_R8P
+   quads%style%border = pm%border
+   if (pm%border) then
+      quads%style%border_color = trim(pm%border_color)
+      quads%style%linewidth = pm%border_lw
+   endif
+   quads%crisp = .true.
+   quads%key_blank = .true.
+   quads%title = ''
+   if (allocated(one%title)) quads%title = one%title
+   quads%title_plain = one%title_plain
+   quads%x = ux(1:m)
+   quads%y = uy(1:m)
+   allocate(quads%colors(m))
+   do r = 1_I4P, m
+      quads%colors(r) = colors(modulo(r - 1_I4P, max(1_I4P, size(colors, kind=I4P))) + 1_I4P)
+   enddo
+   quads%colors_kept = .true.
+   quads%palette_mode = 0_I4P
+   endsubroutine pm3d_surface_quads
+
+   pure subroutine pm3d_grow_queue(qx, qy, qd, qc, nq, n)
+   !< The depth queue room for `n` quadrangles at least, its `nq` first kept (through temporaries: nvfortran 26.9, bug
+   !< 31).
+   real(R8P), allocatable,         intent(inout) :: qx(:) !< Corner abscissae.
+   real(R8P), allocatable,         intent(inout) :: qy(:) !< Corner ordinates.
+   real(R8P), allocatable,         intent(inout) :: qd(:) !< Depths.
+   character(len=24), allocatable, intent(inout) :: qc(:) !< Colors.
+   integer(I4P),                   intent(in)    :: nq    !< Quadrangles queued.
+   integer(I4P),                   intent(in)    :: n     !< Room needed.
+   real(R8P), allocatable                        :: tr(:) !< Temporary.
+   character(len=24), allocatable                :: tc(:) !< Temporary.
+
+   if (size(qd) >= n) return
+   allocate(tr(4 * n))
+   if (nq > 0_I4P) tr(1:4 * nq) = qx(1:4 * nq)
+   deallocate(qx)
+   allocate(qx(4 * n))
+   if (nq > 0_I4P) qx(1:4 * nq) = tr(1:4 * nq)
+   if (nq > 0_I4P) tr(1:4 * nq) = qy(1:4 * nq)
+   deallocate(qy)
+   allocate(qy(4 * n))
+   if (nq > 0_I4P) qy(1:4 * nq) = tr(1:4 * nq)
+   if (nq > 0_I4P) tr(1:nq) = qd(1:nq)
+   deallocate(qd)
+   allocate(qd(n))
+   if (nq > 0_I4P) qd(1:nq) = tr(1:nq)
+   allocate(tc(n))
+   if (nq > 0_I4P) tc(1:nq) = qc(1:nq)
+   deallocate(qc)
+   allocate(qc(n))
+   if (nq > 0_I4P) qc(1:nq) = tc(1:nq)
+   endsubroutine pm3d_grow_queue
+
+   pure subroutine pm3d_scan_order(pm, one, f, swap, back)
+   !< gnuplot's order of the scans and points of the surface `one` (pm3d_rearrange_part): `scansforward` the file's,
+   !< `scansbackward` and `depthorder` from the last scan; `scansautomatic` from the depths (at the floor) of the first
+   !< and last defined points of the file's last scan (points from the last when the last lies no farther) and of the
+   !< file's first scan at that point (scans in the file's order when it lies no nearer; from 3 scans, else from the
+   !< last).
+   type(pm3d_object),   intent(in)  :: pm   !< pm3d settings.
+   type(series_object), intent(in)  :: one  !< Surface.
+   type(view3d_frame),  intent(in)  :: f    !< The view.
+   logical,             intent(out) :: swap !< Scans from the last.
+   logical,             intent(out) :: back !< Points from the last.
+   integer(I4P)                     :: g    !< Grid scans.
+   integer(I4P)                     :: sa   !< Scan A (from the file's last).
+   integer(I4P)                     :: from !< First defined point of scan A.
+   integer(I4P)                     :: last !< Last defined point of scan A.
+   integer(I4P)                     :: i    !< Point.
+   integer(I4P)                     :: cnt  !< Points of scan A, less one.
+   real(R8P)                        :: va(3), va2(3), vb(3) !< View coordinates.
+
+   back = .false.
+   swap = .true.
+   select case (pm%direction)
+   case (1_I4P)
+      swap = .false.
+      return
+   case (2_I4P, 3_I4P)
+      return
+   endselect
+   g = one%grid_scans
+   do sa = g, 1_I4P, -1_I4P
+      cnt = one%scans(2, sa) - one%scans(1, sa)
+      if (cnt <= 0_I4P) cycle
+      from = -1_I4P
+      do i = one%scans(1, sa), one%scans(2, sa)
+         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
+            from = i
+            exit
+         endif
+      enddo
+      if (from < 0_I4P) cycle
+      last = from
+      do i = one%scans(2, sa), from + 1_I4P, -1_I4P
+         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
+            last = i
+            exit
+         endif
+      enddo
+      if (.not. (real(last - from, R8P) > real(cnt, R8P) * 0.1_R8P)) cycle
+      va = view3d_xyz(f, one%x(from), one%y(from), f%floor_z, base=.true.)
+      va2 = view3d_xyz(f, one%x(last), one%y(last), f%floor_z, base=.true.)
+      back = .not. (va2(3) > va(3))
+      ! gnuplot compares with the first scan of the file while at least 3 scans are left (len2 >= 3)
+      if (sa < 3_I4P) cycle
+      i = one%scans(1, 1) + (from - one%scans(1, sa))
+      do while (i <= one%scans(2, 1))
+         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) exit
+         i = i + 1_I4P
+      enddo
+      if (i > one%scans(2, 1)) cycle
+      vb = view3d_xyz(f, one%x(i), one%y(i), f%floor_z, base=.true.)
+      swap = vb(3) > va(3)
+      return
+   enddo
+   endsubroutine pm3d_scan_order
+
+   subroutine pm3d_sorted_queue(pm, qx, qy, qd, qc, nq, q)
+   !< The queued quadrangles as one series, sorted by depth, farthest first (gnuplot's compare_quadrangles; stable on
+   !< ties).
+   type(pm3d_object),   intent(in)  :: pm    !< pm3d settings.
+   real(R8P),           intent(in)  :: qx(:) !< Corner abscissae [px].
+   real(R8P),           intent(in)  :: qy(:) !< Corner ordinates [px].
+   real(R8P),           intent(in)  :: qd(:) !< Depths.
+   character(len=24),   intent(in)  :: qc(:) !< Colors.
+   integer(I4P),        intent(in)  :: nq    !< Quadrangles.
+   type(series_object), intent(out) :: q     !< Quadrangles.
+   integer(I4P), allocatable        :: order(:) !< Sorted order.
+   integer(I4P)                     :: i, j, t !< Counters.
+   real(R8P)                        :: nan   !< NaN.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   allocate(order(nq))
+   do i = 1_I4P, nq
+      order(i) = i
+   enddo
+   do i = 2_I4P, nq
+      t = order(i)
+      j = i - 1_I4P
+      do while (j >= 1_I4P)
+         if (qd(order(j)) <= qd(t)) exit
+         order(j + 1_I4P) = order(j)
+         j = j - 1_I4P
+      enddo
+      order(j + 1_I4P) = t
+   enddo
+   allocate(q%x(5_I4P * nq), q%y(5_I4P * nq), q%colors(5_I4P * nq))
+   do i = 1_I4P, nq
+      t = order(i)
+      q%x(5 * i - 4:5 * i - 1) = qx(4 * t - 3:4 * t)
+      q%y(5 * i - 4:5 * i - 1) = qy(4 * t - 3:4 * t)
+      q%x(5 * i) = nan
+      q%y(5 * i) = nan
+      q%colors(5 * i - 4:5 * i) = qc(t)
+   enddo
+   q%style%with = WITH_POLYGONS
+   q%style%fill = FILL_SOLID
+   q%style%density = 1.0_R8P
+   q%style%border = pm%border
+   if (pm%border) then
+      q%style%border_color = trim(pm%border_color)
+      q%style%linewidth = pm%border_lw
+   endif
+   q%crisp = .true.
+   q%key_blank = .true.
+   q%title = ''
+   q%colors_kept = .true.
+   q%palette_mode = 0_I4P
+   endsubroutine pm3d_sorted_queue
+
    subroutine view3d_contours(self)
    !< The contour lines of the surfaces of a 3D view as lines with their heights after each surface (contour_series):
    !< on the base plane (`set contour base`, moved to it once the view is set up), on the surface (`surface`), or both
@@ -3082,6 +3482,10 @@ contains
    real(R8P)                            :: korigin(2) !< key origin (variables: no argument temporaries).
    real(R8P)                            :: xr3(2), yr3(2), zr3(2) !< Axis ends of the view, and
    logical                              :: logs3(3)  !< its log axes (variables: no argument temporaries).
+   type(palette_object)                 :: pal3      !< Effective palette.
+   type(series_object), allocatable     :: hraw(:)   !< Series before their projection (hidden3d).
+   type(map_geometry)                   :: g3        !< The view's character and tick sizes, for the color box [px].
+   real(R8P)                            :: cbox3(4)  !< Default color box: left, top, width, height [px].
    real(R8P)                            :: dx        !< gnuplot's xinkey [units].
    real(R8P)                            :: dy        !< gnuplot's yinkey [units].
    real(R8P)                            :: km(6)     !< gnuplot's key metrics (key3d_metrics) [units].
@@ -3096,6 +3500,8 @@ contains
    raw = self%series
    ! the contour lines of the surfaces (`set contour`), each surface's levels after it, as gnuplot's graph3d
    if (self%contour%on) call view3d_contours(self)
+   ! the pm3d surfaces, pending until the view is known (their color range first)
+   call view3d_pm3d_marks(self)
    ! the ranges of the 3D points alone (not the baselines of the 2D styles: impulses, boxes)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (.not. allocated(self%series(s)%z)) cycle
@@ -3145,18 +3551,23 @@ contains
    yr3 = [self%yaxis%lo, self%yaxis%hi]
    zr3 = [self%zaxis%lo, self%zaxis%hi]
    logs3 = [self%xaxis%log, self%yaxis%log, self%zaxis%log]
+   pal3 = effective_palette(self%palette, backend%theme%name)
    f = view3d_setup(self%view3d, box, self%canvas, font_size, lines, xr3, yr3, zr3, logs3, &
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
+   ! the pm3d quadrangles of the pending surfaces, projected (gnuplot's pm3d_plot)
+   if (any(self%series%pm3d_pending)) call view3d_pm3d_quads(self, f, pal3)
    ! the contours on the base plane (gnuplot's cntr3d_lines: x, y at base_z)
    do s = 1_I4P, size(self%series, kind=I4P)
       if (.not. self%series(s)%contour_base) cycle
       if (.not. allocated(self%series(s)%z)) cycle
       where (ieee_is_finite(self%series(s)%z)) self%series(s)%z = merge(10.0_R8P**f%base_z, f%base_z, f%log(3))
    enddo
+   ! the series as they are before their projection (one to one with those projected: pm3d and contours inserted)
+   hraw = self%series
    call view3d_project(self%series, f, self%view3d%surface)
    ! set hidden3d: the grid surfaces as opaque quadrangles, painted back to front (their own lines not drawn)
-   if (self%view3d%hidden3d .and. self%view3d%surface) call hidden_quads(raw, f, self%series, qx, qy, qdepth, qcolor, &
+   if (self%view3d%hidden3d .and. self%view3d%surface) call hidden_quads(hraw, f, self%series, qx, qy, qdepth, qcolor, &
                                                                          qlw)
    ! the annotations at their projected positions (screen fractions), restored after
    if (allocated(self%notes)) then
@@ -3280,6 +3691,18 @@ contains
       backend%literal = .false.
       backend%boxed = .false.
       backend%font = font_object()
+   endif
+   ! the color box, gnuplot's default for a 3D plot: from 0.709 to 0.778 of the x scale right of the middle, from 0.147
+   ! below to 0.497 above it of the y scale (draw_color_smooth_box), its ticks both sides inward
+   if (self%colorbox .and. self%has_image(palette=.true.)) then
+      g3%hchar = f%hchar * 0.01_R8P
+      g3%vchar = f%vchar * 0.01_R8P
+      g3%vtic = f%vtic * 0.01_R8P
+      g3%shift = f%shift
+      cbox3 = [(f%xmiddle + 0.709_R8P * f%xscaler) * 0.01_R8P, f%height - (f%ymiddle + 0.497_R8P * f%yscaler) * 0.01_R8P, &
+               0.069_R8P * f%xscaler * 0.01_R8P, 0.644_R8P * f%yscaler * 0.01_R8P]
+      kbox = [x0, y0, x0 + width, y0 + height]
+      call self%draw_colorbox(backend, area, kbox, font_size, g3, cbox3)
    endif
    call backend%end_axes
    self%key_spacing = spacing
@@ -8468,7 +8891,7 @@ contains
    if (self%cbaxis%has_label()) room = room + GAP + LINE_HEIGHT * font_size
    endfunction colorbox_height
 
-   subroutine draw_colorbox(self, backend, area, panel, font_size, geo)
+   subroutine draw_colorbox(self, backend, area, panel, font_size, geo, box3d)
    !< The color box: the palette gradient over the color axis, its frame (`border`), ticks, labels and label. Vertical,
    !< low values at the bottom (at the top with `invert`), at the right of the plot by default; horizontal, low values
    !< at the left, below the x labels by default; or in the `user` box (canvas fractions from the bottom left).
@@ -8479,8 +8902,10 @@ contains
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
    real(R8P),             intent(in)    :: panel(:)  !< Panel box: left, top, right, bottom [px].
    real(R8P),             intent(in)    :: font_size !< Font size [px].
-   type(map_geometry),    intent(in), optional :: geo !< Geometry of a map view.
+   type(map_geometry),    intent(in), optional :: geo !< Geometry of a map view (of a 3D view with `box3d`).
+   real(R8P),             intent(in), optional :: box3d(:) !< A 3D view's default box: left, top, width, height [px].
    logical                              :: mapped    !< A map view's default box.
+   character(len=:), allocatable        :: gcol      !< Grid line color.
    real(R8P)                            :: label_gap !< Tick labels right of the box [px].
    real(R8P)                            :: label_dy  !< Their baseline below the tick [px].
    integer(I4P), allocatable            :: rgba(:,:,:) !< Gradient.
@@ -8513,6 +8938,8 @@ contains
    if (mapped) then
       box = [area(2) + 0.025_R8P * (area(2) - area(1)) + geo%hchar, area(3), 0.05_R8P * (area(2) - area(1)), &
              area(4) - area(3)]
+      ! a 3D view's (gnuplot's draw_color_smooth_box: beside the plot, from the view's middle and scale)
+      if (present(box3d)) box = box3d(1:4)
       label_gap = geo%hchar
       label_dy = geo%shift
    endif
@@ -8548,6 +8975,23 @@ contains
    associate(left => box(1), top => box(2), bw => box(3), bh => box(4))
       call backend%image(left, top, left + bw, top + bh, rgba)
       if (self%cbox%border) call backend%rect(left, top, bw, bh, FRAME_COLOR, 'none', 1.0_R8P)
+      ! `set grid cb mcb`: lines across the box at the ticks, in the grid style (gnuplot's cbtick_callback)
+      if (any(self%grid_cb)) then
+         gcol = GRID_COLOR
+         if (allocated(self%grid_lc)) gcol = self%grid_lc
+         do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
+            if (.not. self%grid_cb(merge(1_I4P, 2_I4P, self%cbaxis%ticks(k)%major))) cycle
+            if (.not. self%cbaxis%ticks(k)%major .and. self%cbaxis%tics%minor == MINOR_DEFAULT) cycle
+            if (self%cbox%horizontal) then
+               pos = left + self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bw
+               call backend%polyline([pos, pos], [top, top + bh], gcol, self%grid_lw, self%grid_dash_array())
+            else
+               pos = self%cbaxis%to_unit(self%cbaxis%ticks(k)%value) * bh
+               pos = merge(top + pos, top + bh - pos, self%cbox%invert)
+               call backend%polyline([left, left + bw], [pos, pos], gcol, self%grid_lw, self%grid_dash_array())
+            endif
+         enddo
+      endif
       do k = 1_I4P, size(self%cbaxis%ticks, kind=I4P)
          if (.not. self%cbaxis%ticks(k)%major) then
             ! minor ticks once set (mcbtics): the log decade multiples are not drawn by default
@@ -9777,7 +10221,7 @@ contains
       if (.not. allocated(series(s)%z) .or. .not. allocated(series(s)%scans)) cycle
       if (size(series(s)%scans, 2) == 0) cycle
       last = max(1_I4P, series(s)%grid_scans)
-      if (series(s)%style%with == WITH_PM3D .or. series(s)%style%with == WITH_MASK) cycle
+      if (series(s)%style%with == WITH_MASK) cycle
       ends = [series(s)%scans(1, 1), series(s)%scans(2, 1), series(s)%scans(1, last), series(s)%scans(2, last)]
       do e = 1_I4P, 4_I4P
          associate(x => series(s)%x(ends(e)), y => series(s)%y(ends(e)), zz => series(s)%z(ends(e)))
