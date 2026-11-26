@@ -400,7 +400,9 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    logical                          :: grid_cb(2) = .false. !< Grid lines across the color box at its major and minor
                                                             !< ticks (`set grid cb mcb`).
-   type(shape_object)               :: walls(5)           !< The grid walls of a 3D view (`set wall y0|x0|y1|x1|z0`).
+   type(shape_object), allocatable  :: walls(:)           !< The grid walls of a 3D view (`set wall y0|x0|y1|x1|z0`), 5 once
+                                                           !< set (allocatable: nvfortran 26.9 copies a fixed array of them
+                                                           !< shallowly, freeing their points twice).
    logical                          :: wall_on(5) = .false. !< Those drawn.
    integer(I4P)                     :: cfill_mode = 0_I4P  !< `set contourfill`: 0 `auto N`, 1 `ztics`, 2 `cbtics`.
    integer(I4P)                     :: cfill_n = 5_I4P     !< `set contourfill auto N`: the slices.
@@ -2633,19 +2635,34 @@ contains
    type(series_object)               :: marks    !< The color range of a surface.
    type(series_object)               :: pending  !< The surface, pending.
    type(series_object)               :: blank    !< A series of default components (never assigned).
+   character(len=:), allocatable     :: line_color !< The line of a zerrorfill item.
    real(R8P), allocatable            :: c(:)     !< Color values.
    logical, allocatable              :: use(:)   !< Points autoscaling the color axis.
    real(R8P)                         :: nan      !< NaN.
    integer(I4P)                      :: s        !< Series counter.
    integer(I4P)                      :: k        !< A defined point.
    logical                           :: pm3d     !< A `with pm3d` item.
+   logical                           :: any_pal  !< The palette used: the heights of every item autoscale the color axis.
+   logical                           :: found    !< Marks built.
 
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   ! gnuplot's plot3d: the height of every point of every item updates the color axis (STORE_AND_UPDATE_RANGE of the
+   ! color, z by default); it matters once the palette colors something
+   any_pal = .false.
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (self%series(s)%style%with == WITH_PM3D .or. self%series(s)%palette_mode > 0_I4P .or. &
+          self%series(s)%contourfill) any_pal = .true.
+      if (self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P) any_pal = .true.
+   enddo
    allocate(drawn(0))
    do s = 1_I4P, size(self%series, kind=I4P)
       ! splot with boxes, with polygons: pending (gnuplot's plot3d_boxes, plot3d_polygons)
       if ((self%series(s)%style%with == WITH_BOXES .or. self%series(s)%style%with == WITH_POLYGONS) .and. &
           allocated(self%series(s)%z) .and. allocated(self%series(s)%scans)) then
+         if (any_pal .and. self%series(s)%palette_mode == 0_I4P) then
+            call z_marks(self, self%series(s), blank, marks, found)
+            if (found) call push(drawn, marks)
+         endif
          pending = self%series(s)
          pending%pm3d_pending = .true.
          call push(drawn, pending)
@@ -2653,11 +2670,24 @@ contains
       endif
       ! zerrorfill: its quadrangles pending (with its key entry, a fill sample), then its line through z
       if (self%series(s)%zerrorfill .and. allocated(self%series(s)%zlow) .and. allocated(self%series(s)%zhigh)) then
+         if (any_pal) then
+            call z_marks(self, self%series(s), blank, marks, found)
+            if (found) call push(drawn, marks)
+         endif
+         ! gnuplot's colors of zerrorfill ("backwards"): without `fc` the fill in the line color and the line in the
+         ! fill's border color (black by default, the background without border); with `fc` the line in `lc`
+         line_color = zerror_line_color(self%series(s))
          pending = self%series(s)
          pending%pm3d_pending = .true.
          pending%style%with = WITH_PM3D
+         if (allocated(self%series(s)%style%color)) then
+            if (.not. allocated(pending%style%fill_rgb)) pending%style%fill_rgb = self%series(s)%style%color
+            if (len(pending%style%fill_rgb) == 0) pending%style%fill_rgb = self%series(s)%style%color
+         endif
+         pending%style%color = line_color
          call push(drawn, pending)
          pending = self%series(s)
+         pending%style%color = line_color
          pending%zerrorfill = .false.
          deallocate(pending%zlow, pending%zhigh)
          pending%title = ''
@@ -2709,13 +2739,58 @@ contains
             endif
             call push(drawn, pending)
             if (pm3d) cycle
+            call push(drawn, self%series(s))
+            cycle
          endif
       endif
       if (pm3d) cycle
+      ! any other item: its heights on the color axis while the palette is used
+      if (any_pal .and. self%series(s)%palette_mode == 0_I4P .and. allocated(self%series(s)%z)) then
+         call z_marks(self, self%series(s), blank, marks, found)
+         if (found) call push(drawn, marks)
+      endif
       call push(drawn, self%series(s))
    enddo
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_marks
+
+   subroutine z_marks(self, one, blank, marks, found)
+   !< Two lone points of the color range of the heights of `one` within the x, y and z ranges set (gnuplot's: a point
+   !< out of range does not autoscale the color axis), as view3d_pm3d_marks's: invisible, keyless.
+   class(axes_object),  intent(in)  :: self  !< Panel.
+   type(series_object), intent(in)  :: one   !< The item.
+   type(series_object), intent(in)  :: blank !< A series of default components.
+   type(series_object), intent(out) :: marks !< The marks.
+   logical,             intent(out)  :: found !< Some point in range.
+   logical, allocatable             :: use(:) !< Points autoscaling the color axis.
+   real(R8P)                        :: nan   !< NaN.
+   integer(I4P)                     :: k     !< Point.
+
+   found = .false.
+   if (size(one%z) /= size(one%x) .or. size(one%z) /= size(one%y)) return
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   use = ieee_is_finite(one%z) .and. ieee_is_finite(one%x) .and. ieee_is_finite(one%y)
+   do k = 1_I4P, size(one%z, kind=I4P)
+      if (.not. use(k)) cycle
+      use(k) = in_set_range(self%xaxis, one%x(k)) .and. in_set_range(self%yaxis, one%y(k)) .and. &
+               in_set_range(self%zaxis, one%z(k))
+   enddo
+   ! a loop, not findloc: nvfortran 26.9 rejects findloc of a logical array
+   do k = 1_I4P, size(use, kind=I4P)
+      if (use(k)) exit
+   enddo
+   if (k > size(use, kind=I4P)) return
+   found = .true.
+   marks = blank
+   marks%style = one%style
+   marks%style%with = WITH_POLYGONS
+   marks%x = [one%x(k), nan, one%x(k)]
+   marks%y = [one%y(k), nan, one%y(k)]
+   marks%zvalues = [minval(one%z, mask=use), nan, maxval(one%z, mask=use)]
+   marks%palette_mode = 1_I4P
+   marks%key_blank = .true.
+   marks%title = ''
+   endsubroutine z_marks
 
    function series_palette(self, s, p) result(pal)
    !< The palette of the series `s`: its named colormap (`fc palette NAME`, `lc palette NAME`), else `p`; a colormap
@@ -3054,7 +3129,7 @@ contains
    subroutine polygon3d_quads(pm, one, f, depth, rot_x, rot_z, quads, q)
    !< The polygons of `splot ... with polygons` (gnuplot's plot3d_polygons): each scan of the item (its blocks) one
    !< polygon, a triangle a quadrangle with its first corner again; in the first point's color (`lc variable`, `fc rgb
-   !< variable`) or the fill color, lit by `set pm3d lighting` (gnuplot's illuminate_one_quadrangle: its first 4
+   !< variable`) or the fill color (`fc`, else the fill's border color: black by default), lit by `set pm3d lighting` (gnuplot's illuminate_one_quadrangle: its first 4
    !< corners in the view); its depth the mean of its corners; queued with `depth`, else sorted among themselves.
    type(pm3d_object),   intent(in)    :: pm      !< pm3d settings.
    type(series_object), intent(in)    :: one     !< The item.
@@ -3073,8 +3148,14 @@ contains
    integer(I4P)                       :: k, j, i1, nv, nc !< Counters.
    logical                            :: column_color !< A color per point.
 
+   ! gnuplot's quad[0].c = fill_properties.border_color: `fc` (plot3d stores it there), else the fill's border color,
+   ! black by default (not the line color), gnuplot's LT_NODRAW color without border
    color = 'black'
-   if (allocated(one%style%color)) color = one%style%color
+   if (.not. one%style%border) then
+      color = '#fffffd'
+   elseif (allocated(one%style%border_color)) then
+      if (len(one%style%border_color) > 0) color = one%style%border_color
+   endif
    if (allocated(one%style%fill_rgb)) then
       if (len(one%style%fill_rgb) > 0) color = one%style%fill_rgb
    endif
@@ -3136,6 +3217,8 @@ contains
    quads%title = ''
    if (allocated(one%title)) quads%title = one%title
    quads%title_plain = one%title_plain
+   ! its key entry the title alone (gnuplot's do_3dkey draws no sample for POLYGONS)
+   quads%key_blank = .true.
    if (depth) then
       call queue_append(q, lq)
       quads%x = [real(R8P) :: ]
@@ -3228,6 +3311,27 @@ contains
    endif
    quads%palette_mode = 0_I4P
    endsubroutine zerror_quads
+
+   function zerror_line_color(one) result(color)
+   !< The color of the line of a zerrorfill item, gnuplot's (plot3d.c "ZERRORFILL is weird"): with a fill color (`fc`)
+   !< its line color; else its fill's border color: black by default, the border's `lc`, the background without border
+   !< (gnuplot's svg draws LT_NODRAW so).
+   type(series_object), intent(in) :: one   !< The item.
+   character(len=:), allocatable   :: color !< Line color.
+
+   color = 'black'
+   if (allocated(one%style%fill_rgb)) then
+      if (len(one%style%fill_rgb) > 0) then
+         if (allocated(one%style%color)) color = one%style%color
+         return
+      endif
+   endif
+   if (.not. one%style%border) then
+      color = 'white'
+   elseif (allocated(one%style%border_color)) then
+      if (len(one%style%border_color) > 0) color = one%style%border_color
+   endif
+   endfunction zerror_line_color
 
    subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, q, lows, highs, &
                                  slice_colors)

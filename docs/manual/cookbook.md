@@ -2146,6 +2146,16 @@ labels, arrows and objects are figure methods.
 
 <Plot name="cb_fortran_tools" svg :width="760" :height="320" />
 
+### From Fortran: 3D views
+
+The 3D settings are figure methods named after gnuplot's commands: `set_pm3d(lighting=...)`, `set_contourfill`,
+`set_boxdepth`, `set_wall`; `splot` takes the styles `pm3d`, `contourfill`, `boxes`, `zerrorfill` and `polygons`. See
+[the library](/guide/library).
+
+<<< @/examples/snippets/cb_fortran_3d-views.f90{fortran}
+
+<Plot name="cb_fortran_3d" svg :width="900" :height="320" />
+
 ### From Fortran: run gnuplot commands
 
 `script_object` is the interpreter of the command line: scripts and single commands from the program, with errors

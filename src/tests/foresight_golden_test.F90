@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(133)                  !< Per-figure outcome.
+logical                     :: test_passed(145)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -124,59 +124,79 @@ test_passed(96) = check('histogram_layouts.txt', figure_histogram_layouts())
 test_passed(97) = check('annotations.svg', figure_annotations())
 test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
-test_passed(100) = check('annotation_styles.svg', figure_annotation_styles())
-test_passed(101) = check('annotation_styles.txt', figure_annotation_styles())
-test_passed(102) = check('tic_labels_fills.svg', figure_tic_labels_fills())
-test_passed(103) = check('tic_labels_fills.txt', figure_tic_labels_fills())
-! enhanced text through the library API; the html page is also the one of the viewer DOM test of enhanced tick labels
-test_passed(104) = check('enhanced.svg', figure_enhanced())
-test_passed(105) = check('enhanced.html', figure_enhanced())
-test_passed(106) = check('enhanced.txt', figure_enhanced())
-! ticks on the zero axes; the html page is also the one of the viewer DOM test of tick placement
-test_passed(107) = check('tics_axis.svg', figure_tics_axis())
-test_passed(108) = check('tics_axis.html', figure_tics_axis())
-! 3D plots, the map view (gnuplot `set view map`): scattered points colored by height, a grid as an image
-test_passed(109) = check('map_points.svg', figure_map_points())
-test_passed(110) = check('map_points.html', figure_map_points())
-test_passed(111) = check('map_points.txt', figure_map_points())
-test_passed(112) = check('map_image.svg', figure_map_image())
-test_passed(113) = check('map_image.html', figure_map_image())
-test_passed(114) = check('map_image.txt', figure_map_image())
-! pm3d in the map view: a surface as colored quadrangles, and subdivided (interpolate 4,4)
-test_passed(115) = check('map_pm3d.svg', figure_map_pm3d(1_I4P))
-test_passed(116) = check('map_pm3d.html', figure_map_pm3d(1_I4P))
-test_passed(117) = check('map_pm3d.txt', figure_map_pm3d(1_I4P))
-test_passed(118) = check('map_pm3d_interpolate.svg', figure_map_pm3d(4_I4P))
-! contour lines in the map view, a level per linetype and key entry, over a pm3d surface
-test_passed(119) = check('map_contour.svg', figure_map_contour())
-test_passed(120) = check('map_contour.html', figure_map_contour())
-test_passed(121) = check('map_contour.txt', figure_map_contour())
-test_passed(122) = check('map_dgrid3d.svg', figure_map_dgrid3d())
-test_passed(123) = check('map_dgrid3d.html', figure_map_dgrid3d())
-test_passed(124) = check('map_dgrid3d.txt', figure_map_dgrid3d())
-! a 3D view (gnuplot's default view 60, 30): a surface mesh in its box, the ticks and labels of the three axes, the key
-! and the title at gnuplot's places
-test_passed(125) = check('view3d_frame.svg', figure_view3d_frame())
-! the 3D view on the HTML page (static: data-3d, the viewer leaves it) and on the dumb device
-test_passed(126) = check('view3d_frame.html', figure_view3d_frame())
-test_passed(127) = check('view3d_frame.txt', figure_view3d_frame())
-! hidden lines (gnuplot's set hidden3d, a painter's algorithm): the surface opaque, its underside in the next color,
-! the key below the plot
-test_passed(128) = check('view3d_hidden.svg', figure_view3d_hidden())
-! pm3d in a 3D view (gnuplot's pm3d_plot): the surface as colored quadrangles at the base and at the surface, in
-! gnuplot's order of the scans, the color box at gnuplot's default place for a 3D plot; on the page and the dumb device
-test_passed(129) = check('view3d_pm3d.svg', figure_view3d_pm3d())
-test_passed(130) = check('view3d_pm3d.html', figure_view3d_pm3d())
-test_passed(131) = check('view3d_pm3d.txt', figure_view3d_pm3d())
-! the xz and yz projections (gnuplot's set view projection): the planes seen edge-on side by side, their borders, the
-! ticks and labels where gnuplot puts them (the y label rotated, the z axis of the yz plane reversed)
-test_passed(132) = check('view3d_projection.svg', figure_view3d_projection())
-test_passed(133) = check('view3d_projection.txt', figure_view3d_projection())
-write(output_unit, '(A,133L2)') 'foresight golden checks:', test_passed
+! the later figures in a procedure of their own: nvfortran 26.9 finds the main program too large to compile
+call later_checks
+write(output_unit, '(A,145L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine later_checks
+   !< The golden checks from 100 on (nvfortran 26.9: a main program of them all is too large to compile).
+   test_passed(100) = check('annotation_styles.svg', figure_annotation_styles())
+   test_passed(101) = check('annotation_styles.txt', figure_annotation_styles())
+   test_passed(102) = check('tic_labels_fills.svg', figure_tic_labels_fills())
+   test_passed(103) = check('tic_labels_fills.txt', figure_tic_labels_fills())
+   ! enhanced text through the library API; the html page is also the one of the viewer DOM test of enhanced tick labels
+   test_passed(104) = check('enhanced.svg', figure_enhanced())
+   test_passed(105) = check('enhanced.html', figure_enhanced())
+   test_passed(106) = check('enhanced.txt', figure_enhanced())
+   ! ticks on the zero axes; the html page is also the one of the viewer DOM test of tick placement
+   test_passed(107) = check('tics_axis.svg', figure_tics_axis())
+   test_passed(108) = check('tics_axis.html', figure_tics_axis())
+   ! 3D plots, the map view (gnuplot `set view map`): scattered points colored by height, a grid as an image
+   test_passed(109) = check('map_points.svg', figure_map_points())
+   test_passed(110) = check('map_points.html', figure_map_points())
+   test_passed(111) = check('map_points.txt', figure_map_points())
+   test_passed(112) = check('map_image.svg', figure_map_image())
+   test_passed(113) = check('map_image.html', figure_map_image())
+   test_passed(114) = check('map_image.txt', figure_map_image())
+   ! pm3d in the map view: a surface as colored quadrangles, and subdivided (interpolate 4,4)
+   test_passed(115) = check('map_pm3d.svg', figure_map_pm3d(1_I4P))
+   test_passed(116) = check('map_pm3d.html', figure_map_pm3d(1_I4P))
+   test_passed(117) = check('map_pm3d.txt', figure_map_pm3d(1_I4P))
+   test_passed(118) = check('map_pm3d_interpolate.svg', figure_map_pm3d(4_I4P))
+   ! contour lines in the map view, a level per linetype and key entry, over a pm3d surface
+   test_passed(119) = check('map_contour.svg', figure_map_contour())
+   test_passed(120) = check('map_contour.html', figure_map_contour())
+   test_passed(121) = check('map_contour.txt', figure_map_contour())
+   test_passed(122) = check('map_dgrid3d.svg', figure_map_dgrid3d())
+   test_passed(123) = check('map_dgrid3d.html', figure_map_dgrid3d())
+   test_passed(124) = check('map_dgrid3d.txt', figure_map_dgrid3d())
+   ! a 3D view (gnuplot's default view 60, 30): a surface mesh in its box, the ticks and labels of the three axes, the key
+   ! and the title at gnuplot's places
+   test_passed(125) = check('view3d_frame.svg', figure_view3d_frame())
+   ! the 3D view on the HTML page (static: data-3d, the viewer leaves it) and on the dumb device
+   test_passed(126) = check('view3d_frame.html', figure_view3d_frame())
+   test_passed(127) = check('view3d_frame.txt', figure_view3d_frame())
+   ! hidden lines (gnuplot's set hidden3d, a painter's algorithm): the surface opaque, its underside in the next color,
+   ! the key below the plot
+   test_passed(128) = check('view3d_hidden.svg', figure_view3d_hidden())
+   ! pm3d in a 3D view (gnuplot's pm3d_plot): the surface as colored quadrangles at the base and at the surface, in
+   ! gnuplot's order of the scans, the color box at gnuplot's default place for a 3D plot; on the page and the dumb device
+   test_passed(129) = check('view3d_pm3d.svg', figure_view3d_pm3d())
+   test_passed(130) = check('view3d_pm3d.html', figure_view3d_pm3d())
+   test_passed(131) = check('view3d_pm3d.txt', figure_view3d_pm3d())
+   ! the xz and yz projections (gnuplot's set view projection): the planes seen edge-on side by side, their borders, the
+   ! ticks and labels where gnuplot puts them (the y label rotated, the z axis of the yz plane reversed)
+   test_passed(132) = check('view3d_projection.svg', figure_view3d_projection())
+   test_passed(133) = check('view3d_projection.txt', figure_view3d_projection())
+   ! the library of phase 3 (D4): pm3d lighting with its spotlight, contourfill slices, 3D boxes on a wall, a zerrorfill
+   ! band and depth-sorted polygons; each the same page as the script's commands draw
+   test_passed(134) = check('view3d_lighting.svg', figure_view3d_lighting())
+   test_passed(135) = check('view3d_lighting.html', figure_view3d_lighting())
+   test_passed(136) = check('view3d_lighting.txt', figure_view3d_lighting())
+   test_passed(137) = check('view3d_contourfill.svg', figure_view3d_contourfill())
+   test_passed(138) = check('view3d_contourfill.html', figure_view3d_contourfill())
+   test_passed(139) = check('view3d_contourfill.txt', figure_view3d_contourfill())
+   test_passed(140) = check('view3d_boxes.svg', figure_view3d_boxes())
+   test_passed(141) = check('view3d_boxes.html', figure_view3d_boxes())
+   test_passed(142) = check('view3d_boxes.txt', figure_view3d_boxes())
+   test_passed(143) = check('view3d_polygons.svg', figure_view3d_polygons())
+   test_passed(144) = check('view3d_polygons.html', figure_view3d_polygons())
+   test_passed(145) = check('view3d_polygons.txt', figure_view3d_polygons())
+   endsubroutine later_checks
+
    function figure_lines() result(fig)
    !< Two curves, a dashed one, title and axis labels; both axes autoscaled.
    type(figure_object)    :: fig  !< Figure.
@@ -1074,6 +1094,113 @@ contains
    call fig%set_view(projection='yz')
    call fig%splot(x, y, z, title='surface')
    endfunction figure_view3d_projection
+
+   function figure_view3d_lighting() result(fig)
+   !< pm3d lighting (gnuplot `set pm3d lighting primary 0.5 specular 0.4 spec2 0.3`, `set pm3d spotlight rot_x 60`):
+   !< a ripple lit by the light from the viewer, its second light and the spotlight, without the color box.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(-3.0_R8P + 0.25_R8P * real(i, R8P), i = 0, 24)]
+   y = [(-3.0_R8P + 0.25_R8P * real(j, R8P), j = 0, 24)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = cos(sqrt(x(i)**2 + y(j)**2)) * exp(-0.1_R8P * (x(i)**2 + y(j)**2))
+      enddo
+   enddo
+   call fig%set_title('pm3d lighting')
+   call fig%set_colorbox(on=.false.)
+   call fig%set_pm3d(lighting=.true., primary=0.5_R8P, specular=0.4_R8P, spec2=0.3_R8P)
+   call fig%set_spotlight(rot_x=60.0_R8P)
+   call fig%splot(x, y, z, title='ripple', with='pm3d')
+   endfunction figure_view3d_lighting
+
+   function figure_view3d_contourfill() result(fig)
+   !< contourfill (gnuplot `set contourfill auto 6`, `splot ... with contourfill`): a saddle cut into six slices of the z
+   !< range, each in the palette's color at its middle, outlined (`set pm3d border`).
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(-1.0_R8P + 0.125_R8P * real(i, R8P), i = 0, 16)]
+   y = [(-1.0_R8P + 0.125_R8P * real(j, R8P), j = 0, 16)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = x(i)**2 - y(j)**2
+      enddo
+   enddo
+   call fig%set_title('contourfill auto 6')
+   call fig%set_contourfill(levels=6_I4P)
+   call fig%set_pm3d(border=.true.)
+   call fig%splot(x, y, z, title='saddle', with='contourfill')
+   endfunction figure_view3d_contourfill
+
+   function figure_view3d_boxes() result(fig)
+   !< 3D boxes (gnuplot `set boxwidth 0.5`, `set boxdepth 0.3`, `set pm3d depthorder base`, `splot ... with boxes`) in
+   !< front of the back walls (`set wall y0`, `set wall x0`), and a zerrorfill band beside them.
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:)   !< Heights.
+   integer(I4P)           :: i      !< Counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(real(i, R8P), i = 1, 5)]
+   y = [(1.0_R8P, i = 1, 5)]
+   z = [3.0_R8P, 5.0_R8P, 2.0_R8P, 4.0_R8P, 1.0_R8P]
+   call fig%set_title('boxes and zerrorfill')
+   call fig%set_xyplane(relative=0.0_R8P)
+   call fig%set_yrange(min=0.0_R8P, max=3.0_R8P)
+   call fig%set_zrange(min=0.0_R8P, max=6.0_R8P)
+   call fig%set_boxwidth(0.5_R8P)
+   call fig%set_boxdepth(depth=0.3_R8P)
+   call fig%set_pm3d(order='depthorder')
+   call fig%set_wall(which='y0')
+   call fig%set_wall(which='x0')
+   call fig%splot(x, y, z, title='boxes', with='boxes', fs='solid 0.8')
+   y = [(2.5_R8P, i = 1, 5)]
+   call fig%splot(x, y, z, title='band', with='zerrorfill', zlow=z - 0.5_R8P, zhigh=z + 0.5_R8P)
+   endfunction figure_view3d_boxes
+
+   function figure_view3d_polygons() result(fig)
+   !< Depth-sorted 3D polygons (gnuplot `set object polygon from ... depthorder`, `set pm3d depthorder`) through a pm3d
+   !< plane, and a polygon item (`splot ... with polygons`).
+   type(figure_object)    :: fig    !< Figure.
+   real(R8P), allocatable :: x(:)   !< Abscissae.
+   real(R8P), allocatable :: y(:)   !< Ordinates.
+   real(R8P), allocatable :: z(:,:) !< Heights.
+   integer(I4P)           :: i      !< Column counter.
+   integer(I4P)           :: j      !< Row counter.
+
+   call fig%init(width=600_I4P, height=400_I4P)
+   x = [(real(i, R8P), i = 0, 4)]
+   y = [(real(j, R8P), j = 0, 4)]
+   allocate(z(size(x), size(y)))
+   do j = 1_I4P, size(y, kind=I4P)
+      do i = 1_I4P, size(x, kind=I4P)
+         z(i, j) = 0.5_R8P * x(i)
+      enddo
+   enddo
+   call fig%set_title('depthorder polygons')
+   call fig%set_colorbox(on=.false.)
+   call fig%set_pm3d(order='depthorder')
+   call fig%set_object('polygon', [1.0_R8P, 3.0_R8P, 3.0_R8P, 1.0_R8P], [2.0_R8P, 2.0_R8P, 2.0_R8P, 2.0_R8P], &
+                       z=[0.0_R8P, 0.0_R8P, 3.0_R8P, 3.0_R8P], fc='#4060c0', fs='solid 0.9', layer='depthorder')
+   call fig%splot(x, y, z, title='plane', with='pm3d')
+   call fig%splot([0.0_R8P, 4.0_R8P, 2.0_R8P], [4.0_R8P, 4.0_R8P, 4.0_R8P], [0.0_R8P, 0.0_R8P, 2.5_R8P], &
+                  title='triangle', with='polygons', fs='solid 0.5')
+   endfunction figure_view3d_polygons
 
    function figure_colorbox_modes() result(fig)
    !< Color boxes: horizontal below the plot, vertical inverted without border, and a user box over the plot.

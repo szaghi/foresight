@@ -6134,9 +6134,9 @@ contains
             endif
          endblock
       endif
-      if (allocated(fs) .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge radar rose '// &
-                                            'boxerrorbars boxxyerror candlesticks boxplot ellipses polygons sectors '// &
-                                            'fillsteps surface')) then
+      if (allocated(fs) .and. .not. zerr .and. .not. is_word(with, 'boxes filledcurves histograms circles pie gauge '// &
+                                            'radar rose boxerrorbars boxxyerror candlesticks boxplot ellipses polygons '// &
+                                            'sectors fillsteps surface')) then
          call fail('plot: fs applies to boxes, filledcurves, histograms, circles, the box styles and the panel charts '// &
                    'only', iostat, iomsg)
          return
@@ -7228,6 +7228,21 @@ contains
                panel%series(size(panel%series))%zlow = zerr_lo
                panel%series(size(panel%series))%zhigh = zerr_hi
                panel%series(size(panel%series))%zerrorfill = .true.
+               ! its fill: `set style fill`, then the item's `fs` (gnuplot's fill_properties; its border colors the line)
+               panel%series(size(panel%series))%style%fill = panel%fill_default%fill
+               panel%series(size(panel%series))%style%density = panel%fill_default%density
+               panel%series(size(panel%series))%style%pattern = panel%fill_default%pattern
+               panel%series(size(panel%series))%style%border = panel%fill_default%border
+               if (allocated(panel%fill_default%border_color)) &
+                  panel%series(size(panel%series))%style%border_color = panel%fill_default%border_color
+               if (allocated(fs)) then
+                  block
+                     character(len=:), allocatable :: bad !< Unknown word (none: checked by fill_ok).
+
+                     if (.not. fill_ok(fs)) return
+                     call fill_style(fs, panel%series(size(panel%series))%style, bad)
+                  endblock
+               endif
             endif
          endassociate
       endif
@@ -10611,6 +10626,7 @@ contains
       associate(panel => self%figure%panels(self%figure%current))
          do j = 1_I4P, size(panel%objects, kind=I4P)
             if (panel%objects(j)%tag /= TAG) cycle
+            if (.not. allocated(panel%walls)) allocate(panel%walls(5))
             panel%walls(w) = panel%objects(j)
             panel%walls(w)%layer = 'fb'
             ! a wall's border black unless a color is given (gnuplot's WALL_* default: BLACK_COLORSPEC)
@@ -11013,7 +11029,8 @@ contains
                     'point nopoint offset font noenhanced enhanced rect rectangle circle ellipse polygon size arc '// &
                     'angle fc fillcolor fs fillstyle lw linewidth lc linecolor lt linetype dt dashtype nohead head '// &
                     'backhead heads filled empty nofilled noborder clip noclip default units boxed noboxed as arrowstyle '// &
-                    'noenh noenha noenhan noenhanc noenhance enh enha enhan enhanc enhance width height')
+                    'noenh noenha noenhan noenhanc noenhance enh enha enhan enhanc enhance width height '// &
+                    'depthorder depth deptho depthor depthord depthorde wedge nowedge')
       endfunction is_annotation_word
 
       subroutine position(q)

@@ -103,6 +103,10 @@ type :: figure_object
       procedure, pass(self) :: set_xyplane     !< gnuplot `set xyplane`.
       procedure, pass(self) :: set_hidden3d    !< gnuplot `set hidden3d`.
       procedure, pass(self) :: set_pm3d        !< gnuplot `set pm3d`.
+      procedure, pass(self) :: set_spotlight   !< gnuplot `set pm3d spotlight`.
+      procedure, pass(self) :: set_contourfill !< gnuplot `set contourfill`.
+      procedure, pass(self) :: set_wall        !< gnuplot `set wall`, `set walls`.
+      procedure, pass(self) :: set_boxdepth    !< gnuplot `set boxdepth`.
       procedure, pass(self) :: set_contour     !< gnuplot `set contour`, `set cntrparam`, `set cntrlabel`.
       procedure, pass(self) :: set_dgrid3d     !< gnuplot `set dgrid3d`.
       procedure, pass(self) :: set_zlabel      !< gnuplot `set zlabel`.
@@ -1175,14 +1179,15 @@ contains
    call self%add_arrow(arrow)
    endsubroutine set_arrow
 
-   subroutine set_object(self, kind, x, y, tag, system, width, height, radius, angle, arc, fc, fs, lw, dt, layer, clip)
+   subroutine set_object(self, kind, x, y, tag, system, width, height, radius, angle, arc, fc, fs, lw, dt, layer, clip, z)
    !< An object, as gnuplot `set object [tag] rectangle|circle|ellipse|polygon`: a `rectangle` from the corner (`x(1)`,
    !< `y(1)`) to (`x(2)`, `y(2)`), or centred on (`x(1)`, `y(1)`) with `width` and `height`; a `circle` centred on
    !< (`x(1)`, `y(1)`) of `radius` (x axis values), its `arc` [deg] a wedge if partial; an `ellipse` centred there,
    !< `width` and `height` (axis values), `angle` [deg]; a `polygon` of the vertices (`x`, `y`). `system` the
    !< coordinate systems (as `set_label`), `fc` the fill color, `fs` the fill style words (`'solid 0.3 border'`),
    !< `lw` the border width, `dt` its dash type (1 solid to 5), `layer` `behind`, `back` (default) or `front`, `clip`
-   !< false to draw beyond the plot area.
+   !< false to draw beyond the plot area. In 3D views a polygon takes the heights `z` of its vertices (in the system of
+   !< the abscissae), and `layer='depthorder'` sorts it with the pm3d quadrangles (gnuplot's `depthorder`).
    !< By default, as gnuplot, a rectangle is filled with the page color and bordered black, the others empty, black.
    class(figure_object), intent(inout)        :: self   !< Figure.
    character(len=*),     intent(in)           :: kind   !< `rectangle`, `circle`, `ellipse`, `polygon`.
@@ -1201,6 +1206,7 @@ contains
    integer(I4P),         intent(in), optional :: dt     !< Border dash type, 1 (solid) to 5.
    character(len=*),     intent(in), optional :: layer  !< `behind`, `back`, `front`.
    logical,              intent(in), optional :: clip   !< Clipped by the plot area.
+   real(R8P),            intent(in), optional :: z(:)   !< Heights of a 3D polygon's vertices.
    type(shape_object)                         :: object !< Object.
    character(len=:), allocatable              :: bad    !< Unknown fill word.
    integer(I4P)                               :: k      !< Counter.
@@ -1213,6 +1219,14 @@ contains
    do k = 1_I4P, size(x, kind=I4P)
       object%points(k) = place(x(k), y(k), system, 'set_object')
    enddo
+   if (present(z)) then
+      if (kind /= 'polygon' .or. size(z) /= size(x)) error stop 'foresight: set_object: z gives a polygon''s heights, '// &
+                                                                'one per vertex'
+      do k = 1_I4P, size(x, kind=I4P)
+         object%points(k)%z = z(k)
+         object%points(k)%sz = object%points(k)%sx
+      enddo
+   endif
    object%size%sx = object%points(1)%sx
    object%size%sy = object%points(1)%sy
    select case (kind)
@@ -1255,9 +1269,10 @@ contains
       object%style%dashtype = dt
    endif
    if (present(layer)) then
-      if (all(layer /= ['behind', 'back  ', 'front '])) &
-         error stop 'foresight: set_object: layer must be behind, back or front, not "'//layer//'"'
+      if (all(layer /= ['behind    ', 'back      ', 'front     ', 'depthorder'])) &
+         error stop 'foresight: set_object: layer must be behind, back, front or depthorder, not "'//layer//'"'
       object%layer = layer
+      if (layer == 'depthorder') object%layer = 'depth'
    endif
    if (present(clip)) object%clip = clip
    if (present(tag)) object%tag = tag
@@ -1826,10 +1841,14 @@ contains
    endassociate
    endsubroutine set_ttics
 
-   subroutine splot_points(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette)
+   subroutine splot_points(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette, zlow, zhigh, fs)
    !< Add the points (`x`, `y`, `z`) to the current panel, made a 3D panel, as gnuplot `splot ... using 1:2:3`: one
    !< scan of scattered points, in the style `with` (points by default) and the line options of `plot`; `palette`
-   !< colors them by their height (gnuplot `lc palette`).
+   !< colors them by their height (gnuplot `lc palette`). `with='zerrorfill'`: the line through the points and the band
+   !< from `zlow` to `zhigh` filled below it (gnuplot `splot ... using 1:2:3:4:5 with zerrorfill`); `with='boxes'`: 3D
+   !< boxes from the base plane (their width `set_boxwidth`, their depth `set_boxdepth`); `with='polygons'`: the points
+   !< the vertices of one polygon; `fs` the fill style words of these. zerrorfill's colors are gnuplot's: the band in
+   !< the line color `lc` and the line in the fill's border color (black by default).
    class(figure_object), intent(inout)        :: self  !< Figure.
    real(R8P),            intent(in)           :: x(:)  !< Abscissae.
    real(R8P),            intent(in)           :: y(:)  !< Ordinates.
@@ -1842,25 +1861,52 @@ contains
    real(R8P),            intent(in), optional :: ps    !< Point size.
    integer(I4P),         intent(in), optional :: pt    !< Point type.
    logical,              intent(in), optional :: palette !< Colored by height through the palette.
+   real(R8P),            intent(in), optional :: zlow(:)  !< Lower ends of the z errors (`zerrorfill`).
+   real(R8P),            intent(in), optional :: zhigh(:) !< Upper ends of the z errors (`zerrorfill`).
+   character(len=*),     intent(in), optional :: fs    !< Fill style words.
    logical                                    :: by_z  !< Colored by height.
+   logical                                    :: zerr  !< `with='zerrorfill'`.
+   character(len=:), allocatable              :: bad   !< Unknown fill word.
 
    if (size(x) /= size(y) .or. size(x) /= size(z)) error stop 'foresight: splot: x, y and z sizes differ'
    by_z = .false.
    if (present(palette)) by_z = palette
-   if (by_z) then
+   zerr = .false.
+   if (present(with)) zerr = with == 'zerrorfill'
+   if (zerr) then
+      if (.not. (present(zlow) .and. present(zhigh))) error stop 'foresight: splot: zerrorfill takes zlow and zhigh'
+      if (size(zlow) /= size(z) .or. size(zhigh) /= size(z)) error stop 'foresight: splot: zlow, zhigh and z sizes differ'
+      call self%plot(x, y, title=title, with='lines', lc=lc, lw=lw, dt=dt)
+   elseif (by_z) then
       if (present(with)) then
-         call self%plot(x, y, title=title, with=with, lw=lw, dt=dt, ps=ps, pt=pt, palette_z=z)
+         call self%plot(x, y, title=title, with=with, lw=lw, dt=dt, ps=ps, pt=pt, palette_z=z, fs=fs)
       else
          call self%plot(x, y, title=title, with='points', lw=lw, dt=dt, ps=ps, pt=pt, palette_z=z)
       endif
    elseif (present(with)) then
-      call self%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
+      call self%plot(x, y, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt, fs=fs)
    else
       call self%plot(x, y, title=title, with='points', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
    endif
    call heights_of_last(self, z, reshape([1_I4P, size(z, kind=I4P)], [2, 1]))
-   ! set_dgrid3d: the scattered points gridded (gnuplot's grid_nongrid_data)
    associate(panel => self%panels(self%current))
+      if (zerr) then
+         panel%series(size(panel%series))%zlow = zlow
+         panel%series(size(panel%series))%zhigh = zhigh
+         panel%series(size(panel%series))%zerrorfill = .true.
+         ! its fill: set_style_fill's, then `fs` (gnuplot's fill_properties; its border colors the line)
+         panel%series(size(panel%series))%style%fill = panel%fill_default%fill
+         panel%series(size(panel%series))%style%density = panel%fill_default%density
+         panel%series(size(panel%series))%style%pattern = panel%fill_default%pattern
+         panel%series(size(panel%series))%style%border = panel%fill_default%border
+         if (allocated(panel%fill_default%border_color)) &
+            panel%series(size(panel%series))%style%border_color = panel%fill_default%border_color
+         if (present(fs)) then
+            call fill_style(fs, panel%series(size(panel%series))%style, bad)
+            if (len(bad) > 0) error stop 'foresight: splot: unsupported fill style "'//bad//'"'
+         endif
+      endif
+      ! set_dgrid3d: the scattered points gridded (gnuplot's grid_nongrid_data)
       if (panel%dgrid3d%on) call grid_series(panel%series(size(panel%series)), panel%dgrid3d)
    endassociate
    endsubroutine splot_points
@@ -1868,7 +1914,8 @@ contains
    subroutine splot_grid(self, x, y, z, title, with, lc, lw, dt, ps, pt, palette)
    !< Add the surface `z(i, j)` at (`x(i)`, `y(j)`) to the current panel, made a 3D panel, as gnuplot `splot` of a
    !< grid: a scan per `y(j)` (gnuplot's iso-curves), in the style `with` (lines by default; `image` its pixels, the
-   !< grid evenly spaced) and the line options of `plot`; `palette` colors the points by height.
+   !< grid evenly spaced; `pm3d` colored quadrangles; `contourfill` the quadrangles cut into the slices of
+   !< `set_contourfill`, each in one color) and the line options of `plot`; `palette` colors the points by height.
    class(figure_object), intent(inout)        :: self   !< Figure.
    real(R8P),            intent(in)           :: x(:)   !< Abscissae of the columns.
    real(R8P),            intent(in)           :: y(:)   !< Ordinates of the rows.
@@ -1923,6 +1970,16 @@ contains
       endif
    endif
    if (present(with)) then
+      if (with == 'contourfill') then
+         ! a pm3d surface in z slices, out of the contours (gnuplot's CONTOURFILL, opt_out_of_contours)
+         call self%plot(xs, ys, title=title, with='pm3d', lc=lc, lw=lw, dt=dt)
+         call heights_of_last(self, zs, scans)
+         associate(last => self%panels(self%current)%series(size(self%panels(self%current)%series)))
+            last%contourfill = .true.
+            last%no_contours = .true.
+         endassociate
+         return
+      endif
       call self%plot(xs, ys, title=title, with=with, lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
    else
       call self%plot(xs, ys, title=title, with='lines', lc=lc, lw=lw, dt=dt, ps=ps, pt=pt)
@@ -2062,14 +2119,18 @@ contains
    endassociate
    endsubroutine set_dgrid3d
 
-   subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in, at, order, border)
+   subroutine set_pm3d(self, implicit, interpolate, corners2color, clip4in, at, order, border, clip, lighting, primary, &
+                       specular, spec2)
    !< gnuplot `set pm3d`: `implicit` every surface drawn as colored quadrangles too (`set pm3d`; false: only the items
    !< `with='pm3d'`, `unset pm3d`), `interpolate` the steps along and between the scans (`interpolate N,M`, 0 or
    !< negative for gnuplot's automatic counts), `corners2color` the color of a quadrangle from its corners (`mean`,
    !< `geomean`, `harmean`, `rms`, `median`, `min`, `max`, `c1` to `c4`), `clip4in` its 4 corners in range. In 3D
    !< views: `at` where (`b` the base, `s` the surface, `t` the top, combined in drawing order, e.g. `'bs'`), `order`
    !< the drawing order (`scansautomatic`, `scansforward`, `scansbackward`, `depthorder`), `border` the quadrangles
-   !< outlined in black.
+   !< outlined in black; `clip` `'z'` (gnuplot's `clip z`, the default: the quadrangles cut at the z range), `'1in'`
+   !< (`clip1in`: one corner in range is enough) or `'4in'` (`clip4in`); `lighting` gnuplot's `set pm3d lighting`
+   !< (false: `nolighting`), its `primary` light (0.5), `specular` highlights (0.2) and `spec2` the spotlight's share (0,
+   !< see `set_spotlight`), each between 0 and 1.
    class(figure_object), intent(inout)        :: self           !< Figure.
    logical,              intent(in), optional :: implicit       !< Every surface drawn with pm3d.
    integer(I4P),         intent(in), optional :: interpolate(2) !< Interpolation steps.
@@ -2078,9 +2139,44 @@ contains
    character(len=*),     intent(in), optional :: at             !< Where: b, s, t combined.
    character(len=*),     intent(in), optional :: order          !< Drawing order in 3D views.
    logical,              intent(in), optional :: border         !< Outlined quadrangles.
+   character(len=*),     intent(in), optional :: clip           !< `z`, `1in` or `4in`.
+   logical,              intent(in), optional :: lighting       !< Lit quadrangles.
+   real(R8P),            intent(in), optional :: primary        !< Share of the primary light.
+   real(R8P),            intent(in), optional :: specular       !< Share of the specular highlights.
+   real(R8P),            intent(in), optional :: spec2          !< Share of the spotlight.
 
    call self%ensure_panels
    associate(pm => self%panels(self%current)%pm3d)
+      if (present(clip)) then
+         select case (clip)
+         case ('z')
+            pm%clip4in = .false.
+            pm%clip_z = .true.
+         case ('1in')
+            pm%clip4in = .false.
+            pm%clip_z = .false.
+         case ('4in')
+            pm%clip4in = .true.
+            pm%clip_z = .false.
+         case default
+            error stop 'foresight: set_pm3d: clip must be z, 1in or 4in'
+         endselect
+      endif
+      if (present(lighting)) then
+         ! gnuplot's parse_lighting_options: `lighting` alone primary 0.5, specular 0.2, no spotlight
+         pm%strength = 0.0_R8P
+         pm%spec = 0.0_R8P
+         pm%spec2 = 0.0_R8P
+         if (lighting) then
+            pm%strength = 0.5_R8P
+            pm%spec = 0.2_R8P
+         endif
+      endif
+      if (present(primary)) pm%strength = min(1.0_R8P, max(0.0_R8P, primary))
+      if (present(specular)) pm%spec = min(1.0_R8P, max(0.0_R8P, specular))
+      if (present(spec2)) pm%spec2 = min(1.0_R8P, max(0.0_R8P, spec2))
+      if ((present(primary) .or. present(specular) .or. present(spec2)) .and. pm%strength == 0.0_R8P) &
+         error stop 'foresight: set_pm3d: primary, specular and spec2 need lighting'
       if (present(at)) then
          if (len(at) == 0 .or. len(at) > 6 .or. verify(at, 'bst') /= 0) &
             error stop 'foresight: set_pm3d: at must combine b, s and t (6 letters at most)'
@@ -2133,6 +2229,178 @@ contains
       endif
    endassociate
    endsubroutine set_pm3d
+
+   subroutine set_spotlight(self, rot_x, rot_z, color, phong, default)
+   !< The spotlight of pm3d's lighting, gnuplot `set pm3d spotlight [rot_x A] [rot_z B] [rgbcolor C] [Phong P]
+   !< [default]`: its direction (`rot_x`, `rot_z` [deg], 50 and 90), its `color` ('#rrggbb', gnuplot's '#ff0044'), its
+   !< Phong exponent `phong` (4); `default` those back first. Its share of the light is `set_pm3d(spec2=)`.
+   class(figure_object), intent(inout)        :: self    !< Figure.
+   real(R8P),            intent(in), optional :: rot_x   !< Rotation about x [deg].
+   real(R8P),            intent(in), optional :: rot_z   !< Rotation about z [deg].
+   character(len=*),     intent(in), optional :: color   !< Color, '#rrggbb'.
+   real(R8P),            intent(in), optional :: phong   !< Phong exponent.
+   logical,              intent(in), optional :: default !< gnuplot's spotlight first.
+   integer(I4P)                               :: ios     !< Read status.
+
+   call self%ensure_panels
+   associate(pm => self%panels(self%current)%pm3d)
+      if (present(default)) then
+         if (default) then
+            pm%spot_rot = [50.0_R8P, 90.0_R8P]
+            pm%spot_rgb = 16711748_I4P
+            pm%spot_phong = 4.0_R8P
+         endif
+      endif
+      if (present(rot_x)) pm%spot_rot(1) = rot_x
+      if (present(rot_z)) pm%spot_rot(2) = rot_z
+      if (present(phong)) pm%spot_phong = abs(phong)
+      if (present(color)) then
+         ios = 1_I4P
+         if (len(color) == 7) then
+            if (color(1:1) == '#') read(color(2:7), '(Z6)', iostat=ios) pm%spot_rgb
+         endif
+         if (ios /= 0_I4P) error stop 'foresight: set_spotlight: color must be #rrggbb, not "'//color//'"'
+      endif
+   endassociate
+   endsubroutine set_spotlight
+
+   subroutine set_contourfill(self, levels, ztics, cbtics, firstlinetype, palette)
+   !< The slices of `splot(..., with='contourfill')`, gnuplot `set contourfill`: `levels` N slices evenly over the z range
+   !< (`auto N`, 5 by default), or bounded by the major `ztics` or `cbtics`; each slice colored by the palette at its
+   !< middle (`palette`, the default), or in the linetypes from `firstlinetype`.
+   class(figure_object), intent(inout)        :: self          !< Figure.
+   integer(I4P),         intent(in), optional :: levels        !< Slices.
+   logical,              intent(in), optional :: ztics         !< Bounded by the z ticks.
+   logical,              intent(in), optional :: cbtics        !< Bounded by the cb ticks.
+   integer(I4P),         intent(in), optional :: firstlinetype !< Linetype of the first slice.
+   logical,              intent(in), optional :: palette       !< Colored by the palette.
+
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(levels)) then
+         panel%cfill_mode = 0_I4P
+         panel%cfill_n = max(1_I4P, min(levels, 100_I4P))
+      endif
+      if (present(ztics)) then
+         if (ztics) panel%cfill_mode = 1_I4P
+      endif
+      if (present(cbtics)) then
+         if (cbtics) panel%cfill_mode = 2_I4P
+      endif
+      if (present(firstlinetype)) panel%cfill_lt = firstlinetype
+      if (present(palette)) then
+         if (palette) panel%cfill_lt = -1_I4P
+      endif
+   endassociate
+   endsubroutine set_contourfill
+
+   subroutine set_wall(self, which, on, fc, fs, lw)
+   !< A grid wall of the 3D views, gnuplot `set wall y0|x0|y1|x1|z0` (the planes y = 0, x = 0, y = 1, x = 1, z = 0 of the
+   !< graph) or, without `which`, `set walls` (y0, x0 and z0): filled half transparent in gnuplot's colors (the y walls
+   !< '#cdb79e', the x ones '#228b22', z '#a0b6cd') and bordered black, drawn behind or in front of the plot as they face;
+   !< `fc` the fill color, `fs` the fill style words (`'solid 0.3 noborder'`), `lw` the border width; `on` false removes
+   !< it (every wall without `which`, `unset walls`).
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   character(len=*),     intent(in), optional :: which !< `y0`, `x0`, `y1`, `x1` or `z0`.
+   logical,              intent(in), optional :: on    !< Drawn.
+   character(len=*),     intent(in), optional :: fc    !< Fill color.
+   character(len=*),     intent(in), optional :: fs    !< Fill style words.
+   real(R8P),            intent(in), optional :: lw    !< Border width [px].
+   character(len=2), parameter :: NAMES(5) = ['y0', 'x0', 'y1', 'x1', 'z0'] !< gnuplot's wall tags, in order.
+   logical                     :: drawn !< Drawn.
+   integer(I4P)                :: w     !< Wall.
+   integer(I4P)                :: k     !< Counter.
+
+   call self%ensure_panels
+   drawn = .true.
+   if (present(on)) drawn = on
+   if (.not. present(which)) then
+      if (.not. drawn) then
+         self%panels(self%current)%wall_on = .false.
+         return
+      endif
+      if (.not. allocated(self%panels(self%current)%walls)) allocate(self%panels(self%current)%walls(5))
+      do k = 1_I4P, 5_I4P
+         if (k == 3_I4P .or. k == 4_I4P) cycle
+         self%panels(self%current)%walls(k) = wall_polygon(k, fc, fs, lw)
+         self%panels(self%current)%wall_on(k) = .true.
+      enddo
+      return
+   endif
+   do w = 5_I4P, 1_I4P, -1_I4P
+      if (NAMES(w) == which) exit
+   enddo
+   if (w == 0_I4P) error stop 'foresight: set_wall: which must be y0, x0, y1, x1 or z0, not "'//which//'"'
+   if (.not. drawn) then
+      self%panels(self%current)%wall_on(w) = .false.
+      return
+   endif
+   if (.not. allocated(self%panels(self%current)%walls)) allocate(self%panels(self%current)%walls(5))
+   self%panels(self%current)%walls(w) = wall_polygon(w, fc, fs, lw)
+   self%panels(self%current)%wall_on(w) = .true.
+   endsubroutine set_wall
+
+   function wall_polygon(k, fc, fs, lw) result(obj)
+   !< Grid wall `k` (y0, x0, y1, x1, z0) with gnuplot's default style and the options: a module procedure, not an
+   !< internal one of set_wall (nvfortran 26.9 corrupted the figure through one).
+   integer(I4P),     intent(in)           :: k   !< Wall.
+   character(len=*), intent(in), optional :: fc  !< Fill color.
+   character(len=*), intent(in), optional :: fs  !< Fill style words.
+   real(R8P),        intent(in), optional :: lw  !< Border width [px].
+   type(shape_object)                     :: obj !< The wall.
+   real(R8P), parameter :: CORNERS(3, 4, 5) = reshape([ &
+      0.0_R8P, 0.0_R8P, 0.0_R8P,  0.0_R8P, 0.0_R8P, 1.0_R8P,  1.0_R8P, 0.0_R8P, 1.0_R8P,  1.0_R8P, 0.0_R8P, 0.0_R8P, &
+      0.0_R8P, 0.0_R8P, 0.0_R8P,  0.0_R8P, 1.0_R8P, 0.0_R8P,  0.0_R8P, 1.0_R8P, 1.0_R8P,  0.0_R8P, 0.0_R8P, 1.0_R8P, &
+      0.0_R8P, 1.0_R8P, 0.0_R8P,  1.0_R8P, 1.0_R8P, 0.0_R8P,  1.0_R8P, 1.0_R8P, 1.0_R8P,  0.0_R8P, 1.0_R8P, 1.0_R8P, &
+      1.0_R8P, 0.0_R8P, 0.0_R8P,  1.0_R8P, 0.0_R8P, 1.0_R8P,  1.0_R8P, 1.0_R8P, 1.0_R8P,  1.0_R8P, 1.0_R8P, 0.0_R8P, &
+      0.0_R8P, 0.0_R8P, 0.0_R8P,  1.0_R8P, 0.0_R8P, 0.0_R8P,  1.0_R8P, 1.0_R8P, 0.0_R8P,  0.0_R8P, 1.0_R8P, 0.0_R8P], &
+      [3, 4, 5]) !< Graph corners of each wall, as gnuplot's.
+   character(len=7), parameter :: COLORS(5) = ['#cdb79e', '#228b22', '#cdb79e', '#228b22', '#a0b6cd'] !< gnuplot's
+                                                                                       !< WALL_Y/X/Z_COLOR.
+   character(len=:), allocatable :: bad !< Unknown fill word.
+   integer(I4P)                  :: c   !< Corner.
+   integer(I4P)                  :: m   !< Its column.
+
+   obj%kind = 'polygon'
+   allocate(obj%points(5))
+   do c = 1_I4P, 5_I4P
+      m = 1_I4P + mod(c - 1_I4P, 4_I4P)
+      obj%points(c)%x = CORNERS(1, m, k)
+      obj%points(c)%y = CORNERS(2, m, k)
+      obj%points(c)%z = CORNERS(3, m, k)
+      obj%points(c)%sx = 'graph'
+      obj%points(c)%sy = 'graph'
+      obj%points(c)%sz = 'graph'
+   enddo
+   call fill_style('transparent solid 0.5 border', obj%style, bad)
+   obj%style%color = COLORS(k)
+   if (present(fc)) obj%style%color = fc
+   if (present(fs)) then
+      call fill_style(fs, obj%style, bad)
+      if (len(bad) > 0) error stop 'foresight: set_wall: unsupported fill style "'//bad//'"'
+   endif
+   obj%style%border_color = 'black'
+   if (present(lw)) obj%style%linewidth = lw
+   obj%layer = 'fb'
+   endfunction wall_polygon
+
+   subroutine set_boxdepth(self, depth, square)
+   !< The depth along y of the 3D boxes (`splot(..., with='boxes')`), gnuplot `set boxdepth D` (y autoscaled over y +- D),
+   !< `set boxdepth square` (`square`: as deep as wide on the page); 0 or none: flat boxes (`unset boxdepth`).
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in), optional :: depth  !< Depth (y axis values).
+   logical,              intent(in), optional :: square !< As deep as wide on the page.
+
+   call self%ensure_panels
+   self%panels(self%current)%boxdepth = 0.0_R8P
+   if (present(depth)) then
+      if (depth < 0.0_R8P) error stop 'foresight: set_boxdepth: the depth must not be negative'
+      self%panels(self%current)%boxdepth = depth
+   endif
+   if (present(square)) then
+      if (square) self%panels(self%current)%boxdepth = -1.0_R8P
+   endif
+   endsubroutine set_boxdepth
 
    subroutine set_view(self, map, rot_x, rot_z, scale, zscale, map_scale, equal, azimuth, projection)
    !< The view of the 3D panels, as gnuplot `set view ROT_X, ROT_Z, SCALE, SCALE_Z` (each kept if absent) or `set view

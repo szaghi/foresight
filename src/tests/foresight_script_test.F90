@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(286)                           !< Per-check outcome.
+logical                       :: test_passed(287)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7818,6 +7818,35 @@ block
    if (test_passed(286)) then
       svg = read_text('foresight_script_test_cn.svg')
       test_passed(286) = index(svg, '<path fill="#18934f" stroke="none"') > 0
+   endif
+endblock
+
+
+! check 287: gnuplot's colors of 3D items: `with polygons` filled in the fill's border color (black by default) and keyed
+! by its title alone, zerrorfill's line in its fill border color (`fs border lc 'red'`), the color axis autoscaled over
+! the heights of every item (0 to 5, the polygon's top); `fs solid 0.9 depthorder` read in a polygon object
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   integer(I4P)                  :: k    !< Position.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_zp.svg'"//nl// &
+                             "$T << EOD"//nl//"0 4 0"//nl//"4 4 0"//nl//"2 4 5"//nl//"EOD"//nl// &
+                             "set xrange [0:4]; set yrange [0:4]"//nl// &
+                             "set object 1 polygon from 1,2,0 to 3,2,0 to 3,2,3 fc rgb '#4060c0' fs solid 0.9 depthorder"// &
+                             nl//"splot x*0 with pm3d notitle, $T title 'tri' with polygons fs solid 0.5, "// &
+                             "$T u 1:2:3:($3-1):($3+1) title 'band' with zerrorfill fs border lc 'red'", iostat, iomsg)
+   test_passed(287) = iostat == 0_I4P
+   if (test_passed(287)) then
+      svg = read_text('foresight_script_test_zp.svg')
+      ! the polygon once: no key sample in its color
+      k = index(svg, 'fill="black" fill-opacity="0.5"')
+      test_passed(287) = k > 0 .and. index(svg, 'polyline fill="none" stroke="#ff0000"') > 0
+      if (test_passed(287)) test_passed(287) = index(svg(k + 1:), 'fill="black" fill-opacity="0.5"') == 0
+      k = index(svg, 'fs-colorbox')
+      if (test_passed(287)) test_passed(287) = k > 0
+      if (test_passed(287)) test_passed(287) = index(svg(k:), '>5</text>') > 0
    endif
 endblock
 

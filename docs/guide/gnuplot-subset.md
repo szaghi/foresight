@@ -2360,7 +2360,8 @@ box keeps the palette.
 
 The quadrangles at the surface are clipped to the z range (gnuplot's default `set pm3d clip z`): a z range set cuts
 them smoothly at its ends, as clip_filled_polygon (`clip1in` draws those with a corner in range whole, `clip4in` those
-with all 4); the color axis autoscales over the points within the ranges set. `splot ... with contourfill` draws the
+with all 4); the color axis autoscales over the points within the ranges set, those of every item of the plot (lines,
+points, boxes, polygons, labels: their heights, gnuplot's plot3d) once the palette colors something. `splot ... with contourfill` draws the
 pm3d surface in slices of z, gnuplot's plot3d_contourfill: for each slice in turn (`set contourfill auto N`: N equal
 slices of the z range; `ztics`, `cbtics`: from each major tick within it to the next, the first and last reaching its
 ends) the quadrangles clipped to it, each slice in the palette color of its middle (`firstlinetype N`: of linetypes N,
@@ -2386,12 +2387,13 @@ polygon objects (`set object N polygon ... depthorder`: closed, in their fill st
 back of `fc ls N`, gnuplot's 2-sided coloring). The depth-sorted polygons keep each its item's fill style and outline
 (a box its fill border), a pattern in the polygon's own color, its lines as wide as the border (gnuplot's svg tile
 inherits the line width in effect). A polygon of 3 corners is gnuplot's quadrangle with its first corner again; an object of more
-than 11 corners is not drawn.
+than 11 corners is not drawn. Its key entry is the title alone, as gnuplot's.
 
 `splot ... with zerrorfill` draws a line with its z errors, gnuplot's plot3d_zerrorfill: between each two points a
 quadrangle from their low ends to their high ones (`x:y:z:dz` from z - dz to z + dz, or `x:y:z:zlow:zhigh`), in the
-item's fill color (`fc`, else its line color), then the line through z in its line color; the key sample is the fill
-crossed by the line. The quadrangles of an item are sorted by depth among themselves and later items cover earlier
+item's fill color (`fc`, else its line color), then the line through z: with `fc` in its line color, else in its
+fill's border color (black by default, `fs border lc C`, the background with `noborder`: gnuplot's colors "backwards");
+`fs` and `set style fill` give its fill. The key sample is the fill crossed by the line. The quadrangles of an item are sorted by depth among themselves and later items cover earlier
 ones (gnuplot's: plot them back to front), or with `set pm3d depthorder` sorted with every pm3d surface. `set wall`
 puts gnuplot's grid walls in a 3D view: polygons over the planes of the graph (`y0`, `x0`, `y1`, `x1`, `z0`), filled
 half transparent in gnuplot's colors, bordered in black, unless `fs` and `fc` are given, each drawn behind the plot when it faces away
