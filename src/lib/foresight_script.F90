@@ -1298,6 +1298,15 @@ contains
 
    iostat = 0_I4P
    iomsg = ''
+   ! `tc def[ault]`: the default text color (gnuplot's TC_DEFAULT)
+   if (i < size(tokens, kind=I4P)) then
+      if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(i + 1_I4P)%text, 'default', 3_I4P)) then
+         i = i + 1_I4P
+         color = ''
+         ok = .true.
+         return
+      endif
+   endif
    ! `tc lt N`: the color of linetype N
    if (i < size(tokens, kind=I4P)) then
       if (tokens(i + 1_I4P)%text == 'lt' .or. keyword(tokens(i + 1_I4P)%text, 'linetype', 5_I4P)) then
@@ -4336,11 +4345,15 @@ contains
    character(len=:), allocatable                :: sampled   !< Its sample variables.
    character(len=:), allocatable                :: item_dummy !< The dummy variable of the item's function.
    logical                                      :: sample_first !< `plot sample [...] ...`: no plot range.
+   character(len=:), allocatable                :: range_names(:) !< splot's dummy variables named by the inline
+                                                                  !< ranges (`splot [u=0:1] [v=0:2] ...`), blank if not.
 
    iostat = 0_I4P
    iomsg = ''
    loaded = ''
    loaded_skip = 0_I4P
+   allocate(character(len=64) :: range_names(2))
+   range_names = ''
    allocate(functions(0), slots(0), yfunctions(0), own_range(2, 0), own_set(2, 0), own_base(0), sharpens(0))
    spider_group = 0_I4P
    call self%figure%clear
@@ -5593,6 +5606,19 @@ contains
                   names = trim(first_word(self%dummies))//' y'
                endif
             endif
+            ! the names of the inline ranges, for this plot
+            if (len_trim(range_names(1)) > 0 .or. len_trim(range_names(2)) > 0) then
+               block
+                  character(len=:), allocatable :: nx !< First name.
+                  character(len=:), allocatable :: ny !< Second name.
+
+                  nx = first_word(names)
+                  ny = trim(adjustl(names(index(names, ' ') + 1:)))
+                  if (len_trim(range_names(1)) > 0) nx = trim(range_names(1))
+                  if (len_trim(range_names(2)) > 0) ny = trim(range_names(2))
+                  names = nx//' '//ny
+               endblock
+            endif
             spec = '1:2:('//written//')'
             if (len(para_fields) > 0) then
                ! parametric: the u, v grid, the three functions the fields
@@ -6780,9 +6806,12 @@ contains
          if (line%lc == LC_VARIABLE) line%lc = LC_PALETTE_Z
       endif
       if (with == 'pm3d' .and. n >= 4_I4P .and. .not. allocated(line%lc)) line%lc = LC_PALETTE_Z
-      ! lc palette (z): the z as the color column, unless the item gives one after its plot fields
+      ! lc palette (z): the z as the color column, unless the item gives one after its plot fields; so is pm3d's lc rgb
+      ! variable (gnuplot's pm3d takes the heights as the colors without a fourth field)
       if (allocated(line%lc)) then
-         if (line%lc == LC_PALETTE_Z) then
+         if (with == 'pm3d' .and. line%lc == LC_RGB_VARIABLE) then
+            if (word_count(replace_colons(rest)) < 3_I4P) rest = rest//':'//zspec
+         elseif (line%lc == LC_PALETTE_Z) then
             needed = 3_I4P + merge(1_I4P, 0_I4P, ps_var) + merge(1_I4P, 0_I4P, pt_var) + &
                      merge(1_I4P, 0_I4P, with == 'labels') + &
                      merge(1_I4P, 0_I4P, rotate_var) + merge(2_I4P, 0_I4P, with == 'vectors')
@@ -8568,16 +8597,28 @@ contains
       colon = top_colon(text)
       ! a quoted time holds no dummy variable
       if (scan(text, '"'//"'") > 0 .and. equal > scan(text, '"'//"'")) equal = 0_I4P
-      if (first .and. equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
-         dummy = trim(adjustl(text(1:equal - 1_I4P)))
-         if (len(dummy) == 0) then
-            call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
-            return
-         endif
-         if (verify(dummy, UNAME_CHARS) /= 0 .or. &
-             verify(dummy(1:1), '0123456789') == 0) then
-            call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
-            return
+      ! splot's y range names the second dummy variable too (`splot [x=-3:3] [y=-3:3] ...`, gnuplot)
+      if ((first .or. (axis == 2_I4P .and. self%figure%panels(self%figure%current)%three_d)) .and. &
+          equal > 0_I4P .and. (colon == 0_I4P .or. equal < colon)) then
+         if (axis == 2_I4P) then
+            range_names(2) = trim(adjustl(text(1:equal - 1_I4P)))
+            if (len_trim(range_names(2)) == 0 .or. verify(trim(range_names(2)), UNAME_CHARS) /= 0 .or. &
+                verify(range_names(2)(1:1), '0123456789') == 0) then
+               call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
+               return
+            endif
+         else
+            dummy = trim(adjustl(text(1:equal - 1_I4P)))
+            if (len(dummy) == 0) then
+               call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
+               return
+            endif
+            if (verify(dummy, UNAME_CHARS) /= 0 .or. &
+                verify(dummy(1:1), '0123456789') == 0) then
+               call fail('plot: bad dummy variable name in "['//text//']"', iostat, iomsg)
+               return
+            endif
+            range_names(1) = dummy
          endif
          body = text(equal + 1_I4P:)
          colon = top_colon(body)
@@ -9889,6 +9930,7 @@ contains
    logical                                      :: kind_set  !< An object kind given.
    real(R8P)                                    :: v         !< A number.
    logical                                      :: polar_place !< A position `polar THETA, R`.
+   real(R8P)                                    :: palette_read !< The value of a `tc palette cb V|frac F` read.
 
    iostat = 0_I4P
    iomsg = ''
@@ -10354,7 +10396,18 @@ contains
          elseif (word == 'front' .or. word == 'back') then
             label%front = word == 'front'
          elseif (word == 'tc' .or. keyword(word, 'textcolor', 5_I4P)) then
-            call color_words(label%color)
+            call color_words(label%color, palette_ok=.true.)
+            ! `tc palette z|cb V|frac F`: the color resolved with the color axis, when drawn
+            if (allocated(label%color)) then
+               if (index(label%color, '*palette') == 1) then
+                  label%palette = merge(1_I4P, merge(2_I4P, 3_I4P, label%color == LC_PALETTE_CB), &
+                                        label%color == LC_PALETTE_Z)
+                  label%palette_value = palette_read
+                  label%color = ''
+               else
+                  label%palette = 0_I4P
+               endif
+            endif
          elseif (word == 'point') then
             label%point = .true.
             do while (i < size(tokens, kind=I4P))
@@ -10702,10 +10755,12 @@ contains
       endselect
       endsubroutine object_words
 
-      subroutine color_words(color)
+      subroutine color_words(color, palette_ok)
       !< A color after `tc`, `fc` (token `i`): `rgb "color"`, `"color"`, `lt N`, `N`, `bgnd`, `black`; `i` left on its
-      !< last token.
+      !< last token; with `palette_ok` (a label's `tc`), `palette z|cb V|frac F` as its marker, the value in
+      !< `palette_read`.
       character(len=:), allocatable, intent(out) :: color !< Color.
+      logical, optional,             intent(in)  :: palette_ok !< Palette colors read.
       type(token_object), allocatable            :: copy(:) !< Tokens with `lc` for the color word.
       type(line_style_object)                    :: probe   !< Color read.
 
@@ -10719,12 +10774,21 @@ contains
          color = merge('white', 'black', tokens(i)%text == 'bgnd')
          return
       endif
+      ! `def[ault]`: the default text color (gnuplot's TC_DEFAULT)
+      if (keyword(tokens(i + 1_I4P)%text, 'default', 3_I4P)) then
+         i = i + 1_I4P
+         return
+      endif
       if (keyword(tokens(i + 1_I4P)%text, 'linetype', 5_I4P) .or. tokens(i + 1_I4P)%text == 'lt') i = i + 1_I4P
       copy = tokens
       if (.not. (copy(i)%text == 'lt' .or. keyword(copy(i)%text, 'linetype', 5_I4P))) copy(i)%text = 'lc'
       if (.not. line_option(copy, i, probe, iostat, iomsg, self%figure%panels(self%figure%current)%linecolors, &
                             self%symbols)) return
       if (allocated(probe%lc)) color = probe%lc
+      palette_read = probe%palette
+      if (present(palette_ok)) then
+         if (palette_ok .and. index(color, '*palette') == 1) return
+      endif
       if (index(color, '*') == 1) then
          call fail('set '//option//': variable and palette colors do not apply', iostat, iomsg)
          return
@@ -10948,16 +11012,19 @@ contains
    r_named = .false.
    if (size(tokens) >= 2) r_named = tokens(2)%text == 'r'
    option = tokens(1)%text
-   ! gnuplot's old `set noxtics`, `set nokey`, ...: the unset of the option
-   if (is_word(option, 'noxtics noytics nox2tics noy2tics nocbtics nomxtics nomytics nokey nogrid noborder')) then
-      block
-         type(token_object), allocatable :: words(:) !< The option without its `no`.
+   ! gnuplot's old `set noxtics`, `set nokey`, `set nomztics`, ...: any `set no{foo}` but `set non...` is `unset foo`,
+   ! as gnuplot's set_command
+   if (len(option) > 2) then
+      if (option(1:2) == 'no' .and. option(3:3) /= 'n') then
+         block
+            type(token_object), allocatable :: words(:) !< The option without its `no`.
 
-         words = tokens
-         words(1)%text = option(3:)
-         call self%unset_command(words, iostat, iomsg)
-      endblock
-      return
+            words = tokens
+            words(1)%text = option(3:)
+            call self%unset_command(words, iostat, iomsg)
+         endblock
+         return
+      endif
    endif
    if (keyword(option, 'title', 3_I4P)) then
       call title_option
@@ -11224,27 +11291,11 @@ contains
                         reverse=axis%reverse, bounded=axis%bounded, limits=axis%limits)
       endassociate
    elseif (keyword(option, 'cblabel', 3_I4P)) then
-      ! `set cblabel "text" [font F]`
-      block
-         integer(I4P) :: f !< The `font` word, or past the end.
-
-         f = size(tokens, kind=I4P) + 1_I4P
-         do k = 2_I4P, size(tokens, kind=I4P)
-            if (tokens(k)%kind == TOKEN_WORD .and. tokens(k)%text == 'font') then
-               f = k
-               exit
-            endif
-         enddo
-         if (.not. self%string_argument(tokens(1:f - 1_I4P), text, iostat, iomsg)) return
-         if (f <= size(tokens, kind=I4P)) then
-            if (.not. font_spec(self, tokens, f, self%figure%panels(self%figure%current)%cblabel_font, iostat, &
-                                iomsg)) then
-               iomsg = 'set cblabel: '//iomsg
-               return
-            endif
-            if (.not. no_more(tokens, f + 1_I4P, iostat, iomsg)) return
-         endif
-      endblock
+      ! `set cblabel "text" [offset X,Y] [font F] [tc COLOR] [rotate|norotate] [noenhanced]`, as the axis labels
+      ! (no associate name here: axis_label updates the panel through self)
+      self%figure%panels(self%figure%current)%label_font(7) = self%figure%panels(self%figure%current)%cblabel_font
+      if (.not. axis_label(7_I4P)) return
+      self%figure%panels(self%figure%current)%cblabel_font = self%figure%panels(self%figure%current)%label_font(7)
       call self%figure%set_cblabel(text)
    elseif (keyword(option, 'colorbox', 4_I4P)) then
       call colorbox_option
@@ -12607,7 +12658,7 @@ contains
       !< [noenhanced|enhanced]` (and ylabel, y2label, x2label: `axis` 1 to 4): the text, shifted by characters (x right,
       !< y up), in its color, and whether it is read as it is, not as enhanced text. The font, the rotation and the
       !< justification are read and ignored, as one font and the axis' own layout are foresight's.
-      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2, 5 r, 6 z.
+      integer(I4P), intent(in)      :: axis   !< Axis: 1 x, 2 y, 3 y2, 4 x2, 5 r, 6 z, 7 cb.
       logical                       :: ok     !< Success.
       character(len=*), parameter   :: WORDS = 'offset font tc textcolor textc textco textcol textcolo rotate norotate '// &
                                                'left right center centre noenhanced noenh enhanced enh boxed noboxed' !< Options.
@@ -12643,6 +12694,8 @@ contains
                if (allocated(panel%x2axis%label)) text = panel%x2axis%label
             case (6_I4P)
                if (allocated(panel%zaxis%label)) text = panel%zaxis%label
+            case (7_I4P)
+               if (allocated(panel%cbaxis%label)) text = panel%cbaxis%label
             case default
                if (allocated(panel%raxis%label)) text = panel%raxis%label
             endselect
@@ -12686,7 +12739,8 @@ contains
                return
             endif
          case ('rotate')
-            ! rotate parallel, rotate by A
+            ! rotate parallel, rotate by A; the color box label vertical (its default)
+            if (axis == 7_I4P) self%figure%panels(self%figure%current)%cblabel_norotate = .false.
             if (k < size(tokens, kind=I4P)) then
                if (tokens(k + 1_I4P)%text == 'parallel') then
                   k = k + 1_I4P
@@ -12694,7 +12748,10 @@ contains
                   k = k + 2_I4P
                endif
             endif
-         case ('norotate', 'left', 'right', 'center', 'centre')
+         case ('norotate')
+            ! the color box label horizontal
+            if (axis == 7_I4P) self%figure%panels(self%figure%current)%cblabel_norotate = .true.
+         case ('left', 'right', 'center', 'centre')
          case ('noenhanced', 'noenh')
             plain = .true.
          case ('enhanced', 'enh')
@@ -15578,8 +15635,12 @@ contains
             mirror = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'nomirror', 4_I4P)) then
             mirror = .false.
+         elseif (toks(i)%kind == TOKEN_WORD .and. keyword(toks(i)%text, 'geographic', 3_I4P)) then
+            ! gnuplot `set xtics geographic`: the labels in degrees, minutes, seconds by the format (`%D %M %S %E %N`)
+            tics%geographic = .true.
          elseif (toks(i)%kind == TOKEN_WORD .and. (keyword(toks(i)%text, 'timedate', 4_I4P) .or. &
                                                   toks(i)%text == 'numeric')) then
+            tics%geographic = .false.
             ! gnuplot `set xtics time|timedate|numeric`: the axis ticked and labelled in time units, or not (as `set
             ! format x ... timedate`)
             block
@@ -16143,6 +16204,9 @@ contains
             if (is_word(tokens(i + 1_I4P)%text, 'timedate numeric')) then
                kind = tokens(i + 1_I4P)%text
                i = i + 1_I4P
+            elseif (keyword(tokens(i + 1_I4P)%text, 'geographic', 3_I4P)) then
+               kind = 'geographic'
+               i = i + 1_I4P
             endif
          endif
          if (i < size(tokens, kind=I4P)) then
@@ -16157,12 +16221,17 @@ contains
             if (len(message) > 0 .and. (kind == 'timedate' .or. time_axes(axes))) then
                if (len(time_format_check(format)) == 0) message = ''
             endif
+            ! a geographic format (`%D %M %S %E %N`, gnuplot's gstrdms) on geographic axes
+            if (len(message) > 0 .and. (kind == 'geographic' .or. geographic_axes(axes))) message = ''
             if (len(message) > 0) then
                call fail('set format: '//message, iostat, iomsg)
                return
             endif
          endif
-         if (len(kind) > 0) then
+         if (kind == 'geographic') then
+            call set_geographic(axes, .true.)
+         elseif (len(kind) > 0) then
+            call set_geographic(axes, .false.)
             if (axes == 'xyy2cbx2') axes = 'xyy2x2'
             if (index(axes, 'cb') > 0) then
                call fail('set format: the color axis is not a time axis', iostat, iomsg)
@@ -16174,6 +16243,38 @@ contains
       if (zaxis) self%figure%panels(self%figure%current)%zaxis%tics%format = format
       if (axes /= 'z') call self%figure%set_format(format, axes)
       endsubroutine format_option
+
+      function geographic_axes(names) result(geo)
+      !< Whether one of the axes `names` labels its ticks in degrees, minutes, seconds (`set xtics geographic`).
+      character(len=*), intent(in)  :: names    !< Axes names.
+      logical                       :: geo      !< A geographic axis named.
+      character(len=:), allocatable :: bad      !< Unknown name.
+      logical                       :: named(5) !< x, y, y2, cb, x2 named.
+
+      call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
+      associate(panel => self%figure%panels(self%figure%current))
+         geo = (named(1) .and. panel%xaxis%tics%geographic) .or. (named(2) .and. panel%yaxis%tics%geographic) .or. &
+               (named(3) .and. panel%y2axis%tics%geographic) .or. (named(4) .and. panel%cbaxis%tics%geographic) .or. &
+               (named(5) .and. panel%x2axis%tics%geographic)
+      endassociate
+      endfunction geographic_axes
+
+      subroutine set_geographic(names, on)
+      !< The axes `names` labelled in degrees, minutes, seconds (gnuplot's tictype DT_DMS), or not.
+      character(len=*), intent(in)  :: names    !< Axes names.
+      logical,          intent(in)  :: on       !< Geographic.
+      character(len=:), allocatable :: bad      !< Unknown name.
+      logical                       :: named(5) !< x, y, y2, cb, x2 named.
+
+      call axes_names(names, named(1), named(2), named(3), bad, cb=named(4), x2=named(5))
+      associate(panel => self%figure%panels(self%figure%current))
+         if (named(1)) panel%xaxis%tics%geographic = on
+         if (named(2)) panel%yaxis%tics%geographic = on
+         if (named(3)) panel%y2axis%tics%geographic = on
+         if (named(4)) panel%cbaxis%tics%geographic = on
+         if (named(5)) panel%x2axis%tics%geographic = on
+      endassociate
+      endsubroutine set_geographic
 
       function time_axes(names) result(time)
       !< Whether one of the axes `names` (`x`, `y`, `y2`, `x2` concatenated) is a time axis (`set xdata time`, `set
@@ -16533,6 +16634,20 @@ contains
       endblock
       return
    elseif (keyword(option, 'logscale', 3_I4P) .and. size(tokens) == 2) then
+      if (index(tokens(2)%text, 'z') > 0) then
+         ! the z axis (splot's) apart from the others
+         self%figure%panels(self%figure%current)%zaxis%log = .false.
+         if (len(tokens(2)%text) == 1) return
+         block
+            type(token_object), allocatable :: rest(:) !< The other axes.
+
+            rest = tokens
+            rest(2)%text = rest(2)%text(1:index(rest(2)%text, 'z') - 1)//rest(2)%text(index(rest(2)%text, 'z') + 1:)
+            if (.not. axes_argument(rest, axes, iostat, iomsg)) return
+         endblock
+         call self%figure%unset_logscale(axes)
+         return
+      endif
       if (tokens(2)%text == 'r') then
          self%figure%panels(self%figure%current)%raxis%log = .false.
          return
@@ -16821,6 +16936,10 @@ contains
    elseif (keyword(option, 'rrange', 2_I4P)) then
       self%figure%panels(self%figure%current)%raxis%min_fixed = .false.
       self%figure%panels(self%figure%current)%raxis%max_fixed = .false.
+   elseif (keyword(option, 'cbrange', 3_I4P)) then
+      ! autoscaled again, as gnuplot
+      self%figure%panels(self%figure%current)%cbaxis%min_fixed = .false.
+      self%figure%panels(self%figure%current)%cbaxis%max_fixed = .false.
    elseif (keyword(option, 'urange', 2_I4P) .or. keyword(option, 'vrange', 2_I4P)) then
       if (option(1:1) == 'u') self%uv_range(:, 1) = [-5.0_R8P, 5.0_R8P]
       if (option(1:1) == 'v') self%uv_range(:, 2) = [-5.0_R8P, 5.0_R8P]

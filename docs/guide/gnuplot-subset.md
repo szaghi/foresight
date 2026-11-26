@@ -86,7 +86,7 @@ that did what it says.
 | **rax**is | the r axis, from the pole towards the right of the page (the default) | no r axis |
 | **bor**der [`MASK`] [**po**lar] [`front`\|`back`\|`behind`] [`lt N`] [`lc C`] [`lw W`] [`dt N`] | frame sides, 1 bottom, 2 left, 4 top, 8 right (31, all, by default; `MASK` a number or a constant expression, a negative one its bits: -1 all); in a [3D view](#3d-views) the base edges (1 to 8), verticals (16 to 128) and top edges (256 to 2048); in their line; `polar` adds the circle of the largest r, keeping the sides when no `MASK` is given; the layer is read and ignored (the border over the data) | no border |
 | **k**ey [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`inside`\|`outside`\|`lmargin`\|`rmargin`\|`tmargin`\|`bmargin`\|`below`\|`above`\|`at POSITION`] [`horizontal`\|`vertical`] [`box` [`lt`\|`lw`\|`lc`\|`dt`\|`ls` ...]\|`nobox`] [`opaque`] [`reverse`] [`Left`\|`Right`] [`invert`] [`samplen L`] [`spacing S`] [`width W`] [`height H`] [`maxrows N`\|`maxcols N`] [`columns N`] [`offset X,Y`] [`title "text"` [`left`\|`center`\|`right`]] [`font F`] [`textcolor C`\|`tc variable`\|`tc rgb variable`] [`noenhanced`] [`default`] [`autotitle` [`columnhead`]\|`noautotitle`] | show the key, inside the plot area (top right by default), in a margin or at a position, in its layout, see [below](#key); untitled items: as written, by [column header](#column-headers), or none; the title centred over the key, `left` or `right` at its left or right side, as gnuplot | hide the key |
-| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] [`axis`\|`border`] [`rangelimited`] [`format "f"`] [`font F`] [`offset X,Y`] [`textcolor C`] [`noenhanced`] | tick positions, see [below](#ticks-and-label-formats); `time`\|`timedate`\|`numeric`: the axis ticked as times or not ([time data](#time-data)); `logscale`\|`nologscale`: on a log axis the step a factor, or added; `noenhanced`: the labels as they are, not as [enhanced text](#enhanced-text); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
+| **xti**cs / **yti**cs / **y2ti**cs / **x2ti**cs / **cbti**cs [`add`] [`auto`\|`autofreq` \| `STEP` \| `START,STEP[,END]` \| `("label" pos level, ...)`] [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`rotate` [`by` *angle*]\|`norotate`] [`left`\|`right`\|`center`] [`axis`\|`border`] [`rangelimited`] [`format "f"`] [`font F`] [`offset X,Y`] [`textcolor C`] [`noenhanced`] | tick positions, see [below](#ticks-and-label-formats); `time`\|`timedate`\|`numeric`: the axis ticked as times or not ([time data](#time-data)); `geographic`: the labels in degrees, minutes and seconds by the format ([below](#geographic-tick-labels)); `logscale`\|`nologscale`: on a log axis the step a factor, or added; `noenhanced`: the labels as they are, not as [enhanced text](#enhanced-text); `y2tics` and `x2tics` are off by default, see [below](#second-y-axis) and [below](#second-x-axis); `cbtics` those of the color box | no ticks, labels nor grid lines |
 | **tic**s [`mirror`\|`nomirror`] [`in`\|`out`] [`scale MAJOR[,MINOR]`\|`scale default`] [`border`] [`rotate` [`by A`]\|`norotate`] [`nooffset`] | the options of every axis' ticks (the scale of the color box's too); bare, the x and y ticks on, see [below](#ticks-and-label-formats) | no ticks on any axis |
 | **ticsc**ale `MAJOR` [`MINOR`] | gnuplot's old form of `set tics scale` | — |
 | **lmar**gin / **rmar**gin / **tmar**gin / **bmar**gin [[`at`] `screen` `N` \| `N`] | a margin set: `N` characters from the panel's edge, or the border at the page fraction `N` (from the bottom left); bare or negative, computed, see [below](#margins) | computed |
@@ -96,7 +96,7 @@ that did what it says.
 | **du**mmy `NAME`[`, ...`] | the variable of plotted [functions](#functions) (`x`; `t` in polar mode) | `x` |
 | **enc**oding [`default`\|`utf8`\|`locale`\|`iso_8859_1`] | the text encoding (`GPVAL_ENCODING`); the output is UTF-8: with `iso_8859_1` the bytes of the texts (an octal `"\351"`) are written as their Latin-1 characters (gnuplot declares its output's encoding instead); other encodings are refused | `default` |
 | **termopt**ion [`dash`\|`dashed`] [`enhanced`\|`noenhanced`] [`font F`] | gnuplot's terminal options foresight honours: dashes (always there), [enhanced text](#enhanced-text) on (the default) or off, `font "name,size"` the page's [font](#fonts) (also `set terminal svg font ...`) | — |
-| **for**mat [*axes*] [`"format"`] [`timedate`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `numeric` numeric ones | default labels |
+| **for**mat [*axes*] [`"format"`] [`timedate`\|`geographic`\|`numeric`] | tick label format of the *axes* (as `logscale`), see [below](#ticks-and-label-formats); on [time axes](#time-data) a time format (`"%H:%M"`); `timedate` makes them time axes (ticks and labels only), `geographic` [geographic](#geographic-tick-labels) ones, `numeric` numeric ones | default labels |
 | **xda**ta / **yda**ta / **x2da**ta / **y2da**ta [`time`] | the data of the axis are [times](#time-data), read with the `timefmt`; the axis ticked and labelled in time units | numbers |
 | **timef**mt `"format"` | the input [time format](#time-data), `%d/%m/%y,%H:%M` by default | the default |
 | **lab**el [`N`] ... | a [label](#labels-arrows-and-objects) | `unset label [N]`: all, or tag `N` |
@@ -134,11 +134,11 @@ that did what it says.
 | **spi**derplot | spider plot coordinates and data style | back to lines |
 | **st**yle `spiderplot` [`fs` FILL] [`lw W`] [`pt N`] [`ps S`] | polygons of the spider plots (empty with border by default) | — |
 | `rgbmax` `V` | full intensity of the components of [RGB images](#images-and-palettes) (255 by default) | 255 |
-| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`functions R, G, B`\|`cubehelix` [`start S`] [`cycles C`] [`saturation S`]\|`file 'f'` [`index N`] [`every E`] [`using U`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] [`model RGB`\|`model HSV`\|`model CMY`] [`gamma G`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension); `defined` takes `v "color"` or `v r g b` (0 to 1), alone gnuplot 6.0's default gradient (dark blue, blue, green, yellow, orange, red, pink); `model HSV` (or gnuplot's `mode HSV`) reads the three components as hue, saturation and value, `model CMY` as cyan, magenta, yellow (gnuplot 6.0's models); `gamma G` the gamma of `gray` and `cubehelix` (1.5); `file` also `using gray:rgb` (`using 1:(rgbcolor(strcol(2)))`, a packed RGB) and `file '-'` (the rows after the command); `functions R, G, B`: three expressions of `gray` (0 to 1), clipped to 0..1, sampled at 1025 levels; `rgbformulae` abbreviates down to `rgb` (`rgbform`, as gnuplot) | — |
+| **pal**ette [`rgbformulae R,G,B`\|`defined (v c, ...)`\|`functions R, G, B`\|`cubehelix` [`start S`] [`cyc`[`les`] `C`] [`sat`[`uration`] `S`]\|`file 'f'` [`index N`] [`every E`] [`using U`]\|`gray`\|`color`\|`viridis`\|`NAME`] [`positive`\|`negative`] [`maxcolors N`] [`model RGB`\|`model HSV`\|`model CMY`] [`gamma G`] | palette of the [images](#images-and-palettes); none: the default (`rgbformulae 7,5,15`); `NAME` a [named palette](#named-palettes) (foresight extension); `defined` takes `v "color"` or `v r g b` (0 to 1), alone gnuplot 6.0's default gradient (dark blue, blue, green, yellow, orange, red, pink); `model HSV` (or gnuplot's `mode HSV`) reads the three components as hue, saturation and value, `model CMY` as cyan, magenta, yellow (gnuplot 6.0's models); `gamma G` the gamma of `gray` and `cubehelix` (1.5); `file` also `using gray:rgb` (`using 1:(rgbcolor(strcol(2)))`, a packed RGB) and `file '-'` (the rows after the command); `functions R, G, B`: three expressions of `gray` (0 to 1), clipped to 0..1, sampled at 1025 levels; `rgbformulae` abbreviates down to `rgb` (`rgbform`, as gnuplot) | — |
 | **colormap** `new NAME` \| `NAME range [min:max]` | gnuplot 6.0's named colormaps: the current palette saved as NAME, for [`lc palette NAME`](#colors-per-point-and-from-the-palette); its own range, else the color axis' | — |
 | **colors**equence `default`\|`podo`\|`classic`\|`NAME` [`N`] | the [linetype colors](#styles) of the series, `lc N` and the slices: gnuplot's 8 (`default`), `podo` (8), `classic` (13, gnuplot's svg terminal); `NAME [N]` foresight's: the first N (8) colors of a categorical order | — |
-| **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | — |
-| **cbl**abel `"text"` | color box label | no label |
+| **cbr**ange `[min:max]` | value range of the palette; `*` or empty autoscales an end | autoscaled |
+| **cbl**abel `"text"` [`offset X,Y`] [`font F`] [`textcolor C`] [`rotate`\|`norotate`] [`noenhanced`] | color box label: vertical (`rotate`, the default) or horizontal (`norotate`), moved by `offset` in gnuplot's characters | no label |
 | **colo**rbox [`vertical`\|`horizontal`] [`default`\|`user`] [`origin X,Y`] [`size W,H`] [`border`\|`bdefault`\|`noborder`] [`invert`\|`noinvert`] [`front`] | color box of the images, see [below](#images-and-palettes) | no color box, every option reset |
 | **box**width [`W`] [`absolute`\|`relative`] | box width; no `W`: boxes touching (the default) | boxes touching |
 | **st**yle `boxplot` [`range R`\|`fraction F`] [`outliers`\|`nooutliers`] [`pointtype P`] [`candlesticks`\|`financebars`] [`medianlinewidth W`] [`separation S`] [`labels off`\|`auto`\|`x`] [`sorted`\|`unsorted`] | layout of the [boxplots](#box-finance-and-boxplot-styles) plotted next | — |
@@ -1154,7 +1154,8 @@ and keeps the labels; each axis takes it too (`set xtics scale 2`). `set tics fr
 The tick labels of an axis (`set xtics ...`) or of every axis (`set tics ...`) take gnuplot's options: `format "..."`
 (the axis' `set format`), `font "..."` (the labels' [font](#fonts), placed as the page's, as gnuplot), `offset X[,Y]` and `nooffset` (a
 shift in characters, 0.6 font sizes wide and 1 high, y up; gnuplot's svg characters are 0.7 by 1.5) and
-`textcolor`/`tc COLOR`. `set tics` changes only the options it names.
+`textcolor`/`tc COLOR`. `set tics` changes only the options it names. gnuplot's old forms `set no{option}` (`set
+noxtics`, `set nomztics`, `set nokey`, ...) are `unset {option}`, as gnuplot.
 
 ```gnuplot
 set xtics 1 offset 0,-0.5 tc rgb "#b3163f" format "%.1f"   # the x labels lower, red, one decimal
@@ -1289,6 +1290,19 @@ x2tics`/`set y2tics` turn the axis ticks on (gnuplot draws none otherwise). One 
 `using` field, or one each for two axes (`using 1:2:xtic(""):ytic("")`). In a script an empty label is still a tick, as
 gnuplot: `xtic("")` and `ytic("")` mark every row, a rug plot (the library's blank labels are no ticks). The HTML page
 keeps the x labels through a zoom; the other axes show numeric ticks while zoomed.
+
+### Geographic tick labels
+
+```gnuplot
+set xrange [-180:180]; set yrange [-90:90]
+set xtics geographic; set format x "%D %E"     # 150 W ... 0 ... 150 E
+set format y "%D %N" geographic                 # 80 S ... 80 N
+```
+
+`set xtics geographic` (or `set format x "..." geographic`) labels the ticks in degrees, minutes and seconds,
+gnuplot's gstrdms: `%D` whole degrees, `%d` degrees as `%f` (with its width and precision), `%M` and `%m` minutes,
+`%S` and `%s` seconds, `%E` E or W and `%N` N or S (blank at 0) in place of the sign; the value is first brought
+within -180 to 180. The ticks are placed as on any axis; `timedate` or `numeric` turns the labels back.
 
 ## Key
 
@@ -1594,7 +1608,7 @@ cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system o
 
 | Command | Options (gnuplot 6.0's, defaults first) |
 |---|---|
-| `set label [N] ["text"] [at POS]` | a text on several lines (`"a\nb"`) one below the other, the first at the position; a third (3D) coordinate of POS read and ignored; `left`\|`center`\|`right`, `norotate`\|`rotate [by A]`, `back`\|`front`, `tc`/`textcolor` `rgb "c"`\|`"c"`\|`lt N`, `nopoint`\|`point [pt N] [ps S]`, `offset X,Y` (characters), `font "f"` (its [font](#fonts)), `noenhanced` |
+| `set label [N] ["text"] [at POS]` | a text on several lines (`"a\nb"`) one below the other, the first at the position; a third (3D) coordinate of POS read and ignored; `left`\|`center`\|`right`, `norotate`\|`rotate [by A]`, `back`\|`front`, `tc`/`textcolor` `rgb "c"`\|`"c"`\|`lt N`\|`default`\|`palette z`\|`palette cb V`\|`palette frac F` (the palette color of the label's z, of a value or of a fraction, over the color axis: when no item sets it, the extent of the plotted heights, not extended to ticks, as gnuplot), `nopoint`\|`point [pt N] [ps S]`, `offset X,Y` (characters), `font "f"` (its [font](#fonts)), `noenhanced` |
 | `set arrow [N] from POS to\|rto POS\|length [SYS] L angle A` | `as N`/`arrowstyle N` (the look of `set style arrow N`, the options after it applied on it), `head`\|`nohead`\|`backhead`\|`heads`, `size [SYS] L,A` (head length in x axis values, or graph, screen, character; barb angle [deg]); `length L angle A` the tip from the tail, the length along x in its system (negative: backwards), the angle on the page, `nofilled` (two barbs)\|`filled`\|`empty`\|`noborder`, `back`\|`front`, `lc`, `lt`, `lw`, `dt` |
 | `set style arrow N [default]` | the arrow options above but the position: the look of the arrows `as N`; `unset style arrow` forgets them |
 | `set object [N] rectangle from POS to\|rto POS` \| `rectangle center\|at POS size W,H` | `fc`/`fillcolor`, `fs`/`fillstyle` (as `set style fill`, `border lc C` included), `lw`, `dt` (a dashed border), `back`\|`front`\|`behind`, `clip`\|`noclip`, `default`; a rectangle in the page color (`fc bgnd`) with a black border, as gnuplot, or in the look of `set style rectangle` |
@@ -2223,7 +2237,8 @@ set xrange [-3:3]; set yrange [-3:3]
 splot x*exp(-x**2-y**2) with points pt 7 ps 0.5 lc palette
 ```
 
-Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them). `set table` writes
+Inline ranges are `[x] [y] [z]`; the dummy variables are x and y (`set dummy u, v` renames them; `[NAME=a:b]` names
+them for the plot, `splot [x=-3:3] [y=-3:3] sin(x)*cos(y)`). `set table` writes
 the surfaces as gnuplot does: a block `# Surface K of N surfaces` per dataset of each item, its grid iso-curves (the
 scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set xyplane`, `set ticslevel`,
 `set zrange`, `set zlabel`, `set ztics`, `set mztics`, `set zzeroaxis` and `set surface` set the [3D views](#3d-views).
@@ -2232,7 +2247,8 @@ scans of data last first, gnuplot's order), rows `x y z type`. `set view`, `set 
 point, each quadrangle in the palette color of its corners (`set pm3d corners2color`, their mean by default; with a
 fourth `using` field, of its values; `lc variable` too), subdivided by `set pm3d interpolate N,M`; the color box spans
 the data's z (or color) range. With `lc rgb variable` (or `fc rgb variable`) the fourth field is a packed color
-0xAARRGGBB and a quadrangle takes the mean of its corners channel by channel (`c1` ... `c4`: one of them; a surface of
+0xAARRGGBB (without one, the heights are the colors, as gnuplot) and a quadrangle takes the mean of its corners channel
+by channel (`c1` ... `c4`: one of them; a surface of
 2 scans takes them in reverse order, as gnuplot's `scansautomatic`); the color box then spans z. `set pm3d border`
 outlines each quadrangle after its fill. `set pm3d` alone draws every surface with pm3d under its own lines (`unset surface` leaves the pm3d
 alone), `set style function pm3d` and `set style data pm3d` the items without `with`. In a map view the base, surface

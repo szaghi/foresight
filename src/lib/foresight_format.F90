@@ -27,6 +27,7 @@ public :: c_integer
 public :: c_real
 public :: c_string
 public :: decimal_of
+public :: dms_label
 public :: decimal_str
 public :: exact_decimal
 public :: fixed
@@ -1309,4 +1310,149 @@ contains
       if (text(j:j) >= 'a' .and. text(j:j) <= 'z') upper(j:j) = achar(iachar(text(j:j)) - 32)
    enddo
    endfunction upper_case
+
+   pure function dms_label(format, value) result(label)
+   !< The label of `value` in degrees by a geographic `format`, gnuplot's gstrdms (`set xtics geographic`): `%D`
+   !< whole degrees, `%d` degrees (as `%f`, with its width and precision), `%M` whole minutes, `%m` minutes, `%S` whole
+   !< seconds, `%s` seconds, `%E` E or W, `%N` N or S (blank at 0) instead of the sign; the value is first brought
+   !< within +-180, the minus sign on the first of degrees, minutes and seconds written. A format with none of them is
+   !< a plain C format of the value.
+   character(len=*), intent(in)  :: format !< Format.
+   real(R8P),        intent(in)  :: value  !< Value [degrees].
+   character(len=:), allocatable :: label  !< Label.
+   real(R8P)                     :: v      !< Value within +-180.
+   real(R8P)                     :: d(3)   !< Degrees, minutes, seconds (fractional).
+   real(R8P)                     :: whole(3) !< Whole degrees, minutes, seconds.
+   character(len=1)              :: compass !< E, W, N, S or blank.
+   character(len=:), allocatable :: flags  !< Conversion flags.
+   integer(I4P)                  :: width  !< Field width.
+   integer(I4P)                  :: prec   !< Precision.
+   integer(I4P)                  :: k      !< Character counter.
+   integer(I4P)                  :: c      !< Conversion character position.
+   integer(I4P)                  :: first  !< The first of degrees (1), minutes (2), seconds (3) written, 0 none.
+   logical                       :: signed !< No compass: the sign written.
+   character(len=1)              :: t      !< Conversion character.
+   real(R8P)                     :: q      !< A quantity written.
+
+   v = value
+   if (v > 180.0_R8P) v = v - 360.0_R8P
+   if (v < -180.0_R8P) v = v + 360.0_R8P
+   d(1) = abs(v)
+   whole(1) = real(floor(d(1)), R8P)
+   d(2) = (d(1) - whole(1)) * 60.0_R8P
+   whole(2) = real(floor(d(2)), R8P)
+   d(3) = (d(1) - whole(1)) * 3600.0_R8P - whole(2) * 60.0_R8P
+   whole(3) = real(floor(d(3)), R8P)
+   ! the first quantity written and whether a compass replaces the sign
+   first = 0_I4P
+   signed = .true.
+   compass = ' '
+   do k = 1_I4P, len(format, kind=I4P) - 1_I4P
+      if (format(k:k) /= '%') cycle
+      c = k + 1_I4P
+      do while (c < len(format, kind=I4P))
+         if (index('DdMmSsEN%', format(c:c)) > 0) exit
+         c = c + 1_I4P
+      enddo
+      select case (format(c:c))
+      case ('D', 'd')
+         if (first == 0_I4P .or. first > 1_I4P) first = 1_I4P
+      case ('M', 'm')
+         if (first == 0_I4P .or. first > 2_I4P) first = 2_I4P
+      case ('S', 's')
+         if (first == 0_I4P) first = 3_I4P
+      case ('E')
+         signed = .false.
+         if (v /= 0.0_R8P) compass = merge('W', 'E', v < 0.0_R8P)
+      case ('N')
+         signed = .false.
+         if (v /= 0.0_R8P) compass = merge('S', 'N', v < 0.0_R8P)
+      endselect
+   enddo
+   if (first == 0_I4P) then
+      ! no degrees, minutes nor seconds: a plain C format of the value (gnuplot's snprintf)
+      block
+         character(len=:), allocatable :: prefix !< Text before.
+         character(len=:), allocatable :: suffix !< Text after.
+         character(len=:), allocatable :: msg    !< Problem.
+
+         call split_format(format, prefix, flags, width, prec, t, suffix, msg)
+         if (len(msg) > 0 .or. index('fFeEgG', t) == 0) then
+            label = format
+         else
+            label = prefix//c_real(flags, width, prec, t, value)//suffix
+         endif
+      endblock
+      return
+   endif
+   label = ''
+   k = 1_I4P
+   do while (k <= len(format, kind=I4P))
+      if (format(k:k) /= '%' .or. k == len(format, kind=I4P)) then
+         label = label//format(k:k)
+         k = k + 1_I4P
+         cycle
+      endif
+      if (format(k + 1_I4P:k + 1_I4P) == '%') then
+         label = label//'%'
+         k = k + 2_I4P
+         cycle
+      endif
+      ! %[flags][width][.precision]conversion
+      c = k + 1_I4P
+      flags = ''
+      do while (c <= len(format, kind=I4P))
+         if (index('-+ #0', format(c:c)) == 0) exit
+         flags = flags//format(c:c)
+         c = c + 1_I4P
+      enddo
+      width = 0_I4P
+      do while (c <= len(format, kind=I4P))
+         if (index('0123456789', format(c:c)) == 0) exit
+         width = width * 10_I4P + int(index('0123456789', format(c:c)) - 1, I4P)
+         c = c + 1_I4P
+      enddo
+      prec = -1_I4P
+      if (c <= len(format, kind=I4P)) then
+         if (format(c:c) == '.') then
+            prec = 0_I4P
+            c = c + 1_I4P
+            do while (c <= len(format, kind=I4P))
+               if (index('0123456789', format(c:c)) == 0) exit
+               prec = prec * 10_I4P + int(index('0123456789', format(c:c)) - 1, I4P)
+               c = c + 1_I4P
+            enddo
+         endif
+      endif
+      if (c > len(format, kind=I4P)) then
+         label = label//format(k:)
+         exit
+      endif
+      t = format(c:c)
+      select case (t)
+      case ('D', 'M', 'S', 'd', 'm', 's')
+         select case (t)
+         case ('D')
+            q = whole(1)
+         case ('M')
+            q = whole(2)
+         case ('S')
+            q = whole(3)
+         case ('d')
+            q = d(1)
+         case ('m')
+            q = d(2)
+         case default
+            q = d(3)
+         endselect
+         if (v < 0.0_R8P .and. signed .and. index('DdMmSs', t) > 0 .and. (index('DdMmSs', t) + 1) / 2 == first) q = -q
+         label = label//c_real(flags, width, prec, merge('g', 'f', index('DMS', t) > 0), q)
+      case ('E', 'N')
+         label = label//c_string(flags, width, -1_I4P, compass)
+      case default
+         label = label//format(k:c)
+      endselect
+      k = c + 1_I4P
+   enddo
+   endfunction dms_label
 endmodule foresight_format

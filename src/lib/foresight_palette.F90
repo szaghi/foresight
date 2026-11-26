@@ -456,16 +456,16 @@ contains
          e = index(rest, ' ', kind=I4P)
          if (e == 0_I4P) e = len(rest, kind=I4P) + 1_I4P
          key = rest(1:e - 1_I4P)
-         select case (key)
-         case ('start')
+         ! gnuplot's words: `start`, `cyc[les]`, `sat[uration]`
+         if (key == 'start') then
             c = 1_I4P
-         case ('cycles')
+         elseif (abbreviates(key, 'cycles', 3)) then
             c = 2_I4P
-         case ('saturation')
+         elseif (abbreviates(key, 'saturation', 3)) then
             c = 3_I4P
-         case default
+         else
             exit
-         endselect
+         endif
          call next(key)
          call next(w)
          call real_from_decimal(w, v, ok)
@@ -705,4 +705,16 @@ contains
    endselect
    f = min(1.0_R8P, max(0.0_R8P, f))
    endfunction formula
+
+   pure function abbreviates(word, full, shortest) result(yes)
+   !< Whether `word` is `full` or an abbreviation of it of `shortest` characters at least (gnuplot's almost_equals).
+   character(len=*), intent(in) :: word     !< Word read.
+   character(len=*), intent(in) :: full     !< Full keyword.
+   integer,          intent(in) :: shortest !< Shortest abbreviation.
+   logical                      :: yes      !< Match.
+
+   yes = .false.
+   if (len(word) < shortest .or. len(word) > len(full)) return
+   yes = full(1:len(word)) == word
+   endfunction abbreviates
 endmodule foresight_palette

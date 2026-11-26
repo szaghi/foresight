@@ -194,7 +194,8 @@ type :: axes_object
    logical                          :: key_reverse = .false. !< Samples left of the titles (gnuplot `reverse`).
    logical                          :: key_plain = .false. !< The key's texts as they are, not enhanced (`noenhanced`).
    logical                          :: title_plain = .false. !< The title as it is, not enhanced (`noenhanced`).
-   logical                          :: label_plain(6) = .false. !< The x, y, y2, x2, r, z labels as they are (`noenhanced`).
+   logical                          :: label_plain(7) = .false. !< The x, y, y2, x2, r, z, cb labels as they are
+                                                                !< (`noenhanced`).
    logical                          :: key_left = .false. !< Titles left-justified (gnuplot `Left`), else right.
    logical                          :: key_invert = .false. !< Entries in reverse order (gnuplot `invert`).
    logical                          :: key_opaque = .false. !< The key area painted over the plot (`opaque`).
@@ -253,12 +254,14 @@ type :: axes_object
                                                                !< start, middle or end, at the centre.
    character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
    type(font_object)                :: title_font              !< Title font, `set title font "..."`.
-   type(font_object)                :: label_font(6)           !< x, y, y2, x2, r, z label fonts, `set xlabel font`.
+   type(font_object)                :: label_font(7)           !< x, y, y2, x2, r, z, cb label fonts, `set xlabel font`.
    type(font_object)                :: cblabel_font            !< Color box label font, `set cblabel font`.
    type(font_object)                :: key_font                !< Key font (entries and title), `set key font`.
-   real(R8P)                        :: label_offset(2, 6) = 0.0_R8P !< x, y, y2, x2, r, z label shifts [characters, y up],
-                                                                    !< `set xlabel offset X,Y`.
-   character(len=24)                :: label_color(6) = ''     !< x, y, y2, x2, r, z label colors, `set xlabel tc`.
+   real(R8P)                        :: label_offset(2, 7) = 0.0_R8P !< x, y, y2, x2, r, z, cb label shifts [characters,
+                                                                    !< y up], `set xlabel offset X,Y`.
+   character(len=24)                :: label_color(7) = ''     !< x, y, y2, x2, r, z, cb label colors, `set xlabel tc`.
+   logical                          :: cblabel_norotate = .false. !< The color box label horizontal (`set cblabel
+                                                                  !< norotate`; gnuplot's is vertical by default).
    real(R8P)                        :: margin_user(4) = -1.0_R8P !< Left, right, top, bottom margins set (gnuplot
                                                                   !< `set lmargin`...): characters, or a page fraction
                                                                   !< with `margin_screen`; negative: computed.
@@ -1547,6 +1550,12 @@ contains
       else
          call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis)
       endif
+   endif
+   ! the labels in palette colors (`tc palette z|cb V|frac F`), over that color axis
+   if (allocated(self%notes)) then
+      if (any(self%notes%palette > 0_I4P)) call note_palette_colors(self%notes, self%notes%at%z, &
+                                                                     effective_palette(self%palette, backend%theme%name), &
+                                                                     self%cbaxis)
    endif
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
@@ -2963,6 +2972,13 @@ contains
    call self%setup_axes(area, raw)
    call view3d_zextent(self%series, self%zaxis%log, zr, zfound)
    call self%zaxis%setup(zr(1), zr(2), zfound, area(4) - area(3))
+   ! labels in palette colors without a palette series: the color axis autoscaled over the heights of the data (not
+   ! the z range), as gnuplot's
+   ! (no color box drawn: not extended to its ticks)
+   if (notes_in_palette(self) .and. .not. self%has_image(palette=.true.)) then
+      self%cbaxis%tight = .true.
+      call self%cbaxis%setup(zr(1), zr(2), zfound, area(4) - area(3))
+   endif
    if (backend%enhanced) call plain_ticks(self)
    lines = 0_I4P
    if (self%has_title()) lines = 1_I4P + count([(self%title(k:k) == '\', k = 1_I4P, len(self%title, kind=I4P))])
@@ -3040,6 +3056,15 @@ contains
          call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis, self%colormaps)
       else
          call paint_series(self%series, effective_palette(self%palette, backend%theme%name), self%cbaxis)
+      endif
+   endif
+   ! the labels in palette colors, of their z as given (not projected)
+   if (allocated(self%notes) .and. allocated(notes)) then
+      if (size(notes) == size(self%notes)) then
+         if (any(self%notes%palette > 0_I4P)) call note_palette_colors(self%notes, notes%at%z, &
+                                                                        effective_palette(self%palette, &
+                                                                                          backend%theme%name), &
+                                                                        self%cbaxis)
       endif
    endif
    ! the projected series are page coordinates: the page axes map them one to one
@@ -7971,6 +7996,43 @@ contains
       endfunction map_color
    endsubroutine paint_series
 
+   pure function notes_in_palette(self) result(yes)
+   !< Whether a label of the panel is in a palette color (`set label ... tc palette`).
+   class(axes_object), intent(in) :: self !< Panel.
+   logical                        :: yes  !< Any.
+
+   yes = .false.
+   if (allocated(self%notes)) yes = any(self%notes%palette > 0_I4P)
+   endfunction notes_in_palette
+
+   pure subroutine note_palette_colors(notes, z, p, cbaxis)
+   !< The colors of the labels in palette colors, gnuplot's: of their height `z` over the color axis (`tc palette z`),
+   !< of a color axis value (`cb V`) or of a fraction (`frac F`) of the palette `p`.
+   type(label_object), intent(inout) :: notes(:) !< Labels.
+   real(R8P),          intent(in)    :: z(:)     !< Their heights (z of their positions).
+   type(palette_object), intent(in)  :: p        !< Effective palette.
+   type(axis_object),  intent(in)    :: cbaxis   !< Color axis.
+   real(R8P)                         :: f        !< Palette fraction.
+   integer(I4P)                      :: k        !< Label counter.
+
+   do k = 1_I4P, size(notes, kind=I4P)
+      select case (notes(k)%palette)
+      case (1_I4P, 2_I4P)
+         f = merge(z(min(k, size(z, kind=I4P))), notes(k)%palette_value, notes(k)%palette == 1_I4P)
+         if (cbaxis%hi /= cbaxis%lo .and. .not. (cbaxis%log .and. f <= 0.0_R8P)) then
+            f = min(1.0_R8P, max(0.0_R8P, cbaxis%to_unit(f)))
+         else
+            f = 0.0_R8P
+         endif
+      case (3_I4P)
+         f = min(1.0_R8P, max(0.0_R8P, notes(k)%palette_value))
+      case default
+         cycle
+      endselect
+      notes(k)%color = hex_color(p%rgb(f))
+   enddo
+   endsubroutine note_palette_colors
+
    function effective_palette(palette, theme) result(p)
    !< `palette`, or the palette of the `theme` if it has the default colors: from the dark glass to the emissive colors
    !< (`vfd`), from the pale glass to the dark segments (`lcd`), quantized as `palette` (`maxcolors`).
@@ -8369,15 +8431,44 @@ contains
          widest = max(widest, backend%text_width(self%cbaxis%ticks(k)%label, self%cbaxis%ticks(k)%sup, font_size))
       enddo
       if (self%cbaxis%has_label()) then
-         backend%font = self%cblabel_font
-         if (self%cbox%horizontal) then
-            call backend%text(left + 0.5_R8P * bw, top + bh + GAP + font_size + &
-                              merge(GAP + LINE_HEIGHT * font_size, 0.0_R8P, labelled), self%cbaxis%label, 'middle')
-         else
-            call backend%text(left + bw + 3.0_R8P * GAP + widest + (LINE_HEIGHT - 0.25_R8P) * font_size, &
-                              top + 0.5_R8P * bh, self%cbaxis%label, 'middle', rotate=-90.0_R8P)
-         endif
-         backend%font = font_object()
+         ! `set cblabel offset X,Y` in gnuplot's character units (svg: h_char 0.7, v_char 1.5 font sizes), `norotate`
+         ! horizontal about the same centre, `tc` its color
+         block
+            real(R8P)                     :: lx    !< Label anchor abscissa [px].
+            real(R8P)                     :: ly    !< Label anchor ordinate [px].
+            character(len=:), allocatable :: color !< Label color.
+
+            backend%font = self%cblabel_font
+            backend%literal = self%label_plain(7)
+            color = trim(self%label_color(7))
+            if (self%cbox%horizontal) then
+               lx = left + 0.5_R8P * bw
+               ly = top + bh + GAP + font_size + merge(GAP + LINE_HEIGHT * font_size, 0.0_R8P, labelled)
+            else
+               lx = left + bw + 3.0_R8P * GAP + widest + (LINE_HEIGHT - 0.25_R8P) * font_size
+               ly = top + 0.5_R8P * bh
+            endif
+            lx = lx + self%label_offset(1, 7) * 0.7_R8P * font_size
+            ly = ly - self%label_offset(2, 7) * 1.5_R8P * font_size
+            if (self%cblabel_norotate .and. .not. self%cbox%horizontal) then
+               ! about the centre of the vertical one (gnuplot's svg: 0.325 font sizes each way)
+               lx = lx - 0.325_R8P * font_size
+               ly = ly + 0.325_R8P * font_size
+            endif
+            if (self%cbox%horizontal .or. self%cblabel_norotate) then
+               if (len(color) > 0) then
+                  call backend%text(lx, ly, self%cbaxis%label, 'middle', color=color)
+               else
+                  call backend%text(lx, ly, self%cbaxis%label, 'middle')
+               endif
+            elseif (len(color) > 0) then
+               call backend%text(lx, ly, self%cbaxis%label, 'middle', rotate=-90.0_R8P, color=color)
+            else
+               call backend%text(lx, ly, self%cbaxis%label, 'middle', rotate=-90.0_R8P)
+            endif
+            backend%font = font_object()
+            backend%literal = .false.
+         endblock
       endif
    endassociate
    call backend%end_group
@@ -8468,7 +8559,8 @@ contains
    if (allocated(self%y2axis%ticks)) call one_line(self%y2axis%ticks)
    if (allocated(self%x2axis%ticks)) call one_line(self%x2axis%ticks)
    if (allocated(self%xaxis%ticks) .and. self%xaxis%tics%rotate /= 0.0_R8P) call one_line(self%xaxis%ticks)
-   if (self%has_image(palette=.true.)) call setup_colors
+   ! the color axis of the palette series, or of the labels in palette colors alone (gnuplot sets it up as well)
+   if (self%has_image(palette=.true.) .or. notes_in_palette(self)) call setup_colors
    contains
 
       subroutine setup_polar
@@ -8530,7 +8622,8 @@ contains
       else
          npx = merge(area(2) - area(1), area(4) - area(3), self%cbox%horizontal)
       endif
-      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend .or. .not. self%colorbox
+      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend .or. .not. self%colorbox .or. &
+                          .not. self%has_image(palette=.true.)
       call self%cbaxis%setup(zmin, zmax, any_z, npx)
       endsubroutine setup_colors
 

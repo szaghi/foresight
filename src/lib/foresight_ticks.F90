@@ -30,7 +30,8 @@ module foresight_ticks
 !< The same rules are mirrored by the interactive viewer, which must regenerate identical ticks after a zoom.
 use penf, only : I4P, I8P, R8P
 use foresight_font, only : font_object
-use foresight_format, only : decimal_of, decimal_str, format_check, format_decimal, int_str, parse_decimal, real_str
+use foresight_format, only : decimal_of, decimal_str, dms_label, format_check, format_decimal, int_str, parse_decimal, &
+                             real_str
 use foresight_time, only : civil_time, DAY_SEC, MON_SEC, WEEK_SEC, YEAR_SEC, strftime, time_format_check, time_justify, &
                            time_parts
 
@@ -113,6 +114,8 @@ type :: tics_object
    logical                       :: per_label = .false. !< gnuplot's default `% h` labels, each by %g (with a x10
                                                         !< superscript exponent), of the scripts; else the
                                                         !< library's per-axis rule (SCI_HIGH, SCI_LOW).
+   logical                       :: geographic = .false. !< Labels in degrees, minutes, seconds by the format (gnuplot
+                                                         !< `set xtics geographic`, `%D %M %S %E %N`).
    contains
       procedure, pass(self) :: attribute  !< Viewer attribute of the tick positions.
       procedure, pass(self) :: clear_list !< Forget the explicit list, back to the automatic or fixed ticks.
@@ -1491,7 +1494,11 @@ contains
    real(R8P),                     intent(in), optional :: span(2) !< Axis start and end.
 
    if (present(tics)) then
-      if (tics%has_format()) then
+      if (tics%has_format() .and. tics%geographic) then
+         label = dms_label(tics%format, real(n, R8P) * 10.0_R8P**e)
+         sup = ''
+         return
+      elseif (tics%has_format()) then
          call format_decimal(tics%format, n, e, label, sup)
          return
       elseif (tics%per_label) then

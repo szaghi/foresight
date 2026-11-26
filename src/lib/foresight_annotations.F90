@@ -69,6 +69,9 @@ type :: label_object
    type(font_object)             :: font                 !< Font (`set label font "..."`).
    real(R8P)                     :: offset(2) = 0.0_R8P  !< Text offset [characters, y upward].
    logical                       :: boxed = .false.      !< On the background (gnuplot `boxed`, a drawn text box style).
+   integer(I4P)                  :: palette = 0_I4P      !< Palette color: 1 of its z (`tc palette z`), 2 of a color
+                                                         !< axis value (`cb V`), 3 of a fraction (`frac F`); 0 none.
+   real(R8P)                     :: palette_value = 0.0_R8P !< The value V or the fraction F.
 endtype label_object
 
 type :: arrow_object

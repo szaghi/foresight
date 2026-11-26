@@ -327,6 +327,16 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 ticks fall on whole time units, the labels invented from the range as gnuplot's (`%H:%M:%S` within a day at minute
 steps), or written by `set format x`; range ends are times. See [Time data](/guide/gnuplot-subset#time-data).
 
+### Geographic tick labels
+
+<<< @/examples/snippets/cb_geographic.gp{gnuplot}
+
+<Plot name="cb_geographic" svg :width="560" :height="400" />
+
+`set xtics geographic` writes the tick labels in degrees, minutes and seconds by the format: `%D` the whole degrees,
+`%E` E or W and `%N` N or S in place of the sign, as gnuplot's gstrdms. See
+[Geographic tick labels](/guide/gnuplot-subset#geographic-tick-labels).
+
 ### Minor ticks in time units
 
 <<< @/examples/snippets/cb_time_minor.gp{gnuplot}
@@ -1684,6 +1694,16 @@ the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`
 `lc rgb variable` (or `fc rgb variable`) colors each quadrangle of a pm3d surface by the fourth `using` field, a packed
 color 0xRRGGBB (0xAARRGGBB with a transparency): a quadrangle takes the mean of its corners channel by channel, as
 gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plots](/guide/gnuplot-subset#3d-plots).
+
+### Labels in palette colors
+
+<<< @/examples/snippets/cb_view3d_label_colors.gp{gnuplot}
+
+<Plot name="cb_view3d_label_colors" svg :width="560" :height="400" />
+
+`tc palette z` colors a label by its own height through the palette, `tc palette cb V` by a value, `tc palette frac F`
+by a fraction of the palette. With no item colored by the palette, the color axis spans the heights of the surface,
+as gnuplot: the labels then read as a legend of the heights. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
 
 ### Contour lines over a map
 

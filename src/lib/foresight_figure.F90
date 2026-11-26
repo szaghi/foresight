@@ -823,23 +823,39 @@ contains
    if (len(bad) > 0) error stop 'foresight: set_style_boxplot: '//bad
    endsubroutine set_style_boxplot
 
-   subroutine set_format(self, format, axes)
+   subroutine set_format(self, format, axes, geographic)
    !< Tick label `format` of the `axes` named `x`, `y`, `y2`, `cb` (all when absent), as gnuplot `set format`: text
    !< with one printf conversion `%[flags][width][.precision]` `f`, `e`, `E`, `g`, `G` or `h` (`g` with a `x10`
    !< superscript exponent), e.g. `'%.1e'` or `'%g s'`; an empty format restores the default labels. On a time axis
-   !< (`set_time_axes`) a time format, `'%H:%M'` (see foresight_time `strftime`).
-   class(figure_object), intent(inout)        :: self    !< Figure.
-   character(len=*),     intent(in)           :: format  !< Label format.
-   character(len=*),     intent(in), optional :: axes    !< Axes names, e.g. `y`, `xy` or `y2`.
-   character(len=:), allocatable              :: message !< Format problem.
-   logical                                    :: named(5) !< x, y, y2, cb, x2 named.
+   !< (`set_time_axes`) a time format, `'%H:%M'` (see foresight_time `strftime`). With `geographic` (gnuplot `set
+   !< format x "..." geographic`, `set xtics geographic`) the labels are degrees, minutes and seconds: `%D` `%M` `%S`
+   !< whole, `%d` `%m` `%s` as `%f`, `%E` `%N` the compass letter, e.g. `'%D %E'` (foresight_format `dms_label`).
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   character(len=*),     intent(in)           :: format     !< Label format.
+   character(len=*),     intent(in), optional :: axes       !< Axes names, e.g. `y`, `xy` or `y2`.
+   logical,              intent(in), optional :: geographic !< Labels in degrees, minutes, seconds.
+   character(len=:), allocatable              :: message    !< Format problem.
+   logical                                    :: named(5)   !< x, y, y2, cb, x2 named.
+   logical                                    :: geo        !< A geographic axis named.
 
-   if (len(format) > 0) then
+   named = which_axes(axes, 'set_format')
+   call self%ensure_panels
+   associate(panel => self%panels(self%current))
+      if (present(geographic)) then
+         if (named(1)) panel%xaxis%tics%geographic = geographic
+         if (named(2)) panel%yaxis%tics%geographic = geographic
+         if (named(3)) panel%y2axis%tics%geographic = geographic
+         if (named(4)) panel%cbaxis%tics%geographic = geographic
+         if (named(5)) panel%x2axis%tics%geographic = geographic
+      endif
+      geo = (named(1) .and. panel%xaxis%tics%geographic) .or. (named(2) .and. panel%yaxis%tics%geographic) .or. &
+            (named(3) .and. panel%y2axis%tics%geographic) .or. (named(4) .and. panel%cbaxis%tics%geographic) .or. &
+            (named(5) .and. panel%x2axis%tics%geographic)
+   endassociate
+   if (len(format) > 0 .and. .not. geo) then
       message = format_check(format)
       if (len(message) > 0 .and. len(time_format_check(format)) > 0) error stop 'foresight: set_format: '//message
    endif
-   named = which_axes(axes, 'set_format')
-   call self%ensure_panels
    associate(panel => self%panels(self%current))
       if (named(1)) panel%xaxis%tics%format = format
       if (named(2)) panel%yaxis%tics%format = format

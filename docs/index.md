@@ -196,6 +196,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_ytics_rotate" svg :width="560" :height="320" caption="rotated y labels" />
   <Plot name="cb_time" svg :width="640" :height="480" caption="a time axis (set xdata time)" />
   <Plot name="cb_time_minor" svg :width="640" :height="260" caption="minor ticks in time units" />
+  <Plot name="cb_geographic" svg :width="560" :height="400" caption="geographic tick labels" />
   <Plot name="cb_weekdates" svg :width="640" :height="300" caption="ISO 8601 week dates" />
   <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
   <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
@@ -368,6 +369,7 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_view3d_arrows" svg :width="560" :height="400" caption="arrows and labels in 3D" />
   <Plot name="cb_view3d_sphere" svg :width="560" :height="420" caption="points on a sphere (set mapping)" />
   <Plot name="cb_view3d_hidden" svg :width="560" :height="400" caption="hidden lines (set hidden3d)" />
+  <Plot name="cb_view3d_label_colors" svg :width="560" :height="400" caption="labels in palette colors" />
   <Plot name="cb_view3d_smooth" svg :width="560" :height="400" caption="smoothed profiles in 3D" />
   <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
   <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />

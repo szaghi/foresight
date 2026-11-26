@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(270)                           !< Per-check outcome.
+logical                       :: test_passed(272)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7014,6 +7014,98 @@ block
                                                 'fill="#7f7f7fdf" stroke="#7f7f7fdf"') > 0
    call interpreter%run_text("set pm3d border lc palette", iostat, iomsg)
    test_passed(270) = test_passed(270) .and. iostat /= 0_I4P .and. index(iomsg, 'border: a color') > 0
+endblock
+
+
+
+! gnuplot's option forms read by the tier B and C demos: `set no{foo}` as `unset foo` (`set nomztics`, gnuplot's
+! set_command); `unset log z`; `set palette cubehelix cyc[les] C sat[uration] S` (gnuplot's almost_equals);
+! `set label ... tc def[ault]` and `tc lt N`; `set cblabel "text" offset X,Y tc COLOR norotate` (offset in gnuplot's
+! characters, h_char 0.7 and v_char 1.5 font sizes, probed); `splot [x=a:b] [y=c:d] f(x,y)` naming the dummies after
+! `set dummy u,v` (gnuplot's surface1.dem)
+block
+   character(len=:), allocatable :: svg !< Page.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set mztics 2; set nomztics; set log z; unset log z; "// &
+                             "set palette cubehelix start 1 cyc 2 sat 0.5", iostat, iomsg)
+   associate(panel => interpreter%figure%panels(1))
+      test_passed(271) = iostat == 0_I4P .and. panel%zaxis%tics%minor /= 2_I4P .and. .not. panel%zaxis%log .and. &
+                        all(panel%palette%cubehelix == [1.0_R8P, 2.0_R8P, 0.5_R8P])
+   endassociate
+   call interpreter%run_text("set label 1 'a' at 0,0 tc lt 2; set label 1 'a' at 0,0 tc def", iostat, iomsg)
+   test_passed(271) = test_passed(271) .and. iostat == 0_I4P
+   if (test_passed(271)) test_passed(271) = len(interpreter%figure%panels(1)%notes(1)%color) == 0
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_cb.svg'; "// &
+                             "set cblabel 'Phase' offset -2,1 tc 'red'; plot '++' using 1:2:($1*$2) with image", &
+                             iostat, iomsg)
+   test_passed(271) = test_passed(271) .and. iostat == 0_I4P
+   if (test_passed(271)) then
+      svg = read_text('foresight_script_test_cb.svg')
+      test_passed(271) = index(svg, 'x="570.2" y="174.5" text-anchor="middle" transform="rotate(-90 570.2 174.5)" '// &
+                                   'fill="#ff0000">Phase') > 0
+   endif
+   call interpreter%run_text("set cblabel norotate offset 0,0 tc def; replot", iostat, iomsg)
+   test_passed(271) = test_passed(271) .and. iostat == 0_I4P
+   if (test_passed(271)) test_passed(271) = index(read_text('foresight_script_test_cb.svg'), &
+                                                'x="583.1" y="196.4" text-anchor="middle">Phase') > 0
+   call interpreter%run_text("set dummy u,v; set table 'foresight_script_test.dat'; "// &
+                             "splot [x=0:1] [y=0:2] x*y; unset table", iostat, iomsg)
+   test_passed(271) = test_passed(271) .and. iostat == 0_I4P
+   if (test_passed(271)) then
+      associate(series => interpreter%figure%panels(1)%series)
+         test_passed(271) = abs(maxval(series(1)%z, mask=ieee_is_finite(series(1)%z)) - 2.0_R8P) < 1.0e-12_R8P
+      endassociate
+   endif
+endblock
+
+
+
+! labels in palette colors, gnuplot 6.0's (probed): `tc palette z` the z of the label over the color axis, `cb V` a
+! value, `frac F` a fraction; the color axis set up for them alone (cbrange [0:1]: black, rgb(180,32,0),
+! rgb(114,2,243)), over the z range without a cbrange (labels at z -10, 0, 9 with zrange [-10:10]: black,
+! rgb(180,32,0), rgb(249,219,0)); `set xtics geographic` with `set format x "%D %E"` (gnuplot's gstrdms: 150 W, 0,
+! 80 N); splot pm3d lc rgb variable of three fields, the heights its packed colors (gnuplot's complex_trig.dem)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_tc.svg'; "// &
+                             "set cbrange [0:1]; set label 1 'Z' at 0,0 tc palette z; "// &
+                             "set label 2 'C' at 0,0.5 tc palette cb 0.5; set label 3 'F' at 0,0.8 tc palette frac 0.2; "// &
+                             "splot x*y", iostat, iomsg)
+   test_passed(272) = iostat == 0_I4P
+   if (test_passed(272)) then
+      svg = read_text('foresight_script_test_tc.svg')
+      test_passed(272) = index(svg, 'fill="#000000">Z<') > 0 .and. index(svg, 'fill="#b42000">C<') > 0 .and. &
+                        index(svg, 'fill="#7202f3">F<') > 0
+   endif
+   call interpreter%run_text("unset label; unset cbrange; set xrange [-10:10]; set yrange [-10:10]; "// &
+                             "set zrange [-10:10]; set label 1 'A' at 0,0,-10 tc pal z; "// &
+                             "set label 2 'B' at 0,0,0 tc pal z; set label 3 'C' at 0,0,9 tc pal z; splot x*y/10", &
+                             iostat, iomsg)
+   test_passed(272) = test_passed(272) .and. iostat == 0_I4P
+   if (test_passed(272)) then
+      svg = read_text('foresight_script_test_tc.svg')
+      test_passed(272) = index(svg, 'fill="#000000">A<') > 0 .and. index(svg, 'fill="#b42000">B<') > 0 .and. &
+                        index(svg, 'fill="#f9db00">C<') > 0
+   endif
+   call interpreter%run_text("reset; set xrange [-180:180]; set xtics geographic; set format x '%D %E'; "// &
+                             "plot x", iostat, iomsg)
+   test_passed(272) = test_passed(272) .and. iostat == 0_I4P
+   if (test_passed(272)) then
+      svg = read_text('foresight_script_test_tc.svg')
+      test_passed(272) = index(svg, '>150 W<') > 0 .and. index(svg, '>0  <') > 0 .and. index(svg, '>100 E<') > 0
+   endif
+   call interpreter%run_text("set format y '%D %N' geographic; set yrange [-90:90]; replot", iostat, iomsg)
+   test_passed(272) = test_passed(272) .and. iostat == 0_I4P
+   if (test_passed(272)) test_passed(272) = index(read_text('foresight_script_test_tc.svg'), '>80 N<') > 0
+   call interpreter%run_text("reset; set view map"//nl//"$q << EOD"//nl//"0 0 16711680"//nl//"0 1 255"//nl//nl// &
+                             "1 0 65280"//nl//"1 1 2164260863"//nl//"EOD"//nl// &
+                             "splot $q using 1:2:3 with pm3d lc rgb variable", iostat, iomsg)
+   test_passed(272) = test_passed(272) .and. iostat == 0_I4P
+   if (test_passed(272)) test_passed(272) = index(read_text('foresight_script_test_tc.svg'), 'fill="#7f7f7fdf"') > 0
 endblock
 
 if (all(test_passed)) then
