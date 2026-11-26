@@ -968,6 +968,7 @@ contains
    type(token_object), allocatable              :: tokens(:) !< Statement tokens.
    character(len=:), allocatable                :: command   !< Command word.
    character(len=:), allocatable                :: expanded  !< Statement after `@name` substitution.
+   real(R8P)                                    :: cb_range(2) !< Color axis range of `palette(z)`.
    character(len=:), allocatable                :: text      !< String argument.
    integer(I4P)                                 :: i         !< Token counter.
 
@@ -979,15 +980,17 @@ contains
    ! before any), a range set taking effect in a plot command, as gnuplot's axis setup before reading the data
    if (allocated(self%figure%panels)) then
       if (self%figure%current >= 1 .and. self%figure%current <= size(self%figure%panels)) then
+      ! the range through a variable, not an array constructor: no argument temporary at each statement (ifx's debug
+      ! check reports each one)
       associate(cb => self%figure%panels(self%figure%current)%cbaxis)
          if (cb%min_fixed .and. cb%max_fixed .and. (keyword(command, 'plot', 1_I4P) .or. &
                                                      keyword(command, 'splot', 2_I4P) .or. &
                                                      keyword(command, 'replot', 3_I4P))) then
-            call set_palette_function(self%figure%panels(self%figure%current)%palette, [cb%min_user, cb%max_user], &
-                                      cb%log)
+            cb_range = [cb%min_user, cb%max_user]
          else
-            call set_palette_function(self%figure%panels(self%figure%current)%palette, [cb%lo, cb%hi], cb%log)
+            cb_range = [cb%lo, cb%hi]
          endif
+         call set_palette_function(self%figure%panels(self%figure%current)%palette, cb_range, cb%log)
       endassociate
       endif
    endif
