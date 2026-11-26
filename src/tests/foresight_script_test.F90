@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(287)                           !< Per-check outcome.
+logical                       :: test_passed(288)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7850,6 +7850,53 @@ block
    endif
 endblock
 
+
+! check 288: label offsets in plot and page units (gnuplot's get_offsets): `graph 0.1, 0.1` the second in the first's
+! system (0.1 of the plot area each way), `screen 0.1` 0.1 of the page less a unit (59.99), in 2D; in a 3D view the
+! offsets `first 1, 2` and `screen 0.1, 0.05` as gnuplot 6.0 draws them from the label at 5,5,5 (58.48, 11.54 up;
+! 60, 20 up)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   real(R8P)                     :: a(2), b(2), c(2), d(2) !< Label anchors.
+   real(R8P)                     :: area(4) !< Plot area.
+   integer(I4P)                  :: k    !< Position.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_lo.svg'"//nl// &
+                             "set xrange [0:10]; set yrange [0:10]"//nl// &
+                             "set label 1 'A' at 5,5 offset graph 0.1, 0.1"//nl// &
+                             "set label 2 'C' at 5,5 offset screen 0.1, character 1"//nl// &
+                             "set label 3 'D' at 5,5"//nl//"plot x notitle", iostat, iomsg)
+   test_passed(288) = iostat == 0_I4P
+   if (test_passed(288)) then
+      svg = read_text('foresight_script_test_lo.svg')
+      k = index(svg, 'data-area="')
+      read(svg(k + 11:index(svg(k + 11:), '"') + k + 9), *) area
+      a = anchor_of(svg, 'A')
+      c = anchor_of(svg, 'C')
+      d = anchor_of(svg, 'D')
+      test_passed(288) = abs(a(1) - d(1) - aint(10.0_R8P * (area(2) - area(1))) / 100.0_R8P) < 0.011_R8P .and. &
+                        abs(d(2) - a(2) - aint(10.0_R8P * (area(4) - area(3))) / 100.0_R8P) < 0.011_R8P .and. &
+                        abs(c(1) - d(1) - 59.99_R8P) < 0.011_R8P
+   endif
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_lo.svg'"//nl// &
+                             "set xrange [0:10]; set yrange [0:10]; set zrange [0:10]"//nl// &
+                             "set label 2 'B' at 5,5,5 offset first 1, 2"//nl// &
+                             "set label 3 'C' at 5,5,5 offset screen 0.1, 0.05"//nl// &
+                             "set label 4 'D' at 5,5,5"//nl//"splot x*0 notitle", iostat, iomsg)
+   test_passed(288) = test_passed(288) .and. iostat == 0_I4P
+   if (test_passed(288)) then
+      svg = read_text('foresight_script_test_lo.svg')
+      b = anchor_of(svg, 'B')
+      c = anchor_of(svg, 'C')
+      d = anchor_of(svg, 'D')
+      test_passed(288) = abs(b(1) - d(1) - 58.48_R8P) < 0.02_R8P .and. abs(d(2) - b(2) - 11.54_R8P) < 0.02_R8P .and. &
+                        abs(c(1) - d(1) - 60.0_R8P) < 0.02_R8P .and. abs(d(2) - c(2) - 20.0_R8P) < 0.02_R8P
+   endif
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -8195,4 +8242,26 @@ contains
    read(u) text
    close(u)
    endfunction read_text
+
+   function anchor_of(svg, text) result(xy)
+   !< The anchor (x, y) of the text element `text` in `svg`, huge when absent.
+   character(len=*), intent(in) :: svg   !< Page.
+   character(len=*), intent(in) :: text  !< Its text.
+   real(R8P)                    :: xy(2) !< Anchor.
+   integer(I4P)                 :: e     !< The text's end.
+   integer(I4P)                 :: b     !< Its element's start.
+   integer(I4P)                 :: q     !< A quote.
+
+   xy = huge(1.0_R8P)
+   e = index(svg, '>'//text//'</text>', kind=I4P)
+   if (e == 0_I4P) return
+   b = index(svg(1:e), '<text x="', back=.true., kind=I4P)
+   if (b == 0_I4P) return
+   b = b + 9_I4P
+   q = index(svg(b:), '"', kind=I4P)
+   read(svg(b:b + q - 2_I4P), *) xy(1)
+   b = index(svg(b:e), 'y="', kind=I4P) + b + 2_I4P
+   q = index(svg(b:), '"', kind=I4P)
+   read(svg(b:b + q - 2_I4P), *) xy(2)
+   endfunction anchor_of
 endprogram foresight_script_test

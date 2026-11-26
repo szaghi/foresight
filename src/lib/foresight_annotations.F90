@@ -67,7 +67,9 @@ type :: label_object
    integer(I4P)                  :: pt = 1_I4P           !< Point type.
    real(R8P)                     :: ps = 1.0_R8P         !< Point size.
    type(font_object)             :: font                 !< Font (`set label font "..."`).
-   real(R8P)                     :: offset(2) = 0.0_R8P  !< Text offset [characters, y upward].
+   real(R8P)                     :: offset(2) = 0.0_R8P  !< Text offset [y upward], in `offset_system`.
+   character(len=9)              :: offset_system(2) = 'character' !< Systems of the offset: `character`, `first`,
+                                                                    !< `second`, `graph`, `screen` (gnuplot's position).
    logical                       :: boxed = .false.      !< On the background (gnuplot `boxed`, a drawn text box style).
    integer(I4P)                  :: palette = 0_I4P      !< Palette color: 1 of its z (`tc palette z`), 2 of a color
                                                          !< axis value (`cb V`), 3 of a fraction (`frac F`); 0 none.
@@ -190,6 +192,54 @@ contains
       endfunction coordinate
    endfunction unit_of
 
+   pure function label_shift(label, frame, xaxis, yaxis, x2axis, y2axis) result(d)
+   !< The offset of `label` on the page [px, y downward], gnuplot's get_offsets (map_position_r): each coordinate in its
+   !< system, `character` (the cell), `graph` (the plot area), `screen` (the page less a terminal unit), `first` and
+   !< `second` (the axis' scale: the distance from its 0); the non-character ones truncated to gnuplot's svg units
+   !< (1/100 px, an int cast).
+   type(label_object), intent(in) :: label  !< Label.
+   type(frame_object), intent(in) :: frame  !< Plot area and page.
+   type(axis_object),  intent(in) :: xaxis  !< x axis.
+   type(axis_object),  intent(in) :: yaxis  !< y axis.
+   type(axis_object),  intent(in) :: x2axis !< x2 axis.
+   type(axis_object),  intent(in) :: y2axis !< y2 axis.
+   real(R8P)                      :: d(2)   !< Shift [px].
+
+   d(1) = along(label%offset(1), label%offset_system(1), frame%cell(1), frame%area(2) - frame%area(1), &
+                frame%canvas(1), xaxis, x2axis)
+   d(2) = -along(label%offset(2), label%offset_system(2), frame%cell(2), frame%area(4) - frame%area(3), &
+                 frame%canvas(2), yaxis, y2axis)
+   contains
+      pure function along(v, system, cell, plot, page, first, second) result(c)
+      !< One coordinate of the offset [px, upward for y].
+      real(R8P),         intent(in) :: v      !< Value.
+      character(len=*),  intent(in) :: system !< System.
+      real(R8P),         intent(in) :: cell   !< Character cell [px].
+      real(R8P),         intent(in) :: plot   !< Plot area extent [px].
+      real(R8P),         intent(in) :: page   !< Page extent [px].
+      type(axis_object), intent(in) :: first  !< First axis.
+      type(axis_object), intent(in) :: second !< Second axis.
+      real(R8P)                     :: c      !< Shift [px].
+
+      c = 0.0_R8P
+      if (v == 0.0_R8P) return
+      select case (trim(system))
+      case ('graph')
+         c = v * plot
+      case ('screen')
+         c = v * (page - 0.01_R8P)
+      case ('first')
+         if (first%accepts(v) .and. first%accepts(0.0_R8P)) c = (first%to_unit(v) - first%to_unit(0.0_R8P)) * plot
+      case ('second')
+         if (second%accepts(v) .and. second%accepts(0.0_R8P)) c = (second%to_unit(v) - second%to_unit(0.0_R8P)) * plot
+      case default
+         c = v * cell
+         return
+      endselect
+      c = aint(c * 100.0_R8P) / 100.0_R8P
+      endfunction along
+   endfunction label_shift
+
    pure function page_of(p, frame, xaxis, yaxis, x2axis, y2axis) result(xy)
    !< `p` on the page [px, y downward]; huge for an unplaceable value.
    type(place_object), intent(in) :: p      !< Position.
@@ -254,8 +304,9 @@ contains
          if (xy(1) == huge(1.0_R8P)) cycle
          if (labels(k)%point) call backend%dots([xy(1)], [xy(2)], color_of(labels(k)%color), &
                                                 0.6_R8P * labels(k)%ps * font_size, pt=labels(k)%pt, line_width=1.0_R8P)
-         ! the offset in characters (0.6 of the font size wide, 1 high), the baseline a third of the size down
-         t = xy + [labels(k)%offset(1) * 0.6_R8P * font_size, -labels(k)%offset(2) * font_size + 0.35_R8P * font_size]
+         ! the offset in its systems (characters: 0.6 of the font size wide, 1 high), the baseline a third of the size
+         ! down
+         t = xy + label_shift(labels(k), frame, xaxis, yaxis, x2axis, y2axis) + [0.0_R8P, 0.35_R8P * font_size]
          backend%boxed = labels(k)%boxed
          backend%font = labels(k)%font
          if (labels(k)%rotate /= 0.0_R8P .and. backend%rotates_text()) then

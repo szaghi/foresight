@@ -1067,11 +1067,12 @@ contains
    endassociate
    endsubroutine unset_object
 
-   subroutine set_label(self, text, x, y, tag, system, justify, rotate, color, front, point, pt, ps, offset)
+   subroutine set_label(self, text, x, y, tag, system, justify, rotate, color, front, point, pt, ps, offset, offset_system)
    !< A label at (`x`, `y`), as gnuplot `set label [tag] "text" at x,y`: `system` the coordinate systems (`first`, the
    !< default, `second`, `graph`, `screen`; two words for x and y: `'graph first'`), `justify` `left` (default),
    !< `center` or `right`, `rotate` [deg], `color` of the text, `front` over the frame (else behind the data), `point`
-   !< a marker (`pt`, `ps`) at the position, `offset` the text offset [characters].
+   !< a marker (`pt`, `ps`) at the position, `offset` the text offset, in characters or in `offset_system` (`character`,
+   !< `first`, `second`, `graph`, `screen`; two words for x and y, as gnuplot `offset graph 0.1, screen 0.02`).
    class(figure_object), intent(inout)        :: self      !< Figure.
    character(len=*),     intent(in)           :: text      !< Text.
    real(R8P),            intent(in)           :: x         !< Abscissa.
@@ -1085,8 +1086,10 @@ contains
    logical,              intent(in), optional :: point     !< A point at the position.
    integer(I4P),         intent(in), optional :: pt        !< Point type.
    real(R8P),            intent(in), optional :: ps        !< Point size.
-   real(R8P),            intent(in), optional :: offset(2) !< Text offset [characters].
+   real(R8P),            intent(in), optional :: offset(2) !< Text offset.
+   character(len=*),     intent(in), optional :: offset_system !< Its coordinate systems.
    type(label_object)                         :: label     !< Label.
+   type(place_object)                         :: probe     !< The offset's systems, checked.
 
    label%text = text
    label%at = place(x, y, system, 'set_label')
@@ -1104,6 +1107,10 @@ contains
    if (present(pt)) label%pt = pt
    if (present(ps)) label%ps = ps
    if (present(offset)) label%offset = offset
+   if (present(offset_system)) then
+      probe = place(0.0_R8P, 0.0_R8P, offset_system, 'set_label')
+      label%offset_system = [probe%sx, probe%sy]
+   endif
    call self%add_label(label)
    endsubroutine set_label
 

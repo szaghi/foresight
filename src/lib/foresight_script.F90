@@ -11137,6 +11137,24 @@ contains
       if (iostat /= 0_I4P) iomsg = 'set '//option//': '//iomsg
       endsubroutine coordinate
 
+      subroutine pair_systems(values, systems)
+      !< Two coordinates `[SYS] a, [SYS] b` after token `i` (an offset), each with its system, the second in the first's
+      !< unless given (gnuplot's get_position_type); `i` left on the last.
+      real(R8P),        intent(out)   :: values(2)  !< Numbers.
+      character(len=9), intent(inout) :: systems(2) !< Their systems.
+
+      call coordinate(values(1), systems(1))
+      if (iostat /= 0_I4P) return
+      values(2) = 0.0_R8P
+      systems(2) = systems(1)
+      if (i < size(tokens, kind=I4P)) then
+         if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+            i = i + 1_I4P
+            call coordinate(values(2), systems(2))
+         endif
+      endif
+      endsubroutine pair_systems
+
       subroutine pair(values, system)
       !< Two numbers `[SYS] a, b` after token `i` (an object size, an arrow head size), `i` left on the last.
       real(R8P),        intent(out)   :: values(2) !< Numbers.
@@ -11229,12 +11247,9 @@ contains
          elseif (word == 'noboxed' .and. option == 'label') then
             label%boxed = .false.
          elseif (word == 'offset') then
-            block
-               character(len=9) :: system !< Offset system (characters only).
-
-               system = 'first'
-               call pair(label%offset, system)
-            endblock
+            ! `offset [SYS] X, [SYS] Y`: character by default, the second in the first's system unless given (gnuplot)
+            label%offset_system = 'character'
+            call pair_systems(label%offset, label%offset_system)
          elseif (word == 'font') then
             if (.not. font_spec(self, tokens, i, label%font, iostat, iomsg)) then
                iomsg = 'set label: '//iomsg
@@ -14346,6 +14361,8 @@ contains
                endif
             endif
             if (.not. next_real(tokens, i, offset(1), iostat, iomsg, self%symbols)) return
+            ! the second coordinate in the first's system unless given (gnuplot's get_position_type)
+            systems(2) = systems(1)
             if (i >= size(tokens, kind=I4P)) then
                call fail('set title: offset X,Y expected', iostat, iomsg)
                return

@@ -3129,8 +3129,8 @@ contains
    subroutine polygon3d_quads(pm, one, f, depth, rot_x, rot_z, quads, q)
    !< The polygons of `splot ... with polygons` (gnuplot's plot3d_polygons): each scan of the item (its blocks) one
    !< polygon, a triangle a quadrangle with its first corner again; in the first point's color (`lc variable`, `fc rgb
-   !< variable`) or the fill color (`fc`, else the fill's border color: black by default), lit by `set pm3d lighting` (gnuplot's illuminate_one_quadrangle: its first 4
-   !< corners in the view); its depth the mean of its corners; queued with `depth`, else sorted among themselves.
+   !< variable`) or the fill color (`fc`, else the fill's border color: black by default), lit by `set pm3d lighting`
+   !< (gnuplot's illuminate_one_quadrangle: its first 4 corners in the view); its depth the mean of its corners; queued with `depth`, else sorted among themselves.
    type(pm3d_object),   intent(in)    :: pm      !< pm3d settings.
    type(series_object), intent(in)    :: one     !< The item.
    type(view3d_frame),  intent(in)    :: f       !< The view.
@@ -4823,6 +4823,7 @@ contains
       do k = 1_I4P, size(self%notes, kind=I4P)
          self%notes(k)%at = view3d_place(f, self%notes(k)%at, self%canvas, self%xaxis, self%yaxis, &
                                          self%zaxis)
+         call view3d_label_offset(f, self%notes(k), self%canvas, self%xaxis, self%yaxis, self%zaxis)
       enddo
    endif
    if (allocated(self%arrows)) then
@@ -11286,6 +11287,64 @@ contains
    enddo
    d = [offset(1) * unit(1), -offset(2) * unit(2)]
    endfunction offset_px
+
+   pure subroutine view3d_label_offset(f, label, canvas, xaxis, yaxis, zaxis)
+   !< A label's offset in axis or graph units (`first`, `graph`) in a 3D view, gnuplot's map3d_position_r: the projected
+   !< distance from their origin (graph 0: the axis minima, first 0: the value 0, z in the system of y) moved into its
+   !< position (screen fractions, view3d_place's), truncated to gnuplot's svg units (1/100 px). gnuplot refuses those
+   !< systems mixed with `screen` or `character` ones: their part is dropped. Screen units rounded into the position
+   !< too; character ones stay with the label.
+   type(view3d_frame), intent(in)    :: f         !< The view.
+   type(label_object), intent(inout) :: label     !< Label, its position projected already.
+   real(R8P),          intent(in)    :: canvas(2) !< Page width and height [px].
+   type(axis_object),  intent(in)    :: xaxis     !< x axis.
+   type(axis_object),  intent(in)    :: yaxis     !< y axis.
+   type(axis_object),  intent(in)    :: zaxis     !< z axis.
+   type(place_object)                :: e         !< The offset's end.
+   type(place_object)                :: o         !< Its origin.
+   real(R8P)                         :: d(2)      !< Projected distance [px, y upward].
+   logical                           :: plot(2)   !< Each coordinate in plot systems.
+   integer(I4P)                      :: c         !< Coordinate.
+
+   do c = 1_I4P, 2_I4P
+      plot(c) = label%offset_system(c) == 'first' .or. label%offset_system(c) == 'graph' .or. &
+                label%offset_system(c) == 'second'
+   enddo
+   ! screen units rounded to gnuplot's svg units (map3d_getposition's + 0.5), into the position
+   do c = 1_I4P, 2_I4P
+      if (label%offset_system(c) /= 'screen') cycle
+      d(c) = aint(label%offset(c) * (canvas(c) * 100.0_R8P - 1.0_R8P) + sign(0.5_R8P, label%offset(c))) / 100.0_R8P
+      if (c == 1_I4P) then
+         label%at%x = label%at%x + d(c) / canvas(c)
+      else
+         label%at%y = label%at%y + d(c) / canvas(c)
+      endif
+      label%offset(c) = 0.0_R8P
+      label%offset_system(c) = 'character'
+   enddo
+   if (.not. any(plot)) return
+   if (.not. all(plot)) then
+      do c = 1_I4P, 2_I4P
+         if (plot(c)) label%offset(c) = 0.0_R8P
+      enddo
+      return
+   endif
+   e = place_object(x=label%offset(1), y=label%offset(2), z=0.0_R8P, sx=label%offset_system(1), &
+                    sy=label%offset_system(2), sz=label%offset_system(2))
+   if (e%sx == 'second') e%sx = 'first'
+   if (e%sy == 'second') e%sy = 'first'
+   if (e%sz == 'second') e%sz = 'first'
+   o = e
+   o%x = 0.0_R8P
+   o%y = 0.0_R8P
+   e = view3d_place(f, e, canvas, xaxis, yaxis, zaxis)
+   o = view3d_place(f, o, canvas, xaxis, yaxis, zaxis)
+   d = aint([(e%x - o%x) * canvas(1), (e%y - o%y) * canvas(2)] * 100.0_R8P) / 100.0_R8P
+   label%at%x = label%at%x + d(1) / canvas(1)
+   label%at%y = label%at%y + d(2) / canvas(2)
+   label%offset = 0.0_R8P
+   label%offset_system = 'character'
+   endsubroutine view3d_label_offset
 
    pure function view3d_place(f, p, canvas, xaxis, yaxis, zaxis, solid) result(q)
    !< The position `p` of an annotation in a 3D view as screen fractions (gnuplot's map3d_position): page systems
