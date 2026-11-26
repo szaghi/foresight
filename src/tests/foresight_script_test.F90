@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(281)                           !< Per-check outcome.
+logical                       :: test_passed(282)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7386,8 +7386,8 @@ endblock
 ! `with zerrorfill`, gnuplot 6.0's plot3d_zerrorfill (probed on its svg, 600 x 400): a quadrangle from the low to the
 ! high ends between each two points (x:y:z:dz, or x:y:z:zlow:zhigh), in the fill color (164.30,212.65 164.30,176.60
 ! 254.77,138.11 254.77,210.24 in rgb(255,215,0)), the line through z in the line color, the key sample the fill and the
-! line; `fc lt N` the color of linetype N; `set wall` the walls y0, x0, z0 as gnuplot's (half transparent, in its
-! colors, back or front as they face: x0 at 85.96,235.19 242.65,154.05 242.65,45.85 85.96,127), `border -1` black,
+! line; `fc lt N` the color of linetype N; `set wall` the walls y0, x0, z0 as gnuplot's (half transparent, bordered in
+! black, in its colors, back or front as they face: x0 at 85.96,235.19 242.65,154.05 242.65,45.85 85.96,127), `border -1` black,
 ! `unset wall`; `set grid z` at the major z ticks only, `mz` the minor ones
 block
    character(len=:), allocatable :: svg  !< Page.
@@ -7420,8 +7420,9 @@ block
    test_passed(278) = test_passed(278) .and. iostat == 0_I4P .and. count(interpreter%figure%panels(1)%wall_on) == 3
    if (test_passed(278)) then
       svg = read_text('foresight_script_test_ze.svg')
-      test_passed(278) = index(svg, '<path fill="#228b22" fill-opacity="0.5" stroke="none" '// &
-                                   'd="M85.96,235.19 242.65,154.05 242.65,45.85 85.96,127 85.96,235.19Z"') > 0 .and. &
+      test_passed(278) = index(svg, '<path fill="#228b22" fill-opacity="0.5" stroke="black" stroke-width="1" '// &
+                                   'stroke-linejoin="miter" d="M85.96,235.19 242.65,154.05 242.65,45.85 85.96,127 '// &
+                                   '85.96,235.19Z"') > 0 .and. &
                         index(svg, 'fill="#228b22"') < index(svg, 'fill="#a0b6cd"') .and. &
                         index(svg, 'fill="#a0b6cd"') < index(svg, 'fill="#cdb79e"')
    endif
@@ -7577,6 +7578,72 @@ block
    call interpreter%run_text("set view projection xw", iostat, iomsg)
    test_passed(281) = test_passed(281) .and. iostat /= 0_I4P
    iostat = 0_I4P
+endblock
+
+! check 282: the 3D fixes left by phase 3, as gnuplot 6.0: a map's pm3d surface clipped to the z range set (`clip z`,
+! clip_filled_polygon), the color axis autoscaled over the points in range (store_and_update_range); `set boxdepth D`
+! widening the y autoscale by D about each box, 3D boxes bordered in black (a default colorspec); a map in a multiplot
+! layout with a title laid out in gnuplot's cell, its grid walls (bordered, gnuplot's default), its quadrangles in
+! depth order (`depthorder`: seen from below, the highest first); a depth-sorted pattern drawn as wide as its border
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_mz.svg'"//nl// &
+                             "set view map; set samples 11; set isosamples 11"//nl// &
+                             "set xrange [-2:2]; set yrange [-2:2]; set zrange [-0.5:0.5]"//nl// &
+                             "splot x*y with pm3d notitle", iostat, iomsg)
+   test_passed(282) = iostat == 0_I4P
+   if (test_passed(282)) then
+      svg = read_text('foresight_script_test_mz.svg')
+      test_passed(282) = index(svg, '<path fill="#e17900" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.4,0.8125 0.4,0.8 0.5,0.8 0.5,0.9 0.421875,0.9Z"') > 0 .and. &
+                        abs(interpreter%figure%panels(1)%cbaxis%lo + 0.5_R8P) < 1.0e-12_R8P .and. &
+                        abs(interpreter%figure%panels(1)%cbaxis%hi - 0.5_R8P) < 1.0e-12_R8P
+   endif
+   ! set boxdepth: the y autoscale over y -+ D, the boxes bordered in black
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_bd.svg'"//nl// &
+                             "$D << EOD"//nl//"1 1 2"//nl//"2 1 3"//nl//"1 2 1"//nl//"2 2 4"//nl//"EOD"//nl// &
+                             "set boxdepth 0.3; set boxwidth 0.5"//nl//"splot $D with boxes notitle", iostat, iomsg)
+   test_passed(282) = test_passed(282) .and. iostat == 0_I4P
+   if (test_passed(282)) then
+      svg = read_text('foresight_script_test_bd.svg')
+      test_passed(282) = abs(interpreter%figure%panels(1)%yaxis%lo - 0.6_R8P) < 1.0e-9_R8P .and. &
+                        abs(interpreter%figure%panels(1)%yaxis%hi - 2.4_R8P) < 1.0e-9_R8P .and. &
+                        index(svg, '<path fill="#9400d3" stroke="black"') > 0
+   endif
+   ! a map in a titled multiplot layout: gnuplot's cell, the walls, the depth order
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_mw.svg'"//nl// &
+                             "set multiplot layout 1,2 title 'T'"//nl//"set samples 3; set isosamples 3"//nl// &
+                             "splot x*y notitle"//nl//"set view map; set wall; set pm3d depthorder; set palette gray"// &
+                             nl//"set xrange [0:1]; set yrange [0:1]"//nl//"splot x+y with pm3d notitle"//nl// &
+                             "unset multiplot", iostat, iomsg)
+   test_passed(282) = test_passed(282) .and. iostat == 0_I4P
+   if (test_passed(282)) then
+      svg = read_text('foresight_script_test_mw.svg')
+      test_passed(282) = index(svg, 'data-area="346.55 528.59 73.8 326.2"') > 0 .and. &
+                        index(svg, '<path fill="#a0b6cd" fill-opacity="0.5" stroke="black" stroke-width="1" '// &
+                                   'stroke-linejoin="miter" d="M346.55,326.2 528.59,326.2 528.59,73.8 346.55,73.8 '// &
+                                   '346.55,326.2Z"') > 0 .and. &
+                        index(svg, 'fill="#d2d2d2" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.5,0.5 0.5,0 1,0 1,0.5Z"') > 0 .and. &
+                        index(svg, 'fill="#d2d2d2"') < index(svg, 'fill="#656565"')
+   endif
+   ! a depth-sorted pattern as wide as the pm3d border
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pw.svg'"//nl// &
+                             "set obj 1 polygon from 0,0,0 to 1,0,0 to 0,1,1 depthorder fs transparent pattern 1 "// &
+                             "fc 'red'"//nl//"set pm3d depthorder border lc 'black' lw 2"//nl// &
+                             "set xrange [-1:2]; set yrange [-1:2]; set zrange [-1:2]"//nl//"splot -10 notitle", &
+                             iostat, iomsg)
+   test_passed(282) = test_passed(282) .and. iostat == 0_I4P
+   if (test_passed(282)) then
+      svg = read_text('foresight_script_test_pw.svg')
+      test_passed(282) = index(svg, '<path d="M0,0 L8,8 M0,8 L8,0" fill="none" stroke="#ff0000" stroke-width="2"/>') > 0
+   endif
 endblock
 
 if (all(test_passed)) then

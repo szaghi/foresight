@@ -309,6 +309,7 @@ contains
    self%layout = fresh%layout
    self%manual = fresh%manual
    self%title = ''
+   self%title_font = fresh%title_font
    if (allocated(self%panels)) deallocate(self%panels)
    call self%ensure_panels
    if (present(width)) self%width = real(width, R8P)

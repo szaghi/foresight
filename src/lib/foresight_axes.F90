@@ -1386,6 +1386,9 @@ contains
    endif
    found(ky) = found(ky) .or. hit
    xfound(kx) = xfound(kx) .or. hit
+   ! 3D boxes deep along y (`set boxdepth D`): y autoscaled over y - D to y + D, gnuplot's plot3d
+   if (self%boxdepth > 0.0_R8P .and. self%series(s)%style%with == WITH_BOXES .and. allocated(self%series(s)%z)) &
+      call deep_boxes(ymin(ky), ymax(ky), found(ky))
    if (self%series(s)%noautoscale) then
       ymin(ky) = ysave(1)
       ymax(ky) = ysave(2)
@@ -1412,6 +1415,25 @@ contains
          call self%series(s)%extent(xaxis, yaxis, x0, x1, y0, y1, any)
       endif
       endsubroutine widen
+
+      pure subroutine deep_boxes(y0, y1, any)
+      !< Widen the y extent by the box depth about each point (inside the x range when `windowed`).
+      real(R8P), intent(inout) :: y0  !< Smallest ordinate.
+      real(R8P), intent(inout) :: y1  !< Largest ordinate.
+      logical,   intent(inout) :: any !< A counted point.
+      integer(I4P)             :: i   !< Point counter.
+
+      do i = 1_I4P, min(size(self%series(s)%x, kind=I4P), size(self%series(s)%y, kind=I4P))
+         if (.not. (ieee_is_finite(self%series(s)%x(i)) .and. ieee_is_finite(self%series(s)%y(i)))) cycle
+         if (windowed) then
+            if (self%series(s)%x(i) < min(self%xaxis%lo, self%xaxis%hi) .or. &
+                self%series(s)%x(i) > max(self%xaxis%lo, self%xaxis%hi)) cycle
+         endif
+         y0 = min(y0, self%series(s)%y(i) - self%boxdepth)
+         y1 = max(y1, self%series(s)%y(i) + self%boxdepth)
+         any = .true.
+      enddo
+      endsubroutine deep_boxes
    endsubroutine series_extent
 
    pure subroutine set_defaults(self)
@@ -1786,6 +1808,8 @@ contains
       character(len=*), intent(in) :: layer      !< `behind`, `back` or `front`.
       logical,          intent(in) :: data_space !< The data space objects, else the page annotations.
 
+      ! a map's grid walls (`set wall`) behind its back objects, gnuplot's (the vertical ones seen edge-on)
+      if (map .and. layer == 'back' .and. any(self%wall_on)) call map_walls(data_space)
       ! the pixmaps on the page before the objects of their layer, as gnuplot
       if (.not. data_space .and. allocated(self%pixmaps)) &
          call draw_pixmaps(self%pixmaps, layer, backend, area, self%canvas, font_size, self%xaxis, self%yaxis, &
@@ -1798,6 +1822,24 @@ contains
       if (allocated(self%arrows)) call draw_note_arrows(self%arrows, layer == 'front', backend, area, self%canvas, &
                                                    font_size, self%xaxis, self%yaxis, self%x2axis, self%y2axis)
       endsubroutine annotate
+
+      subroutine map_walls(data_space)
+      !< The grid walls drawn of a map view, in the back layer (the data space ones, else the page ones).
+      logical, intent(in)             :: data_space !< The data space walls, else the page ones.
+      type(shape_object), allocatable :: walls(:)   !< The walls drawn.
+      integer(I4P)                    :: k, j       !< Counters.
+
+      allocate(walls(count(self%wall_on)))
+      j = 0_I4P
+      do k = 1_I4P, 5_I4P
+         if (.not. self%wall_on(k)) cycle
+         j = j + 1_I4P
+         walls(j) = self%walls(k)
+         walls(j)%layer = 'back'
+      enddo
+      call draw_shapes(walls, 'back', data_space, backend, area, self%canvas, font_size, self%xaxis, self%yaxis, &
+                       self%x2axis, self%y2axis)
+      endsubroutine map_walls
       pure function circle_u(rho) result(u)
       !< Unit abscissae of the circle of radius `rho` [r units] about the pole.
       real(R8P), intent(in)  :: rho  !< Radius.
@@ -2509,14 +2551,15 @@ contains
                ! the slices from the z range (and the color axis) of the data, autoscaled as in a 3D view
                call map_contourfill_slices(self, lows, highs, mids, scol, zr)
                if (self%cfill_lt > 0_I4P) then
-                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads, lows=lows, &
-                                   highs=highs, mids=mids, zrange=zr, slice_colors=scol)
+                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, self%zaxis, pm3d, &
+                                   mx, my, quads, lows=lows, highs=highs, mids=mids, zrange=zr, slice_colors=scol)
                else
-                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads, lows=lows, &
-                                   highs=highs, mids=mids, zrange=zr)
+                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, self%zaxis, pm3d, &
+                                   mx, my, quads, lows=lows, highs=highs, mids=mids, zrange=zr)
                endif
             else
-               call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads)
+               call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, self%zaxis, pm3d, mx, &
+                                my, quads)
             endif
             call push(drawn, quads)
          endif
@@ -2952,6 +2995,14 @@ contains
    if (quads%style%fill == FILL_EMPTY) then
       quads%style%fill = FILL_SOLID
       quads%style%density = 1.0_R8P
+   endif
+   ! a border of no color given is black (gnuplot's apply_pm3dcolor of a default colorspec)
+   if (quads%style%border) then
+      if (.not. allocated(quads%style%border_color)) then
+         quads%style%border_color = 'black'
+      elseif (len(quads%style%border_color) == 0) then
+         quads%style%border_color = 'black'
+      endif
    endif
    if (allocated(quads%style%fill_rgb)) deallocate(quads%style%fill_rgb)
    quads%crisp = .true.
@@ -4104,14 +4155,19 @@ contains
    if (len(sup) > 0) label = label//'^{'//sup//'}'
    endfunction contour_label
 
-   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, mx, my, quads, lows, highs, mids, zrange, slice_colors)
+   subroutine pm3d_series(series, settings, xaxis, yaxis, zaxis, titled, mx, my, quads, lows, highs, mids, zrange, &
+                          slice_colors)
    !< The pm3d quadrangles of a 3D `series` as a series of polygons (see map_surfaces); `titled` keeps its key entry
    !< (a `with pm3d` item; the quadrangles of an implicit pm3d have none); a `mask` item keeps the quadrangles whose
-   !< first corner lies in a mask polygon (`mx`, `my`), as gnuplot's pm3d_plot.
+   !< first corner lies in a mask polygon (`mx`, `my`), as gnuplot's pm3d_plot. A quadrangle needs a corner within the
+   !< x, y and z ranges set; at the surface alone (`at s`, no base nor top) gnuplot's `clip z` clips it to the z range
+   !< set (clip_filled_polygon), its color that of the whole quadrangle; the color axis autoscales over the points
+   !< within the ranges (the two lone points), not over the quadrangles' values.
    type(series_object), intent(in)  :: series   !< Surface.
    type(pm3d_object),   intent(in)  :: settings !< pm3d settings.
    type(axis_object),   intent(in)  :: xaxis    !< Horizontal axis.
    type(axis_object),   intent(in)  :: yaxis    !< Vertical axis.
+   type(axis_object),   intent(in)  :: zaxis    !< Height axis.
    logical,             intent(in)  :: titled   !< Keep the title.
    real(R8P),           intent(in)  :: mx(:)    !< Mask polygons abscissae, NaN separated.
    real(R8P),           intent(in)  :: my(:)    !< Mask polygons ordinates.
@@ -4131,6 +4187,8 @@ contains
    logical, allocatable             :: inrange(:) !< Points within the fixed x and y ranges.
    logical, allocatable             :: keep(:)  !< Polygon rows kept (mask).
    real(R8P)                        :: nan      !< NaN.
+   real(R8P)                        :: crange(2) !< Color range of the lone points.
+   logical                          :: zfixed   !< The z range set at both ends.
    integer(I4P)                     :: k        !< A defined point.
 
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
@@ -4139,7 +4197,8 @@ contains
       if (size(series%zvalues) == size(series%z)) c = series%zvalues
    endif
    inrange = ieee_is_finite(series%x) .and. ieee_is_finite(series%y)
-   ! within the x and y ranges set (both ends), as gnuplot's INRANGE points; element-wise, never comparing a NaN
+   zfixed = zaxis%min_fixed .and. zaxis%max_fixed
+   ! within the x, y and z ranges set (both ends), as gnuplot's INRANGE points; element-wise, never comparing a NaN
    do k = 1_I4P, size(inrange, kind=I4P)
       if (.not. inrange(k)) cycle
       if (xaxis%min_fixed .and. xaxis%max_fixed) inrange(k) = series%x(k) >= min(xaxis%min_user, xaxis%max_user) .and. &
@@ -4147,6 +4206,9 @@ contains
       if (.not. inrange(k)) cycle
       if (yaxis%min_fixed .and. yaxis%max_fixed) inrange(k) = series%y(k) >= min(yaxis%min_user, yaxis%max_user) .and. &
                                                           series%y(k) <= max(yaxis%min_user, yaxis%max_user)
+      if (.not. inrange(k)) cycle
+      if (zfixed) inrange(k) = series%z(k) >= min(zaxis%min_user, zaxis%max_user) .and. &
+                               series%z(k) <= max(zaxis%min_user, zaxis%max_user)
    enddo
    call pm3d_polygons(series%x, series%y, series%z, c, series%scans, series%scan_sets, series%grid_scans, settings, &
                       inrange, px, py, pc, rgb=series%zvalues_rgb, pz=pz)
@@ -4173,7 +4235,24 @@ contains
          pc(k) = nan
          if (sl(k) > 0_I4P) pc(k) = mids(sl(k))
       enddo
+   elseif (settings%clip_z .and. zfixed .and. scan(settings%at, 'bt') == 0) then
+      ! gnuplot's `clip z` at the surface: each quadrangle clipped to the z range, in its own color
+      call contourfill_polygons(px, py, pz, [min(zaxis%min_user, zaxis%max_user)], &
+                                [max(zaxis%min_user, zaxis%max_user)], [zaxis%min_user, zaxis%max_user], cx, cy, cz, &
+                                sl, src)
+      px = cx
+      py = cy
+      pz = cz
+      deallocate(cz)
+      allocate(cz(size(cx)))
+      do k = 1_I4P, size(cx, kind=I4P)
+         cz(k) = nan
+         if (src(k) > 0_I4P) cz(k) = pc(src(k))
+      enddo
+      call move_alloc(cz, pc)
    endif
+   ! `set pm3d depthorder`: the map seen from below (gnuplot's rot_x 180), the highest polygons drawn first
+   if (settings%direction == 3_I4P .and. .not. present(lows)) call map_depth_order(px, py, pc, pz)
    quads%style = series%style
    quads%style%with = WITH_POLYGONS
    quads%style%fill = FILL_SOLID
@@ -4197,9 +4276,17 @@ contains
       if (ieee_is_finite(c(k)) .and. ieee_is_finite(series%x(k)) .and. ieee_is_finite(series%y(k))) exit
    enddo
    if (k <= size(c, kind=I4P)) then
+      ! the color axis autoscaled over the points within the ranges set (gnuplot's store_and_update_range), all of them
+      ! if none
+      if (any(inrange .and. ieee_is_finite(c))) then
+         crange = [minval(c, mask=inrange .and. ieee_is_finite(c)), maxval(c, mask=inrange .and. ieee_is_finite(c))]
+      else
+         crange = [minval(c, mask=ieee_is_finite(c)), maxval(c, mask=ieee_is_finite(c))]
+      endif
+      quads%cb_lone = .true.
       quads%x = [px, series%x(k), nan, series%x(k)]
       quads%y = [py, series%y(k), nan, series%y(k)]
-      quads%zvalues = [pc, minval(c, mask=ieee_is_finite(c)), nan, maxval(c, mask=ieee_is_finite(c))]
+      quads%zvalues = [pc, crange(1), nan, crange(2)]
    else
       quads%x = px
       quads%y = py
@@ -4243,6 +4330,77 @@ contains
    endif
    endsubroutine pm3d_series
 
+   pure subroutine map_depth_order(px, py, pc, pz)
+   !< The polygons `px`, `py` (a NaN row after each), their color values `pc` and heights `pz`, reordered by their mean
+   !< height, the highest first (a stable order): gnuplot's depth queue of a map view, seen from below.
+   real(R8P), intent(inout) :: px(:) !< Abscissae.
+   real(R8P), intent(inout) :: py(:) !< Ordinates.
+   real(R8P), intent(inout) :: pc(:) !< Color values.
+   real(R8P), intent(inout) :: pz(:) !< Heights.
+   integer(I4P)             :: first(size(px) + 1) !< First row of each polygon.
+   real(R8P)                :: key(size(px))       !< Mean height of each polygon.
+   integer(I4P)             :: order(size(px))     !< Polygons in drawing order.
+   real(R8P)                :: ox(size(px)), oy(size(px)), oc(size(px)), oz(size(px)) !< Reordered rows.
+   integer(I4P)             :: n, r, k, m, i, j, t !< Counters.
+
+   n = 0_I4P
+   r = 1_I4P
+   do while (r <= size(px, kind=I4P))
+      if (.not. ieee_is_finite(px(r))) then
+         r = r + 1_I4P
+         cycle
+      endif
+      n = n + 1_I4P
+      first(n) = r
+      k = r
+      do while (k <= size(px, kind=I4P))
+         if (.not. ieee_is_finite(px(k))) exit
+         k = k + 1_I4P
+      enddo
+      key(n) = sum(pz(r:k - 1_I4P)) / real(k - r, R8P)
+      r = k + 1_I4P
+   enddo
+   if (n < 2_I4P) return
+   first(n + 1_I4P) = size(px, kind=I4P) + 2_I4P
+   order(1:n) = [(i, i = 1_I4P, n)]
+   ! insertion sort, stable, the highest first
+   do i = 2_I4P, n
+      t = order(i)
+      j = i - 1_I4P
+      do while (j >= 1_I4P)
+         if (key(order(j)) >= key(t)) exit
+         order(j + 1_I4P) = order(j)
+         j = j - 1_I4P
+      enddo
+      order(j + 1_I4P) = t
+   enddo
+   m = 0_I4P
+   do i = 1_I4P, n
+      r = first(order(i))
+      k = r
+      do while (k <= size(px, kind=I4P))
+         if (.not. ieee_is_finite(px(k))) exit
+         k = k + 1_I4P
+      enddo
+      ! the polygon and its NaN row
+      ox(m + 1_I4P:m + k - r) = px(r:k - 1_I4P)
+      oy(m + 1_I4P:m + k - r) = py(r:k - 1_I4P)
+      oc(m + 1_I4P:m + k - r) = pc(r:k - 1_I4P)
+      oz(m + 1_I4P:m + k - r) = pz(r:k - 1_I4P)
+      m = m + k - r + 1_I4P
+      if (m <= size(px, kind=I4P)) then
+         ox(m) = px(min(k, size(px, kind=I4P)))
+         oy(m) = py(min(k, size(px, kind=I4P)))
+         oc(m) = pc(min(k, size(px, kind=I4P)))
+         oz(m) = pz(min(k, size(px, kind=I4P)))
+      endif
+   enddo
+   px(1:m) = ox(1:m)
+   py(1:m) = oy(1:m)
+   pc(1:m) = oc(1:m)
+   pz(1:m) = oz(1:m)
+   endsubroutine map_depth_order
+
    function map_geometry_of(self, x0, y0, width, height, font_size) result(geo)
    !< The geometry of the panel's map view in the box of top-left corner (`x0`, `y0`) and size `width` x `height`
    !< [px] (foresight_view3d's map_layout): gnuplot's title lines (one, plus the backslashes of its text, as gnuplot
@@ -4256,10 +4414,16 @@ contains
    type(map_geometry)             :: geo       !< Geometry.
    integer(I4P)                   :: lines     !< Title lines.
    integer(I4P)                   :: k         !< Character counter.
+   real(R8P)                      :: box(4)    !< Panel box: left, top, width, height [px].
 
    lines = 0_I4P
    if (self%has_title()) lines = 1_I4P + count([(self%title(k:k) == '\', k = 1_I4P, len(self%title, kind=I4P))])
-   geo = map_layout(self%view3d, [x0, y0, width, height], self%canvas, font_size, lines, &
+   ! gnuplot's panel box (a multiplot layout's: its title band apart), else the rendering one, as a 3D view's
+   box = [x0, y0, width, height]
+   if (self%box3d(1) >= 0.0_R8P) box = [self%box3d(1) * self%canvas(1), &
+                                        (1.0_R8P - self%box3d(2) - self%box3d(4)) * self%canvas(2), &
+                                        self%box3d(3) * self%canvas(1), self%box3d(4) * self%canvas(2)]
+   geo = map_layout(self%view3d, box, self%canvas, font_size, lines, &
                     self%colorbox .and. self%has_image(palette=.true.) .and. .not. self%cbox%user, &
                     self%x2axis%has_label(), self%y2axis%has_label(), self%x2_active, &
                     merge(self%xaxis%tics%scale(1), 0.0_R8P, self%xaxis%tics%mirror .and. self%xaxis%tics%out), &
@@ -7846,8 +8010,9 @@ contains
    found = .false.
    do s = 1_I4P, size(all, kind=I4P)
       if (all(s)%palette_mode == 1_I4P .and. allocated(all(s)%zvalues)) then
-         ! lc palette z: the values of the points
-         do i = 1_I4P, size(all(s)%zvalues, kind=I4P)
+         ! lc palette z: the values of the points (of pm3d quadrangles, the two lone points of their range at the end)
+         do i = merge(max(1_I4P, size(all(s)%zvalues, kind=I4P) - 2_I4P), 1_I4P, all(s)%cb_lone), &
+                size(all(s)%zvalues, kind=I4P)
             if (.not. ieee_is_finite(all(s)%zvalues(i))) cycle
             if (positive .and. all(s)%zvalues(i) <= 0.0_R8P) cycle
             found = .true.
@@ -10287,7 +10452,7 @@ contains
       subroutine setup_colors
       !< The color axis over the finite values of the images (the positive ones on a log axis; or `cbrange`), a linear
       !< one extended to its ticks as gnuplot 6.0 (not a log one, nor with `noextend` or `set autoscale cbfix`, nor
-      !< without a color box: gnuplot extends the range to the ticks it draws).
+      !< without a color box in a 2D plot: gnuplot's plot extends the range to the ticks it draws, its splot always).
       real(R8P) :: zmin  !< Smallest value.
       real(R8P) :: zmax  !< Largest value.
       logical   :: any_z !< Any finite value.
@@ -10300,8 +10465,8 @@ contains
       else
          npx = merge(area(2) - area(1), area(4) - area(3), self%cbox%horizontal)
       endif
-      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend .or. .not. self%colorbox .or. &
-                          .not. self%has_image(palette=.true.)
+      self%cbaxis%tight = self%cbaxis%log .or. self%cbaxis%noextend .or. (.not. self%colorbox .and. .not. self%three_d) &
+                          .or. .not. self%has_image(palette=.true.)
       call self%cbaxis%setup(zmin, zmax, any_z, npx)
       endsubroutine setup_colors
 

@@ -122,7 +122,7 @@ that did what it says.
 | **hid**den3d [`offset N`\|`nooffset`] [...] | the hidden lines of the [3D views](#3d-views) removed (a painter's algorithm): grid surfaces opaque, their underside in the next linetype | no hidden lines |
 | **map**ping [`cartesian`\|`spherical`\|`cylindrical`] | splot's data columns: x:y:z, theta:phi:r or theta:z:r ([3D views](#3d-views)) | `cartesian` |
 | **xyp**lane `at Z` \| `relative F` \| `F`, **ticsl**evel `F` | the base plane of the [3D views](#3d-views): at the height Z, or F times the z range below it (0.5 by default) | — |
-| **wall**[`s`] [`y0`\|`x0`\|`y1`\|`x1`\|`z0`] [`fs ...`] [`fc C`] [`lw W`] | the [grid walls](#3d-views) of a 3D view, polygons over the planes x = 0, y = 0, x = 1, y = 1 and z = 0 of the graph, half transparent in gnuplot's colors by default, drawn behind the plot or over it as they face; bare, `y0`, `x0` and `z0` | no walls |
+| **wall**[`s`] [`y0`\|`x0`\|`y1`\|`x1`\|`z0`] [`fs ...`] [`fc C`] [`lw W`] | the [grid walls](#3d-views) of a 3D view, polygons over the planes x = 0, y = 0, x = 1, y = 1 and z = 0 of the graph, half transparent in gnuplot's colors and bordered in black by default, drawn behind the plot or over it as they face; bare, `y0`, `x0` and `z0` | no walls |
 | **boxd**epth `D`\|`square` | the depth of `splot ... with boxes` along y: the boxes [in 3D](#3d-views) with their back, sides and top (`square` as deep as wide on the page) | flat boxes (their front face) |
 | **su**rface [`implicit`\|`explicit`] | the surfaces of the [3D plots](#3d-plots) drawn | not drawn (contours only) |
 | **zr**ange, **zl**abel, **zti**cs, **mzti**cs, **zzero**axis | the z axis of the [3D plots](#3d-plots): its range (the options of `xrange`), label (those of `xlabel`), ticks (those of `xtics`), minor ticks and zero axis | as the x ones |
@@ -2262,7 +2262,11 @@ by channel (`c1` ... `c4`: one of them; a surface of
 2 scans takes them in reverse order, as gnuplot's `scansautomatic`); the color box then spans z. `set pm3d border`
 outlines each quadrangle after its fill. `set pm3d` alone draws every surface with pm3d under its own lines (`unset surface` leaves the pm3d
 alone), `set style function pm3d` and `set style data pm3d` the items without `with`. In a map view the base, surface
-and top (`at b|s|t`) are the same picture.
+and top (`at b|s|t`) are the same picture, but for the z range set: a quadrangle needs a corner within it (as within
+the x and y ranges set), and at the surface alone (`at s`) gnuplot's `clip z` cuts it at the range's ends, each piece in
+the color of its whole quadrangle; the color axis autoscales over the points within the ranges. `set pm3d depthorder`
+draws a map's quadrangles from the highest down (gnuplot's map is seen from below), and `set wall` puts its walls
+behind it.
 
 ```gnuplot
 set view map
@@ -2360,8 +2364,10 @@ after slice). With `set hidden3d` the mesh of a pm3d surface is hidden by it, it
 
 `splot ... with boxes` draws gnuplot's 3D boxes (plot3d_boxes): for each point a face from z = 0 (within the z range)
 to its height, as wide as `set boxwidth` (1 without), in the y = constant plane of the point; with `set boxdepth D` a
-box D deep along y (`square`: as deep as wide on the page) with its back, sides and top. Each in the point's color
-(`lc variable`, `fc rgb variable`, lit by `set pm3d lighting`) or the item's fill color, in its fill style and border;
+box D deep along y (`square`: as deep as wide on the page) with its back, sides and top, the y range autoscaled over
+y - D to y + D about each point (gnuplot's plot3d). Each in the point's color
+(`lc variable`, `fc rgb variable`, lit by `set pm3d lighting`) or the item's fill color, in its fill style and border
+(black unless its color is given);
 an item's faces are sorted by the depth of their base, or with `set pm3d depthorder base` with every pm3d surface.
 The key sample is the fill alone.
 
@@ -2370,7 +2376,8 @@ The key sample is the fill alone.
 item's polygons are sorted by their depth, or with `set pm3d depthorder` with every pm3d surface and the `depthorder`
 polygon objects (`set object N polygon ... depthorder`: closed, in their fill style, line style N+1's color on the
 back of `fc ls N`, gnuplot's 2-sided coloring). The depth-sorted polygons keep each its item's fill style and outline
-(a box its fill border). A polygon of 3 corners is gnuplot's quadrangle with its first corner again; an object of more
+(a box its fill border), a pattern in the polygon's own color, its lines as wide as the border (gnuplot's svg tile
+inherits the line width in effect). A polygon of 3 corners is gnuplot's quadrangle with its first corner again; an object of more
 than 11 corners is not drawn.
 
 `splot ... with zerrorfill` draws a line with its z errors, gnuplot's plot3d_zerrorfill: between each two points a
@@ -2379,7 +2386,7 @@ item's fill color (`fc`, else its line color), then the line through z in its li
 crossed by the line. The quadrangles of an item are sorted by depth among themselves and later items cover earlier
 ones (gnuplot's: plot them back to front), or with `set pm3d depthorder` sorted with every pm3d surface. `set wall`
 puts gnuplot's grid walls in a 3D view: polygons over the planes of the graph (`y0`, `x0`, `y1`, `x1`, `z0`), filled
-half transparent in gnuplot's colors unless `fs` and `fc` are given, each drawn behind the plot when it faces away
+half transparent in gnuplot's colors, bordered in black, unless `fs` and `fc` are given, each drawn behind the plot when it faces away
 and over it when it faces the viewer; `unset wall` removes them.
 
 ### Contours

@@ -179,6 +179,9 @@ type :: series_object
                                                !< for its own.
    logical                       :: zvalues_rgb = .false. !< `zvalues` are packed colors 0xAARRGGBB (gnuplot's pm3d
                                                           !< `lc rgb variable`), not palette values.
+   logical                       :: cb_lone = .false. !< The color axis autoscales over its last two finite
+                                                      !< `zvalues` only (pm3d quadrangles: the lone points of the
+                                                      !< surface's range within the ranges set, gnuplot's).
    logical                       :: colors_kept = .false. !< `colors` set per point; the palette paints only the points
                                                           !< of a finite `zvalues` (the color range of pm3d quads).
    logical                       :: no_hidden = .false.   !< Out of the hidden surfaces of `set hidden3d` (item option

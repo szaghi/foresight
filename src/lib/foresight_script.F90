@@ -10171,7 +10171,7 @@ contains
    subroutine wall_option(self, tokens, iostat, iomsg)
    !< gnuplot `set wall [y0|x0|y1|x1|z0] [fs ...] [fc C] [lw W] ...`: the grid walls of a 3D view, polygons over the
    !< planes x = 0, y = 0, x = 1, y = 1, z = 0 of the graph, drawn behind or in front of the plot as they face (gnuplot's
-   !< LAYER_FRONTBACK); half transparent, unbordered, in gnuplot's colors by default. Bare, y0, x0 and z0 on. Read as a
+   !< LAYER_FRONTBACK); half transparent, bordered in black, in gnuplot's colors by default. Bare, y0, x0 and z0 on. Read as a
    !< `set object polygon` of graph corners (its options), kept apart from the objects.
    class(script_object), intent(inout) :: self      !< Interpreter.
    type(token_object),   intent(in)    :: tokens(:) !< Tokens, `wall` first.
@@ -10218,7 +10218,7 @@ contains
       integer(I4P), intent(in) :: first !< First option token.
 
       text = 'object 2000000000 polygon from '//trim(CORNERS(w))//' to '// &
-             trim(CORNERS(w)(1:index(CORNERS(w), ' to ') - 1))//' fs transparent solid 0.5 noborder fc rgb "'// &
+             trim(CORNERS(w)(1:index(CORNERS(w), ' to ') - 1))//' fs transparent solid 0.5 border fc rgb "'// &
              COLORS(w)//'"'
       do j = first, size(tokens, kind=I4P)
          if (tokens(j)%kind == TOKEN_STRING) then
@@ -10239,9 +10239,13 @@ contains
             if (panel%objects(j)%tag /= TAG) cycle
             panel%walls(w) = panel%objects(j)
             panel%walls(w)%layer = 'fb'
-            ! a wall's border black unless a color is given (gnuplot's: the wall's line properties)
+            ! a wall's border black unless a color is given (gnuplot's WALL_* default: BLACK_COLORSPEC)
             if (panel%walls(w)%style%border) then
-               if (.not. allocated(panel%walls(w)%style%border_color)) panel%walls(w)%style%border_color = 'black'
+               if (.not. allocated(panel%walls(w)%style%border_color)) then
+                  panel%walls(w)%style%border_color = 'black'
+               elseif (len(panel%walls(w)%style%border_color) == 0) then
+                  panel%walls(w)%style%border_color = 'black'
+               endif
             endif
             panel%wall_on(w) = .true.
             panel%objects = [panel%objects(1:j - 1), panel%objects(j + 1:)]

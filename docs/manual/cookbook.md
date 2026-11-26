@@ -1773,8 +1773,8 @@ z in its line color; the items are plotted back to front. See [3D views](/guide/
 
 <Plot name="cb_view3d_walls" svg :width="560" :height="400" />
 
-`set wall` fills the planes of the graph box (x0, y0, z0, x1, y1) half transparent; each is drawn behind the plot or
-over it as it faces. See [3D views](/guide/gnuplot-subset#3d-views).
+`set wall` fills the planes of the graph box (x0, y0, z0, x1, y1) half transparent and borders them in black; each is
+drawn behind the plot or over it as it faces. See [3D views](/guide/gnuplot-subset#3d-views).
 
 ### Bars in 3D
 

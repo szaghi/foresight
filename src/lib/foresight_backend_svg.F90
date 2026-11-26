@@ -277,7 +277,7 @@ contains
    character(len=:), allocatable     :: paint      !< Fill paint.
 
    ! the pattern definition, if any, is written first
-   paint = self%pattern_fill(fill, .false.)
+   paint = self%pattern_fill(fill, .false., line_width)
    write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, paint, opacity, stroke, line_width, ghost)//' d="M'
    call self%write_pairs(x, y, PX_DECIMALS, '', '')
    call self%put('Z"/>')
@@ -508,23 +508,28 @@ contains
    if (self%series > 0_I4P) self%caps = self%caps//'</g>'//new_line('a')
    endsubroutine data_bars
 
-   function pattern_fill(self, fill, unit) result(paint)
+   function pattern_fill(self, fill, unit, line_width) result(paint)
    !< Paint of the `fill` of a polygon: the fill itself, or for a pattern fill (foresight_style `fill_color`) a
-   !< reference to its definition, written before the polygon (once while pattern, color and space do not change): an
-   !< 8 px tile of gnuplot's svg terminal, in page pixels or (`unit`) mapped to the unit square of the plot area.
-   class(backend_svg), intent(inout) :: self    !< Device.
-   character(len=*),   intent(in)    :: fill    !< Fill color, or pattern fill.
-   logical,            intent(in)    :: unit    !< The polygon is in the unit square of the plot area.
+   !< reference to its definition, written before the polygon (once while pattern, color, width and space do not
+   !< change): an 8 px tile of gnuplot's svg terminal, in page pixels or (`unit`) mapped to the unit square of the plot
+   !< area, its lines as wide as the polygon's border (gnuplot's tile inherits the line width in effect; 1 px without).
+   class(backend_svg), intent(inout) :: self       !< Device.
+   character(len=*),   intent(in)    :: fill       !< Fill color, or pattern fill.
+   logical,            intent(in)    :: unit       !< The polygon is in the unit square of the plot area.
+   real(R8P),          intent(in)    :: line_width !< Border width [px], not positive without a border.
    character(len=:), allocatable     :: paint   !< Fill paint.
    character(len=:), allocatable     :: color   !< Pattern color.
    character(len=:), allocatable     :: key     !< Definition key.
    character(len=:), allocatable     :: lines   !< Pattern path.
+   character(len=:), allocatable     :: width   !< Line width of the tile.
    integer(I4P)                      :: pattern !< Pattern number.
 
    call pattern_parts(fill, pattern, color)
    paint = fill
    if (pattern == 0_I4P) return
-   key = int_str(int(pattern, I8P))//color
+   width = '1'
+   if (line_width > 0.0_R8P) width = px(line_width)
+   key = int_str(int(pattern, I8P))//color//' '//width
    if (unit) key = key//px(self%area(3))//px(self%area(4))
    if (allocated(self%pattern_key)) then
       if (self%pattern_key == key) then
@@ -553,11 +558,11 @@ contains
       call self%put('<defs><pattern id="fs-pattern-'//int_str(int(self%patterns, I8P))//'" patternUnits="userSpaceOnUse" '// &
                     'width="8" height="8" patternTransform="scale('//fixed(1.0_R8P / self%area(3), UNIT_DECIMALS)//' '// &
                     fixed(1.0_R8P / self%area(4), UNIT_DECIMALS)//')"><path d="'//lines//'" fill="none" stroke="'// &
-                    self%theme%map(color)//'" stroke-width="1"/></pattern></defs>')
+                    self%theme%map(color)//'" stroke-width="'//width//'"/></pattern></defs>')
    else
       call self%put('<defs><pattern id="fs-pattern-'//int_str(int(self%patterns, I8P))//'" patternUnits="userSpaceOnUse" '// &
                     'width="8" height="8"><path d="'//lines//'" fill="none" stroke="'//self%theme%map(color)// &
-                    '" stroke-width="1"/></pattern></defs>')
+                    '" stroke-width="'//width//'"/></pattern></defs>')
    endif
    endfunction pattern_fill
 
@@ -765,7 +770,7 @@ contains
    character(len=:), allocatable     :: paint      !< Fill paint.
 
    ! the pattern definition, if any, is written first
-   paint = self%pattern_fill(fill, .true.)
+   paint = self%pattern_fill(fill, .true., line_width)
    write(self%unit, '(A)', advance='no') '<path'//polygon_paint(self, paint, opacity, stroke, line_width, ghost)// &
                                          ' vector-effect="non-scaling-stroke" d="M'
    call self%write_pairs(x, 1.0_R8P - y, UNIT_DECIMALS, '', '')
