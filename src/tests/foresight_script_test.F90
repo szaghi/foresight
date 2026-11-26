@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(284)                           !< Per-check outcome.
+logical                       :: test_passed(286)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7775,6 +7775,50 @@ block
    call interpreter%run_text("set nonlinear z via exp(z) inverse log(z)", iostat, iomsg)
    test_passed(284) = test_passed(284) .and. iostat /= 0_I4P
    iostat = 0_I4P
+endblock
+
+! check 285: `bins binrange [LO:HI]` with constant expressions (random.dem's `binrange [xlow:xhigh]`): the bins of
+! binrange [0:6] given as variables
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+
+   open(newunit=unit, file=data_file, action='write', status='replace')
+   write(unit, '(A)') '1.5 2', '2.2 4', '2.7 1', '3.1 3', '3.9 5', '4.4 2', '5.0 6', '2.2 1'
+   close(unit)
+   call interpreter%init(scratch)
+   call interpreter%run_text("lo = 0; hi = 2*3"//nl//"plot '"//data_file//"' u 1 smooth bins = 3 binrange [lo:hi]", &
+                             iostat, iomsg)
+   test_passed(285) = iostat == 0_I4P
+   if (test_passed(285)) then
+      associate(series => interpreter%figure%panels(1)%series(1))
+         test_passed(285) = size(series%x) == 3
+         if (test_passed(285)) test_passed(285) = all(series%x == [0.0_R8P, 3.0_R8P, 6.0_R8P]) .and. &
+                                                all(series%y == [0.0_R8P, 7.0_R8P, 1.0_R8P])
+      endassociate
+   endif
+   call interpreter%run_text("plot '"//data_file//"' u 1 smooth bins = 3 binrange [lo:nosuch]", iostat, iomsg)
+   test_passed(285) = test_passed(285) .and. iostat /= 0_I4P
+   iostat = 0_I4P
+endblock
+
+! check 286: a named colormap read reversed under a `negative` current palette (gnuplot's cb2gray flips the gray before
+! the colormap lookup): `fc palette water` of a pm3d surface after `set palette ... negative`, the lowest quadrangle
+! dark green as gnuplot's (turquoise unflipped)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_cn.svg'"//nl// &
+                             "set palette defined (0 'turquoise', 1 'dark-green')"//nl//"set colormap new water"//nl// &
+                             "set palette defined (0 'yellow', 1 'red') negative"//nl//"set isosamples 3,3"//nl// &
+                             "set xrange [0:1]; set yrange [0:1]"//nl//"splot x+y with pm3d fc palette water notitle", &
+                             iostat, iomsg)
+   test_passed(286) = iostat == 0_I4P
+   if (test_passed(286)) then
+      svg = read_text('foresight_script_test_cn.svg')
+      test_passed(286) = index(svg, '<path fill="#18934f" stroke="none"') > 0
+   endif
 endblock
 
 if (all(test_passed)) then

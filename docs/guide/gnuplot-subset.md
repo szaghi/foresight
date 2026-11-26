@@ -975,7 +975,7 @@ plot 'FILE' using X[:Y] smooth bins[=N] ...       # the same
 |---|---|
 | `bins` | `set samples` bins (100 by default) |
 | `bins=N` | N bins (at least 2), the first centred on the smallest x, the last on the largest |
-| `binrange [LO:HI]` | the centres of the first and last bins at LO and HI, whatever the data: values beyond the outer edges fall in no bin |
+| `binrange [LO:HI]` | the centres of the first and last bins at LO and HI (numbers or constant expressions, `[xlow:xhigh]`), whatever the data: values beyond the outer edges fall in no bin |
 | `binwidth=W` | bins W wide, as few as span the range, centred on it (N is then ignored) |
 | `binvalue=avg` | the mean of the y of each bin (two or more points), not their sum |
 
@@ -1518,7 +1518,8 @@ functions; all of them in `set style line`. In the key, the line sample takes th
 point sample that of the last one, as gnuplot. `fc palette cb V` and `fc palette frac F` give an item one palette
 color (fill and line). gnuplot 6.0's named colormaps: `set colormap new NAME` saves the current palette as NAME, `set
 colormap NAME range [min:max]` gives it a range of its own, and `lc palette NAME` colors the z column of an item by it
-(over its range, else over the color axis); an undefined NAME is an error.
+(over its range, else over the color axis); `fc palette NAME` colors a pm3d surface by it, read reversed while the
+current palette is `negative` (gnuplot's cb2gray flips the gray before the lookup); an undefined NAME is an error.
 
 ## Lines, steps and impulses
 

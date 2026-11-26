@@ -2718,7 +2718,8 @@ contains
    endsubroutine view3d_pm3d_marks
 
    function series_palette(self, s, p) result(pal)
-   !< The palette of the series `s`: its named colormap (`fc palette NAME`, `lc palette NAME`), else `p`.
+   !< The palette of the series `s`: its named colormap (`fc palette NAME`, `lc palette NAME`), else `p`; a colormap
+   !< read reversed while the current palette is `negative` (gnuplot's cb2gray flips the gray before the lookup).
    class(axes_object),   intent(in) :: self !< Panel.
    integer(I4P),         intent(in) :: s    !< Series.
    type(palette_object), intent(in) :: p    !< Panel palette.
@@ -2726,7 +2727,10 @@ contains
 
    pal = p
    if (self%series(s)%colormap > 0_I4P .and. allocated(self%colormaps)) then
-      if (self%series(s)%colormap <= size(self%colormaps, kind=I4P)) pal = self%colormaps(self%series(s)%colormap)%palette
+      if (self%series(s)%colormap <= size(self%colormaps, kind=I4P)) then
+         pal = self%colormaps(self%series(s)%colormap)%palette
+         if (p%negative) pal%negative = .not. pal%negative
+      endif
    endif
    endfunction series_palette
 

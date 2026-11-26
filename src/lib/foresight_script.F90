@@ -8526,11 +8526,29 @@ contains
             call fail('plot: binrange needs [LO:HI]', iostat, iomsg)
             return
          endif
-         if (.not. (to_number(trim(adjustl(text(1:colon - 1_I4P))), binrange(1)) .and. &
-                    to_number(trim(adjustl(text(colon + 1_I4P:))), binrange(2)))) then
-            call fail('plot: binrange needs two numbers, found "['//text//']"', iostat, iomsg)
-            return
-         endif
+         ! numbers or constant expressions (`binrange [xlow:xhigh]`)
+         block
+            character(len=:), allocatable :: message !< Not a constant.
+            integer(I4P)                  :: status  !< Constant status.
+            integer(I4P)                  :: e       !< End.
+            character(len=:), allocatable :: piece   !< An end's text.
+
+            do e = 1_I4P, 2_I4P
+               if (e == 1_I4P) then
+                  piece = trim(adjustl(text(1:colon - 1_I4P)))
+               else
+                  piece = trim(adjustl(text(colon + 1_I4P:)))
+               endif
+               if (.not. to_number(piece, binrange(e))) then
+                  status = 1_I4P
+                  if (len(piece) > 0) call self%symbols%constant(piece, binrange(e), status, message)
+                  if (status /= 0_I4P) then
+                     call fail('plot: binrange needs two numbers, found "['//text//']"', iostat, iomsg)
+                     return
+                  endif
+               endif
+            enddo
+         endblock
       case ('binwidth')
          if (.not. value_text(text)) return
          if (.not. to_number(text, v)) then
