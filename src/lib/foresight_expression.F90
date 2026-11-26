@@ -38,7 +38,8 @@ module foresight_expression
 !<
 !< Complex numbers, as gnuplot's: constants `{re, im}` and `I` (`{0,1}`); `+ - * / **` (gnuplot's formulas: powers in
 !< polar form, a negative base with a fractional exponent complex), `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
-!< `exp`, `log`, `log10` (of negative reals too), `sin`, `cos`, `tan`, `sinh`, `cosh`; comparisons `<`... of the real
+!< `exp`, `log`, `log10` (of negative reals too), `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`, `acos`, `atan`,
+!< `asinh`, `acosh`, `atanh` (asin, acos off [-1:1] and acosh below 1 too); comparisons `<`... of the real
 !< parts, `==` `!=` of both; a plotted value whose imaginary part exceeds 1e-8 is undefined (gnuplot's `set zero`); the
 !< other functions of a complex argument are undefined.
 !<
@@ -4268,8 +4269,9 @@ contains
       c%r = ieee_value(1.0_R8P, ieee_quiet_nan)
       return
    endif
-   if (a%im /= 0.0_R8P .or. (x < 0.0_R8P .and. (name == 'sqrt' .or. name == 'log' .or. name == 'log10'))) then
-      ! a complex argument, or a negative one of sqrt and log: gnuplot's complex result
+   if (a%im /= 0.0_R8P .or. (x < 0.0_R8P .and. (name == 'sqrt' .or. name == 'log' .or. name == 'log10')) .or. &
+       (abs(x) > 1.0_R8P .and. (name == 'asin' .or. name == 'acos')) .or. (x < 1.0_R8P .and. name == 'acosh')) then
+      ! a complex argument, or a real one off the real domain of sqrt, log, asin, acos, acosh: gnuplot's complex result
       call complex_unary(name, a, c, ok)
       return
    endif
@@ -4561,6 +4563,17 @@ contains
       den = cos(2.0_R8P * re) + cosh(2.0_R8P * im)
       ok = den /= 0.0_R8P
       if (ok) c = complex_value(sin(2.0_R8P * re) / den, sinh(2.0_R8P * im) / den)
+   case ('tanh')
+      ! gnuplot's f_tanh: +-1 where exp(-|2 re|) underflows
+      if (exp(-abs(2.0_R8P * re)) == 0.0_R8P) then
+         c = complex_value(sign(1.0_R8P, re), 0.0_R8P)
+      else
+         den = cosh(2.0_R8P * re) + cos(2.0_R8P * im)
+         ok = den /= 0.0_R8P
+         if (ok) c = complex_value(sinh(2.0_R8P * re) / den, sin(2.0_R8P * im) / den)
+      endif
+   case ('asin', 'acos', 'atan', 'asinh', 'acosh', 'atanh')
+      call inverse_trig(name, re, im, c, ok)
    case ('int', 'floor', 'ceil', 'sgn')
       ! of the real part, as gnuplot
       call unary(findloc(FUNCTIONS, name, dim=1, kind=I4P), value_object(r=re), c, ok)
@@ -4568,6 +4581,123 @@ contains
       ok = .false.
    endselect
    endsubroutine complex_unary
+
+   pure subroutine inverse_trig(name, re, im, c, ok)
+   !< c = name(re + i im) of the inverse circular and hyperbolic functions, gnuplot 6.0's formulas (standard.c: f_asin,
+   !< f_acos, f_atan, f_asinh, f_acosh, f_atanh), their branch cuts and their undefined points included.
+   character(len=*),   intent(in)    :: name !< asin, acos, atan, asinh, acosh or atanh.
+   real(R8P),          intent(in)    :: re   !< Real part.
+   real(R8P),          intent(in)    :: im   !< Imaginary part.
+   type(value_object), intent(out)   :: c    !< Result.
+   logical,            intent(inout) :: ok   !< Defined.
+   real(R8P)                         :: x, y !< The parts the formula reads.
+   real(R8P)                         :: alpha, beta, t, u, v, w, z !< gnuplot's intermediates.
+   real(R8P)                         :: ysign !< Sign of y.
+
+   c = value_object()
+   select case (name)
+   case ('asin', 'asinh')
+      ! asinh(z) = -i asin(i z): x the negated imaginary part, y the real one
+      if (name == 'asin') then
+         x = re
+         y = im
+      else
+         x = -im
+         y = re
+      endif
+      ysign = merge(1.0_R8P, -1.0_R8P, y >= 0.0_R8P)
+      if (y == 0.0_R8P .and. abs(x) <= 1.0_R8P) then
+         if (name == 'asin') then
+            c = complex_value(asin(x), 0.0_R8P)
+         else
+            c = complex_value(0.0_R8P, -asin(x))
+         endif
+      elseif (name == 'asinh' .and. y == 0.0_R8P) then
+         ok = .false.
+      elseif (x == 0.0_R8P) then
+         alpha = sqrt(1.0_R8P + y * y)
+         t = ysign * log(alpha + sqrt(alpha * alpha - 1.0_R8P))
+         if (name == 'asin') then
+            c = complex_value(0.0_R8P, t)
+         else
+            c = complex_value(t, 0.0_R8P)
+         endif
+      else
+         beta = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P - sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         if (name == 'asin' .and. beta > 1.0_R8P) beta = 1.0_R8P
+         alpha = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P + sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         t = ysign * log(alpha + sqrt(alpha * alpha - 1.0_R8P))
+         if (name == 'asin') then
+            c = complex_value(asin(beta), t)
+         else
+            c = complex_value(t, -asin(beta))
+         endif
+      endif
+   case ('acos')
+      x = re
+      y = im
+      if (y == 0.0_R8P .and. abs(x) <= 1.0_R8P) then
+         c = complex_value(acos(x), 0.0_R8P)
+      else
+         alpha = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P + sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         beta = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P - sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         beta = max(-1.0_R8P, min(1.0_R8P, beta))
+         ysign = merge(1.0_R8P, -1.0_R8P, y >= 0.0_R8P)
+         c = complex_value(acos(beta), -ysign * log(alpha + sqrt(alpha * alpha - 1.0_R8P)))
+      endif
+   case ('acosh')
+      x = re
+      y = im
+      if (y == 0.0_R8P .and. abs(x) <= 1.0_R8P) then
+         c = complex_value(0.0_R8P, acos(x))
+      elseif (y == 0.0_R8P .and. x > 1.0_R8P) then
+         c = complex_value(log(x + sqrt(x * x - 1.0_R8P)), 0.0_R8P)
+      else
+         alpha = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P + sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         beta = sqrt((x + 1.0_R8P) ** 2 + y * y) / 2.0_R8P - sqrt((x - 1.0_R8P) ** 2 + y * y) / 2.0_R8P
+         c = complex_value(log(alpha + sqrt(alpha * alpha - 1.0_R8P)), merge(-1.0_R8P, 1.0_R8P, y < 0.0_R8P) * &
+                           acos(beta))
+      endif
+   case default
+      ! atan, atanh (atanh(z) = -i atan(i z))
+      if (name == 'atan') then
+         x = re
+         y = im
+      else
+         x = -im
+         y = re
+      endif
+      if (y == 0.0_R8P) then
+         if (name == 'atan') then
+            c = complex_value(atan(x), 0.0_R8P)
+         else
+            c = complex_value(0.0_R8P, -atan(x))
+         endif
+      elseif (x == 0.0_R8P .and. abs(y) >= 1.0_R8P) then
+         ok = .false.
+      else
+         if (x >= 0.0_R8P) then
+            u = x
+            v = y
+         else
+            u = -x
+            v = -y
+         endif
+         z = atan(2.0_R8P * u / (1.0_R8P - u * u - v * v))
+         w = log((u * u + (v + 1.0_R8P) ** 2) / (u * u + (v - 1.0_R8P) ** 2)) / 4.0_R8P
+         if (z < 0.0_R8P) z = z + 2.0_R8P * (2.0_R8P * atan(1.0_R8P))
+         if (x < 0.0_R8P) then
+            z = -z
+            w = -w
+         endif
+         if (name == 'atan') then
+            c = complex_value(0.5_R8P * z, w)
+         else
+            c = complex_value(w, -0.5_R8P * z)
+         endif
+      endif
+   endselect
+   endsubroutine inverse_trig
 
    pure subroutine safe_add(x, y, z, ok)
    !< z = x + y, undefined on overflow.
@@ -4927,6 +5057,14 @@ contains
          return
       endif
    endif
+   ! the inverse hyperbolic functions of a complex argument (acosh of a real below 1 too): gnuplot's complex values
+   select case (trim(MATH_FUNCTIONS(f)))
+   case ('asinh', 'acosh', 'atanh')
+      if (args(1)%im /= 0.0_R8P .or. (trim(MATH_FUNCTIONS(f)) == 'acosh' .and. x(1) < 1.0_R8P)) then
+         call inverse_trig(trim(MATH_FUNCTIONS(f)), x(1), args(1)%im, c, ok)
+         return
+      endif
+   endselect
    call math_function(f, x(1:size(args)), args(1)%i, r, is_int, ok)
    if (.not. ok) return
    if (is_int) then

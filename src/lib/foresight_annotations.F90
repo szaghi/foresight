@@ -122,6 +122,8 @@ type :: pixmap_object
    !< An image from a PNG file, gnuplot `set pixmap`.
    integer(I4P)                  :: tag = 0_I4P         !< Tag (`set pixmap N`).
    character(len=:), allocatable :: png                 !< The file, base64.
+   character(len=:), allocatable :: wide_png            !< A colormap's entries as a row (`colormap NAME`), base64:
+                                                        !< drawn when more than twice as wide as high (gnuplot's).
    integer(I4P)                  :: pixels(2) = 0_I4P   !< Its width and height [pixels].
    type(place_object)            :: at                  !< Position: the lower left corner, or the centre.
    type(place_object)            :: span                !< Width and height, each in its system.
@@ -456,7 +458,14 @@ contains
             if (pixmaps(k)%sized == 3_I4P) wh(1) = wh(2) * real(pixmaps(k)%pixels(1), R8P) / &
                                                    real(pixmaps(k)%pixels(2), R8P)
          endif
-         if (pixmaps(k)%center) then
+         ! a colormap more than twice as wide as high: its entries along x (gnuplot's place_pixmaps)
+         if (allocated(pixmaps(k)%wide_png) .and. wh(1) > 2.0_R8P * wh(2)) then
+            if (pixmaps(k)%center) then
+               call backend%pixmap(xy(1) - 0.5_R8P * wh(1), xy(2) - 0.5_R8P * wh(2), wh(1), wh(2), pixmaps(k)%wide_png)
+            else
+               call backend%pixmap(xy(1), xy(2) - wh(2), wh(1), wh(2), pixmaps(k)%wide_png)
+            endif
+         elseif (pixmaps(k)%center) then
             call backend%pixmap(xy(1) - 0.5_R8P * wh(1), xy(2) - 0.5_R8P * wh(2), wh(1), wh(2), pixmaps(k)%png)
          else
             call backend%pixmap(xy(1), xy(2) - wh(2), wh(1), wh(2), pixmaps(k)%png)

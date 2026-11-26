@@ -265,6 +265,8 @@ type :: axes_object
    character(len=6)                 :: key_title_anchor = 'middle' !< Its anchor: `start` (gnuplot `left`), `middle`
                                                                  !< or `end` (`right`).
    real(R8P)                        :: title_offset(2) = 0.0_R8P !< Title shift [characters], `set title offset`.
+   character(len=9)                 :: title_offset_system(2) = 'character' !< Its coordinate systems: `character`,
+                                                                            !< `graph` (plot fractions), `screen`.
    character(len=6)                 :: title_anchor = 'middle' !< Title justification, `set title left|right`:
                                                                !< start, middle or end, at the centre.
    character(len=24)                :: title_color = ''        !< Title color, `set title tc`; empty for the text's.
@@ -2458,9 +2460,15 @@ contains
          backend%boxed = self%title_boxed
          backend%font = self%title_font
          ! a title on several lines (new lines in it, gnuplot's "\n"), each a row lower
-         call text_rows(backend, 0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                        title_y - self%title_offset(2) * font_size, self%title, trim(self%title_anchor), &
-                        row_step(backend, element_px(backend, self%title_font, font_size)), trim(self%title_color))
+         block
+            real(R8P) :: shift_px(2) !< Title shift [px, y down].
+
+            shift_px = offset_px(self%title_offset, self%title_offset_system, [right - left, bottom - top], &
+                                 self%canvas, font_size)
+            call text_rows(backend, 0.5_R8P * (left + right) + shift_px(1), title_y + shift_px(2), self%title, &
+                           trim(self%title_anchor), row_step(backend, element_px(backend, self%title_font, font_size)), &
+                           trim(self%title_color))
+         endblock
          backend%literal = .false.
          backend%boxed = .false.
          backend%font = font_object()
@@ -2709,6 +2717,19 @@ contains
    call move_alloc(drawn, self%series)
    endsubroutine view3d_pm3d_marks
 
+   function series_palette(self, s, p) result(pal)
+   !< The palette of the series `s`: its named colormap (`fc palette NAME`, `lc palette NAME`), else `p`.
+   class(axes_object),   intent(in) :: self !< Panel.
+   integer(I4P),         intent(in) :: s    !< Series.
+   type(palette_object), intent(in) :: p    !< Panel palette.
+   type(palette_object)             :: pal  !< Palette.
+
+   pal = p
+   if (self%series(s)%colormap > 0_I4P .and. allocated(self%colormaps)) then
+      if (self%series(s)%colormap <= size(self%colormaps, kind=I4P)) pal = self%colormaps(self%series(s)%colormap)%palette
+   endif
+   endfunction series_palette
+
    subroutine view3d_pm3d_quads(self, f, p)
    !< The pm3d quadrangles of the pending surfaces of a 3D view (view3d_pm3d_marks), gnuplot's pm3d_plot: at the surface,
    !< the base and the top (`set pm3d at`, in its order), projected on the page; in gnuplot's order of the scans and of
@@ -2764,8 +2785,8 @@ contains
                                  depth, self%view3d%rot_x, self%view3d%rot_z, quads, q, lows=lows, highs=highs, &
                                  slice_colors=scol)
       else
-         call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
-                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, q)
+         call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, &
+                                 series_palette(self, s, p), depth, self%view3d%rot_x, self%view3d%rot_z, quads, q)
       endif
       if (q%n > n0) call queue_tag(q, n0, quads%style)
       if (depth) then
@@ -4518,9 +4539,14 @@ contains
          backend%literal = self%title_plain
          backend%boxed = self%title_boxed
          backend%font = self%title_font
-         call text_rows(backend, 0.5_R8P * (left + right) + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                        geo%title_y + geo%shift - self%title_offset(2) * font_size, self%title, &
-                        trim(self%title_anchor), geo%vchar, trim(self%title_color))
+         block
+            real(R8P) :: d(2) !< Title shift [px, y down].
+
+            d = offset_px(self%title_offset, self%title_offset_system, [right - left, bottom - top], self%canvas, &
+                          font_size)
+            call text_rows(backend, 0.5_R8P * (left + right) + d(1), geo%title_y + geo%shift + d(2), self%title, &
+                           trim(self%title_anchor), geo%vchar, trim(self%title_color))
+         endblock
          backend%literal = .false.
          backend%boxed = .false.
          backend%font = font_object()
@@ -4808,9 +4834,22 @@ contains
       backend%literal = self%title_plain
       backend%boxed = self%title_boxed
       backend%font = self%title_font
-      call text_rows(backend, f%title(1) * 0.01_R8P + self%title_offset(1) * CHAR_WIDTH * font_size, &
-                     f%height - f%title(2) * 0.01_R8P + f%shift - self%title_offset(2) * font_size, self%title, &
-                     trim(self%title_anchor), f%vchar * 0.01_R8P, trim(self%title_color))
+      block
+         real(R8P) :: d(2)    !< Title shift [px, y down].
+         real(R8P) :: o(2)    !< The box origin on the page [px].
+         real(R8P) :: g(2)    !< The graph offset's end on the page [px].
+
+         d = offset_px(self%title_offset, self%title_offset_system, [0.0_R8P, 0.0_R8P], self%canvas, font_size)
+         ! graph offsets through the view, gnuplot's map3d_position_r: from the box origin (x, y, z at their minima)
+         if (all(self%title_offset_system == 'graph')) then
+            o = view3d_page(f, view3d_xyz(f, f%x(1), f%y(1), f%z(1), linear=.true.))
+            g = view3d_page(f, view3d_xyz(f, f%x(1) + self%title_offset(1) * (f%x(2) - f%x(1)), &
+                                          f%y(1) + self%title_offset(2) * (f%y(2) - f%y(1)), f%z(1), linear=.true.))
+            d = g - o
+         endif
+         call text_rows(backend, f%title(1) * 0.01_R8P + d(1), f%height - f%title(2) * 0.01_R8P + f%shift + d(2), &
+                        self%title, trim(self%title_anchor), f%vchar * 0.01_R8P, trim(self%title_color))
+      endblock
       backend%literal = .false.
       backend%boxed = .false.
       backend%font = font_object()
@@ -11113,6 +11152,32 @@ contains
 
    yes = axis%tics%rangelimited .and. axis%has_data
    endfunction limits
+
+   pure function offset_px(offset, systems, plot, canvas, font_size) result(d)
+   !< A text offset on the page [px, x right, y down] (gnuplot's map_position_r): each coordinate in its system,
+   !< `character` (0.6 of the font size wide, the font size high), `graph` (fractions of the `plot` width and height
+   !< [px]) or `screen` (fractions of the `canvas`); y upward as given.
+   real(R8P),        intent(in) :: offset(2)  !< Offset.
+   character(len=*), intent(in) :: systems(2) !< Coordinate systems.
+   real(R8P),        intent(in) :: plot(2)    !< Plot area width and height [px].
+   real(R8P),        intent(in) :: canvas(2)  !< Page width and height [px].
+   real(R8P),        intent(in) :: font_size  !< Font size [px].
+   real(R8P)                    :: d(2)       !< Shift [px].
+   real(R8P)                    :: unit(2)    !< Unit of each coordinate [px].
+   integer(I4P)                 :: k          !< Coordinate.
+
+   do k = 1_I4P, 2_I4P
+      select case (trim(systems(k)))
+      case ('graph')
+         unit(k) = plot(k)
+      case ('screen')
+         unit(k) = canvas(k)
+      case default
+         unit(k) = merge(CHAR_WIDTH * font_size, font_size, k == 1_I4P)
+      endselect
+   enddo
+   d = [offset(1) * unit(1), -offset(2) * unit(2)]
+   endfunction offset_px
 
    pure function view3d_place(f, p, canvas, xaxis, yaxis, zaxis, solid) result(q)
    !< The position `p` of an annotation in a 3D view as screen fractions (gnuplot's map3d_position): page systems

@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(283)                           !< Per-check outcome.
+logical                       :: test_passed(284)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7701,6 +7701,79 @@ block
                              iostat, iomsg)
    test_passed(283) = test_passed(283) .and. iostat /= 0_I4P
    if (test_passed(283)) test_passed(283) = index(iomsg, 'perpendicular') > 0
+   iostat = 0_I4P
+endblock
+
+! check 284: script gaps of gnuplot 6.0 demos: the complex inverse functions (asin, acos, atan, asinh, acosh, atanh of
+! complex arguments, asin and acos off [-1:1], acosh below 1) as gnuplot's standard.c, its digits; the dummy variables
+! of the '++' pseudo-file (x and y, the splot's); a 3D title offset in graph units (through the view); `set pixmap N
+! colormap NAME`, a column of the colormap's 256 entries, a row when more than twice as wide as high; `set nonlinear
+! cb|z via log10(z) inverse 10**z` the axis logarithmic, other maps refused
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: tab  !< Table.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   real(R8P)                     :: v    !< A value.
+   logical                       :: found !< Variable found.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("a1 = real(asin({0.5,0.5})); a2 = imag(acosh({0.5,0.5})); a3 = real(atanh({0.5,0.5}))"// &
+                             nl//"a4 = imag(acos(2)); a5 = imag(acosh(0.5)); a6 = real(atan({0.5,0.5}))"//nl// &
+                             "a7 = imag(asinh({0.5,0.5}))", iostat, iomsg)
+   test_passed(284) = iostat == 0_I4P
+   call interpreter%symbols%value_of('a1', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 0.452278447151191_R8P) < 1.0e-14_R8P
+   call interpreter%symbols%value_of('a2', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 1.11851787964371_R8P) < 1.0e-14_R8P
+   call interpreter%symbols%value_of('a3', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 0.402359478108525_R8P) < 1.0e-14_R8P
+   call interpreter%symbols%value_of('a4', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v + 1.31695789692482_R8P) < 1.0e-14_R8P
+   call interpreter%symbols%value_of('a5', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 1.0471975511966_R8P) < 1.0e-13_R8P
+   call interpreter%symbols%value_of('a6', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 0.553574358897045_R8P) < 1.0e-14_R8P
+   call interpreter%symbols%value_of('a7', v, found)
+   test_passed(284) = test_passed(284) .and. found .and. abs(v - 0.452278447151191_R8P) < 1.0e-14_R8P
+   ! the '++' pseudo-file: x and y its sample variables
+   call interpreter%run_text("set table 'foresight_script_test_pp.txt'"//nl//"splot '++' using 1:2:(x*10+y)"//nl// &
+                             "unset table", iostat, iomsg)
+   test_passed(284) = test_passed(284) .and. iostat == 0_I4P
+   if (test_passed(284)) then
+      tab = read_text('foresight_script_test_pp.txt')
+      test_passed(284) = index(tab, new_line('a')//'-5 -5 -55 i'//new_line('a')) > 0
+   endif
+   ! a 3D title offset in graph units, gnuplot's map3d_position_r
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_to.svg'"//nl// &
+                             "set title 'T' offset graph 0.15, graph -0.33"//nl//"set parametric"//nl// &
+                             "splot u,v,u*v", iostat, iomsg)
+   test_passed(284) = test_passed(284) .and. iostat == 0_I4P
+   if (test_passed(284)) then
+      svg = read_text('foresight_script_test_to.svg')
+      test_passed(284) = index(svg, '<text x="289" y="72.47" text-anchor="middle">T</text>') > 0
+   endif
+   ! a colormap as a pixmap
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_pm.svg'"//nl// &
+                             "set colormap new water"//nl// &
+                             "set pixmap 1 colormap water at screen 0.1,0.1 size screen 0.4,0.03"//nl// &
+                             "set pixmap 2 colormap water at screen 0.8,0.3 size screen 0.03,0.4"//nl//"plot x", &
+                             iostat, iomsg)
+   test_passed(284) = test_passed(284) .and. iostat == 0_I4P
+   if (test_passed(284)) then
+      svg = read_text('foresight_script_test_pm.svg')
+      test_passed(284) = index(svg, '<image x="60" y="348" width="240" height="12"') > 0 .and. &
+                        index(svg, '<image x="480" y="120" width="18" height="160"') > 0 .and. &
+                        all(interpreter%figure%panels(1)%pixmaps(1)%pixels == [1, 256])
+   endif
+   ! nonlinear color and z axes: the base 10 logarithm
+   call interpreter%run_text("set nonlinear cb via log10(z) inverse 10**z"//nl// &
+                             "set nonlinear z via log10(z) inverse 10**z", iostat, iomsg)
+   test_passed(284) = test_passed(284) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%cbaxis%log .and. &
+                     interpreter%figure%panels(1)%zaxis%log
+   call interpreter%run_text("set nonlinear z via exp(z) inverse log(z)", iostat, iomsg)
+   test_passed(284) = test_passed(284) .and. iostat /= 0_I4P
    iostat = 0_I4P
 endblock
 

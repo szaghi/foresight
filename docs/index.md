@@ -231,6 +231,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_special_functions" svg :width="720" :height="480" caption="special functions" />
   <Plot name="cb_complex" svg :width="560" :height="320" caption="complex numbers" />
+  <Plot name="cb_complex_phase" svg :width="560" :height="460" caption="a complex function over the plane" />
   <Plot name="cb_set_for" svg :width="560" :height="320" caption="labels and arrows in a loop (set for)" />
   <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
   <Plot name="cb_sums" svg :width="560" :height="320" caption="sums, and assignments in a plot" />

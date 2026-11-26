@@ -139,6 +139,7 @@ use foresight_pm3d, only : pm3d_object, CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HAR
 use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
                              real_from_decimal
 use foresight_readout, only : readout_check
+use foresight_png, only : png_base64
 use foresight_sys, only : command_output, sleep_ms
 use foresight_time, only : strptime, time_format_check
 use foresight_fit, only : fit_model, fit_report, fit_result, fit_settings, levenberg_marquardt
@@ -5220,8 +5221,23 @@ contains
          sampled = dummy
          if (len_trim(sample_names(1)) > 0) sampled = trim(sample_names(1))
       elseif (pseudo == 2_I4P) then
-         sampled = 'u v'
-         if (len_trim(sample_names(1)) > 0) sampled = trim(sample_names(1))//' v'
+         ! the splot's dummy variables (gnuplot's c_dummy_var): x and y, u and v in parametric mode, or `set dummy`'s
+         sampled = trim(merge('u v', 'x y', self%parametric))
+         if (len_trim(self%dummies) > 0) then
+            block
+               character(len=64) :: names(2) !< The first two names of `set dummy`.
+               integer(I4P)      :: status   !< Read status.
+
+               names = ''
+               read(self%dummies, *, iostat=status) names
+               if (len_trim(names(2)) > 0) then
+                  sampled = trim(names(1))//' '//trim(names(2))
+               else
+                  sampled = trim(adjustl(self%dummies))//sampled(index(sampled, ' '):)
+               endif
+            endblock
+         endif
+         if (len_trim(sample_names(1)) > 0) sampled = trim(sample_names(1))//sampled(index(sampled, ' '):)
          if (len_trim(sample_names(2)) > 0) sampled = sampled(1:index(sampled, ' '))//trim(sample_names(2))
       endif
       if (nsample == 2_I4P .and. pseudo /= 2_I4P) then
@@ -5764,8 +5780,9 @@ contains
                      line%lc = probe%lc
                      line%palette = probe%palette
                   elseif (probe%lc == LC_PALETTE_Z .or. probe%lc == LC_VARIABLE .or. probe%lc == LC_RGB_VARIABLE) then
-                     ! `fc palette [z]`, `fc variable`: the fills (and lines) colored per point, as lc's
+                     ! `fc palette [z|NAME]`, `fc variable`: the fills (and lines) colored per point, as lc's
                      line%lc = probe%lc
+                     if (allocated(probe%colormap)) line%colormap = probe%colormap
                   elseif (index(probe%lc, '*') == 1) then
                      call fail('plot: fc: this color form is not supported (lc variable, lc palette z color the '// &
                                'fills)', iostat, iomsg)
@@ -10876,16 +10893,51 @@ contains
                pix%sized = 3_I4P
             elseif (word == 'center' .or. word == 'centre') then
                pix%center = .true.
+            elseif (word == 'colormap') then
+               ! gnuplot's pixmap_from_colormap: the colormap's entries a column of pixels, the first at the top
+               if (i >= size(tokens, kind=I4P)) then
+                  call fail('set pixmap: colormap NAME expected', iostat, iomsg)
+                  return
+               endif
+               i = i + 1_I4P
+               call colormap_pixels(tokens(i)%text)
             elseif (is_word(word, 'behind back front')) then
                pix%layer = word
             else
-               call fail('set pixmap: unsupported option "'//word//'" (a file, at, size, width, height, center, '// &
-                         'behind, back, front are)', iostat, iomsg)
+               call fail('set pixmap: unsupported option "'//word//'" (a file, colormap, at, size, width, height, '// &
+                         'center, behind, back, front are)', iostat, iomsg)
             endif
             if (iostat /= 0_I4P) return
             i = i + 1_I4P
          enddo
       endsubroutine pixmap_words
+
+      subroutine colormap_pixels(name)
+      !< The named colormap `name` into `pix`, as gnuplot 6.0's pixmap_from_colormap: one column of its entries
+      !< (new_colormap: `maxcolors` of them up to 256, else 256, entry i the palette at gray i/(N-1)), the first on top.
+      character(len=*), intent(in) :: name   !< Colormap.
+      integer(I4P), allocatable    :: rgba(:,:,:) !< Pixels.
+      integer(I4P)                 :: k      !< Colormap index.
+      integer(I4P)                 :: n      !< Entries.
+      integer(I4P)                 :: r      !< Entry.
+
+      k = self%colormap_index(name)
+      if (k == 0_I4P) then
+         call fail('set pixmap: no colormap "'//name//'" (set colormap new NAME)', iostat, iomsg)
+         return
+      endif
+      n = 256_I4P
+      if (self%colormaps(k)%palette%maxcolors > 0_I4P .and. self%colormaps(k)%palette%maxcolors <= 256_I4P) &
+         n = self%colormaps(k)%palette%maxcolors
+      allocate(rgba(4, 1, n))
+      do r = 1_I4P, n
+         rgba(1:3, 1, r) = self%colormaps(k)%palette%rgb(real(r - 1_I4P, R8P) / real(max(1_I4P, n - 1_I4P), R8P))
+         rgba(4, 1, r) = 255_I4P
+      enddo
+      pix%png = png_base64(rgba)
+      pix%pixels = [1_I4P, n]
+      pix%wide_png = png_base64(reshape(rgba, [4, n, 1]))
+      endsubroutine colormap_pixels
 
       subroutine read_png(file)
       !< The PNG `file` into `pix`: its bytes as base64, its width and height (the IHDR chunk, big endian).
@@ -10931,6 +10983,7 @@ contains
          if (.not. is_b64_initialized) call b64_init
          call b64_encode(n=bytes, code=code)
          pix%png = code
+         if (allocated(pix%wide_png)) deallocate(pix%wide_png)
       endsubroutine read_png
 
       pure function is_annotation_word(w) result(yes)
@@ -14214,6 +14267,7 @@ contains
       !< shifted by characters (x right, y up), justified about the centre (gnuplot's), in its color; `font` is read and
       !< ignored (one font in foresight); `noenhanced` writes it as it is, not enhanced text.
       real(R8P) :: offset(2) !< Shift [characters].
+      character(len=9) :: systems(2) !< Its coordinate systems.
       integer(I4P) :: j      !< First option token.
       logical   :: plain     !< `noenhanced`: the title as it is.
       character(len=6)  :: anchor !< Justification.
@@ -14237,6 +14291,7 @@ contains
          return
       endif
       offset = self%figure%panels(self%figure%current)%title_offset
+      systems = self%figure%panels(self%figure%current)%title_offset_system
       anchor = self%figure%panels(self%figure%current)%title_anchor
       color = self%figure%panels(self%figure%current)%title_color
       boxed = .false.
@@ -14246,6 +14301,15 @@ contains
       do while (i <= size(tokens, kind=I4P))
          select case (tokens(i)%text)
          case ('offset')
+            ! X,Y each in its system: character (the default), graph or screen (gnuplot's position)
+            systems = 'character'
+            if (i < size(tokens, kind=I4P)) then
+               if (is_word(tokens(i + 1_I4P)%text, 'character char graph screen')) then
+                  i = i + 1_I4P
+                  systems(1) = tokens(i)%text
+                  if (tokens(i)%text == 'char') systems(1) = 'character'
+               endif
+            endif
             if (.not. next_real(tokens, i, offset(1), iostat, iomsg, self%symbols)) return
             if (i >= size(tokens, kind=I4P)) then
                call fail('set title: offset X,Y expected', iostat, iomsg)
@@ -14256,6 +14320,13 @@ contains
                return
             endif
             i = i + 1_I4P
+            if (i < size(tokens, kind=I4P)) then
+               if (is_word(tokens(i + 1_I4P)%text, 'character char graph screen')) then
+                  i = i + 1_I4P
+                  systems(2) = tokens(i)%text
+                  if (tokens(i)%text == 'char') systems(2) = 'character'
+               endif
+            endif
             if (.not. next_real(tokens, i, offset(2), iostat, iomsg, self%symbols)) return
          case ('font')
             if (.not. font_spec(self, tokens, i, self%figure%panels(self%figure%current)%title_font, iostat, iomsg)) then
@@ -14290,6 +14361,7 @@ contains
          i = i + 1_I4P
       enddo
       call self%figure%set_title(text, offset=offset)
+      self%figure%panels(self%figure%current)%title_offset_system = systems
       self%figure%panels(self%figure%current)%title_boxed = boxed
       self%figure%panels(self%figure%current)%title_plain = plain
       self%figure%panels(self%figure%current)%title_anchor = anchor
@@ -14753,7 +14825,7 @@ contains
 
       subroutine nonlinear_option
       !< gnuplot `set nonlinear x|y via EXPR inverse EXPR`: the axis placed linearly in the values of the first map (of
-      !< `x`, of `y`), the second its inverse; see foresight_axes' nonlinear_axis.
+      !< `x`, of `y`), the second its inverse; see foresight_axes' nonlinear_axis. `z` and `cb`: log_map.
       type(expression_object) :: fwd  !< Forward map.
       type(expression_object) :: inv  !< Inverse map.
       character(len=1)        :: axis !< x or y.
@@ -14765,9 +14837,13 @@ contains
          call fail('set nonlinear: x or y expected', iostat, iomsg)
          return
       endif
+      if (tokens(2)%text == 'cb' .or. tokens(2)%text == 'z') then
+         call log_map
+         return
+      endif
       if (.not. (tokens(2)%text == 'x' .or. tokens(2)%text == 'y')) then
-         call fail('set nonlinear: x or y expected (x2, y2, cb and r are not supported), found "'//tokens(2)%text//'"', &
-                   iostat, iomsg)
+         call fail('set nonlinear: x, y, z or cb expected (x2, y2 and r are not supported), found "'// &
+                   tokens(2)%text//'"', iostat, iomsg)
          return
       endif
       axis = tokens(2)%text
@@ -14806,6 +14882,63 @@ contains
          endif
       endassociate
       endsubroutine nonlinear_option
+
+      subroutine log_map
+      !< `set nonlinear z|cb via EXPR inverse EXPR` (the variable z): a base 10 logarithm and its inverse (gnuplot's
+      !< `via log10(z) inverse 10**z`), the axis logarithmic as `set logscale`; other maps not supported.
+      type(expression_object) :: fwd  !< Forward map.
+      type(expression_object) :: inv  !< Inverse map.
+      integer(I4P)            :: k    !< Token counter.
+      integer(I4P)            :: v    !< Token of `via`.
+      integer(I4P)            :: w    !< Token of `inverse`.
+      logical                 :: logs !< The maps are log10 and its inverse.
+
+      v = 0_I4P
+      w = 0_I4P
+      do k = 3_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%text == 'via') v = k
+         if (keyword(tokens(k)%text, 'inverse', 3_I4P)) w = k
+      enddo
+      if (v /= 3_I4P .or. w <= v + 1_I4P .or. w >= size(tokens, kind=I4P)) then
+         call fail('set nonlinear: via EXPR inverse EXPR expected', iostat, iomsg)
+         return
+      endif
+      call fwd%compile(expression_source(tokens(v + 1_I4P:w - 1_I4P)), iostat, iomsg, variable='z', &
+                       symbols=self%symbols)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set nonlinear: via: '//iomsg
+         return
+      endif
+      call inv%compile(expression_source(tokens(w + 1_I4P:)), iostat, iomsg, variable='z', symbols=self%symbols)
+      if (iostat /= 0_I4P) then
+         iomsg = 'set nonlinear: inverse: '//iomsg
+         return
+      endif
+      logs = near(fwd%value_at(10.0_R8P), 1.0_R8P) .and. near(fwd%value_at(1000.0_R8P), 3.0_R8P) .and. &
+             near(fwd%value_at(0.01_R8P), -2.0_R8P) .and. near(inv%value_at(2.0_R8P), 100.0_R8P) .and. &
+             near(inv%value_at(-1.0_R8P), 0.1_R8P)
+      if (.not. logs) then
+         call fail('set nonlinear '//tokens(2)%text//': only a base 10 logarithm (via log10(z) inverse 10**z) is '// &
+                   'supported', iostat, iomsg)
+         return
+      endif
+      if (tokens(2)%text == 'z') then
+         self%figure%panels(self%figure%current)%zaxis%log = .true.
+      else
+         call self%figure%set_logscale('cb')
+      endif
+      endsubroutine log_map
+
+      pure function near(a, b) result(yes)
+      !< Whether `a` is finite and within 1e-7 (relative to `b`, at least 1) of `b` (no comparison of a NaN: the debug
+      !< builds trap it).
+      real(R8P), intent(in) :: a   !< Value.
+      real(R8P), intent(in) :: b   !< Expected value.
+      logical               :: yes !< Near.
+
+      yes = .false.
+      if (ieee_is_finite(a)) yes = abs(a - b) < 1.0e-7_R8P * max(1.0_R8P, abs(b))
+      endfunction near
 
       subroutine grow_maps
       !< The maps of the current panel, 8 (link and nonlinear), those set kept.
@@ -19907,7 +20040,7 @@ contains
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
         word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &
-        .or. word == 'concavehull' .or. word == 'delaunay'
+        .or. word == 'concavehull' .or. word == 'delaunay' .or. word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)
    endfunction is_item_option
 
    pure function is_line_option(word) result(is)

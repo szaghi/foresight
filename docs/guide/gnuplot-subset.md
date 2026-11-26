@@ -58,7 +58,7 @@ that did what it says.
 
 | Option | `set` | `unset` |
 |---|---|---|
-| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] [`boxed`] | panel title, shifted by `offset` characters (y up); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` its [font](#fonts) (its size grows the top margin, as gnuplot); `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text); `boxed` on the background (text box style 0); a new line (`"a\nb"`) starts a line below, the plot lower, as gnuplot; options without a text (`set title offset 0,-2`) keep the title | no title |
+| **tit**le `"text"` [`offset X,Y`] [`font F`] [`left`\|`center`\|`right`] [`tc COLOR`] [`noenhanced`] [`boxed`] | panel title, shifted by `offset` characters (y up; each coordinate may name its system: `offset graph 0.15, graph -0.33` fractions of the plot, through the view in 3D as gnuplot's map3d_position_r, `screen` fractions of the page); `left` and `right` justify it about its centre, as gnuplot's svg terminal; `tc` its color (`tc lt N` linetype N's); `font` its [font](#fonts) (its size grows the top margin, as gnuplot); `noenhanced` writes it as it is, not as [enhanced text](#enhanced-text); `boxed` on the background (text box style 0); a new line (`"a\nb"`) starts a line below, the plot lower, as gnuplot; options without a text (`set title offset 0,-2`) keep the title | no title |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
 | **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
@@ -338,8 +338,10 @@ The rules are gnuplot's, checked against gnuplot 6.0:
   beyond 2^52 give NaN, as gnuplot.
 - Values are complex, as gnuplot's: `{re, im}` and `I` are constants; `+ - * / **` follow gnuplot's formulas (powers in
   polar form: `(-8)**(1./3)` is `{1.0, 1.732...}`); `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`, `exp`, `log`,
-  `log10` (also of negative reals: `sqrt(-4)` is `{0.0, 2.0}`), `sin`, `cos`, `tan`, `sinh`, `cosh` take complex
-  arguments, the other functions of one are undefined; comparisons `<`... compare the real parts, `==` `!=` both.
+  `log10` (also of negative reals: `sqrt(-4)` is `{0.0, 2.0}`), `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`,
+  `acos`, `atan`, `asinh`, `acosh`, `atanh` take complex arguments (gnuplot 6.0's formulas and branch cuts; `asin` and
+  `acos` off [-1:1] and `acosh` below 1 give complex values too: `acosh(0.5)` is `{0.0, 1.047...}`), the other
+  functions of one are undefined; comparisons `<`... compare the real parts, `==` `!=` both.
   `print` shows `{re, im}`. A plotted value whose imaginary part exceeds 1e-8 is undefined (gnuplot's `set zero`):
   `plot abs(A(w)), 180/pi*arg(A(w))` plots a transfer function.
 - An assignment inside an expression sets the user variable when it runs: on each data row in `using`, so a running
@@ -847,7 +849,9 @@ also after the plot's own ranges: `splot [-2:2] [-2:2] sample [h=1:5] '+' using 
 
 `'++'` is a grid of two columns, u and v: `set samples` values over `urange`, by `set isosamples` (its second value)
 values over `vrange` (both [-5:5] by default), v from its maximum down, the scan lines apart (a blank line). The
-variables are `u` and `v`, or those its two ranges name: `sample [a=0:2:0.5][b=-1:1:0.5] '++' using (a):(b):(a*b)`.
+variables are the splot's dummy variables, gnuplot's: `x` and `y` (`u` and `v` in parametric mode, the `set dummy`
+names if set), or those its two ranges name: `splot '++' using 1:2:(sin(x)*cos(y))`,
+`sample [a=0:2:0.5][b=-1:1:0.5] '++' using (a):(b):(a*b)`.
 `unset urange`, `unset vrange` and `unset trange` restore the defaults.
 
 ## Parametric plots
@@ -905,8 +909,8 @@ print gamma(4.5), lgamma(100), igamma(2, 1), ibeta(2, 3, 0.4), lambertw(1), Elli
 
 The orders `n` of `besjn`, `besyn`, `besin` and `expint` must be integers (`besjn(2.0, x)` is an error), as gnuplot.
 Outside its domain a function is undefined, a gap in a plot, as gnuplot's undefined value; so are the results gnuplot
-gives as complex numbers (`acosh(0.5)`) or as infinities, foresight's values being finite real numbers. The complex
-functions of gnuplot (`imag`, `arg`, `Ai`, `BesselJ`, ...) and those of libcerf (`VP`, `erfi`, `FresnelC`, ...) are not
+gives as infinities, foresight's values being finite real numbers (the complex values of `asin`, `acos`, `acosh` are
+gnuplot's, see [Expressions](#expressions-in-using)). The complex special functions of gnuplot (`Ai`, `BesselJ`, ...) and those of libcerf (`VP`, `erfi`, `FresnelC`, ...) are not
 supported. Built with gfortran the values are gnuplot's bit for bit; other compilers' mathematical libraries
 (nvfortran's) differ by a few units in the last place in some ranges.
 
@@ -1111,7 +1115,8 @@ makes the same axis on top; `unset link x2` frees it.
 interval a broken axis (the values there not placed). The hidden axis takes the mapped data and ends and its own
 automatic range. Its automatic ticks, at least 1 apart, are labelled by G of them, as gnuplot 6.0: `via sqrt(x)` over
 [0:100] reads 0, 4, 16, ..., 100; a step or a list (`set xtics 10`) is in the axis' own values. `unset nonlinear x`
-undoes it. Not supported: x2, y2, cb and r.
+undoes it. `set nonlinear z|cb via log10(z) inverse 10**z` (the variable z for both, as gnuplot) makes the z or color
+axis logarithmic, as `set logscale z|cb`; other maps of z and cb are refused. Not supported: x2, y2 and r.
 
 ## Column headers
 
@@ -1625,7 +1630,7 @@ cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system o
 | `set object [N] circle [at POS] size R [arc [A:B]]` | as rectangle; empty with a black border; `R` in x axis values (round on the page), `radius R` the same, an arc a wedge from the centre |
 | `set object [N] ellipse [at POS] size W,H [angle A]` | as circle; the axes in the units of x and y, turned by `A` in those units (gnuplot's `units xy`) |
 | `set object [N] polygon from POS to POS to POS ...` | as circle; in a [3D view](#3d-views) `depthorder` sorts it with the pm3d quadrangles (`set pm3d depthorder`), `fc ls N` colors its back in line style N+1's; options without vertices change an existing one (or are accepted, nothing drawn) |
-| `set pixmap N "file.png" [at POS] [size W,H \| width W \| height H] [center]` | a PNG image, gnuplot 6.0's: `at` its lower left corner (`center` its centre), its own pixels without a size, `width` or `height` alone the other side by its aspect; W, H in any system (`first` by default, `char` cells); `behind`, `back`, `front` (the default) its layer; `unset pixmap N`, `unset pixmaps`. PNG only (gnuplot also reads JPEG and GIF); the SVG holds the file, text devices draw nothing |
+| `set pixmap N "file.png"\|colormap NAME [at POS] [size W,H \| width W \| height H] [center]` | a PNG image, gnuplot 6.0's (`colormap NAME`: a column of the 256 colors of a `set colormap new NAME`, the first on top, a row from the left when more than twice as wide as high, gnuplot's colorbox of a named palette): `at` its lower left corner (`center` its centre), its own pixels without a size, `width` or `height` alone the other side by its aspect; W, H in any system (`first` by default, `char` cells); `behind`, `back`, `front` (the default) its layer; `unset pixmap N`, `unset pixmaps`. PNG only (gnuplot also reads JPEG and GIF); the SVG holds the file, text devices draw nothing |
 
 `N` is a tag: an existing one is replaced, or changed when no position is given (`set object 3 fc rgb "red"`), as
 gnuplot; without it the next free tag. `rto` is relative to the previous point. Layers: `back` behind the data,
@@ -2562,8 +2567,7 @@ text). Zooming magnifies the cells with the data.
 `fit` beyond [its subset](#fit), log bases other than 10; `set rlabel`,
 the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the color box labels, `out` of the color box ticks, `axis` of the
-x2 and y2 ticks; the complex forms of the functions but `abs`, `arg`, `real`, `imag`, `conj`, `sqrt`,
-`exp`, `log`, `log10`, `sin`, `cos`, `tan`, `sinh`, `cosh` (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
+x2 and y2 ticks; the complex forms of the special functions (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
 (`VP`, `erfi`, `FresnelC`, ...);
 in [enhanced text](#enhanced-text), the fonts and the super and subscripts of the text devices; in `set format`,
 gnuplot's `geographic` formats; `set datafile` options other than `separator`, `missing`,

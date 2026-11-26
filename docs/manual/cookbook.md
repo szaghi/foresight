@@ -593,6 +593,17 @@ Values are complex, as gnuplot's: `I` is `{0,1}` (or write `{0,1}`), `abs` and `
 a transfer function; a plotted value with an imaginary part is undefined. See
 [Expressions](/guide/gnuplot-subset#expressions-in-using).
 
+
+### A complex function over the plane
+
+<<< @/examples/snippets/cb_complex_phase.gp{gnuplot}
+
+<Plot name="cb_complex_phase" svg :width="560" :height="460" />
+
+`atanh` of a complex argument, as gnuplot 6.0 computes it (its branch cuts along the real axis beyond -1 and 1): the
+`'++'` pseudo-file samples the plane, `x` and `y` its variables, each point colored by `hsv2rgb` of the phase and the
+magnitude (`lc rgb variable`). `asin`, `acos`, `atan`, `asinh`, `acosh` and `tanh` take complex arguments too. See
+[Expressions](/guide/gnuplot-subset#expressions-in-using).
 ### Labels and arrows in a loop
 
 <<< @/examples/snippets/cb_set_for.gp{gnuplot}
