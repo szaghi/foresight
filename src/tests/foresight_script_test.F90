@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(276)                           !< Per-check outcome.
+logical                       :: test_passed(277)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7302,6 +7302,83 @@ block
    test_passed(276) = test_passed(276) .and. iostat == 0_I4P
    if (test_passed(276)) test_passed(276) = index(read_text('foresight_script_test_lit.svg'), 'fill="#aaeeee"') > 0
 
+endblock
+
+
+
+! `with contourfill`, gnuplot 6.0's plot3d_contourfill (probed: the svg polygons of a 3 x 3 grid, 600 x 400): `set
+! contourfill auto 3` the quadrangles clipped to 3 slices of the z range, slice after slice, each in the palette color
+! of its middle (rgb(104,1,221) first: a degenerate triangle at a corner, then a pentagon); `ztics` 27 polygons;
+! `firstlinetype 3` in linetypes 3, 4, ...; a map view the same polygons; the default `clip z` of pm3d clipping the
+! quadrangles at a z range set (a pentagon in rgb(236,161,0)), the color axis autoscaled over the points within it
+! (rgb(193,48,0) first); `set tics scale 0` turning back on the x and y ticks turned off (gnuplot's set_tic_prop)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=:), allocatable :: grid !< The grid datablock.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   integer(I4P)                  :: k, n !< Counters.
+
+   grid = "$g << EOD"//nl//"0 0 0"//nl//"1 0 1"//nl//"2 0 2"//nl//nl//"0 1 3"//nl//"1 1 4"//nl//"2 1 8"//nl//nl// &
+          "0 2 6"//nl//"1 2 7"//nl//"2 2 9"//nl//"EOD"//nl
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_cf.svg'"//nl//grid// &
+                             "set contourfill auto 3"//nl//"splot $g using 1:2:3 with contourfill notitle", iostat, iomsg)
+   test_passed(277) = iostat == 0_I4P
+   if (test_passed(277)) then
+      svg = read_text('foresight_script_test_cf.svg')
+      test_passed(277) = index(svg, 'fill="#6801dd" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.273833,0.3964 0.273833,0.3964 0.273833,0.3964Z"') > 0 .and. &
+                        index(svg, 'd="M0.273833,0.3964 0.143267,0.587975 0.369433,0.6165 0.456483,0.48875 '// &
+                                   '0.273833,0.3964Z"') > 0 .and. &
+                        index(svg, 'fill="#b42000" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.58705,0.297175 0.5,0.424925 0.613083,0.394075Z"') > 0 .and. &
+                        index(svg, '#6801dd') < index(svg, '#b42000') .and. index(svg, 'class="fs-colorbox"') > 0
+   endif
+   call interpreter%run_text("set contourfill ztics; replot", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%cfill_mode == 1_I4P
+   if (test_passed(277)) then
+      svg = read_text('foresight_script_test_cf.svg')
+      svg = svg(index(svg, 'fs-crisp'):)
+      n = 0_I4P
+      k = index(svg, '<path fill=')
+      do while (k > 0)
+         n = n + 1_I4P
+         svg = svg(k + 1:)
+         k = index(svg, '<path fill=')
+      enddo
+      test_passed(277) = n == 27_I4P
+   endif
+   call interpreter%run_text("set contourfill auto 3; set contourfill firstlinetype 3; replot", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P
+   if (test_passed(277)) then
+      svg = read_text('foresight_script_test_cf.svg')
+      test_passed(277) = index(svg, 'fill="#56b4e9"') > 0 .and. index(svg, 'fill="#6801dd"') == 0
+   endif
+   call interpreter%run_text("unset contourfill; set contourfill auto 3; set view map; replot", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%cfill_lt == -1_I4P
+   if (test_passed(277)) test_passed(277) = index(read_text('foresight_script_test_cf.svg'), &
+                                                'd="M0,1 0,0.5 0,0.5 0.5,0.666667 0.5,1Z"') > 0
+   call interpreter%run_text("set contourfill bogus", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat /= 0_I4P
+   ! pm3d's default clip z
+   call interpreter%run_text("set view 60,30; set zrange [1:8]"//nl// &
+                             "splot $g using 1:2:3 with pm3d notitle", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%pm3d%clip_z
+   if (test_passed(277)) then
+      svg = read_text('foresight_script_test_cf.svg')
+      test_passed(277) = index(svg, 'fill="#c13000" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.404417,0.191925 0.273833,0.409275 0.5,0.4292 0.630567,0.21185Z"') > 0 .and. &
+                        index(svg, 'fill="#eca100" stroke="none" vector-effect="non-scaling-stroke" '// &
+                                   'd="M0.630567,0.21185 0.5,0.4292 0.726167,0.3332 0.726167,0.3332 0.74365,0.202475Z"') &
+                        > 0
+   endif
+   call interpreter%run_text("set pm3d clip4in", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%pm3d%clip_z
+   ! set tics options turn the x and y ticks on again
+   call interpreter%run_text("unset xtics; unset ytics; set tics scale 0", iostat, iomsg)
+   test_passed(277) = test_passed(277) .and. iostat == 0_I4P .and. &
+                     interpreter%figure%panels(1)%xaxis%tics%mode /= TICS_NONE .and. &
+                     interpreter%figure%panels(1)%yaxis%tics%mode /= TICS_NONE
 endblock
 
 if (all(test_passed)) then

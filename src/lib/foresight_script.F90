@@ -4344,6 +4344,7 @@ contains
    logical                                      :: keyentry_blank !< A keyentry without sample (`with labels`, or
                                                                   !< no `with`).
    logical                                      :: with_given !< The item has its `with`.
+   logical                                      :: cfill      !< `with contourfill`.
    integer(I4P)                                 :: loaded_skip !< Lines it skipped (`skip N`).
    character(len=:), allocatable                :: word      !< Modifier.
    character(len=:), allocatable                :: title     !< Item title.
@@ -4914,6 +4915,7 @@ contains
       with = self%data_style
       if (is_function) with = self%function_style
       with_given = .false.
+      cfill = .false.
       has_table_if = .false.
       has_title = .false.
       auto_title = .false.
@@ -5100,6 +5102,9 @@ contains
          elseif (keyword(word, 'with', 1_I4P)) then
             if (.not. next_word(tokens, i, word, iostat, iomsg)) return
             with = canonical_style(word)
+            ! splot's `with contourfill`: a pm3d surface in z slices (gnuplot's CONTOURFILL)
+            cfill = splot_mode .and. word == 'contourfill'
+            if (cfill) with = 'pm3d'
             with_given = .true.
             if (len(with) == 0) then
                call fail('plot: unsupported style "'//word//'" (supported: '//STYLE_NAMES//')', iostat, iomsg)
@@ -7615,6 +7620,11 @@ contains
       !< the key sample, and along a closed curve.
       associate(panel => self%figure%panels(self%figure%current))
          if (with == 'filledcurves') panel%series(size(panel%series))%fill_edges = 1_I4P
+         ! `with contourfill`: out of the contours (gnuplot's opt_out_of_contours)
+         if (cfill) then
+            panel%series(size(panel%series))%contourfill = .true.
+            panel%series(size(panel%series))%no_contours = .true.
+         endif
          if (allocated(fill_rgb)) then
             panel%series(size(panel%series))%style%fill_rgb = fill_rgb
             ! the item's border in its fill color too, unless `fs border lc` gives one (gnuplot 6.0: fc over lc)
@@ -11933,6 +11943,38 @@ contains
          endif
          cnt%on = .true.
       endassociate
+   elseif (option == 'contourfill') then
+      ! gnuplot's set_contourfill: the slices of `with contourfill`, one option per command
+      cfill_set: block
+      integer(I4P) :: i !< Token.
+      integer(I4P) :: n !< Number read.
+
+      associate(panel => self%figure%panels(self%figure%current))
+         if (size(tokens) < 2) then
+            call fail('set contourfill: auto N, ztics, cbtics, palette or firstlinetype N expected', iostat, iomsg)
+            return
+         endif
+         i = 2_I4P
+         if (tokens(2)%text == 'auto') then
+            if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+            panel%cfill_mode = 0_I4P
+            panel%cfill_n = max(1_I4P, min(n, 100_I4P))
+         elseif (tokens(2)%text == 'ztics') then
+            panel%cfill_mode = 1_I4P
+         elseif (tokens(2)%text == 'cbtics') then
+            panel%cfill_mode = 2_I4P
+         elseif (keyword(tokens(2)%text, 'palette', 3_I4P)) then
+            panel%cfill_lt = -1_I4P
+         elseif (keyword(tokens(2)%text, 'firstlinetype', 5_I4P)) then
+            if (.not. next_integer(tokens, i, n, iostat, iomsg, self%symbols)) return
+            panel%cfill_lt = n
+         else
+            call fail('set contourfill: unrecognized option "'//tokens(2)%text//'"', iostat, iomsg)
+            return
+         endif
+         if (.not. no_more(tokens, i + 1_I4P, iostat, iomsg)) return
+      endassociate
+      endblock cfill_set
    elseif (keyword(option, 'cntrparam', 5_I4P)) then
       call cntrparam_option(tokens)
    elseif (keyword(option, 'dgrid3d', 2_I4P)) then
@@ -13303,8 +13345,14 @@ contains
                self%figure%panels(self%figure%current)%view3d%map = .true.
             elseif (w == 'clip4in' .or. keyword(w, 'clip4in', 5_I4P)) then
                pm%clip4in = .true.
-            elseif (w == 'clip' .or. keyword(w, 'clip1in', 5_I4P)) then
+               pm%clip_z = .false.
+            elseif (keyword(w, 'clip1in', 5_I4P)) then
                pm%clip4in = .false.
+               pm%clip_z = .false.
+            elseif (keyword(w, 'clipz', 4_I4P)) then
+               ! gnuplot's `clip` (`clip z`): smooth clipping at the z range
+               pm%clip4in = .false.
+               pm%clip_z = .true.
             elseif (keyword(w, 'border', 2_I4P)) then
                ! the quadrangles outlined, gnuplot's: black and 1 wide by default, `retrace` in their fill colors,
                ! else in the line properties given (lc, lt, lw; dt read)
@@ -15690,6 +15738,11 @@ contains
                panel%ttics%font = labels%font
             endif
          endif
+         ! gnuplot's set_tic_prop: the x and y ticks turned off are on again (on the border) after any option
+         if (.not. scale_only) then
+            call panel%xaxis%tics%enable
+            call panel%yaxis%tics%enable
+         endif
       endassociate
       endsubroutine all_tics_option
 
@@ -17353,6 +17406,11 @@ contains
       overflow_mode = OVERFLOW_IGNORE
    elseif (keyword(option, 'mttics', 3_I4P)) then
       self%figure%panels(self%figure%current)%ttics%minor = MINOR_NONE
+   elseif (option == 'contourfill') then
+      ! gnuplot's unset_contourfill: auto 5, the palette
+      self%figure%panels(self%figure%current)%cfill_mode = 0_I4P
+      self%figure%panels(self%figure%current)%cfill_n = 5_I4P
+      self%figure%panels(self%figure%current)%cfill_lt = -1_I4P
    else
       call fail('unsupported option "unset '//option//'"', iostat, iomsg)
    endif

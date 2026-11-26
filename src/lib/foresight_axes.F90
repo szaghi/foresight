@@ -56,7 +56,8 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
                              view3d_setup, view3d_xyz
-use foresight_pm3d, only : lit_color, masked, packed_hex, pm3d_object, pm3d_polygons
+use foresight_pm3d, only : contour_slices, contourfill_polygons, lit_color, masked, packed_hex, pm3d_object, &
+                            pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
 use foresight_dgrid3d, only : dgrid3d_object
 use foresight_font, only : font_object
@@ -376,6 +377,9 @@ type :: axes_object
    integer(I4P)                     :: grid_dt = 0_I4P   !< Grid dash type, 0 for foresight's dots.
    logical                          :: grid_cb(2) = .false. !< Grid lines across the color box at its major and minor
                                                             !< ticks (`set grid cb mcb`).
+   integer(I4P)                     :: cfill_mode = 0_I4P  !< `set contourfill`: 0 `auto N`, 1 `ztics`, 2 `cbtics`.
+   integer(I4P)                     :: cfill_n = 5_I4P     !< `set contourfill auto N`: the slices.
+   integer(I4P)                     :: cfill_lt = -1_I4P   !< `set contourfill firstlinetype N` (-1: `palette`).
    logical                          :: title_boxed = .false.   !< Title on the background (`set title boxed`).
    logical                          :: hist_title_boxed = .false. !< Histogram group titles on the background.
    integer(I4P)                     :: label_boxed = 0_I4P !< Axis labels on the background (`set xlabel boxed`):
@@ -2459,6 +2463,9 @@ contains
    type(series_object)               :: blank   !< A series of default components (never assigned).
    real(R8P), allocatable            :: mx(:)   !< Mask polygons abscissae.
    real(R8P), allocatable            :: my(:)   !< Mask polygons ordinates.
+   real(R8P), allocatable            :: lows(:), highs(:), mids(:) !< Slices of `with contourfill`.
+   character(len=24), allocatable    :: scol(:) !< Their colors.
+   real(R8P)                         :: zr(2)   !< z range of the slices.
    integer(I4P)                      :: s       !< Series counter.
    logical                           :: pm3d    !< A `with pm3d` item.
 
@@ -2475,7 +2482,19 @@ contains
       if (allocated(self%series(s)%scans)) then
          if ((pm3d .and. self%view3d%surface .and. .not. self%series(s)%no_surface) .or. &
              (.not. pm3d .and. self%pm3d%implicit .and. self%series(s)%grid_scans > 1_I4P)) then
-            call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads)
+            if (self%series(s)%contourfill) then
+               ! the slices from the z range (and the color axis) of the data, autoscaled as in a 3D view
+               call map_contourfill_slices(self, lows, highs, mids, scol, zr)
+               if (self%cfill_lt > 0_I4P) then
+                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads, lows=lows, &
+                                   highs=highs, mids=mids, zrange=zr, slice_colors=scol)
+               else
+                  call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads, lows=lows, &
+                                   highs=highs, mids=mids, zrange=zr)
+               endif
+            else
+               call pm3d_series(self%series(s), self%pm3d, self%xaxis, self%yaxis, pm3d, mx, my, quads)
+            endif
             call push(drawn, quads)
          endif
       endif
@@ -2541,6 +2560,7 @@ contains
    type(series_object)               :: pending  !< The surface, pending.
    type(series_object)               :: blank    !< A series of default components (never assigned).
    real(R8P), allocatable            :: c(:)     !< Color values.
+   logical, allocatable              :: use(:)   !< Points autoscaling the color axis.
    real(R8P)                         :: nan      !< NaN.
    integer(I4P)                      :: s        !< Series counter.
    integer(I4P)                      :: k        !< A defined point.
@@ -2557,9 +2577,16 @@ contains
             if (allocated(self%series(s)%zvalues) .and. .not. self%series(s)%zvalues_rgb) then
                if (size(self%series(s)%zvalues) == size(self%series(s)%z)) c = self%series(s)%zvalues
             endif
+            ! the color range over the points within the x, y and z ranges set (gnuplot's: the color of a point
+            ! out of range does not autoscale the color axis)
+            use = ieee_is_finite(c) .and. ieee_is_finite(self%series(s)%x) .and. ieee_is_finite(self%series(s)%y)
             do k = 1_I4P, size(c, kind=I4P)
-               if (ieee_is_finite(c(k)) .and. ieee_is_finite(self%series(s)%x(k)) .and. &
-                   ieee_is_finite(self%series(s)%y(k))) exit
+               if (.not. use(k)) cycle
+               use(k) = in_set_range(self%xaxis, self%series(s)%x(k)) .and. &
+                        in_set_range(self%yaxis, self%series(s)%y(k)) .and. in_set_range(self%zaxis, self%series(s)%z(k))
+            enddo
+            do k = 1_I4P, size(c, kind=I4P)
+               if (use(k)) exit
             enddo
             if (k <= size(c, kind=I4P)) then
                ! not series_object(): nvfortran 26.9's front end crashes on it (bug 30)
@@ -2568,7 +2595,7 @@ contains
                marks%style%with = WITH_POLYGONS
                marks%x = [self%series(s)%x(k), nan, self%series(s)%x(k)]
                marks%y = [self%series(s)%y(k), nan, self%series(s)%y(k)]
-               marks%zvalues = [minval(c, mask=ieee_is_finite(c)), nan, maxval(c, mask=ieee_is_finite(c))]
+               marks%zvalues = [minval(c, mask=use), nan, maxval(c, mask=use)]
                marks%palette_mode = 1_I4P
                marks%key_blank = .true.
                marks%title = ''
@@ -2611,6 +2638,8 @@ contains
    type(series_object)                 :: queue   !< The depth-sorted quadrangles of every surface.
    real(R8P), allocatable              :: qx(:), qy(:), qd(:) !< Queued corners [px], and their depths.
    character(len=24), allocatable      :: qc(:)   !< Queued colors.
+   real(R8P), allocatable              :: lows(:), highs(:), mids(:) !< Slices of `with contourfill`.
+   character(len=24), allocatable      :: scol(:) !< Their colors.
    integer(I4P)                        :: nq      !< Queued quadrangles.
    integer(I4P)                        :: s       !< Series counter.
    logical                             :: depth   !< `depthorder`.
@@ -2623,8 +2652,15 @@ contains
          call push(drawn, self%series(s))
          cycle
       endif
-      call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
-                              depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq)
+      if (self%series(s)%contourfill) then
+         call contourfill_slices(self, self%zaxis, self%cbaxis, p, lows, highs, mids, scol)
+         call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
+                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq, lows=lows, &
+                                 highs=highs, slice_colors=scol)
+      else
+         call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, p, &
+                                 depth, self%view3d%rot_x, self%view3d%rot_z, quads, qx, qy, qd, qc, nq)
+      endif
       if (depth) then
          ! queued: its key entry kept in place, a text alone
          if (len(quads%title) == 0) cycle
@@ -2642,7 +2678,7 @@ contains
    endsubroutine view3d_pm3d_quads
 
    subroutine pm3d_surface_quads(pm, xaxis, yaxis, zaxis, cbaxis, one, f, p, depth, rot_x, rot_z, quads, qx, qy, qd, qc, &
-                                 nq)
+                                 nq, lows, highs, slice_colors)
    !< The pm3d quadrangles of the surface `one` in the view `f` (view3d_pm3d_quads): projected, in its colors (those
    !< at the surface lit with `set pm3d lighting`, gnuplot's apply_lighting_model), appended to the depth queue (`qx`,
    !< `qy` corners, `qd` depths, `qc` colors, `nq` quadrangles) with `depth`.
@@ -2663,8 +2699,21 @@ contains
    real(R8P), allocatable,         intent(inout) :: qd(:)   !< Queued depths.
    character(len=24), allocatable, intent(inout) :: qc(:)   !< Queued colors.
    integer(I4P),                   intent(inout) :: nq      !< Queued quadrangles.
+   real(R8P),         optional,    intent(in)    :: lows(:) !< `with contourfill`: slice lows.
+   real(R8P),         optional,    intent(in)    :: highs(:) !< Slice highs.
+   character(len=24), optional,    intent(in)    :: slice_colors(:) !< Slice colors.
    real(R8P), allocatable                        :: c(:)    !< Color values of the points.
    real(R8P), allocatable                        :: px(:), py(:), pz(:), pc(:) !< Polygons.
+   real(R8P), allocatable                        :: sx(:), sy(:), sz(:) !< Polygons at the surface.
+   character(len=24), allocatable                :: scol(:) !< Their colors.
+   integer(I4P), allocatable                     :: sl(:), src(:) !< Their slices and quadrangles (first rows).
+   real(R8P), allocatable                        :: bx(:), by(:) !< Polygons at the base and top.
+   character(len=24), allocatable                :: bcol(:) !< Their colors.
+   integer(I4P), allocatable                     :: bsrc(:) !< Their quadrangles.
+   real(R8P), allocatable                        :: lx(:), ly(:), lz(:) !< Polygons of an `at` letter.
+   character(len=24), allocatable                :: lcol(:) !< Their colors.
+   integer(I4P), allocatable                     :: lsrc(:) !< Their quadrangles.
+   integer(I4P)                                  :: nv      !< Corners of a polygon.
    real(R8P), allocatable                        :: ux(:), uy(:) !< Projected polygons.
    character(len=24), allocatable                :: colors(:) !< Polygon colors.
    character(len=24), allocatable                :: lit(:)  !< Polygon colors at the surface (lit).
@@ -2722,7 +2771,7 @@ contains
    ! `set pm3d lighting`: the quadrangles at the surface lit, from the corners gnuplot passes (A(i), A(i+1), B(i) of a
    ! quadrangle, rows 1, 4, 2; the first three of an interpolated one)
    lit = colors
-   if (pm%strength > 0.0_R8P .and. index(pm%at, 's') > 0) then
+   if (pm%strength > 0.0_R8P .and. index(pm%at, 's') > 0 .and. .not. present(lows)) then
       do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
          if (.not. ieee_is_finite(px(r))) cycle
          block
@@ -2775,57 +2824,160 @@ contains
          endblock
       enddo
    endif
+   ! the polygons at the surface (`s`), each row with the first row of its quadrangle (its depth, its lighting):
+   ! `with contourfill` the quadrangles clipped to each slice in turn, in its color lit from the quadrangle's corners;
+   ! gnuplot's default `clip z` the quadrangles clipped to the z range (clip_filled_polygon); else the quadrangles.
+   ! The base and the top (`b`, `t`) the quadrangles whole, unlit (those of the slices with contourfill).
+   if (present(lows)) then
+      call contourfill_polygons(px, py, pz, lows, highs, [zaxis%lo, zaxis%hi], sx, sy, sz, sl, src)
+      allocate(scol(size(sx)), bcol(size(sx)))
+      do r = 1_I4P, size(sx, kind=I4P)
+         bcol(r) = ''
+         if (sl(r) > 0_I4P) bcol(r) = slice_colors(sl(r))
+      enddo
+      scol = bcol
+      if (pm%strength > 0.0_R8P .and. index(pm%at, 's') > 0) then
+         r = 1_I4P
+         do while (r <= size(sx, kind=I4P))
+            if (sl(r) == 0_I4P) then
+               r = r + 1_I4P
+               cycle
+            endif
+            nv = 0_I4P
+            do while (r + nv <= size(sx, kind=I4P))
+               if (sl(r + nv) == 0_I4P) exit
+               nv = nv + 1_I4P
+            enddo
+            block
+               integer(I4P) :: c3(3) !< Channels.
+               logical      :: ok    !< Known.
+               integer(I8P) :: code  !< Packed color.
+               integer(I4P) :: q     !< First row of the quadrangle.
+
+               call named_color(trim(bcol(r)), c3, ok)
+               if (ok) then
+                  q = src(r)
+                  if (pm%interp(1) == 1_I4P .and. pm%interp(2) == 1_I4P) then
+                     code = lit_color(real(c3, R8P) / 255.0_R8P, 0_I8P, corner(q), corner(q + 3_I4P), &
+                                      corner(q + 1_I4P), corner(q + 2_I4P), pm, f%scale3d, rot_x, rot_z)
+                  else
+                     code = lit_color(real(c3, R8P) / 255.0_R8P, 0_I8P, corner(q), corner(q + 1_I4P), &
+                                      corner(q + 2_I4P), corner(q + 3_I4P), pm, f%scale3d, rot_x, rot_z)
+                  endif
+                  scol(r:r + nv - 1_I4P) = packed_hex(real(code, R8P))
+               endif
+            endblock
+            r = r + nv
+         enddo
+      endif
+   elseif (pm%clip_z) then
+      call contourfill_polygons(px, py, pz, [min(zaxis%lo, zaxis%hi)], [max(zaxis%lo, zaxis%hi)], &
+                                [zaxis%lo, zaxis%hi], sx, sy, sz, sl, src)
+      allocate(scol(size(sx)))
+      do r = 1_I4P, size(sx, kind=I4P)
+         scol(r) = ''
+         if (src(r) > 0_I4P) scol(r) = lit(src(r))
+      enddo
+   else
+      sx = px
+      sy = py
+      sz = pz
+      scol = lit
+      allocate(src(size(px)))
+      do r = 1_I4P, size(px, kind=I4P)
+         src(r) = 0_I4P
+         if (ieee_is_finite(px(r))) src(r) = r - modulo(r - 1_I4P, 5_I4P)
+      enddo
+   endif
+   ! the base and the top: the quadrangles (the slices' polygons with contourfill), each its own source
+   if (present(lows)) then
+      bx = sx
+      by = sy
+      bsrc = src
+   else
+      bx = px
+      by = py
+      bcol = colors
+      allocate(bsrc(size(px)))
+      do r = 1_I4P, size(px, kind=I4P)
+         bsrc(r) = 0_I4P
+         if (ieee_is_finite(px(r))) bsrc(r) = r - modulo(r - 1_I4P, 5_I4P)
+      enddo
+   endif
    nat = len_trim(pm%at, kind=I4P)
-   allocate(ux(size(px) * nat), uy(size(px) * nat), all_colors(size(px) * nat))
+   allocate(ux((size(sx) + size(bx)) * nat), uy((size(sx) + size(bx)) * nat), &
+            all_colors((size(sx) + size(bx)) * nat))
    m = 0_I4P
    do a = 1_I4P, nat
       zat = 0.0_R8P
       if (pm%at(a:a) == 'b') zat = f%base_z
       if (pm%at(a:a) == 't') zat = f%ceiling_z
+      if (pm%at(a:a) == 's') then
+         lx = sx
+         ly = sy
+         lz = sz
+         lcol = scol
+         lsrc = src
+      else
+         lx = bx
+         ly = by
+         lcol = bcol
+         lsrc = bsrc
+      endif
       m0 = m
-      do r = 1_I4P, size(px, kind=I4P)
+      do r = 1_I4P, size(lx, kind=I4P)
          m = m + 1_I4P
-         if (pm%at(a:a) == 's') then
-            all_colors(m) = lit(r)
-         else
-            all_colors(m) = colors(r)
-         endif
-         if (.not. ieee_is_finite(px(r))) then
-            ux(m) = px(r)
-            uy(m) = px(r)
+         all_colors(m) = lcol(r)
+         if (.not. ieee_is_finite(lx(r))) then
+            ux(m) = lx(r)
+            uy(m) = lx(r)
             cycle
          endif
          if (pm%at(a:a) == 's') then
-            v = view3d_xyz(f, px(r), py(r), pz(r))
+            v = view3d_xyz(f, lx(r), ly(r), lz(r))
          else
-            v = view3d_xyz(f, px(r), py(r), zat, base=.true.)
+            v = view3d_xyz(f, lx(r), ly(r), zat, base=.true.)
          endif
          w = view3d_page(f, v, truncate=.true.)
          ux(m) = w(1)
          uy(m) = -w(2)
       enddo
       if (.not. depth) cycle
-      ! queued with the mean depth of their corners (of the base below them with `base`)
-      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + size(px, kind=I4P) / 5_I4P)
-      do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
-         if (.not. ieee_is_finite(px(r))) cycle
+      ! queued, up to 6 corners each, with the mean depth of the corners of their quadrangle (unclipped, as gnuplot's;
+      ! of the base below them with `base`)
+      call pm3d_grow_queue(qx, qy, qd, qc, nq, nq + size(lx, kind=I4P) / 4_I4P + 1_I4P)
+      r = 1_I4P
+      do while (r <= size(lx, kind=I4P))
+         if (.not. ieee_is_finite(lx(r))) then
+            r = r + 1_I4P
+            cycle
+         endif
+         nv = 0_I4P
+         do while (r + nv <= size(lx, kind=I4P))
+            if (.not. ieee_is_finite(lx(r + nv))) exit
+            nv = nv + 1_I4P
+         enddo
+         nv = min(nv, 6_I4P)
          dsum = 0.0_R8P
-         do k = 0_I4P, 3_I4P
+         do k = lsrc(r), lsrc(r) + 3_I4P
             if (pm%base_sort) then
-               v = view3d_xyz(f, px(r + k), py(r + k), min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), &
+               v = view3d_xyz(f, px(k), py(k), min(max(0.0_R8P, min(f%z(1), f%z(2))), max(f%z(1), f%z(2))), &
                               base=.true.)
             elseif (pm%at(a:a) == 's') then
-               v = view3d_xyz(f, px(r + k), py(r + k), pz(r + k))
+               v = view3d_xyz(f, px(k), py(k), pz(k))
             else
-               v = view3d_xyz(f, px(r + k), py(r + k), zat, base=.true.)
+               v = view3d_xyz(f, px(k), py(k), zat, base=.true.)
             endif
             dsum = dsum + v(3)
          enddo
          nq = nq + 1_I4P
-         qx(4 * nq - 3:4 * nq) = ux(m0 + r:m0 + r + 3)
-         qy(4 * nq - 3:4 * nq) = uy(m0 + r:m0 + r + 3)
+         qx(6 * nq - 5:6 * nq) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         qy(6 * nq - 5:6 * nq) = ieee_value(1.0_R8P, ieee_quiet_nan)
+         qx(6 * nq - 5:6 * nq - 6 + nv) = ux(m0 + r:m0 + r + nv - 1)
+         qy(6 * nq - 5:6 * nq - 6 + nv) = uy(m0 + r:m0 + r + nv - 1)
          qd(nq) = 0.25_R8P * dsum
          qc(nq) = all_colors(m0 + r)
+         r = r + nv
       enddo
    enddo
    quads%style = one%style
@@ -2860,6 +3012,96 @@ contains
       endfunction corner
    endsubroutine pm3d_surface_quads
 
+   pure function in_set_range(axis, v) result(inside)
+   !< Whether `v` lies within the range set on `axis` (both ends fixed; else any value), gnuplot's INRANGE.
+   type(axis_object), intent(in) :: axis   !< Axis.
+   real(R8P),         intent(in) :: v      !< Value.
+   logical                       :: inside !< Within.
+
+   inside = .true.
+   if (axis%min_fixed .and. axis%max_fixed) &
+      inside = v >= min(axis%min_user, axis%max_user) .and. v <= max(axis%min_user, axis%max_user)
+   endfunction in_set_range
+
+   subroutine map_contourfill_slices(self, lows, highs, mids, colors, zr)
+   !< The slices of `with contourfill` in a map view (contourfill_slices): the z axis autoscaled on the heights as in a
+   !< 3D view (one local axis per procedure: nvfortran 26.9, bug 26).
+   class(axes_object),             intent(in)  :: self      !< Panel.
+   real(R8P), allocatable,         intent(out) :: lows(:)   !< Slice lows.
+   real(R8P), allocatable,         intent(out) :: highs(:)  !< Slice highs.
+   real(R8P), allocatable,         intent(out) :: mids(:)   !< Slice color values.
+   character(len=24), allocatable, intent(out) :: colors(:) !< Slice colors.
+   real(R8P),                      intent(out) :: zr(2)     !< z axis range.
+   type(axis_object)                           :: za        !< z axis.
+   logical                                     :: found     !< Any height.
+
+   call view3d_zextent(self%series, self%zaxis%log, zr, found)
+   za = self%zaxis
+   call za%setup(zr(1), zr(2), found, 400.0_R8P)
+   call map_contourfill_cb(self, za, lows, highs, mids, colors)
+   zr = [za%lo, za%hi]
+   endsubroutine map_contourfill_slices
+
+   subroutine map_contourfill_cb(self, za, lows, highs, mids, colors)
+   !< The slices of `with contourfill` in a map view, its color axis autoscaled on the heights (map_contourfill_slices).
+   class(axes_object),             intent(in)  :: self      !< Panel.
+   type(axis_object),              intent(in)  :: za        !< z axis, set up.
+   real(R8P), allocatable,         intent(out) :: lows(:)   !< Slice lows.
+   real(R8P), allocatable,         intent(out) :: highs(:)  !< Slice highs.
+   real(R8P), allocatable,         intent(out) :: mids(:)   !< Slice color values.
+   character(len=24), allocatable, intent(out) :: colors(:) !< Slice colors.
+   type(axis_object)                           :: ca        !< Color axis.
+   real(R8P)                                   :: zr(2)     !< z extent.
+   logical                                     :: found     !< Any height.
+
+   call view3d_zextent(self%series, self%zaxis%log, zr, found)
+   ca = self%cbaxis
+   call ca%setup(zr(1), zr(2), found, 400.0_R8P)
+   call contourfill_slices(self, za, ca, effective_palette(self%palette, ''), lows, highs, mids, colors)
+   endsubroutine map_contourfill_cb
+
+   subroutine contourfill_slices(self, za, ca, p, lows, highs, mids, colors)
+   !< The z slices of `with contourfill` and their colors (gnuplot's plot3d_contourfill, `set contourfill`): `auto N`
+   !< equal slices of the z range of `za`; `ztics` (`cbtics`) from each major tick of `za` (`ca`) within the z range to
+   !< the next; each in the palette color of its middle on the color axis `ca` (`firstlinetype N`: of linetypes N,
+   !< N+1, ...).
+   class(axes_object),             intent(in)  :: self      !< Panel.
+   type(axis_object),              intent(in)  :: za        !< z axis, set up.
+   type(axis_object),              intent(in)  :: ca        !< Color axis, set up.
+   type(palette_object),           intent(in)  :: p         !< Effective palette.
+   real(R8P), allocatable,         intent(out) :: lows(:)   !< Slice lows.
+   real(R8P), allocatable,         intent(out) :: highs(:)  !< Slice highs.
+   real(R8P), allocatable,         intent(out) :: mids(:)   !< Slice color values.
+   character(len=24), allocatable, intent(out) :: colors(:) !< Slice colors.
+   real(R8P), allocatable                      :: tics(:)   !< Ticks within the range.
+   real(R8P)                                   :: zlo, zhi  !< z range.
+   integer(I4P)                                :: k         !< Counter.
+
+   zlo = min(za%lo, za%hi)
+   zhi = max(za%lo, za%hi)
+   allocate(tics(0))
+   if (self%cfill_mode == 1_I4P .and. allocated(za%ticks)) then
+      do k = 1_I4P, size(za%ticks, kind=I4P)
+         if (za%ticks(k)%major .and. za%ticks(k)%value >= zlo .and. za%ticks(k)%value <= zhi) &
+            tics = [tics, za%ticks(k)%value]
+      enddo
+   elseif (self%cfill_mode == 2_I4P .and. allocated(ca%ticks)) then
+      do k = 1_I4P, size(ca%ticks, kind=I4P)
+         if (ca%ticks(k)%major .and. ca%ticks(k)%value >= zlo .and. ca%ticks(k)%value <= zhi) &
+            tics = [tics, ca%ticks(k)%value]
+      enddo
+   endif
+   call contour_slices(self%cfill_mode, self%cfill_n, zlo, zhi, tics, lows, highs, mids)
+   allocate(colors(size(mids)))
+   do k = 1_I4P, size(mids, kind=I4P)
+      if (self%cfill_lt > 0_I4P) then
+         colors(k) = default_color(self%cfill_lt + k - 1_I4P, self%linecolors)
+      else
+         colors(k) = hex_color(p%rgb(min(1.0_R8P, max(0.0_R8P, ca%to_unit(mids(k))))))
+      endif
+   enddo
+   endsubroutine contourfill_slices
+
    pure subroutine pm3d_grow_queue(qx, qy, qd, qc, nq, n)
    !< The depth queue room for `n` quadrangles at least, its `nq` first kept (through temporaries: nvfortran 26.9, bug
    !< 31).
@@ -2873,15 +3115,15 @@ contains
    character(len=24), allocatable                :: tc(:) !< Temporary.
 
    if (size(qd) >= n) return
-   allocate(tr(4 * n))
-   if (nq > 0_I4P) tr(1:4 * nq) = qx(1:4 * nq)
+   allocate(tr(6 * n))
+   if (nq > 0_I4P) tr(1:6 * nq) = qx(1:6 * nq)
    deallocate(qx)
-   allocate(qx(4 * n))
-   if (nq > 0_I4P) qx(1:4 * nq) = tr(1:4 * nq)
-   if (nq > 0_I4P) tr(1:4 * nq) = qy(1:4 * nq)
+   allocate(qx(6 * n))
+   if (nq > 0_I4P) qx(1:6 * nq) = tr(1:6 * nq)
+   if (nq > 0_I4P) tr(1:6 * nq) = qy(1:6 * nq)
    deallocate(qy)
-   allocate(qy(4 * n))
-   if (nq > 0_I4P) qy(1:4 * nq) = tr(1:4 * nq)
+   allocate(qy(6 * n))
+   if (nq > 0_I4P) qy(1:6 * nq) = tr(1:6 * nq)
    if (nq > 0_I4P) tr(1:nq) = qd(1:nq)
    deallocate(qd)
    allocate(qd(n))
@@ -2969,7 +3211,7 @@ contains
    integer(I4P),        intent(in)  :: nq    !< Quadrangles.
    type(series_object), intent(out) :: q     !< Quadrangles.
    integer(I4P), allocatable        :: order(:) !< Sorted order.
-   integer(I4P)                     :: i, j, t !< Counters.
+   integer(I4P)                     :: i, j, t, k !< Counters.
    real(R8P)                        :: nan   !< NaN.
 
    nan = ieee_value(1.0_R8P, ieee_quiet_nan)
@@ -2987,14 +3229,26 @@ contains
       enddo
       order(j + 1_I4P) = t
    enddo
-   allocate(q%x(5_I4P * nq), q%y(5_I4P * nq), q%colors(5_I4P * nq))
+   ! each polygon its corners (up to 6, NaN padded in the queue) and a NaN row
+   j = nq
+   do k = 1_I4P, 6_I4P * nq
+      if (ieee_is_finite(qx(k))) j = j + 1_I4P
+   enddo
+   allocate(q%x(j), q%y(j), q%colors(j))
+   j = 0_I4P
    do i = 1_I4P, nq
       t = order(i)
-      q%x(5 * i - 4:5 * i - 1) = qx(4 * t - 3:4 * t)
-      q%y(5 * i - 4:5 * i - 1) = qy(4 * t - 3:4 * t)
-      q%x(5 * i) = nan
-      q%y(5 * i) = nan
-      q%colors(5 * i - 4:5 * i) = qc(t)
+      do k = 6_I4P * t - 5_I4P, 6_I4P * t
+         if (.not. ieee_is_finite(qx(k))) exit
+         j = j + 1_I4P
+         q%x(j) = qx(k)
+         q%y(j) = qy(k)
+         q%colors(j) = qc(t)
+      enddo
+      j = j + 1_I4P
+      q%x(j) = nan
+      q%y(j) = nan
+      q%colors(j) = qc(t)
    enddo
    q%style%with = WITH_POLYGONS
    q%style%fill = FILL_SOLID
@@ -3272,7 +3526,7 @@ contains
    if (len(sup) > 0) label = label//'^{'//sup//'}'
    endfunction contour_label
 
-   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, mx, my, quads)
+   subroutine pm3d_series(series, settings, xaxis, yaxis, titled, mx, my, quads, lows, highs, mids, zrange, slice_colors)
    !< The pm3d quadrangles of a 3D `series` as a series of polygons (see map_surfaces); `titled` keeps its key entry
    !< (a `with pm3d` item; the quadrangles of an implicit pm3d have none); a `mask` item keeps the quadrangles whose
    !< first corner lies in a mask polygon (`mx`, `my`), as gnuplot's pm3d_plot.
@@ -3284,7 +3538,15 @@ contains
    real(R8P),           intent(in)  :: mx(:)    !< Mask polygons abscissae, NaN separated.
    real(R8P),           intent(in)  :: my(:)    !< Mask polygons ordinates.
    type(series_object), intent(out) :: quads    !< Quadrangles.
+   real(R8P),         optional, intent(in) :: lows(:)  !< `with contourfill`: slice lows.
+   real(R8P),         optional, intent(in) :: highs(:) !< Slice highs.
+   real(R8P),         optional, intent(in) :: mids(:)  !< Slice color values.
+   real(R8P),         optional, intent(in) :: zrange(2) !< z axis range.
+   character(len=24), optional, intent(in) :: slice_colors(:) !< Slice colors (`firstlinetype`), else the palette's.
    real(R8P), allocatable           :: c(:)     !< Color values of the points.
+   real(R8P), allocatable           :: pz(:)    !< Polygon heights.
+   real(R8P), allocatable           :: cx(:), cy(:), cz(:) !< Polygons of the slices.
+   integer(I4P), allocatable        :: sl(:), src(:) !< Their slices and quadrangles.
    real(R8P), allocatable           :: px(:)    !< Polygon abscissae.
    real(R8P), allocatable           :: py(:)    !< Polygon ordinates.
    real(R8P), allocatable           :: pc(:)    !< Polygon color values.
@@ -3309,7 +3571,7 @@ contains
                                                           series%y(k) <= max(yaxis%min_user, yaxis%max_user)
    enddo
    call pm3d_polygons(series%x, series%y, series%z, c, series%scans, series%scan_sets, series%grid_scans, settings, &
-                      inrange, px, py, pc, rgb=series%zvalues_rgb)
+                      inrange, px, py, pc, rgb=series%zvalues_rgb, pz=pz)
    if (series%masked) then
       ! the quadrangles (4 corners and a NaN row each) of a masked first corner dropped
       allocate(keep(size(px)))
@@ -3320,6 +3582,19 @@ contains
       px = pack(px, keep)
       py = pack(py, keep)
       pc = pack(pc, keep)
+      pz = pack(pz, keep)
+   endif
+   ! `with contourfill`: the quadrangles clipped to each slice in turn, each row the value of its slice's color
+   if (present(lows)) then
+      call contourfill_polygons(px, py, pz, lows, highs, zrange, cx, cy, cz, sl, src)
+      px = cx
+      py = cy
+      deallocate(pc)
+      allocate(pc(size(cx)))
+      do k = 1_I4P, size(cx, kind=I4P)
+         pc(k) = nan
+         if (sl(k) > 0_I4P) pc(k) = mids(sl(k))
+      enddo
    endif
    quads%style = series%style
    quads%style%with = WITH_POLYGONS
@@ -3376,6 +3651,17 @@ contains
          quads%palette_mode = 0_I4P
          deallocate(quads%zvalues)
       endif
+   endif
+   if (present(slice_colors)) then
+      ! `set contourfill firstlinetype N`: each slice in its linetype color, the palette painting the lone points only
+      if (allocated(quads%colors)) deallocate(quads%colors)
+      allocate(quads%colors(size(quads%x)))
+      quads%colors = ''
+      do k = 1_I4P, size(sl, kind=I4P)
+         if (sl(k) > 0_I4P) quads%colors(k) = slice_colors(sl(k))
+      enddo
+      quads%colors_kept = .true.
+      if (allocated(quads%zvalues)) quads%zvalues(1:size(sl)) = nan
    endif
    endsubroutine pm3d_series
 

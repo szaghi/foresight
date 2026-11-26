@@ -1737,6 +1737,16 @@ respect to the viewer, `specular` its highlights, `spec2` a red spotlight on the
 spotlight` moves and colors it). A fill color (`fc`) is lit as the palette colors are. See
 [3D views](/guide/gnuplot-subset#3d-views).
 
+### A surface filled between its levels
+
+<<< @/examples/snippets/cb_view3d_contourfill.gp{gnuplot}
+
+<Plot name="cb_view3d_contourfill" svg :width="560" :height="400" />
+
+`with contourfill` draws the pm3d surface in slices of z, each in the palette color of its middle: `set contourfill
+ztics` slices it at the z ticks (`cbtics` at the color box's, `auto N` in N equal slices). In a map view
+(`set view map`) it is a filled contour map. See [3D views](/guide/gnuplot-subset#3d-views).
+
 ### Contours in a 3D view
 
 <<< @/examples/snippets/cb_view3d_contours.gp{gnuplot}

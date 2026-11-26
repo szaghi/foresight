@@ -15,6 +15,8 @@ public :: pm3d_object
 public :: pm3d_polygons
 public :: packed_hex
 public :: lit_color
+public :: contour_slices
+public :: contourfill_polygons
 public :: masked
 public :: CORNERS_MEAN, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_RMS, CORNERS_MEDIAN, CORNERS_MIN, CORNERS_MAX, &
           CORNERS_C1
@@ -38,6 +40,8 @@ type :: pm3d_object
                                             !< gnuplot's automatic counts).
    integer(I4P)     :: corners = CORNERS_MEAN !< `corners2color`.
    logical          :: clip4in = .false.    !< `clip4in`: a quadrangle needs its 4 corners in range, else one.
+   logical          :: clip_z = .true.      !< `clip z` (gnuplot's default): in a 3D view the quadrangles at the surface
+                                            !< clipped smoothly to the z range; `clip1in`, `clip4in` whole.
    logical          :: border = .false.     !< `border`: the quadrangles outlined.
    character(len=24) :: border_color = 'black' !< Color of the outlines (`border lc|lt ...`); blank with `retrace`
                                             !< (each in its fill color).
@@ -469,4 +473,184 @@ contains
    packed = alpha + int(tmp(1) * 255.0_R8P, I8P) * 65536_I8P + int(tmp(2) * 255.0_R8P, I8P) * 256_I8P + &
             int(tmp(3) * 255.0_R8P, I8P)
    endfunction lit_color
+
+   pure subroutine contour_slices(mode, n, zlo, zhi, tics, lows, highs, mids)
+   !< The z slices of `with contourfill`, gnuplot's plot3d_contourfill: `mode` 0 (`set contourfill auto N`) `n` equal
+   !< slices of the z axis range [`zlo`, `zhi`]; else (`ztics`, `cbtics`) a slice from each tick of `tics` (those within
+   !< the range, ascending) to the next, the first from `zlo` and the last to `zhi`; at most 100 slices. `mids` the
+   !< values of their colors (each slice's middle).
+   integer(I4P),           intent(in)  :: mode     !< 0 auto, else ticks.
+   integer(I4P),           intent(in)  :: n        !< Slices of `auto`.
+   real(R8P),              intent(in)  :: zlo      !< Axis range, low end.
+   real(R8P),              intent(in)  :: zhi      !< Axis range, high end.
+   real(R8P),              intent(in)  :: tics(:)  !< Ticks within the range.
+   real(R8P), allocatable, intent(out) :: lows(:)  !< Slice lows.
+   real(R8P), allocatable, intent(out) :: highs(:) !< Slice highs.
+   real(R8P), allocatable, intent(out) :: mids(:)  !< Slice color values.
+   integer(I4P), parameter             :: MAX_ZSLICES = 100_I4P !< gnuplot's limit.
+   real(R8P)                           :: zinc     !< Slice height.
+   integer(I4P)                        :: m        !< Slices.
+   integer(I4P)                        :: l        !< Slice.
+
+   if (mode == 0_I4P) then
+      m = max(1_I4P, min(n, MAX_ZSLICES))
+      zinc = (zhi - zlo) / real(m, R8P)
+      allocate(lows(m), highs(m), mids(m))
+      do l = 1_I4P, m
+         lows(l) = zlo + zinc * real(l - 1_I4P, R8P)
+         highs(l) = lows(l) + zinc
+         mids(l) = lows(l) + zinc / 2.0_R8P
+      enddo
+   else
+      m = min(size(tics, kind=I4P), MAX_ZSLICES)
+      allocate(lows(m), highs(m), mids(m))
+      if (m == 0_I4P) return
+      do l = 1_I4P, m
+         lows(l) = tics(l)
+         if (l > 1_I4P) highs(l - 1_I4P) = tics(l)
+      enddo
+      lows(1) = zlo
+      highs(m) = zhi
+      mids = (lows + highs) / 2.0_R8P
+   endif
+   endsubroutine contour_slices
+
+   pure subroutine clip_band(x, y, z, zmin, zmax, ox, oy, oz, nvo)
+   !< The convex polygon `x`, `y`, `z` clipped to the heights [`zmin`, `zmax`], gnuplot's clip_filled_polygon: `nvo`
+   !< -1 nothing left, 0 all within (the polygon itself), else the vertices `ox`, `oy`, `oz` left (at most 2 more).
+   real(R8P),    intent(in)  :: x(:)  !< Abscissae.
+   real(R8P),    intent(in)  :: y(:)  !< Ordinates.
+   real(R8P),    intent(in)  :: z(:)  !< Heights.
+   real(R8P),    intent(in)  :: zmin  !< Lowest height kept.
+   real(R8P),    intent(in)  :: zmax  !< Highest height kept.
+   real(R8P),    intent(out) :: ox(:) !< Clipped abscissae.
+   real(R8P),    intent(out) :: oy(:) !< Clipped ordinates.
+   real(R8P),    intent(out) :: oz(:) !< Clipped heights.
+   integer(I4P), intent(out) :: nvo   !< Vertices left.
+   integer(I4P)              :: out(size(z)) !< -1 under, 1 over, 0 within.
+   integer(I4P)              :: nv, cur, nxt, nover, nunder !< Counters.
+   real(R8P)                 :: fr    !< Interpolation fraction.
+   real(R8P)                 :: zb    !< Bound crossed.
+
+   nv = size(z, kind=I4P)
+   nover = 0_I4P
+   nunder = 0_I4P
+   do cur = 1_I4P, nv
+      out(cur) = 0_I4P
+      if (z(cur) >= zmin .and. z(cur) <= zmax) cycle
+      if (z(cur) > zmax) then
+         out(cur) = 1_I4P
+         nover = nover + 1_I4P
+      elseif (z(cur) < zmin) then
+         out(cur) = -1_I4P
+         nunder = nunder + 1_I4P
+      endif
+   enddo
+   nvo = 0_I4P
+   if (nover + nunder == 0_I4P) return
+   nvo = -1_I4P
+   if (nunder == nv .or. nover == nv) return
+   nvo = 0_I4P
+   do cur = 1_I4P, nv
+      nxt = mod(cur, nv) + 1_I4P
+      if (out(cur) /= 0_I4P) then
+         if (out(nxt) == 0_I4P) then
+            zb = merge(zmax, zmin, z(cur) >= zmax)
+            fr = (zb - z(nxt)) / (z(cur) - z(nxt))
+            nvo = nvo + 1_I4P
+            ox(nvo) = x(nxt) + fr * (x(cur) - x(nxt))
+            oy(nvo) = y(nxt) + fr * (y(cur) - y(nxt))
+            oz(nvo) = zb
+         elseif (out(cur) * out(nxt) < 0_I4P) then
+            zb = merge(zmax, zmin, z(cur) >= zmax)
+            fr = (zb - z(nxt)) / (z(cur) - z(nxt))
+            nvo = nvo + 1_I4P
+            ox(nvo) = x(nxt) + fr * (x(cur) - x(nxt))
+            oy(nvo) = y(nxt) + fr * (y(cur) - y(nxt))
+            oz(nvo) = zb
+            zb = merge(zmax, zmin, z(nxt) >= zmax)
+            fr = (zb - oz(nvo)) / (z(nxt) - oz(nvo))
+            ox(nvo + 1) = ox(nvo) + fr * (x(nxt) - ox(nvo))
+            oy(nvo + 1) = oy(nvo) + fr * (y(nxt) - oy(nvo))
+            oz(nvo + 1) = zb
+            nvo = nvo + 1_I4P
+         endif
+      else
+         nvo = nvo + 1_I4P
+         ox(nvo) = x(cur)
+         oy(nvo) = y(cur)
+         oz(nvo) = z(cur)
+         if (out(nxt) /= 0_I4P) then
+            zb = merge(zmax, zmin, z(nxt) >= zmax)
+            fr = (zb - z(cur)) / (z(nxt) - z(cur))
+            nvo = nvo + 1_I4P
+            ox(nvo) = x(cur) + fr * (x(nxt) - x(cur))
+            oy(nvo) = y(cur) + fr * (y(nxt) - y(cur))
+            oz(nvo) = zb
+         endif
+      endif
+   enddo
+   if (nvo <= 1_I4P) nvo = -1_I4P
+   endsubroutine clip_band
+
+   pure subroutine contourfill_polygons(px, py, pz, lows, highs, zrange, cx, cy, cz, slice, source)
+   !< The pm3d quadrangles `px`, `py`, `pz` (4 corners and a NaN row each) of `with contourfill`, gnuplot's: for each
+   !< slice [`lows`, `highs`] in turn (within `zrange`), every quadrangle clipped to it (clip_band; whole when within),
+   !< as polygons of 3 to 6 corners and a NaN row; `slice` the slice of each row, `source` the first row of its
+   !< quadrangle (0 on the NaN rows).
+   real(R8P),                 intent(in)  :: px(:)     !< Quadrangle abscissae.
+   real(R8P),                 intent(in)  :: py(:)     !< Quadrangle ordinates.
+   real(R8P),                 intent(in)  :: pz(:)     !< Quadrangle heights.
+   real(R8P),                 intent(in)  :: lows(:)   !< Slice lows.
+   real(R8P),                 intent(in)  :: highs(:)  !< Slice highs.
+   real(R8P),                 intent(in)  :: zrange(2) !< z axis range.
+   real(R8P),    allocatable, intent(out) :: cx(:)     !< Polygon abscissae.
+   real(R8P),    allocatable, intent(out) :: cy(:)     !< Polygon ordinates.
+   real(R8P),    allocatable, intent(out) :: cz(:)     !< Polygon heights.
+   integer(I4P), allocatable, intent(out) :: slice(:)  !< Slice of each row.
+   integer(I4P), allocatable, intent(out) :: source(:) !< First row of the quadrangle of each row.
+   real(R8P),    allocatable              :: tx(:), ty(:), tz(:) !< Rows, room for the most.
+   integer(I4P), allocatable              :: ts(:), tq(:) !< Their slices and quadrangles.
+   real(R8P)                              :: ox(6), oy(6), oz(6) !< A clipped polygon.
+   real(R8P)                              :: zmin, zmax !< Band.
+   real(R8P)                              :: nan   !< NaN.
+   integer(I4P)                           :: l, r, m, nvo !< Counters.
+
+   nan = ieee_value(1.0_R8P, ieee_quiet_nan)
+   allocate(tx(7 * (size(px) / 5 + 1) * max(1, size(lows))), ty(7 * (size(px) / 5 + 1) * max(1, size(lows))))
+   allocate(tz(size(tx)), ts(size(tx)), tq(size(tx)))
+   m = 0_I4P
+   do l = 1_I4P, size(lows, kind=I4P)
+      zmin = max(min(zrange(1), zrange(2)), lows(l))
+      zmax = min(max(zrange(1), zrange(2)), highs(l))
+      do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
+         if (.not. all(ieee_is_finite(px(r:r + 3))) .or. .not. all(ieee_is_finite(pz(r:r + 3)))) cycle
+         call clip_band(px(r:r + 3), py(r:r + 3), pz(r:r + 3), zmin, zmax, ox, oy, oz, nvo)
+         if (nvo < 0_I4P) cycle
+         if (nvo == 0_I4P) then
+            tx(m + 1:m + 4) = px(r:r + 3)
+            ty(m + 1:m + 4) = py(r:r + 3)
+            tz(m + 1:m + 4) = pz(r:r + 3)
+            nvo = 4_I4P
+         else
+            tx(m + 1:m + nvo) = ox(1:nvo)
+            ty(m + 1:m + nvo) = oy(1:nvo)
+            tz(m + 1:m + nvo) = oz(1:nvo)
+         endif
+         ts(m + 1:m + nvo) = l
+         tq(m + 1:m + nvo) = r
+         m = m + nvo + 1_I4P
+         tx(m) = nan
+         ty(m) = nan
+         tz(m) = nan
+         ts(m) = 0_I4P
+         tq(m) = 0_I4P
+      enddo
+   enddo
+   cx = tx(1:m)
+   cy = ty(1:m)
+   cz = tz(1:m)
+   slice = ts(1:m)
+   source = tq(1:m)
+   endsubroutine contourfill_polygons
 endmodule foresight_pm3d
