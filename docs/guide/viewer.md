@@ -59,7 +59,10 @@ regenerated:
 - **ticks, tick labels and grid** (y2 and x2 ticks included), with a line-by-line port of the Fortran tick rules
   (`src/js/viewer.js` mirrors `src/lib/foresight_ticks.F90`), so labels stay exact decimals; on time axes the time
   steps and the labels (two-line ones included) by the same rules as the Fortran side; text labels from the data
-  (`xtic`, `x2tic`, `ytic`, `y2tic`) kept at their values; the minor ticks of `set mxtics time` are not redrawn;
+  (`xtic`, `x2tic`, `ytic`, `y2tic`) kept at their values; the minor ticks of `set mxtics time` are not redrawn.
+  The labels are measured as the Fortran side measures them: the page carries the advance widths of the
+  [compiled-in fonts](output-formats#fonts) for the characters 32-126 and 160-255 and the kerning of their ASCII
+  pairs (11 kB), and each redrawn label records its width (`data-width`) in the axis' face;
 - **error bar caps**, **point type markers** (`pt`), **arrowheads** of `vectors` and `arrows`, and the texts of `with
   labels`, kept at their pixel size in separate overlays;
 - what does not follow the data is hidden while zoomed and shown again by `a`: the r and theta labels of a polar
@@ -112,6 +115,8 @@ drawn.
 ## Limits
 
 - Tick labels regenerated after a zoom can be wider than the margin reserved by Fortran for the original ones.
+- The viewer measures characters beyond Latin-1 (Greek, math symbols) as 0.556 em and kerns ASCII pairs only; a
+  label with them is drawn right, its recorded width may differ from the Fortran one.
 - Log and linear scales cannot be toggled in the page: the data are written already mapped to the axis scale.
 - Points on the border are clipped to the plot area, as matplotlib does (gnuplot shows them whole).
 - Hiding a series does not rescale the axes, and following fits y to every shown series of the panel, on either y

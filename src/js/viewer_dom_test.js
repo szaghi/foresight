@@ -10,7 +10,8 @@
 // second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
 // time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed;
 // enhanced.html, tick labels with enhanced text markup redrawn as <tspan> elements by a zoom; view3d_frame.html, a 3D
-// view turned by a left drag and back by u. The
+// view turned by a left drag and back by u; the widths of the labels a zoom redraws, against the Fortran faces'
+// data (font_fixture.json). The
 // page is parsed
 // by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
@@ -350,6 +351,53 @@ check("its title and key kept", v3title !== undefined && !v3title.hasAttribute("
   v3d.querySelector(".fs-key-entry").getAttribute("display") !== "none");
 key("u");
 check("u: the script's view again", v3d.querySelector(".fs-scene-view") === null && v3d.innerHTML === v3dHome);
+
+// tick labels measured as foresight measures them: the viewer's widths (data-width of each label a zoom redraws) against
+// the data of the Fortran faces, src/js/font_fixture.json (written by scripts/gen_fonts.py from the same tables as
+// src/lib/foresight_fontdata_*.F90: every face's Latin-1 advances and kerning), to 0.01 px; the font table the page
+// carries under 20 kB
+var fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "font_fixture.json"), "utf8"));
+function referenceWidth(text, face, size) {
+  var f = fixture[face - 1], units = 0, prev = 0;
+  Array.from(text).forEach(function (ch) {
+    var code = ch.codePointAt(0);
+    units += f.advance[code] + (prev ? f.kern[prev + "," + code] || 0 : 0);
+    prev = code;
+  });
+  return size * units / f.upm;
+}
+var core = require("./viewer.js");
+var faceWorst = 0;
+["0123456789", "AVATAR", "Temperature [K] vs. time (s)", "-1.5e+03", "Jan 01 12:00", "AV To Wa LT Yo P. F, Te"]
+  .forEach(function (text) {
+    for (var face = 1; face <= 8; face++) {
+      faceWorst = Math.max(faceWorst, Math.abs(core.textWidth(text, face, 10) - referenceWidth(text, face, 10)));
+    }
+  });
+check("the viewer's widths are the Fortran faces' in all 8 faces (worst " + faceWorst.toExponential(2) + " pt)",
+  faceWorst < 0.01 && core.faceOf("Arial") === 1 && core.faceOf("serif", true, true) === 8 &&
+  core.faceOf("Times", false, true) === 3);
+var widthWorst = 0, widthCount = 0;
+[path.join(examples, "ch7.html"), path.join(__dirname, "..", "tests", "goldens", "time_axis.html"),
+  path.join(__dirname, "..", "tests", "goldens", "x2.html"), path.join(__dirname, "..", "tests", "goldens", "semilogy.html")]
+  .forEach(function (file) {
+    page = strip(file);
+    p = load("");
+    var size = Number(panel(0).getAttribute("data-font-size"));
+    wheel(0);
+    Array.prototype.forEach.call(panel(0).querySelectorAll(".fs-xticks text, .fs-yticks text, .fs-x2ticks text"),
+      function (t) {
+        if (!t.hasAttribute("data-width") || t.children.length > 0) return;
+        var face = 1 + (t.getAttribute("font-weight") === "bold" ? 1 : 0) + (t.getAttribute("font-style") === "italic" ? 2 : 0);
+        var w = referenceWidth(t.textContent, face, Number(t.getAttribute("font-size") || size));
+        widthWorst = Math.max(widthWorst, Math.abs(Number(t.getAttribute("data-width")) - w));
+        widthCount++;
+      });
+  });
+check("labels a zoom redraws measured as Fortran's (" + widthCount + " labels, worst " + widthWorst.toExponential(2) +
+  " px)", widthCount > 20 && widthWorst < 0.01);
+var table = viewer.slice(viewer.indexOf("// ---- font metrics"), viewer.indexOf("// ---- end of font metrics"));
+check("the font table the page carries: " + Buffer.byteLength(table) + " bytes", Buffer.byteLength(table) < 20000);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

@@ -175,10 +175,11 @@ check("enhanced nested", spans("x^{a^b}") === "<tspan>x</tspan><tspan font-size=
   "<tspan font-size=\"7.68\" dy=\"2.88\">j</tspan>");
 check("enhanced sub after sup", spans("x^2_3") === "<tspan>x</tspan><tspan font-size=\"9.6\" dy=\"-6\">2</tspan>" +
   "<tspan font-size=\"9.6\" dy=\"9.6\">3</tspan>");
+// @ and ~ step back by the real widths (Liberation Sans: b at 9.6 px, a at 12 px), as foresight_enhanced
 check("enhanced & @ ~", spans("a&{bb}c") === "<tspan>a</tspan><tspan fill=\"none\">bb</tspan><tspan>c</tspan>" &&
   spans("a@_bc") === "<tspan>a</tspan><tspan font-size=\"9.6\" dy=\"3.6\">b</tspan>" +
-  "<tspan dx=\"-5.28\" dy=\"-3.6\">c</tspan>" &&
-  spans("~a{.8-}") === "<tspan>a</tspan><tspan dx=\"-6.6\" dy=\"-9.6\">-</tspan>");
+  "<tspan dx=\"-5.34\" dy=\"-3.6\">c</tspan>" &&
+  spans("~a{.8-}") === "<tspan>a</tspan><tspan dx=\"-6.67\" dy=\"-9.6\">-</tspan>");
 check("enhanced fonts", spans("{/=8 s}{/*1.5 L}") ===
   "<tspan font-size=\"8\">s</tspan><tspan font-size=\"18\">L</tspan>" &&
   spans("{/:Italic i}{/:Bold=16 b}") === "<tspan font-style=\"italic\">i</tspan>" +
