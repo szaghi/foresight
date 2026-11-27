@@ -31,6 +31,7 @@ const docs = [
       { text: 'C2. Fonts that travel', link: '/manual/paths/c-paper/02-fonts-that-travel' },
       { text: 'C3. Sizes and the paper theme', link: '/manual/paths/c-paper/03-sizes-and-the-paper-theme' },
       { text: 'C4. Multi-panel figures', link: '/manual/paths/c-paper/04-multi-panel-figures' },
+      { text: 'C5. The paper', link: '/manual/paths/c-paper/05-the-paper' },
     ],
   },
   {

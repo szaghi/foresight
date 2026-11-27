@@ -1,0 +1,40 @@
+name: Paper
+
+# The example paper of the docs' path C (docs/examples/paper/paper.tex), built with Tectonic from the figures the docs
+# examples committed (docs/public/examples/*.pdf): it compiles with no warning about its figures, and every font of
+# the paper is embedded (scripts/build_paper.sh). Not managed by fobis scaffold.
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+    paths:
+      - 'docs/examples/paper/**'
+      - 'docs/public/examples/*.pdf'
+      - 'scripts/build_paper.sh'
+      - '.github/workflows/paper.yml'
+  pull_request:
+    paths:
+      - 'docs/examples/paper/**'
+      - 'docs/public/examples/*.pdf'
+      - 'scripts/build_paper.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wtfjoke/setup-tectonic@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: poppler (pdffonts)
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: build and check the paper
+        run: bash scripts/build_paper.sh build/paper/paper.pdf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper
+          path: build/paper/paper.pdf
