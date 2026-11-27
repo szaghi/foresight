@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(292)                           !< Per-check outcome.
+logical                       :: test_passed(293)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7696,8 +7696,11 @@ block
    test_passed(283) = test_passed(283) .and. iostat == 0_I4P
    if (test_passed(283)) test_passed(283) = interpreter%figure%panels(1)%view3d%rot_x == 70.0_R8P .and. &
                                           interpreter%figure%panels(1)%view3d%rot_z == 10.0_R8P
-   ! an image turned out of the xy plane: not supported, said so
+   ! an image turned out of the xy plane (perpendicular=, check 293); a 2D plot's perpendicular= refused
    call interpreter%run_text("splot 'foresight_script_test_mb.bin' binary array=(2,2) perp=(1,1,1) with image", &
+                             iostat, iomsg)
+   test_passed(283) = test_passed(283) .and. iostat == 0_I4P
+   call interpreter%run_text("plot 'foresight_script_test_mb.bin' binary array=(2,2) perp=(1,1,1) with image", &
                              iostat, iomsg)
    test_passed(283) = test_passed(283) .and. iostat /= 0_I4P
    if (test_passed(283)) test_passed(283) = index(iomsg, 'perpendicular') > 0
@@ -7994,6 +7997,53 @@ block
       p1 = anchor_of(svg, 'P')
       test_passed(292) = abs(t1(1) - t0(1) - 33.6_R8P) < 0.011_R8P .and. abs(x1(1) - x0(1) - 25.2_R8P) < 0.011_R8P .and. &
                         abs(p1(1) - p0(1) - 4.5_R8P) < 0.011_R8P
+   endif
+endblock
+
+! check 293: binary images in 3D views as gnuplot 6.0: each pixel a 3D polygon colored by the palette (the set
+! cbrange), out of the autoscaling, the pixel centres autoscaling (an item of their own, no linetype used up);
+! `perpendicular=(1,0,0)` turns the image into the plane x = its centre (gnuplot's rotation_matrix_3D: y along the
+! image's second axis, z against its first); a 2D plot of a one-dimensional array generates x, `using 1` the y
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+   real(R8P), allocatable      :: fx(:), fy(:), fz(:) !< Finite corners.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set cbrange [0:40]"//nl//"splot 'foresight_script_test_mb.bin' binary array=(2,2) "// &
+                             "dx=2 dy=2 center=(5,6,7) perp=(1,0,0) with image, x*y", iostat, iomsg)
+   test_passed(293) = iostat == 0_I4P
+   if (test_passed(293)) then
+      associate(sr => interpreter%figure%panels(1)%series)
+         test_passed(293) = size(sr) == 3
+         ! (the corners, the polygons' breaks left out)
+         if (test_passed(293)) then
+            fx = pack(sr(1)%x, ieee_is_finite(sr(1)%x))
+            fy = pack(sr(1)%y, ieee_is_finite(sr(1)%y))
+            fz = pack(sr(1)%z, ieee_is_finite(sr(1)%z))
+            test_passed(293) = size(fx) == 16 .and. size(fy) == 16 .and. size(fz) == 16
+         endif
+         if (test_passed(293)) test_passed(293) = all(abs(fx - 5.0_R8P) < 1.0e-9_R8P) .and. &
+                                                abs(minval(fy) - 4.0_R8P) < 1.0e-9_R8P .and. &
+                                                abs(maxval(fy) - 8.0_R8P) < 1.0e-9_R8P .and. &
+                                                abs(minval(fz) - 5.0_R8P) < 1.0e-9_R8P .and. &
+                                                abs(maxval(fz) - 9.0_R8P) < 1.0e-9_R8P .and. &
+                                                sr(1)%noautoscale .and. .not. sr(2)%noautoscale
+         ! the surface after the image takes the second linetype, as gnuplot's (the centres use none)
+         if (test_passed(293)) test_passed(293) = sr(3)%style%color == default_color(2_I4P, &
+                                                interpreter%figure%panels(1)%linecolors)
+      endassociate
+   endif
+   call interpreter%init(scratch)
+   call interpreter%run_text("plot 'foresight_script_test_eb.bin' binary skip=4 array=2 endian=big format='%f' "// &
+                             "using 1 with lines", iostat, iomsg)
+   test_passed(293) = test_passed(293) .and. iostat == 0_I4P
+   if (test_passed(293)) then
+      associate(sr => interpreter%figure%panels(1)%series)
+         test_passed(293) = size(sr) == 1
+         if (test_passed(293)) test_passed(293) = size(sr(1)%x) == 2
+         if (test_passed(293)) test_passed(293) = all(abs(sr(1)%x - [0.0_R8P, 1.0_R8P]) < 1.0e-9_R8P) .and. &
+                                                all(abs(sr(1)%y - [1.5_R8P, 2.5_R8P]) < 1.0e-9_R8P)
+      endassociate
    endif
 endblock
 

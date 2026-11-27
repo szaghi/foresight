@@ -3111,7 +3111,10 @@ contains
    !< there; `rotation=A` (`rotate`, `rot`; A in radians, `Ad` degrees, `Api` multiples of pi) turns the pixels about
    !< that centre, or about the origin when `origin=` is given, as gnuplot's; an angle off the right ones makes each
    !< pixel a polygon of its four corners (`with polygons`, colored by its value through the palette, or by its packed
-   !< RGB), as gnuplot draws rotated images.
+   !< RGB), as gnuplot draws rotated images. A splot's image in a 3D view (not the map) is drawn the same, each pixel a
+   !< 3D polygon (`lc rgb variable`, the palette's color of its value over the set cbrange): in the xy plane at the z of
+   !< `center=(X,Y,Z)` or `origin=(X,Y,Z)`, or turned by `perpendicular=(PX,PY,PZ)` (gnuplot's rotation_matrix_3D: the
+   !< image's normal along that vector), as gnuplot's df_readbinary.
    class(script_object),            intent(inout) :: self      !< Interpreter.
    type(token_object),              intent(in)    :: tokens(:) !< Items tokens.
    logical,                         intent(in)    :: three_d   !< A splot.
@@ -3136,6 +3139,11 @@ contains
    logical                                        :: centre_set !< center= given.
    logical                                        :: dy_set    !< dy= given.
    logical                                        :: polygons  !< Pixels as polygons (an angle off the right ones).
+   logical                                        :: solid3d   !< Pixels as 3D polygons (a splot's image in a 3D view).
+   logical                                        :: perp_set  !< perpendicular= given.
+   real(R8P)                                      :: perp(3)   !< The image's normal (`perpendicular=`).
+   real(R8P)                                      :: pmat(3, 3) !< gnuplot's rotation_matrix_3D of it.
+   real(R8P)                                      :: lift      !< z of center= or origin= (a splot's).
    integer(I4P)                                   :: quarter   !< Right angle multiple, -1 if none.
    real(R8P)                                      :: v         !< A value read.
    integer(I4P)                                   :: shape(2)  !< Pixels across and up.
@@ -3151,6 +3159,7 @@ contains
    logical                                        :: big       !< Big endian.
    logical                                        :: has_using !< The item has its using.
    logical                                        :: array_set !< array= given.
+   logical                                        :: one_dim   !< array=W, one dimension (a 2D plot's x generated).
    logical                                        :: record_set !< record= given.
    logical                                        :: matrix    !< gnuplot's matrix binary (`binary` alone, `matrix`).
    integer(I4P), allocatable                      :: records(:) !< Record lengths (`record=N1:N2:...`).
@@ -3174,12 +3183,16 @@ contains
       angle = 0.0_R8P
       origin_set = .false.
       centre_set = .false.
+      perp_set = .false.
+      perp = [0.0_R8P, 0.0_R8P, 1.0_R8P]
+      lift = 0.0_R8P
       dy_set = .false.
       flip = .false.
       big = .false.
       skip = 0_I4P
       format = ''
       array_set = .false.
+      one_dim = .false.
       record_set = .false.
       matrix = .false.
       if (allocated(records)) deallocate(records)
@@ -3213,9 +3226,13 @@ contains
          endif
          select case (word)
          case ('center', 'centre')
-            ! x, y (a splot's z, the plane of the image, not read)
+            ! x, y and a splot's z (the plane of the image)
             value = strip_parentheses(value)
-            read(value, *, iostat=iostat) centre
+            if (count([(value(q:q) == ',', q = 1_I4P, len(value, kind=I4P))]) >= 2) then
+               read(value, *, iostat=iostat) centre, lift
+            else
+               read(value, *, iostat=iostat) centre
+            endif
             if (iostat /= 0_I4P) then
                call fail('plot: binary center=(X,Y) expected', iostat, iomsg)
                return
@@ -3271,7 +3288,8 @@ contains
                if (value(q:q) == 'x' .or. value(q:q) == ',' .or. value(q:q) == ':') value(q:q) = ' '
             enddo
             shape = 1_I4P
-            if (index(trim(adjustl(value)), ' ') > 0) then
+            one_dim = index(trim(adjustl(value)), ' ') == 0
+            if (.not. one_dim) then
                read(value, *, iostat=iostat) shape
             else
                read(value, *, iostat=iostat) shape(1)
@@ -3301,7 +3319,11 @@ contains
             if (word == 'dy') dy_set = .true.
          case ('origin')
             value = strip_parentheses(value)
-            read(value, *, iostat=iostat) origin
+            if (count([(value(q:q) == ',', q = 1_I4P, len(value, kind=I4P))]) >= 2) then
+               read(value, *, iostat=iostat) origin, lift
+            else
+               read(value, *, iostat=iostat) origin
+            endif
             if (iostat /= 0_I4P) then
                call fail('plot: binary origin=(X,Y) expected', iostat, iomsg)
                return
@@ -3320,8 +3342,18 @@ contains
             call fail('plot: binary filetype='//value//' is not supported (raw arrays only)', iostat, iomsg)
             return
          case ('perp', 'perpendicular')
-            call fail('plot: binary perpendicular= is not supported (images in the xy plane only)', iostat, iomsg)
-            return
+            ! the normal of the image's plane, splot only (gnuplot's)
+            if (.not. three_d) then
+               call fail('plot: binary perpendicular= applies to splot', iostat, iomsg)
+               return
+            endif
+            value = strip_parentheses(value)
+            read(value, *, iostat=iostat) perp
+            if (iostat /= 0_I4P) then
+               call fail('plot: binary perpendicular=(PX,PY,PZ) expected', iostat, iomsg)
+               return
+            endif
+            perp_set = .true.
          case default
             exit
          endselect
@@ -3380,6 +3412,28 @@ contains
          if (tokens(q)%kind == TOKEN_WORD .and. keyword(tokens(q)%text, 'with', 1_I4P) .and. &
              q < size(tokens, kind=I4P)) style = style_name(tokens(q + 1_I4P)%text)
       enddo
+      ! pixels as polygons for the image styles only: other styles take the turned points
+      if (.not. is_word(style, 'image rgbimage rgbalpha')) polygons = .false.
+      ! a splot's image in a 3D view: its pixels 3D polygons, turned by perpendicular= (gnuplot's rotation_matrix_3D)
+      solid3d = three_d .and. is_word(style, 'image rgbimage rgbalpha') .and. &
+                (perp_set .or. polygons .or. .not. self%figure%panels(self%figure%current)%view3d%map)
+      if (solid3d) polygons = .true.
+      pmat = reshape([1.0_R8P, 0.0_R8P, 0.0_R8P, 0.0_R8P, 1.0_R8P, 0.0_R8P, 0.0_R8P, 0.0_R8P, 1.0_R8P], [3, 3])
+      block
+         real(R8P) :: c1 !< |p|.
+         real(R8P) :: c2 !< |p| in the xy plane.
+         real(R8P) :: sc !< Scale.
+
+         c1 = norm2(perp)
+         c2 = norm2(perp(1:2))
+         if (.not. (c1 < 1.0e-9_R8P .or. c2 < 1.0e-4_R8P * c1)) then
+            sc = 1.0_R8P / (c1 * c2)
+            ! gnuplot's P[i][j], row i: pmat(i, j)
+            pmat(1, :) = [perp(1) * perp(3) * sc, -perp(2) * c1 * sc, perp(1) * c2 * sc]
+            pmat(2, :) = [perp(2) * perp(3) * sc, perp(1) * c1 * sc, perp(2) * c2 * sc]
+            pmat(3, :) = [-c2 * c2 * sc, 0.0_R8P, perp(3) * c2 * sc]
+         endif
+      endblock
       ! the field types: %type each (one for every field)
       nkinds = 0_I4P
       q = 1_I4P
@@ -3394,7 +3448,7 @@ contains
             j = j + 1_I4P
          enddo
          nkinds = nkinds + 1_I4P
-         kinds(nkinds) = format(q + 1:j - 1)
+         kinds(nkinds) = binary_type_name(format(q + 1:j - 1))
          q = j
       enddo
       if (nkinds == 0_I4P) then
@@ -3450,7 +3504,7 @@ contains
          real(R8P), parameter          :: SIGNS(2, 4) = reshape([-1.0_R8P, -1.0_R8P, 1.0_R8P, -1.0_R8P, 1.0_R8P, &
                                                                  1.0_R8P, -1.0_R8P, 1.0_R8P], [2, 4]) !< Corners.
 
-         allocate(character(len=int(shape(1), I8P) * shape(2) * (nfields + 2_I4P) * 26_I8P * &
+         allocate(character(len=int(shape(1), I8P) * shape(2) * (nfields + 6_I4P) * 26_I8P * &
                                 merge(5_I8P, 1_I8P, polygons) + 1_I8P) :: buffer)
          at = 0_I4P
          cnat = 0.5_R8P * step * real(shape - 1_I4P, R8P)
@@ -3494,6 +3548,45 @@ contains
                      buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
                      at = at + w + 1_I4P
                   enddo
+                  if (solid3d) then
+                     ! the corner from the image's reference (its centre, or its first pixel with origin=), turned by
+                     ! perpendicular= and moved to the centre or origin (gnuplot's df_readbinary translation)
+                     block
+                        real(R8P) :: a(2)  !< Corner from the reference, in the image's plane.
+                        real(R8P) :: o3(3) !< The reference's place.
+                        real(R8P) :: x3(3) !< The corner.
+                        real(R8P) :: c3(3) !< The pixel centre.
+                        integer(I4P) :: e  !< Coordinate.
+
+                        if (centre_set) then
+                           o3 = [centre, lift]
+                        elseif (origin_set) then
+                           o3 = [origin, lift]
+                        else
+                           o3 = [cnat + origin, 0.0_R8P]
+                        endif
+                        a = p - o3(1:2) + SIGNS(1, corner) * half(:, 1) + SIGNS(2, corner) * half(:, 2)
+                        x3 = matmul(pmat, [a(1), a(2), 0.0_R8P]) + o3
+                        ! then the pixel centre, which the autoscaling sees (gnuplot's image points)
+                        a = p - o3(1:2)
+                        c3 = matmul(pmat, [a(1), a(2), 0.0_R8P]) + o3
+                        do e = 1_I4P, 6_I4P
+                           if (e <= 3_I4P) then
+                              write(cell, '(ES24.16E3)') x3(e)
+                           else
+                              write(cell, '(ES24.16E3)') c3(e - 3_I4P)
+                           endif
+                           w = len_trim(adjustl(cell), kind=I4P)
+                           if (e < 6_I4P) then
+                              buffer(at + 1:at + w + 1) = trim(adjustl(cell))//' '
+                           else
+                              buffer(at + 1:at + w + 1) = trim(adjustl(cell))//new_line('a')
+                           endif
+                           at = at + w + 1_I4P
+                        enddo
+                     endblock
+                     cycle
+                  endif
                   if (polygons) then
                      write(cell, '(ES24.16E3)') p(1) + SIGNS(1, corner) * half(1, 1) + SIGNS(2, corner) * half(1, 2)
                   else
@@ -3556,6 +3649,9 @@ contains
                   return
                endif
                color = '(int('//trim(parts(1))//')*65536+int('//trim(parts(2))//')*256+int('//trim(parts(3))//'))'
+            elseif (solid3d) then
+               ! the palette's packed color of the value (the set cbrange)
+               color = '(palette('//trim(parts(1))//'))'
             else
                color = trim(parts(1))
             endif
@@ -3568,6 +3664,8 @@ contains
                t%text = 'using'
                call push(items, t)
                t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))//':'//color
+               if (solid3d) t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))// &
+                                     ':'//int_str(int(nfields + 3_I4P, I8P))//':'//color
                call push(items, t)
             endif
             t%first = tokens(last)%first
@@ -3579,6 +3677,9 @@ contains
                      call push(items, tokens(q))
                      items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
                                                int_str(int(nfields + 2_I4P, I8P))//':'//color
+                     if (solid3d) items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
+                                                            int_str(int(nfields + 2_I4P, I8P))//':'// &
+                                                            int_str(int(nfields + 3_I4P, I8P))//':'//color
                      q = q + 1_I4P
                      cycle
                   endif
@@ -3606,11 +3707,49 @@ contains
             call push(items, t)
             t%text = 'lc'
             call push(items, t)
-            if (rgb) then
+            if (rgb .or. solid3d) then
                t%text = 'rgb'
                call push(items, t)
                t%text = 'variable'
                call push(items, t)
+               if (solid3d) then
+                  ! the polygons out of the autoscaling, the pixel centres in it (gnuplot autoscales an image by its
+                  ! points): `, $__binaryN using CX:CY:CZ every ::0::0 with points ps 0 notitle`
+                  t%text = 'noautoscale'
+                  call push(items, t)
+                  t%kind = TOKEN_COMMA
+                  t%text = ','
+                  call push(items, t)
+                  t%kind = TOKEN_WORD
+                  do q = 1_I4P, 11_I4P
+                     select case (q)
+                     case (1_I4P)
+                        t%text = name
+                     case (2_I4P)
+                        t%text = 'using'
+                     case (3_I4P)
+                        t%text = int_str(int(nfields + 4_I4P, I8P))//':'//int_str(int(nfields + 5_I4P, I8P))//':'// &
+                                 int_str(int(nfields + 6_I4P, I8P))
+                     case (4_I4P)
+                        t%text = 'every'
+                     case (5_I4P)
+                        t%text = '::0::0'
+                     case (6_I4P)
+                        t%text = 'with'
+                     case (7_I4P)
+                        t%text = 'points'
+                     case (8_I4P)
+                        t%text = 'ps'
+                     case (9_I4P)
+                        t%text = '0'
+                     case (10_I4P)
+                        t%text = 'notitle'
+                     case (11_I4P)
+                        t%text = '__uncounted'
+                     endselect
+                     call push(items, t)
+                  enddo
+               endif
             else
                t%text = 'palette'
                call push(items, t)
@@ -3632,6 +3771,8 @@ contains
          call push(items, t)
          t%text = int_str(int(nfields + 1_I4P, I8P))//':'//int_str(int(nfields + 2_I4P, I8P))
          if (three_d) t%text = t%text//':(0)'
+         ! a 2D plot of a one-dimensional array: x generated, the fields after it (gnuplot's)
+         if (one_dim .and. .not. three_d) t%text = int_str(int(nfields + 1_I4P, I8P))
          do f = 1_I4P, nfields
             t%text = t%text//':'//int_str(int(f, I8P))
          enddo
@@ -3644,6 +3785,9 @@ contains
                items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
                                          int_str(int(nfields + 2_I4P, I8P))//trim(merge(':(0)', '    ', three_d))// &
                                          ':'//tokens(q)%text
+            if (tokens(q - 1_I4P)%kind == TOKEN_WORD .and. keyword(tokens(q - 1_I4P)%text, 'using', 1_I4P) .and. &
+                one_dim .and. .not. three_d) items(size(items))%text = int_str(int(nfields + 1_I4P, I8P))//':'// &
+                                                                       tokens(q)%text
          endif
       enddo
       k = last + 1_I4P
@@ -3829,7 +3973,7 @@ contains
             c2 = c2 + 1_I4P
          enddo
          nkinds = nkinds + 1_I4P
-         kinds(nkinds) = format(q2 + 1:c2 - 1)
+         kinds(nkinds) = binary_type_name(format(q2 + 1:c2 - 1))
          q2 = c2
       enddo
       if (nkinds == 0_I4P) then
@@ -4701,6 +4845,8 @@ contains
    logical                                      :: box_lcvar !< lc variable on boxplot factors: a linetype per factor.
    integer(I4P)                                 :: item_lt   !< The item's `lt N`, 0 if not given.
    logical                                      :: item_noauto !< The item out of the autoscaling (`noautoscale`).
+   logical                                      :: item_uncounted !< An item of foresight's (`__uncounted`, a 3D
+                                                                  !< image's pixel centres): no linetype used up.
    logical                                      :: lcz       !< lc palette z: the palette values from the last column.
    character(len=:), allocatable                :: palette_lc !< `lc palette` marker of the item, empty for none.
    real(R8P),        allocatable                :: zcolors(:) !< Palette values of the points (`lc palette z`).
@@ -5323,6 +5469,7 @@ contains
       box_lcvar = .false.
       item_lt = 0_I4P
       item_noauto = .false.
+      item_uncounted = .false.
       if (allocated(format)) deallocate(format)
       if (allocated(hole)) deallocate(hole)
       if (allocated(whisker)) deallocate(whisker)
@@ -6043,6 +6190,9 @@ contains
          elseif (keyword(word, 'noautoscale', 6_I4P)) then
             ! gnuplot `noautoscale` (`noauto`): the item out of the autoscaling
             item_noauto = .true.
+         elseif (word == '__uncounted') then
+            ! foresight's own item (binary_items: the pixel centres of a 3D image): no linetype used up
+            item_uncounted = .true.
          elseif (word == 'pixels' .and. (with == 'image' .or. with == 'rgbimage' .or. with == 'rgbalpha')) then
             ! gnuplot draws the image as a rectangle per pixel: foresight's images are drawn so anyway
             continue
@@ -7695,6 +7845,7 @@ contains
       integer(I4P)              :: r     !< Row.
       integer(I4P), allocatable :: bounds(:,:) !< Scans: first and last point.
       integer(I4P), allocatable :: sets(:)     !< Their datasets.
+      logical                   :: explicit    !< The item's color given (`lc ...`).
 
       allocate(bounds(2, size(heights)), sets(size(heights)))
       n = 0_I4P
@@ -7721,9 +7872,13 @@ contains
          if (self%mapping /= 0_I4P .and. pseudo /= 3_I4P) call map_points(panel%series(last), self%mapping, &
                                                                          panel%degrees)
          ! set hidden3d: the underside in the linetype `offset` after the item's, a linetype reserved for it (gnuplot)
+         ! (an explicit color, `lc ...`, colors the underside too: gnuplot's LP_EXPLICIT_COLOR)
          if (panel%view3d%hidden3d .and. panel%view3d%hidden_offset /= 0_I4P) then
-            panel%series(last)%back_color = default_color(last + panel%color_shift + panel%view3d%hidden_offset, &
-                                                          panel%linecolors)
+            explicit = .false.
+            if (allocated(line%lc)) explicit = len_trim(line%lc) > 0
+            if (.not. explicit) &
+               panel%series(last)%back_color = default_color(last + panel%color_shift + panel%view3d%hidden_offset, &
+                                                             panel%linecolors)
             panel%color_shift = panel%color_shift + 1_I4P
          endif
          panel%series(last)%no_contours = item_nocontours
@@ -8377,7 +8532,7 @@ contains
          if (allocated(line%pn)) panel%series(last)%pointnumber = line%pn
          panel%series(last)%ellipse_units = ellipse_units
          ! a keyentry takes the linetype of the next item without using it up, as gnuplot
-         if (keyentry) panel%color_shift = panel%color_shift - 1_I4P
+         if (keyentry .or. item_uncounted) panel%color_shift = panel%color_shift - 1_I4P
          panel%series(last)%noautoscale = item_noauto
          panel%series(last)%masked = item_mask
          ! a mask is not drawn: its key entry is its title alone (gnuplot's)
@@ -20076,6 +20231,49 @@ contains
    enddo
    endfunction plain_data_format
 
+   pure function binary_type_name(word) result(name)
+   !< gnuplot's name of the binary field type `word` (its aliases of `show datafile binary datasizes`: `f` float, `lf`
+   !< double, `d` and `i` int, `byte` int8, ...), a leading `*` (a skipped field) kept.
+   character(len=*), intent(in)  :: word !< Type as written, without its `%`.
+   character(len=:), allocatable :: name !< gnuplot's name.
+   character(len=:), allocatable :: core !< Without the `*`.
+   character(len=:), allocatable :: star !< The `*` or empty.
+
+   core = trim(adjustl(word))
+   star = ''
+   if (len(core) > 0) then
+      if (core(1:1) == '*') then
+         star = '*'
+         core = core(2:)
+      endif
+   endif
+   select case (core)
+   case ('schar', 'c')
+      core = 'char'
+   case ('sint', 'i', 'd')
+      core = 'int'
+   case ('u')
+      core = 'uint'
+   case ('ld')
+      core = 'long'
+   case ('lu')
+      core = 'ulong'
+   case ('f')
+      core = 'float'
+   case ('lf')
+      core = 'double'
+   case ('byte')
+      core = 'int8'
+   case ('ubyte')
+      core = 'uint8'
+   case ('word')
+      core = 'int16'
+   case ('uword')
+      core = 'uint16'
+   endselect
+   name = star//core
+   endfunction binary_type_name
+
    pure function findloc_name(names, name) result(k)
    !< Index of `name` among `names`, 0 if absent (a loop: nvfortran 26.9 refuses findloc on some arrays). `names` is
    !< not allocatable: with a `character(len=*), allocatable` array dummy here, nvfortran 26.9 -O2 miscompiled the
@@ -20124,7 +20322,8 @@ contains
         word == 'fill' .or. word == 'nocontours' .or. word == 'nosurface' .or. word == 'nogrid' .or. word == 'mask' .or. &
         keyword(word, 'fillstyle', 5_I4P) .or. keyword(word, 'matrix', 3_I4P) .or. keyword(word, 'whiskerbars', 7_I4P) &
         .or. word == 'bins' .or. index(word, 'bins=') == 1 .or. word == 'noenhanced' .or. word == 'enhanced' .or. &
-        word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == 'convexhull' &
+        word == 'sharpen' .or. word == 'volatile' .or. keyword(word, 'noautoscale', 6_I4P) .or. word == '__uncounted' .or. &
+        word == 'convexhull' &
         .or. word == 'concavehull' .or. word == 'delaunay' .or. word == 'fc' .or. keyword(word, 'fillcolor', 5_I4P)
    endfunction is_item_option
 

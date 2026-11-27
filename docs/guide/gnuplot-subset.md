@@ -2048,8 +2048,17 @@ box, where gnuplot's has none). Each pixel's fields as the format (`%char`, `%uc
 `%uint`, `%long`, `%ulong`, `%float`, `%double` and the sized names `%int8` ... `%float64`; `%*type` reads a field and
 skips it; one specifier for every field, floats by default; rgbimage reads 3, rgbalpha 4, or as many as the `using`
 reads). `using` addresses the fields (`using ($1+$2+$3) with image`), the x and y of the pixels implied. The matrix
-binary and the general binary records are in [Binary files](data-files#binary-files). Not supported: `filetype=`
-(png, ...) and `perpendicular=` (an image out of the xy plane).
+binary and the general binary records are in [Binary files](data-files#binary-files). A one-dimensional array
+(`array=W`) in a 2D plot generates x alone: `using 1` is the y (`plot 'sine.bin' binary array=201 dx=0.01
+format='%f' using 1 with lines`); the type names take gnuplot's short forms too (`%f`, `%lf`, `%d`, `%byte`, ...).
+
+A splot's image in a 3D view (not `set view map`) draws each pixel as a 3D polygon, colored by the palette over the
+set `cbrange` (or its packed RGB), as gnuplot's: in the plane z = 0, or at the z of `center=(X,Y,Z)` or
+`origin=(X,Y,Z)`; `perpendicular=(PX,PY,PZ)` (`perp`, splot only) turns the image so that its normal lies along that
+vector, as gnuplot's rotation_matrix_3D (`perp=(1,0,0)`: the image in the plane x = its centre, its second axis
+along y). The pixel centres autoscale the axes, as gnuplot's image points. Not supported: `filetype=` (png, ...),
+per-record lists of `skip=` and `origin=` (`skip=360:348`), and an autoscaled `cbrange` for 3D images (set it); a 3D
+image has no color box.
 
 The palette maps the values over `cbrange` (autoscaled to the values and, a linear one with its color box drawn, extended to its ticks; `noextend`, `set autoscale cbfix` or `unset colorbox` keeps the values) to colors, as gnuplot 6.0 (its
 `test palette` values): the default `rgbformulae 7,5,15` (black, blue, red, yellow), any of the 37 `rgbformulae`
