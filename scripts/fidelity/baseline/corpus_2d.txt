@@ -82,7 +82,7 @@ named_var.dem|0|1||
 nokey.dem|0|1||
 nonlinear1.dem|0|1||
 nonlinear2.dem|0|1||
-nonlinear3.dem|0|1||
+nonlinear3.dem|0|1||font family "Times" not compiled in: texts measured with the sans face (Liberation Sans);
 nonlinear6.dem|0|1||
 orbits.dem|0|1||
 overflow.dem|0|0||
@@ -96,7 +96,7 @@ polygon_border.dem|0|1||
 prob.dem|0|1||
 prob2.dem|0|1||
 prob3.dem|0|1||
-probably_tux.dem|0|1||
+probably_tux.dem|0|1||font family "Times" not compiled in: texts measured with the sans face (Liberation Sans);
 rainbow.dem|0|1||
 rectangle.dem|0|1||
 rgba_lines.dem|0|1||

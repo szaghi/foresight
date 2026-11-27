@@ -3001,13 +3001,13 @@ open(newunit=unit, file='foresight_script_test_offsets.svg')
 close(unit, status='delete')
 
 ! set timestamp: the date and time now (SOURCE_DATE_EPOCH if set) in the bottom left margin, the plot area a row
-! shorter; top, rotate, offset, textcolor; unset
+! shorter (left of it the y labels, "-10" 17.34 px in Liberation Sans at 12 px); top, rotate, offset, textcolor; unset
 call interpreter%init(scratch)
 call interpreter%run_text('set term svg size 500,300; set output "foresight_script_test_stamp.svg"'//new_line('a')// &
                           'set timestamp "stamp %Y" offset 1,0 tc "red"; plot x', iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(140) = iostat == 0_I4P .and. file_has('foresight_script_test_stamp.svg', 'fill="#ff0000">stamp 20') .and. &
-                   file_has('foresight_script_test_stamp.svg', 'data-area="35.8 490 16 254"')
+                   file_has('foresight_script_test_stamp.svg', 'data-area="33.34 490 16 254"')
 call interpreter%run_text('set timestamp top rotate; replot', iostat, iomsg)
 test_passed(140) = test_passed(140) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%stamp_top .and. &
                    interpreter%figure%panels(1)%stamp_rotate .and. &

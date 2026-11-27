@@ -14,7 +14,7 @@ use foresight_format, only : fixed, int_str, latin1_utf8, real_str, xml_escape
 use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
-use foresight_font, only : font_attributes
+use foresight_font, only : face_of, font_attributes, font_object, text_advance
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -76,6 +76,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: data_polygon
       procedure, pass(self) :: data_image
       procedure, pass(self) :: text_width
+      procedure, pass(self) :: text_face
       procedure, pass(self) :: readout
       procedure, pass(self) :: readout_extent
       procedure, pass(self) :: data_arrows
@@ -793,20 +794,41 @@ contains
    endsubroutine data_image
 
    pure function text_width(self, string, sup, font_size) result(width)
-   !< Estimated width of `string` with its superscript `sup` [px]: the viewer renders the glyphs, so a mean advance of
-   !< 0.55 font sizes (Arial digits: 0.556) is assumed, superscripts at 0.75 size.
+   !< Width of `string` with its superscript `sup` [px], from the compiled-in fonts (foresight_font): the face of the
+   !< texts written now (`self%font`, unset parts the page's family), kerned; the superscript at 0.75 size.
    class(backend_svg), intent(in) :: self      !< Device.
    character(len=*),   intent(in) :: string    !< Text.
    character(len=*),   intent(in) :: sup       !< Superscript.
    real(R8P),          intent(in) :: font_size !< Font size [px].
    real(R8P)                      :: width     !< Width [px].
+   integer(I4P)                   :: face      !< Face.
 
+   face = self%text_face()
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
-      width = markup_width(string, font_size) + 0.55_R8P * font_size * 0.75_R8P * real(len(sup), R8P)
+      if (self%latin1) then
+         width = markup_width(latin1_utf8(string), font_size, face)
+      else
+         width = markup_width(string, font_size, face)
+      endif
+   elseif (self%latin1) then
+      width = text_advance(latin1_utf8(string), face, font_size)
    else
-      width = 0.55_R8P * font_size * (real(len(string), R8P) + 0.75_R8P * real(len(sup), R8P))
+      width = text_advance(string, face, font_size)
    endif
+   if (len(sup) > 0) width = width + text_advance(sup, face, 0.75_R8P * font_size)
    endfunction text_width
+
+   pure function text_face(self) result(face)
+   !< The compiled-in face (foresight_fontdata, 1-8) of the texts written now: `self%font`, its family the page's when
+   !< unset (`set terminal ... font`, else Arial: the sans face).
+   class(backend_svg), intent(in) :: self !< Device.
+   integer(I4P)                   :: face !< Face.
+   type(font_object)              :: font !< Font of the texts written now.
+
+   font = self%font
+   if (len_trim(font%family) == 0) font%family = self%page_family
+   face = face_of(font)
+   endfunction text_face
 
    subroutine readout(self, x, y, height, masks, label, prefix, suffix, color, font_size)
    !< Seven-segment readout of top-left corner (`x`, `y`) [px], a `<g class="fs-readout">`: the bold label above a

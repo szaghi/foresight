@@ -2,88 +2,88 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="560" height="400" viewBox="0 0 560 400" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#5d9cff" data-theme="vfd" data-frame="#5d9cff" data-grid-color="#15304a">
 <defs><filter id="fs-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="560" height="400"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
 <rect x="0" y="0" width="560" height="400" fill="#04070a" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="29.2 487.6 16 369" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
+<g class="fs-axes" data-area="26.67 493.32 16 369" data-x="-5.125e0 5.125e0" data-y="-3.875e0 3.875e0" data-log="0 0" data-grid="0" data-font-size="12" data-xformat="%h" data-yformat="%h">
 <g class="fs-grid" display="none">
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="79.51,369 79.51,16"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="168.96,369 168.96,16"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="258.4,369 258.4,16"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="347.84,369 347.84,16"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="437.29,369 437.29,16"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,329.15 487.6,329.15"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,283.6 487.6,283.6"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,238.05 487.6,238.05"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,192.5 487.6,192.5"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,146.95 487.6,146.95"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,101.4 487.6,101.4"/>
-<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="29.2,55.85 487.6,55.85"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="77.89,369 77.89,16"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="168.94,369 168.94,16"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="260,369 260,16"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="351.05,369 351.05,16"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="442.1,369 442.1,16"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,329.15 493.32,329.15"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,283.6 493.32,283.6"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,238.05 493.32,238.05"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,192.5 493.32,192.5"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,146.95 493.32,146.95"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,101.4 493.32,101.4"/>
+<polyline fill="none" stroke="#15304a" stroke-width="0.5" stroke-dasharray="2,3" points="26.67,55.85 493.32,55.85"/>
 </g>
 <g class="fs-glow" filter="url(#fs-glow)">
-<svg class="fs-plot" x="29.2" y="16" width="458.4" height="353" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<svg class="fs-plot" x="26.67" y="16" width="466.65" height="353" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
 <g class="fs-series" data-series="1">
 <image x="0" y="0" width="1" height="1" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACkAAAAfCAYAAAB6Q+RGAAAUBklEQVR4AQH7EwTsACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8EBwr/BAcK/wQHCv8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/wQHCv8EBwr/BAcK/wQHCv8EBwr/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/wQHCv8EBwr/BAcK/wQHCv8EBwr/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/E0c7/xNHO/8TRzv/E0c7/xNHO/8iiGz/Iohs/yKIbP8iiGz/MMic/zDInP8wyJz/MMic/zDInP8wyJz/MMic/yKIbP8i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bP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/wQHCv8EBwr/BAcK/wQHCv8EBwr/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/wQHCv8EBwr/BAcK/wQHCv8EBwr/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8EBwr/BAcK/wQHCv8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/xNHO/8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/ACKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/E0c7/xNHO/8TRzv/E0c7/xNHO/8TRzv/E0c7/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/Iohs/yKIbP8iiGz/703rh9KbOYcAAAAASUVORK5CYII="/>
 </g>
 </svg>
 </g>
-<rect x="29.2" y="16" width="458.4" height="353" fill="none" stroke="#5d9cff" stroke-width="1"/>
+<rect x="26.67" y="16" width="466.65" height="353" fill="none" stroke="#5d9cff" stroke-width="1"/>
 <g class="fs-xticks">
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="79.51,369 79.51,363"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="79.51,16 79.51,22"/>
-<text x="79.51" y="387" text-anchor="middle">-4</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="168.96,369 168.96,363"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="168.96,16 168.96,22"/>
-<text x="168.96" y="387" text-anchor="middle">-2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="258.4,369 258.4,363"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="258.4,16 258.4,22"/>
-<text x="258.4" y="387" text-anchor="middle">0</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="347.84,369 347.84,363"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="347.84,16 347.84,22"/>
-<text x="347.84" y="387" text-anchor="middle">2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="437.29,369 437.29,363"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="437.29,16 437.29,22"/>
-<text x="437.29" y="387" text-anchor="middle">4</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="77.89,369 77.89,363"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="77.89,16 77.89,22"/>
+<text x="77.89" y="387" text-anchor="middle">-4</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="168.94,369 168.94,363"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="168.94,16 168.94,22"/>
+<text x="168.94" y="387" text-anchor="middle">-2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="260,369 260,363"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="260,16 260,22"/>
+<text x="260" y="387" text-anchor="middle">0</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="351.05,369 351.05,363"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="351.05,16 351.05,22"/>
+<text x="351.05" y="387" text-anchor="middle">2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="442.1,369 442.1,363"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="442.1,16 442.1,22"/>
+<text x="442.1" y="387" text-anchor="middle">4</text>
 </g>
 <g class="fs-yticks">
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,329.15 35.2,329.15"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,329.15 481.6,329.15"/>
-<text x="23.2" y="333.35" text-anchor="end">-3</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,283.6 35.2,283.6"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,283.6 481.6,283.6"/>
-<text x="23.2" y="287.8" text-anchor="end">-2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,238.05 35.2,238.05"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,238.05 481.6,238.05"/>
-<text x="23.2" y="242.25" text-anchor="end">-1</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,192.5 35.2,192.5"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,192.5 481.6,192.5"/>
-<text x="23.2" y="196.7" text-anchor="end">0</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,146.95 35.2,146.95"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,146.95 481.6,146.95"/>
-<text x="23.2" y="151.15" text-anchor="end">1</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,101.4 35.2,101.4"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,101.4 481.6,101.4"/>
-<text x="23.2" y="105.6" text-anchor="end">2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="29.2,55.85 35.2,55.85"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="487.6,55.85 481.6,55.85"/>
-<text x="23.2" y="60.05" text-anchor="end">3</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,329.15 32.67,329.15"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,329.15 487.32,329.15"/>
+<text x="20.67" y="333.35" text-anchor="end">-3</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,283.6 32.67,283.6"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,283.6 487.32,283.6"/>
+<text x="20.67" y="287.8" text-anchor="end">-2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,238.05 32.67,238.05"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,238.05 487.32,238.05"/>
+<text x="20.67" y="242.25" text-anchor="end">-1</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,192.5 32.67,192.5"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,192.5 487.32,192.5"/>
+<text x="20.67" y="196.7" text-anchor="end">0</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,146.95 32.67,146.95"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,146.95 487.32,146.95"/>
+<text x="20.67" y="151.15" text-anchor="end">1</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,101.4 32.67,101.4"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,101.4 487.32,101.4"/>
+<text x="20.67" y="105.6" text-anchor="end">2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="26.67,55.85 32.67,55.85"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="493.32,55.85 487.32,55.85"/>
+<text x="20.67" y="60.05" text-anchor="end">3</text>
 </g>
 <g class="fs-colorbox">
-<image x="493.6" y="16" width="18" height="353" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAICAYAAAA4GpVBAAAAM0lEQVR4AQEoANf/APXmY/8Au+6C/wCA9qL/AEb+wf8AMMic/wAiiGz/ABNHO/8ABAcK/8gsE9NHDIVcAAAAAElFTkSuQmCC"/>
-<rect x="493.6" y="16" width="18" height="353" fill="none" stroke="#5d9cff" stroke-width="1"/>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,369 505.6,369"/>
-<text x="517.6" y="373.2">-0.4</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,318.57 505.6,318.57"/>
-<text x="517.6" y="322.77">-0.2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,268.14 505.6,268.14"/>
-<text x="517.6" y="272.34">0</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,217.71 505.6,217.71"/>
-<text x="517.6" y="221.91">0.2</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,167.29 505.6,167.29"/>
-<text x="517.6" y="171.49">0.4</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,116.86 505.6,116.86"/>
-<text x="517.6" y="121.06">0.6</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,66.43 505.6,66.43"/>
-<text x="517.6" y="70.63">0.8</text>
-<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="511.6,16 505.6,16"/>
-<text x="517.6" y="20.2">1</text>
+<image x="499.32" y="16" width="18" height="353" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAICAYAAAA4GpVBAAAAM0lEQVR4AQEoANf/APXmY/8Au+6C/wCA9qL/AEb+wf8AMMic/wAiiGz/ABNHO/8ABAcK/8gsE9NHDIVcAAAAAElFTkSuQmCC"/>
+<rect x="499.32" y="16" width="18" height="353" fill="none" stroke="#5d9cff" stroke-width="1"/>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,369 511.32,369"/>
+<text x="523.32" y="373.2">-0.4</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,318.57 511.32,318.57"/>
+<text x="523.32" y="322.77">-0.2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,268.14 511.32,268.14"/>
+<text x="523.32" y="272.34">0</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,217.71 511.32,217.71"/>
+<text x="523.32" y="221.91">0.2</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,167.29 511.32,167.29"/>
+<text x="523.32" y="171.49">0.4</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,116.86 511.32,116.86"/>
+<text x="523.32" y="121.06">0.6</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,66.43 511.32,66.43"/>
+<text x="523.32" y="70.63">0.8</text>
+<polyline fill="none" stroke="#5d9cff" stroke-width="1" points="517.32,16 511.32,16"/>
+<text x="523.32" y="20.2">1</text>
 </g>
 </g>
 </svg>

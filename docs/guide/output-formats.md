@@ -30,7 +30,9 @@ symbols.
 A family is chosen by gnuplot's font spec (`set title font "serif,14"`, `font ":Bold"`) or the library's font
 settings; the family name is matched without case nor blanks. A character Liberation Sans lacks (a few math symbols)
 is taken from Latin Modern of the same style; one no face has counts 0.556 em. Text is measured with kerning, the
-pairs the fonts' OpenType tables give.
+pairs the fonts' OpenType tables give. A script naming a family foresight does not have (`font "Times,12"`) is warned
+once (`font family "Times" not compiled in: texts measured with the sans face`); the SVG still names the family, so a
+reader with that font sees it, in room measured for Liberation Sans.
 
 The font data stays under the fonts' licenses, not foresight's: Liberation Sans under the SIL Open Font License 1.1,
 Latin Modern under the GUST Font License (`LICENSES/`). foresight calls its faces `sans` and `serif`: under the OFL a
@@ -39,7 +41,9 @@ licenses.
 
 ## SVG
 
-A standalone SVG document, 600 x 480 px by default (`set terminal svg size W,H`), font Arial/Helvetica 12 px.
+A standalone SVG document, 600 x 480 px by default (`set terminal svg size W,H`), font Arial/Helvetica 12 px. The
+layout measures every text with the [compiled-in fonts](#fonts): the reader's Arial (or Liberation Sans, which has its
+metrics) fills the room exactly.
 
 - The data of each panel live in a nested `<svg class="fs-plot">` whose `viewBox` is the unit square: coordinates are
   written with 6 decimals of the plot area, and `vector-effect="non-scaling-stroke"` keeps line widths in pixels.

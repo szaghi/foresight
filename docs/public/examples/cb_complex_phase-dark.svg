@@ -7921,7 +7921,7 @@
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="436.17,79.38 427.17,79.38"/>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="421.11,79.38 430.11,79.38"/>
 <text x="444.56" y="83.28">π</text>
-<text x="485.97" y="230" text-anchor="middle" transform="rotate(-90 485.97 230)">phase</text>
+<text x="478.45" y="230" text-anchor="middle" transform="rotate(-90 478.45 230)">phase</text>
 </g>
 </g>
 </svg>

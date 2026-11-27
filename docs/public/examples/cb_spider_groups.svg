@@ -2,22 +2,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="560" height="420" viewBox="0 0 560 420" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
 <rect x="0" y="0" width="560" height="420" fill="#f3ede1" stroke="none" stroke-width="0"/>
 <g class="fs-spider">
-<path fill="#2e7d4f" fill-opacity="0.2" stroke="#2e7d4f" stroke-width="3" stroke-linejoin="miter" d="M223.6,187.8 319.73,154.5 249.23,224.8 223.6,273.64 108.25,276.6 159.51,173Z"/>
-<path fill="none" stroke="#2e7d4f" stroke-width="1.5" d="M216.85,187.8A6.75,6.75 0 1 0 230.35,187.8A6.75,6.75 0 1 0 216.85,187.8ZM312.98,154.5A6.75,6.75 0 1 0 326.48,154.5A6.75,6.75 0 1 0 312.98,154.5ZM242.48,224.8A6.75,6.75 0 1 0 255.98,224.8A6.75,6.75 0 1 0 242.48,224.8ZM216.85,273.64A6.75,6.75 0 1 0 230.35,273.64A6.75,6.75 0 1 0 216.85,273.64ZM101.5,276.6A6.75,6.75 0 1 0 115,276.6A6.75,6.75 0 1 0 101.5,276.6ZM152.76,173A6.75,6.75 0 1 0 166.26,173A6.75,6.75 0 1 0 152.76,173Z"/>
-<path fill="#b86a00" fill-opacity="0.2" stroke="#b86a00" stroke-width="2" stroke-linejoin="miter" d="M223.6,173 255.64,191.5 287.69,247 223.6,284 127.47,265.5 159.51,173Z"/>
-<path fill="none" stroke="#b86a00" stroke-width="1.5" d="M216.85,173A6.75,6.75 0 1 0 230.35,173A6.75,6.75 0 1 0 216.85,173ZM248.89,191.5A6.75,6.75 0 1 0 262.39,191.5A6.75,6.75 0 1 0 248.89,191.5ZM280.94,247A6.75,6.75 0 1 0 294.44,247A6.75,6.75 0 1 0 280.94,247ZM216.85,284A6.75,6.75 0 1 0 230.35,284A6.75,6.75 0 1 0 216.85,284ZM120.72,265.5A6.75,6.75 0 1 0 134.22,265.5A6.75,6.75 0 1 0 120.72,265.5ZM152.76,173A6.75,6.75 0 1 0 166.26,173A6.75,6.75 0 1 0 152.76,173Z"/>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 223.6,62"/>
-<text x="223.6" y="48.44" text-anchor="middle">Scale 1</text>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 351.77,136"/>
-<text x="367.15" y="131.32">Scale 2</text>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 351.77,284"/>
-<text x="367.15" y="297.08">Scale 3</text>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 223.6,358"/>
-<text x="223.6" y="379.96" text-anchor="middle">Scale 4</text>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 95.43,284"/>
-<text x="80.05" y="297.08" text-anchor="end   ">Scale 5</text>
-<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="223.6,210 95.43,136"/>
-<text x="80.05" y="131.32" text-anchor="end   ">Scale 6</text>
+<path fill="#2e7d4f" fill-opacity="0.2" stroke="#2e7d4f" stroke-width="3" stroke-linejoin="miter" d="M227.32,187.8 323.45,154.5 252.96,224.8 227.32,273.64 111.97,276.6 163.24,173Z"/>
+<path fill="none" stroke="#2e7d4f" stroke-width="1.5" d="M220.57,187.8A6.75,6.75 0 1 0 234.07,187.8A6.75,6.75 0 1 0 220.57,187.8ZM316.7,154.5A6.75,6.75 0 1 0 330.2,154.5A6.75,6.75 0 1 0 316.7,154.5ZM246.21,224.8A6.75,6.75 0 1 0 259.71,224.8A6.75,6.75 0 1 0 246.21,224.8ZM220.57,273.64A6.75,6.75 0 1 0 234.07,273.64A6.75,6.75 0 1 0 220.57,273.64ZM105.22,276.6A6.75,6.75 0 1 0 118.72,276.6A6.75,6.75 0 1 0 105.22,276.6ZM156.49,173A6.75,6.75 0 1 0 169.99,173A6.75,6.75 0 1 0 156.49,173Z"/>
+<path fill="#b86a00" fill-opacity="0.2" stroke="#b86a00" stroke-width="2" stroke-linejoin="miter" d="M227.32,173 259.37,191.5 291.41,247 227.32,284 131.2,265.5 163.24,173Z"/>
+<path fill="none" stroke="#b86a00" stroke-width="1.5" d="M220.57,173A6.75,6.75 0 1 0 234.07,173A6.75,6.75 0 1 0 220.57,173ZM252.62,191.5A6.75,6.75 0 1 0 266.12,191.5A6.75,6.75 0 1 0 252.62,191.5ZM284.66,247A6.75,6.75 0 1 0 298.16,247A6.75,6.75 0 1 0 284.66,247ZM220.57,284A6.75,6.75 0 1 0 234.07,284A6.75,6.75 0 1 0 220.57,284ZM124.45,265.5A6.75,6.75 0 1 0 137.95,265.5A6.75,6.75 0 1 0 124.45,265.5ZM156.49,173A6.75,6.75 0 1 0 169.99,173A6.75,6.75 0 1 0 156.49,173Z"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 227.32,62"/>
+<text x="227.32" y="48.44" text-anchor="middle">Scale 1</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 355.5,136"/>
+<text x="370.88" y="131.32">Scale 2</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 355.5,284"/>
+<text x="370.88" y="297.08">Scale 3</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 227.32,358"/>
+<text x="227.32" y="379.96" text-anchor="middle">Scale 4</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 99.15,284"/>
+<text x="83.77" y="297.08" text-anchor="end   ">Scale 5</text>
+<polyline fill="none" stroke="#1d1b18" stroke-width="2" points="227.32,210 99.15,136"/>
+<text x="83.77" y="131.32" text-anchor="end   ">Scale 6</text>
 <path fill="#2e7d4f" fill-opacity="0.2" stroke="none" d="M514,27.7 550,27.7 550,19.3 514,19.3Z"/>
 <text x="508" y="27.7" text-anchor="end">Array #1</text>
 <path fill="#b86a00" fill-opacity="0.2" stroke="none" d="M514,42.7 550,42.7 550,34.3 514,34.3Z"/>

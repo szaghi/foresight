@@ -40,6 +40,20 @@ The rows on other projects summarise their documentation as of October 2026
 - **fplotlib** and **fortplot** are pure Fortran like foresight, with raster output and 3D; they write images, not
   interactive pages, and read no gnuplot.
 
+## Layout compared with gnuplot
+
+foresight lays a gnuplot script's page out as gnuplot 6.0 does, and measures how close it gets on gnuplot's own demos
+(`scripts/fidelity/`, see [Contributing](contributing#fidelity-to-gnuplot)). The differences left by design:
+
+- **Text widths.** foresight measures every text with the metrics of its compiled-in fonts (advance widths and
+  kerning, see [Fonts](output-formats#fonts)); gnuplot's layout estimates a text as its number of characters times a
+  character width. Where labels are narrow (`-1`, `1.5`, `σ`), foresight's margins and key boxes are narrower than
+  gnuplot's and the plot area wider.
+- **Titles.** A panel's title takes gnuplot's room above the plot (a character height, its lines, a character height),
+  as do the cells of a multiplot layout under a multiplot title. Panels placed by `set origin` and `set size` under a
+  multiplot title start below foresight's title band, not over it as gnuplot draws them.
+- **Text devices** keep foresight's rows of character cells for titles and labels.
+
 ## When to use something else
 
 - **Publication figures** with LaTeX typesetting and fine layout control: pgfplots, matplotlib.

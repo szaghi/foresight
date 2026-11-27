@@ -2979,7 +2979,8 @@ contains
    class(figure_object),  intent(inout) :: self    !< Figure.
    class(backend_object), intent(inout) :: backend !< Output device.
    character(len=*),      intent(in)    :: file    !< Output file.
-   real(R8P)                            :: top     !< Top of the panel grid [px].
+   real(R8P)                            :: top     !< Top of the panels placed by origin and size [px].
+   real(R8P)                            :: layout_top !< Top of the layout's grid [px].
    real(R8P)                            :: cell(2) !< Grid cell width and height [px].
    integer(I4P)                         :: p       !< Panel counter.
    integer(I4P)                         :: rc(2)   !< Row and column of a panel's cell, from 0.
@@ -2993,6 +2994,7 @@ contains
    page = [self%width, self%height]
    call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
    top = 0.0_R8P
+   layout_top = 0.0_R8P
    if (len(self%title) > 0) then
       ! lines apart at each new line (`"a\nb"`, a last one empty included), as gnuplot
       block
@@ -3021,9 +3023,13 @@ contains
             if (a > len(self%title, kind=I4P) + 1_I4P) exit
          enddo
          top = PAD + real(line, R8P) * LINE_HEIGHT * size + GAP
+         ! a layout's cells below gnuplot's band (mp_layout_size_and_offset): the title's lines, a character height
+         ! (1.5 font sizes) each; panels placed by origin and size keep foresight's room (a documented difference)
+         layout_top = top
+         if (.not. backend%row_height() > 0.0_R8P) layout_top = real(line, R8P) * 1.5_R8P * size
       endblock
    endif
-   cell = [self%width / real(self%cols, R8P), (self%height - top) / real(self%rows, R8P)]
+   cell = [self%width / real(self%cols, R8P), (self%height - layout_top) / real(self%rows, R8P)]
    do p = 1_I4P, size(self%panels, kind=I4P)
       ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
       associate(panel => self%panels(p))
@@ -3075,13 +3081,13 @@ contains
                   screen = panel%margin_screen
                   panel%margin_user = layout_area(rc)
                   panel%margin_screen = .true.
-                  call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
+                  call panel%render(backend, real(rc(2), R8P) * cell(1), layout_top + real(rc(1), R8P) * cell(2), cell(1), &
                                     cell(2), self%font_size, canvas=page)
                   panel%margin_user = kept
                   panel%margin_screen = screen
                endblock
             else
-               call panel%render(backend, real(rc(2), R8P) * cell(1), top + real(rc(1), R8P) * cell(2), cell(1), &
+               call panel%render(backend, real(rc(2), R8P) * cell(1), layout_top + real(rc(1), R8P) * cell(2), cell(1), &
                                  cell(2), self%font_size, canvas=page)
             endif
          else

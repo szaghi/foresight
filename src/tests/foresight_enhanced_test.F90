@@ -20,11 +20,12 @@ test_passed(1) = svg_is('x^{a^b}', '<tspan>x</tspan><tspan font-size="9.6" dy="-
 ! a subscript right after a superscript: from the superscript's baseline, as gnuplot
 test_passed(2) = svg_is('x^2_3', '<tspan>x</tspan><tspan font-size="9.6" dy="-6">2</tspan>'// &
                         '<tspan font-size="9.6" dy="9.6">3</tspan>')
-! & invisible (room kept), @ phantom (the next element steps back over it), ~ overprint raised by 0.8
+! & invisible (room kept), @ phantom (the next element steps back over it: b at 9.6 px, 1139/2048 em of Liberation
+! Sans), ~ overprint raised by 0.8 (back over a at 12 px)
 test_passed(3) = svg_is('a&{bb}c', '<tspan>a</tspan><tspan fill="none">bb</tspan><tspan>c</tspan>') .and. &
                  svg_is('a@_bc', '<tspan>a</tspan><tspan font-size="9.6" dy="3.6">b</tspan>'// &
-                        '<tspan dx="-5.28" dy="-3.6">c</tspan>') .and. &
-                 svg_is('~a{.8-}', '<tspan>a</tspan><tspan dx="-6.6" dy="-9.6">-</tspan>')
+                        '<tspan dx="-5.34" dy="-3.6">c</tspan>') .and. &
+                 svg_is('~a{.8-}', '<tspan>a</tspan><tspan dx="-6.67" dy="-9.6">-</tspan>')
 ! font specifications: absolute and relative sizes, bold, italic, a family; Symbol as the Greek letters
 test_passed(4) = svg_is('{/=8 s}{/*1.5 L}', '<tspan font-size="8">s</tspan><tspan font-size="18">L</tspan>') .and. &
                  svg_is('{/:Italic i}{/:Bold=16 b}', '<tspan font-style="italic">i</tspan>'// &
@@ -40,10 +41,11 @@ test_passed(6) = markup_plain('T_{n-1}(x) = x^2') == 'Tn-1(x) = x2' .and. markup
                  markup_plain('x\^2') == 'x^2' .and. markup_plain('{/Symbol a}^2') == 'a2'
 ! escaped, read as it is
 test_passed(7) = markup_literal('a_{1}^2') == 'a\_\{1\}\^2' .and. markup_plain(markup_literal('p & q~@\')) == 'p & q~@\'
-! the width: the smaller sizes narrower, a phantom taking no room, the escapes none
-test_passed(8) = abs(markup_width('x^2', 12.0_R8P) - 11.88_R8P) < 1.0e-9_R8P .and. &
+! the width, Liberation Sans' advances: the smaller sizes narrower (x at 12 px, 2 at 9.6), a phantom taking no room,
+! the escapes none (a, _ and 1 at 12 px, 1139/2048 em each)
+test_passed(8) = abs(markup_width('x^2', 12.0_R8P) - 11.3390625_R8P) < 1.0e-9_R8P .and. &
                  abs(markup_width('a@_bc', 12.0_R8P) - markup_width('ac', 12.0_R8P)) < 1.0e-9_R8P .and. &
-                 abs(markup_width('a\_1', 12.0_R8P) - 19.8_R8P) < 1.0e-9_R8P
+                 abs(markup_width('a\_1', 12.0_R8P) - 20.021484375_R8P) < 1.0e-9_R8P
 ! the markup characters
 test_passed(9) = has_markup('x^2') .and. has_markup('a\b') .and. .not. has_markup('x**2 + 1 (m/s)')
 ! gnuplot's \U+hhhh (hex digits read greedily) and the Symbol font's upper half (a Latin-1 character in UTF-8): the

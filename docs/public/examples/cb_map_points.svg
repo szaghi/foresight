@@ -924,7 +924,7 @@
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="477.21,73.8 468.21,73.8"/>
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="458.58,73.8 467.58,73.8"/>
 <text x="485.6" y="77.7">0.5</text>
-<text x="533.61" y="200" text-anchor="middle" transform="rotate(-90 533.61 200)">value</text>
+<text x="527.88" y="200" text-anchor="middle" transform="rotate(-90 527.88 200)">value</text>
 </g>
 </g>
 </svg>

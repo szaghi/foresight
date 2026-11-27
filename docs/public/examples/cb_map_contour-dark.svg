@@ -1662,26 +1662,26 @@
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="440.87,57.48 425.72,57.48"/>
 <text x="54.15" y="61.38" text-anchor="end">3</text>
 </g>
-<rect x="88.61" y="63.18" width="151.8" height="96" fill="#130d0f" stroke="none" stroke-width="1"/>
-<rect x="88.61" y="63.18" width="151.8" height="96" fill="none" stroke="#e8ecf0" stroke-width="1"/>
+<rect x="88.61" y="63.18" width="131.33" height="96" fill="#130d0f" stroke="none" stroke-width="1"/>
+<rect x="88.61" y="63.18" width="131.33" height="96" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-key-entry" data-series="2">
-<text x="192.41" y="79.38" text-anchor="end">sin(x) cos(y)</text>
+<text x="171.94" y="79.38" text-anchor="end">sin(x) cos(y)</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<polyline fill="none" stroke="#6cb6ff" stroke-width="2" points="200.81,93.48 243.41,93.48"/>
-<text x="192.41" y="97.38" text-anchor="end">    0.75</text>
+<polyline fill="none" stroke="#6cb6ff" stroke-width="2" points="180.34,93.48 222.94,93.48"/>
+<text x="171.94" y="97.38" text-anchor="end">    0.75</text>
 </g>
 <g class="fs-key-entry" data-series="4">
-<polyline fill="none" stroke="#6fd99a" stroke-width="2" points="200.81,111.48 243.41,111.48"/>
-<text x="192.41" y="115.38" text-anchor="end">    0.25</text>
+<polyline fill="none" stroke="#6fd99a" stroke-width="2" points="180.34,111.48 222.94,111.48"/>
+<text x="171.94" y="115.38" text-anchor="end">    0.25</text>
 </g>
 <g class="fs-key-entry" data-series="5">
-<polyline fill="none" stroke="#ffb454" stroke-width="2" points="200.81,129.48 243.41,129.48"/>
-<text x="192.41" y="133.38" text-anchor="end">   -0.25</text>
+<polyline fill="none" stroke="#ffb454" stroke-width="2" points="180.34,129.48 222.94,129.48"/>
+<text x="171.94" y="133.38" text-anchor="end">   -0.25</text>
 </g>
 <g class="fs-key-entry" data-series="6">
-<polyline fill="none" stroke="#c49bff" stroke-width="2" points="200.81,147.48 243.41,147.48"/>
-<text x="192.41" y="151.38" text-anchor="end">   -0.75</text>
+<polyline fill="none" stroke="#c49bff" stroke-width="2" points="180.34,147.48 222.94,147.48"/>
+<text x="171.94" y="151.38" text-anchor="end">   -0.75</text>
 </g>
 <g class="fs-colorbox">
 <image x="458.58" y="57.48" width="18.63" height="267.04" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAFC0lEQVR4AQEABf/6AP7///8A/f7+/wD8/v3/APv+/P8A+v37/wD4/fr/APf9+f8A9vz5/wD1/Pj/APP8+P8A8vv3/wDx+/f/AO/69v8A7vr2/wDt+vX/AOz59f8A6vn1/wDp+PX/AOj49P8A5/f0/wDm9/T/AOX29P8A4/X0/wDi9fT/AOH09P8A4PP0/wDf8/T/AN7y9P8A3fH1/wDc8fX/ANzw9f8A2+/1/wDa7vX/ANnt9v8A2e32/wDY7Pb/ANfr9v8A1+r3/wDW6ff/ANbo9/8A1ef3/wDV5vj/ANXl+P8A1OP4/wDU4vj/ANTh+P8A1OD5/wDU3/n/ANTe+f8A1Nz5/wDU2/n/ANTa+f8A1Nn5/wDU1/n/ANXW+f8A1dX5/wDV0/n/ANXS+P8A1tH4/wDWz/j/ANfO9/8A18z3/wDYy/b/ANjK9v8A2cj1/wDZx/T/ANrG9P8A2sTz/wDbw/L/ANzB8f8A3MDw/wDdv+//AN297v8A3rzt/wDfu+v/AN+56v8A4Ljp/wDgt+f/AOG15v8A4rTk/wDis+L/AOOy4f8A47Df/wDkr93/AOSu2/8A5a3Z/wDlrNf/AOWr1f8A5qrT/wDmqdD/AOaozv8A5qfM/wDmpsn/AOalx/8A5qTF/wDmo8L/AOajwP8A5qK9/wDmobr/AOWguP8A5aC1/wDln7L/AOSfsP8A5J6t/wDjnqr/AOKdqP8A4Z2l/wDhnKL/AOCcn/8A35yc/wDem5r/ANybl/8A25uU/wDam5L/ANmaj/8A15qM/wDWmon/ANSah/8A0pqE/wDRmoL/AM+af/8AzZp9/wDLmnr/AMmaeP8Ax5p2/wDFmnP/AMKacf8AwJtv/wC+m23/ALuba/8AuZtp/wC2m2f/ALScZf8AsZxj/wCvnGL/AKycYP8AqZxe/wCnnV3/AKSdXP8AoZ1a/wCenVn/AJudWP8AmJ5X/wCVnlb/AJKeVf8AkJ5U/wCNnlT/AIqeU/8Ah55T/wCEn1L/AIGfUv8Afp9S/wB7n1H/AHifUf8AdZ5R/wBynlH/AG+eUv8AbZ5S/wBqnlL/AGeeU/8AZJ1T/wBinVT/AF+dVP8AXZxV/wBanFb/AFibVv8AVZtX/wBTmlj/AFGaWf8ATpla/wBMmFv/AEqYXP8ASJdd/wBGll7/AESVYP8AQpRh/wBBk2L/AD+SY/8APZFk/wA8kGb/ADqPZ/8AOY1o/wA4jGr/ADeLa/8ANYls/wA0iG3/ADOGb/8AM4Vw/wAyg3H/ADGCcv8AMIBz/wAwfnT/AC99df8AL3t2/wAueXf/AC53eP8ALnV5/wAudHr/AC5yev8ALnB7/wAubnz/AC5sfP8ALmp8/wAuaH3/AC5mff8AL2N9/wAvYX3/AC9fff8AMF19/wAwW33/ADBZff8AMVd8/wAxVHz/ADJSe/8AMlB6/wAzTnr/ADNMef8ANEp4/wA0R3f/ADVFdf8ANUN0/wA2QXP/ADY/cf8ANj1v/wA3O27/ADc5bP8ANzZq/wA4NGj/ADgyZv8AODBj/wA4LmH/ADgsX/8AOCtc/wA3KVn/ADcnV/8ANyVU/wA2I1H/ADUhTv8ANSBL/wA0Hkj/ADMcRP8AMhpB/wAwGT7/AC8XOv8ALRU3/wArFDP/ACkSL/8AJxEs/wAlDyj/ACINJP8AHwwg/wAcChv/ABgIF/8AEwcS/wAOBQ3/AAcCBv+hnMrCrBK7MwAAAABJRU5ErkJggg=="/>

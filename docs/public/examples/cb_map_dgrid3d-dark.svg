@@ -3623,13 +3623,13 @@ M0.934851,0.171954 M0.064271,0.739707 M0.278758,0.798236 M0.764733,0.117926 M0.1
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="440.87,57.48 425.72,57.48"/>
 <text x="54.15" y="61.38" text-anchor="end">2</text>
 </g>
-<rect x="88.61" y="63.18" width="112.2" height="42" fill="#130d0f" stroke="none" stroke-width="1"/>
+<rect x="88.61" y="63.18" width="104.02" height="42" fill="#130d0f" stroke="none" stroke-width="1"/>
 <g class="fs-key-entry" data-series="1">
-<text x="152.81" y="79.38" text-anchor="end">density</text>
+<text x="144.63" y="79.38" text-anchor="end">density</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="0.3" d="M181.16,93.48A1.35,1.35 0 1 0 183.86,93.48A1.35,1.35 0 1 0 181.16,93.48Z"/>
-<text x="152.81" y="97.38" text-anchor="end">points</text>
+<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="0.3" d="M172.98,93.48A1.35,1.35 0 1 0 175.68,93.48A1.35,1.35 0 1 0 172.98,93.48Z"/>
+<text x="144.63" y="97.38" text-anchor="end">points</text>
 </g>
 <g class="fs-colorbox">
 <image x="458.58" y="57.48" width="18.63" height="267.04" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAFC0lEQVR4AQEABf/6AAcCBv8ADgUN/wATBxL/ABgIF/8AHAob/wAfDCD/ACINJP8AJQ8o/wAnESz/ACkSL/8AKxQz/wAtFTf/AC8XOv8AMBk+/wAyGkH/ADMcRP8ANB5I/wA1IEv/ADUhTv8ANiNR/wA3JVT/ADcnV/8ANylZ/wA4K1z/ADgsX/8AOC5h/wA4MGP/ADgyZv8AODRo/wA3Nmr/ADc5bP8ANztu/wA2PW//ADY/cf8ANkFz/wA1Q3T/ADVFdf8ANEd3/wA0Snj/ADNMef8AM056/wAyUHr/ADJSe/8AMVR8/wAxV3z/ADBZff8AMFt9/wAwXX3/AC9fff8AL2F9/wAvY33/AC5mff8ALmh9/wAuanz/AC5sfP8ALm58/wAucHv/AC5yev8ALnR6/wAudXn/AC53eP8ALnl3/wAve3b/AC99df8AMH50/wAwgHP/ADGCcv8AMoNx/wAzhXD/ADOGb/8ANIht/wA1iWz/ADeLa/8AOIxq/wA5jWj/ADqPZ/8APJBm/wA9kWT/AD+SY/8AQZNi/wBClGH/AESVYP8ARpZe/wBIl13/AEqYXP8ATJhb/wBOmVr/AFGaWf8AU5pY/wBVm1f/AFibVv8AWpxW/wBdnFX/AF+dVP8AYp1U/wBknVP/AGeeU/8Aap5S/wBtnlL/AG+eUv8Acp5R/wB1nlH/AHifUf8Ae59R/wB+n1L/AIGfUv8AhJ9S/wCHnlP/AIqeU/8AjZ5U/wCQnlT/AJKeVf8AlZ5W/wCYnlf/AJudWP8Anp1Z/wChnVr/AKSdXP8Ap51d/wCpnF7/AKycYP8Ar5xi/wCxnGP/ALScZf8Atptn/wC5m2n/ALuba/8Avptt/wDAm2//AMKacf8AxZpz/wDHmnb/AMmaeP8Ay5p6/wDNmn3/AM+af/8A0ZqC/wDSmoT/ANSah/8A1pqJ/wDXmoz/ANmaj/8A2puS/wDbm5T/ANybl/8A3pua/wDfnJz/AOCcn/8A4Zyi/wDhnaX/AOKdqP8A456q/wDknq3/AOSfsP8A5Z+y/wDloLX/AOWguP8A5qG6/wDmor3/AOajwP8A5qPC/wDmpMX/AOalx/8A5qbJ/wDmp8z/AOaozv8A5qnQ/wDmqtP/AOWr1f8A5azX/wDlrdn/AOSu2/8A5K/d/wDjsN//AOOy4f8A4rPi/wDitOT/AOG15v8A4Lfn/wDguOn/AN+56v8A37vr/wDevO3/AN297v8A3b/v/wDcwPD/ANzB8f8A28Py/wDaxPP/ANrG9P8A2cf0/wDZyPX/ANjK9v8A2Mv2/wDXzPf/ANfO9/8A1s/4/wDW0fj/ANXS+P8A1dP5/wDV1fn/ANXW+f8A1Nf5/wDU2fn/ANTa+f8A1Nv5/wDU3Pn/ANTe+f8A1N/5/wDU4Pn/ANTh+P8A1OL4/wDU4/j/ANXl+P8A1eb4/wDV5/f/ANbo9/8A1un3/wDX6vf/ANfr9v8A2Oz2/wDZ7fb/ANnt9v8A2u71/wDb7/X/ANzw9f8A3PH1/wDd8fX/AN7y9P8A3/P0/wDg8/T/AOH09P8A4vX0/wDj9fT/AOX29P8A5vf0/wDn9/T/AOj49P8A6fj1/wDq+fX/AOz59f8A7fr1/wDu+vb/AO/69v8A8fv3/wDy+/f/APP8+P8A9fz4/wD2/Pn/APf9+f8A+P36/wD6/fv/APv+/P8A/P79/wD9/v7/AP7///8sccrCZ/SPPAAAAABJRU5ErkJggg=="/>

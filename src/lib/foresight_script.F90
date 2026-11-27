@@ -127,7 +127,7 @@ use foresight_expression, only : block_hook, element_fetch_hook, element_hook, f
                                  saved_array, saved_variable, &
                                  symbols_object, value_list, value_object, overflow_mode, OVERFLOW_IGNORE, &
                                  OVERFLOW_FLOAT, OVERFLOW_UNDEFINED, OVERFLOW_NAN
-use foresight_font, only : font_object, font_of
+use foresight_font, only : family_face, font_object, font_of
 use foresight_annotations, only : arrow_object, label_object, pixmap_object, place_object, push, shape_object
 use foresight_axis, only : axis_object
 use foresight_figure, only : figure_object
@@ -180,6 +180,7 @@ real(R8P), parameter :: DUMB_CELL(2) = [0.55_R8P, 1.25_R8P] !< Text device cell 
 integer(I4P),      parameter :: FOREVER = 1000_I4P !< Values of an unbounded plot iteration, `for [i=A:*]`, at most.
 character(len=12), parameter :: LC_VARIABLE     = '*variable'    !< `lc variable` marker in a line color.
 character(len=12), parameter :: LC_RGB_VARIABLE = '*rgbvariable' !< `lc rgb variable` marker in a line color.
+character(len=1024), save :: warned_families = '' !< Font families warned about (not compiled in), `|name|` each.
 character(len=12), parameter :: LC_PALETTE_Z    = '*palettez'    !< `lc palette [z]` marker in a line color.
 real(R8P),         parameter :: PI_SCRIPT       = 4.0_R8P * atan(1.0_R8P) !< pi.
 character(len=12), parameter :: LC_PALETTE_CB   = '*palettecb'   !< `lc palette cb V` marker in a line color.
@@ -1384,6 +1385,21 @@ contains
       return
    endif
    font = font_of(text)
+   ! a family foresight has no font for: measured with the sans face, as the docs say (once per family and run)
+   if (len_trim(font%family) > 0) then
+      block
+         integer(I4P) :: family !< Compiled-in family.
+         logical      :: known  !< The family is compiled in.
+
+         call family_face(font%family, family, known)
+         if (.not. known .and. index(warned_families, '|'//trim(font%family)//'|') == 0) then
+            if (len_trim(warned_families) + len_trim(font%family) + 2 <= len(warned_families)) &
+               warned_families = trim(warned_families)//'|'//trim(font%family)//'|'
+            write(error_unit, '(A)') 'foresight: warning: font family "'//trim(font%family)// &
+                                     '" not compiled in: texts measured with the sans face (Liberation Sans)'
+         endif
+      endblock
+   endif
    endfunction font_spec
 
    function string_argument(self, tokens, text, iostat, iomsg) result(ok)

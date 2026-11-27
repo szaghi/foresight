@@ -2231,6 +2231,8 @@ contains
    real(R8P)                            :: rise(2)   !< Lowest and highest page ordinates of a rotated x2 label from its
                                                      !< anchor [px].
    real(R8P)                            :: title_y   !< Baseline of the title [px].
+   real(R8P)                            :: title_px  !< Size of the title [px].
+   real(R8P)                            :: title_step !< Distance between the title's lines [px].
    real(R8P)                            :: ax        !< Label anchor abscissa [px].
    real(R8P)                            :: ay        !< Label anchor ordinate [px].
    character(len=6)                     :: text_anchor !< Text anchor of a rotated y label.
@@ -2462,7 +2464,24 @@ contains
                                                   self%y2axis%label, 3_I4P, -90.0_R8P)
       backend%literal = .false.
       if (self%has_title()) then
-         title_y = y0 + PAD + element_px(backend, self%title_font, font_size)
+         title_px = element_px(backend, self%title_font, font_size)
+         title_step = row_step(backend, title_px)
+         if (backend%row_height() > 0.0_R8P) then
+            title_y = y0 + PAD + title_px
+         else
+            ! gnuplot 6.0 (boundary.c): the first line's middle a character height and a half below the panel's top
+            ! (its lines a character height of its font apart); brought down into the plot by an offset, its lines
+            ! and half a character height above the plot; the baseline 0.35 font sizes below the middle
+            title_step = CHAR_HEIGHT * title_px
+            if (real(self%title_rows(), R8P) + self%title_offset(2) > 0.0_R8P) then
+               title_y = y0 + 1.5_R8P * CHAR_HEIGHT * font_size
+               if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) title_y = title_y + &
+                                                                                           LINE_HEIGHT * font_size
+            else
+               title_y = top - real(self%title_rows(), R8P) * title_step - 0.5_R8P * CHAR_HEIGHT * font_size
+            endif
+            title_y = title_y + 0.35_R8P * title_px
+         endif
          ! on a text device, the row right above the x2 label or tick labels, with no empty row between them
          if (backend%row_height() > 0.0_R8P .and. self%x2_active) then
             if (self%x2axis%has_label() .and. any(self%x2axis%ticks%major)) then
@@ -2484,8 +2503,7 @@ contains
             shift_px = offset_px(self%title_offset, self%title_offset_system, [right - left, bottom - top], &
                                  self%canvas, font_size)
             call text_rows(backend, 0.5_R8P * (left + right) + shift_px(1), title_y + shift_px(2), self%title, &
-                           trim(self%title_anchor), row_step(backend, element_px(backend, self%title_font, font_size)), &
-                           trim(self%title_color))
+                           trim(self%title_anchor), title_step, trim(self%title_color))
          endblock
          backend%literal = .false.
          backend%boxed = .false.
@@ -10353,8 +10371,19 @@ contains
    if (self%colorbox .and. self%has_image(palette=.true.) .and. .not. (self%cbox%user .or. self%cbox%horizontal)) &
       margins(2) = margins(2) + self%colorbox_width(backend, font_size)
    margins(3) = PAD + 0.5_R8P * font_size
-   if (self%has_title()) margins(3) = margins(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * &
-                                     element_px(backend, self%title_font, font_size) + GAP
+   if (self%has_title()) then
+      if (backend%row_height() > 0.0_R8P) then
+         ! a text device: the title's rows and a gap
+         margins(3) = margins(3) + real(self%title_rows(), R8P) * LINE_HEIGHT * &
+                      element_px(backend, self%title_font, font_size) + GAP
+      else
+         ! gnuplot 6.0 (boundary.c): a character height, the title's lines in its font (none when an offset brings
+         ! the title down by them: inside the plot), a character height
+         margins(3) = 2.0_R8P * CHAR_HEIGHT * font_size
+         if (real(self%title_rows(), R8P) + self%title_offset(2) > 0.0_R8P) margins(3) = margins(3) + &
+            real(self%title_rows(), R8P) * CHAR_HEIGHT * element_px(backend, self%title_font, font_size)
+      endif
+   endif
    ! the row of a timestamp at the top (gnuplot `set timestamp top`)
    if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) margins(3) = margins(3) + LINE_HEIGHT * font_size
    margins(3) = margins(3) + above + self%x2_room(font_size)

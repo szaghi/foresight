@@ -8,7 +8,9 @@ module foresight_enhanced
 !< (`=N` absolute, `*F` relative), weight (`:Bold`) and style (`:Italic`); `@` makes the next element take no room (the
 !< one after it written over it, as `a@^b_c`); `&` makes the next element invisible, keeping its room; `~a{.8-}`
 !< overprints the second element on the first, raised by the fraction of the size; `\` makes the next character
-!< literal. Widths are estimated as the SVG backend's: 0.55 font sizes per character.
+!< literal. Widths come from the compiled-in fonts (foresight_font): each run in its face (its family, else the base
+!< one; its weight and style, or the base ones) at its size, kerned.
+use foresight_font, only : family_face, text_advance
 use foresight_format, only : escape => xml_escape, utf8_char
 use penf, only : I4P, R8P
 
@@ -23,8 +25,6 @@ public :: markup_literal
 public :: markup_plain
 public :: markup_svg
 public :: markup_width
-
-real(R8P), parameter :: ADVANCE = 0.55_R8P !< Mean character advance [font size].
 
 type :: enhanced_run
    !< A piece of text in one style.
@@ -284,33 +284,63 @@ contains
    call move_alloc(grown, runs)
    endsubroutine put
 
-   pure function runs_width(runs, all) result(w)
-   !< Width of `runs` [base size]: 0.55 per character at their size; phantom runs take none (all do with `all`).
+   pure function runs_width(runs, all, base) result(w)
+   !< Width of `runs` [base size], each run in its face (run_face) at its size; phantom runs take none (all do with
+   !< `all`).
    type(enhanced_run), intent(in)           :: runs(:) !< Runs.
    logical,            intent(in), optional :: all     !< Phantom runs counted.
+   integer(I4P),       intent(in), optional :: base    !< Base face (foresight_fontdata, 1-8), 1 if absent.
    real(R8P)                                :: w       !< Width.
    integer(I4P)                             :: k       !< Counter.
+   integer(I4P)                             :: face    !< Base face.
    logical                                  :: every   !< Phantom runs counted.
 
    every = .false.
    if (present(all)) every = all
+   face = 1_I4P
+   if (present(base)) face = base
    w = 0.0_R8P
    do k = 1_I4P, size(runs, kind=I4P)
       w = w - runs(k)%back
-      if (every .or. .not. runs(k)%phantom) w = w + ADVANCE * runs(k)%size * real(characters(runs(k)%text), R8P)
+      if (every .or. .not. runs(k)%phantom) w = w + text_advance(shown(runs(k)), run_face(runs(k), face), runs(k)%size)
    enddo
    endfunction runs_width
 
-   pure function markup_width(text, font_size) result(width)
-   !< Estimated width of the enhanced `text` [px] at `font_size`.
-   character(len=*), intent(in) :: text      !< Text with markup.
-   real(R8P),        intent(in) :: font_size !< Base font size [px].
-   real(R8P)                    :: width     !< Width [px].
-   type(enhanced_run), allocatable :: runs(:) !< Runs.
-   real(R8P)                       :: w       !< Width [base size].
+   pure function run_face(run, base) result(face)
+   !< The face of `run` (foresight_fontdata, 1-8): its family if set, else the base face's; bold or italic if the run
+   !< or the base face is.
+   type(enhanced_run), intent(in) :: run    !< Run.
+   integer(I4P),       intent(in) :: base   !< Base face, 1-8.
+   integer(I4P)                   :: face   !< Face.
+   integer(I4P)                   :: family !< Family index (1 sans, 2 serif).
+   integer(I4P)                   :: style  !< 0 regular, 1 bold, 2 italic, 3 bold italic.
+   logical                        :: known  !< Family compiled in.
 
+   family = (base - 1_I4P) / 4_I4P + 1_I4P
+   style = modulo(base - 1_I4P, 4_I4P)
+   if (allocated(run%family)) then
+      if (len_trim(run%family) > 0) call family_face(run%family, family, known)
+   endif
+   if (run%bold) style = ior(style, 1_I4P)
+   if (run%italic) style = ior(style, 2_I4P)
+   face = 4_I4P * (family - 1_I4P) + style + 1_I4P
+   endfunction run_face
+
+   pure function markup_width(text, font_size, base) result(width)
+   !< Width of the enhanced `text` [px] at `font_size`, its runs in their faces (`base`, 1-8, the face of the text
+   !< without markup; 1 if absent).
+   character(len=*), intent(in)           :: text      !< Text with markup.
+   real(R8P),        intent(in)           :: font_size !< Base font size [px].
+   integer(I4P),     intent(in), optional :: base      !< Base face.
+   real(R8P)                              :: width     !< Width [px].
+   type(enhanced_run), allocatable        :: runs(:)   !< Runs.
+   real(R8P)                              :: w         !< Width [base size].
+   integer(I4P)                           :: face      !< Base face.
+
+   face = 1_I4P
+   if (present(base)) face = base
    call enhanced_runs(text, runs)
-   w = runs_width(runs, .true.)
+   w = runs_width(runs, .true., face)
    width = max(0.0_R8P, w) * font_size
    endfunction markup_width
 
