@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.19.0] — 2026-11-27
+### Added
+- **view3d**: Set view projection xz|yz, as gnuplot 6.0
+
+- **datafile**: Gnuplot's matrix binary and general binary records, as gnuplot 6.0
+
+- **script**: Complex inverse functions, '++' dummies, graph offsets, pixmap colormaps, nonlinear z|cb, as gnuplot 6.0
+
+- **figure**: The library API of phase 3, gnuplot's colors of 3D zerrorfill and polygons
+
+- **script**: Label offsets in graph, screen and axis units, as gnuplot 6.0
+
+
+### Documentation
+- 3D views in the README, feature map, architecture and landing page
+
+
+### Fixed
+- **view3d**: Map pm3d z clipping, boxdepth autoscale, walls and depth order, as gnuplot 6.0
+
+- **script**: Binrange of constant expressions, named colormaps under a negative palette
+
+- **script**: Parametric splot's inline ranges are [u] [v] [x] [y] [z], as gnuplot 6.0
+
+- **view3d**: Z autoscaled over the points within the x and y ranges, phase 4 review
+
+- **view3d**: Key samples of 3D and map views as gnuplot's graph3d
+
+- **axes**: Character units in gnuplot's svg cell, 0.7 by 1.5 of the font size
+
+
 ## [0.18.0] — 2026-11-26
 ### Added
 - **pm3d**: Lc rgb variable and pm3d border, as gnuplot 6.0
