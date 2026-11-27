@@ -22,14 +22,14 @@
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="42.4,37 630,37"/>
 </g>
 <g class="fs-annotations">
-<text x="86.4" y="332.2" fill="black">at character 12, 6</text>
-<text x="86.4" y="190.6" fill="black">character 12, graph 0.55</text>
+<text x="100.8" y="296.2" fill="black">at character 12, 6</text>
+<text x="100.8" y="190.6" fill="black">character 12, graph 0.55</text>
 </g>
 <g class="fs-anchored">
 </g>
 <g class="fs-annotations">
-<polyline fill="none" stroke="#9400d3" stroke-width="1" points="216,328 336.2,335.8"/>
-<path fill="#9400d3" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M319.15,330.03 336.2,335.8 318.55,339.32Z"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="252,292 336.2,335.8"/>
+<path fill="#9400d3" stroke="#9400d3" stroke-width="1" stroke-linejoin="miter" d="M322.93,323.64 336.2,335.8 318.63,331.91Z"/>
 </g>
 <g class="fs-anchored">
 </g>

@@ -115,7 +115,7 @@
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="550,46.69 544,46.69"/>
 <text x="57.4" y="50.89" text-anchor="end">1.5</text>
 </g>
-<text x="29.2" y="163" text-anchor="middle" transform="rotate(-90 29.2 163)" fill="#45d4d4">amplitude</text>
+<text x="30.4" y="163" text-anchor="middle" transform="rotate(-90 30.4 163)" fill="#45d4d4">amplitude</text>
 <text x="306.7" y="22" text-anchor="end">Bessel functions</text>
 <rect x="314.4" y="40" width="231.6" height="36" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-key-entry" data-series="1">

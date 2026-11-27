@@ -42,8 +42,8 @@
 <path data-series="2" fill="#1d1b18" stroke="#1d1b18" stroke-width="1" d="M228.63,69.97A4.5,4.5 0 1 0 237.63,69.97A4.5,4.5 0 1 0 228.63,69.97ZM431.7,74.12A4.5,4.5 0 1 0 440.7,74.12A4.5,4.5 0 1 0 431.7,74.12Z"/>
 </svg>
 <svg class="fs-labels" x="49" y="80.2" width="491.2" height="245.6" viewBox="0 0 491.2 245.6" overflow="hidden">
-<text class="fs-label" data-series="2" data-u="0.474611" data-v="0.284889" data-dx="7.2" data-dy="-7.8" x="240.33" y="62.17" text-anchor="middle" fill="#1d1b18">Lisbon</text>
-<text class="fs-label" data-series="2" data-u="0.888028" data-v="0.301778" data-dx="7.2" data-dy="-7.8" x="443.4" y="66.32" text-anchor="middle" fill="#1d1b18">Tokyo</text>
+<text class="fs-label" data-series="2" data-u="0.474611" data-v="0.284889" data-dx="8.4" data-dy="-13.8" x="241.53" y="56.17" text-anchor="middle" fill="#1d1b18">Lisbon</text>
+<text class="fs-label" data-series="2" data-u="0.888028" data-v="0.301778" data-dx="8.4" data-dy="-13.8" x="444.6" y="60.32" text-anchor="middle" fill="#1d1b18">Tokyo</text>
 </svg>
 <rect x="49" y="80.2" width="491.2" height="245.6" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">

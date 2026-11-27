@@ -469,10 +469,10 @@
 <path data-series="2" fill="#1d1b18" stroke="#1d1b18" stroke-width="1" d="M367.24,140.72A4.5,4.5 0 1 0 376.24,140.72A4.5,4.5 0 1 0 367.24,140.72ZM251.8,175.55A4.5,4.5 0 1 0 260.8,175.55A4.5,4.5 0 1 0 251.8,175.55ZM240.12,86.28A4.5,4.5 0 1 0 249.12,86.28A4.5,4.5 0 1 0 240.12,86.28ZM219.93,217.54A4.5,4.5 0 1 0 228.93,217.54A4.5,4.5 0 1 0 219.93,217.54Z"/>
 </svg>
 <svg class="fs-labels" x="0" y="0" width="560" height="420" viewBox="0 0 560 420" overflow="hidden">
-<text class="fs-label" data-series="2" data-u="0.663821" data-v="0.335048" data-dx="7.2" data-dy="4.2" x="378.94" y="144.92" fill="#1d1b18">Rome</text>
-<text class="fs-label" data-series="2" data-u="0.457679" data-v="0.417976" data-dx="7.2" data-dy="4.2" x="263.5" y="179.75" fill="#1d1b18">New York</text>
-<text class="fs-label" data-series="2" data-u="0.436821" data-v="0.205429" data-dx="7.2" data-dy="4.2" x="251.82" y="90.48" fill="#1d1b18">Tokyo</text>
-<text class="fs-label" data-series="2" data-u="0.400768" data-v="0.517952" data-dx="7.2" data-dy="4.2" x="231.63" y="221.74" fill="#1d1b18">Sydney</text>
+<text class="fs-label" data-series="2" data-u="0.663821" data-v="0.335048" data-dx="8.4" data-dy="4.2" x="380.14" y="144.92" fill="#1d1b18">Rome</text>
+<text class="fs-label" data-series="2" data-u="0.457679" data-v="0.417976" data-dx="8.4" data-dy="4.2" x="264.7" y="179.75" fill="#1d1b18">New York</text>
+<text class="fs-label" data-series="2" data-u="0.436821" data-v="0.205429" data-dx="8.4" data-dy="4.2" x="253.02" y="90.48" fill="#1d1b18">Tokyo</text>
+<text class="fs-label" data-series="2" data-u="0.400768" data-v="0.517952" data-dx="8.4" data-dy="4.2" x="232.83" y="221.74" fill="#1d1b18">Sydney</text>
 </svg>
 <g class="fs-border">
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="456.55,289.28 327.3,401.21"/>

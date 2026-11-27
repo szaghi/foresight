@@ -39,11 +39,11 @@ M0.25,0.288889L0.2,0.109328"/>
 </g>
 </svg>
 <svg class="fs-labels" x="35.8" y="16" width="514.2" height="248" viewBox="0 0 514.2 248" overflow="hidden">
-<text class="fs-label" data-series="2" data-u="0.166667" data-v="0.777778" data-dx="-7.2" data-dy="4.2" x="78.5" y="197.09" text-anchor="end" fill="#e8ecf0">A</text>
-<text class="fs-label" data-series="2" data-u="0.416667" data-v="0.6" data-dx="-7.2" data-dy="4.2" x="207.05" y="153" text-anchor="end" fill="#e8ecf0">B</text>
-<text class="fs-label" data-series="2" data-u="0.666667" data-v="0.733333" data-dx="-7.2" data-dy="4.2" x="335.6" y="186.07" text-anchor="end" fill="#e8ecf0">C</text>
-<text class="fs-label" data-series="2" data-u="0.5" data-v="0.333333" data-dx="-7.2" data-dy="4.2" x="249.9" y="86.87" text-anchor="end" fill="#e8ecf0">D</text>
-<text class="fs-label" data-series="2" data-u="0.25" data-v="0.288889" data-dx="-7.2" data-dy="4.2" x="121.35" y="75.84" text-anchor="end" fill="#e8ecf0">E</text>
+<text class="fs-label" data-series="2" data-u="0.166667" data-v="0.777778" data-dx="-8.4" data-dy="4.2" x="77.3" y="197.09" text-anchor="end" fill="#e8ecf0">A</text>
+<text class="fs-label" data-series="2" data-u="0.416667" data-v="0.6" data-dx="-8.4" data-dy="4.2" x="205.85" y="153" text-anchor="end" fill="#e8ecf0">B</text>
+<text class="fs-label" data-series="2" data-u="0.666667" data-v="0.733333" data-dx="-8.4" data-dy="4.2" x="334.4" y="186.07" text-anchor="end" fill="#e8ecf0">C</text>
+<text class="fs-label" data-series="2" data-u="0.5" data-v="0.333333" data-dx="-8.4" data-dy="4.2" x="248.7" y="86.87" text-anchor="end" fill="#e8ecf0">D</text>
+<text class="fs-label" data-series="2" data-u="0.25" data-v="0.288889" data-dx="-8.4" data-dy="4.2" x="120.15" y="75.84" text-anchor="end" fill="#e8ecf0">E</text>
 </svg>
 <rect x="35.8" y="16" width="514.2" height="248" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-xticks">

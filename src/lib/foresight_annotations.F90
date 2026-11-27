@@ -194,9 +194,9 @@ contains
 
    pure function label_shift(label, frame, xaxis, yaxis, x2axis, y2axis) result(d)
    !< The offset of `label` on the page [px, y downward], gnuplot's get_offsets (map_position_r): each coordinate in its
-   !< system, `character` (the cell), `graph` (the plot area), `screen` (the page less a terminal unit), `first` and
-   !< `second` (the axis' scale: the distance from its 0); the non-character ones truncated to gnuplot's svg units
-   !< (1/100 px, an int cast).
+   !< system, `character` (the cell, gnuplot's svg 0.7 by 1.5 of the font size), `graph` (the plot area), `screen`
+   !< (the page less a terminal unit), `first` and `second` (the axis' scale: the distance from its 0); the
+   !< non-character ones truncated to gnuplot's svg units (1/100 px, an int cast).
    type(label_object), intent(in) :: label  !< Label.
    type(frame_object), intent(in) :: frame  !< Plot area and page.
    type(axis_object),  intent(in) :: xaxis  !< x axis.
@@ -209,6 +209,9 @@ contains
                 frame%canvas(1), xaxis, x2axis)
    d(2) = -along(label%offset(2), label%offset_system(2), frame%cell(2), frame%area(4) - frame%area(3), &
                  frame%canvas(2), yaxis, y2axis)
+   ! a label with a point: its text moved right and up by half the point (gnuplot's pointsize * h_tic / 2, h_tic half a
+   ! character height)
+   if (label%point) d = d + 0.25_R8P * label%ps * frame%cell(2) * [1.0_R8P, -1.0_R8P]
    contains
       pure function along(v, system, cell, plot, page, first, second) result(c)
       !< One coordinate of the offset [px, upward for y].
@@ -292,7 +295,7 @@ contains
    integer(I4P)                         :: k         !< Label counter.
    integer(I4P)                         :: pass      !< 1 page labels, 2 anchored ones.
 
-   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
+   frame = frame_object(area=area, canvas=canvas, cell=[0.7_R8P * font_size, 1.5_R8P * font_size])
    do pass = 1_I4P, 2_I4P
       if (.not. any([(labels(k)%front .eqv. front .and. (anchored(labels(k)%at) .eqv. pass == 2_I4P), &
                       k = 1_I4P, size(labels, kind=I4P))])) cycle
@@ -367,7 +370,7 @@ contains
    integer(I4P)                         :: pass      !< 1 page arrows, 2 anchored ones.
    logical                              :: tied      !< Tied to the data.
 
-   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
+   frame = frame_object(area=area, canvas=canvas, cell=[0.7_R8P * font_size, 1.5_R8P * font_size])
    do pass = 1_I4P, 2_I4P
       if (.not. any([(arrows(k)%front .eqv. front .and. ((anchored(arrows(k)%from) .or. anchored(arrows(k)%to)) &
                       .eqv. pass == 2_I4P), k = 1_I4P, size(arrows, kind=I4P))])) cycle
@@ -490,7 +493,7 @@ contains
    integer(I4P)                         :: k          !< Pixmap counter.
    integer(I4P)                         :: pass       !< 1 page pixmaps, 2 anchored ones.
 
-   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
+   frame = frame_object(area=area, canvas=canvas, cell=[0.7_R8P * font_size, 1.5_R8P * font_size])
    do pass = 1_I4P, 2_I4P
       if (.not. any([(trim(pixmaps(k)%layer) == layer .and. (anchored(pixmaps(k)%at) .eqv. pass == 2_I4P), &
                       k = 1_I4P, size(pixmaps, kind=I4P))])) cycle
@@ -620,7 +623,7 @@ contains
    logical                              :: drawn      !< A group opened.
    character(len=:), allocatable        :: dashes     !< Border dash array, empty for solid.
 
-   frame = frame_object(area=area, canvas=canvas, cell=[0.6_R8P * font_size, font_size])
+   frame = frame_object(area=area, canvas=canvas, cell=[0.7_R8P * font_size, 1.5_R8P * font_size])
    drawn = .false.
    do k = 1_I4P, size(shapes, kind=I4P)
       if (trim(shapes(k)%layer) == 'fb') then

@@ -30,11 +30,11 @@
 <path data-series="1" fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M83.4,127.4A4.5,4.5 0 1 0 92.4,127.4A4.5,4.5 0 1 0 83.4,127.4ZM171.3,86.45A4.5,4.5 0 1 0 180.3,86.45A4.5,4.5 0 1 0 171.3,86.45ZM259.2,150.15A4.5,4.5 0 1 0 268.2,150.15A4.5,4.5 0 1 0 259.2,150.15ZM347.1,45.5A4.5,4.5 0 1 0 356.1,45.5A4.5,4.5 0 1 0 347.1,45.5ZM435,95.55A4.5,4.5 0 1 0 444,95.55A4.5,4.5 0 1 0 435,95.55Z"/>
 </svg>
 <svg class="fs-labels" x="22.6" y="16" width="527.4" height="273" viewBox="0 0 527.4 273" overflow="hidden">
-<text class="fs-label" data-series="2" data-u="0.166667" data-v="0.466667" data-dx="0" data-dy="-7.8" x="87.9" y="119.6" text-anchor="middle" fill="#e8ecf0">3.2</text>
-<text class="fs-label" data-series="2" data-u="0.333333" data-v="0.316667" data-dx="0" data-dy="-7.8" x="175.8" y="78.65" text-anchor="middle" fill="#e8ecf0">4.1</text>
-<text class="fs-label" data-series="2" data-u="0.5" data-v="0.55" data-dx="0" data-dy="-7.8" x="263.7" y="142.35" text-anchor="middle" fill="#e8ecf0">2.7</text>
-<text class="fs-label" data-series="2" data-u="0.666667" data-v="0.166667" data-dx="0" data-dy="-7.8" x="351.6" y="37.7" text-anchor="middle" fill="#e8ecf0">5.0</text>
-<text class="fs-label" data-series="2" data-u="0.833333" data-v="0.35" data-dx="0" data-dy="-7.8" x="439.5" y="87.75" text-anchor="middle" fill="#e8ecf0">3.9</text>
+<text class="fs-label" data-series="2" data-u="0.166667" data-v="0.466667" data-dx="0" data-dy="-13.8" x="87.9" y="113.6" text-anchor="middle" fill="#e8ecf0">3.2</text>
+<text class="fs-label" data-series="2" data-u="0.333333" data-v="0.316667" data-dx="0" data-dy="-13.8" x="175.8" y="72.65" text-anchor="middle" fill="#e8ecf0">4.1</text>
+<text class="fs-label" data-series="2" data-u="0.5" data-v="0.55" data-dx="0" data-dy="-13.8" x="263.7" y="136.35" text-anchor="middle" fill="#e8ecf0">2.7</text>
+<text class="fs-label" data-series="2" data-u="0.666667" data-v="0.166667" data-dx="0" data-dy="-13.8" x="351.6" y="31.7" text-anchor="middle" fill="#e8ecf0">5.0</text>
+<text class="fs-label" data-series="2" data-u="0.833333" data-v="0.35" data-dx="0" data-dy="-13.8" x="439.5" y="81.75" text-anchor="middle" fill="#e8ecf0">3.9</text>
 </svg>
 <rect x="22.6" y="16" width="527.4" height="273" fill="none" stroke="#e8ecf0" stroke-width="1"/>
 <g class="fs-xticks">

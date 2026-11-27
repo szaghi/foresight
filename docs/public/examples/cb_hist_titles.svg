@@ -55,8 +55,8 @@
 <text x="478.95" y="292" text-anchor="middle">CPU 64</text>
 </g>
 <g class="fs-groups">
-<text x="172.7" y="313" text-anchor="middle" fill="#b3163f">mesh</text>
-<text x="417.7" y="313" text-anchor="middle" fill="#b3163f">fluxes</text>
+<text x="172.7" y="316" text-anchor="middle" fill="#b3163f">mesh</text>
+<text x="417.7" y="316" text-anchor="middle" fill="#b3163f">fluxes</text>
 </g>
 <g class="fs-yticks">
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="50.2,274 56.2,274"/>

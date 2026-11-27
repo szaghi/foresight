@@ -29,7 +29,7 @@
 </g>
 <g class="fs-anchored">
 <path fill="black" stroke="black" stroke-width="1" d="M131.1,37A3.6,3.6 0 1 0 138.3,37A3.6,3.6 0 1 0 131.1,37Z"/>
-<text x="141.9" y="41.2" fill="black">peak</text>
+<text x="147.6" y="36.7" fill="black">peak</text>
 <text x="582.99" y="356.6" transform="rotate(-60 582.99 356.6)" fill="red">rotated</text>
 </g>
 <g class="fs-annotations">

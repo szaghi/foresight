@@ -123,7 +123,10 @@ integer(I4P),     parameter :: HIST_COLUMNSTACKED = 2_I4P !< One stack per histo
 integer(I4P),     parameter :: HIST_ERRORBARS     = 3_I4P !< Clustered, with error bars.
 real(R8P),        parameter :: SAMPLE_LENGTH = 3.0_R8P   !< Key sample length [font size].
 integer(I4P),     parameter :: MAX_LINETYPES = 128_I4P !< Linetypes of `set linetype` (lw, dt, pt, ps).
-real(R8P),        parameter :: CHAR_WIDTH    = 0.6_R8P   !< Character width [font size], gnuplot's character units.
+real(R8P),        parameter :: CHAR_WIDTH    = 0.7_R8P   !< Character width [font size], gnuplot's character units (its
+                                                        !< svg terminal's h_char).
+real(R8P),        parameter :: CHAR_HEIGHT   = 1.5_R8P   !< Character height [font size], gnuplot's svg v_char (ascent,
+                                                        !< descent and leading).
 real(R8P),        parameter :: CAP_LENGTH    = 6.0_R8P   !< Error bar cap length [px].
 character(len=*), parameter :: FRAME_COLOR   = 'black'   !< Border and tick color.
 character(len=*), parameter :: GRID_COLOR    = '#a0a0a0' !< Grid line color.
@@ -2098,7 +2101,7 @@ contains
    endif
    ! the x2 label's row, more for an offset up, as gnuplot's boundary
    if (self%x2axis%has_label()) room = room + max(0.0_R8P, LINE_HEIGHT * self%label_font(4)%size_px(font_size) + GAP + &
-                                                  self%label_offset(2, 4) * font_size)
+                                                  self%label_offset(2, 4) * CHAR_HEIGHT * font_size)
    endfunction x2_room
 
    pure function stacked_column(self, s) result(yes)
@@ -2139,7 +2142,7 @@ contains
 
    subroutine draw_group_titles(self, backend, left, right, baseline, font_size)
    !< The title of each histogram group centred under its bars (the middle of its rows, or stacks), on `baseline`,
-   !< moved by `hist_title_offset` (0.6 of the font size wide and the font size high characters), in
+   !< moved by `hist_title_offset` (gnuplot's characters: 0.7 of the font size wide, 1.5 high), in
    !< `hist_title_color`.
    class(axes_object),    intent(in)    :: self     !< Panel.
    class(backend_object), intent(inout) :: backend  !< Output device.
@@ -2174,12 +2177,12 @@ contains
       backend%boxed = self%hist_title_boxed
       backend%font = self%hist_title_font
       if (allocated(self%hist_title_color)) then
-         call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
-                           baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle', &
+         call backend%text(left + u * (right - left) + CHAR_WIDTH * font_size * self%hist_title_offset(1), &
+                           baseline - CHAR_HEIGHT * font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle', &
                            color=self%hist_title_color)
       else
-         call backend%text(left + u * (right - left) + 0.6_R8P * font_size * self%hist_title_offset(1), &
-                           baseline - font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle')
+         call backend%text(left + u * (right - left) + CHAR_WIDTH * font_size * self%hist_title_offset(1), &
+                           baseline - CHAR_HEIGHT * font_size * self%hist_title_offset(2), self%series(s)%hist_title, 'middle')
       endif
       backend%boxed = .false.
       backend%font = font_object()
@@ -2497,7 +2500,7 @@ contains
       real(R8P)                    :: py     !< Shifted ordinate [px].
 
       px = x + self%label_offset(1, k) * CHAR_WIDTH * font_size
-      py = y - self%label_offset(2, k) * font_size
+      py = y - self%label_offset(2, k) * CHAR_HEIGHT * font_size
       backend%boxed = btest(self%label_boxed, k - 1_I4P)
       backend%font = self%label_font(k)
       if (len_trim(self%label_color(k)) > 0) then
@@ -3138,7 +3141,8 @@ contains
    !< The polygons of `splot ... with polygons` (gnuplot's plot3d_polygons): each scan of the item (its blocks) one
    !< polygon, a triangle a quadrangle with its first corner again; in the first point's color (`lc variable`, `fc rgb
    !< variable`) or the fill color (`fc`, else the fill's border color: black by default), lit by `set pm3d lighting`
-   !< (gnuplot's illuminate_one_quadrangle: its first 4 corners in the view); its depth the mean of its corners; queued with `depth`, else sorted among themselves.
+   !< (gnuplot's illuminate_one_quadrangle: its first 4 corners in the view); its depth the mean of its corners;
+   !< queued with `depth`, else sorted among themselves.
    type(pm3d_object),   intent(in)    :: pm      !< pm3d settings.
    type(series_object), intent(in)    :: one     !< The item.
    type(view3d_frame),  intent(in)    :: f       !< The view.
@@ -5851,10 +5855,12 @@ contains
       backend%font = self%label_font(5)
       p = cx + 0.5_R8P * radius * sx + self%label_offset(1, 5) * CHAR_WIDTH * font_size
       if (len_trim(self%label_color(5)) > 0) then
-         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * font_size, self%raxis%label, &
+         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * CHAR_HEIGHT * font_size, &
+                           self%raxis%label, &
                            'middle', color=trim(self%label_color(5)))
       else
-         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * font_size, self%raxis%label, &
+         call backend%text(p, cy + GAP - 2.0_R8P * font_size - self%label_offset(2, 5) * CHAR_HEIGHT * font_size, &
+                           self%raxis%label, &
                            'middle')
       endif
       backend%literal = .false.
@@ -6030,7 +6036,7 @@ contains
       case (2_I4P)
          top = top - self%key_offset(2) * (area(4) - area(3))
       case default
-         top = top - self%key_offset(2) * font_size
+         top = top - self%key_offset(2) * CHAR_HEIGHT * font_size
       endselect
       if (self%key_opaque) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
                                              'none', WINDOW_FILL, 1.0_R8P)
@@ -6666,7 +6672,7 @@ contains
 
    length = SAMPLE_LENGTH * font_size
    if (self%key_samplen >= 0.0_R8P) then
-      length = self%key_samplen * CHAR_WIDTH * font_size
+      length = self%key_samplen * 0.6_R8P * font_size
       if (self%gnuplot_key) length = length + TICK_MAJOR
    endif
    endfunction key_sample
@@ -7043,10 +7049,10 @@ contains
             case (2_I4P)
                v(p) = v(p) + jit * 0.7_R8P * font_size / h
             case (1_I4P)
-               u(p) = u(p) + jit * 0.7_R8P * CHAR_WIDTH * font_size / w
+               u(p) = u(p) + jit * 0.42_R8P * font_size / w
                v(p) = v0
             case default
-               u(p) = u(p) + jit * 0.7_R8P * CHAR_WIDTH * font_size / w
+               u(p) = u(p) + jit * 0.42_R8P * font_size / w
             endselect
             j = j + 1_I4P
          enddo
@@ -7445,15 +7451,15 @@ contains
                   if (series%colors(i) == 'none') cycle
                   call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
                                         label_angle(i), trim(series%colors(i)), &
-                                        series%text_offset(1) * 0.6_R8P * font_size, &
-                                        -series%text_offset(2) * font_size + 0.35_R8P * font_size, &
+                                        series%text_offset(1) * CHAR_WIDTH * font_size, &
+                                        -series%text_offset(2) * CHAR_HEIGHT * font_size + 0.35_R8P * font_size, &
                                         element_px(backend, series%font, font_size))
                   cycle
                endif
             endif
             call data_label_lines(backend, u(i), v(i), trim(series%texts(i)), trim(series%text_anchor), &
-                                  label_angle(i), color, series%text_offset(1) * 0.6_R8P * font_size, &
-                                  -series%text_offset(2) * font_size + 0.35_R8P * font_size, &
+                                  label_angle(i), color, series%text_offset(1) * CHAR_WIDTH * font_size, &
+                                  -series%text_offset(2) * CHAR_HEIGHT * font_size + 0.35_R8P * font_size, &
                                   element_px(backend, series%font, font_size))
          enddo
          backend%boxed = .false.
@@ -10220,7 +10226,7 @@ contains
    endif
    ! the x label's row, less its offset up (more for an offset down), as gnuplot's boundary
    if (self%xaxis%has_label()) margins(4) = margins(4) + max(0.0_R8P, LINE_HEIGHT * font_size + GAP - &
-                                                              self%label_offset(2, 1) * font_size)
+                                                              self%label_offset(2, 1) * CHAR_HEIGHT * font_size)
    if (self%polar .and. self%ttics%mode /= TICS_NONE) then
       ! theta labels outside the disc, as wide as "360"
       margins(1:2) = max(margins(1:2), PAD + GAP + backend%text_width('360', '', font_size))
@@ -10247,9 +10253,9 @@ contains
                                                        x0 + width - self%margin_user(2) * CHAR_WIDTH * font_size, &
                                                        self%margin_screen(2))
    if (self%margin_user(3) >= 0.0_R8P) area(3) = merge((1.0_R8P - self%margin_user(3)) * self%canvas(2), &
-                                                       y0 + self%margin_user(3) * font_size, self%margin_screen(3))
+                                                       y0 + self%margin_user(3) * CHAR_HEIGHT * font_size, self%margin_screen(3))
    if (self%margin_user(4) >= 0.0_R8P) area(4) = merge((1.0_R8P - self%margin_user(4)) * self%canvas(2), &
-                                                       y0 + height - self%margin_user(4) * font_size, &
+                                                       y0 + height - self%margin_user(4) * CHAR_HEIGHT * font_size, &
                                                        self%margin_screen(4))
    if (self%ratio > 0.0_R8P) then
       call fit_ratio(area, self%ratio)
@@ -11286,7 +11292,7 @@ contains
          y = y0 + height - 1.5_R8P * font_size
       endif
    else
-      x = x0 + CHAR_WIDTH * font_size
+      x = x0 + 0.6_R8P * font_size
       if (self%stamp_top) then
          y = y0 + 1.8_R8P * font_size
       else
@@ -11294,7 +11300,7 @@ contains
       endif
    endif
    x = x + self%stamp_offset(1) * CHAR_WIDTH * font_size
-   y = y - self%stamp_offset(2) * font_size
+   y = y - self%stamp_offset(2) * CHAR_HEIGHT * font_size
    backend%font = self%stamp_font
    if (self%stamp_rotate .and. len_trim(self%stamp_color) > 0) then
       call backend%text(x, y, text, anchor, rotate=-90.0_R8P, color=trim(self%stamp_color))
@@ -11350,7 +11356,7 @@ contains
       case ('screen')
          unit(k) = canvas(k)
       case default
-         unit(k) = merge(CHAR_WIDTH * font_size, font_size, k == 1_I4P)
+         unit(k) = merge(CHAR_WIDTH, CHAR_HEIGHT, k == 1_I4P) * font_size
       endselect
    enddo
    d = [offset(1) * unit(1), -offset(2) * unit(2)]
@@ -12207,7 +12213,7 @@ contains
    real(R8P),         intent(in) :: font_size !< Font size [px].
    real(R8P)                     :: dy        !< Shift, down.
 
-   dy = -tics%offset(2) * font_size
+   dy = -tics%offset(2) * CHAR_HEIGHT * font_size
    endfunction label_dy
 
    pure subroutine axes_names(names, x, y, y2, bad, cb, x2)

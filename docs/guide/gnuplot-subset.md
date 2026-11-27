@@ -1167,7 +1167,7 @@ and keeps the labels; each axis takes it too (`set xtics scale 2`). `set tics fr
 
 The tick labels of an axis (`set xtics ...`) or of every axis (`set tics ...`) take gnuplot's options: `format "..."`
 (the axis' `set format`), `font "..."` (the labels' [font](#fonts), placed as the page's, as gnuplot), `offset X[,Y]` and `nooffset` (a
-shift in characters, 0.6 font sizes wide and 1 high, y up; gnuplot's svg characters are 0.7 by 1.5) and
+shift in characters, gnuplot's svg cell: 0.7 font sizes wide and 1.5 high, y up) and
 `textcolor`/`tc COLOR`. `set tics` changes only the options it names. gnuplot's old forms `set no{option}` (`set
 noxtics`, `set nomztics`, `set nokey`, ...) are `unset {option}`, as gnuplot.
 
@@ -1370,7 +1370,8 @@ them all. The samples are gnuplot 6.0's: a line, points, a filled box (its fill 
 has one), an arrow for `vectors` and `arrows`, none for `labels` (their point with `labels point`) and for a
 `keyentry` without a style. In a script `samplen L` is L characters plus a tick length (gnuplot's `samplen * h_char +
 h_tic`), a boxed key draws a line under its title, and a vertical key taller than the panel wraps into columns, filled
-top down, as gnuplot. A character is foresight's cell, 0.6 font sizes wide and 1 high. `font` the key's [font](#fonts) (its
+top down, as gnuplot. A character is gnuplot's svg cell, 0.7 font sizes wide and 1.5 high (the 2D key's sample
+length `samplen` keeps 0.6 font sizes a character: foresight's 2D key is its own). `font` the key's [font](#fonts) (its
 rows and widths by its size); `noenhanced` writes the key's texts as they are, not as [enhanced text](#enhanced-text).
 
 ```gnuplot
@@ -1617,8 +1618,9 @@ unset label 1; unset arrow                                   # one tag, or all
 
 A position is `x, y`, each coordinate in its system: `first` (the values of the x and y axes, the default), `second`
 (the x2, y2 axes), `graph` (fractions of the plot area from its bottom left), `screen` (fractions of the page) or
-`character` (character cells from the bottom left of the page: 0.6 of the font size wide and the font size high, the
-cell of the label offsets; gnuplot's svg cell is about 0.7 by 1.5); the system of x is also y's unless y names one
+`character` (character cells from the bottom left of the page, gnuplot's svg cell: 0.7 of the font size wide and 1.5
+high, the cell of the label offsets too); a label with a point has its text moved right and up by half the point
+(gnuplot's pointsize times half a tick); the system of x is also y's unless y names one
 (`graph 0.5, first 3`); the systems take gnuplot's abbreviations (`fir`, `sec`, `gr`, `sc`, `char`). A coordinate is a constant expression, or a time string on a [time axis](#time-data).
 
 | Command | Options (gnuplot 6.0's, defaults first) |
@@ -1821,8 +1823,7 @@ unset multiplot
 `set lmargin N` (`rmargin`, `tmargin`, `bmargin`) puts the border `N` characters from the panel's edge, `set lmargin at
 screen F` at the fraction `F` of the page (from the bottom left), as gnuplot; bare, negative or unset, the margin is
 computed from the labels again. `set margins L, R, B, T` sets the four, in gnuplot's order, each `[at screen] N`. A
-character is foresight's cell, 0.6 font sizes wide and 1 high (gnuplot's svg cell is about 0.7 by 1.5, so margins in
-characters are narrower than gnuplot's; at screen fractions they match). Panels of a multiplot with the same margins
+character is gnuplot's svg cell, 0.7 font sizes wide and 1.5 high (`set lmargin 10` 84 px at 12 pt, as gnuplot). Panels of a multiplot with the same margins
 at screen line up whatever their tick labels.
 
 ```gnuplot

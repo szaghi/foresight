@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(291)                           !< Per-check outcome.
+logical                       :: test_passed(292)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -2667,15 +2667,15 @@ test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. interpreter%figu
 call interpreter%run_text('set key enhanced', iostat, iomsg)
 test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%key_plain
 
-! set lmargin|rmargin|tmargin|bmargin [at screen] N, set margins L,R,B,T, unset: the border where they say (characters
-! 0.6 font sizes wide and 1 high, screen fractions from the bottom left)
+! set lmargin|rmargin|tmargin|bmargin [at screen] N, set margins L,R,B,T, unset: the border where they say (gnuplot's svg
+! characters, 0.7 font sizes wide and 1.5 high: 84 and 54 px at 12 pt, as gnuplot; screen fractions from the bottom left)
 call interpreter%init(scratch)
 call interpreter%run_text('set term svg size 400,300; set output "foresight_script_test_margins.svg"'//new_line('a')// &
                           'set lmargin 10; set rmargin at screen 0.9; set tmargin 3; set bmargin at screen 0.2'// &
                           new_line('a')//'plot [0:10] x notitle', iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(125) = iostat == 0_I4P .and. file_has('foresight_script_test_margins.svg', &
-                   '<rect x="72" y="36" width="288" height="204" fill="none" stroke="black"')
+                   '<rect x="84" y="54" width="276" height="186" fill="none" stroke="black"')
 call interpreter%run_text('set margins 1, 2, at screen 0.1, 4', iostat, iomsg)
 associate(panel => interpreter%figure%panels(1))
    test_passed(125) = test_passed(125) .and. iostat == 0_I4P .and. &
@@ -7943,13 +7943,13 @@ block
    character(len=1), parameter   :: nl = new_line('a') !< New line.
 
    call interpreter%init(scratch)
-   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_k3.svg'"//nl// &
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_k3a.svg'"//nl// &
                              "$B << EOD"//nl//"1 1 3"//nl//"2 1 5"//nl//"EOD"//nl// &
                              "set xrange [0:3]; set yrange [0:3]; set zrange [0:6]"//nl// &
                              "splot $B title 'l' with lines, $B title 'b' with boxes fs solid 0.5", iostat, iomsg)
    test_passed(291) = iostat == 0_I4P
    if (test_passed(291)) then
-      svg = read_text('foresight_script_test_k3.svg')
+      svg = read_text('foresight_script_test_k3a.svg')
       test_passed(291) = index(svg, 'points="514.27,45.01 556.83,45.01"') > 0 .and. &
                         index(svg, 'd="M514.27,67.51 556.83,67.51 556.83,58.51 514.27,58.51Z"') > 0
    endif
@@ -7960,6 +7960,40 @@ block
       svg = read_text('foresight_script_test_k3.svg')
       test_passed(291) = index(svg, 'points="480.71,63.01 523.27,63.01"') > 0 .and. &
                         index(svg, '<text x="531.66" y="48.91"') > 0
+   endif
+endblock
+
+
+! check 292: gnuplot's svg character cell (0.7 by 1.5 of the font size): `set title offset 4,-1` moves the title 33.6 px
+! right, `set xlabel offset 3,2` 25.2 (gnuplot 6.0: 33.56, 25.17; the heights move the margins too), and a label with a
+! point has its text 4.5 px right (gnuplot's pointsize * h_tic / 2)
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   real(R8P)                     :: t0(2), x0(2), p0(2), t1(2), x1(2), p1(2) !< Anchors without and with offsets.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_cc0.svg'"//nl// &
+                             "set title 'T'; set xlabel 'X'; set label 1 'P' at 5,5"//nl// &
+                             "plot [0:10][0:10] x notitle", iostat, iomsg)
+   test_passed(292) = iostat == 0_I4P
+   if (test_passed(292)) then
+      svg = read_text('foresight_script_test_cc0.svg')
+      t0 = anchor_of(svg, 'T')
+      x0 = anchor_of(svg, 'X')
+      p0 = anchor_of(svg, 'P')
+   endif
+   call interpreter%run_text("set output 'foresight_script_test_cc1.svg'"//nl// &
+                             "set title 'T' offset 4,-1; set xlabel 'X' offset 3,2; set label 1 'P' at 5,5 point pt 7"//nl// &
+                             "plot [0:10][0:10] x notitle", iostat, iomsg)
+   test_passed(292) = test_passed(292) .and. iostat == 0_I4P
+   if (test_passed(292)) then
+      svg = read_text('foresight_script_test_cc1.svg')
+      t1 = anchor_of(svg, 'T')
+      x1 = anchor_of(svg, 'X')
+      p1 = anchor_of(svg, 'P')
+      test_passed(292) = abs(t1(1) - t0(1) - 33.6_R8P) < 0.011_R8P .and. abs(x1(1) - x0(1) - 25.2_R8P) < 0.011_R8P .and. &
+                        abs(p1(1) - p0(1) - 4.5_R8P) < 0.011_R8P
    endif
 endblock
 

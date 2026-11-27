@@ -48,9 +48,9 @@
 </g>
 </svg>
 <svg class="fs-labels" x="22.6" y="16" width="347.4" height="233" viewBox="0 0 347.4 233" overflow="hidden">
-<text class="fs-label" data-series="3" data-u="0.166667" data-v="0.833333" data-dx="7.2" data-dy="4.2" x="65.1" y="198.37" fill="black">a</text>
-<text class="fs-label" data-series="3" data-u="0.333333" data-v="0.5" data-dx="7.2" data-dy="4.2" x="123" y="120.7" fill="black">bb</text>
-<text class="fs-label" data-series="3" data-u="0.666667" data-v="0.666667" data-dx="7.2" data-dy="4.2" x="238.8" y="159.53" fill="black">c</text>
+<text class="fs-label" data-series="3" data-u="0.166667" data-v="0.833333" data-dx="8.4" data-dy="4.2" x="66.3" y="198.37" fill="black">a</text>
+<text class="fs-label" data-series="3" data-u="0.333333" data-v="0.5" data-dx="8.4" data-dy="4.2" x="124.2" y="120.7" fill="black">bb</text>
+<text class="fs-label" data-series="3" data-u="0.666667" data-v="0.666667" data-dx="8.4" data-dy="4.2" x="240" y="159.53" fill="black">c</text>
 </svg>
 <rect x="22.6" y="16" width="347.4" height="233" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">

@@ -68,10 +68,10 @@ M0.928571,0.232143L1.009714,0.23975"/>
 </g>
 </svg>
 <svg class="fs-labels" x="125.6" y="16" width="328" height="328" viewBox="0 0 328 328" overflow="hidden">
-<text class="fs-label" data-series="2" data-u="0.214286" data-v="0.5" data-dx="7.2" data-dy="4.2" x="77.49" y="168.2" fill="#ff0000">inlet</text>
-<text class="fs-label" data-series="2" data-u="0.7" data-v="0.339286" data-dx="7.2" data-dy="4.2" x="236.8" y="115.49" fill="#ff0000">wake-top</text>
-<text class="fs-label" data-series="2" data-u="0.7" data-v="0.660714" data-dx="7.2" data-dy="4.2" x="236.8" y="220.91" fill="#ff0000">wake-bottom</text>
-<text class="fs-label" data-series="2" data-u="0.871429" data-v="0.5" data-dx="7.2" data-dy="4.2" x="293.03" y="168.2" fill="#ff0000">far-wake</text>
+<text class="fs-label" data-series="2" data-u="0.214286" data-v="0.5" data-dx="8.4" data-dy="4.2" x="78.69" y="168.2" fill="#ff0000">inlet</text>
+<text class="fs-label" data-series="2" data-u="0.7" data-v="0.339286" data-dx="8.4" data-dy="4.2" x="238" y="115.49" fill="#ff0000">wake-top</text>
+<text class="fs-label" data-series="2" data-u="0.7" data-v="0.660714" data-dx="8.4" data-dy="4.2" x="238" y="220.91" fill="#ff0000">wake-bottom</text>
+<text class="fs-label" data-series="2" data-u="0.871429" data-v="0.5" data-dx="8.4" data-dy="4.2" x="294.23" y="168.2" fill="#ff0000">far-wake</text>
 </svg>
 <rect x="125.6" y="16" width="328" height="328" fill="none" stroke="#1d1b18" stroke-width="1"/>
 <g class="fs-xticks">

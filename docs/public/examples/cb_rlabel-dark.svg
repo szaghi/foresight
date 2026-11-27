@@ -166,7 +166,7 @@
 <text x="299.67" y="228" text-anchor="middle">60°</text>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="240,210 240,204"/>
 <text x="240" y="228" text-anchor="middle">90°</text>
-<text x="315.1" y="192" text-anchor="middle">altitude</text>
+<text x="312.7" y="192" text-anchor="middle">altitude</text>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="240,31 240,37"/>
 <text x="240" y="23.2" text-anchor="middle">N</text>
 <polyline fill="none" stroke="#e8ecf0" stroke-width="1" points="419,210 413,210"/>
