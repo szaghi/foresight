@@ -30,23 +30,23 @@ TERM = re.compile(r"^\s*set\s+(term|termi|termin|termina|terminal)\b(?!option)")
 PAUSE = re.compile(r"^\s*pause\b")
 
 
-def paged_copy(demo: str, demodir: str) -> str:
-    """The demo as a pdfcairo copy writing ARG1/<name>_pNN.pdf, one page per pause: its file name."""
+def paged_copy(demo: str, demodir: str, term: str = "pdfcairo", ext: str = "pdf") -> str:
+    """The demo as a copy for `term` writing ARG1/<name>_pNN.<ext>, one page per pause: its file name."""
     with open(os.path.join(demodir, demo + ".dem"), errors="replace") as f:
         src = f.read().split("\n")
-    lines = ["set terminal pdfcairo", "FID_N = 1", "FID_DIR = ARG1",
-             f"set output sprintf('%s/{demo}_p%02d.pdf', FID_DIR, FID_N)"]
+    lines = [f"set terminal {term}", "FID_N = 1", "FID_DIR = ARG1",
+             f"set output sprintf('%s/{demo}_p%02d.{ext}', FID_DIR, FID_N)"]
     cont = False
     for line in src:
         if not cont and TERM.match(line):
             lines.append("# " + line)
         elif not cont and PAUSE.match(line):
-            lines.append(f"FID_N = FID_N + 1; set output sprintf('%s/{demo}_p%02d.pdf', FID_DIR, FID_N)")
+            lines.append(f"FID_N = FID_N + 1; set output sprintf('%s/{demo}_p%02d.{ext}', FID_DIR, FID_N)")
         else:
             lines.append(line)
         cont = line.rstrip().endswith("\\")
     lines.append("set output")
-    name = "pdf_" + demo + ".dem"
+    name = ext + "_" + demo + ".dem"
     with open(os.path.join(demodir, name), "w") as f:
         f.write("\n".join(lines) + "\n")
     return name

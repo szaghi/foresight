@@ -11,6 +11,7 @@ The format follows the output name, in the library (`fig%save(file)`) and in scr
 | `*.html`, `*.htm` | interactive page: SVG plus the embedded [viewer](viewer) |
 | `*.svg` | static SVG |
 | `*.pdf` | PDF, one page |
+| `*.tex` | a LaTeX picture whose texts LaTeX sets, and its graphics as PDF (gnuplot's cairolatex) |
 | `*.txt` | text, the gnuplot `dumb` or `block` terminal |
 | `-` | text on the standard output |
 
@@ -88,6 +89,41 @@ The plot area is a clipping path; markers crossing its border are drawn whole, a
   same figure (rasterized, within 0.002 of the fidelity score).
 - Left out: what needs a viewer (zoom, hidden series, hypertext) and `set pixmap` images (a PNG file, which PDF cannot
   hold as it is).
+
+## LaTeX pictures (cairolatex)
+
+`set terminal cairolatex` (library: `fig%save('NAME.tex')`) writes the figure as gnuplot 6.0's cairolatex does: the
+drawing as a [PDF](#pdf) without its texts (`NAME.pdf`), and `NAME.tex`, a LaTeX picture that puts every text where
+the PDF would draw it and includes the drawing. LaTeX sets the texts in the document's fonts, with its math:
+
+```latex
+\begin{figure}
+  \centering
+  \input{NAME.tex}   % \usepackage{graphicx} (and color for colortext) in the preamble
+\end{figure}
+```
+
+- The file is gnuplot's own: its macros (`\gplbacktext`, `\gplfronttext`, `\ifGPcolor`, `\ifGPblacktext`, a
+  `gnuplot.cfg` read by standalone documents) are written as gnuplot writes them, so a document set up for gnuplot's
+  figures takes foresight's. Each text is a `\put` in 0.05 bp at its center (`\makebox(0,0)[l|r]{\strut{}...}`,
+  `\rotatebox` when turned), its color by `\colorrgb`; texts opening with `{` or `[` are their own box, as gnuplot's
+  cairolatex documents.
+- Texts are LaTeX source: write `'$\alpha_0$'`, not enhanced text (the terminal refuses `enhanced`). The tick numbers
+  of the default format are written in math, `$-0.5$`, as gnuplot's `$%h$`; automatic titles are escaped (a data
+  file's) or set in math (a function's), as gnuplot's. The layout counts a text's characters as gnuplot does (a
+  control word one character, `$`, braces, `_` and `^` none), measured in the figure's font.
+- Options, gnuplot's: `pdf` (the only graphics format; `eps` and `png` are refused), `standalone` (a whole document,
+  its graphics `NAME-inc.pdf`, the font size's `size<N>.clo`, the paper of the figure's size) or `input` (the
+  default), `blacktext` (the default) or `colortext`, `header "..."` (LaTeX code: the preamble's end of a standalone
+  document, else the picture's start), `font "name,size"` (a LaTeX font name such as `cmss`, and the size the layout
+  and a standalone document use: 11 by default, laid out at `fontscale` 0.6), and pdfcairo's `size`, `fontscale`,
+  `linewidth`, `dashlength`, `rounded`, `mono`; see [path C](/manual/paths/c-paper/06-labels-set-by-latex).
+- `scripts/check_cairolatex.py` checks the test suite's LaTeX pictures: every `\put` at the center of the same text
+  of the SVG of the figure, within 0.1 bp. `scripts/fidelity/cairolatex.py` compiles 16 gnuplot demo pages from
+  gnuplot's cairolatex and from foresight's with LuaLaTeX and compares them (rasterized, each within 0.03 of the
+  fidelity score).
+- Not gnuplot's: the positions are foresight's layout (its margins and tick placement), not gnuplot's to the point;
+  the graphics' page is transparent whatever `background` (the back texts lie under it).
 
 ## HTML
 

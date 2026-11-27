@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(167)                  !< Per-figure outcome.
+logical                     :: test_passed(171)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -126,7 +126,7 @@ test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
 ! the later figures in a procedure of their own: nvfortran 26.9 finds the main program too large to compile
 call later_checks
-write(output_unit, '(A,167L2)') 'foresight golden checks:', test_passed
+write(output_unit, '(A,171L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -222,7 +222,22 @@ contains
    test_passed(165) = check('lines_glyphs.svg', with_glyphs(figure_lines()))
    test_passed(166) = check('enhanced_glyphs.svg', with_glyphs(figure_enhanced()))
    test_passed(167) = check('annotations_glyphs.svg', with_glyphs(figure_annotations()))
+   ! cairolatex: the LaTeX pictures (the texts set by LaTeX, each at its SVG anchor: scripts/check_cairolatex.py)
+   test_passed(168) = check('lines.tex', figure_lines())
+   test_passed(169) = check('annotations.tex', figure_annotations())
+   test_passed(170) = check('histograms.tex', figure_histograms(.false.))
+   test_passed(171) = check('lines_standalone.tex', standalone(figure_lines()))
    endsubroutine later_checks
+
+   function standalone(fig) result(out)
+   !< `fig` as a standalone LaTeX document in color, 10 pt, Latin Modern Sans, with a header line.
+   type(figure_object), intent(in) :: fig !< Figure.
+   type(figure_object)             :: out !< Figure.
+
+   out = fig
+   call out%set_cairolatex(standalone=.true., colortext=.true., header=achar(92)//'usepackage{amsmath}', font='lmss', &
+                           size=10.0_R8P)
+   endfunction standalone
 
    function figure_lines() result(fig)
    !< Two curves, a dashed one, title and axis labels; both axes autoscaled.
@@ -1698,6 +1713,20 @@ contains
    if (passed) then
       open(newunit=unit, file=output)
       close(unit, status='delete')
+   endif
+   ! a LaTeX picture's graphics
+   if (index(output, '.tex') == len(output) - 3) then
+      do unit = 1_I4P, 2_I4P
+         golden = output(:len(output) - 4)//trim(merge('.pdf    ', '-inc.pdf', unit == 1_I4P))
+         inquire(file=golden, exist=exists)
+         if (.not. exists) cycle
+         block
+            integer(I4P) :: u !< File unit.
+
+            open(newunit=u, file=golden)
+            close(u, status='delete')
+         endblock
+      enddo
    endif
    endfunction check
 

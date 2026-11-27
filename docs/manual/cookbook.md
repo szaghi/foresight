@@ -2158,6 +2158,17 @@ its fonts embedded.
 `theme paper serif` sets the texts in Latin Modern Roman, the font of a LaTeX paper; `size double` spans both columns
 ([cb_paper_double.pdf](/examples/cb_paper_double.pdf)).
 
+### Labels set by LaTeX
+
+<<< @/examples/snippets/cb_latex-figure.gp{gnuplot}
+
+<<< @/examples/output/cb_latex.txt{console}
+
+`set terminal cairolatex` writes the drawing as a PDF without its texts (`cb_latex.pdf`) and a LaTeX picture
+(`cb_latex.tex`) that places every text, as gnuplot's cairolatex: a paper `\input`s it and LaTeX sets the labels in
+the paper's fonts, its math included. The texts are LaTeX source (`'$\zeta = 0.1$'`), the tick numbers math; see
+[C6. Labels set by LaTeX](/manual/paths/c-paper/06-labels-set-by-latex).
+
 ## From Fortran
 
 ### From Fortran: gaps in the data

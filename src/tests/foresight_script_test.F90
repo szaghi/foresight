@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(300)                           !< Per-check outcome.
+logical                       :: test_passed(301)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8252,6 +8252,62 @@ block
    test_passed(300) = test_passed(300) .and. iostat == 0_I4P .and. &
                       abs(interpreter%figure%width - 17.8_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P .and. &
                       abs(interpreter%figure%height - 8.0_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P
+endblock
+
+! check 301: `set terminal cairolatex`, as gnuplot 6.0: pdfcairo's drawing laid out for 11 pt at fontscale 0.6 (8.8 pt),
+! the default output .tex; `pdf standalone colortext header font size`: NAME.tex a document (size10.clo, the header,
+! LaTeX's sans family), its graphics NAME-inc.pdf with no text, tick numbers in math, colored texts, an automatic
+! title of a function in math; `input`: NAME.pdf; eps, png and enhanced refused
+block
+   character(len=:), allocatable :: tex !< LaTeX file.
+   character(len=:), allocatable :: pdf !< Graphics.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   character(len=1), parameter   :: bs = achar(92)     !< Backslash.
+   logical                       :: there !< File exists.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal cairolatex", iostat, iomsg)
+   test_passed(301) = iostat == 0_I4P .and. abs(interpreter%figure%width - 480.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%font_size - 11.0_R8P * 0.6_R8P * 16.0_R8P / 9.0_R8P) < 1.0e-9_R8P .and. &
+                      interpreter%output(len(interpreter%output) - 3:) == '.tex'
+   call interpreter%run_text("set terminal cairolatex pdf standalone colortext header '"//bs//"usepackage{amsmath}' "// &
+                             "font 'cmss,10' size 9cm,6cm"//nl//"set output 'foresight_script_test_cl.tex'"//nl// &
+                             "set label 'peak' at 1,0.5 textcolor rgb '#d55e00'"//nl//"plot sin(x)", iostat, iomsg)
+   test_passed(301) = test_passed(301) .and. iostat == 0_I4P
+   if (test_passed(301)) then
+      tex = read_text('foresight_script_test_cl.tex')
+      pdf = read_text('foresight_script_test_cl-inc.pdf')
+      test_passed(301) = index(tex, bs//'InputIfFileExists{size10.clo}') > 0 .and. &
+                         index(tex, bs//'usepackage{amsmath}'//nl//bs//'begin{document}') > 0 .and. &
+                         index(tex, bs//'renewcommand*'//bs//'rmdefault{cmss}') > 0 .and. &
+                         index(tex, bs//'GPblacktextfalse') > 0 .and. &
+                         index(tex, bs//'includegraphics[width={255.12bp},height={170.08bp}]{foresight_script_test_cl-inc}') &
+                         > 0 .and. index(tex, '[r]{'//bs//'strut{}$-0.6$}}%') > 0 .and. &
+                         index(tex, bs//'colorrgb{0.84,0.37,0.00}%%') > 0 .and. index(tex, '{'//bs//'strut{}peak}}%') > 0 .and. &
+                         index(tex, '{'//bs//'strut{}$sin(x)$}}%') > 0 .and. index(tex, bs//'end{document}') > 0 .and. &
+                         index(pdf, ' Tf') == 0
+   endif
+   call interpreter%run_text("set terminal cairolatex input"//nl//"set output 'foresight_script_test_cl.tex'"//nl// &
+                             "plot x", iostat, iomsg)
+   inquire(file='foresight_script_test_cl.pdf', exist=there)
+   test_passed(301) = test_passed(301) .and. iostat == 0_I4P .and. there
+   if (there) then
+      tex = read_text('foresight_script_test_cl.tex')
+      test_passed(301) = test_passed(301) .and. index(tex, bs//'documentclass') == 0 .and. &
+                         index(tex, '{foresight_script_test_cl}}%') > 0
+   endif
+   call interpreter%run_text("set terminal cairolatex eps", iostat, iomsg)
+   test_passed(301) = test_passed(301) .and. iostat /= 0_I4P
+   call interpreter%run_text("set terminal cairolatex enhanced", iostat, iomsg)
+   test_passed(301) = test_passed(301) .and. iostat /= 0_I4P
+   call interpreter%run_text("if (strstrt(GPVAL_TERMINALS, 'cairolatex') == 0) { no_such_command }", iostat, iomsg)
+   test_passed(301) = test_passed(301) .and. iostat == 0_I4P
+   open(newunit=unit, file='foresight_script_test_cl.tex')
+   close(unit, status='delete')
+   open(newunit=unit, file='foresight_script_test_cl-inc.pdf')
+   close(unit, status='delete')
+   open(newunit=unit, file='foresight_script_test_cl.pdf')
+   close(unit, status='delete')
 endblock
 
 if (all(test_passed)) then

@@ -66,6 +66,7 @@ type, abstract :: backend_object
    logical            :: enhanced = .false. !< Texts read as gnuplot's enhanced text (foresight_enhanced).
    logical            :: latin1 = .false.   !< Texts in ISO 8859-1, written in UTF-8 (`set encoding iso_8859_1`).
    logical            :: literal = .false.  !< The texts written now as they are (an automatic title, noenhanced).
+   logical            :: tex = .false.      !< Texts are LaTeX source, set by LaTeX (cairolatex): numbers in math mode.
    real(R8P)          :: text_size = 12.0_R8P !< Default font size of the texts [px].
    logical            :: boxed = .false.     !< The texts written now are boxed (gnuplot's textbox): on the background.
    character(len=48)  :: page_family = ''    !< Font family of the page (`set terminal ... font`), empty: the device's.

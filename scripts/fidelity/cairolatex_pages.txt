@@ -1,0 +1,19 @@
+# demo pages compared as cairolatex (scripts/fidelity/cairolatex.py): pdfcairo_pages.txt less the 4 pages whose
+# LaTeX gnuplot 6.0's own cairolatex output does not compile (texts with Unicode beyond LaTeX's defaults or
+# LaTeX's reserved characters: windrose p01, unicode p01, dashtypes p02, concave_hull p01)
+ellipse_p01
+violinplot_p03
+polar_p05
+map_projection_p03
+special_chars_p01
+custom_key_p01
+finance_p02
+jitter_p07
+boxplot_p01
+orbits_p02
+electron_p02
+spiderplot_p01
+polargrid_p03
+ellipses_style_p01
+fillstyle_p01
+prob_p29

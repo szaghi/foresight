@@ -2305,15 +2305,31 @@ contains
                             trim(self%xaxis%tics%anchor()), self%xaxis%ticks(t)%sup, -angle)
          elseif (self%xaxis%tics%out) then
             backend%font = self%xaxis%tics%font
-            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
-                            label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
-                            LINE_HEIGHT * font_size, self%xaxis%tics%color)
+            block
+               character(len=:), allocatable :: text   !< Label written.
+               character(len=:), allocatable :: raised !< Superscript written.
+
+               text = self%xaxis%ticks(t)%label
+               raised = self%xaxis%ticks(t)%sup
+               if (backend%tex) call tex_tick(self%xaxis%tics, text, raised)
+               call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
+                               label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
+                               self%xaxis%tics%color)
+            endblock
             backend%font = font_object()
          else
             backend%font = self%xaxis%tics%font
-            call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
-                            label_dy(self%xaxis%tics, font_size), self%xaxis%ticks(t)%label, self%xaxis%ticks(t)%sup, &
-                            LINE_HEIGHT * font_size, self%xaxis%tics%color)
+            block
+               character(len=:), allocatable :: text   !< Label written.
+               character(len=:), allocatable :: raised !< Superscript written.
+
+               text = self%xaxis%ticks(t)%label
+               raised = self%xaxis%ticks(t)%sup
+               if (backend%tex) call tex_tick(self%xaxis%tics, text, raised)
+               call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
+                               label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
+                               self%xaxis%tics%color)
+            endblock
             backend%font = font_object()
          endif
       enddo
@@ -11443,24 +11459,65 @@ contains
    real(R8P),             intent(in)    :: rotate    !< Rotation [deg, clockwise], 0 for none.
    real(R8P)                            :: px        !< Abscissa moved.
    real(R8P)                            :: py        !< Ordinate moved.
+   character(len=:), allocatable        :: text      !< Label written.
+   character(len=:), allocatable        :: raised    !< Superscript written.
 
    px = x + label_dx(tics, font_size)
    py = y + label_dy(tics, font_size)
+   text = label
+   raised = sup
+   if (backend%tex) call tex_tick(tics, text, raised)
    ! in the axis' font (gnuplot `set xtics font`), placed as the page's (gnuplot's layout)
    backend%font = tics%font
    if (rotate /= 0.0_R8P) then
       if (len_trim(tics%color) > 0) then
-         call backend%text(px, py, label, anchor, sup=sup, rotate=rotate, color=trim(tics%color))
+         call backend%text(px, py, text, anchor, sup=raised, rotate=rotate, color=trim(tics%color))
       else
-         call backend%text(px, py, label, anchor, sup=sup, rotate=rotate)
+         call backend%text(px, py, text, anchor, sup=raised, rotate=rotate)
       endif
    elseif (len_trim(tics%color) > 0) then
-      call backend%text(px, py, label, anchor, sup=sup, color=trim(tics%color))
+      call backend%text(px, py, text, anchor, sup=raised, color=trim(tics%color))
    else
-      call backend%text(px, py, label, anchor, sup=sup)
+      call backend%text(px, py, text, anchor, sup=raised)
    endif
    backend%font = font_object()
    endsubroutine tick_label
+
+   pure subroutine tex_tick(tics, text, raised)
+   !< A number of the default format in LaTeX math, as gnuplot's latex terminals ("$%h$"; a power of ten's exponent
+   !< as `\times10^{n}` raised); other labels as they are.
+   type(tics_object),             intent(in)    :: tics   !< Axis tick settings.
+   character(len=:), allocatable, intent(inout) :: text   !< Label.
+   character(len=:), allocatable, intent(inout) :: raised !< Superscript.
+   character(len=:), allocatable                :: body   !< Label in LaTeX.
+   integer(I4P)                                 :: j      !< Character.
+
+   if (allocated(tics%format)) then
+      if (len(tics%format) > 0) return
+   endif
+   if (len(text) == 0) return
+   if (verify(text, '0123456789.-+eE '//achar(226)//achar(136)//achar(146)//achar(195)//achar(151)) > 0) return
+   body = ''
+   j = 1_I4P
+   do while (j <= len(text, kind=I4P))
+      ! U+2212 minus and U+00D7 times (UTF-8) as LaTeX's
+      if (j + 2_I4P <= len(text, kind=I4P) .and. text(j:min(j + 2_I4P, len(text, kind=I4P))) == &
+          achar(226)//achar(136)//achar(146)) then
+         body = body//'-'
+         j = j + 3_I4P
+      elseif (j + 1_I4P <= len(text, kind=I4P) .and. text(j:min(j + 1_I4P, len(text, kind=I4P))) == &
+              achar(195)//achar(151)) then
+         body = body//achar(92)//'times'
+         j = j + 2_I4P
+      else
+         body = body//text(j:j)
+         j = j + 1_I4P
+      endif
+   enddo
+   if (len(raised) > 0) body = body//'^{'//raised//'}'
+   text = '$'//trim(body)//'$'
+   raised = ''
+   endsubroutine tex_tick
 
    subroutine draw_stamp(self, backend, x0, y0, height, font_size)
    !< gnuplot `set timestamp`: the date and time now (or SOURCE_DATE_EPOCH's) in the format, at the bottom left of the

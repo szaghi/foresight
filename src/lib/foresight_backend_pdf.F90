@@ -21,6 +21,7 @@ use foresight_format, only : fixed, int_str, latin1_utf8
 use foresight_palette, only : named_color
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
+use foresight_texpicture, only : tex_document, tex_number, tex_visible
 use penf, only : I1P, I4P, I8P, R8P
 
 implicit none
@@ -47,6 +48,14 @@ type, extends(backend_object) :: backend_pdf
    real(R8P),         public :: dash_scale = 1.0_R8P !< Every dash length times this (`dashlength`).
    character(len=7),  public :: cap = 'butt'         !< Line caps and joins: `butt` (miter joins), `rounded`, `square`.
    logical,           public :: mono = .false.       !< Monochrome: lines and texts black, fills gray (`mono`).
+   logical,           public :: latex = .false.      !< cairolatex: the texts into the LaTeX picture `tex_file`, not
+                                                     !< drawn (the PDF its graphics).
+   character(len=:), allocatable, public :: tex_file   !< The LaTeX file (cairolatex).
+   character(len=:), allocatable, public :: tex_header !< LaTeX code of the picture (`header`), empty for none.
+   character(len=:), allocatable, public :: tex_font   !< LaTeX font name `family,series,shape`, empty for none.
+   logical,           public :: tex_standalone = .false. !< A whole LaTeX document (`standalone`), else for \input.
+   logical,           public :: tex_colortext = .false.  !< Texts in their colors (`colortext`), else black.
+   real(R8P),         public :: tex_size = 11.0_R8P      !< Font size of a standalone document [pt].
    character(len=:), allocatable :: file              !< Final output file.
    real(R8P)                     :: page(2) = 0.0_R8P !< Page width and height [px].
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
@@ -66,6 +75,11 @@ type, extends(backend_object) :: backend_pdf
    integer(I4P)                  :: heads_used = 0_I4P !< Its bytes in use.
    integer(I1P), allocatable     :: labels_bytes(:)   !< Data labels of the plot area.
    integer(I4P)                  :: labels_used = 0_I4P !< Its bytes in use.
+   integer(I1P), allocatable     :: back_bytes(:)     !< cairolatex: the `\put` lines of the back texts.
+   integer(I4P)                  :: back_used = 0_I4P !< Its bytes in use.
+   integer(I1P), allocatable     :: front_bytes(:)    !< cairolatex: the `\put` lines of the front texts.
+   integer(I4P)                  :: front_used = 0_I4P !< Its bytes in use.
+   logical                       :: front = .false.   !< cairolatex: texts now in front (the panel's plot area open).
    integer(I1P), allocatable     :: object_bytes(:)   !< Objects made while drawing (images, masks, patterns), whole.
    integer(I4P)                  :: object_used = 0_I4P !< Its bytes in use.
    integer(I4P), allocatable     :: object_at(:)      !< Offset of each of those objects in object_bytes.
@@ -118,6 +132,7 @@ type, extends(backend_object) :: backend_pdf
       procedure, pass(self), private :: emit         !< Write to a destination buffer.
       procedure, pass(self), private :: text_face    !< Face of the texts written now.
       procedure, pass(self), private :: draw_text    !< A text at a pixel point, into a destination.
+      procedure, pass(self), private :: tex_put      !< A text of the LaTeX picture (cairolatex).
       procedure, pass(self), private :: paint_path   !< Fill and stroke a path, into a destination.
       procedure, pass(self), private :: color_op     !< Fill or stroke color operator (with its opacity state).
       procedure, pass(self), private :: alpha_state  !< Graphics state of an opacity.
@@ -148,6 +163,12 @@ contains
    self%fonts = .false.
    self%page_used = 0_I4P
    self%object_used = 0_I4P
+   self%tex = self%latex
+   self%front = .false.
+   self%back_used = 0_I4P
+   self%front_used = 0_I4P
+   if (.not. allocated(self%back_bytes)) allocate(self%back_bytes(4096))
+   if (.not. allocated(self%front_bytes)) allocate(self%front_bytes(4096))
    self%objects = 0_I4P
    self%nimages = 0_I4P
    self%npatterns = 0_I4P
@@ -238,7 +259,33 @@ contains
    write(unit) out(1:used)
    close(unit)
    call rename_file(self%file//'.tmp', self%file)
+   if (self%latex) call write_tex
    contains
+      subroutine write_tex
+      !< The LaTeX picture (cairolatex): its texts, the graphics (this PDF, named as written without its extension).
+      character(len=:), allocatable :: graphics !< Graphics file, without extension.
+      character(len=:), allocatable :: header   !< LaTeX code.
+      character(len=:), allocatable :: font     !< LaTeX font.
+      integer(I4P)                  :: dot      !< Extension's dot.
+
+      graphics = self%file
+      dot = index(graphics, '.', back=.true.)
+      if (dot > index(graphics, '/', back=.true.) + 1_I4P) graphics = graphics(:dot - 1_I4P)
+      header = ''
+      if (allocated(self%tex_header)) header = self%tex_header
+      font = ''
+      if (allocated(self%tex_font)) font = self%tex_font
+      open(newunit=unit, file=self%tex_file//'.tmp', access='stream', form='unformatted', action='write', &
+           status='replace', iostat=iostat, iomsg=iomsg)
+      if (iostat /= 0_I4P) error stop 'foresight: cannot open "'//self%tex_file//'.tmp": '//trim(iomsg)
+      write(unit) tex_document(bytes_text(self%back_bytes, self%back_used), &
+                               bytes_text(self%front_bytes, self%front_used), PT_PER_PX * self%page(1), &
+                               PT_PER_PX * self%page(2), graphics, self%tex_standalone, header, font, self%tex_size, &
+                               .not. self%mono, .not. self%tex_colortext)
+      close(unit)
+      call rename_file(self%tex_file//'.tmp', self%tex_file)
+      endsubroutine write_tex
+
       subroutine put_text(text)
       !< Append `text`, a character at a time.
       character(len=*), intent(in) :: text !< Text.
@@ -286,9 +333,11 @@ contains
    endsubroutine end_page
 
    subroutine begin_axes(self, view)
-   !< Open a panel: nothing to write (its geometry is the viewer's).
+   !< Open a panel: nothing to write (its geometry is the viewer's); cairolatex texts in the back until its plot area.
    class(backend_pdf), intent(inout) :: self !< Device.
    type(axes_view),    intent(in)    :: view !< Panel geometry and axis ranges.
+
+   self%front = .false.
 
    endsubroutine begin_axes
 
@@ -434,6 +483,7 @@ contains
 
    self%area = [x, y, width, height]
    self%spill = .false.
+   self%front = .true.
    self%caps_used = 0_I4P
    self%marks_used = 0_I4P
    self%heads_used = 0_I4P
@@ -593,6 +643,12 @@ contains
    integer(I4P)                   :: face      !< Face.
 
    face = self%text_face()
+   if (self%latex) then
+      ! LaTeX sets it: the characters gnuplot counts (strlen_tex), measured in the face
+      width = text_advance(tex_visible(string), face, font_size)
+      if (len(sup) > 0) width = width + text_advance(tex_visible(sup), face, 0.75_R8P * font_size)
+      return
+   endif
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       if (self%latin1) then
          width = markup_width(latin1_utf8(string), font_size, face)
@@ -843,6 +899,10 @@ contains
    if (len(string) == 0 .and. len(sup) == 0) return
    face = self%text_face()
    base = self%font%size_px(self%text_size)
+   if (self%latex) then
+      if (self%visible()) call self%tex_put(x, y, string, anchor, sup, rotate, color, base)
+      return
+   endif
    c = cos(rotate * acos(-1.0_R8P) / 180.0_R8P)
    s = sin(rotate * acos(-1.0_R8P) / 180.0_R8P)
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
@@ -963,6 +1023,61 @@ contains
                      num(extent)//' '//num(bottom - top)//' re f Q'//new_line('a'))
       endsubroutine box_under
    endsubroutine draw_text
+
+   subroutine tex_put(self, x, y, string, anchor, sup, rotate, color, base)
+   !< The text `string` (LaTeX, its superscript `sup` raised) of the LaTeX picture, as gnuplot's epslatex texts: its
+   !< center (gnuplot's vertical anchor, 0.35 `base` above foresight's baseline) by `\put` in 0.05 bp from the bottom
+   !< left, `\makebox(0,0)[l|r]{\strut{}...}` (a text opening with `{` or `[` its own box), `\rotatebox` [deg,
+   !< counterclockwise], its color by `\colorrgb` (shown or not by `\ifGPblacktext`), else the frame's; in the back
+   !< texts until the panel's plot area opens.
+   class(backend_pdf), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Anchor abscissa [px].
+   real(R8P),          intent(in)    :: y      !< Baseline [px].
+   character(len=*),   intent(in)    :: string !< Text, LaTeX.
+   character(len=*),   intent(in)    :: anchor !< `start`, `middle` or `end`.
+   character(len=*),   intent(in)    :: sup    !< Superscript, empty for none.
+   real(R8P),          intent(in)    :: rotate !< Rotation [deg, clockwise].
+   character(len=*),   intent(in)    :: color  !< Color.
+   real(R8P),          intent(in)    :: base   !< Font size [px].
+   character(len=1),   parameter     :: BS = achar(92)     !< Backslash.
+   character(len=1),   parameter     :: NL = new_line('a') !< Line end.
+   character(len=:), allocatable     :: body   !< Text.
+   character(len=:), allocatable     :: box    !< Its box.
+   character(len=:), allocatable     :: line   !< Lines written.
+   real(R8P)                         :: a      !< Rotation [rad].
+   integer(I4P)                      :: c(3)   !< Color channels.
+   logical                           :: ok     !< Color known.
+
+   a = rotate * acos(-1.0_R8P) / 180.0_R8P
+   body = string
+   if (len(sup) > 0) body = body//'$^{'//sup//'}$'
+   if (body(1:1) == '{' .or. body(1:1) == '[') then
+      box = BS//'makebox(0,0)'//body
+   elseif (anchor == 'start') then
+      box = BS//'makebox(0,0)[l]{'//BS//'strut{}'//body//'}'
+   elseif (anchor == 'end') then
+      box = BS//'makebox(0,0)[r]{'//BS//'strut{}'//body//'}'
+   else
+      box = BS//'makebox(0,0){'//BS//'strut{}'//body//'}'
+   endif
+   if (rotate /= 0.0_R8P) box = BS//'rotatebox{'//tex_number(-rotate)//'}{'//box//'}'
+   call named_color(trim(color), c, ok)
+   if (.not. ok) c = 0_I4P
+   if (any(c /= 0_I4P)) then
+      line = '      '//BS//'colorrgb{'//tex_number(real(c(1), R8P) / 255.0_R8P)//','// &
+             tex_number(real(c(2), R8P) / 255.0_R8P)//','//tex_number(real(c(3), R8P) / 255.0_R8P)//'}%%'//NL
+   else
+      line = '      '//BS//'csname LTb'//BS//'endcsname%%'//NL
+   endif
+   line = line//'      '//BS//'put('// &
+          int_str(nint(20.0_R8P * PT_PER_PX * (x + 0.35_R8P * base * sin(a)), I8P))//','// &
+          int_str(nint(20.0_R8P * PT_PER_PX * (self%page(2) - y + 0.35_R8P * base * cos(a)), I8P))//'){'//box//'}%'//NL
+   if (self%front) then
+      call add_text(self%front_bytes, self%front_used, (line))
+   else
+      call add_text(self%back_bytes, self%back_used, (line))
+   endif
+   endsubroutine tex_put
 
    subroutine paint_path(self, destination, path, fill, opacity, stroke, line_width, dasharray, join)
    !< Fill (`fill` at `opacity`, unless `none`) and stroke (`stroke` `line_width` px wide, dashed by the SVG
@@ -2034,6 +2149,19 @@ contains
 
    text = num(x)//' '//num(y)
    endfunction point
+
+   pure function bytes_text(bytes, n) result(text)
+   !< The first `n` bytes of `bytes` as characters.
+   integer(I1P), intent(in)      :: bytes(:) !< Bytes.
+   integer(I4P), intent(in)      :: n        !< Bytes in use.
+   character(len=:), allocatable :: text     !< Text.
+   integer(I4P)                  :: k        !< Byte.
+
+   allocate(character(len=n) :: text)
+   do k = 1_I4P, n
+      text(k:k) = achar(iand(int(bytes(k), I4P), 255_I4P))
+   enddo
+   endfunction bytes_text
 
    pure function num(v) result(text)
    !< A number of the content: 3 decimals at most, trailing zeros stripped (foresight_format `fixed`).

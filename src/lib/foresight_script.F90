@@ -496,7 +496,7 @@ contains
                                 '+CHI_SHAPES -LIBCERF -COMPLEX_FUNCS -WATCHPOINTS -EXTERNAL_FUNCTIONS')
    call self%symbols%set_string('GPVAL_ENCODING', self%encoding)
    call self%symbols%set_string('GPVAL_TERM', self%term_name)
-   call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html pdf pdfcairo svg')
+   call self%symbols%set_string('GPVAL_TERMINALS', 'block cairolatex dumb html pdf pdfcairo svg')
    call self%symbols%set_string('GPVAL_DEGREE_SIGN', achar(194)//achar(176))
    ! gnuplot's reserved voxel variables (scripts test exists("VoxelDistance") for voxel support)
    call self%symbols%set_value('VoxelDistance', 0.0_R8P, is_int=.false.)
@@ -8621,6 +8621,9 @@ contains
          panel%series(last)%gnuplot_sample = .true.
          panel%series(last)%title_plain = auto_title .or. plain_item
          panel%series(last)%title_auto = auto_title
+         ! for LaTeX (gnuplot's texify_title): a data file's automatic title escaped, a function's in math
+         if (auto_title .and. self%term_name == 'cairolatex' .and. allocated(panel%series(last)%title)) &
+            panel%series(last)%title = latex_title(panel%series(last)%title, is_function)
          panel%series(last)%title_at = title_at
          panel%series(last)%title_justify = title_justify
          panel%series(last)%title_xy = title_xy
@@ -12049,9 +12052,9 @@ contains
    iomsg = ''
    if (self%output /= '-') then
       select case (extension(self%output))
-      case ('svg', 'html', 'htm', 'pdf', 'txt')
+      case ('svg', 'html', 'htm', 'pdf', 'tex', 'txt')
       case default
-         call fail('unsupported output "'//self%output//'" (supported: .svg, .html, .pdf, .txt, -)', iostat, iomsg)
+         call fail('unsupported output "'//self%output//'" (supported: .svg, .html, .pdf, .tex, .txt, -)', iostat, iomsg)
          return
       endselect
    endif
@@ -12079,6 +12082,9 @@ contains
    real(R8P)                                    :: pdf_fontscale !< Its fontscale.
    real(R8P)                                    :: pdf_font_pt   !< Its font size [pt], 0 for none given.
    character(len=48)                            :: pdf_family    !< Its font family, blank for none given.
+   logical                                      :: tex_term      !< `set terminal cairolatex`.
+   real(R8P)                                    :: pdf_scale0    !< The terminal's default fontscale.
+   real(R8P)                                    :: pdf_pt0       !< The terminal's default font size [pt].
    integer(I4P)                                 :: rows      !< Multiplot rows.
    integer(I4P)                                 :: cols      !< Multiplot columns.
    logical                                      :: columns_first !< Multiplot `columnsfirst`.
@@ -12441,7 +12447,7 @@ contains
       call self%symbols%set_string('GPVAL_ENCODING', text)
    elseif (keyword(option, 'terminal', 2_I4P)) then
       if (size(tokens) < 2) then
-         call fail('set terminal: svg, html, pdfcairo, dumb or block expected', iostat, iomsg)
+         call fail('set terminal: svg, html, pdfcairo, cairolatex, dumb or block expected', iostat, iomsg)
          return
       endif
       text = tokens(2)%text
@@ -12451,12 +12457,22 @@ contains
          if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
          return
       endif
-      pdf_term = text == 'pdf' .or. text == 'pdfcairo'
-      pdf_fontscale = 0.5_R8P
+      tex_term = text == 'cairolatex'
+      pdf_term = text == 'pdf' .or. text == 'pdfcairo' .or. tex_term
+      pdf_scale0 = merge(0.6_R8P, 0.5_R8P, tex_term)
+      pdf_pt0 = merge(11.0_R8P, 12.0_R8P, tex_term)
+      pdf_fontscale = pdf_scale0
       pdf_font_pt = 0.0_R8P
       pdf_family = ''
       select case (text)
       case ('svg', 'html')
+      case ('cairolatex')
+         ! gnuplot 6.0's cairolatex: pdfcairo's drawing (5 x 3 inches, 0.5 pt lines), its texts set by LaTeX, laid out
+         ! for 11 pt at fontscale 0.6 (drawn at 4/3: 8.8 pt), black (blacktext), for \input
+         call self%figure%set_page_size(5.0_R8P, 3.0_R8P, 'in')
+         call self%figure%set_font(',11', 0.6_R8P * 4.0_R8P / 3.0_R8P)
+         call self%figure%set_pdf(linewidth=0.5_R8P / 0.75_R8P, dashlength=1.0_R8P, cap='butt', mono=.false.)
+         call self%figure%set_cairolatex(standalone=.false., colortext=.false., header='', font='', size=11.0_R8P)
       case ('pdf', 'pdfcairo')
          ! gnuplot 6.0's pdfcairo: 5 x 3 inches, "Sans,12" at fontscale 0.5 (drawn at 4/3 of its points, pango's 96 dpi:
          ! 8 pt), lines of 0.5 pt, butt caps, color
@@ -12470,16 +12486,46 @@ contains
          self%figure%height = 24.0_R8P * DUMB_CELL(2) * self%figure%font_size
          call self%figure%set_text(charset=merge('dumb     ', 'quadrants', text == 'dumb'), colors='mono')
       case default
-         call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, pdfcairo, pdf, dumb, '// &
-                   'block)', iostat, iomsg)
+         call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, pdfcairo, pdf, cairolatex, '// &
+                   'dumb, block)', iostat, iomsg)
          return
       endselect
       self%term_name = text
       call self%symbols%set_string('GPVAL_TERM', text)
       i = 3_I4P
       do while (i <= size(tokens, kind=I4P))
-         if (is_word(tokens(i)%text, 'enhanced noenhanced')) then
+         if (tex_term .and. is_word(tokens(i)%text, 'enhanced noenhanced')) then
+            call fail('set terminal cairolatex: extraneous argument "'//tokens(i)%text//'" (LaTeX sets the texts)', &
+                      iostat, iomsg)
+            return
+         elseif (is_word(tokens(i)%text, 'enhanced noenhanced')) then
             call self%figure%set_enhanced(tokens(i)%text == 'enhanced')
+         elseif (tex_term .and. tokens(i)%text == 'pdf') then
+            continue
+         elseif (tex_term .and. is_word(tokens(i)%text, 'eps png')) then
+            call fail('set terminal cairolatex: '//tokens(i)%text//' is not supported (the graphics are pdf)', iostat, &
+                      iomsg)
+            return
+         elseif (tex_term .and. (keyword(tokens(i)%text, 'standalone', 5_I4P) .or. &
+                                 keyword(tokens(i)%text, 'input', 3_I4P))) then
+            call self%figure%set_cairolatex(standalone=tokens(i)%text(1:1) == 's')
+         elseif (tex_term .and. (keyword(tokens(i)%text, 'blacktext', 1_I4P) .or. &
+                                 keyword(tokens(i)%text, 'colortext', 6_I4P) .or. &
+                                 keyword(tokens(i)%text, 'colourtext', 7_I4P))) then
+            call self%figure%set_cairolatex(colortext=tokens(i)%text(1:1) == 'c')
+         elseif (tex_term .and. tokens(i)%text == 'noheader') then
+            call self%figure%set_cairolatex(header='')
+         elseif (tex_term .and. tokens(i)%text == 'header') then
+            block
+               character(len=:), allocatable :: code !< LaTeX code.
+
+               i = i + 1_I4P
+               if (.not. self%string_expression(tokens, i, code, iostat, iomsg)) then
+                  iomsg = 'set terminal: header: '//iomsg
+                  return
+               endif
+               call self%figure%set_cairolatex(header=code)
+            endblock
          elseif ((text == 'dumb' .or. text == 'block') .and. is_word(tokens(i)%text, 'mono ansi ansi256 ansirgb')) then
             call self%figure%set_text(colors=tokens(i)%text)
          elseif (text == 'block' .and. is_word(tokens(i)%text, 'half quadrants sextants braille')) then
@@ -12613,6 +12659,30 @@ contains
             call self%figure%set_theme(name=tokens(i)%text)
          elseif (tokens(i)%text == 'glow' .or. tokens(i)%text == 'noglow') then
             call self%figure%set_theme(glow=tokens(i)%text == 'glow')
+         elseif (tex_term .and. tokens(i)%text == 'font') then
+            block
+               character(len=:), allocatable :: spec  !< Font string.
+               real(R8P)                     :: size  !< Size [pt].
+               integer(I4P)                  :: comma !< Its comma.
+               integer(I4P)                  :: ios   !< Read status.
+
+               ! "name,size" as gnuplot's cairo terminals read it: the name a LaTeX font name, the size if a number
+               i = i + 1_I4P
+               if (.not. self%string_expression(tokens, i, spec, iostat, iomsg)) then
+                  iomsg = 'set terminal: font: '//iomsg
+                  return
+               endif
+               comma = index(spec, ',')
+               if (comma > 0) then
+                  read(spec(comma + 1:), *, iostat=ios) size
+                  if (ios == 0 .and. size > 0.0_R8P) then
+                     pdf_font_pt = size
+                     call self%figure%set_cairolatex(size=size)
+                  endif
+                  spec = spec(:comma - 1)
+               endif
+               call self%figure%set_cairolatex(font=trim(spec))
+            endblock
          elseif (tokens(i)%text == 'font') then
             block
                type(font_object) :: font !< Page font.
@@ -12638,18 +12708,22 @@ contains
       enddo
       ! pdfcairo's font: its size in points times fontscale and 4/3 (12 if none given; gnuplot's cairo terminals draw a
       ! font of S points at 4/3 S), its family
-      if (pdf_term .and. (pdf_font_pt > 0.0_R8P .or. pdf_fontscale /= 0.5_R8P .or. len_trim(pdf_family) > 0)) then
-         if (.not. pdf_font_pt > 0.0_R8P) pdf_font_pt = 12.0_R8P
+      if (pdf_term .and. (pdf_font_pt > 0.0_R8P .or. pdf_fontscale /= pdf_scale0 .or. len_trim(pdf_family) > 0)) then
+         if (.not. pdf_font_pt > 0.0_R8P) pdf_font_pt = pdf_pt0
          call self%figure%set_font(trim(pdf_family)//','//fixed(pdf_font_pt, 3_I4P), pdf_fontscale * 4.0_R8P / 3.0_R8P)
       endif
       ! the terminal decides the format of the default output, never of one set explicitly
       if (.not. self%output_set) then
          if (text == 'dumb' .or. text == 'block') then
             self%output = '-'
+         elseif (self%output == '-' .and. tex_term) then
+            self%output = 'foresight.tex'
          elseif (self%output == '-' .and. pdf_term) then
             self%output = 'foresight.pdf'
          elseif (self%output == '-') then
             self%output = 'foresight.'//text
+         elseif (tex_term) then
+            self%output = change_extension(self%output, 'tex')
          elseif (pdf_term) then
             self%output = change_extension(self%output, 'pdf')
          else
@@ -18619,6 +18693,25 @@ contains
    axis%min_fixed = .true.
    axis%max_fixed = .true.
    endsubroutine fix_range
+
+   pure function latex_title(title, formula) result(text)
+   !< An automatic title for LaTeX, as gnuplot's texify_title: a function's in math (`$...$`), a data file's with
+   !< LaTeX's reserved characters `#$%^&_{}\` escaped by a backslash.
+   character(len=*), intent(in)  :: title   !< Title.
+   logical,          intent(in)  :: formula !< A function's.
+   character(len=:), allocatable :: text    !< Title for LaTeX.
+   integer(I4P)                  :: k       !< Character.
+
+   if (formula) then
+      text = '$'//title//'$'
+      return
+   endif
+   text = ''
+   do k = 1_I4P, len(title, kind=I4P)
+      if (index('#$%^&_{}'//achar(92), title(k:k)) > 0) text = text//achar(92)
+      text = text//title(k:k)
+   enddo
+   endfunction latex_title
 
    pure subroutine item_auto_title(text, first, file_last, last, written, quote, spec, using, title)
    !< The automatic title of a data item, gnuplot's: the item as written from its file (characters `first` to

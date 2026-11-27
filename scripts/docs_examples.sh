@@ -11,7 +11,7 @@
 #   docs/examples/anim/        animation scripts, run once per frame (see below)
 #   docs/examples/snippets/    generated: each source without the markers, and <source>-<region>.<ext>, dedented
 #   docs/examples/output/      generated: <ID>.txt, "$ COMMAND" then its output (standard output and error)
-#   docs/public/examples/      generated: every plot the runs write (.svg, .html, .pdf), served as /examples/<file> and
+#   docs/public/examples/      generated: every plot the runs write (.svg, .html, .pdf, .tex), served as /examples/<file> and
 #                              embedded live by the pages, twice: <name>.<ext> in the washi theme and <name>-dark.<ext>
 #                              in the night one (FORESIGHT_THEME, the light and dark modes of the site; a source that
 #                              sets its own theme keeps it in both)
@@ -41,7 +41,7 @@ mkdir -p "$root/build"
   cat "$root/build/docs-examples.log"; echo "docs_examples: library build failed" >&2; exit 1; }
 rm -rf -- "$build"
 mkdir -p "$build/bin" "$run_dir" "$dark_dir" "$ex/snippets" "$ex/output" "$public"
-rm -f -- "$ex"/snippets/* "$ex"/output/*.txt "$public"/*.svg "$public"/*.html "$public"/*.txt "$public"/*.pdf
+rm -f -- "$ex"/snippets/* "$ex"/output/*.txt "$public"/*.svg "$public"/*.html "$public"/*.txt "$public"/*.pdf "$public"/*.tex
 
 # snippets: the whole source and each region, without the markers, dedented
 markers='^ *(!run |!region |!endregion |#run |# region |# endregion )'
@@ -136,7 +136,7 @@ for src in "$ex"/anim/*.gp; do
 done
 
 # plots: the washi ones as they are, the night ones with -dark before the extension
-find "$run_dir" -maxdepth 1 \( -name '*.svg' -o -name '*.html' -o -name '*.pdf' \) -exec cp {} "$public/" \;
+find "$run_dir" -maxdepth 1 \( -name '*.svg' -o -name '*.html' -o -name '*.pdf' -o -name '*.tex' \) -exec cp {} "$public/" \;
 for f in "$dark_dir"/*.svg "$dark_dir"/*.html; do
   [ -e "$f" ] || continue
   b=$(basename "$f"); cp "$f" "$public/${b%.*}-dark.${b##*.}"

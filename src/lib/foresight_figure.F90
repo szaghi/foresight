@@ -85,6 +85,11 @@ type :: figure_object
    logical                        :: pdf_mono = .false.       !< PDF monochrome (`mono`).
    character(len=16)              :: page_color = 'white'     !< Page color (`background`), before the theme's map.
    logical                        :: pdf_glyphs = .true.      !< PDF texts in the compiled-in fonts, embedded.
+   logical                        :: tex_standalone = .false. !< cairolatex: a whole LaTeX document (`standalone`).
+   logical                        :: tex_colortext = .false.  !< cairolatex: texts in their colors (`colortext`).
+   character(len=:), allocatable  :: tex_header               !< cairolatex: LaTeX code (`header`), empty for none.
+   character(len=:), allocatable  :: tex_font                 !< cairolatex: LaTeX font name, empty for none.
+   real(R8P)                      :: tex_size = 11.0_R8P      !< cairolatex: font size [pt] (a standalone document's).
    character(len=48)              :: font_family = ''         !< Page font family (`set terminal ... font "name,size"`),
                                                               !< empty for foresight's.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
@@ -173,6 +178,7 @@ type :: figure_object
       procedure, pass(self) :: set_page_size !< Page size in px, in, cm or pt (gnuplot's terminal `size`).
       procedure, pass(self) :: set_font     !< Page font, gnuplot's "family,size" in points.
       procedure, pass(self) :: set_pdf      !< PDF line widths, dashes, caps, monochrome, background.
+      procedure, pass(self) :: set_cairolatex !< LaTeX picture options: standalone, colortext, header, font, size.
       procedure, pass(self) :: set_border_style !< Border line: lc, lw, dt.
       procedure, pass(self) :: set_zeroaxis !< Zero axes.
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
@@ -321,6 +327,11 @@ contains
    self%theme_chosen = .false.
    self%svg_glyphs = fresh%svg_glyphs
    self%pdf_glyphs = fresh%pdf_glyphs
+   self%tex_standalone = fresh%tex_standalone
+   self%tex_colortext = fresh%tex_colortext
+   self%tex_header = ''
+   self%tex_font = ''
+   self%tex_size = fresh%tex_size
    self%pdf_line_scale = fresh%pdf_line_scale
    self%pdf_dash_scale = fresh%pdf_dash_scale
    self%pdf_cap = fresh%pdf_cap
@@ -491,8 +502,10 @@ contains
    endsubroutine plot
 
    subroutine save(self, file)
-   !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.pdf` PDF, `.txt`
-   !< text (the gnuplot `dumb` or `block` terminal, see `set_text`), `-` text on standard output.
+   !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.pdf` PDF, `.tex`
+   !< a LaTeX picture whose texts LaTeX sets (gnuplot's cairolatex: `NAME.tex` and its graphics `NAME.pdf`, or
+   !< `NAME-inc.pdf` for a standalone document, see `set_cairolatex`), `.txt` text (the gnuplot `dumb` or `block`
+   !< terminal, see `set_text`), `-` text on standard output.
    class(figure_object), intent(inout) :: self   !< Figure.
    character(len=*),     intent(in)    :: file   !< Output file.
    type(backend_svg)                   :: svg    !< SVG device.
@@ -518,6 +531,32 @@ contains
       call self%render(svg, file)
    case ('pdf')
       call self%render(pdf, file)
+   case ('tex')
+      block
+         character(len=16)             :: page     !< Page color.
+         character(len=:), allocatable :: graphics !< Graphics file, without extension.
+
+         pdf%latex = .true.
+         pdf%tex_file = file
+         pdf%tex_standalone = self%tex_standalone
+         pdf%tex_colortext = self%tex_colortext
+         pdf%tex_header = ''
+         if (allocated(self%tex_header)) pdf%tex_header = self%tex_header
+         pdf%tex_font = ''
+         if (allocated(self%tex_font)) pdf%tex_font = self%tex_font
+         pdf%tex_size = self%tex_size
+         ! the graphics transparent: the back texts lie under them
+         page = self%page_color
+         self%page_color = 'none'
+         if (index(file, '.', back=.true.) > 1) then
+            graphics = file(:index(file, '.', back=.true.) - 1)
+         else
+            graphics = file
+         endif
+         if (self%tex_standalone) graphics = graphics//'-inc'
+         call self%render(pdf, graphics//'.pdf')
+         self%page_color = page
+      endblock
    case ('html', 'htm')
       html%title = self%title
       if (len(html%title) == 0 .and. allocated(self%panels(1)%title)) html%title = self%panels(1)%title
@@ -526,7 +565,7 @@ contains
    case ('txt')
       call text(.false.)
    case default
-      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html, .pdf, .txt, -)'
+      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html, .pdf, .tex, .txt, -)'
    endselect
    contains
       subroutine text(clear_screen)
@@ -1919,6 +1958,25 @@ contains
    if (present(mono)) self%pdf_mono = mono
    if (present(background)) self%page_color = background
    endsubroutine set_pdf
+
+   subroutine set_cairolatex(self, standalone, colortext, header, font, size)
+   !< The LaTeX picture of `save('NAME.tex')`, as gnuplot's cairolatex terminal options: `standalone` a whole document
+   !< (its graphics `NAME-inc.pdf`), else one for `\input` (`NAME.pdf`); `colortext` the texts in their colors (gnuplot's
+   !< `colortext`, else `blacktext`); `header` LaTeX code (the preamble's end when standalone, else the picture's start);
+   !< `font` gnuplot's LaTeX font name `family,series,shape`; `size` the standalone document's font size [pt].
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   logical,              intent(in), optional :: standalone !< A whole document.
+   logical,              intent(in), optional :: colortext  !< Texts in color.
+   character(len=*),     intent(in), optional :: header     !< LaTeX code.
+   character(len=*),     intent(in), optional :: font       !< LaTeX font name.
+   real(R8P),            intent(in), optional :: size       !< Font size [pt].
+
+   if (present(standalone)) self%tex_standalone = standalone
+   if (present(colortext)) self%tex_colortext = colortext
+   if (present(header)) self%tex_header = header
+   if (present(font)) self%tex_font = font
+   if (present(size)) self%tex_size = size
+   endsubroutine set_cairolatex
 
    subroutine set_margin(self, side, value, screen)
    !< Set a margin of the current panel, as gnuplot `set lmargin|rmargin|tmargin|bmargin`: `side` is `l`, `r`, `t` or
