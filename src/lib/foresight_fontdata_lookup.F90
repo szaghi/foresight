@@ -270,39 +270,126 @@ contains
    integer(I4P),              intent(in)  :: index     !< Glyph index (glyph_index), > 0.
    integer(I4P), allocatable, intent(out) :: ops(:)    !< Operations.
    integer(I4P), allocatable, intent(out) :: points(:) !< Coordinates, x then y.
-   integer(I4P), allocatable              :: packed(:) !< Points, x and y in one integer.
+   integer(I4P)                           :: a         !< First entry.
+   integer(I4P)                           :: b         !< Last entry.
+   integer(I4P)                           :: k         !< Entry.
 
    select case (face)
    case (1)
-      ops = SANS_REGULAR_OPS(SANS_REGULAR_PATH_START(index):SANS_REGULAR_PATH_START(index + 1) - 1)
-      packed = SANS_REGULAR_POINTS(SANS_REGULAR_POINT_START(index):SANS_REGULAR_POINT_START(index + 1) - 1)
+      a = SANS_REGULAR_PATH_START(index)
+      b = SANS_REGULAR_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SANS_REGULAR_OPS(k)
+      enddo
+      a = SANS_REGULAR_POINT_START(index)
+      b = SANS_REGULAR_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SANS_REGULAR_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SANS_REGULAR_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (2)
-      ops = SANS_BOLD_OPS(SANS_BOLD_PATH_START(index):SANS_BOLD_PATH_START(index + 1) - 1)
-      packed = SANS_BOLD_POINTS(SANS_BOLD_POINT_START(index):SANS_BOLD_POINT_START(index + 1) - 1)
+      a = SANS_BOLD_PATH_START(index)
+      b = SANS_BOLD_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SANS_BOLD_OPS(k)
+      enddo
+      a = SANS_BOLD_POINT_START(index)
+      b = SANS_BOLD_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SANS_BOLD_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SANS_BOLD_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (3)
-      ops = SANS_ITALIC_OPS(SANS_ITALIC_PATH_START(index):SANS_ITALIC_PATH_START(index + 1) - 1)
-      packed = SANS_ITALIC_POINTS(SANS_ITALIC_POINT_START(index):SANS_ITALIC_POINT_START(index + 1) - 1)
+      a = SANS_ITALIC_PATH_START(index)
+      b = SANS_ITALIC_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SANS_ITALIC_OPS(k)
+      enddo
+      a = SANS_ITALIC_POINT_START(index)
+      b = SANS_ITALIC_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SANS_ITALIC_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SANS_ITALIC_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (4)
-      ops = SANS_BOLDITALIC_OPS(SANS_BOLDITALIC_PATH_START(index):SANS_BOLDITALIC_PATH_START(index + 1) - 1)
-      packed = SANS_BOLDITALIC_POINTS(SANS_BOLDITALIC_POINT_START(index):SANS_BOLDITALIC_POINT_START(index + 1) - 1)
+      a = SANS_BOLDITALIC_PATH_START(index)
+      b = SANS_BOLDITALIC_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SANS_BOLDITALIC_OPS(k)
+      enddo
+      a = SANS_BOLDITALIC_POINT_START(index)
+      b = SANS_BOLDITALIC_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SANS_BOLDITALIC_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SANS_BOLDITALIC_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (5)
-      ops = SERIF_REGULAR_OPS(SERIF_REGULAR_PATH_START(index):SERIF_REGULAR_PATH_START(index + 1) - 1)
-      packed = SERIF_REGULAR_POINTS(SERIF_REGULAR_POINT_START(index):SERIF_REGULAR_POINT_START(index + 1) - 1)
+      a = SERIF_REGULAR_PATH_START(index)
+      b = SERIF_REGULAR_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SERIF_REGULAR_OPS(k)
+      enddo
+      a = SERIF_REGULAR_POINT_START(index)
+      b = SERIF_REGULAR_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SERIF_REGULAR_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SERIF_REGULAR_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (6)
-      ops = SERIF_BOLD_OPS(SERIF_BOLD_PATH_START(index):SERIF_BOLD_PATH_START(index + 1) - 1)
-      packed = SERIF_BOLD_POINTS(SERIF_BOLD_POINT_START(index):SERIF_BOLD_POINT_START(index + 1) - 1)
+      a = SERIF_BOLD_PATH_START(index)
+      b = SERIF_BOLD_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SERIF_BOLD_OPS(k)
+      enddo
+      a = SERIF_BOLD_POINT_START(index)
+      b = SERIF_BOLD_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SERIF_BOLD_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SERIF_BOLD_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (7)
-      ops = SERIF_ITALIC_OPS(SERIF_ITALIC_PATH_START(index):SERIF_ITALIC_PATH_START(index + 1) - 1)
-      packed = SERIF_ITALIC_POINTS(SERIF_ITALIC_POINT_START(index):SERIF_ITALIC_POINT_START(index + 1) - 1)
+      a = SERIF_ITALIC_PATH_START(index)
+      b = SERIF_ITALIC_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SERIF_ITALIC_OPS(k)
+      enddo
+      a = SERIF_ITALIC_POINT_START(index)
+      b = SERIF_ITALIC_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SERIF_ITALIC_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SERIF_ITALIC_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case (8)
-      ops = SERIF_BOLDITALIC_OPS(SERIF_BOLDITALIC_PATH_START(index):SERIF_BOLDITALIC_PATH_START(index + 1) - 1)
-      packed = SERIF_BOLDITALIC_POINTS(SERIF_BOLDITALIC_POINT_START(index):SERIF_BOLDITALIC_POINT_START(index + 1) - 1)
+      a = SERIF_BOLDITALIC_PATH_START(index)
+      b = SERIF_BOLDITALIC_PATH_START(index + 1_I4P) - 1_I4P
+      allocate(ops(b - a + 1_I4P))
+      do k = a, b
+         ops(k - a + 1_I4P) = SERIF_BOLDITALIC_OPS(k)
+      enddo
+      a = SERIF_BOLDITALIC_POINT_START(index)
+      b = SERIF_BOLDITALIC_POINT_START(index + 1_I4P) - 1_I4P
+      allocate(points(2_I4P * (b - a + 1_I4P)))
+      do k = a, b
+         points(2_I4P * (k - a) + 1_I4P) = SERIF_BOLDITALIC_POINTS(k) / 32768_I4P - 16384_I4P
+         points(2_I4P * (k - a) + 2_I4P) = modulo(SERIF_BOLDITALIC_POINTS(k), 32768_I4P) - 16384_I4P
+      enddo
    case default
-      allocate(ops(0), packed(0))
+      allocate(ops(0), points(0))
    endselect
-   allocate(points(2 * size(packed)))
-   points(1::2) = packed / 32768_I4P - 16384_I4P
-   points(2::2) = modulo(packed, 32768_I4P) - 16384_I4P
    endsubroutine glyph_outline
 
    pure function search(codes, code) result(index)

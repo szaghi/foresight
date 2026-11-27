@@ -438,16 +438,26 @@ def lookup_module(faces: list[Face]) -> tuple[str, str]:
          "integer(I4P)             :: kern  !< Font units (negative: closer)."],
         "kern = pair(@_KERN_KEY, @_KERN_VALUE, left, right)", "kern = 0_I4P",
         "The kerning between glyphs `left` and `right` of `face`.", "kern")
+    # element by element: nvfortran 26.9 -O2 miscompiles an allocatable assigned from a slice of these parameter
+    # arrays inside the select case (the points came out empty)
     body = ["select case (face)"]
     for i, f in enumerate(faces):
         p = f.name.upper()
         body += [f"case ({i + 1})",
-                 f"   ops = {p}_OPS({p}_PATH_START(index):{p}_PATH_START(index + 1) - 1)",
-                 f"   packed = {p}_POINTS({p}_POINT_START(index):{p}_POINT_START(index + 1) - 1)"]
-    body += ["case default", "   allocate(ops(0), packed(0))", "endselect",
-             "allocate(points(2 * size(packed)))",
-             "points(1::2) = packed / 32768_I4P - 16384_I4P",
-             "points(2::2) = modulo(packed, 32768_I4P) - 16384_I4P"]
+                 f"   a = {p}_PATH_START(index)",
+                 f"   b = {p}_PATH_START(index + 1_I4P) - 1_I4P",
+                 "   allocate(ops(b - a + 1_I4P))",
+                 "   do k = a, b",
+                 f"      ops(k - a + 1_I4P) = {p}_OPS(k)",
+                 "   enddo",
+                 f"   a = {p}_POINT_START(index)",
+                 f"   b = {p}_POINT_START(index + 1_I4P) - 1_I4P",
+                 "   allocate(points(2_I4P * (b - a + 1_I4P)))",
+                 "   do k = a, b",
+                 f"      points(2_I4P * (k - a) + 1_I4P) = {p}_POINTS(k) / 32768_I4P - 16384_I4P",
+                 f"      points(2_I4P * (k - a) + 2_I4P) = modulo({p}_POINTS(k), 32768_I4P) - 16384_I4P",
+                 "   enddo"]
+    body += ["case default", "   allocate(ops(0), points(0))", "endselect"]
     procs.append(("subroutine", "glyph_outline", "face, index, ops, points", "",
                   "The outline of glyph `index` of `face`: its operations (0 move, 1 line, 2 quadratic, 3 cubic, 4 "
                   "close) and their points (x, y pairs, font units).",
@@ -455,7 +465,9 @@ def lookup_module(faces: list[Face]) -> tuple[str, str]:
                    "integer(I4P),              intent(in)  :: index     !< Glyph index (glyph_index), > 0.",
                    "integer(I4P), allocatable, intent(out) :: ops(:)    !< Operations.",
                    "integer(I4P), allocatable, intent(out) :: points(:) !< Coordinates, x then y."],
-                  ["integer(I4P), allocatable              :: packed(:) !< Points, x and y in one integer."], body))
+                  ["integer(I4P)                           :: a         !< First entry.",
+                   "integer(I4P)                           :: b         !< Last entry.",
+                   "integer(I4P)                           :: k         !< Entry."], body))
 
     def header(kind: str, name: str, args: str, result: str) -> str:
         res = f" result({result})" if result else ""

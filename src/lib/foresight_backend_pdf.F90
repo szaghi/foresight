@@ -213,12 +213,12 @@ contains
    offset(4) = used
    call put_text('4 0 obj'//new_line('a')//'<< /Length '//int_str(int(self%page_used, I8P))//' >>'//new_line('a')// &
                  'stream'//new_line('a'))
-   call put_raw(self%page_bytes(1:self%page_used))
+   call put_buffer(self%page_bytes, self%page_used)
    call put_text(new_line('a')//'endstream'//new_line('a')//'endobj'//new_line('a'))
    do k = 1_I4P, self%objects
       offset(4_I4P + k) = used + self%object_at(k)
    enddo
-   if (self%object_used > 0_I4P) call put_raw(self%object_bytes(1:self%object_used))
+   if (self%object_used > 0_I4P) call put_buffer(self%object_bytes, self%object_used)
    xref = used
    call put_text('xref'//new_line('a')//'0 '//int_str(int(total + 1_I4P, I8P))//new_line('a')// &
                  '0000000000 65535 f '//new_line('a'))
@@ -236,25 +236,49 @@ contains
    call rename_file(self%file//'.tmp', self%file)
    contains
       subroutine put_text(text)
-      !< Append `text`.
+      !< Append `text`, a character at a time.
       character(len=*), intent(in) :: text !< Text.
+      integer(I4P)                 :: k    !< Character.
 
-      call put_raw(text_bytes(text))
+      do k = 1_I4P, len(text, kind=I4P)
+         call put_raw([byte(iachar(text(k:k), kind=I4P))])
+      enddo
       endsubroutine put_text
+
+      subroutine put_buffer(bytes, n)
+      !< Append `bytes(1:n)`, element by element: nvfortran 26.9 -O2 passed the section `bytes(1:n)` of these components
+      !< one element late (its first byte lost, a zero after its last).
+      integer(I1P), intent(in) :: bytes(:) !< Buffer.
+      integer(I4P), intent(in) :: n        !< Bytes in use.
+      integer(I4P)             :: k        !< Byte.
+
+      call reserve(n)
+      do k = 1_I4P, n
+         out(used + k) = bytes(k)
+      enddo
+      used = used + n
+      endsubroutine put_buffer
 
       subroutine put_raw(bytes)
       !< Append `bytes`.
-      integer(I1P), intent(in)  :: bytes(:) !< Bytes.
-      integer(I1P), allocatable :: grown(:) !< Larger buffer.
+      integer(I1P), intent(in) :: bytes(:) !< Bytes.
 
-      if (used + size(bytes, kind=I4P) > size(out, kind=I4P)) then
-         allocate(grown(2_I4P * (used + size(bytes, kind=I4P))))
-         grown(1:used) = out(1:used)
-         call move_alloc(grown, out)
-      endif
+      call reserve(size(bytes, kind=I4P))
       out(used + 1_I4P:used + size(bytes, kind=I4P)) = bytes
       used = used + size(bytes, kind=I4P)
       endsubroutine put_raw
+
+      subroutine reserve(n)
+      !< Room for `n` more bytes in `out`, grown by doubling.
+      integer(I4P), intent(in)  :: n        !< Bytes.
+      integer(I1P), allocatable :: grown(:) !< Larger buffer.
+
+      if (used + n > size(out, kind=I4P)) then
+         allocate(grown(2_I4P * (used + n)))
+         grown(1:used) = out(1:used)
+         call move_alloc(grown, out)
+      endif
+      endsubroutine reserve
    endsubroutine end_page
 
    subroutine begin_axes(self, view)
@@ -411,7 +435,7 @@ contains
    self%heads_used = 0_I4P
    self%labels_used = 0_I4P
    ! structure, written whatever the visibility (a hidden group may open or close around the plot area)
-   call add_bytes(self%page_bytes, self%page_used, text_bytes('q '//clip_box(self)//new_line('a')))
+   call add_text(self%page_bytes, self%page_used, ('q '//clip_box(self)//new_line('a')))
    endsubroutine begin_plot_area
 
    subroutine end_plot_area(self)
@@ -419,7 +443,7 @@ contains
    !< device), arrowheads and data labels, clipped to the plot area.
    class(backend_pdf), intent(inout) :: self !< Device.
 
-   call add_bytes(self%page_bytes, self%page_used, text_bytes('Q'//new_line('a')))
+   call add_text(self%page_bytes, self%page_used, ('Q'//new_line('a')))
    call overlay(self%caps_bytes, self%caps_used, .true.)
    call overlay(self%marks_bytes, self%marks_used, .not. self%spill)
    call overlay(self%heads_bytes, self%heads_used, .true.)
@@ -437,12 +461,12 @@ contains
 
       if (used == 0_I4P) return
       if (clipped) then
-         call add_bytes(self%page_bytes, self%page_used, text_bytes('q '//clip_box(self)//new_line('a')))
+         call add_text(self%page_bytes, self%page_used, ('q '//clip_box(self)//new_line('a')))
       else
-         call add_bytes(self%page_bytes, self%page_used, text_bytes('q'//new_line('a')))
+         call add_text(self%page_bytes, self%page_used, ('q'//new_line('a')))
       endif
       call add_bytes(self%page_bytes, self%page_used, bytes(1:used))
-      call add_bytes(self%page_bytes, self%page_used, text_bytes('Q'//new_line('a')))
+      call add_text(self%page_bytes, self%page_used, ('Q'//new_line('a')))
       endsubroutine overlay
    endsubroutine end_plot_area
 
@@ -739,9 +763,9 @@ contains
 
    separate = .true.
    if (opening) then
-      call add_bytes(self%page_bytes, self%page_used, text_bytes('q '//clip_box(self)//new_line('a')))
+      call add_text(self%page_bytes, self%page_used, ('q '//clip_box(self)//new_line('a')))
    else
-      call add_bytes(self%page_bytes, self%page_used, text_bytes('Q'//new_line('a')))
+      call add_text(self%page_bytes, self%page_used, ('Q'//new_line('a')))
    endif
    endsubroutine front_area
 
@@ -755,15 +779,15 @@ contains
    if (.not. self%visible()) return
    select case (destination)
    case (CAPS)
-      call add_bytes(self%caps_bytes, self%caps_used, text_bytes(text))
+      call add_text(self%caps_bytes, self%caps_used, (text))
    case (MARKS)
-      call add_bytes(self%marks_bytes, self%marks_used, text_bytes(text))
+      call add_text(self%marks_bytes, self%marks_used, (text))
    case (HEADS)
-      call add_bytes(self%heads_bytes, self%heads_used, text_bytes(text))
+      call add_text(self%heads_bytes, self%heads_used, (text))
    case (LABELS)
-      call add_bytes(self%labels_bytes, self%labels_used, text_bytes(text))
+      call add_text(self%labels_bytes, self%labels_used, (text))
    case default
-      call add_bytes(self%page_bytes, self%page_used, text_bytes(text))
+      call add_text(self%page_bytes, self%page_used, (text))
    endselect
    endsubroutine emit
 
@@ -1059,14 +1083,13 @@ contains
    self%objects = self%objects + 1_I4P
    self%object_at(self%objects) = self%object_used
    number = 4_I4P + self%objects
-   call add_bytes(self%object_bytes, self%object_used, text_bytes(int_str(int(number, I8P))//' 0 obj'// &
-                                                                  new_line('a')//body))
+   call add_text(self%object_bytes, self%object_used, int_str(int(number, I8P))//' 0 obj'//new_line('a')//body)
    if (present(stream)) then
-      call add_bytes(self%object_bytes, self%object_used, text_bytes(new_line('a')//'stream'//new_line('a')))
+      call add_text(self%object_bytes, self%object_used, (new_line('a')//'stream'//new_line('a')))
       call add_bytes(self%object_bytes, self%object_used, stream)
-      call add_bytes(self%object_bytes, self%object_used, text_bytes(new_line('a')//'endstream'))
+      call add_text(self%object_bytes, self%object_used, (new_line('a')//'endstream'))
    endif
-   call add_bytes(self%object_bytes, self%object_used, text_bytes(new_line('a')//'endobj'//new_line('a')))
+   call add_text(self%object_bytes, self%object_used, (new_line('a')//'endobj'//new_line('a')))
    endfunction add_object
 
    function add_image(self, rgba) result(name)
@@ -1905,6 +1928,29 @@ contains
    buffer(used + 1_I4P:used + size(bytes, kind=I4P)) = bytes
    used = used + size(bytes, kind=I4P)
    endsubroutine add_bytes
+
+   pure subroutine add_text(buffer, used, text)
+   !< Append the characters of `text` to `buffer(1:used)`, grown by doubling.
+   integer(I1P), allocatable, intent(inout) :: buffer(:) !< Buffer.
+   integer(I4P),              intent(inout) :: used      !< Bytes in use.
+   character(len=*),          intent(in)    :: text      !< Text.
+   integer(I1P), allocatable                :: grown(:)  !< Larger buffer.
+   integer(I4P)                             :: k         !< Character.
+
+   if (.not. allocated(buffer)) then
+      allocate(buffer(max(4096_I4P, 2_I4P * len(text, kind=I4P))))
+      used = 0_I4P
+   endif
+   if (used + len(text, kind=I4P) > size(buffer, kind=I4P)) then
+      allocate(grown(2_I4P * (used + len(text, kind=I4P))))
+      grown(1:used) = buffer(1:used)
+      call move_alloc(grown, buffer)
+   endif
+   do k = 1_I4P, len(text, kind=I4P)
+      buffer(used + k) = byte(iachar(text(k:k), kind=I4P))
+   enddo
+   used = used + len(text, kind=I4P)
+   endsubroutine add_text
 
    pure function text_bytes(text) result(bytes)
    !< The bytes of `text`.
