@@ -16,6 +16,27 @@ The format follows the output name, in the library (`fig%save(file)`) and in scr
 In scripts, `set terminal svg|html|dumb|block` changes the format of the default output (the one derived from the
 script name) but never an output set explicitly with `set output`.
 
+## Fonts
+
+foresight compiles two font families in, each in four faces (regular, bold, italic, bold italic): their advance
+widths, kerning pairs and glyph outlines for Latin (ASCII, Latin-1, Latin Extended-A), Greek, punctuation and math
+symbols.
+
+| Family | Stands for | Faces from |
+|---|---|---|
+| `sans` | the default, `Arial`, `Helvetica`, `sans-serif`, `Liberation Sans`, `Arimo`, and every family foresight does not have | Liberation Sans 2.1.5 (Arial's metrics, as gnuplot's terminals draw by default) |
+| `serif` | `serif`, `Latin Modern Roman`, `LM Roman`, `CMU Serif`, `Computer Modern` | Latin Modern Roman 10 (LaTeX's default text font); lowercase Greek and math symbols from Latin Modern Math, as TeX takes them |
+
+A family is chosen by gnuplot's font spec (`set title font "serif,14"`, `font ":Bold"`) or the library's font
+settings; the family name is matched without case nor blanks. A character Liberation Sans lacks (a few math symbols)
+is taken from Latin Modern of the same style; one no face has counts 0.556 em. Text is measured with kerning, the
+pairs the fonts' OpenType tables give.
+
+The font data stays under the fonts' licenses, not foresight's: Liberation Sans under the SIL Open Font License 1.1,
+Latin Modern under the GUST Font License (`LICENSES/`). foresight calls its faces `sans` and `serif`: under the OFL a
+converted subset may not carry the reserved name *Liberation*. Documents foresight writes are not covered by the font
+licenses.
+
 ## SVG
 
 A standalone SVG document, 600 x 480 px by default (`set terminal svg size W,H`), font Arial/Helvetica 12 px.

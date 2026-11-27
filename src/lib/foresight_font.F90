@@ -5,14 +5,28 @@ module foresight_font
 !< As gnuplot 6.0's svg terminal: the size after the first comma, `:Bold` and `:Italic` (or ` bold`, ` italic`) the
 !< weight and the style, the rest the family. A family is written to the SVG as given (the reader's fonts render it);
 !< font files (a path, `.ttf`) and gnuplot's `mbfont:` sets are not families an SVG can name: left out, as an empty
-!< family is. Text widths stay foresight's estimate, whatever the family.
-use penf, only : R8P
+!< family is.
+!<
+!< Widths come from the compiled-in faces (foresight_fontdata): Liberation Sans (Arial's metrics) for the sans families
+!< and every family foresight does not have, Latin Modern Roman for the serif ones (`family_face`), each in four faces
+!< (regular, bold, italic, bold italic); `text_advance` sums the advance widths of a UTF-8 text and the kerning of its
+!< pairs, a character Liberation Sans lacks taken from Latin Modern, one no face has counting 0.556 em.
+use foresight_fontdata, only : face_upm, glyph_advance, glyph_index, glyph_kern
+use penf, only : I4P, R8P
 
 implicit none
 private
 public :: font_object
 public :: font_of
 public :: font_attributes
+public :: FAMILY_SANS, FAMILY_SERIF
+public :: family_face
+public :: face_of
+public :: text_advance
+
+integer(I4P), parameter :: FAMILY_SANS  = 1_I4P !< Liberation Sans, faces 1-4.
+integer(I4P), parameter :: FAMILY_SERIF = 2_I4P !< Latin Modern Roman, faces 5-8.
+real(R8P),    parameter :: MISSING_ADVANCE = 0.556_R8P !< Advance of a character no face has [em].
 
 type :: font_object
    !< A text element's font: a size, a family, the weight and the style; unset parts take the page's.
@@ -134,4 +148,132 @@ contains
       if (short(1:1) == '.') short = '0'//short
       endfunction trim_zeros
    endfunction font_attributes
+
+   pure subroutine family_face(family, index, known)
+   !< The compiled-in family standing for the CSS `family` (case and blanks ignored): Latin Modern Roman for `serif`,
+   !< `Latin Modern Roman`, `LM Roman`, `CMU Serif`, `Computer Modern`; Liberation Sans for every other one, `known`
+   !< telling whether the family is one of Liberation Sans' (empty, `sans`, `sans-serif`, `Arial`, `Helvetica`,
+   !< `Liberation Sans`, `Arimo`) or a fallback.
+   character(len=*), intent(in)  :: family !< CSS family.
+   integer(I4P),     intent(out) :: index  !< FAMILY_SANS or FAMILY_SERIF.
+   logical,          intent(out) :: known  !< The family is compiled in (not a fallback).
+   character(len=:), allocatable :: key    !< Lowercase family without blanks nor quotes.
+   integer                       :: k      !< Counter.
+   integer                       :: c      !< Character code.
+
+   key = ''
+   do k = 1, len_trim(family)
+      c = iachar(family(k:k))
+      if (c >= iachar('A') .and. c <= iachar('Z')) c = c + 32
+      if (c /= iachar(' ') .and. c /= 39 .and. c /= iachar('"')) key = key//achar(c)
+   enddo
+   index = FAMILY_SANS
+   known = .true.
+   select case (key)
+   case ('serif', 'latinmodernroman', 'latinmodern', 'lmroman', 'lmroman10', 'cmuserif', 'computermodern')
+      index = FAMILY_SERIF
+   case ('', 'sans', 'sans-serif', 'arial', 'helvetica', 'liberationsans', 'arimo')
+   case default
+      known = .false.
+   endselect
+   endsubroutine family_face
+
+   elemental function face_of(font) result(face)
+   !< The compiled-in face (foresight_fontdata, 1-8) of `font`: its family (family_face), weight and style.
+   type(font_object), intent(in) :: font  !< Font.
+   integer(I4P)                  :: face  !< Face.
+   integer(I4P)                  :: index !< Family.
+   logical                       :: known !< Family compiled in.
+
+   call family_face(font%family, index, known)
+   face = 4_I4P * (index - 1_I4P) + 1_I4P
+   if (font%bold) face = face + 1_I4P
+   if (font%italic) face = face + 2_I4P
+   endfunction face_of
+
+   pure function text_advance(text, face, size) result(width)
+   !< The width of the UTF-8 `text` set in `face` at `size`, in the unit of `size`: the advance widths of its
+   !< characters and the kerning of each pair. A character a sans face lacks is taken from the serif face of the same
+   !< style (Latin Modern, whose data holds the math symbols), not kerned; one no face has counts 0.556 em.
+   character(len=*), intent(in) :: text  !< UTF-8 text.
+   integer(I4P),     intent(in) :: face  !< Face (foresight_fontdata, 1-8).
+   real(R8P),        intent(in) :: size  !< Font size (em).
+   real(R8P)                    :: width !< Width.
+   real(R8P)                    :: em    !< Width in em of the fallback glyphs and missing characters.
+   integer(I4P)                 :: units !< Advance in font units of `face`.
+   integer(I4P)                 :: k     !< Byte.
+   integer(I4P)                 :: n     !< Bytes of a character.
+   integer(I4P)                 :: code  !< Code point.
+   integer(I4P)                 :: glyph !< Glyph index.
+   integer(I4P)                 :: prev  !< Previous glyph index, 0 none.
+   integer(I4P)                 :: other !< Fallback face.
+
+   units = 0_I4P
+   em = 0.0_R8P
+   prev = 0_I4P
+   other = face + 4_I4P
+   if (face > 4_I4P) other = 0_I4P
+   k = 1_I4P
+   do while (k <= len(text, kind=I4P))
+      call decode(text, k, code, n)
+      k = k + n
+      glyph = glyph_index(face, code)
+      if (glyph == 0_I4P) then
+         prev = 0_I4P
+         if (other > 0_I4P) glyph = glyph_index(other, code)
+         if (glyph > 0_I4P) then
+            em = em + real(glyph_advance(other, glyph), R8P) / real(face_upm(other), R8P)
+         else
+            em = em + MISSING_ADVANCE
+         endif
+         cycle
+      endif
+      units = units + glyph_advance(face, glyph)
+      if (prev > 0_I4P) units = units + glyph_kern(face, prev, glyph)
+      prev = glyph
+   enddo
+   width = size * (real(units, R8P) / real(max(1_I4P, face_upm(face)), R8P) + em)
+   endfunction text_advance
+
+   pure subroutine decode(text, k, code, n)
+   !< The code point of the UTF-8 character at byte `k` of `text` and its bytes (a malformed byte: its own code).
+   character(len=*), intent(in)  :: text !< UTF-8 text.
+   integer(I4P),     intent(in)  :: k    !< First byte.
+   integer(I4P),     intent(out) :: code !< Code point.
+   integer(I4P),     intent(out) :: n    !< Bytes.
+   integer(I4P)                  :: lead !< First byte's value.
+   integer(I4P)                  :: j    !< Continuation byte.
+   integer(I4P)                  :: b    !< Its value.
+
+   lead = iachar(text(k:k), kind=I4P)
+   select case (lead)
+   case (240:247)
+      n = 4_I4P
+      code = iand(lead, 7_I4P)
+   case (224:239)
+      n = 3_I4P
+      code = iand(lead, 15_I4P)
+   case (192:223)
+      n = 2_I4P
+      code = iand(lead, 31_I4P)
+   case default
+      n = 1_I4P
+      code = lead
+      return
+   endselect
+   if (k + n - 1_I4P > len(text, kind=I4P)) then
+      n = 1_I4P
+      code = lead
+      return
+   endif
+   do j = k + 1_I4P, k + n - 1_I4P
+      b = iachar(text(j:j), kind=I4P)
+      if (b < 128_I4P .or. b > 191_I4P) then
+         n = 1_I4P
+         code = lead
+         return
+      endif
+      code = 64_I4P * code + (b - 128_I4P)
+   enddo
+   endsubroutine decode
 endmodule foresight_font

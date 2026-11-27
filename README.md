@@ -147,4 +147,7 @@ The named palettes carry third-party color tables: the *Scientific colour maps* 
 viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial Institute's licence),
 and Kenneth Moreland's black_body (CC0); their notices are in `src/lib/foresight_colormaps.F90`.
 
+The compiled-in fonts keep their own licenses, not foresight's: Liberation Sans (SIL Open Font License 1.1) and Latin
+Modern Roman and Math (GUST Font License); see [LICENSES/README.md](LICENSES/README.md).
+
 © [Stefano Zaghi](https://github.com/szaghi)
