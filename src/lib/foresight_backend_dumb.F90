@@ -29,6 +29,7 @@ module foresight_backend_dumb
 use, intrinsic :: iso_fortran_env, only : output_unit
 use foresight_backend, only : arrow_head, axes_view, backend_object
 use foresight_enhanced, only : has_markup, markup_plain
+use foresight_math, only : has_math
 use foresight_format, only : latin1_utf8
 use foresight_style, only : pattern_parts
 use foresight_theme, only : theme_object
@@ -405,7 +406,9 @@ contains
    if (self%hidden) return
    full = string
    ! enhanced text: its characters, the markup dropped
-   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) full = markup_plain(string)
+   ! enhanced markup dropped, TeX math written as its source
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string) .and. .not. has_math(string)) &
+      full = markup_plain(string)
    if (present(sup)) then
       if (len(sup) > 0) full = full//'^'//sup
    endif
@@ -648,7 +651,7 @@ contains
    real(R8P),           intent(in) :: font_size !< Font size [px].
    real(R8P)                       :: width     !< Width [px].
 
-   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string) .and. .not. has_math(string)) then
       width = CELL_WIDTH * font_size * real(len(markup_plain(string)), R8P)
    else
       width = CELL_WIDTH * font_size * real(len(string), R8P)

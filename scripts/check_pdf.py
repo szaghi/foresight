@@ -6,7 +6,8 @@ For each NAME.pdf:
 - `pdffonts` lists every font embedded, with its Unicode map;
 - the text `pdftotext` extracts is the text of the SVG golden of the same figure (NAME.svg: the contents of its <text>
   elements, hover titles left out), compared as the multiset of their non-blank characters (the two programs split
-  and order runs differently: sub- and superscripts, rotated labels);
+  and order runs differently: sub- and superscripts, rotated labels); not for a figure whose texts hold TeX math (the
+  PDF's text is the formulas' characters, the SVG's their source): scripts/check_math.py checks those;
 - when NAME_glyphs.svg exists (the same figure, its texts drawn from the glyphs: `fontglyphs`), the PDF and that SVG
   rasterized differ by less than 0.002 (the fidelity score of scripts/fidelity/score.py: the mean absolute difference
   of the blurred 120x80 grayscale pages). Both are rasterized by the same headless Chrome, the PDF's drawing converted
@@ -27,6 +28,9 @@ import sys
 import tempfile
 
 RASTER_LIMIT = 0.002
+
+
+MATH = re.compile(r"\$[^\s$][^$]*(?<=\S)\$(?![A-Za-z0-9_])")  # a TeX math run, as foresight's next_math reads it
 
 
 def svg_text(path: str) -> str:
@@ -123,9 +127,12 @@ def main() -> None:
         if not embedded:
             ok = False
             notes.append("NOT ALL EMBEDDED")
-        expected, got = chars(svg_text(pdf[:-4] + ".svg")), chars(pdf_text(pdf))
+        source = svg_text(pdf[:-4] + ".svg")
+        expected, got = chars(source), chars(pdf_text(pdf))
         notes.append(f"{sum(got.values())} characters")
-        if expected != got:
+        if MATH.search(source):
+            notes.append("TeX math: its text checked by check_math.py")
+        elif expected != got:
             ok = False
             notes.append(f"missing {dict(expected - got)} extra {dict(got - expected)}")
         glyphs = pdf[:-4] + "_glyphs.svg"

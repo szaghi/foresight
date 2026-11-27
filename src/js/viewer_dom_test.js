@@ -10,7 +10,8 @@
 // second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
 // time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed;
 // enhanced.html, tick labels with enhanced text markup redrawn as <tspan> elements by a zoom; view3d_frame.html, a 3D
-// view turned by a left drag and back by u; the widths of the labels a zoom redraws, against the Fortran faces'
+// view turned by a left drag and back by u; math.html, TeX-math labels kept as drawn by a zoom; the widths of the
+// labels a zoom redraws, against the Fortran faces'
 // data (font_fixture.json). The
 // page is parsed
 // by linkedom; the SVG
@@ -398,6 +399,19 @@ check("labels a zoom redraws measured as Fortran's (" + widthCount + " labels, w
   " px)", widthCount > 20 && widthWorst < 0.01);
 var table = viewer.slice(viewer.indexOf("// ---- font metrics"), viewer.indexOf("// ---- end of font metrics"));
 check("the font table the page carries: " + Buffer.byteLength(table) + " bytes", Buffer.byteLength(table) < 20000);
+
+// math.html: TeX-math labels drawn from the glyphs (the math font's defined once); a zoom redraws the ticks and keeps
+// the math labels as drawn
+page = strip(path.join(__dirname, "..", "tests", "goldens", "math.html"));
+p = load("");
+function formulas() {
+  return Array.prototype.map.call(p.document.querySelectorAll(".fs-glyphs"), function (g) { return g.outerHTML; });
+}
+var mathBefore = formulas();
+wheel(0);
+check("a zoom keeps the " + mathBefore.length + " math labels as drawn",
+  mathBefore.length >= 5 && box(0)[2] < 1 && formulas().join("") === mathBefore.join("") &&
+  p.document.querySelector('[id^="fs-g9-"]') !== null);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

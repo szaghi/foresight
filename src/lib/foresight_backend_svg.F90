@@ -15,8 +15,8 @@ use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
 use foresight_font, only : face_of, font_attributes, font_object, text_advance
-use foresight_fontdata, only : face_upm, glyph_outline
-use foresight_textlayout, only : layout_text, placed_glyph
+use foresight_math, only : any_outline, any_upm
+use foresight_textlayout, only : has_math, layout_text, math_text_width, placed_glyph
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -104,7 +104,7 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: put         !< Write a line.
       procedure, pass(self), private :: write_pairs !< Write coordinate pairs.
       procedure, pass(self), private :: glyph_group !< A text drawn from the glyphs (`fontglyphs`).
-      procedure, pass(self), private :: glyph_defs  !< The definitions of the glyphs drawn.
+      procedure, pass(self)          :: glyph_defs  !< The definitions of the glyphs drawn (the HTML device's too).
 endtype backend_svg
 
 contains
@@ -128,7 +128,7 @@ contains
    !< Close the document and publish it atomically.
    class(backend_svg), intent(inout) :: self !< Device.
 
-   if (self%glyphs) call self%glyph_defs
+   if (self%nglyphs > 0_I4P) call self%glyph_defs
    call self%put('</svg>')
    call self%close_file
    endsubroutine end_page
@@ -341,15 +341,18 @@ contains
    character(len=*),   intent(in), optional :: color  !< Text color, the frame's if absent.
    character(len=:), allocatable            :: line   !< Output line.
    character(len=:), allocatable            :: runs   !< Enhanced text runs.
+   logical                                  :: math   !< The text holds TeX math: drawn from the glyphs.
 
+   math = .not. self%literal .and. has_math(string)
    line = '<text x="'//px(x)//'" y="'//px(y)//'"'//font_attributes(self%font, self%font%size)
-   if (self%glyphs) line = line//' fill-opacity="0"'
+   if (self%glyphs .or. math) line = line//' fill-opacity="0"'
    if (self%boxed) line = line//textbox_attribute(self)
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
    if (present(color)) line = line//' fill="'//self%theme%map(color)//'"'
-   if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
-      ! gnuplot's enhanced text: styled runs, the blanks at their ends kept (a renderer may strip them per <tspan>)
+   if (self%enhanced .and. .not. self%literal .and. has_markup(string) .and. .not. math) then
+      ! gnuplot's enhanced text: styled runs, the blanks at their ends kept (a renderer may strip them per <tspan>); a
+      ! text holding math keeps its source under its glyphs
       runs = markup_svg(string, self%font%size_px(self%text_size))
       if (index(runs, '<tspan') > 0) line = line//' xml:space="preserve"'
       line = line//'>'//runs
@@ -359,8 +362,9 @@ contains
    if (present(sup)) then
       if (len(sup) > 0) line = line//'<tspan dy="-0.45em" font-size="0.75em">'//xml_escape(sup)//'</tspan>'
    endif
-   if (self%glyphs) then
-      ! the text kept, transparent (selection, search, screen readers), its glyphs drawn over it
+   if (self%glyphs .or. math) then
+      ! the text kept, transparent (selection, search, screen readers), its glyphs drawn over it (always for TeX math,
+      ! which no font sets)
       call self%put(line//'</text>')
       block
          character(len=:), allocatable :: super !< Superscript.
@@ -840,6 +844,15 @@ contains
    integer(I4P)                   :: face      !< Face.
 
    face = self%text_face()
+   if (.not. self%literal .and. has_math(string)) then
+      ! TeX math among the text (foresight_math)
+      if (self%latin1) then
+         width = math_text_width(latin1_utf8(string), self%enhanced .and. has_markup(string), face, font_size, sup)
+      else
+         width = math_text_width(string, self%enhanced .and. has_markup(string), face, font_size, sup)
+      endif
+      return
+   endif
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       if (self%latin1) then
          width = markup_width(latin1_utf8(string), font_size, face)
@@ -967,7 +980,7 @@ contains
    font = self%font
    if (len_trim(font%family) == 0) font%family = self%page_family
    call layout_text(string, self%enhanced .and. .not. self%literal .and. has_markup(string), face_of(font), &
-                    self%font%size_px(self%text_size), sup, placed, count, width)
+                    self%font%size_px(self%text_size), sup, placed, count, width, math=.not. self%literal)
    start = 0.0_R8P
    if (anchor == 'middle') start = -0.5_R8P * width
    if (anchor == 'end') start = -width
@@ -977,6 +990,12 @@ contains
    if (rotate /= 0.0_R8P) group = group//' rotate('//px(rotate)//')'
    group = group//'">'
    do k = 1_I4P, count
+      if (placed(k)%face == 0_I4P .and. placed(k)%width > 0.0_R8P) then
+         ! a rule of a formula
+         group = group//'<rect x="'//px(start + placed(k)%x)//'" y="'//px(placed(k)%y)//'" width="'// &
+                 px(placed(k)%width)//'" height="'//px(placed(k)%height)//'"/>'
+         cycle
+      endif
       if (placed(k)%glyph == 0_I4P) cycle
       ! the glyph's definition, recorded once
       do j = 1_I4P, self%nglyphs
@@ -996,7 +1015,7 @@ contains
          self%glyph_face(self%nglyphs) = placed(k)%face
          self%glyph_number(self%nglyphs) = placed(k)%glyph
       endif
-      scale = placed(k)%size / real(face_upm(placed(k)%face), R8P)
+      scale = placed(k)%size / real(any_upm(placed(k)%face), R8P)
       group = group//'<use xlink:href="#fs-g'//int_str(int(placed(k)%face, I8P))//'-'// &
               int_str(int(placed(k)%glyph, I8P))//'" transform="translate('//px(start + placed(k)%x)//' '// &
               px(placed(k)%y)//') scale('//fixed(scale, 5_I4P)//' '//fixed(-scale, 5_I4P)//')"/>'
@@ -1017,7 +1036,7 @@ contains
    if (self%nglyphs == 0_I4P) return
    call self%put('<defs>')
    do j = 1_I4P, self%nglyphs
-      call glyph_outline(self%glyph_face(j), self%glyph_number(j), ops, points)
+      call any_outline(self%glyph_face(j), self%glyph_number(j), ops, points)
       d = ''
       at = 1_I4P
       do k = 1_I4P, size(ops, kind=I4P)

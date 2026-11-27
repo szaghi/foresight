@@ -2158,6 +2158,16 @@ its fonts embedded.
 `theme paper serif` sets the texts in Latin Modern Roman, the font of a LaTeX paper; `size double` spans both columns
 ([cb_paper_double.pdf](/examples/cb_paper_double.pdf)).
 
+### Math in the labels
+
+<<< @/examples/snippets/cb_math-figure.gp{gnuplot}
+
+<Plot name="cb_math" svg :width="560" :height="320" />
+
+A text's `$...$` runs are TeX math, set as LaTeX sets them in Latin Modern Math: Greek, scripts, `\frac`, `\sqrt`,
+`\mathrm`, operators with TeX's spacing, in every format (the PDF embeds the glyphs); see
+[C7. Math in labels](/manual/paths/c-paper/07-math-in-labels).
+
 ### Labels set by LaTeX
 
 <<< @/examples/snippets/cb_latex-figure.gp{gnuplot}

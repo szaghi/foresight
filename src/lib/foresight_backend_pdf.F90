@@ -22,6 +22,8 @@ use foresight_palette, only : named_color
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
 use foresight_texpicture, only : tex_document, tex_number, tex_visible
+use foresight_math, only : any_advance, any_outline, any_upm
+use foresight_textlayout, only : has_math, layout_text, math_text_width, placed_glyph
 use penf, only : I1P, I4P, I8P, R8P
 
 implicit none
@@ -96,8 +98,8 @@ type, extends(backend_object) :: backend_pdf
    integer(I4P), allocatable     :: glyph_unicode(:)  !< The character it shows.
    integer(I4P), allocatable     :: glyph_rank(:)     !< Its rank among the face's glyphs used, from 1.
    integer(I4P)                  :: nglyphs = 0_I4P   !< Glyphs used.
-   integer(I4P)                  :: face_glyphs(8) = 0_I4P !< Glyphs used of each face.
-   integer(I4P)                  :: font_objects(8, 16) = 0_I4P !< Object number of each face's Type 3 fonts.
+   integer(I4P)                  :: face_glyphs(9) = 0_I4P !< Glyphs used of each face (9: the math font).
+   integer(I4P)                  :: font_objects(9, 16) = 0_I4P !< Object number of each face's Type 3 fonts.
    real(R8P),    allocatable     :: alphas(:)         !< Opacity of each graphics state (/GS1, /GS2...).
    logical,      allocatable     :: strokes(:)        !< Whether that opacity is the stroke's (CA), else the fill's (ca).
    integer(I4P)                  :: nalphas = 0_I4P   !< Graphics states.
@@ -649,6 +651,15 @@ contains
       if (len(sup) > 0) width = width + text_advance(tex_visible(sup), face, 0.75_R8P * font_size)
       return
    endif
+   if (.not. self%literal .and. has_math(string)) then
+      ! TeX math among the text (foresight_math)
+      if (self%latin1) then
+         width = math_text_width(latin1_utf8(string), self%enhanced .and. has_markup(string), face, font_size, sup)
+      else
+         width = math_text_width(string, self%enhanced .and. has_markup(string), face, font_size, sup)
+      endif
+      return
+   endif
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       if (self%latin1) then
          width = markup_width(latin1_utf8(string), font_size, face)
@@ -905,6 +916,10 @@ contains
    endif
    c = cos(rotate * acos(-1.0_R8P) / 180.0_R8P)
    s = sin(rotate * acos(-1.0_R8P) / 180.0_R8P)
+   if (.not. self%literal .and. has_math(string)) then
+      call math_text
+      return
+   endif
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       call enhanced_runs(string, runs)
    else
@@ -940,6 +955,41 @@ contains
    ops = ops//'ET'//new_line('a')
    call self%emit(destination, 'q '//self%color_op(color, .false.)//new_line('a')//ops//'Q'//new_line('a'))
    contains
+      subroutine math_text
+      !< A text holding TeX math (foresight_textlayout with `math`): each glyph in its embedded Type 3 font (the math
+      !< font's too, whatever `embed`), the formulas' rules filled, in the text's frame.
+      type(placed_glyph), allocatable :: placed(:) !< Glyphs and rules.
+      character(len=:), allocatable   :: name      !< Font resource of a glyph.
+      integer(I4P)                    :: count     !< Glyphs placed.
+      integer(I4P)                    :: slot      !< Its code.
+      integer(I4P)                    :: j         !< Glyph.
+      real(R8P)                       :: start     !< Text start from the anchor [px].
+      real(R8P)                       :: along     !< A glyph along the baseline [px].
+
+      call layout_text(string, self%enhanced .and. has_markup(string), face, base, sup, placed, count, width, &
+                       math=.true.)
+      start = 0.0_R8P
+      if (anchor == 'middle') start = -0.5_R8P * width
+      if (anchor == 'end') start = -width
+      if (self%boxed) call box_under(start, width)
+      ops = ''
+      do j = 1_I4P, count
+         along = start + placed(j)%x
+         if (placed(j)%face == 0_I4P) then
+            if (placed(j)%width > 0.0_R8P) &
+               ops = ops//'q '//num(c)//' '//num(s)//' '//num(s)//' '//num(-c)//' '//num(x)//' '//num(y)//' cm '// &
+                     num(along)//' '//num(-placed(j)%y - placed(j)%height)//' '//num(placed(j)%width)//' '// &
+                     num(placed(j)%height)//' re f Q'//new_line('a')
+            cycle
+         endif
+         call self%glyph_slot(placed(j)%face, placed(j)%glyph, placed(j)%unicode, name, slot)
+         ops = ops//'BT /'//name//' '//num(placed(j)%size)//' Tf '//num(c)//' '//num(s)//' '//num(s)//' '// &
+               num(-c)//' '//num(x + c * along - s * placed(j)%y)//' '//num(y + s * along + c * placed(j)%y)// &
+               ' Tm <'//hex2(slot)//'> Tj ET'//new_line('a')
+      enddo
+      call self%emit(destination, 'q '//self%color_op(color, .false.)//new_line('a')//ops//'Q'//new_line('a'))
+      endsubroutine math_text
+
       function show(face_k, font_size, along, up, run) result(op)
       !< Operators of `run` in `face_k` at `font_size`, at `along` px along the baseline and `up` px across it (negative:
       !< up) from the anchor: the embedded glyphs (each character's font and code, kerned by TJ adjustments), or the
@@ -1440,9 +1490,9 @@ contains
    integer(I4P)                      :: unicode_obj !< Object of the ToUnicode map.
 
    self%font_objects = 0_I4P
-   do face = 1_I4P, 8_I4P
+   do face = 1_I4P, size(self%face_glyphs, kind=I4P)
       do font = 1_I4P, (self%face_glyphs(face) + 254_I4P) / 255_I4P
-         scale = 1000.0_R8P / real(face_upm(face), R8P)
+         scale = 1000.0_R8P / real(any_upm(face), R8P)
          procs = ''
          widths = ''
          names = ''
@@ -1453,8 +1503,8 @@ contains
             code = modulo(self%glyph_rank(k) - 1_I4P, 255_I4P) + 1_I4P
             count = max(count, code)
             if (self%glyph_number(k) > 0_I4P) then
-               advance = scale * real(glyph_advance(face, self%glyph_number(k)), R8P)
-               call glyph_outline(face, self%glyph_number(k), ops, points)
+               advance = scale * real(any_advance(face, self%glyph_number(k)), R8P)
+               call any_outline(face, self%glyph_number(k), ops, points)
                proc = outline_ops(ops, scale * real(points, R8P), box)
             else
                advance = 556.0_R8P
@@ -1467,7 +1517,7 @@ contains
                     int_str(int(self%add_object('<< /Length '//int_str(int(len(proc), I8P))//' >>', &
                                                 text_bytes(proc)), I8P))//' 0 R'
             names = names//' '//int_str(int(code, I8P))//' /g'//int_str(int(code, I8P))
-            cmap = cmap//'<'//hex2(code)//'> <'//hex4(self%glyph_unicode(k))//'>'//new_line('a')
+            cmap = cmap//'<'//hex2(code)//'> <'//utf16(self%glyph_unicode(k))//'>'//new_line('a')
             widths = widths//' '//num(advance)
          enddo
          ! codes are assigned in order: the widths list runs from 1 to count
@@ -1555,9 +1605,9 @@ contains
       n = min(100_I4P, left)
       cmap = cmap//int_str(int(n, I8P))//' beginbfchar'//new_line('a')
       do e = 1_I4P, n
-         ! each line is `<cc> <uuuu>` and a new line: 12 characters
-         cmap = cmap//entries(a:a + 11_I4P)
-         a = a + 12_I4P
+         ! each line is `<cc> <uuuu>` (`<uuuuuuuu>`: a surrogate pair) and a new line
+         cmap = cmap//entries(a:a + index(entries(a:), new_line('a')) - 1_I4P)
+         a = a + index(entries(a:), new_line('a'))
       enddo
       cmap = cmap//'endbfchar'//new_line('a')
       left = left - n
@@ -1573,6 +1623,18 @@ contains
 
    write(text, '(Z2.2)') value
    endfunction hex2
+
+   pure function utf16(value) result(text)
+   !< The UTF-16 code units of the code point `value`, in hexadecimal: four digits, eight for a surrogate pair.
+   integer(I4P), intent(in)      :: value !< Code point.
+   character(len=:), allocatable :: text  !< Digits.
+
+   if (value > 65535_I4P) then
+      text = hex4(55296_I4P + (value - 65536_I4P) / 1024_I4P)//hex4(56320_I4P + modulo(value - 65536_I4P, 1024_I4P))
+   else
+      text = hex4(value)
+   endif
+   endfunction utf16
 
    pure function hex4(value) result(text)
    !< `value` (0-65535) as four hexadecimal digits.

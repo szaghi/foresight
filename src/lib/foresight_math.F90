@@ -23,6 +23,7 @@ private
 public :: math_item
 public :: math_layout
 public :: has_math
+public :: next_math
 public :: any_upm
 public :: any_advance
 public :: any_outline
@@ -116,22 +117,56 @@ contains
    endsubroutine math_layout
 
    pure function has_math(text) result(yes)
-   !< Whether `text` holds math: a `$` and a later `$`, neither escaped (`\$` is a dollar).
+   !< Whether `text` holds math (next_math).
    character(len=*), intent(in) :: text  !< Text.
    logical                      :: yes   !< It holds math.
-   integer(I4P)                 :: k     !< Position.
-   integer(I4P)                 :: found !< Unescaped dollars.
+   integer(I4P)                 :: open  !< A run's opening dollar.
+   integer(I4P)                 :: close !< Its closing dollar.
 
-   found = 0_I4P
-   do k = 1_I4P, len(text, kind=I4P)
-      if (text(k:k) /= '$') cycle
-      if (k > 1_I4P) then
-         if (text(k - 1_I4P:k - 1_I4P) == achar(92)) cycle
-      endif
-      found = found + 1_I4P
-   enddo
-   yes = found >= 2_I4P
+   call next_math(text, 1_I4P, open, close)
+   yes = open > 0_I4P
    endfunction has_math
+
+   pure subroutine next_math(text, from, open, close)
+   !< The next math run of `text` from `from`, as pandoc reads TeX math in text: an unescaped `$` followed by a non-blank
+   !< opens it, the next unescaped `$` preceded by a non-blank and followed by no letter, digit nor `_` closes it
+   !< (gnuplot's `$data` blocks and `$f(x)` function blocks, `$5 and $10`, are text); `open` and `close` the dollars'
+   !< positions, 0 when there is none.
+   character(len=*), intent(in)  :: text  !< Text.
+   integer(I4P),     intent(in)  :: from  !< First position.
+   integer(I4P),     intent(out) :: open  !< Opening dollar, 0 none.
+   integer(I4P),     intent(out) :: close !< Closing dollar, 0 none.
+   integer(I4P)                  :: i     !< Opening candidate.
+   integer(I4P)                  :: j     !< Closing candidate.
+   integer(I4P)                  :: n     !< Length.
+
+   open = 0_I4P
+   close = 0_I4P
+   n = len(text, kind=I4P)
+   do i = from, n - 1_I4P
+      if (.not. dollar(i)) cycle
+      if (text(i + 1_I4P:i + 1_I4P) == ' ' .or. text(i + 1_I4P:i + 1_I4P) == '$') cycle
+      do j = i + 2_I4P, n
+         if (.not. dollar(j)) cycle
+         if (text(j - 1_I4P:j - 1_I4P) == ' ') cycle
+         if (j < n) then
+            if (is_letter(text(j + 1_I4P:j + 1_I4P)) .or. scan(text(j + 1_I4P:j + 1_I4P), '0123456789_') > 0) cycle
+         endif
+         open = i
+         close = j
+         return
+      enddo
+   enddo
+   contains
+      pure function dollar(k) result(yes)
+      !< An unescaped dollar at `k`.
+      integer(I4P), intent(in) :: k   !< Position.
+      logical                  :: yes !< A dollar.
+
+      yes = text(k:k) == '$'
+      if (yes .and. k > 1_I4P) yes = text(k - 1_I4P:k - 1_I4P) /= achar(92)
+      endfunction dollar
+   endsubroutine next_math
 
    pure function any_upm(face) result(upm)
    !< Units to the em of a text face (1-8) or of the math font (MATH_FACE).

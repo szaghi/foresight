@@ -1739,6 +1739,24 @@ Departures from gnuplot: the Symbol font is written as Unicode Greek letters (gn
 `Symbol`, which few systems have), and the `<text>` elements carry `xml:space="preserve"`, so the blank at the start
 of a run is kept by every SVG renderer.
 
+### TeX math
+
+A foresight extension: a text's `$...$` runs are TeX math, laid out as LaTeX lays them out (unicode-math, Latin
+Modern Math) and drawn from the compiled-in math glyphs, in any label, title, key title or tick label: `set xlabel
+'$t/\tau$'`, `plot f(x) title '$e^{-t/\tau}\cos\omega t$'`. The subset: math italic letters, Greek, sub- and
+superscripts and primes, `\frac`, `\sqrt`, `\left` ... `\right`, operators and relations with TeX's spacing, inline
+`\sum`, `\prod`, `\int`, accents (`\hat`, `\bar`, `\vec`, ...), `\mathrm`, `\mathbf`, operator names (`\sin`, ...)
+and spaces; no display style nor environments; see [path C](/manual/paths/c-paper/07-math-in-labels).
+
+- The text around a formula stays enhanced text; in a text holding math `\$` is a dollar; a single `$` is a dollar.
+  Automatic titles and `noenhanced` texts are never math.
+- SVG and HTML draw a text holding math from the glyphs, over the text kept transparent (selectable); PDF embeds the
+  math glyphs; the text devices write the source; `cairolatex` hands it to LaTeX.
+- The viewer keeps math labels as drawn; a zoom draws the tick labels again, as text: a math tick format
+  (`set format y '$%.1f$'`) is then written as its source.
+- foresight_math_test compares 40 formulas with LuaLaTeX's layout, every glyph within 0.5 pt at 10 pt;
+  `scripts/check_math.py` checks them in the SVG and PDF goldens.
+
 ## Parallel axes and spider plots
 
 ```gnuplot

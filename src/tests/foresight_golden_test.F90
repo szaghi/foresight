@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(171)                  !< Per-figure outcome.
+logical                     :: test_passed(177)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -126,7 +126,7 @@ test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
 ! the later figures in a procedure of their own: nvfortran 26.9 finds the main program too large to compile
 call later_checks
-write(output_unit, '(A,171L2)') 'foresight golden checks:', test_passed
+write(output_unit, '(A,177L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -227,7 +227,61 @@ contains
    test_passed(169) = check('annotations.tex', figure_annotations())
    test_passed(170) = check('histograms.tex', figure_histograms(.false.))
    test_passed(171) = check('lines_standalone.tex', standalone(figure_lines()))
+   ! TeX math in labels: every device; the 40 reference formulas of src/tests/math_refs.txt (scripts/check_math.py
+   ! checks them against LuaLaTeX's layout in the SVG and the PDF)
+   test_passed(172) = check('math.svg', figure_math())
+   test_passed(173) = check('math.pdf', figure_math())
+   test_passed(174) = check('math.txt', figure_math())
+   test_passed(175) = check('math.html', figure_math())
+   test_passed(176) = check('math_refs.svg', figure_math_refs())
+   test_passed(177) = check('math_refs.pdf', figure_math_refs())
    endsubroutine later_checks
+
+   function figure_math() result(fig)
+   !< TeX-math labels: the title, the axis labels, the key titles and two labels with fractions, roots, Greek, scripts,
+   !< `\left(` ... `\right)` and a relation; a label with math and an escaped dollar.
+   type(figure_object)         :: fig  !< Figure.
+   real(R8P), allocatable      :: t(:) !< Times.
+   character(len=1), parameter :: B = achar(92) !< Backslash.
+   integer(I4P)                :: i    !< Counter.
+
+   t = [(0.04_R8P * real(i, R8P), i = 0, 100)]
+   call fig%set_title('Damped response $x(t) = e^{-t/'//B//'tau}'//B//'cos'//B//'omega t$')
+   call fig%set_xlabel('$t/'//B//'tau$')
+   call fig%set_ylabel('$x/x_0$')
+   call fig%plot(t, exp(-t) * cos(8.0_R8P * atan(1.0_R8P) * t), title='$e^{-t/'//B//'tau}'//B//'cos'//B//'omega t$')
+   call fig%plot(t, exp(-t), title='$e^{-t/'//B//'tau}$', dt=2_I4P)
+   call fig%set_label('$'//B//'omega = '//B//'sqrt{k/m}$, $'//B//'zeta = '//B//'frac{c}{2'//B//'sqrt{km}}$', &
+                      1.5_R8P, 0.6_R8P)
+   call fig%set_label('$'//B//'left('//B//'frac{'//B//'partial u}{'//B//'partial t}'//B//'right)_{'//B// &
+                      'max} '//B//'le 10^{-3}$', 1.5_R8P, -0.4_R8P)
+   call fig%set_label('from '//B//'$5 to $x_0$', 2.5_R8P, 0.2_R8P)
+   endfunction figure_math
+
+   function figure_math_refs() result(fig)
+   !< The 40 formulas of src/tests/math_refs.txt as labels at 10 pt, two columns of 20 (screen x 0.12 and 0.55, from
+   !< screen y 0.95 down by 0.045), left justified: scripts/check_math.py compares their glyphs with LuaLaTeX's.
+   type(figure_object)           :: fig   !< Figure.
+   character(len=512)            :: line  !< A line of the references.
+   integer(I4P)                  :: unit  !< File unit.
+   integer(I4P)                  :: ios   !< I/O status.
+   integer(I4P)                  :: k     !< Formula.
+
+   call fig%init(width=800_I4P, height=900_I4P)
+   call fig%set_font(',10')
+   call fig%plot([0.0_R8P, 1.0_R8P], [0.0_R8P, 1.0_R8P], title='')
+   open(newunit=unit, file='src/tests/math_refs.txt', status='old', action='read')
+   k = 0_I4P
+   do
+      read(unit, '(A)', iostat=ios) line
+      if (ios /= 0) exit
+      if (line(1:2) /= 'F ') cycle
+      call fig%set_label('$'//trim(line(3:))//'$', merge(0.12_R8P, 0.55_R8P, k < 20_I4P), &
+                         0.95_R8P - 0.045_R8P * real(mod(k, 20_I4P), R8P), system='screen')
+      k = k + 1_I4P
+   enddo
+   close(unit)
+   endfunction figure_math_refs
 
    function standalone(fig) result(out)
    !< `fig` as a standalone LaTeX document in color, 10 pt, Latin Modern Sans, with a header line.

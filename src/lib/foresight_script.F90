@@ -11413,24 +11413,6 @@ contains
       endif
       endsubroutine pair_systems
 
-      subroutine pair(values, system)
-      !< Two numbers `[SYS] a, b` after token `i` (an object size, an arrow head size), `i` left on the last.
-      real(R8P),        intent(out)   :: values(2) !< Numbers.
-      character(len=9), intent(inout) :: system    !< System of the first.
-      character(len=9)                :: second    !< System of the second (ignored).
-
-      call coordinate(values(1), system)
-      if (iostat /= 0_I4P) return
-      values(2) = 0.0_R8P
-      if (i < size(tokens, kind=I4P)) then
-         if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
-            i = i + 1_I4P
-            second = system
-            call coordinate(values(2), second)
-         endif
-      endif
-      endsubroutine pair
-
       subroutine label_words
       !< The words of `set label`.
       do while (i <= size(tokens, kind=I4P))
@@ -11650,6 +11632,7 @@ contains
       !< The words of `set object`.
       real(R8P)                     :: size2(2) !< Width and height.
       character(len=9)              :: system   !< System of a size.
+      character(len=9)              :: second_system !< System of a size's second number (ignored).
       character(len=:), allocatable :: bad      !< Unknown fill word.
       character(len=:), allocatable :: fill     !< Fill words.
       type(place_object)            :: corner   !< A corner.
@@ -11706,8 +11689,19 @@ contains
             ! `radius R` names a circle's size, as gnuplot
             system = 'first'
             if (allocated(object%points)) system = object%points(1)%sx
-            call pair(size2, system)
+            ! the two numbers inline: nvfortran 26.9 -O2 read a stale `i` in an internal subroutine (pair) right after
+            ! its sibling (coordinate) advanced it, and missed the comma
+            call coordinate(size2(1), system)
             if (iostat /= 0_I4P) return
+            size2(2) = 0.0_R8P
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%kind == TOKEN_COMMA) then
+                  i = i + 1_I4P
+                  second_system = system
+                  call coordinate(size2(2), second_system)
+                  if (iostat /= 0_I4P) return
+               endif
+            endif
             object%size%x = size2(1)
             object%size%y = size2(2)
             object%size%sx = system

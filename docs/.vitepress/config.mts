@@ -33,6 +33,7 @@ const docs = [
       { text: 'C4. Multi-panel figures', link: '/manual/paths/c-paper/04-multi-panel-figures' },
       { text: 'C5. The paper', link: '/manual/paths/c-paper/05-the-paper' },
       { text: 'C6. Labels set by LaTeX', link: '/manual/paths/c-paper/06-labels-set-by-latex' },
+      { text: 'C7. Math in labels', link: '/manual/paths/c-paper/07-math-in-labels' },
     ],
   },
   {

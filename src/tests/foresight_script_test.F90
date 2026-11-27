@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(301)                           !< Per-check outcome.
+logical                       :: test_passed(302)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8310,6 +8310,9 @@ block
    close(unit, status='delete')
 endblock
 
+! check 302 in a procedure of its own, as the golden test's later checks (the main program is large)
+call check_math_labels
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -8326,6 +8329,43 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine check_math_labels
+   !< Check 302: TeX math in a script's labels: the SVG draws them from the glyphs (the math font's defined, a fraction's
+   !< rule a <rect>) over their text kept transparent; a single `$` a dollar; noenhanced titles never math; the dumb
+   !< terminal writes the source
+   character(len=:), allocatable :: page   !< File.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   character(len=1), parameter   :: bs = achar(92)     !< Backslash.
+   character(len=:), allocatable :: iomsg  !< Error message.
+   integer(I4P)                  :: iostat !< Error status.
+   integer(I4P)                  :: unit   !< File unit.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg"//nl//"set output 'foresight_script_test_math.svg'"//nl// &
+                             "set xlabel '$"//bs//"frac{t}{"//bs//"tau}$'"//nl//"set ylabel 'cost: $5'"//nl// &
+                             "plot x title '$x$ and $y$' noenhanced", iostat, iomsg)
+   test_passed(302) = iostat == 0_I4P
+   if (test_passed(302)) then
+      page = read_text('foresight_script_test_math.svg')
+      test_passed(302) = index(page, '<path id="fs-g9-') > 0 .and. index(page, 'class="fs-glyphs"') > 0 .and. &
+                         index(page, 'fill-opacity="0" text-anchor="middle">$'//bs//'frac{t}{'//bs//'tau}$</text>') &
+                         > 0 .and. &
+                         index(page, '<rect x=') > 0 .and. index(page, '>cost: $5</text>') > 0 .and. &
+                         index(page, '>$x$ and $y$</text>') > 0
+   endif
+   call interpreter%run_text("set terminal dumb"//nl//"set output 'foresight_script_test_math.txt'"//nl//"replot", &
+                             iostat, iomsg)
+   test_passed(302) = test_passed(302) .and. iostat == 0_I4P
+   if (test_passed(302)) then
+      page = read_text('foresight_script_test_math.txt')
+      test_passed(302) = index(page, '$'//bs//'frac{t}{'//bs//'tau}$') > 0
+   endif
+   open(newunit=unit, file='foresight_script_test_math.svg')
+   close(unit, status='delete')
+   open(newunit=unit, file='foresight_script_test_math.txt')
+   close(unit, status='delete')
+   endsubroutine check_math_labels
+
    function baseline(svg, at) result(y)
    !< The `y` attribute of the SVG `<text>` element holding position `at` of `svg`.
    character(len=*), intent(in) :: svg  !< SVG.

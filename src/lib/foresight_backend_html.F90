@@ -72,6 +72,8 @@ contains
    !< Close the SVG, append the viewer script, close the page and publish it atomically.
    class(backend_html), intent(inout) :: self !< Device.
 
+   ! the glyphs of the texts drawn from them (TeX math), defined once
+   call self%glyph_defs
    call self%put('</svg>')
    call self%put('<script>')
    call write_viewer_js(self%output_unit())

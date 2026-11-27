@@ -451,6 +451,7 @@ foresight --watch residuals.gp                # re-render while the solver write
 <div class="fs-gallery">
   <Plot name="cb_paper" svg :width="321" :height="227" caption="a one-column figure (pdfcairo, theme paper)" />
   <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern" />
+  <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels, set as LaTeX sets it" />
 </div>
 
 ### From Fortran
