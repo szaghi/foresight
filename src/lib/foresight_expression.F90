@@ -73,6 +73,7 @@ public :: store_hook
 public :: element_hook
 public :: element_fetch_hook
 public :: fetch_hook
+public :: voxel_hook
 public :: store_interface
 public :: fetch_interface
 public :: push
@@ -154,6 +155,8 @@ integer(I4P), parameter :: OP_FETCH        = 51_I4P !< Push the user variable `s
 integer(I4P), parameter :: OP_ASSIGN_ELEMENT = 52_I4P !< `name[i] = value` inside an expression: the top stored in
                                                       !< element i (below it) of the array `stores(arg)`
                                                       !< (`element_hook`); the index dropped, the value kept.
+integer(I4P), parameter :: OP_VOXEL         = 54_I4P !< `voxel(x, y, z)`: the three tops replaced by the active voxel
+                                                    !< grid's value there (`voxel_hook`), gnuplot 6.0's.
 integer(I4P), parameter :: OP_FETCH_ELEMENT = 53_I4P !< Replace the top (an index) with that element of the array
                                                      !< `stores(arg)` as it is now (`element_fetch_hook`).
 
@@ -197,6 +200,7 @@ integer(I4P), parameter :: E_UNINIT     = 13_I4P !< An operation on gnuplot's un
 integer(I4P), parameter :: E_SEED       = 14_I4P !< rand(x): x not an integer seed.
 integer(I4P), parameter :: E_ORDER      = 15_I4P !< A real order of besjn, besyn, besin or expint (`order_message`).
 integer(I4P), parameter :: E_NOVAR      = 16_I4P !< A variable assigned by an expression read before it has a value.
+integer(I4P), parameter :: E_NOVOXEL    = 17_I4P !< voxel() without an active voxel grid.
 
 ! binary operator levels of the grammar, loosest first
 character(len=*), parameter :: LEVELS(10) = [character(len=11) :: '||', '&&', '|', '^', '&', '== != eq ne', &
@@ -418,6 +422,14 @@ abstract interface
    logical,            intent(out) :: set   !< With a value.
    endsubroutine element_fetch_interface
 
+   subroutine voxel_interface(p, v, found)
+   !< The active voxel grid's value at `p` (NaN out of its ranges), `found` false if no grid is active.
+   import :: R8P
+   real(R8P), intent(in)  :: p(3)  !< Point.
+   real(R8P), intent(out) :: v     !< Value.
+   logical,   intent(out) :: found !< A grid is active.
+   endsubroutine voxel_interface
+
    subroutine fetch_interface(name, v, found)
    !< Value of the user variable `name` now, `found` false if none.
    import :: value_object
@@ -430,6 +442,7 @@ endinterface
 procedure(block_call_interface), pointer :: block_hook => null() !< The interpreter's runner of function blocks.
 procedure(store_interface),      pointer :: store_hook => null() !< The interpreter's store of a user variable.
 procedure(fetch_interface),      pointer :: fetch_hook => null() !< The interpreter's value of a user variable.
+procedure(voxel_interface),      pointer :: voxel_hook => null() !< The interpreter's active voxel grid.
 procedure(element_store_interface), pointer :: element_hook => null() !< The interpreter's store of an array element.
 procedure(element_fetch_interface), pointer :: element_fetch_hook => null() !< The interpreter's array element now.
 integer(I8P), save :: rand_seeds(2) = 1234567890_I8P !< gnuplot's rand seeds (L'Ecuyer's combined generator).
@@ -892,7 +905,7 @@ contains
       case (OP_ADD:OP_NE, OP_CONCAT:OP_STRNE, OP_BAND:OP_SHR, OP_JUMP_UNLESS, OP_AND_JUMP, OP_OR_JUMP, OP_TIMECOLUMN)
          ! the conditional jumps pop on the path that falls through; timecolumn takes the column and the format
          depth = depth - 1_I4P
-      case (OP_SUBSTRING)
+      case (OP_SUBSTRING, OP_VOXEL)
          depth = depth - 2_I4P
       case (OP_ASSIGN_ELEMENT)
          depth = depth - 1_I4P
@@ -1375,6 +1388,10 @@ contains
          elseif (name == 'atan2') then
             if (nargs /= 2_I4P) call syntax('atan2 needs 2 arguments', at)
             call emit(OP_ATAN2)
+         elseif (name == 'voxel') then
+            ! gnuplot 6.0's voxel(x, y, z): the active voxel grid's value there
+            if (nargs /= 3_I4P) call syntax('voxel needs 3 arguments', at)
+            call emit(OP_VOXEL)
          elseif (name == 'timecolumn') then
             if (present(variable)) then
                call syntax(name//' is only valid in using, not in a function', at)
@@ -2340,7 +2357,8 @@ contains
    if (iostat /= 0_I4P) return
    if (any(FUNCTIONS == name) .or. any(STRING_FUNCTIONS == name) .or. any(ROW_FUNCTIONS == name) .or. &
        any(MATH_FUNCTIONS == name) .or. &
-       name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists' .or. name == 'time') then
+       name == 'atan2' .or. name == 'column' .or. name == 'value' .or. name == 'exists' .or. name == 'time' .or. &
+       name == 'voxel') then
       iostat = 1_I4P
       iomsg = '"'//name//'" is a builtin function'
       return
@@ -3599,6 +3617,27 @@ contains
             sp = sp - instruction%arg
          case (OP_ASSIGN)
             if (associated(store_hook)) call store_hook(self%stores(instruction%arg)%text, stack(sp))
+         case (OP_VOXEL)
+            block
+               real(R8P) :: q(3)  !< The point.
+               real(R8P) :: v     !< The value.
+               logical   :: found !< A grid active.
+
+               if (stack(sp - 2_I4P)%is_string) call numeric(stack(sp - 2_I4P), ok, err)
+               if (stack(sp - 1_I4P)%is_string .and. ok) call numeric(stack(sp - 1_I4P), ok, err)
+               if (stack(sp)%is_string .and. ok) call numeric(stack(sp), ok, err)
+               if (ok) then
+                  q = [real_of(stack(sp - 2_I4P)), real_of(stack(sp - 1_I4P)), real_of(stack(sp))]
+                  found = .false.
+                  if (associated(voxel_hook)) call voxel_hook(q, v, found)
+                  if (.not. found) then
+                     ok = .false.
+                     err = E_NOVOXEL
+                  endif
+               endif
+               sp = sp - 2_I4P
+               if (ok) stack(sp) = value_object(r=v)
+            endblock
          case (OP_FETCH_ELEMENT)
             call index_of(stack(sp), c, ok)
             if (.not. ok) then
@@ -5024,6 +5063,8 @@ contains
       text = 'the order of besjn, besyn, besin and expint must be an integer'
    case (E_NOVAR)
       text = 'undefined variable'
+   case (E_NOVOXEL)
+      text = 'no active voxel grid'
    case default
       text = 'undefined value'
    endselect

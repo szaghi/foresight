@@ -48,6 +48,7 @@ that did what it says.
 | **cl**ear | in a [multiplot](#multiplot), the box of the next plot (`set origin`, `set size`) painted with the page color first, an inset over the plots below; otherwise nothing (each plot replaces the page) |
 | **undef**ine *name* ... | forget variables (`name*`: those starting with `name`), arrays and datablocks (`$NAME`) |
 | `array` *A*`[`*N*`]` [`= [`*e1*`, ...]`], `array` *A* `= [`*e1*`, ...]`, `array` *A* `=` *B*`[`*i*`:`*j*`]`, *A*`[`*i*`] =` *expression* | an [array](#arrays) |
+| **vcl**ear [`$GRID`], **vfi**ll\|**vgfi**ll *source* `using x:y:z:radius:(density)`, `voxel(`*x*`,`*y*`,`*z*`) =` *value* | [voxel grids](#voxel-grids): zero a grid, add a density around data points, set one grid point |
 | **sy**stem `"command"` | run a [shell command](#shell-commands-reset-and-pause), its output on the standard output |
 | **res**et [`session`\|`errors`\|`bind`] | the plot settings back to their [defaults](#shell-commands-reset-and-pause) |
 | **pa**use *seconds*\|`-1`\|`mouse` [`"message"`] | [wait](#shell-commands-reset-and-pause): `while (1) { plot ...; pause 5 }` is the live loop |
@@ -314,7 +315,7 @@ plot 'run.dat' using 0:(sqrt($2**2 + $3**2)) with lines
 |---|---|
 | Columns | `$N` or `column(N)`, `$0` is the point number; `column()` takes an expression: `column($1 + 1)`, or a header name: `column("residual")`; `column(-1)` the block, `column(-2)` the dataset; the text of a column: [`strcol(N)`](#string-columns) |
 | Operators, loosest first | `?:` · `\|\|` · `&&` · `\|` · `^` · `&` · `==` `!=` · `<` `<=` `>` `>=` · `<<` `>>` · `+` `-` · `*` `/` `%` · unary `-` `+` `!` `~` · `**` |
-| Functions | `abs acos arg asin atan atan2 ceil conj cos cosh exp floor imag int log log10 real sgn sin sinh sqrt tan tanh`; gnuplot's [special functions](#special-functions) (`erf`, `gamma`, `besj0`, `lambertw`, ...); the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`, `tm_*`, `weekdate_iso`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays), `rand(x)` (gnuplot's generator: `rand(0)` the next number, `rand(-1)` reset, `rand(N)` seeded; the same numbers as gnuplot), `exists("name")` (old name `exist`) |
+| Functions | `abs acos arg asin atan atan2 ceil conj cos cosh exp floor imag int log log10 real sgn sin sinh sqrt tan tanh`; gnuplot's [special functions](#special-functions) (`erf`, `gamma`, `besj0`, `lambertw`, ...); the [string functions](#strings), [`strcol`, `columnhead`](#string-columns), [`timecolumn`, `strftime`, `strptime`, `time`, `tm_*`, `weekdate_iso`](#time-data), [`system`](#shell-commands-reset-and-pause), [`index`](#arrays), `rand(x)` (gnuplot's generator: `rand(0)` the next number, `rand(-1)` reset, `rand(N)` seeded; the same numbers as gnuplot), `exists("name")` (old name `exist`), `voxel(x,y,z)` (the active [voxel grid](#voxel-grids)) |
 | Arrays | `A[i]` an element, `A[i:j]` a slice, `\|A\|` the size, `$NAME[i]` a datablock line, see [Arrays](#arrays) |
 | Function blocks | `$f(args)`, see [Function blocks](#function-blocks) |
 | Constants | numbers (`2`, `1.5`, `.5`, `1e-3`, hexadecimal `0xff`, octal `017`), `pi`, complex `{re, im}` and `I` (`{0,1}`) |
@@ -2486,6 +2487,35 @@ own layout (gnuplot's dumb map is not followed). The other views are [3D views](
 In the library, `fig%splot(x, y, z)` adds scattered points (a scan; gridded after `set_dgrid3d`) and
 `fig%splot(x, y, z2d)` a grid `z(i, j)` at `(x(i), y(j))`, a scan per row; `set_zrange`, `set_zlabel`, `set_ztics` set
 the z axis, `set_view` and `set_xyplane` the view.
+
+### Voxel grids
+
+gnuplot 6.0's voxel grids, as its voxelgrid.c and vplot.c:
+
+```gnuplot
+set vgrid $helix size 33                      # a 33 x 33 x 33 grid of zeros, the active one
+set vxrange [-2:2]; set vyrange [-2:2]; set vzrange [0:11]
+vfill sample [t=0:20] '+' using (cos($1)):(sin($1)):($1):(0.9):(10.0)
+splot $helix with points pt 7 ps 0.4 lt 2, $helix with isosurface level 1.0 lt 3
+```
+
+| Command | Effect |
+|---|---|
+| `set vgrid $NAME` [`size N`] | a grid of N x N x N zeros (N from 10 to 256, 100 by default; an existing grid keeps its size and values), made the active one |
+| `set vxrange [a:b]`, `vyrange`, `vzrange` | the active grid's ranges; without them, the fixed `xrange`, `yrange`, `zrange` when the grid is first used, else an error |
+| `unset vgrid $NAME` | the grid freed |
+| `vclear` [`$NAME`] | every value zero (the active grid by default) |
+| `voxel(x,y,z) = v` | the grid point of (x, y, z): indices `ceil((x - min) / delta)`, as gnuplot; out of the ranges a warning |
+| `voxel(x,y,z)` | in an expression, the value there (NaN out of the ranges, an error without an active grid) |
+| `vfill` *source* `using x:y:z:radius:(density)` | for each data point in the ranges, the density added to every grid point within the radius (and to the nearest one always); `VoxelDistance` (and `GridDistance`, in grid steps) its distance while the density is evaluated; any plot source and option (`sample [t=a:b] '+'`, datablocks, files, `'-'`) |
+| `vgfill` ... | the same, the radius in grid steps |
+| `set isosurface` [`mixed`\|`triangles`] [`insidecolor N`\|`noinsidecolor`] | the isosurface facets: quadrangles and triangles (gnuplot's default) or triangles only; the inside color is read |
+| `splot $NAME with points`\|`dots` [`above L`] | the grid points of values above L (0 by default; `dots` without a style), `lc palette` colored by their value |
+| `splot $NAME with isosurface level L` | the surface of level L by marching cubes (gnuplot's tables), its facets filled in the item's line color and the fill style, depth sorted with `set pm3d depthorder` |
+
+The grid's ranges autoscale the axes, as gnuplot's. `exists("VoxelDistance")` is true, the test gnuplot's demos make.
+Values are single precision, as gnuplot's. Not supported: the inside color of an isosurface (its back faces are
+drawn in the same color), a key sample for an isosurface, `show vgrid` (a no-op, as every `show`).
 
 ## Polar plots
 

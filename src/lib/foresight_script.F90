@@ -120,6 +120,8 @@ use foresight_axes, only : axes_names, axes_object, contour_label, surface_conto
                            MAX_LINETYPES, boxplot_style, boxplot_words, polar_series, &
                            spider_words, POLAR_STYLES, colormap_object
 use foresight_datafile, only : datafile_object
+use foresight_voxel, only : vgrid_object
+use foresight_expression, only : voxel_hook
 use foresight_expression, only : block_hook, element_fetch_hook, element_hook, fetch_hook, store_hook, expression_object, &
                                  list_text, push, &
                                  saved_array, saved_variable, &
@@ -270,6 +272,10 @@ type :: script_object
    integer(I4P)                    :: samples = 100_I4P        !< Function samples, `set samples`.
    real(R8P)                       :: rgbmax = 255.0_R8P       !< Full intensity of RGB image components, `set rgbmax`.
    integer(I4P)                    :: binary_count = 0_I4P     !< Datablocks made of binary files (`$__binaryN`).
+   type(vgrid_object), allocatable :: vgrids(:)                !< Voxel grids (`set vgrid $name`).
+   integer(I4P)                    :: vgrid_active = 0_I4P     !< The active one, 0 for none.
+   logical                         :: iso_triangles = .false.  !< `set isosurface triangles` (else mixed).
+   integer(I4P)                    :: iso_inside = 1_I4P       !< `set isosurface insidecolor N` (read, unused).
    real(R8P)                       :: chi_fraction = 0.6_R8P   !< Default concave hull length, a fraction of the longest
                                                                !< convex hull edge (`set chi_shape fraction`).
    type(symbols_object)            :: symbols                  !< User variables and functions, `a = 2`, `f(x) = ...`.
@@ -361,6 +367,11 @@ type :: script_object
       procedure, pass(self), private :: set_command   !< `set`.
       procedure, pass(self), private :: unset_command !< `unset`.
       procedure, pass(self), private :: exit_command  !< `exit`, `quit`.
+      procedure, pass(self), private :: vgrid_index   !< A voxel grid by name.
+      procedure, pass(self), private :: vgrid_ranges  !< The active voxel grid's ranges.
+      procedure, pass(self), private :: voxel_option  !< `set vgrid`, `set vxrange`..., `set isosurface`.
+      procedure, pass(self), private :: voxel_statement !< `unset vgrid`, `vclear`, `voxel(...) =`, `vfill`.
+      procedure, pass(self), private :: voxel_items   !< splot items of voxel grids as datablocks.
 endtype script_object
 
 type, extends(fit_model) :: script_model
@@ -466,6 +477,7 @@ contains
    element_hook => store_element
    element_fetch_hook => fetch_element
    fetch_hook => fetch_variable
+   voxel_hook => fetch_voxel
    call default_styles(self)
    endsubroutine init
 
@@ -485,6 +497,9 @@ contains
    call self%symbols%set_string('GPVAL_TERM', self%term_name)
    call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html svg')
    call self%symbols%set_string('GPVAL_DEGREE_SIGN', achar(194)//achar(176))
+   ! gnuplot's reserved voxel variables (scripts test exists("VoxelDistance") for voxel support)
+   call self%symbols%set_value('VoxelDistance', 0.0_R8P, is_int=.false.)
+   call self%symbols%set_value('GridDistance', 0.0_R8P, is_int=.false.)
    call command_output('uname -s', text, status)
    if (status /= 0_I4P .or. len(text) == 0) text = 'unknown'
    if (text(len(text):len(text)) == new_line('a')) text = text(1:len(text) - 1)
@@ -1113,6 +1128,19 @@ contains
       endif
       return
    endselect
+   ! gnuplot 6.0's `voxel(x,y,z) = value`, not a function definition
+   block
+      character(len=:), allocatable :: lead !< The statement, its leading blanks removed.
+
+      lead = adjustl(statement)
+      if (len(lead) > 6) then
+         if (lead(1:6) == 'voxel(' .or. lead(1:7) == 'voxel (') then
+            allocate(tokens(0))
+            call self%voxel_statement('voxel', tokens, statement, iostat, iomsg)
+            return
+         endif
+      endif
+   endblock
    if (self%assignment(statement, iostat, iomsg)) return
    call tokenize(statement, tokens, iostat, iomsg)
    if (iostat /= 0_I4P) return
@@ -1153,10 +1181,16 @@ contains
          self%advance_pending = .false.
       endif
    endif
-   if (keyword(command, 'set', 2_I4P)) then
+   if (keyword(command, 'set', 2_I4P) .and. voxel_word(tokens)) then
+      call self%voxel_option(tokens(2:), iostat, iomsg)
+   elseif (keyword(command, 'set', 2_I4P)) then
       call self%set_command(tokens(2:), iostat, iomsg)
+   elseif (keyword(command, 'unset', 3_I4P) .and. voxel_word(tokens)) then
+      call self%voxel_statement('unset', tokens, statement, iostat, iomsg)
    elseif (keyword(command, 'unset', 3_I4P)) then
       call self%unset_command(tokens(2:), iostat, iomsg)
+   elseif (command == 'vclear' .or. command == 'vfill' .or. command == 'vgfill') then
+      call self%voxel_statement(command, tokens, statement, iostat, iomsg)
    elseif (keyword(command, 'plot', 1_I4P)) then
       self%last_plot = after_command(statement)
       self%last_splot = .false.
@@ -4655,7 +4689,7 @@ contains
       endfunction split_cells
    endsubroutine matrix_header_items
 
-   subroutine plot_command(self, tokens, text, iostat, iomsg, three_d)
+   recursive subroutine plot_command(self, tokens, text, iostat, iomsg, three_d)
    !< `plot` and `splot` (`three_d`) (plot_items), gnuplot's binary arrays (`'file' binary array=...`) first read into
    !< datablocks.
    class(script_object),          intent(inout) :: self      !< Interpreter.
@@ -4673,6 +4707,19 @@ contains
 
    splot_mode = .false.
    if (present(three_d)) splot_mode = three_d
+   ! voxel grid items of a splot (`$grid with points|dots|isosurface`) as datablocks first
+   if (splot_mode) then
+      binary = .false.
+      do k = 1_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%kind == TOKEN_WORD) binary = binary .or. self%vgrid_index(tokens(k)%text) > 0_I4P
+      enddo
+      if (binary) then
+         call self%voxel_items(tokens, items, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+         call self%plot_command(items, text, iostat, iomsg, three_d=.true.)
+         return
+      endif
+   endif
    binary = .false.
    has_sparse = .false.
    do k = 2_I4P, size(tokens, kind=I4P)
@@ -16698,11 +16745,14 @@ contains
          ! the label options of every axis
          if (styled) then
             if (allocated(fmt)) then
+               ! gnuplot's `format ""`: no labels (a blank one each), as `set format x ""`; on every axis, z too
+               if (len(fmt) == 0) fmt = ' '
                panel%xaxis%tics%format = fmt
                panel%yaxis%tics%format = fmt
                panel%x2axis%tics%format = fmt
                panel%y2axis%tics%format = fmt
                panel%cbaxis%tics%format = fmt
+               panel%zaxis%tics%format = fmt
             endif
             ! the options given only
             if (offset_given()) then
@@ -19010,7 +19060,8 @@ contains
       return
    endif
    if (.not. (keyword(word, 'plot', 1_I4P) .or. keyword(word, 'replot', 3_I4P) .or. word == 'fit' .or. &
-              keyword(word, 'stats', 2_I4P) .or. keyword(word, 'splot', 2_I4P))) return
+              keyword(word, 'stats', 2_I4P) .or. keyword(word, 'splot', 2_I4P) .or. word == 'vfill' .or. &
+              word == 'vgfill')) return
    i = index(line, word, kind=I4P) + len(word, kind=I4P)
    rewritten = line(1:i - 1)
    expect = .true.
@@ -21079,4 +21130,662 @@ contains
    grown(n + 1_I4P) = item
    call move_alloc(grown, list)
    endsubroutine push_line_style
+   subroutine fetch_voxel(p, v, found)
+   !< The active interpreter's active voxel grid at `p` (foresight_expression's `voxel_hook`, gnuplot's voxel()): NaN
+   !< out of its ranges, `found` false if no grid is active or its ranges are not set yet.
+   real(R8P), intent(in)  :: p(3)  !< Point.
+   real(R8P), intent(out) :: v     !< Value.
+   logical,   intent(out) :: found !< A grid is active.
+
+   v = 0.0_R8P
+   found = .false.
+   if (.not. associated(active)) return
+   if (active%vgrid_active < 1_I4P) return
+   associate(g => active%vgrids(active%vgrid_active))
+      if (.not. all(g%ranged)) return
+      found = .true.
+      v = g%lookup(p)
+   endassociate
+   endsubroutine fetch_voxel
+
+   function vgrid_index(self, name) result(k)
+   !< The voxel grid named `name` (`$grid`), 0 if none.
+   class(script_object), intent(in) :: self !< Interpreter.
+   character(len=*),     intent(in) :: name !< Name.
+   integer(I4P)                     :: k    !< Index.
+   integer(I4P)                     :: j    !< Counter.
+
+   k = 0_I4P
+   if (.not. allocated(self%vgrids)) return
+   do j = 1_I4P, size(self%vgrids, kind=I4P)
+      if (self%vgrids(j)%name == name) k = j
+   enddo
+   endfunction vgrid_index
+
+   subroutine vgrid_ranges(self, iostat, iomsg)
+   !< The active grid's ranges (gnuplot's check_grid_ranges): those set by `set vxrange`..., else the fixed x, y, z
+   !< ranges of the plot now; an error without either. Then its spacing.
+   class(script_object),          intent(inout) :: self   !< Interpreter.
+   integer(I4P),                  intent(out)   :: iostat !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg  !< Error message.
+   integer(I4P)                                 :: a      !< Axis.
+
+   iostat = 0_I4P
+   if (self%vgrid_active < 1_I4P) then
+      call fail('vgrid must be set before use', iostat, iomsg)
+      return
+   endif
+   associate(g => self%vgrids(self%vgrid_active), panel => self%figure%panels(self%figure%current))
+      do a = 1_I4P, 3_I4P
+         if (g%ranged(a)) cycle
+         select case (a)
+         case (1_I4P)
+            if (panel%xaxis%min_fixed .and. panel%xaxis%max_fixed) then
+               g%lo(a) = panel%xaxis%min_user
+               g%hi(a) = panel%xaxis%max_user
+               g%ranged(a) = .true.
+            endif
+         case (2_I4P)
+            if (panel%yaxis%min_fixed .and. panel%yaxis%max_fixed) then
+               g%lo(a) = panel%yaxis%min_user
+               g%hi(a) = panel%yaxis%max_user
+               g%ranged(a) = .true.
+            endif
+         case default
+            if (panel%zaxis%min_fixed .and. panel%zaxis%max_fixed) then
+               g%lo(a) = panel%zaxis%min_user
+               g%hi(a) = panel%zaxis%max_user
+               g%ranged(a) = .true.
+            endif
+         endselect
+         if (.not. g%ranged(a)) then
+            call fail('grid limits must be set before use', iostat, iomsg)
+            return
+         endif
+      enddo
+      call g%spacing
+   endassociate
+   endsubroutine vgrid_ranges
+
+   subroutine voxel_option(self, tokens, iostat, iomsg)
+   !< gnuplot 6.0's `set vgrid $name [size N]` (a new grid of N x N x N zeros, N 10..256, 100 by default, or the grid
+   !< of that name kept, made active), `set vxrange|vyrange|vzrange [min:max]` (of the active grid) and
+   !< `set isosurface [mixed|triangles] [noinsidecolor|insidecolor N]`. `tokens` from the option.
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:) !< Option tokens.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(vgrid_object), allocatable              :: more(:)   !< Grids, one more.
+   type(value_object)                           :: v         !< A value.
+   real(R8P)                                    :: ends(2)   !< Range ends.
+   integer(I4P)                                 :: k, n, c, a !< Counters, size, colon, axis.
+   character(len=:), allocatable                :: text      !< A range end.
+
+   iostat = 0_I4P
+   if (keyword(tokens(1)%text, 'vgrid', 5_I4P)) then
+      if (size(tokens) < 2) then
+         call fail('syntax: set vgrid $<gridname> {size N}', iostat, iomsg)
+         return
+      endif
+      if (tokens(2)%text(1:1) /= '$') then
+         call fail('syntax: set vgrid $<gridname> {size N}', iostat, iomsg)
+         return
+      endif
+      k = self%vgrid_index(tokens(2)%text)
+      n = 100_I4P
+      if (k > 0_I4P) n = self%vgrids(k)%n
+      if (size(tokens) >= 4) then
+         if (tokens(3)%text == 'size') then
+            call self%symbols%evaluate_constant(tokens(4)%text, v, iostat, iomsg)
+            if (iostat /= 0_I4P) return
+            if (v%is_int) then
+               n = int(v%i, I4P)
+            else
+               n = int(v%r, I4P)
+            endif
+         endif
+      endif
+      if (n < 10_I4P .or. n > 256_I4P) then
+         call fail('vgrid size must be an integer between 10 and 256', iostat, iomsg)
+         return
+      endif
+      if (k == 0_I4P) then
+         if (.not. allocated(self%vgrids)) allocate(self%vgrids(0))
+         allocate(more(size(self%vgrids) + 1))
+         more(1:size(self%vgrids)) = self%vgrids
+         call move_alloc(more, self%vgrids)
+         k = size(self%vgrids, kind=I4P)
+         self%vgrids(k)%name = tokens(2)%text
+      endif
+      call self%vgrids(k)%resize(n)
+      self%vgrid_active = k
+   elseif (keyword(tokens(1)%text, 'isosurface', 7_I4P)) then
+      do k = 2_I4P, size(tokens, kind=I4P)
+         if (keyword(tokens(k)%text, 'triangles', 6_I4P)) self%iso_triangles = .true.
+         if (keyword(tokens(k)%text, 'mixed', 3_I4P)) self%iso_triangles = .false.
+         if (keyword(tokens(k)%text, 'noinsidecolor', 7_I4P)) self%iso_inside = 0_I4P
+         if (keyword(tokens(k)%text, 'insidecolor', 6_I4P)) then
+            self%iso_inside = 1_I4P
+            if (k < size(tokens, kind=I4P)) then
+               call self%symbols%evaluate_constant(tokens(k + 1_I4P)%text, v, iostat, iomsg)
+               if (iostat == 0_I4P .and. v%is_int) self%iso_inside = int(v%i, I4P)
+               iostat = 0_I4P
+            endif
+         endif
+      enddo
+   else
+      ! set vxrange|vyrange|vzrange [min:max]
+      if (self%vgrid_active < 1_I4P) then
+         call fail('no voxel grid is active', iostat, iomsg)
+         return
+      endif
+      a = index('xyz', tokens(1)%text(2:2))
+      if (size(tokens) < 2) return
+      if (tokens(2)%kind /= TOKEN_RANGE) return
+      c = index(tokens(2)%text, ':')
+      if (c == 0) return
+      do k = 1_I4P, 2_I4P
+         if (k == 1_I4P) then
+            text = trim(adjustl(tokens(2)%text(1:c - 1)))
+         else
+            text = trim(adjustl(tokens(2)%text(c + 1:)))
+         endif
+         call self%symbols%evaluate_constant(text, v, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+         if (v%is_int) then
+            ends(k) = real(v%i, R8P)
+         else
+            ends(k) = v%r
+         endif
+      enddo
+      self%vgrids(self%vgrid_active)%lo(a) = ends(1)
+      self%vgrids(self%vgrid_active)%hi(a) = ends(2)
+      self%vgrids(self%vgrid_active)%ranged(a) = .true.
+   endif
+   endsubroutine voxel_option
+
+   subroutine voxel_statement(self, command, tokens, statement, iostat, iomsg)
+   !< gnuplot 6.0's `unset vgrid $name` (its storage freed; no grid active if it was), `vclear [$name]` (its values
+   !< zeroed, the active grid's by default), `voxel(x,y,z) = value` (the grid point of (x,y,z): out of the ranges a
+   !< warning, gnuplot's, nothing set) and `vfill`/`vgfill SOURCE using x:y:z:radius:(density)` (voxelgrid.c: the
+   !< density added to each grid point within the radius of each point, `VoxelDistance` and `GridDistance` its
+   !< distances when the density is evaluated; vgfill's radius in grid units). The `vfill` rows are read as `plot ...
+   !< with table` reads them, every source and option of a plot (`sample [t=a:b] '+'`, datablocks, files, `'-'`).
+   class(script_object),          intent(inout) :: self      !< Interpreter.
+   character(len=*),              intent(in)    :: command   !< Command word.
+   type(token_object),            intent(in)    :: tokens(:) !< Statement tokens.
+   character(len=*),              intent(in)    :: statement !< Statement text.
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   type(value_object)                           :: v         !< A value.
+   real(R8P)                                    :: p(3)      !< A point.
+   integer(I4P)                                 :: k, u, depth, a, b !< Counters, `using` token, parenthesis depth.
+   integer(I8P)                                 :: c         !< Grid point.
+   character(len=:), allocatable                :: text      !< Text.
+   character(len=:), allocatable                :: parts(:)  !< `using` fields.
+
+   iostat = 0_I4P
+   select case (command)
+   case ('unset')
+      if (size(tokens) < 3) then
+         call fail('syntax: unset vgrid $<gridname>', iostat, iomsg)
+         return
+      endif
+      k = self%vgrid_index(tokens(3)%text)
+      if (k == 0_I4P) then
+         call fail('no such vgrid', iostat, iomsg)
+         return
+      endif
+      self%vgrids(k)%name = ''
+      self%vgrids(k)%n = 0_I4P
+      if (allocated(self%vgrids(k)%v)) deallocate(self%vgrids(k)%v)
+      if (self%vgrid_active == k) self%vgrid_active = 0_I4P
+   case ('vclear')
+      k = self%vgrid_active
+      if (size(tokens) >= 2) then
+         k = self%vgrid_index(tokens(2)%text)
+         if (k == 0_I4P) then
+            call fail('no such voxel grid', iostat, iomsg)
+            return
+         endif
+      endif
+      if (k > 0_I4P) then
+         if (allocated(self%vgrids(k)%v)) self%vgrids(k)%v = 0.0_R4P
+      endif
+   case ('voxel')
+      call self%vgrid_ranges(iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      ! voxel(x,y,z) = value: the three coordinates within the parentheses, the value after the `=`
+      a = index(statement, '(')
+      depth = 0_I4P
+      b = 0_I4P
+      do k = a, len(statement, kind=I4P)
+         if (statement(k:k) == '(') depth = depth + 1_I4P
+         if (statement(k:k) == ')') depth = depth - 1_I4P
+         if (depth == 0_I4P) then
+            b = k
+            exit
+         endif
+      enddo
+      if (a == 0_I4P .or. b == 0_I4P .or. index(statement(b:), '=') == 0) then
+         call fail('syntax: voxel(x,y,z) = newvalue', iostat, iomsg)
+         return
+      endif
+      parts = split_top(statement(a + 1:b - 1), ',')
+      if (size(parts) /= 3) then
+         call fail('syntax: voxel(x,y,z) = newvalue', iostat, iomsg)
+         return
+      endif
+      do k = 1_I4P, 3_I4P
+         call self%symbols%evaluate_constant(trim(parts(k)), v, iostat, iomsg)
+         if (iostat /= 0_I4P) return
+         p(k) = merge(real(v%i, R8P), v%r, v%is_int)
+      enddo
+      text = statement(b + index(statement(b:), '='):)
+      call self%symbols%evaluate_constant(text, v, iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      associate(g => self%vgrids(self%vgrid_active))
+         c = g%cell(p)
+         if (c == 0_I8P) then
+            write(error_unit, '(A)') 'warning: voxel out of range'
+         else
+            g%v(c) = real(merge(real(v%i, R8P), v%r, v%is_int), R4P)
+         endif
+      endassociate
+   case ('vfill', 'vgfill')
+      if (self%vgrid_active < 1_I4P) then
+         call fail('No current voxel grid', iostat, iomsg)
+         return
+      endif
+      call self%vgrid_ranges(iostat, iomsg)
+      if (iostat /= 0_I4P) return
+      u = 0_I4P
+      do k = 2_I4P, size(tokens, kind=I4P) - 1_I4P
+         if (tokens(k)%kind == TOKEN_WORD .and. keyword(tokens(k)%text, 'using', 1_I4P)) u = k
+      enddo
+      if (u == 0_I4P) then
+         call fail(command//': using x:y:z:radius:(density) expected', iostat, iomsg)
+         return
+      endif
+      do k = 2_I4P, size(tokens, kind=I4P)
+         if (tokens(k)%kind == TOKEN_WORD .and. keyword(tokens(k)%text, 'with', 1_I4P)) then
+            call fail(command//' does not support ''with'' options', iostat, iomsg)
+            return
+         endif
+      enddo
+      parts = split_top(tokens(u + 1_I4P)%text, ':')
+      if (size(parts) /= 5) then
+         call fail(command//': using x:y:z:radius:(density) expected', iostat, iomsg)
+         return
+      endif
+      text = trim(adjustl(parts(5)))
+      if (text(1:1) /= '(') then
+         call fail('5th user spec to vfill must be an expression', iostat, iomsg)
+         return
+      endif
+      call fill_grid(self, tokens, statement, u, parts, command == 'vgfill', iostat, iomsg)
+   endselect
+   endsubroutine voxel_statement
+
+   subroutine fill_grid(self, tokens, statement, u, parts, grid_units, iostat, iomsg)
+   !< vfill: the rows of the source read with the first four `using` fields at full precision (a `plot ... with table`
+   !< into a datablock), then for each point the grid points within its radius incremented by the density (the fifth
+   !< field), `VoxelDistance` and `GridDistance` set to their distances when it is evaluated (gnuplot's modify_voxels:
+   !< single precision sums; a point out of the grid's ranges ignored).
+   class(script_object),          intent(inout) :: self       !< Interpreter.
+   type(token_object),            intent(in)    :: tokens(:)  !< Statement tokens.
+   character(len=*),              intent(in)    :: statement  !< Statement text (the tokens' positions).
+   integer(I4P),                  intent(in)    :: u          !< `using` token.
+   character(len=*),              intent(in)    :: parts(:)   !< `using` fields.
+   logical,                       intent(in)    :: grid_units !< vgfill.
+   integer(I4P),                  intent(out)   :: iostat     !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg      !< Error message.
+   type(token_object), allocatable              :: items(:)   !< The plot items.
+   type(token_object)                           :: t          !< A token.
+   type(token_object), allocatable              :: set_words(:) !< `set table $__vfill`.
+   type(expression_object)                      :: density    !< The density.
+   type(expression_object)                      :: probe      !< Assignments making the distances run-time names.
+   character(len=:), allocatable                :: rows       !< The datablock.
+   character(len=:), allocatable                :: field      !< A field at full precision.
+   real(R8P)                                    :: q(4)       !< A row: x, y, z, radius.
+   integer(I8P), allocatable                    :: nearby(:)  !< Grid points within the radius.
+   real(R8P), allocatable                       :: distance(:), grid_distance(:) !< Their distances.
+   logical                                      :: found      !< Datablock found.
+   integer(I4P)                                 :: k, a, b, ios !< Counters, line ends, status.
+   integer(I8P)                                 :: j          !< Grid point counter.
+   real(R8P)                                    :: d          !< Density.
+
+   iostat = 0_I4P
+   ! the four fields as full precision strings (`with table` writes strings as they are)
+   allocate(items(0))
+   do k = 2_I4P, u
+      call push(items, tokens(k))
+   enddo
+   t = tokens(u + 1_I4P)
+   t%text = ''
+   do k = 1_I4P, 4_I4P
+      field = trim(adjustl(parts(k)))
+      if (verify(field, '0123456789') == 0) field = 'column('//field//')'
+      t%text = t%text//merge(':', ' ', k > 1_I4P)//'(sprintf("%.17g",'//field//'))'
+   enddo
+   t%text = trim(adjustl(t%text))
+   call push(items, t)
+   t%text = 'with'
+   call push(items, t)
+   t%text = 'table'
+   call push(items, t)
+   do k = u + 2_I4P, size(tokens, kind=I4P)
+      call push(items, tokens(k))
+   enddo
+   allocate(set_words(2))
+   set_words(1) = t
+   set_words(1)%text = 'table'
+   set_words(2) = t
+   set_words(2)%text = '$__vfill'
+   call self%set_command(set_words, iostat, iomsg)
+   if (iostat /= 0_I4P) return
+   call self%plot_command(items, statement, iostat, iomsg)
+   deallocate(set_words)
+   allocate(set_words(1))
+   set_words(1) = t
+   set_words(1)%text = 'table'
+   call self%unset_command(set_words, ios, field)
+   if (iostat /= 0_I4P) return
+   call self%symbols%string_of('$__vfill', rows, found)
+   if (.not. found) return
+   ! the density, the distances read when it runs
+   call probe%compile('(VoxelDistance = 0, GridDistance = 0)', ios, field, symbols=self%symbols)
+   call self%symbols%learn_assigned(probe)
+   call self%symbols%set_value('VoxelDistance', 0.0_R8P, is_int=.false.)
+   call self%symbols%set_value('GridDistance', 0.0_R8P, is_int=.false.)
+   call density%compile(trim(adjustl(parts(5))), iostat, iomsg, degrees=self%figure%panels(self%figure%current)%degrees, &
+                        symbols=self%symbols)
+   if (iostat /= 0_I4P) then
+      iomsg = 'vfill: '//iomsg
+      return
+   endif
+   associate(g => self%vgrids(self%vgrid_active))
+      a = 1_I4P
+      do while (a <= len(rows, kind=I4P))
+         b = index(rows(a:), new_line('a'), kind=I4P)
+         if (b == 0_I4P) then
+            b = len(rows, kind=I4P) + 1_I4P
+         else
+            b = a + b - 1_I4P
+         endif
+         read(rows(a:b - 1_I4P), *, iostat=ios) q
+         a = b + 1_I4P
+         if (ios /= 0_I4P) cycle
+         ! points out of the grid's ranges ignored (gnuplot's)
+         if (any(q(1:3) < g%lo) .or. any(q(1:3) > g%hi)) cycle
+         call g%neighbours(q(1:3), q(4), grid_units, nearby, distance, grid_distance)
+         do j = 1_I8P, size(nearby, kind=I8P)
+            call self%symbols%set_value('VoxelDistance', distance(j), is_int=.false.)
+            call self%symbols%set_value('GridDistance', grid_distance(j), is_int=.false.)
+            d = density%evaluate([real(R8P) ::], 0_I4P)
+            g%v(nearby(j)) = real(real(g%v(nearby(j)), R8P) + d, R4P)
+         enddo
+      enddo
+   endassociate
+   endsubroutine fill_grid
+
+   pure function split_top(text, separator) result(parts)
+   !< `text` split at the `separator` characters outside parentheses, brackets and quotes.
+   character(len=*), intent(in)  :: text      !< Text.
+   character(len=1), intent(in)  :: separator !< Separator.
+   character(len=:), allocatable :: parts(:)  !< Parts.
+   integer(I4P)                  :: k, depth, start, n, w !< Counters.
+   character(len=1)              :: quote     !< Open quote.
+   integer(I4P), allocatable     :: cuts(:)   !< Separator positions.
+
+   allocate(cuts(len(text) + 1))
+   n = 0_I4P
+   depth = 0_I4P
+   quote = ' '
+   do k = 1_I4P, len(text, kind=I4P)
+      if (quote /= ' ') then
+         if (text(k:k) == quote) quote = ' '
+         cycle
+      endif
+      select case (text(k:k))
+      case ('"', "'")
+         quote = text(k:k)
+      case ('(', '[', '{')
+         depth = depth + 1_I4P
+      case (')', ']', '}')
+         depth = depth - 1_I4P
+      case default
+         if (text(k:k) == separator .and. depth == 0_I4P) then
+            n = n + 1_I4P
+            cuts(n) = k
+         endif
+      endselect
+   enddo
+   n = n + 1_I4P
+   cuts(n) = len(text, kind=I4P) + 1_I4P
+   w = 1_I4P
+   start = 1_I4P
+   do k = 1_I4P, n
+      w = max(w, cuts(k) - start)
+      start = cuts(k) + 1_I4P
+   enddo
+   allocate(character(len=w) :: parts(n))
+   start = 1_I4P
+   do k = 1_I4P, n
+      parts(k) = text(start:cuts(k) - 1_I4P)
+      start = cuts(k) + 1_I4P
+   enddo
+   endfunction split_top
+
+   subroutine voxel_items(self, tokens, items, iostat, iomsg)
+   !< The splot items of voxel grids as datablocks (gnuplot 6.0's vplot.c): `$grid with points|dots [above L]` the grid
+   !< points above L (0 by default; dots without a style, gnuplot's), x, y, z and the value, colored by it with
+   !< `lc palette`; `$grid with isosurface level L` the facets of the surface of L (marching cubes, `set isosurface`'s
+   !< mixed quadrangles and triangles or triangles only) as `with polygons`, in the item's color and the fill style.
+   !< Each with a hidden item of the grid's corners, which autoscale the axes as gnuplot's grid ranges do.
+   class(script_object),            intent(inout) :: self      !< Interpreter.
+   type(token_object),              intent(in)    :: tokens(:) !< Plot tokens.
+   type(token_object), allocatable, intent(out)   :: items(:)  !< Tokens, grids as datablocks.
+   integer(I4P),                    intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable,   intent(out)   :: iomsg     !< Error message.
+   type(token_object)                             :: t         !< A token.
+   type(value_object)                             :: v         !< A value.
+   character(len=:), allocatable                  :: style     !< The item's style.
+   character(len=:), allocatable                  :: name      !< A datablock.
+   character(len=:), allocatable                  :: rows      !< Its rows.
+   character(len=128)                             :: cell      !< A row of numbers.
+   real(R8P), allocatable                         :: x(:), y(:), z(:), w(:) !< Points.
+   real(R8P), allocatable                         :: fx(:, :), fy(:, :), fz(:, :) !< Facets.
+   real(R8P)                                      :: level     !< Level.
+   logical                                        :: palette   !< `lc palette`.
+   integer(I4P)                                   :: k, j, first, last, g, nf, c !< Counters.
+   integer(I4P)                                   :: used      !< Characters of `rows` used.
+
+   iostat = 0_I4P
+   allocate(items(0))
+   k = 1_I4P
+   do while (k <= size(tokens, kind=I4P))
+      ! an item: up to the next comma
+      first = k
+      last = size(tokens, kind=I4P)
+      do j = k, size(tokens, kind=I4P)
+         if (tokens(j)%kind == TOKEN_COMMA) then
+            last = j - 1_I4P
+            exit
+         endif
+      enddo
+      g = 0_I4P
+      do j = first, last
+         if (tokens(j)%kind == TOKEN_RANGE) cycle
+         if (tokens(j)%kind == TOKEN_WORD) g = self%vgrid_index(tokens(j)%text)
+         exit
+      enddo
+      if (g == 0_I4P) then
+         do j = first, min(last + 1_I4P, size(tokens, kind=I4P))
+            call push(items, tokens(j))
+         enddo
+         k = last + 2_I4P
+         cycle
+      endif
+      if (.not. all(self%vgrids(g)%ranged)) then
+         call fail('splot: the voxel grid '//self%vgrids(g)%name//' has no ranges yet', iostat, iomsg)
+         return
+      endif
+      call self%vgrids(g)%spacing
+      style = 'dots'
+      level = 0.0_R8P
+      palette = .false.
+      do j = first, last
+         if (tokens(j)%kind /= TOKEN_WORD) cycle
+         if (keyword(tokens(j)%text, 'with', 1_I4P) .and. j < last) style = tokens(j + 1_I4P)%text
+         if (tokens(j)%text == 'palette') palette = .true.
+         if ((tokens(j)%text == 'above' .or. tokens(j)%text == 'level') .and. j < last) then
+            call self%symbols%evaluate_constant(tokens(j + 1_I4P)%text, v, iostat, iomsg)
+            if (iostat /= 0_I4P) return
+            level = merge(real(v%i, R8P), v%r, v%is_int)
+         endif
+      enddo
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__voxel'//int_str(int(self%binary_count, I8P))
+      used = 0_I4P
+      if (allocated(rows)) deallocate(rows)
+      if (style == 'isosurface') then
+         c = 0_I4P
+         do j = first, last
+            if (tokens(j)%text == 'level') c = j
+         enddo
+         if (c == 0_I4P) then
+            call fail('isosurface requires a level', iostat, iomsg)
+            return
+         endif
+         call self%vgrids(g)%isosurface(level, self%iso_triangles, fx, fy, fz, nf)
+         do j = 1_I4P, nf
+            do c = 1_I4P, 4_I4P
+               write(cell, '(3(ES24.16E3,1X))') fx(c, j), fy(c, j), fz(c, j)
+               call append_text(rows, used, trim(cell)//new_line('a'))
+            enddo
+            call append_text(rows, used, new_line('a'))
+         enddo
+         style = 'polygons'
+      else
+         call self%vgrids(g)%above(level, 1_I4P, x, y, z, w)
+         do j = 1_I4P, size(x, kind=I4P)
+            write(cell, '(4(ES16.8E3,1X))') x(j), y(j), z(j), w(j)
+            call append_text(rows, used, trim(cell)//new_line('a'))
+         enddo
+         if (.not. keyword(style, 'points', 1_I4P)) style = 'dots'
+      endif
+      if (used == 0_I4P) then
+         call self%symbols%set_string(name, '')
+      else
+         call self%symbols%set_string(name, rows(1:used))
+      endif
+      ! the item: the datablock, its using, its style, the item's other options
+      t = tokens(first)
+      t%kind = TOKEN_WORD
+      t%quote = ' '
+      t%text = name
+      call push(items, t)
+      t%text = 'using'
+      call push(items, t)
+      t%text = merge('1:2:3:4', '1:2:3  ', palette .and. style /= 'polygons')
+      t%text = trim(t%text)
+      call push(items, t)
+      t%text = 'with'
+      call push(items, t)
+      t%text = style
+      call push(items, t)
+      j = first + 1_I4P
+      c = 0_I4P
+      do while (j <= last)
+         if (tokens(j)%kind == TOKEN_WORD) then
+            if (keyword(tokens(j)%text, 'with', 1_I4P) .or. tokens(j)%text == 'above' .or. &
+                tokens(j)%text == 'level') then
+               j = j + 2_I4P
+               cycle
+            endif
+            if ((keyword(tokens(j)%text, 'linetype', 5_I4P) .or. tokens(j)%text == 'lt' .or. &
+                 keyword(tokens(j)%text, 'linecolor', 5_I4P) .or. tokens(j)%text == 'lc') .and. j < last) c = j
+         endif
+         call push(items, tokens(j))
+         j = j + 1_I4P
+      enddo
+      ! an isosurface filled in its line color (gnuplot's quad[0].c = the line color), not a polygon's border color:
+      ! `fc` as the item's `lt N` or `lc ...`, else its place among the items (its automatic linetype)
+      if (style == 'polygons') then
+         t%text = 'fc'
+         call push(items, t)
+         if (c > 0_I4P) then
+            if (tokens(c)%text == 'lt' .or. keyword(tokens(c)%text, 'linetype', 5_I4P)) then
+               t%text = 'lt'
+               call push(items, t)
+               call push(items, tokens(c + 1_I4P))
+            else
+               do j = c + 1_I4P, min(c + 2_I4P, last)
+                  call push(items, tokens(j))
+                  if (j == c + 1_I4P .and. .not. is_word(tokens(j)%text, 'rgb rgbcolor')) exit
+               enddo
+            endif
+         else
+            t%text = 'lt'
+            call push(items, t)
+            nf = 1_I4P
+            do j = 1_I4P, first - 1_I4P
+               if (tokens(j)%kind == TOKEN_COMMA) nf = nf + 1_I4P
+            enddo
+            t%text = int_str(int(nf, I8P))
+            call push(items, t)
+         endif
+      endif
+      ! the grid's corners, autoscaling the axes (no linetype used up)
+      self%binary_count = self%binary_count + 1_I4P
+      name = '$__voxel'//int_str(int(self%binary_count, I8P))
+      write(cell, '(3(ES24.16E3,1X))') self%vgrids(g)%lo
+      rows = trim(cell)//new_line('a')
+      write(cell, '(3(ES24.16E3,1X))') self%vgrids(g)%hi
+      rows = rows//trim(cell)//new_line('a')
+      call self%symbols%set_string(name, rows)
+      t%kind = TOKEN_COMMA
+      t%text = ','
+      call push(items, t)
+      t%kind = TOKEN_WORD
+      do c = 1_I4P, 9_I4P
+         select case (c)
+         case (1_I4P)
+            t%text = name
+         case (2_I4P)
+            t%text = 'using'
+         case (3_I4P)
+            t%text = '1:2:3'
+         case (4_I4P)
+            t%text = 'with'
+         case (5_I4P)
+            t%text = 'points'
+         case (6_I4P)
+            t%text = 'ps'
+         case (7_I4P)
+            t%text = '0'
+         case (8_I4P)
+            t%text = 'notitle'
+         case default
+            t%text = '__uncounted'
+         endselect
+         call push(items, t)
+      enddo
+      if (last < size(tokens, kind=I4P)) call push(items, tokens(last + 1_I4P))
+      k = last + 2_I4P
+   enddo
+   endsubroutine voxel_items
+
+   pure function voxel_word(tokens) result(yes)
+   !< Whether a `set`/`unset` names a voxel option: `vgrid`, `vxrange`, `vyrange`, `vzrange`, `isosurface`.
+   type(token_object), intent(in) :: tokens(:) !< Statement tokens.
+   logical                        :: yes       !< A voxel option.
+
+   yes = .false.
+   if (size(tokens) < 2) return
+   yes = keyword(tokens(2)%text, 'vgrid', 5_I4P) .or. keyword(tokens(2)%text, 'vxrange', 3_I4P) .or. &
+         keyword(tokens(2)%text, 'vyrange', 3_I4P) .or. keyword(tokens(2)%text, 'vzrange', 3_I4P)
+   if (keyword(tokens(1)%text, 'set', 2_I4P)) yes = yes .or. keyword(tokens(2)%text, 'isosurface', 7_I4P)
+   endfunction voxel_word
 endmodule foresight_script

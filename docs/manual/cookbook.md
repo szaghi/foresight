@@ -1807,6 +1807,17 @@ drawn behind the plot or over it as it faces. See [3D views](/guide/gnuplot-subs
 base` the faces of every bar are drawn from the farthest, and `set pm3d lighting` shades them. See
 [3D views](/guide/gnuplot-subset#3d-views).
 
+### An isosurface of a voxel grid
+
+<<< @/examples/snippets/cb_view3d_isosurface.gp{gnuplot}
+
+<Plot name="cb_view3d_isosurface" svg :width="560" :height="400" />
+
+`set vgrid` makes a grid of N x N x N values, `vfill` adds a density around each data point (here 10 within 0.9 of
+the points of a helix), and `with isosurface level L` draws the surface where the values cross L, by marching cubes
+as gnuplot 6.0; `with points above L` would draw the grid points themselves. See
+[Voxel grids](/guide/gnuplot-subset#voxel-grids).
+
 ### Solids from polygons
 
 <<< @/examples/snippets/cb_view3d_polygons.gp{gnuplot}

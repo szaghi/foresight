@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(294)                           !< Per-check outcome.
+logical                       :: test_passed(295)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8077,6 +8077,54 @@ block
       svg2 = read_text('foresight_script_test_sb.svg')
       test_passed(294) = quads(svg) == quads(svg2) .and. len(quads(svg)) > 100
    endif
+endblock
+
+! check 295: gnuplot 6.0's voxel grids (the values probed with gnuplot 6.0): `set vgrid $g size 10`, its ranges,
+! `voxel(x,y,z) = v` at the grid point ceil((x - min) / delta) (voxel(3.2,4,5) the next one, 0), VoxelDistance
+! defined; vfill of one point with radius 1.5: the 19 grid points within it (a face neighbour 1, an edge one 1, a
+! corner one out), then a density of VoxelDistance (sqrt(2) at an edge neighbour, single precision: 2.41421365737915
+! after the first fill); `splot $g with points above 0.5` the 20 grid points above it, a hidden item of the corners;
+! `with isosurface level 0.5` polygons; `set tics format ""` blank labels on every axis, z too; `set iso 7` the
+! isosamples
+block
+   character(len=1), parameter :: nl = new_line('a') !< New line.
+   real(R8P)                   :: v      !< A value.
+   logical                     :: found  !< Variable found.
+   real(R8P)                   :: got(7) !< Values.
+   integer(I4P)                :: k      !< Counter.
+   character(len=2), parameter :: NAMES(6) = ['a1', 'a2', 'a3', 'b1', 'b2', 'b3'] !< Variables read.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set vgrid $g size 10"//nl//"set vxrange [0:9]; set vyrange [0:9]; set vzrange [0:9]"// &
+                             nl//"voxel(3,4,5) = 7"//nl//"a1 = voxel(3,4,5); a2 = voxel(3.2,4,5); a3 = voxel(2.8,4,5)"// &
+                             nl//"$d << EOD"//nl//"5 5 5"//nl//"EOD"//nl//"vfill $d using 1:2:3:(1.5):(1)"//nl// &
+                             "b1 = voxel(6,6,5); b2 = voxel(6,6,6)"//nl// &
+                             "vfill $d using 1:2:3:(1.5):(VoxelDistance)"//nl//"b3 = voxel(6,6,5)", iostat, iomsg)
+   test_passed(295) = iostat == 0_I4P
+   if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+   if (test_passed(295)) then
+      got = 0.0_R8P
+      do k = 1_I4P, 6_I4P
+         call interpreter%symbols%value_of(trim(NAMES(k)), got(k), found)
+      enddo
+      call interpreter%symbols%value_of('VoxelDistance', v, found)
+      test_passed(295) = found .and. all(abs(got - [7.0_R8P, 0.0_R8P, 7.0_R8P, 1.0_R8P, 0.0_R8P, &
+                                                   2.41421365737915_R8P, 0.0_R8P]) < 1.0e-12_R8P)
+   endif
+   call interpreter%run_text("set output 'foresight_script_test_vx.svg'"//nl//"set tics format ''"//nl// &
+                             "splot $g with points above 0.5, $g with isosurface level 0.5", iostat, iomsg)
+   test_passed(295) = test_passed(295) .and. iostat == 0_I4P
+   if (test_passed(295)) then
+      associate(sr => interpreter%figure%panels(1)%series)
+         test_passed(295) = size(sr) == 4
+         if (test_passed(295)) test_passed(295) = size(sr(1)%x) == 20 .and. size(sr(2)%x) == 2 .and. &
+                                                sr(3)%style%with == WITH_POLYGONS .and. size(sr(3)%x) > 0 .and. &
+                                                interpreter%figure%panels(1)%zaxis%tics%format == ' '
+      endassociate
+   endif
+   ! `set iso N` is isosamples (gnuplot's iso$samples), isosurface needs `isosurf`
+   call interpreter%run_text("set iso 7", iostat, iomsg)
+   test_passed(295) = test_passed(295) .and. iostat == 0_I4P .and. interpreter%isosamples1 == 7_I4P
 endblock
 
 if (all(test_passed)) then
