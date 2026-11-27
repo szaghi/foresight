@@ -42,6 +42,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
+| `set_fontglyphs([svg], [pdf])` | `set terminal svg fontglyphs\|fontnames`: the SVG files' texts drawn from the compiled-in glyphs (`svg=.true.`; by name by default), the PDF ones embedded (`pdf=.true.`, the default) or set in the 14 standard fonts by name (`pdf=.false.`); HTML pages keep their texts by name |
 | `set_enhanced([on])` | `set termoption enhanced` (`on=.false.`: `noenhanced`): the texts read as [enhanced text](gnuplot-subset#enhanced-text), `x^2`, `T_{n-1}`, `{/Symbol a}`; off by default in the library, on in the scripts |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)`, `set_x2range(...)` | `set xrange [min:max]` |
 | `set_logscale([axes])`, `unset_logscale([axes])` | `set logscale`, `unset logscale`; `axes` concatenates `x`, `y`, `y2`, `x2`, `cb` (all when absent) |

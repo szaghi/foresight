@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(161)                  !< Per-figure outcome.
+logical                     :: test_passed(167)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -126,7 +126,7 @@ test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
 ! the later figures in a procedure of their own: nvfortran 26.9 finds the main program too large to compile
 call later_checks
-write(output_unit, '(A,161L2)') 'foresight golden checks:', test_passed
+write(output_unit, '(A,167L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -213,6 +213,15 @@ contains
    test_passed(159) = check('enhanced.pdf', figure_enhanced())
    test_passed(160) = check('theme_vfd.pdf', figure_theme('vfd'))
    test_passed(161) = check('view3d_pm3d.pdf', figure_view3d_pm3d())
+   ! texts from the compiled-in glyphs: a Latin-1, Greek and math label set in PDF (embedded Type 3 fonts) and in SVG
+   ! by name and by glyphs (`fontglyphs`); the glyph SVGs of three figures, rasterized against their PDFs by
+   ! scripts/check_pdf.py
+   test_passed(162) = check('unicode.svg', figure_unicode())
+   test_passed(163) = check('unicode.pdf', figure_unicode())
+   test_passed(164) = check('unicode_glyphs.svg', with_glyphs(figure_unicode()))
+   test_passed(165) = check('lines_glyphs.svg', with_glyphs(figure_lines()))
+   test_passed(166) = check('enhanced_glyphs.svg', with_glyphs(figure_enhanced()))
+   test_passed(167) = check('annotations_glyphs.svg', with_glyphs(figure_annotations()))
    endsubroutine later_checks
 
    function figure_lines() result(fig)
@@ -322,6 +331,32 @@ contains
    call fig%plot(x, x**2, title='y = x^2')
    call fig%plot(x, 2.0_R8P * x, title='y = 2 x_0', axes='x1y2')
    endfunction figure_enhanced
+
+   function figure_unicode() result(fig)
+   !< Texts beyond ASCII: Greek, Latin-1 and math symbols in the title, a Symbol-font letter and a superscript in the x
+   !< label, a serif label, a bold and a serif bold key entry (enhanced text).
+   type(figure_object)    :: fig  !< Figure.
+   real(R8P), allocatable :: x(:) !< Abscissae.
+   integer(I4P)           :: i    !< Counter.
+
+   x = [(0.1_R8P * real(i, R8P), i = 0, 10)]
+   call fig%init(width=500_I4P, height=320_I4P)
+   call fig%set_enhanced(.true.)
+   call fig%set_title('Greek αβγ ΔΩ, Latin-1 àéîõü ß, math ∂ ∇ ≤ ≥ ±')
+   call fig%set_xlabel('{/Symbol a}_0 [m s^{-1}]')
+   call fig%set_ylabel('{/serif Température (°C)}')
+   call fig%plot(x, x, title='{/:Bold AVATAR} To')
+   call fig%plot(x, x**2, title='{/:Italic italic} {/serif:Bold serif bold}')
+   endfunction figure_unicode
+
+   function with_glyphs(fig) result(glyphs)
+   !< `fig` with its SVG texts drawn from the compiled-in glyphs (`fontglyphs`).
+   type(figure_object), intent(in) :: fig    !< Figure.
+   type(figure_object)             :: glyphs !< Figure.
+
+   glyphs = fig
+   call glyphs%set_fontglyphs(svg=.true.)
+   endfunction with_glyphs
 
    function figure_x2() result(fig)
    !< Second x axis through the library API: a series on x2y2, its axis on the top border with outward ticks, minor

@@ -58,6 +58,11 @@ metrics) fills the room exactly.
   in plot order): the viewer hides a series when its entry is clicked.
 - All numbers are formatted by integer arithmetic, identically on every compiler: the same figure gives the same
   bytes.
+- Texts are written by name (`font-family="Arial,..."`): the reader's fonts draw them, in room measured for the
+  compiled-in ones. `set terminal svg fontglyphs` (`fig%set_fontglyphs(svg=.true.)`) draws them from the compiled-in
+  glyphs instead, as the PDF: each glyph used defined once (`<path id="fs-g1-36">`, in font units), each character a
+  `<use>` of it; the texts stay in the page, transparent, for selection, search and screen readers. The drawing is then
+  the same on every machine. HTML pages keep their texts by name: the viewer redraws them.
 
 ## PDF
 
@@ -67,12 +72,16 @@ opacity and gnuplot's fill patterns (tiling patterns of the SVG's 8 px tiles); p
 arrowheads at their pixel size; images as 8-bit RGB with an alpha mask; readouts; texts with gnuplot's enhanced markup.
 The plot area is a clipping path; markers crossing its border are drawn whole, as in the SVG.
 
-- Texts are set in the 14 standard fonts: Helvetica for the sans faces (it has Arial's, so Liberation Sans', metrics),
-  Times for the serif ones, Symbol for gnuplot's `{/Symbol ...}`; WinAnsi encoded (Latin-1 and the typographic
-  quotes, dashes, the euro). They are placed with the compiled-in fonts' metrics, as on every device.
+- Texts are drawn from the [compiled-in fonts](#fonts), embedded: a Type 3 font for each face used (its glyphs'
+  outlines, 255 to a font), kerned, with a ToUnicode map, so the text is selectable and searchable and `pdffonts`
+  lists every font embedded. Any character of the fonts is there: Latin-1, Latin Extended-A, Greek, math symbols.
+  `fig%set_fontglyphs(pdf=.false.)` sets them by name in the 14 standard fonts instead (Helvetica, Times, Symbol for
+  gnuplot's `{/Symbol ...}`; WinAnsi encoded: Latin-1 and the typographic quotes, dashes and euro; other characters
+  `?`), nothing embedded.
 - The file is written in one piece, its content stream uncompressed, without dates nor identifiers: the same figure
-  gives the same bytes. `qpdf --check` and `pdftotext` read every reference PDF of the test suite
-  (`scripts/check_pdf.py`).
+  gives the same bytes. `scripts/check_pdf.py` checks every reference PDF of the test suite: `qpdf --check`, every
+  font embedded, the text `pdftotext` extracts equal to the SVG's, and the drawing equal to the glyph SVG's of the
+  same figure (rasterized, within 0.002 of the fidelity score).
 - Left out: what needs a viewer (zoom, hidden series, hypertext) and `set pixmap` images (a PNG file, which PDF cannot
   hold as it is).
 

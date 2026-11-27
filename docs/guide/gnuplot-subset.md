@@ -151,7 +151,7 @@ that did what it says.
 | **st**yle **hist**ogram `clustered` [`gap G`]\|`errorbars` [`gap G`] [`lw W`]\|`rowstacked`\|`columnstacked` [`title` [`tc C`] [`offset X,Y`] [`boxed`]] [`nokeyseparators`] | layout of the [histograms](#histograms) plotted next; clustered, gap 2 by default; the look of the group titles (`boxed`: on the background, text box style 0) | — |
 | `readout` [`on`\|`off`] [`left`\|`right`\|`center`] [`top`\|`bottom`\|`center`] [`horizontal`\|`vertical`] [`opaque`\|`noopaque`] [`size H`] | foresight extension: where and how the [readouts](#readouts) of the panel are drawn | readouts not drawn |
 | **ou**tput `"file"` | output file: `.svg`, `.html`, `.txt`, `-`; bare (gnuplot's standard output), and `unset output`: back to the default output | — |
-| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`enhanced`\|`noenhanced`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period, [enhanced text](#enhanced-text) on (the default) or off; the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
+| **te**rminal `svg`\|`html` [**si**ze `W,H`] [**ref**resh `S`] [`enhanced`\|`noenhanced`] [`fontglyphs`\|`fontnames`] [`theme classic`\|`vfd`\|`lcd`\|`washi`\|`night`] [`glow`\|`noglow`] | output format, size in px, HTML reload period, [enhanced text](#enhanced-text) on (the default) or off; the SVG's texts drawn from the compiled-in glyphs (`fontglyphs`: the same on every machine, as the PDF) or by font name (`fontnames`, the default; HTML pages keep their texts by name), see [Output Formats](output-formats#svg); the [theme](#themes-and-segmented-fills) (foresight extension, any terminal) | — |
 | **te**rminal `push`\|`pop` | read: foresight keeps its one terminal | — |
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
@@ -1684,8 +1684,10 @@ apply to the title, the multiplot title, the axis labels (x, y, x2, y2, r, cb), 
 too), the key, `set label`, the data labels, the histogram group titles, the timestamp and the page (`set terminal ... font`, `set termoption font`). The layout grows as
 gnuplot's: the title, the multiplot title and the x2 label take rows of their size, the key its size; the tick labels
 and the other axis labels are placed as the page's text, only their glyphs change. A family is written to the SVG as
-given, the page's after it as fallback: the reader's fonts draw it, while foresight measures every text as its own
-font (0.55 font sizes a character), so a wide family may need room. Font files (`"/path/a.ttf"`) and gnuplot's
+given, the page's after it as fallback: the reader's fonts draw it, while foresight measures every text with its
+[compiled-in fonts](output-formats#fonts) (Liberation Sans for the sans families and every family it does not have,
+warned once; Latin Modern Roman for the serif ones), so a family wider than those may need room. The PDF, and the SVG
+with `set terminal svg fontglyphs`, draw the texts from those fonts' glyphs. Font files (`"/path/a.ttf"`) and gnuplot's
 `mbfont:` sets name no family an SVG can use: their size, weight and style are kept. Text devices keep their one
 cell. Within a text, [enhanced text](#enhanced-text) changes the size and the style of a part (`{/=8 ...}`,
 `{/:Bold ...}`).

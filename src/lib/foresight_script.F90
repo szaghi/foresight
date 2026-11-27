@@ -12468,6 +12468,9 @@ contains
             call self%figure%set_text(colors=tokens(i)%text)
          elseif (text == 'block' .and. is_word(tokens(i)%text, 'half quadrants sextants braille')) then
             call self%figure%set_text(charset=tokens(i)%text)
+         elseif ((text == 'svg' .or. text == 'html') .and. is_word(tokens(i)%text, 'fontglyphs fontnames')) then
+            ! the SVG files' texts from the glyphs or by name (the HTML pages keep theirs by name)
+            call self%figure%set_fontglyphs(svg=tokens(i)%text == 'fontglyphs')
          elseif (keyword(tokens(i)%text, 'size', 2_I4P)) then
             if (.not. next_integer(tokens, i, width, iostat, iomsg)) return
             i = i + 1_I4P

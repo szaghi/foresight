@@ -1,0 +1,4 @@
+$ foresight pc02_fonts.gp && ls pc02.*
+foresight: pc02.svg
+pc02.pdf
+pc02.svg

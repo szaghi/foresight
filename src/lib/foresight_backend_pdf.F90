@@ -41,7 +41,7 @@ character(len=*), parameter :: BASE_FONTS(9) = [character(len=21) :: 'Helvetica'
 type, extends(backend_object) :: backend_pdf
    !< PDF output device.
    private
-   logical, public :: embed = .false. !< Texts in the compiled-in fonts, embedded (Type 3, with their Unicode), else
+   logical, public :: embed = .true. !< Texts in the compiled-in fonts, embedded (Type 3, with their Unicode), else
                                       !< the standard fonts by name (`fontnames`: Helvetica, Times, Symbol).
    character(len=:), allocatable :: file              !< Final output file.
    real(R8P)                     :: page(2) = 0.0_R8P !< Page width and height [px].
@@ -1397,9 +1397,9 @@ contains
       n = min(100_I4P, left)
       cmap = cmap//int_str(int(n, I8P))//' beginbfchar'//new_line('a')
       do e = 1_I4P, n
-         ! each line is `<cc> <uuuu>` and a new line: 14 characters
-         cmap = cmap//entries(a:a + 13_I4P)
-         a = a + 14_I4P
+         ! each line is `<cc> <uuuu>` and a new line: 12 characters
+         cmap = cmap//entries(a:a + 11_I4P)
+         a = a + 12_I4P
       enddo
       cmap = cmap//'endbfchar'//new_line('a')
       left = left - n

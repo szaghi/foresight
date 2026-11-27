@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(296)                           !< Per-check outcome.
+logical                       :: test_passed(298)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8147,6 +8147,52 @@ block
       if (test_passed(296)) test_passed(296) = index(page(a:b), '"keep":"a\u003cb \u0026 c"') > 0 .and. &
                                              index(page(a + 1:b - 1), '<') == 0
    endif
+endblock
+
+! check 297: `set terminal svg fontglyphs` draws the texts from the compiled-in glyphs (their definitions once, a <use>
+! per character), the texts kept transparent; `fontnames` back to texts by name; an html page keeps its texts by name
+block
+   character(len=:), allocatable :: page !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 400,300 fontglyphs"//nl//"set output 'foresight_script_test_fg.svg'"// &
+                             nl//"set title 'AVATAR'"//nl//"plot x", iostat, iomsg)
+   test_passed(297) = iostat == 0_I4P
+   if (test_passed(297)) then
+      page = read_text('foresight_script_test_fg.svg')
+      test_passed(297) = index(page, '<path id="fs-g1-') > 0 .and. index(page, 'xlink:href="#fs-g1-') > 0 .and. &
+                         index(page, 'fill-opacity="0" text-anchor="middle">AVATAR</text>') > 0
+   endif
+   call interpreter%run_text("set terminal svg fontnames"//nl//"replot", iostat, iomsg)
+   page = read_text('foresight_script_test_fg.svg')
+   test_passed(297) = test_passed(297) .and. iostat == 0_I4P .and. index(page, 'fs-glyphs') == 0
+   call interpreter%run_text("set terminal html fontglyphs"//nl//"set output 'foresight_script_test_fg.html'"//nl// &
+                             "replot", iostat, iomsg)
+   page = read_text('foresight_script_test_fg.html')
+   test_passed(297) = test_passed(297) .and. iostat == 0_I4P .and. index(page, 'fs-glyphs') == 0
+   open(newunit=unit, file='foresight_script_test_fg.svg')
+   close(unit, status='delete')
+   open(newunit=unit, file='foresight_script_test_fg.html')
+   close(unit, status='delete')
+endblock
+
+! check 298: `set output 'x.pdf'` writes a PDF (the format from the extension), its texts embedded
+block
+   character(len=:), allocatable :: page !< File.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set output 'foresight_script_test_pd.pdf'"//nl//"set title 'AVATAR'"//nl//"plot x", &
+                             iostat, iomsg)
+   test_passed(298) = iostat == 0_I4P
+   if (test_passed(298)) then
+      page = read_text('foresight_script_test_pd.pdf')
+      test_passed(298) = page(1:8) == '%PDF-1.4' .and. index(page, '/Subtype /Type3') > 0 .and. &
+                         index(page, '/ToUnicode') > 0 .and. page(len(page) - 5:) == '%%EOF'//new_line('a')
+   endif
+   open(newunit=unit, file='foresight_script_test_pd.pdf')
+   close(unit, status='delete')
 endblock
 
 if (all(test_passed)) then

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="Arial,Helvetica,sans-serif" font-size="12">
+<rect x="0" y="0" width="640" height="400" fill="white" stroke="none" stroke-width="0"/>
+<g class="fs-axes" data-area="36.68 630 54 369" data-x="0 1e1" data-y="-1e0 1e0" data-log="0 0" data-grid="1" data-font-size="12">
+<g class="fs-objects">
+<path fill="#56b4e9" fill-opacity="0.25" stroke="none" d="M274.01,369 392.67,369 392.67,54 274.01,54Z"/>
+</g>
+<g class="fs-grid">
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,369 36.68,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="155.34,369 155.34,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="274.01,369 274.01,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="392.67,369 392.67,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="511.34,369 511.34,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="630,369 630,54"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,369 630,369"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,337.5 630,337.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,306 630,306"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,274.5 630,274.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,243 630,243"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,211.5 630,211.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,180 630,180"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,148.5 630,148.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,117 630,117"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,85.5 630,85.5"/>
+<polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="36.68,54 630,54"/>
+</g>
+<g class="fs-annotations">
+<text x="333.34" y="215.7" fill-opacity="0" text-anchor="middle" fill="black">centre</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" fill="black" transform="translate(333.34 215.7)"><use xlink:href="#fs-g1-68" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(-10.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-79" transform="translate(-4 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-85" transform="translate(2.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-83" transform="translate(6.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(10 0) scale(0.00586 -0.00586)"/></g>
+</g>
+<g class="fs-anchored">
+<path fill="black" stroke="black" stroke-width="1" d="M126.28,54A3.6,3.6 0 1 0 133.48,54A3.6,3.6 0 1 0 126.28,54Z"/>
+<text x="142.78" y="53.7" fill-opacity="0" fill="black">peak</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" fill="black" transform="translate(142.78 53.7)"><use xlink:href="#fs-g1-81" transform="translate(0 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(6.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-66" transform="translate(13.35 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-76" transform="translate(20.02 0) scale(0.00586 -0.00586)"/></g>
+<text x="582.53" y="357.45" fill-opacity="0" transform="rotate(-60 582.53 357.45)" fill="red">rotated</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" fill="red" transform="translate(582.53 357.45) rotate(-60)"><use xlink:href="#fs-g1-83" transform="translate(0 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-80" transform="translate(4 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-85" transform="translate(10.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-66" transform="translate(14 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-85" transform="translate(20.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(24.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-69" transform="translate(30.69 0) scale(0.00586 -0.00586)"/></g>
+</g>
+<g class="fs-annotations">
+</g>
+<g class="fs-anchored">
+<polyline fill="none" stroke="black" stroke-width="1" points="214.67,243 309.61,353.25"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="301.79,337.03 309.61,353.25 294.73,343.11"/>
+<polyline fill="none" stroke="#9400d3" stroke-width="2" points="214.67,180 309.61,85.5"/>
+<path fill="#9400d3" stroke="#9400d3" stroke-width="2" stroke-linejoin="miter" d="M294,94.46 309.61,85.5 300.57,101.07Z"/>
+<path fill="#9400d3" stroke="#9400d3" stroke-width="2" stroke-linejoin="miter" d="M230.28,171.04 214.67,180 223.71,164.43Z"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="564.73,180 505.4,132.75"/>
+<path fill="none" stroke="black" stroke-width="1" stroke-linejoin="miter" d="M556.8,164.07 564.73,180 547.43,175.83Z"/>
+</g>
+<svg class="fs-plot" x="36.68" y="54" width="593.32" height="315" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-objects">
+<path fill="white" stroke="black" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.8,0.2 0.98,0.2 0.98,0.025 0.8,0.025Z"/>
+<path fill="#e69f00" fill-opacity="0.5" stroke="#e69f00" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.26,0.75 0.259711,0.738923 0.258847,0.727952 0.257416,0.717194 0.255433,0.706752 0.252915,0.696726 0.249888,0.687213 0.246381,0.678305
+0.242426,0.670087 0.238064,0.662639 0.233334,0.656032 0.228284,0.650331 0.222961,0.645589 0.217417,0.641853 0.211705,0.639158 0.205881,0.63753
+0.2,0.636986 0.194119,0.63753 0.188295,0.639158 0.182583,0.641853 0.177039,0.645589 0.171716,0.650331 0.166666,0.656032 0.161936,0.662639
+0.157574,0.670087 0.153619,0.678305 0.150112,0.687213 0.147085,0.696726 0.144567,0.706752 0.142584,0.717194 0.141153,0.727952 0.140289,0.738923
+0.14,0.75 0.140289,0.761077 0.141153,0.772048 0.142584,0.782806 0.144567,0.793248 0.147085,0.803274 0.150112,0.812787 0.153619,0.821695
+0.157574,0.829913 0.161936,0.837361 0.166666,0.843968 0.171716,0.849669 0.177039,0.854411 0.182583,0.858147 0.188295,0.860842 0.194119,0.86247
+0.2,0.863014 0.205881,0.86247 0.211705,0.860842 0.217417,0.858147 0.222961,0.854411 0.228284,0.849669 0.233334,0.843968 0.238064,0.837361
+0.242426,0.829913 0.246381,0.821695 0.249888,0.812787 0.252915,0.803274 0.255433,0.793248 0.257416,0.782806 0.258847,0.772048 0.259711,0.761077
+0.26,0.75Z"/>
+<path fill="none" stroke="black" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.769282,0.6 0.767723,0.590352 0.765512,0.582724 0.76267,0.577188 0.759225,0.573797 0.755209,0.572586 0.750661,0.573564 0.745626,0.576723
+0.740151,0.582032 0.734289,0.589441 0.728098,0.598877 0.721635,0.61025 0.714965,0.62345 0.70815,0.638351 0.701256,0.654809 0.694351,0.672665
+0.6875,0.691747 0.680769,0.711872 0.674224,0.732845 0.667927,0.754465 0.661938,0.776524 0.656317,0.798809 0.651116,0.821105 0.646385,0.843198
+0.642171,0.864875 0.638514,0.885927 0.635449,0.906152 0.633006,0.925354 0.631208,0.943349 0.630073,0.959964 0.629611,0.975038 0.629826,0.988426
+0.630718,1 0.632277,1.009648 0.634488,1.017276 0.63733,1.022812 0.640775,1.026203 0.644791,1.027414 0.649339,1.026436 0.654374,1.023277
+0.659849,1.017968 0.665711,1.010559 0.671902,1.001123 0.678365,0.98975 0.685035,0.97655 0.69185,0.961649 0.698744,0.945191 0.705649,0.927335
+0.7125,0.908253 0.719231,0.888128 0.725776,0.867155 0.732073,0.845535 0.738062,0.823476 0.743683,0.801191 0.748884,0.778895 0.753615,0.756802
+0.757829,0.735125 0.761486,0.714073 0.764551,0.693848 0.766994,0.674646 0.768792,0.656651 0.769927,0.640036 0.770389,0.624962 0.770174,0.611574
+0.769282,0.6Z"/>
+</g>
+<g class="fs-series" data-series="1">
+<polyline fill="none" stroke="#9400d3" stroke-width="1" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="0,0.5 0.01,0.450083 0.02,0.400665 0.03,0.35224 0.04,0.305291 0.05,0.260287 0.06,0.217679 0.07,0.177891
+0.08,0.141322 0.09,0.108337 0.1,0.079265 0.11,0.054396 0.12,0.03398 0.13,0.018221 0.14,0.007275 0.15,0.001253
+0.16,0.000213 0.17,0.004168 0.18,0.013076 0.19,0.02685 0.2,0.045351 0.21,0.068395 0.22,0.095752 0.23,0.127147
+0.24,0.162268 0.25,0.200764 0.26,0.242249 0.27,0.28631 0.28,0.332506 0.29,0.380375 0.3,0.42944 0.31,0.47921
+0.32,0.529187 0.33,0.578873 0.34,0.627771 0.35,0.675392 0.36,0.72126 0.37,0.764918 0.38,0.805929 0.39,0.843883
+0.4,0.878401 0.41,0.909139 0.42,0.935788 0.43,0.958083 0.44,0.975801 0.45,0.988765 0.46,0.996846 0.47,0.999962
+0.48,0.998082 0.49,0.991226 0.5,0.979462 0.51,0.962907 0.52,0.941727 0.53,0.916134 0.54,0.886382 0.55,0.85277
+0.56,0.815633 0.57,0.775343 0.58,0.732301 0.59,0.686938 0.6,0.639708 0.61,0.591081 0.62,0.541545 0.63,0.491593
+0.64,0.441725 0.65,0.39244 0.66,0.344229 0.67,0.297575 0.68,0.252943 0.69,0.21078 0.7,0.171507 0.71,0.135515
+0.72,0.103166 0.73,0.074782 0.74,0.050646 0.75,0.031 0.76,0.01604 0.77,0.005916 0.78,0.000728 0.79,0.000529
+0.8,0.005321 0.81,0.015055 0.82,0.029635 0.83,0.048914 0.84,0.072701 0.85,0.100756 0.86,0.132801 0.87,0.168515
+0.88,0.207541 0.89,0.24949 0.9,0.293941 0.91,0.340451 0.92,0.388555 0.93,0.437773 0.94,0.487612 0.95,0.537576
+0.96,0.587163 0.97,0.63588 0.98,0.68324 0.99,0.728768 1,0.772011"/>
+</g>
+</svg>
+<svg class="fs-front" x="36.68" y="54" width="593.32" height="315" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
+<g class="fs-objects">
+<path fill="#009e73" fill-opacity="0.6" stroke="#009e73" stroke-width="1" stroke-linejoin="miter" vector-effect="non-scaling-stroke" d="M0.05,0.2 0.15,0.2 0.1,0.025Z"/>
+</g>
+</svg>
+<rect x="36.68" y="54" width="593.32" height="315" fill="none" stroke="black" stroke-width="1"/>
+<g class="fs-xticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,369 36.68,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,54 36.68,60"/>
+<text x="36.68" y="387" fill-opacity="0" text-anchor="middle">0</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(36.68 387)"><use xlink:href="#fs-g1-17" transform="translate(-3.34 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="155.34,369 155.34,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="155.34,54 155.34,60"/>
+<text x="155.34" y="387" fill-opacity="0" text-anchor="middle">2</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(155.34 387)"><use xlink:href="#fs-g1-19" transform="translate(-3.34 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="274.01,369 274.01,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="274.01,54 274.01,60"/>
+<text x="274.01" y="387" fill-opacity="0" text-anchor="middle">4</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(274.01 387)"><use xlink:href="#fs-g1-21" transform="translate(-3.34 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="392.67,369 392.67,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="392.67,54 392.67,60"/>
+<text x="392.67" y="387" fill-opacity="0" text-anchor="middle">6</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(392.67 387)"><use xlink:href="#fs-g1-23" transform="translate(-3.34 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="511.34,369 511.34,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="511.34,54 511.34,60"/>
+<text x="511.34" y="387" fill-opacity="0" text-anchor="middle">8</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(511.34 387)"><use xlink:href="#fs-g1-25" transform="translate(-3.34 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,369 630,363"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,54 630,60"/>
+<text x="630" y="387" fill-opacity="0" text-anchor="middle">10</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(630 387)"><use xlink:href="#fs-g1-18" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-17" transform="translate(0 0) scale(0.00586 -0.00586)"/></g>
+</g>
+<g class="fs-yticks">
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,369 42.68,369"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,369 624,369"/>
+<text x="30.68" y="373.2" fill-opacity="0" text-anchor="end">-1</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 373.2)"><use xlink:href="#fs-g1-14" transform="translate(-10.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-18" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,337.5 42.68,337.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,337.5 624,337.5"/>
+<text x="30.68" y="341.7" fill-opacity="0" text-anchor="end">-0.8</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 341.7)"><use xlink:href="#fs-g1-14" transform="translate(-20.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-25" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,306 42.68,306"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,306 624,306"/>
+<text x="30.68" y="310.2" fill-opacity="0" text-anchor="end">-0.6</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 310.2)"><use xlink:href="#fs-g1-14" transform="translate(-20.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-23" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,274.5 42.68,274.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,274.5 624,274.5"/>
+<text x="30.68" y="278.7" fill-opacity="0" text-anchor="end">-0.4</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 278.7)"><use xlink:href="#fs-g1-14" transform="translate(-20.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-21" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,243 42.68,243"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,243 624,243"/>
+<text x="30.68" y="247.2" fill-opacity="0" text-anchor="end">-0.2</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 247.2)"><use xlink:href="#fs-g1-14" transform="translate(-20.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-19" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,211.5 42.68,211.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,211.5 624,211.5"/>
+<text x="30.68" y="215.7" fill-opacity="0" text-anchor="end">0</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 215.7)"><use xlink:href="#fs-g1-17" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,180 42.68,180"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,180 624,180"/>
+<text x="30.68" y="184.2" fill-opacity="0" text-anchor="end">0.2</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 184.2)"><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-19" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,148.5 42.68,148.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,148.5 624,148.5"/>
+<text x="30.68" y="152.7" fill-opacity="0" text-anchor="end">0.4</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 152.7)"><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-21" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,117 42.68,117"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,117 624,117"/>
+<text x="30.68" y="121.2" fill-opacity="0" text-anchor="end">0.6</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 121.2)"><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-23" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,85.5 42.68,85.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,85.5 624,85.5"/>
+<text x="30.68" y="89.7" fill-opacity="0" text-anchor="end">0.8</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 89.7)"><use xlink:href="#fs-g1-17" transform="translate(-16.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-15" transform="translate(-10.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-25" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+<polyline fill="none" stroke="black" stroke-width="1" points="36.68,54 42.68,54"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="630,54 624,54"/>
+<text x="30.68" y="58.2" fill-opacity="0" text-anchor="end">1</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(30.68 58.2)"><use xlink:href="#fs-g1-18" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+</g>
+<text x="333.34" y="31.2" fill-opacity="0" text-anchor="middle">labels, arrows, objects</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(333.34 31.2)"><use xlink:href="#fs-g1-77" transform="translate(-59.36 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-66" transform="translate(-56.69 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-67" transform="translate(-50.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(-43.34 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-77" transform="translate(-36.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-84" transform="translate(-34 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-13" transform="translate(-28 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-1" transform="translate(-24.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-66" transform="translate(-21.34 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-83" transform="translate(-14.66 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-83" transform="translate(-10.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-80" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-88" transform="translate(0 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-84" transform="translate(8.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-13" transform="translate(14.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-1" transform="translate(18 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-80" transform="translate(21.34 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-67" transform="translate(28.01 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-75" transform="translate(34.68 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(37.35 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-68" transform="translate(44.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-85" transform="translate(50.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-84" transform="translate(53.36 0) scale(0.00586 -0.00586)"/></g>
+<g class="fs-annotations">
+<text x="627.2" y="392.2" fill-opacity="0" text-anchor="end" fill="black">screen</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" fill="black" transform="translate(627.2 392.2)"><use xlink:href="#fs-g1-84" transform="translate(-36.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-68" transform="translate(-30.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-83" transform="translate(-24.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(-20.02 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-70" transform="translate(-13.35 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-79" transform="translate(-6.67 0) scale(0.00586 -0.00586)"/></g>
+</g>
+<g class="fs-anchored">
+</g>
+<g class="fs-annotations">
+<polyline fill="none" stroke="black" stroke-width="1" stroke-dasharray="8,4" points="66.34,337.5 185.01,337.5"/>
+</g>
+<g class="fs-key-entry" data-series="1">
+<polyline fill="none" stroke="#9400d3" stroke-width="1" points="584,67.5 620,67.5"/>
+<text x="578" y="71.7" fill-opacity="0" text-anchor="end">sin(x)</text>
+<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink" transform="translate(578 71.7)"><use xlink:href="#fs-g1-84" transform="translate(-29.33 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-74" transform="translate(-23.33 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-79" transform="translate(-20.67 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-9" transform="translate(-13.99 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-89" transform="translate(-10 0) scale(0.00586 -0.00586)"/><use xlink:href="#fs-g1-10" transform="translate(-4 0) scale(0.00586 -0.00586)"/></g>
+</g>
+</g>
+<defs>
+<path id="fs-g1-68" d="M275 546Q275 330 343 226Q411 122 548 122Q644 122 708 174Q773 226 788 334L970 322Q949 166 837 73Q725 -20 553 -20Q326 -20 206 124Q87 267 87 542Q87 815 207 958Q327 1102 551 1102Q717 1102 826 1016Q936 930 964 779L779 765Q765 855 708 908Q651 961 546 961Q403 961 339 866Q275 771 275 546Z"/>
+<path id="fs-g1-70" d="M276 503Q276 317 353 216Q430 115 578 115Q695 115 766 162Q836 209 861 281L1019 236Q922 -20 578 -20Q338 -20 212 123Q87 266 87 548Q87 816 212 959Q338 1102 571 1102Q1048 1102 1048 527L1048 503ZM862 641Q847 812 775 890Q703 969 568 969Q437 969 360 882Q284 794 278 641Z"/>
+<path id="fs-g1-79" d="M825 0L825 686Q825 793 804 852Q783 911 737 937Q691 963 602 963Q472 963 397 874Q322 785 322 627L322 0L142 0L142 851Q142 1040 136 1082L306 1082Q307 1077 308 1055Q309 1033 310 1004Q312 976 314 897L317 897Q379 1009 460 1056Q542 1102 663 1102Q841 1102 924 1014Q1006 925 1006 721L1006 0Z"/>
+<path id="fs-g1-85" d="M554 8Q465 -16 372 -16Q156 -16 156 229L156 951L31 951L31 1082L163 1082L216 1324L336 1324L336 1082L536 1082L536 951L336 951L336 268Q336 190 362 158Q387 127 450 127Q486 127 554 141Z"/>
+<path id="fs-g1-83" d="M142 0L142 830Q142 944 136 1082L306 1082Q314 898 314 861L318 861Q361 1000 417 1051Q473 1102 575 1102Q611 1102 648 1092L648 927Q612 937 552 937Q440 937 381 840Q322 744 322 564L322 0Z"/>
+<path id="fs-g1-81" d="M1053 546Q1053 -20 655 -20Q405 -20 319 168L314 168Q318 160 318 -2L318 -425L138 -425L138 861Q138 1028 132 1082L306 1082Q307 1078 309 1054Q311 1029 314 978Q316 927 316 908L320 908Q368 1008 447 1054Q526 1101 655 1101Q855 1101 954 967Q1053 833 1053 546ZM864 542Q864 768 803 865Q742 962 609 962Q502 962 442 917Q381 872 350 776Q318 681 318 528Q318 315 386 214Q454 113 607 113Q741 113 802 212Q864 310 864 542Z"/>
+<path id="fs-g1-66" d="M414 -20Q251 -20 169 66Q87 152 87 302Q87 470 198 560Q308 650 554 656L797 660L797 719Q797 851 741 908Q685 965 565 965Q444 965 389 924Q334 883 323 793L135 810Q181 1102 569 1102Q773 1102 876 1008Q979 915 979 738L979 272Q979 192 1000 152Q1021 111 1080 111Q1106 111 1139 118L1139 6Q1071 -10 1000 -10Q900 -10 854 42Q809 95 803 207L797 207Q728 83 636 32Q545 -20 414 -20ZM455 115Q554 115 631 160Q708 205 752 284Q797 362 797 445L797 534L600 530Q473 528 408 504Q342 480 307 430Q272 380 272 299Q272 211 320 163Q367 115 455 115Z"/>
+<path id="fs-g1-76" d="M816 0L450 494L318 385L318 0L138 0L138 1484L318 1484L318 557L793 1082L1004 1082L565 617L1027 0Z"/>
+<path id="fs-g1-80" d="M1053 542Q1053 258 928 119Q803 -20 565 -20Q328 -20 207 124Q86 269 86 542Q86 1102 571 1102Q819 1102 936 966Q1053 829 1053 542ZM864 542Q864 766 798 868Q731 969 574 969Q416 969 346 866Q275 762 275 542Q275 328 344 220Q414 113 563 113Q725 113 794 217Q864 321 864 542Z"/>
+<path id="fs-g1-69" d="M821 174Q771 70 688 25Q606 -20 484 -20Q279 -20 182 118Q86 256 86 536Q86 1102 484 1102Q607 1102 689 1057Q771 1012 821 914L823 914L821 1035L821 1484L1001 1484L1001 223Q1001 54 1007 0L835 0Q832 16 828 74Q825 132 825 174ZM275 542Q275 315 335 217Q395 119 530 119Q683 119 752 225Q821 331 821 554Q821 769 752 869Q683 969 532 969Q396 969 336 868Q275 768 275 542Z"/>
+<path id="fs-g1-17" d="M1059 705Q1059 352 934 166Q810 -20 567 -20Q324 -20 202 165Q80 350 80 705Q80 1068 198 1249Q317 1430 573 1430Q822 1430 940 1247Q1059 1064 1059 705ZM876 705Q876 1010 806 1147Q735 1284 573 1284Q407 1284 334 1149Q262 1014 262 705Q262 405 336 266Q409 127 569 127Q728 127 802 269Q876 411 876 705Z"/>
+<path id="fs-g1-19" d="M103 0L103 127Q154 244 228 334Q301 423 382 496Q463 568 542 630Q622 692 686 754Q750 816 790 884Q829 952 829 1038Q829 1154 761 1218Q693 1282 572 1282Q457 1282 382 1220Q308 1157 295 1044L111 1061Q131 1230 254 1330Q378 1430 572 1430Q785 1430 900 1330Q1014 1229 1014 1044Q1014 962 976 881Q939 800 865 719Q791 638 582 468Q467 374 399 298Q331 223 301 153L1036 153L1036 0Z"/>
+<path id="fs-g1-21" d="M881 319L881 0L711 0L711 319L47 319L47 459L692 1409L881 1409L881 461L1079 461L1079 319ZM711 1206Q709 1200 683 1153Q657 1106 644 1087L283 555L229 481L213 461L711 461Z"/>
+<path id="fs-g1-23" d="M1049 461Q1049 238 928 109Q807 -20 594 -20Q356 -20 230 157Q104 334 104 672Q104 1038 235 1234Q366 1430 608 1430Q927 1430 1010 1143L838 1112Q785 1284 606 1284Q452 1284 368 1140Q283 997 283 725Q332 816 421 864Q510 911 625 911Q820 911 934 789Q1049 667 1049 461ZM866 453Q866 606 791 689Q716 772 582 772Q456 772 378 698Q301 625 301 496Q301 333 382 229Q462 125 588 125Q718 125 792 212Q866 300 866 453Z"/>
+<path id="fs-g1-25" d="M1050 393Q1050 198 926 89Q802 -20 570 -20Q344 -20 216 87Q89 194 89 391Q89 529 168 623Q247 717 370 737L370 741Q255 768 188 858Q122 948 122 1069Q122 1230 242 1330Q363 1430 566 1430Q774 1430 894 1332Q1015 1234 1015 1067Q1015 946 948 856Q881 766 765 743L765 739Q900 717 975 624Q1050 532 1050 393ZM828 1057Q828 1296 566 1296Q439 1296 372 1236Q306 1176 306 1057Q306 936 374 872Q443 809 568 809Q695 809 762 868Q828 926 828 1057ZM863 410Q863 541 785 608Q707 674 566 674Q429 674 352 602Q275 531 275 406Q275 115 572 115Q719 115 791 186Q863 256 863 410Z"/>
+<path id="fs-g1-18" d="M156 0L156 153L515 153L515 1237L197 1010L197 1180L530 1409L696 1409L696 153L1039 153L1039 0Z"/>
+<path id="fs-g1-14" d="M91 464L91 624L591 624L591 464Z"/>
+<path id="fs-g1-15" d="M187 0L187 219L382 219L382 0Z"/>
+<path id="fs-g1-77" d="M138 0L138 1484L318 1484L318 0Z"/>
+<path id="fs-g1-67" d="M1053 546Q1053 -20 655 -20Q532 -20 450 24Q369 69 318 168L316 168Q316 137 312 74Q308 10 306 0L132 0Q138 54 138 223L138 1484L318 1484L318 1061Q318 996 314 908L318 908Q368 1012 450 1057Q533 1102 655 1102Q860 1102 956 964Q1053 826 1053 546ZM864 540Q864 767 804 865Q744 963 609 963Q457 963 388 859Q318 755 318 529Q318 316 386 214Q454 113 607 113Q743 113 804 214Q864 314 864 540Z"/>
+<path id="fs-g1-84" d="M950 299Q950 146 834 63Q719 -20 511 -20Q309 -20 200 46Q90 113 57 254L216 285Q239 198 311 158Q383 117 511 117Q648 117 712 159Q775 201 775 285Q775 349 731 389Q687 429 589 455L460 489Q305 529 240 568Q174 606 137 661Q100 716 100 796Q100 944 206 1022Q311 1099 513 1099Q692 1099 798 1036Q903 973 931 834L769 814Q754 886 688 924Q623 963 513 963Q391 963 333 926Q275 889 275 814Q275 768 299 738Q323 708 370 687Q417 666 568 629Q711 593 774 562Q837 532 874 495Q910 458 930 410Q950 361 950 299Z"/>
+<path id="fs-g1-13" d="M385 219L385 51Q385 -55 366 -126Q347 -197 307 -262L184 -262Q278 -126 278 0L190 0L190 219Z"/>
+<path id="fs-g1-1" d=""/>
+<path id="fs-g1-88" d="M1174 0L965 0L776 765L740 934Q731 889 712 804Q693 720 508 0L300 0L-3 1082L175 1082L358 347Q365 323 401 149L418 223L644 1082L837 1082L1026 339L1072 149L1103 288L1308 1082L1484 1082Z"/>
+<path id="fs-g1-75" d="M137 1312L137 1484L317 1484L317 1312ZM317 -134Q317 -287 257 -356Q197 -425 77 -425Q0 -425 -50 -416L-50 -277L12 -283Q81 -283 109 -247Q137 -211 137 -107L137 1082L317 1082Z"/>
+<path id="fs-g1-74" d="M137 1312L137 1484L317 1484L317 1312ZM137 0L137 1082L317 1082L317 0Z"/>
+<path id="fs-g1-9" d="M127 532Q127 821 218 1051Q308 1281 496 1484L670 1484Q483 1276 396 1042Q308 808 308 530Q308 253 394 20Q481 -213 670 -424L496 -424Q307 -220 217 10Q127 241 127 528Z"/>
+<path id="fs-g1-89" d="M801 0L510 444L217 0L23 0L408 556L41 1082L240 1082L510 661L778 1082L979 1082L612 558L1002 0Z"/>
+<path id="fs-g1-10" d="M555 528Q555 239 464 9Q374 -221 186 -424L12 -424Q200 -214 287 18Q374 251 374 530Q374 809 286 1042Q199 1275 12 1484L186 1484Q375 1280 465 1050Q555 819 555 532Z"/>
+</defs>
+</svg>

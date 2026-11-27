@@ -37,5 +37,4 @@ The output's extension picks the format: `set output 'pc01.pdf'` in a script, `c
 ## Pitfalls
 
 - A PDF shows what is drawn, not the viewer: hidden series, zoom and hover texts are the HTML page's.
-- Texts in the 14 standard PDF fonts (Helvetica for the sans faces, Times for the serif ones) cover Latin-1 and the
-  Symbol font's Greek; other characters become `?` until the fonts are embedded (the next chapter).
+- The fonts travel with the file (the next chapter): a journal's checker finds them embedded.

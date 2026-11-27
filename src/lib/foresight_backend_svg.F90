@@ -15,6 +15,8 @@ use foresight_png, only : png_base64
 use foresight_style, only : pattern_parts
 use foresight_sys, only : rename_file
 use foresight_font, only : face_of, font_attributes, font_object, text_advance
+use foresight_fontdata, only : face_upm, glyph_outline
+use foresight_textlayout, only : layout_text, placed_glyph
 use penf, only : I4P, I8P, R8P
 
 implicit none
@@ -43,6 +45,11 @@ real(R8P),        parameter :: SEGMENT_GAP    = 0.35_R8P   !< Gap between segmen
 type, extends(backend_object) :: backend_svg
    !< SVG output device.
    private
+   logical, public :: glyphs = .false. !< Texts drawn from the compiled-in glyphs (gnuplot-style `fontglyphs`: the same
+                                       !< shapes as the PDF), each text kept transparent for selection; else by name.
+   integer(I4P), allocatable :: glyph_face(:)   !< Face of each glyph drawn (`fontglyphs`).
+   integer(I4P), allocatable :: glyph_number(:) !< Its glyph index.
+   integer(I4P)              :: nglyphs = 0_I4P !< Glyphs drawn.
    integer(I4P)                  :: unit = -1_I4P !< Output unit.
    character(len=:), allocatable :: file          !< Final output file.
    character(len=:), allocatable :: tmp_file      !< File being written.
@@ -96,6 +103,8 @@ type, extends(backend_object) :: backend_svg
       procedure, pass(self) :: output_unit !< Unit of the open stream.
       procedure, pass(self) :: put         !< Write a line.
       procedure, pass(self), private :: write_pairs !< Write coordinate pairs.
+      procedure, pass(self), private :: glyph_group !< A text drawn from the glyphs (`fontglyphs`).
+      procedure, pass(self), private :: glyph_defs  !< The definitions of the glyphs drawn.
 endtype backend_svg
 
 contains
@@ -110,6 +119,7 @@ contains
 
    call self%open_file(file)
    self%text_size = font_size
+   self%nglyphs = 0_I4P
    call self%put('<?xml version="1.0" encoding="UTF-8" standalone="no"?>')
    call self%open_svg(width, height, font_size)
    endsubroutine begin_page
@@ -118,6 +128,7 @@ contains
    !< Close the document and publish it atomically.
    class(backend_svg), intent(inout) :: self !< Device.
 
+   if (self%glyphs) call self%glyph_defs
    call self%put('</svg>')
    call self%close_file
    endsubroutine end_page
@@ -332,6 +343,7 @@ contains
    character(len=:), allocatable            :: runs   !< Enhanced text runs.
 
    line = '<text x="'//px(x)//'" y="'//px(y)//'"'//font_attributes(self%font, self%font%size)
+   if (self%glyphs) line = line//' fill-opacity="0"'
    if (self%boxed) line = line//textbox_attribute(self)
    if (anchor /= 'start') line = line//' text-anchor="'//anchor//'"'
    if (present(rotate)) line = line//' transform="rotate('//px(rotate)//' '//px(x)//' '//px(y)//')"'
@@ -346,6 +358,24 @@ contains
    endif
    if (present(sup)) then
       if (len(sup) > 0) line = line//'<tspan dy="-0.45em" font-size="0.75em">'//xml_escape(sup)//'</tspan>'
+   endif
+   if (self%glyphs) then
+      ! the text kept, transparent (selection, search, screen readers), its glyphs drawn over it
+      call self%put(line//'</text>')
+      block
+         character(len=:), allocatable :: super !< Superscript.
+         character(len=:), allocatable :: ink   !< Color.
+         real(R8P)                     :: angle !< Rotation.
+
+         super = ''
+         if (present(sup)) super = sup
+         ink = ''
+         if (present(color)) ink = self%theme%map(color)
+         angle = 0.0_R8P
+         if (present(rotate)) angle = rotate
+         call self%put(self%glyph_group(x, y, string, anchor, super, angle, ink))
+      endblock
+      return
    endif
    call self%put(line//'</text>')
    endsubroutine text_raw
@@ -733,6 +763,7 @@ contains
    if (rotate /= 0.0_R8P) line = line//' data-rotate="'//px(-rotate)//'" transform="rotate('//px(-rotate)//' '// &
                                  px(p(1))//' '//px(p(2))//')"'
    line = line//' fill="'//self%theme%map(color)//'"'//font_attributes(self%font, self%font%size)
+   if (self%glyphs) line = line//' fill-opacity="0"'
    if (self%enhanced .and. .not. self%literal .and. has_markup(string)) then
       ! gnuplot's enhanced text, as `text` (cities.dem's `{/=3 Arras}`)
       runs = markup_svg(string, self%font%size_px(self%text_size))
@@ -742,6 +773,8 @@ contains
       line = line//'>'//xml_escape(string)//'</text>'
    endif
    self%labels = self%labels//line//new_line('a')
+   if (self%glyphs) self%labels = self%labels//self%glyph_group(p(1), p(2), string, anchor, '', -rotate, &
+                                                                self%theme%map(color))//new_line('a')
    endsubroutine data_label_raw
 
    function textbox_attribute(self) result(attribute)
@@ -907,6 +940,119 @@ contains
    if (len(label) > 0) extent(1) = max(extent(1), self%text_width(label, '', font_size))
    extent(2) = geometry(5) + (1.0_R8P + SEGMENT_WIDTH) * height
    endfunction readout_extent
+
+   function glyph_group(self, x, y, string, anchor, sup, rotate, color) result(group)
+   !< The glyphs of `string` and its superscript `sup` (foresight_textlayout), the baseline through (`x`, `y`) [px]
+   !< anchored by `anchor`, rotated by `rotate` [deg, clockwise]: a group of `<use>` of the glyph definitions, filled
+   !< with `color` (the page's text color if empty).
+   class(backend_svg), intent(inout) :: self   !< Device.
+   real(R8P),          intent(in)    :: x      !< Anchor abscissa [px].
+   real(R8P),          intent(in)    :: y      !< Baseline [px].
+   character(len=*),   intent(in)    :: string !< Text, UTF-8.
+   character(len=*),   intent(in)    :: anchor !< `start`, `middle` or `end`.
+   character(len=*),   intent(in)    :: sup    !< Superscript, empty for none.
+   real(R8P),          intent(in)    :: rotate !< Rotation [deg, clockwise].
+   character(len=*),   intent(in)    :: color  !< Fill, empty for the page's.
+   character(len=:), allocatable     :: group  !< Element.
+   type(placed_glyph), allocatable   :: placed(:) !< Glyphs.
+   type(font_object)                 :: font   !< Font of the texts written now.
+   integer(I4P), allocatable         :: grown(:) !< Larger list.
+   integer(I4P)                      :: count  !< Glyphs placed.
+   integer(I4P)                      :: k      !< Counter.
+   integer(I4P)                      :: j      !< Glyph drawn.
+   real(R8P)                         :: width  !< Text width [px].
+   real(R8P)                         :: start  !< Text start from the anchor [px].
+   real(R8P)                         :: scale  !< Font units to px.
+
+   font = self%font
+   if (len_trim(font%family) == 0) font%family = self%page_family
+   call layout_text(string, self%enhanced .and. .not. self%literal .and. has_markup(string), face_of(font), &
+                    self%font%size_px(self%text_size), sup, placed, count, width)
+   start = 0.0_R8P
+   if (anchor == 'middle') start = -0.5_R8P * width
+   if (anchor == 'end') start = -width
+   group = '<g class="fs-glyphs" xmlns:xlink="http://www.w3.org/1999/xlink"'
+   if (len(color) > 0) group = group//' fill="'//color//'"'
+   group = group//' transform="translate('//px(x)//' '//px(y)//')'
+   if (rotate /= 0.0_R8P) group = group//' rotate('//px(rotate)//')'
+   group = group//'">'
+   do k = 1_I4P, count
+      if (placed(k)%glyph == 0_I4P) cycle
+      ! the glyph's definition, recorded once
+      do j = 1_I4P, self%nglyphs
+         if (self%glyph_face(j) == placed(k)%face .and. self%glyph_number(j) == placed(k)%glyph) exit
+      enddo
+      if (j > self%nglyphs) then
+         if (.not. allocated(self%glyph_face)) allocate(self%glyph_face(64), self%glyph_number(64))
+         if (self%nglyphs == size(self%glyph_face, kind=I4P)) then
+            allocate(grown(2_I4P * self%nglyphs))
+            grown(1:self%nglyphs) = self%glyph_face(1:self%nglyphs)
+            call move_alloc(grown, self%glyph_face)
+            allocate(grown(2_I4P * self%nglyphs))
+            grown(1:self%nglyphs) = self%glyph_number(1:self%nglyphs)
+            call move_alloc(grown, self%glyph_number)
+         endif
+         self%nglyphs = self%nglyphs + 1_I4P
+         self%glyph_face(self%nglyphs) = placed(k)%face
+         self%glyph_number(self%nglyphs) = placed(k)%glyph
+      endif
+      scale = placed(k)%size / real(face_upm(placed(k)%face), R8P)
+      group = group//'<use xlink:href="#fs-g'//int_str(int(placed(k)%face, I8P))//'-'// &
+              int_str(int(placed(k)%glyph, I8P))//'" transform="translate('//px(start + placed(k)%x)//' '// &
+              px(placed(k)%y)//') scale('//fixed(scale, 5_I4P)//' '//fixed(-scale, 5_I4P)//')"/>'
+   enddo
+   group = group//'</g>'
+   endfunction glyph_group
+
+   subroutine glyph_defs(self)
+   !< The definitions of the glyphs drawn: their outlines in font units, y upward (`fontglyphs`).
+   class(backend_svg), intent(inout) :: self      !< Device.
+   integer(I4P), allocatable         :: ops(:)    !< Outline operations.
+   integer(I4P), allocatable         :: points(:) !< Outline points, x then y.
+   character(len=:), allocatable     :: d         !< Path data.
+   integer(I4P)                      :: j         !< Glyph.
+   integer(I4P)                      :: k         !< Operation.
+   integer(I4P)                      :: at        !< Next point.
+
+   if (self%nglyphs == 0_I4P) return
+   call self%put('<defs>')
+   do j = 1_I4P, self%nglyphs
+      call glyph_outline(self%glyph_face(j), self%glyph_number(j), ops, points)
+      d = ''
+      at = 1_I4P
+      do k = 1_I4P, size(ops, kind=I4P)
+         select case (ops(k))
+         case (0_I4P)
+            d = d//'M'//pair(2_I4P)
+         case (1_I4P)
+            d = d//'L'//pair(2_I4P)
+         case (2_I4P)
+            d = d//'Q'//pair(4_I4P)
+         case (3_I4P)
+            d = d//'C'//pair(6_I4P)
+         case default
+            d = d//'Z'
+         endselect
+      enddo
+      call self%put('<path id="fs-g'//int_str(int(self%glyph_face(j), I8P))//'-'// &
+                    int_str(int(self%glyph_number(j), I8P))//'" d="'//d//'"/>')
+   enddo
+   call self%put('</defs>')
+   contains
+      function pair(n) result(text)
+      !< The next `n` coordinates, space separated.
+      integer(I4P), intent(in)      :: n    !< Coordinates.
+      character(len=:), allocatable :: text !< Text.
+      integer(I4P)                  :: i    !< Counter.
+
+      text = ''
+      do i = 0_I4P, n - 1_I4P
+         if (i > 0_I4P) text = text//' '
+         text = text//int_str(int(points(at + i), I8P))
+      enddo
+      at = at + n
+      endfunction pair
+   endsubroutine glyph_defs
 
    ! building blocks for extending devices
    subroutine close_file(self)

@@ -78,6 +78,8 @@ type :: figure_object
    logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
    type(font_object)              :: title_font               !< Multiplot title font (`set multiplot title ... font`).
+   logical                        :: svg_glyphs = .false.     !< SVG texts drawn from the compiled-in glyphs.
+   logical                        :: pdf_glyphs = .true.      !< PDF texts in the compiled-in fonts, embedded.
    character(len=48)              :: font_family = ''         !< Page font family (`set terminal ... font "name,size"`),
                                                               !< empty for foresight's.
    type(axes_object), allocatable :: panels(:)                !< Plot panels.
@@ -162,6 +164,7 @@ type :: figure_object
       procedure, pass(self) :: set_theta       !< gnuplot `set theta`.
       procedure, pass(self) :: set_margin   !< Set a margin, `set lmargin`...
       procedure, pass(self) :: set_enhanced !< Enhanced text on or off.
+      procedure, pass(self) :: set_fontglyphs !< Texts drawn from the compiled-in glyphs, or set by font names.
       procedure, pass(self) :: set_border_style !< Border line: lc, lw, dt.
       procedure, pass(self) :: set_zeroaxis !< Zero axes.
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
@@ -489,6 +492,8 @@ contains
    svg%theme = self%theme
    html%theme = self%theme
    pdf%theme = self%theme
+   svg%glyphs = self%svg_glyphs
+   pdf%embed = self%pdf_glyphs
    select case (extension(file))
    case ('svg')
       call self%render(svg, file)
@@ -1804,6 +1809,19 @@ contains
    self%enhanced = .true.
    if (present(on)) self%enhanced = on
    endsubroutine set_enhanced
+
+   subroutine set_fontglyphs(self, svg, pdf)
+   !< Texts drawn from the compiled-in glyphs, so that they look the same on every machine, or by font name, as gnuplot's
+   !< svg terminal (`set terminal svg fontglyphs|fontnames`): `svg` for the SVG files (by name if absent: the reader's
+   !< fonts), `pdf` for the PDF ones (embedded if absent; by name, the 14 standard fonts). The HTML pages keep their
+   !< texts by name (the viewer redraws them).
+   class(figure_object), intent(inout)        :: self !< Figure.
+   logical,              intent(in), optional :: svg  !< SVG texts from the glyphs.
+   logical,              intent(in), optional :: pdf  !< PDF texts embedded.
+
+   if (present(svg)) self%svg_glyphs = svg
+   if (present(pdf)) self%pdf_glyphs = pdf
+   endsubroutine set_fontglyphs
 
    subroutine set_margin(self, side, value, screen)
    !< Set a margin of the current panel, as gnuplot `set lmargin|rmargin|tmargin|bmargin`: `side` is `l`, `r`, `t` or
