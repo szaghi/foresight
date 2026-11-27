@@ -1335,6 +1335,9 @@ set key at graph 0.5, 0.5 center      # centred on the plot area
 set key at screen 0.98, screen 0.98   # its top right corner near the top right of the page
 ```
 
+In a 3D view a key `at screen X,Y` has its top at Y and its right edge at X (its centre with `center`, its left edge
+with `left`), its entries laid out as gnuplot's do_3dkey_layout.
+
 Position words apply in order; `center` centres the direction not named yet, as in gnuplot. Titles are right-aligned
 with their sample on the right. Inside, the key lies in the plot area. `outside` puts it in the left or right margin,
 aligned with the top, centre or bottom of the plot; centred horizontally, above (`top`) or below (`bottom`) the
@@ -2362,7 +2365,8 @@ its last in `set samples` points; any other as x, y and z of its path length; `a
 In a 3D view pm3d draws the surface as colored quadrangles projected on the page, gnuplot's pm3d_plot: at the surface,
 the base plane and the top of the box (`set pm3d at s|b|t`, combined and drawn in that order: `at bstbst`); in gnuplot's
 order of the scans and of their points (`scansautomatic`, the default: from the depths of the first and last points of
-a scan and of the first scan, as pm3d_rearrange_part; `scansforward`, `scansbackward`), each surface in its place among
+a scan and of the first scan, as pm3d_rearrange_part; `scansforward`, `scansbackward`: over gnuplot's list of the
+scans, a data file's last first, a function's in sampling order), each surface in its place among
 the items (a surface of `set pm3d` just before its own lines); with `depthorder` the quadrangles of every surface are
 sorted by their mean depth and drawn after all the items (`depthorder base`: by the depth of the base below them). The
 color box stands beside the plot at gnuplot's default place for 3D views (from 0.709 to 0.778 of the view's x scale

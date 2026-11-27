@@ -18615,6 +18615,7 @@ contains
    series%scan_sets = sets
    series%grid_scans = grid
    series%data_scans = read
+   series%sampled_scans = .not. read
    endsubroutine set_heights
 
    pure subroutine append_text(buffer, used, piece)

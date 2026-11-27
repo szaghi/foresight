@@ -170,6 +170,8 @@ type :: series_object
                                                        !< cross iso-curves of a function (drawn, not gridded).
    logical                       :: data_scans = .false. !< Scans read from data, which gnuplot keeps last first (its
                                                          !< table order); a function's are in order.
+   logical                       :: sampled_scans = .false. !< Scans of a script's function surface, in gnuplot's list
+                                                            !< order (its pm3d scan order mirrors a data file's).
    logical                       :: key_blank = .false. !< A key entry of its title alone, no sample (gnuplot's pm3d
                                                         !< surfaces).
    logical                       :: no_contours = .false. !< No contour lines (gnuplot's item option `nocontours`).

@@ -3762,68 +3762,76 @@ contains
    endsubroutine contourfill_slices
 
    pure subroutine pm3d_scan_order(pm, one, f, swap, back)
-   !< gnuplot's order of the scans and points of the surface `one` (pm3d_rearrange_part): `scansforward` the file's,
-   !< `scansbackward` and `depthorder` from the last scan; `scansautomatic` from the depths (at the floor) of the first
-   !< and last defined points of the file's last scan (points from the last when the last lies no farther) and of the
-   !< file's first scan at that point (scans in the file's order when it lies no nearer; from 3 scans, else from the
-   !< last).
+   !< gnuplot's order of the scans and points of the surface `one` (pm3d_rearrange_part) over its list of scans, the
+   !< file's last first for data (and the library's grids), in sampling order for a script's functions
+   !< (`sampled_scans`): `scansforward` the list reversed, `scansbackward` and `depthorder` the list's;
+   !< `scansautomatic` from the depths (at the floor) of the first and last defined points of the list's first scan
+   !< (points from the last when the last lies no farther) and of the list's last scan at that point (the list reversed
+   !< when it lies no nearer; from 3 scans, else the list's order).
    type(pm3d_object),   intent(in)  :: pm   !< pm3d settings.
    type(series_object), intent(in)  :: one  !< Surface.
    type(view3d_frame),  intent(in)  :: f    !< The view.
    logical,             intent(out) :: swap !< Scans from the last.
    logical,             intent(out) :: back !< Points from the last.
    integer(I4P)                     :: g    !< Grid scans.
-   integer(I4P)                     :: sa   !< Scan A (from the file's last).
+   integer(I4P)                     :: j    !< Position in gnuplot's list.
+   integer(I4P)                     :: sa   !< Scan A (the list's j-th).
+   integer(I4P)                     :: sb   !< Scan B (the list's last).
    integer(I4P)                     :: from !< First defined point of scan A.
    integer(I4P)                     :: last !< Last defined point of scan A.
    integer(I4P)                     :: i    !< Point.
    integer(I4P)                     :: cnt  !< Points of scan A, less one.
+   logical                          :: listed !< gnuplot's scan_array in its list's order (else reversed).
    real(R8P)                        :: va(3), va2(3), vb(3) !< View coordinates.
 
    back = .false.
-   swap = .true.
+   g = one%grid_scans
+   ! scan k of the list: the series' g+1-k for data, its k for functions; the list's order is "from the last" for data
    select case (pm%direction)
    case (1_I4P)
-      swap = .false.
-      return
+      listed = .false.
    case (2_I4P, 3_I4P)
-      return
+      listed = .true.
+   case default
+      listed = .true.
+      do j = 1_I4P, g
+         sa = merge(j, g + 1_I4P - j, one%sampled_scans)
+         cnt = one%scans(2, sa) - one%scans(1, sa)
+         if (cnt <= 0_I4P) cycle
+         from = -1_I4P
+         do i = one%scans(1, sa), one%scans(2, sa)
+            if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
+               from = i
+               exit
+            endif
+         enddo
+         if (from < 0_I4P) cycle
+         last = from
+         do i = one%scans(2, sa), from + 1_I4P, -1_I4P
+            if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
+               last = i
+               exit
+            endif
+         enddo
+         if (.not. (real(last - from, R8P) > real(cnt, R8P) * 0.1_R8P)) cycle
+         va = view3d_xyz(f, one%x(from), one%y(from), f%floor_z, base=.true.)
+         va2 = view3d_xyz(f, one%x(last), one%y(last), f%floor_z, base=.true.)
+         back = .not. (va2(3) > va(3))
+         ! gnuplot compares with the list's last scan while at least 3 scans are left (len2 >= 3)
+         if (g - j + 1_I4P < 3_I4P) cycle
+         sb = merge(g, 1_I4P, one%sampled_scans)
+         i = one%scans(1, sb) + (from - one%scans(1, sa))
+         do while (i <= one%scans(2, sb))
+            if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) exit
+            i = i + 1_I4P
+         enddo
+         if (i > one%scans(2, sb)) cycle
+         vb = view3d_xyz(f, one%x(i), one%y(i), f%floor_z, base=.true.)
+         listed = vb(3) > va(3)
+         exit
+      enddo
    endselect
-   g = one%grid_scans
-   do sa = g, 1_I4P, -1_I4P
-      cnt = one%scans(2, sa) - one%scans(1, sa)
-      if (cnt <= 0_I4P) cycle
-      from = -1_I4P
-      do i = one%scans(1, sa), one%scans(2, sa)
-         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
-            from = i
-            exit
-         endif
-      enddo
-      if (from < 0_I4P) cycle
-      last = from
-      do i = one%scans(2, sa), from + 1_I4P, -1_I4P
-         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) then
-            last = i
-            exit
-         endif
-      enddo
-      if (.not. (real(last - from, R8P) > real(cnt, R8P) * 0.1_R8P)) cycle
-      va = view3d_xyz(f, one%x(from), one%y(from), f%floor_z, base=.true.)
-      va2 = view3d_xyz(f, one%x(last), one%y(last), f%floor_z, base=.true.)
-      back = .not. (va2(3) > va(3))
-      ! gnuplot compares with the first scan of the file while at least 3 scans are left (len2 >= 3)
-      if (sa < 3_I4P) cycle
-      i = one%scans(1, 1) + (from - one%scans(1, sa))
-      do while (i <= one%scans(2, 1))
-         if (ieee_is_finite(one%x(i)) .and. ieee_is_finite(one%y(i))) exit
-         i = i + 1_I4P
-      enddo
-      if (i > one%scans(2, 1)) cycle
-      vb = view3d_xyz(f, one%x(i), one%y(i), f%floor_z, base=.true.)
-      swap = vb(3) > va(3)
-      return
-   enddo
+   swap = listed .neqv. one%sampled_scans
    endsubroutine pm3d_scan_order
 
    pure subroutine queue_init(q)
@@ -4938,7 +4946,7 @@ contains
       ! gnuplot's entries about their anchors: key character, sample, (first anchor), column width, text extent
       s3 = [km(1), km(3), -huge(1.0_R8P), km(4), km(1) * real(nint((km(4) - km(3)) / km(1)) - 3_I4P, R8P)] * &
            [0.01_R8P, 0.01_R8P, 1.0_R8P, 0.01_R8P, 0.01_R8P]
-      if (self%key_at) then
+      if (self%key_at .and. .not. all(self%key_system == 'screen')) then
          kbox = [x0, y0, x0 + width, y0 + height]
          call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key, &
                             sample3d=s3)
@@ -11687,7 +11695,8 @@ contains
    pure subroutine key3d_origin(self, f, km, grid, xinkey, yinkey)
    !< gnuplot's do_3dkey_layout: the anchor of the first key entry (its sample's left, its row's top) [units] in the
    !< plot bounds (gnuplot's page bounds, the key `fixed`): below the plot (`below`), centred by its parts; inside at the
-   !< top or bottom, a tick length in, at the left or right; outside at the right or left, a tick length away.
+   !< top or bottom, a tick length in, at the left or right; outside at the right or left, a tick length away; `at
+   !< screen X,Y`, the key's top at Y and its right edge at X (its centre or left edge with `center`, `left`).
    class(axes_object), intent(in)  :: self    !< Panel.
    type(view3d_frame), intent(in)  :: f       !< The view.
    real(R8P),          intent(in)  :: km(6)   !< Key metrics (key3d_metrics).
@@ -11703,6 +11712,17 @@ contains
    size_left = km(1) * real(longest + 2_I4P, R8P)
    size_right = km(1) + km(3)
    height = km(5) + km(2) * real(grid(3), R8P)
+   if (self%key_at) then
+      ! `set key at screen X,Y` (GPKEY_USER_PLACEMENT): the key's top at Y, its right edge (centre, left edge) at X
+      xinkey = self%key_xy(1) * self%canvas(1) * 100.0_R8P - km(4) * real(max(grid(2), 1_I4P) - 1_I4P, R8P) - &
+               size_right - size_left
+      if (trim(self%key_h) == 'center') xinkey = xinkey + 0.5_R8P * (km(4) * real(max(grid(2), 1_I4P) - 1_I4P, R8P) &
+                                                                      + size_right + size_left)
+      if (trim(self%key_h) == 'left') xinkey = self%key_xy(1) * self%canvas(1) * 100.0_R8P
+      xinkey = xinkey + size_left
+      yinkey = self%key_xy(2) * self%canvas(2) * 100.0_R8P - km(5)
+      return
+   endif
    associate(xleft => f%bounds(1), xright => f%bounds(2), ybot => f%bounds(3), ytop => f%bounds(4))
       select case (self%key_place())
       case ('bottom')

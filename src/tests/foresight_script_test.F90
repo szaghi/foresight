@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(293)                           !< Per-check outcome.
+logical                       :: test_passed(294)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8047,6 +8047,38 @@ block
    endif
 endblock
 
+! check 294: gnuplot 6.0's layout rules: a 3D key `at screen X,Y` its top at Y and its right edge at X (the text ending
+! two characters and the sample left of it, do_3dkey_layout's user placement: 540.66 of 600); the pm3d scans of a
+! function surface in gnuplot's list order (sampling order, where a data file's are last first): `scansforward` of the
+! function draws as `scansbackward` of the same rows as data
+block
+   character(len=:), allocatable :: svg, svg2 !< Pages.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400"//nl//"set output 'foresight_script_test_k3.svg'"//nl// &
+                             "set samples 20; set isosamples 21; set view 60, 30, 1.0, 1.1"//nl// &
+                             "set key at screen 1.0, 0.9; set contour surface"//nl// &
+                             "splot x**2-y**2 with lines notitle, x**2-y**2 with lines nosurf lw 3", iostat, iomsg)
+   test_passed(294) = iostat == 0_I4P
+   if (test_passed(294)) then
+      svg = read_text('foresight_script_test_k3.svg')
+      test_passed(294) = index(svg, '<text x="540.66" y="52.9" text-anchor="end">x**2-y**2</text>') > 0
+   endif
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400"//nl//"set isosamples 4,3; set samples 4,3; unset key"// &
+                             nl//"set table $d"//nl//"splot x*y+x"//nl//"unset table"//nl//"set pm3d scansforward"// &
+                             nl//"set output 'foresight_script_test_sf.svg'"//nl//"splot x*y+x with pm3d"//nl// &
+                             "set pm3d scansbackward"//nl//"set output 'foresight_script_test_sb.svg'"//nl// &
+                             "splot $d with pm3d", iostat, iomsg)
+   test_passed(294) = test_passed(294) .and. iostat == 0_I4P
+   if (test_passed(294)) then
+      svg = read_text('foresight_script_test_sf.svg')
+      svg2 = read_text('foresight_script_test_sb.svg')
+      test_passed(294) = quads(svg) == quads(svg2) .and. len(quads(svg)) > 100
+   endif
+endblock
+
 if (all(test_passed)) then
    open(newunit=unit, file=output)
    close(unit, status='delete')
@@ -8378,6 +8410,24 @@ contains
    if (exists) passed = produced == read_text(golden)
    if (.not. passed) write(error_unit, '(A)') output//' differs from '//golden//' (FORESIGHT_UPDATE_GOLDEN=1 rewrites it)'
    endfunction matches_golden
+
+   pure function quads(page) result(list)
+   !< The filled paths of `page` (pm3d quadrangles), in order.
+   character(len=*), intent(in)  :: page !< Page.
+   character(len=:), allocatable :: list !< Their elements.
+   integer(I4P)                  :: at, e !< Positions.
+
+   list = ''
+   at = 1_I4P
+   do
+      e = index(page(at:), '<path fill="#', kind=I4P)
+      if (e == 0_I4P) exit
+      at = at + e - 1_I4P
+      e = index(page(at:), '/>', kind=I4P)
+      list = list//page(at:at + e)
+      at = at + e
+   enddo
+   endfunction quads
 
    function read_text(file) result(text)
    !< Whole content of `file`.
