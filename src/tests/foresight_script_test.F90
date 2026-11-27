@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(295)                           !< Per-check outcome.
+logical                       :: test_passed(296)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8125,6 +8125,28 @@ block
    ! `set iso N` is isosamples (gnuplot's iso$samples), isosurface needs `isosurf`
    call interpreter%run_text("set iso 7", iostat, iomsg)
    test_passed(295) = test_passed(295) .and. iostat == 0_I4P .and. interpreter%isosamples1 == 7_I4P
+endblock
+
+! check 296: an HTML page's 3D scene written as JSON with `&`, `<`, `>` as JSON unicode escapes (a linear write:
+! escaping the whole scene as XML was quadratic, 89 s for igamma.dem's 201 x 201 surface), the title's `a<b & c` among
+! its texts
+block
+   character(len=:), allocatable :: page !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   integer(I4P)                  :: a, b !< The scene's ends.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal html size 600,400"//nl//"set output 'foresight_script_test_sc.html'"//nl// &
+                             "set title 'a<b & c'"//nl//"set isosamples 5"//nl//"splot x*y", iostat, iomsg)
+   test_passed(296) = iostat == 0_I4P
+   if (test_passed(296)) then
+      page = read_text('foresight_script_test_sc.html')
+      a = index(page, '<metadata class="fs-scene">')
+      b = index(page, '</metadata>')
+      test_passed(296) = a > 0 .and. b > a
+      if (test_passed(296)) test_passed(296) = index(page(a:b), '"keep":"a\u003cb \u0026 c"') > 0 .and. &
+                                             index(page(a + 1:b - 1), '<') == 0
+   endif
 endblock
 
 if (all(test_passed)) then

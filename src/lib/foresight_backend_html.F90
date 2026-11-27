@@ -64,7 +64,8 @@ contains
    class(backend_html), intent(inout) :: self !< Device.
    character(len=*),    intent(in)    :: json !< Scene.
 
-   call self%put('<metadata class="fs-scene">'//xml_escape(json)//'</metadata>')
+   ! no XML escaping needed: the scene's strings carry `&`, `<`, `>` as JSON \u escapes (a linear write of a large scene)
+   call self%put('<metadata class="fs-scene">'//json//'</metadata>')
    endsubroutine scene
 
    subroutine end_page(self)

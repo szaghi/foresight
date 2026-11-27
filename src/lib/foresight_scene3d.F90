@@ -74,7 +74,7 @@ contains
    endfunction num
 
    pure function str(text) result(s)
-   !< `text` as a JSON string.
+   !< `text` as a JSON string, `&`, `<` and `>` as their \u escapes: the scene goes into the page's XML as it is.
    character(len=*), intent(in)  :: text !< Text.
    character(len=:), allocatable :: s    !< JSON string.
    integer(I4P)                  :: k    !< Character counter.
@@ -84,6 +84,12 @@ contains
       select case (text(k:k))
       case ('"', '\')
          s = s//'\'//text(k:k)
+      case ('&')
+         s = s//'\u0026'
+      case ('<')
+         s = s//'\u003c'
+      case ('>')
+         s = s//'\u003e'
       case default
          if (iachar(text(k:k)) < 32) then
             s = s//' '
