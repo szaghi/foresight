@@ -22,6 +22,7 @@ use foresight_backend, only : backend_object
 use foresight_backend_block, only : backend_block, BLOCK_CHARSETS
 use foresight_backend_dumb, only : backend_dumb, TEXT_COLORS
 use foresight_backend_html, only : backend_html
+use foresight_backend_pdf, only : backend_pdf
 use foresight_backend_svg, only : backend_svg
 use foresight_format, only : format_check, real_str
 use foresight_time, only : time_format_check
@@ -472,12 +473,13 @@ contains
    endsubroutine plot
 
    subroutine save(self, file)
-   !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.txt` text (the
-   !< gnuplot `dumb` or `block` terminal, see `set_text`), `-` text on standard output.
+   !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.pdf` PDF, `.txt`
+   !< text (the gnuplot `dumb` or `block` terminal, see `set_text`), `-` text on standard output.
    class(figure_object), intent(inout) :: self   !< Figure.
    character(len=*),     intent(in)    :: file   !< Output file.
    type(backend_svg)                   :: svg    !< SVG device.
    type(backend_html)                  :: html   !< HTML device.
+   type(backend_pdf)                   :: pdf    !< PDF device.
 
    call self%ensure_panels
    if (file == '-') then
@@ -486,9 +488,12 @@ contains
    endif
    svg%theme = self%theme
    html%theme = self%theme
+   pdf%theme = self%theme
    select case (extension(file))
    case ('svg')
       call self%render(svg, file)
+   case ('pdf')
+      call self%render(pdf, file)
    case ('html', 'htm')
       html%title = self%title
       if (len(html%title) == 0 .and. allocated(self%panels(1)%title)) html%title = self%panels(1)%title
@@ -497,7 +502,7 @@ contains
    case ('txt')
       call text(.false.)
    case default
-      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html, .txt, -)'
+      error stop 'foresight: unsupported output format of "'//file//'" (supported: .svg, .html, .pdf, .txt, -)'
    endselect
    contains
       subroutine text(clear_screen)

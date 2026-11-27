@@ -10,6 +10,7 @@ The format follows the output name, in the library (`fig%save(file)`) and in scr
 |---|---|
 | `*.html`, `*.htm` | interactive page: SVG plus the embedded [viewer](viewer) |
 | `*.svg` | static SVG |
+| `*.pdf` | PDF, one page |
 | `*.txt` | text, the gnuplot `dumb` or `block` terminal |
 | `-` | text on the standard output |
 
@@ -57,6 +58,23 @@ metrics) fills the room exactly.
   in plot order): the viewer hides a series when its entry is clicked.
 - All numbers are formatted by integer arithmetic, identically on every compiler: the same figure gives the same
   bytes.
+
+## PDF
+
+One page of the figure's size, 0.75 pt per pixel (96 px to the inch): a 600 x 480 px figure is 450 x 360 pt. The
+drawing is the SVG's, primitive by primitive: lines with their widths, dashes and joins; filled polygons with their
+opacity and gnuplot's fill patterns (tiling patterns of the SVG's 8 px tiles); point type markers, error bar caps and
+arrowheads at their pixel size; images as 8-bit RGB with an alpha mask; readouts; texts with gnuplot's enhanced markup.
+The plot area is a clipping path; markers crossing its border are drawn whole, as in the SVG.
+
+- Texts are set in the 14 standard fonts: Helvetica for the sans faces (it has Arial's, so Liberation Sans', metrics),
+  Times for the serif ones, Symbol for gnuplot's `{/Symbol ...}`; WinAnsi encoded (Latin-1 and the typographic
+  quotes, dashes, the euro). They are placed with the compiled-in fonts' metrics, as on every device.
+- The file is written in one piece, its content stream uncompressed, without dates nor identifiers: the same figure
+  gives the same bytes. `qpdf --check` and `pdftotext` read every reference PDF of the test suite
+  (`scripts/check_pdf.py`).
+- Left out: what needs a viewer (zoom, hidden series, hypertext) and `set pixmap` images (a PNG file, which PDF cannot
+  hold as it is).
 
 ## HTML
 

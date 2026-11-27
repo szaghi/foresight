@@ -12,7 +12,7 @@ implicit none
 character(len=*), parameter :: GOLDEN_DIR = 'src/tests/goldens/' !< Reference files directory.
 character(len=8)            :: update_flag                      !< FORESIGHT_UPDATE_GOLDEN value.
 logical                     :: update                           !< Rewrite the references.
-logical                     :: test_passed(145)                  !< Per-figure outcome.
+logical                     :: test_passed(161)                  !< Per-figure outcome.
 
 call get_environment_variable('FORESIGHT_UPDATE_GOLDEN', update_flag)
 update = trim(update_flag) == '1'
@@ -126,7 +126,7 @@ test_passed(98) = check('annotations.txt', figure_annotations())
 test_passed(99) = check('annotations.html', figure_annotations())
 ! the later figures in a procedure of their own: nvfortran 26.9 finds the main program too large to compile
 call later_checks
-write(output_unit, '(A,145L2)') 'foresight golden checks:', test_passed
+write(output_unit, '(A,161L2)') 'foresight golden checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -195,6 +195,24 @@ contains
    test_passed(143) = check('view3d_polygons.svg', figure_view3d_polygons())
    test_passed(144) = check('view3d_polygons.html', figure_view3d_polygons())
    test_passed(145) = check('view3d_polygons.txt', figure_view3d_polygons())
+   ! PDF (foresight_backend_pdf): uncompressed content, the same bytes on every run (scripts/check_pdf.sh checks them with
+   ! qpdf and pdftotext against the SVG goldens of the same figures)
+   test_passed(146) = check('lines.pdf', figure_lines())
+   test_passed(147) = check('point_types.pdf', figure_point_types())
+   test_passed(148) = check('readouts.pdf', figure_readouts())
+   test_passed(149) = check('fills.pdf', figure_fills())
+   test_passed(150) = check('histograms.pdf', figure_histograms(.false.))
+   test_passed(151) = check('image.pdf', figure_image(''))
+   test_passed(152) = check('circles.pdf', figure_circles())
+   test_passed(153) = check('pie.pdf', figure_pie(0.0_R8P))
+   test_passed(154) = check('gauges.pdf', figure_gauges())
+   test_passed(155) = check('polar_round.pdf', figure_polar('round'))
+   test_passed(156) = check('shapes.pdf', figure_shapes())
+   test_passed(157) = check('patterns.pdf', figure_patterns())
+   test_passed(158) = check('annotations.pdf', figure_annotations())
+   test_passed(159) = check('enhanced.pdf', figure_enhanced())
+   test_passed(160) = check('theme_vfd.pdf', figure_theme('vfd'))
+   test_passed(161) = check('view3d_pm3d.pdf', figure_view3d_pm3d())
    endsubroutine later_checks
 
    function figure_lines() result(fig)

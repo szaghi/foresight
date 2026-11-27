@@ -20,6 +20,9 @@ use penf, only : I4P, I8P, R8P
 implicit none
 private
 public :: backend_svg
+! the geometry other vector devices share (foresight_backend_pdf): gnuplot's markers, the readout's segments
+public :: marker_line, marker_path, segment_path
+public :: DIGIT_PITCH, DIGIT_WIDTH, POINT_OFFSET, SEGMENT_WIDTH, SLANT
 
 integer(I4P),     parameter :: PX_DECIMALS    = 2_I4P                        !< Decimals of pixel coordinates.
 integer(I4P),     parameter :: UNIT_DECIMALS  = 6_I4P                        !< Decimals of unit-square coordinates.

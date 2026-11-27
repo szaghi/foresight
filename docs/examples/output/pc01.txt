@@ -1,0 +1,4 @@
+$ foresight pc01_first_pdf.gp && ls pc01.*
+foresight: pc01.svg
+pc01.pdf
+pc01.svg

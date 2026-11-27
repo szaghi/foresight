@@ -12049,9 +12049,9 @@ contains
    iomsg = ''
    if (self%output /= '-') then
       select case (extension(self%output))
-      case ('svg', 'html', 'htm', 'txt')
+      case ('svg', 'html', 'htm', 'pdf', 'txt')
       case default
-         call fail('unsupported output "'//self%output//'" (supported: .svg, .html, .txt, -)', iostat, iomsg)
+         call fail('unsupported output "'//self%output//'" (supported: .svg, .html, .pdf, .txt, -)', iostat, iomsg)
          return
       endselect
    endif

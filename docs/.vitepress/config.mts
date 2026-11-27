@@ -25,6 +25,12 @@ const docs = [
     ],
   },
   {
+    text: 'Path C: figures for a paper',
+    items: [
+      { text: 'C1. A first PDF', link: '/manual/paths/c-paper/01-a-first-pdf' },
+    ],
+  },
+  {
     text: 'Recipes',
     items: [
       { text: 'Cookbook', link: '/manual/cookbook' },

@@ -25,6 +25,8 @@ public :: markup_literal
 public :: markup_plain
 public :: markup_svg
 public :: markup_width
+public :: run_face
+public :: shown
 
 type :: enhanced_run
    !< A piece of text in one style.
