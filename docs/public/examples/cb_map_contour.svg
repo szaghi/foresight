@@ -1668,19 +1668,19 @@
 <text x="192.41" y="79.38" text-anchor="end">sin(x) cos(y)</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<polyline fill="none" stroke="#1f5f8b" stroke-width="2" points="198.41,93.18 234.41,93.18"/>
+<polyline fill="none" stroke="#1f5f8b" stroke-width="2" points="200.81,93.48 243.41,93.48"/>
 <text x="192.41" y="97.38" text-anchor="end">    0.75</text>
 </g>
 <g class="fs-key-entry" data-series="4">
-<polyline fill="none" stroke="#2e7d4f" stroke-width="2" points="198.41,111.18 234.41,111.18"/>
+<polyline fill="none" stroke="#2e7d4f" stroke-width="2" points="200.81,111.48 243.41,111.48"/>
 <text x="192.41" y="115.38" text-anchor="end">    0.25</text>
 </g>
 <g class="fs-key-entry" data-series="5">
-<polyline fill="none" stroke="#b86a00" stroke-width="2" points="198.41,129.18 234.41,129.18"/>
+<polyline fill="none" stroke="#b86a00" stroke-width="2" points="200.81,129.48 243.41,129.48"/>
 <text x="192.41" y="133.38" text-anchor="end">   -0.25</text>
 </g>
 <g class="fs-key-entry" data-series="6">
-<polyline fill="none" stroke="#6b3fa0" stroke-width="2" points="198.41,147.18 234.41,147.18"/>
+<polyline fill="none" stroke="#6b3fa0" stroke-width="2" points="200.81,147.48 243.41,147.48"/>
 <text x="192.41" y="151.38" text-anchor="end">   -0.75</text>
 </g>
 <g class="fs-colorbox">

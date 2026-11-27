@@ -473,7 +473,7 @@
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="81.56,278.52 333.17,320.23"/>
 </g>
 <g class="fs-key-entry" data-series="1">
-<polyline fill="none" stroke="#b3163f" stroke-width="1" points="295.64,345.69 331.64,345.69"/>
+<polyline fill="none" stroke="#b3163f" stroke-width="1" points="298.03,345.99 340.59,345.99"/>
 <text x="289.64" y="349.89" text-anchor="end">strip</text>
 </g>
 <text x="280" y="40.52" text-anchor="middle">a Moebius strip</text>

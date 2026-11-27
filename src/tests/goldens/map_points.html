@@ -162,7 +162,7 @@
 <text x="39.45" y="200" text-anchor="middle" transform="rotate(-90 39.45 200)">y</text>
 <text x="272.57" y="50.7" text-anchor="middle">spiral</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#1f0018" stroke="#1f0018" stroke-width="1" d="M424.69,91.5A4.5,4.5 0 1 0 433.69,91.5A4.5,4.5 0 1 0 424.69,91.5Z"/>
+<path fill="#1f0018" stroke="#1f0018" stroke-width="1" d="M430.39,91.8A4.5,4.5 0 1 0 439.39,91.8A4.5,4.5 0 1 0 430.39,91.8Z"/>
 <text x="405.19" y="95.7" text-anchor="end">x*y</text>
 </g>
 <g class="fs-colorbox">
@@ -205,7 +205,7 @@
   var TOL = 1e-9, SCI_HIGH = 1e5, SCI_LOW = 1e-3, MAX_TICKS = 1000;
   var MAX_POWER = 10000;
   var TICK_MAJOR = 6, TICK_MINOR = 3, GAP = 6;
-  var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // arrowheads, as arrow_head in foresight_backend
+  var HEAD_LENGTH = 18, HEAD_ANGLE = 15; // longest default head barb [px], angle: as Fortran
   // frame and grid colors; a themed page overrides them (data-frame, data-grid-color of its svg)
   var FRAME_COLOR = "black", GRID_COLOR = "#a0a0a0", GRID_DASHES = "2,3";
   var ZOOM_FACTOR = 1.25, MIN_BOX = 4;
@@ -1550,7 +1550,8 @@
       var style = {head: Number(path.getAttribute("data-head")), series: seriesOf(path),
         filled: path.getAttribute("data-filled") === "1", color: path.getAttribute("stroke"),
         width: path.getAttribute("stroke-width"),
-        length: Number(path.getAttribute("data-length") || HEAD_LENGTH),
+        length: Number(path.getAttribute("data-length") || 0),
+        fixed: path.getAttribute("data-fixed") === "1",
         angle: Number(path.getAttribute("data-angle") || HEAD_ANGLE)};
       while ((m = pattern.exec(d)) !== null) {
         vectors.push({style: style, ends: [[+m[1], +m[2]], [+m[3], +m[4]]]});
@@ -1560,12 +1561,19 @@
   }
 
   // barbs of an arrowhead at tip, pointing away from tail (mirror of sized_head): length [px]
-  // and angle [deg], gnuplot's default head without them
-  function arrowHead(tail, tip, length, angle) {
-    var l = length || HEAD_LENGTH, a = Math.PI, h = (angle || HEAD_ANGLE) * Math.PI / 180;
-    if (tail[0] !== tip[0] || tail[1] !== tip[1]) {
-      a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
+  // and angle [deg]; without a length gnuplot's default head (mirror of arrow_head): 0.3 of the
+  // shaft, within 0.3 and 2 tics (HEAD_LENGTH / 2 each); none on a zero length shaft (gnuplot);
+  // a length longer than half the shaft halved, its angle widened, unless fixed (sized_head)
+  function arrowHead(tail, tip, length, angle, fixed) {
+    var shaft = Math.hypot(tip[0] - tail[0], tip[1] - tail[1]), tic = HEAD_LENGTH / 2;
+    var l = length || Math.max(0.3 * tic, Math.min(0.3 * shaft, 2 * tic));
+    var a = Math.atan2(tail[1] - tip[1], tail[0] - tip[0]);
+    var h = (angle || HEAD_ANGLE) * Math.PI / 180;
+    if (length && !fixed && length > shaft / 2) {
+      l = shaft / 2;
+      h = Math.atan(Math.tan(h) * length / l);
     }
+    if (shaft === 0) return [tip, tip];
     return [[tip[0] + l * Math.cos(a + h), tip[1] + l * Math.sin(a + h)],
       [tip[0] + l * Math.cos(a - h), tip[1] + l * Math.sin(a - h)]];
   }
@@ -1736,7 +1744,7 @@
         return [(e[0] - v.u0) / (v.u1 - v.u0) * w, (e[1] - (1 - v.v1)) / (v.v1 - v.v0) * h];
       });
       var draw = function (tail, tip) {
-        var b = arrowHead(tail, tip, s.length, s.angle);
+        var b = arrowHead(tail, tip, s.length, s.angle, s.fixed);
         element(self.heads, s.filled ? "polygon" : "polyline", {"data-series": s.series,
           points: [b[0], tip, b[1]].map(function (q) {
             return px(q[0]) + "," + px(q[1]);
@@ -2059,7 +2067,8 @@
 
   // a key entry toggles its series: a transparent box over the entry takes the clicks
   function keyTargets(svg) {
-    svg.querySelectorAll(".fs-key-entry").forEach(function (node) {
+    // the entries of the 2D panels (a 3D view's are static)
+    svg.querySelectorAll(".fs-axes:not([data-3d]) .fs-key-entry").forEach(function (node) {
       var b = node.getBBox();
       element(node, "rect", {x: b.x - 2, y: b.y - 2, width: b.width + 4, height: b.height + 4,
         fill: "transparent", cursor: "pointer"}).appendChild(document.createElementNS(NS, "title"))
@@ -2073,8 +2082,11 @@
     if (svg.hasAttribute("data-frame")) FRAME_COLOR = svg.getAttribute("data-frame");
     if (svg.hasAttribute("data-grid-color")) GRID_COLOR = svg.getAttribute("data-grid-color");
     svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
+      // a 3D view stays as drawn (no zoom, no pan)
+      if (group.hasAttribute("data-3d")) return;
       panels.push(new Panel(svg, group, k));
     });
+    if (!panels.length) return;
     linkPanels();
     keyTargets(svg);
     var panel = panels[0];

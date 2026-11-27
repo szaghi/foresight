@@ -155,7 +155,7 @@
 <text x="39.45" y="200" text-anchor="middle" transform="rotate(-90 39.45 200)">y</text>
 <text x="272.57" y="50.7" text-anchor="middle">spiral</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#1f0018" stroke="#1f0018" stroke-width="1" d="M424.69,91.5A4.5,4.5 0 1 0 433.69,91.5A4.5,4.5 0 1 0 424.69,91.5Z"/>
+<path fill="#1f0018" stroke="#1f0018" stroke-width="1" d="M430.39,91.8A4.5,4.5 0 1 0 439.39,91.8A4.5,4.5 0 1 0 430.39,91.8Z"/>
 <text x="405.19" y="95.7" text-anchor="end">x*y</text>
 </g>
 <g class="fs-colorbox">

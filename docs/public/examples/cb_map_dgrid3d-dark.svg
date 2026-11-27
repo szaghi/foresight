@@ -3628,7 +3628,7 @@ M0.934851,0.171954 M0.064271,0.739707 M0.278758,0.798236 M0.764733,0.117926 M0.1
 <text x="152.81" y="79.38" text-anchor="end">density</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="0.3" d="M175.46,93.18A1.35,1.35 0 1 0 178.16,93.18A1.35,1.35 0 1 0 175.46,93.18Z"/>
+<path fill="#e8ecf0" stroke="#e8ecf0" stroke-width="0.3" d="M181.16,93.48A1.35,1.35 0 1 0 183.86,93.48A1.35,1.35 0 1 0 181.16,93.48Z"/>
 <text x="152.81" y="97.38" text-anchor="end">points</text>
 </g>
 <g class="fs-colorbox">

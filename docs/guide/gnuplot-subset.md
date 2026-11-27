@@ -2328,7 +2328,9 @@ y = r sin theta), r 1 when the data have two columns, the angles in the `set ang
 
 The key of a 3D view lies where gnuplot's do_3dkey_layout puts it: inside at the top right by default (`left`,
 `bottom` move it), `below` the plot (which rises by its rows), `outside` at the right or left (the plot narrowed by
-its width); `at` places it as in 2D.
+its width); `at` places it as in 2D. Its entries are graph3d's, in a map view too: each sample 4 characters and a tick
+long (0.7 of the font size a character), a character from its title (before it with `reverse`), the fill samples half
+an entry high (0.75 of the font size above and below the row's centre), as gnuplot's svg draws them.
 
 `set hidden3d` removes the hidden lines by a painter's algorithm, not gnuplot's hidden3d.c: each grid surface (lines
 or linespoints of a function or of scans of one length) is drawn as quadrangles filled with the page color and stroked,

@@ -165,18 +165,18 @@
 <polyline fill="none" stroke="#1d1b18" stroke-width="1" points="86.95,298.12 350.26,335.55"/>
 </g>
 <g class="fs-key-entry" data-series="1">
-<path fill="#2e7d4f" stroke="none" d="M91.12,66.91 127.12,66.91 127.12,58.51 91.12,58.51Z"/>
-<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="91.12,62.71 127.12,62.71"/>
+<path fill="#2e7d4f" stroke="none" d="M93.51,67.51 136.07,67.51 136.07,58.51 93.51,58.51Z"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="93.51,63.01 136.07,63.01"/>
 <text x="85.12" y="66.91" text-anchor="end">run 3</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<path fill="#1f5f8b" stroke="none" d="M91.12,84.91 127.12,84.91 127.12,76.51 91.12,76.51Z"/>
-<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="91.12,80.71 127.12,80.71"/>
+<path fill="#1f5f8b" stroke="none" d="M93.51,85.51 136.07,85.51 136.07,76.51 93.51,76.51Z"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="93.51,81.01 136.07,81.01"/>
 <text x="85.12" y="84.91" text-anchor="end">run 2</text>
 </g>
 <g class="fs-key-entry" data-series="5">
-<path fill="#b3163f" stroke="none" d="M91.12,102.91 127.12,102.91 127.12,94.51 91.12,94.51Z"/>
-<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="91.12,98.71 127.12,98.71"/>
+<path fill="#b3163f" stroke="none" d="M93.51,103.51 136.07,103.51 136.07,94.51 93.51,94.51Z"/>
+<polyline fill="none" stroke="#1d1b18" stroke-width="1" points="93.51,99.01 136.07,99.01"/>
 <text x="85.12" y="102.91" text-anchor="end">run 1</text>
 </g>
 <text x="280" y="40.52" text-anchor="middle">splot with zerrorfill</text>

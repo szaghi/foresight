@@ -742,7 +742,7 @@
 <text x="505.62" y="320.3" text-anchor="middle">y</text>
 <text x="22.84" y="194.55" text-anchor="middle">z</text>
 <g class="fs-key-entry" data-series="1">
-<polyline fill="none" stroke="#ff7092" stroke-width="1" points="471.88,62.71 507.88,62.71"/>
+<polyline fill="none" stroke="#ff7092" stroke-width="1" points="474.27,63.01 516.83,63.01"/>
 <text x="465.88" y="66.91" text-anchor="end">surface</text>
 </g>
 <text x="280" y="40.52" text-anchor="middle">sin(x) cos(y)</text>

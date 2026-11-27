@@ -184,35 +184,35 @@
 </g>
 <text x="280" y="50.7" text-anchor="middle">contours</text>
 <g class="fs-key-entry" data-series="1">
-<polyline fill="none" stroke="#c0c0c0" stroke-width="1" points="424.66,91.5 460.66,91.5"/>
+<polyline fill="none" stroke="#c0c0c0" stroke-width="1" points="427.06,91.8 469.66,91.8"/>
 <text x="418.66" y="95.7" text-anchor="end">x exp(-r^2/2)</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<polyline fill="none" stroke="#009e73" stroke-width="1" points="424.66,109.5 460.66,109.5"/>
+<polyline fill="none" stroke="#009e73" stroke-width="1" points="427.06,109.8 469.66,109.8"/>
 <text x="418.66" y="113.7" text-anchor="end">     0.6</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<polyline fill="none" stroke="#56b4e9" stroke-width="1" points="424.66,127.5 460.66,127.5"/>
+<polyline fill="none" stroke="#56b4e9" stroke-width="1" points="427.06,127.8 469.66,127.8"/>
 <text x="418.66" y="131.7" text-anchor="end">     0.4</text>
 </g>
 <g class="fs-key-entry" data-series="4">
-<polyline fill="none" stroke="#e69f00" stroke-width="1" points="424.66,145.5 460.66,145.5"/>
+<polyline fill="none" stroke="#e69f00" stroke-width="1" points="427.06,145.8 469.66,145.8"/>
 <text x="418.66" y="149.7" text-anchor="end">     0.2</text>
 </g>
 <g class="fs-key-entry" data-series="5">
-<polyline fill="none" stroke="#f0e442" stroke-width="1" points="424.66,163.5 460.66,163.5"/>
+<polyline fill="none" stroke="#f0e442" stroke-width="1" points="427.06,163.8 469.66,163.8"/>
 <text x="418.66" y="167.7" text-anchor="end">       0</text>
 </g>
 <g class="fs-key-entry" data-series="6">
-<polyline fill="none" stroke="#0072b2" stroke-width="1" points="424.66,181.5 460.66,181.5"/>
+<polyline fill="none" stroke="#0072b2" stroke-width="1" points="427.06,181.8 469.66,181.8"/>
 <text x="418.66" y="185.7" text-anchor="end">    -0.2</text>
 </g>
 <g class="fs-key-entry" data-series="7">
-<polyline fill="none" stroke="#e51e10" stroke-width="1" points="424.66,199.5 460.66,199.5"/>
+<polyline fill="none" stroke="#e51e10" stroke-width="1" points="427.06,199.8 469.66,199.8"/>
 <text x="418.66" y="203.7" text-anchor="end">    -0.4</text>
 </g>
 <g class="fs-key-entry" data-series="8">
-<polyline fill="none" stroke="#000000" stroke-width="1" points="424.66,217.5 460.66,217.5"/>
+<polyline fill="none" stroke="#000000" stroke-width="1" points="427.06,217.8 469.66,217.8"/>
 <text x="418.66" y="221.7" text-anchor="end">    -0.6</text>
 </g>
 </g>

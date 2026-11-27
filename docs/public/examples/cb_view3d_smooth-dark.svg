@@ -126,11 +126,11 @@ M0.802464,0.427275 M0.854339,0.36335"/>
 <text x="505.62" y="302.3" text-anchor="middle">position</text>
 <text x="22.84" y="189.32" text-anchor="middle">value</text>
 <g class="fs-key-entry" data-series="1">
-<path fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M234.08,345.69A4.5,4.5 0 1 0 243.08,345.69A4.5,4.5 0 1 0 234.08,345.69Z"/>
+<path fill="#ff7092" stroke="#ff7092" stroke-width="1" d="M239.75,345.99A4.5,4.5 0 1 0 248.75,345.99A4.5,4.5 0 1 0 239.75,345.99Z"/>
 <text x="214.58" y="349.89" text-anchor="end">measured</text>
 </g>
 <g class="fs-key-entry" data-series="2">
-<polyline fill="none" stroke="#6cb6ff" stroke-width="2" points="474.8,345.69 510.8,345.69"/>
+<polyline fill="none" stroke="#6cb6ff" stroke-width="2" points="477.19,345.99 519.75,345.99"/>
 <text x="468.8" y="349.89" text-anchor="end">acsplines, weight 2</text>
 </g>
 </g>

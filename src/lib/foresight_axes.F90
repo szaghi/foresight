@@ -1482,6 +1482,7 @@ contains
    type(map_geometry)                   :: geo       !< Geometry of a map view.
    logical                              :: map       !< A map view (gnuplot `splot` with `set view map`).
    real(R8P)                            :: spacing   !< The key spacing, a map view's restored after.
+   real(R8P)                            :: map_s3(5) !< A map key's 3D entries (draw_key's sample3d) [px].
    real(R8P)                            :: karea(4)  !< Key area, and
    real(R8P)                            :: kbox(4)   !< key box (variables: no argument temporaries).
 
@@ -1774,6 +1775,8 @@ contains
       call backend%end_group
    endif
    if (self%key .and. grid(1) > 0_I4P) then
+      ! a map's key is gnuplot's 3D one (graph3d): its samples about anchors set by the texts
+      if (map) map_s3 = map_key_entries(self, geo, element_px(backend, self%key_font, font_size))
       if (map .and. .not. (self%key_at .or. self%key_outside)) then
          ! gnuplot's 3D key inside the map (do_3dkey_layout): its title ends 2 tick lengths and 6 characters left of the
          ! border, its first row a tick length and half a character below the top
@@ -1785,8 +1788,13 @@ contains
             dy = geo%vtic + 0.5_R8P * geo%vchar + geo%shift - 19.2_R8P / 12.0_R8P * font_size
             karea = [area(1) + dx, area(2) - dx, area(3) + dy, area(4) - dy]
             kbox = [x0, y0, x0 + width, y0 + height]
-            call self%draw_key(backend, karea, kbox, element_px(backend, self%key_font, font_size), grid, key)
+            call self%draw_key(backend, karea, kbox, element_px(backend, self%key_font, font_size), grid, key, &
+                               sample3d=map_s3)
          endblock
+      elseif (map) then
+         kbox = [x0, y0, x0 + width, y0 + height]
+         call self%draw_key(backend, area, kbox, element_px(backend, self%key_font, font_size), grid, key, &
+                            sample3d=map_s3)
       else
          kbox = [x0, y0, x0 + width, y0 + height]
          call self%draw_key(backend, area, kbox, element_px(backend, self%key_font, font_size), grid, key)
@@ -4736,6 +4744,7 @@ contains
    real(R8P)                            :: dx        !< gnuplot's xinkey [units].
    real(R8P)                            :: dy        !< gnuplot's yinkey [units].
    real(R8P)                            :: km(6)     !< gnuplot's key metrics (key3d_metrics) [units].
+   real(R8P)                            :: s3(5)     !< gnuplot's 3D key entries (draw_key's sample3d) [px].
    real(R8P)                            :: side      !< Width of a key outside, right (negative: left) [units].
    real(R8P)                            :: below     !< Height of a key below [units].
    integer(I4P)                         :: grid(3)   !< Key entries, columns, rows.
@@ -4920,14 +4929,25 @@ contains
    bounds = [f%bounds(1) * 0.01_R8P, f%bounds(2) * 0.01_R8P, f%height - f%bounds(4) * 0.01_R8P, &
              f%height - f%bounds(3) * 0.01_R8P]
    if (self%key .and. grid(1) > 0_I4P) then
+      ! gnuplot's entries about their anchors: key character, sample, (first anchor), column width, text extent
+      s3 = [km(1), km(3), -huge(1.0_R8P), km(4), km(1) * real(nint((km(4) - km(3)) / km(1)) - 3_I4P, R8P)] * &
+           [0.01_R8P, 0.01_R8P, 1.0_R8P, 0.01_R8P, 0.01_R8P]
       if (self%key_at) then
          kbox = [x0, y0, x0 + width, y0 + height]
-         call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key)
+         call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key, &
+                            sample3d=s3)
       else
          ! gnuplot's do_3dkey_layout: the first entry's text ends a character left of its sample (xinkey), its row
          ! centred half an entry below the top of the entries (yinkey), placed in the plot bounds; foresight's key box
          ! drawn so that its first entry lands there
          call key3d_origin(self, f, km, grid, dx, dy)
+         ! the first entry's anchor (gnuplot's xinkey): with reverse its key_size_left a character and the sample; below
+         ! the plot the columns share its width (key_col_wth)
+         if (self%key_place() == 'bottom' .and. grid(2) > 1_I4P) &
+            s3(4) = aint((f%bounds(2) - f%bounds(1)) / real(grid(2), R8P)) * 0.01_R8P
+         s3(3) = dx * 0.01_R8P
+         if (self%key_reverse) s3(3) = (dx + km(1) + km(3) - km(1) * real(nint((km(4) - km(3)) / km(1)) - 2_I4P, R8P)) &
+                                       * 0.01_R8P
          ! below the plot, gnuplot's columns share its width (key_col_wth): foresight's entries as wide
          if (self%key_place() == 'bottom' .and. grid(2) > 1_I4P) &
             key(1) = real(grid(2), R8P) * (f%bounds(2) - f%bounds(1)) / real(grid(2), R8P) * 0.01_R8P - GAP
@@ -4936,7 +4956,7 @@ contains
                     52.0_R8P / 12.0_R8P * font_size - PAD, &
                     f%height - (dy - 0.5_R8P * km(2)) * 0.01_R8P + f%shift - 19.2_R8P / 12.0_R8P * font_size + GAP]
          call self%draw_key(backend, bounds, kbox, element_px(backend, self%key_font, font_size), grid, key, &
-                            origin=korigin)
+                            origin=korigin, sample3d=s3)
       endif
    endif
    if (self%has_title()) then
@@ -5905,10 +5925,15 @@ contains
    a = (self%theta_origin + merge(-theta, theta, self%theta_clockwise)) * (PI_R8 / 180.0_R8P)
    endfunction page_angle
 
-   subroutine draw_key(self, backend, area, box, font_size, grid, extent, origin)
+   subroutine draw_key(self, backend, area, box, font_size, grid, extent, origin, sample3d)
    !< Draw the key at its place (`key_place`), or with its top left corner at `origin` (a 3D view's, gnuplot's
    !< do_3dkey_layout): right-aligned titles, style samples on their right; entries in a column, or row after row
-   !< (`key_horizontal`).
+   !< (`key_horizontal`). `sample3d` (a 3D or map view's): gnuplot's graph3d entries (do_3dkey_layout) about the anchor
+   !< xl of each, from the first's (`sample3d(3)` [px]) a column width (`sample3d(4)`) apart: the sample from xl
+   !< `sample3d(2)` long (before it with `reverse`), the text a key character (`sample3d(1)`) before (after) it, or
+   !< `sample3d(5)` from xl left-justified (`Left`); without a first anchor (`sample3d(3)` -huge) the anchor from the
+   !< text as foresight places it. The samples about the row centre 0.325 of the font size above the text's baseline,
+   !< the fill samples half an entry (1.5 font sizes) high.
    class(axes_object),    intent(in)    :: self      !< Panel.
    class(backend_object), intent(inout) :: backend   !< Output device.
    real(R8P),             intent(in)    :: area(4)   !< Plot area: left, right, top, bottom [px].
@@ -5917,6 +5942,8 @@ contains
    integer(I4P),          intent(in)    :: grid(3)   !< Entries, columns, rows (`key_layout`).
    real(R8P),             intent(in)    :: extent(2) !< Key width and height [px] (`key_layout`).
    real(R8P),             intent(in), optional :: origin(2) !< Key top left corner [px], instead of its place.
+   real(R8P),             intent(in), optional :: sample3d(5) !< 3D entries: key character, sample length, first
+                                                                   !< anchor, column width, text extent [px].
    real(R8P)                            :: xs(2)     !< Sample abscissae [px].
    real(R8P)                            :: yc        !< Row centre ordinate [px].
    real(R8P)                            :: entry     !< Entry width, spacing included [px].
@@ -6065,7 +6092,13 @@ contains
       call entry_place(k, xs, yc, tx, anchor)
       k = k + 1_I4P
       call backend%begin_group('fs-key-entry', series=s)
-      call key_sample_marks(self%series(s), backend, xs, yc, font_size)
+      if (present(sample3d)) then
+         call entry3d(k - 1_I4P, sample3d, xs, tx, anchor)
+         call key_sample_marks(self%series(s), backend, xs, yc + 0.025_R8P * font_size, font_size, &
+                               half=0.375_R8P * font_size)
+      else
+         call key_sample_marks(self%series(s), backend, xs, yc, font_size)
+      endif
       backend%literal = self%key_plain .or. self%series(s)%title_plain
       ! gnuplot `textcolor`: the titles in a color, or each in its series' (`variable`)
       if (trim(self%key_tc) == 'variable') then
@@ -6105,6 +6138,39 @@ contains
    endif
    backend%font = font_object()
    contains
+      subroutine entry3d(n, s3, xs, tx, anchor)
+      !< gnuplot's graph3d entry `n` (from 0), its sample and text about its anchor xl (do_3dkey_layout: key_sample_left
+      !< and right, key_text_left and right); `tx`, `anchor` foresight's on entry. `s3` passed: nvfortran 26.9 misreads a
+      !< host's optional dummy in an internal procedure.
+      integer(I4P),     intent(in)    :: n      !< Entry.
+      real(R8P),        intent(in)    :: s3(5)  !< 3D entries (draw_key's `sample3d`).
+      real(R8P),        intent(out)   :: xs(2)  !< Sample abscissae [px].
+      real(R8P),        intent(inout) :: tx     !< Title abscissa [px].
+      character(len=5), intent(inout) :: anchor !< Title anchor.
+      real(R8P)                       :: xl     !< The entry's anchor [px].
+      integer(I4P)                    :: col    !< Its column.
+
+      associate(h => s3(1), w => s3(2))
+         if (s3(3) > -huge(1.0_R8P)) then
+            col = merge(modulo(n, grid(2)), n / max(grid(3), 1_I4P), self%key_horizontal)
+            xl = s3(3) + real(col, R8P) * s3(4)
+         elseif (self%key_reverse) then
+            ! from foresight's text: right of the sample
+            xl = merge(tx - h, tx - s3(5), anchor == 'start')
+         else
+            xl = merge(tx + h, tx + s3(5), anchor == 'end  ')
+         endif
+         if (self%key_reverse) then
+            xs = [xl - w, xl]
+            tx = merge(xl + h, xl + s3(5), self%key_left)
+         else
+            xs = [xl, xl + w]
+            tx = merge(xl - s3(5), xl - h, self%key_left)
+         endif
+         anchor = merge('start', 'end  ', self%key_left)
+      endassociate
+      endsubroutine entry3d
+
       subroutine entry_place(n, xs, yc, tx, anchor)
       !< Sample abscissae, row centre and title position of entry `n` (from 0): the sample at the right of its cell, or at
       !< its left (`reverse`); the title beside it, right-justified, or left-justified (`Left`), as gnuplot.
@@ -6193,26 +6259,28 @@ contains
       endsubroutine key_anchor
    endsubroutine draw_key
 
-   subroutine key_sample_marks(series, backend, xs, yc, font_size)
-   !< The key sample of `series` from `xs(1)` to `xs(2)` about the row centre `yc` [px]: its fill, line, error bars
-   !< and point, as the series is drawn.
-   type(series_object),   intent(in)    :: series    !< Series.
-   class(backend_object), intent(inout) :: backend   !< Output device.
-   real(R8P),             intent(in)    :: xs(2)     !< Sample abscissae [px].
-   real(R8P),             intent(in)    :: yc        !< Row centre [px].
-   real(R8P),             intent(in)    :: font_size !< Font size [px].
-   character(len=:), allocatable        :: sample    !< Color of the point sample.
-   type(style_object)                   :: edged     !< Style of the fill sample.
+   subroutine key_sample_marks(series, backend, xs, yc, font_size, half)
+   !< The key sample of `series` from `xs(1)` to `xs(2)` about the row centre `yc` [px]: its fill (`half` high above
+   !< and below the centre, 0.35 of the font size by default), line, error bars and point, as the series is drawn.
+   type(series_object),   intent(in)           :: series    !< Series.
+   class(backend_object), intent(inout)        :: backend   !< Output device.
+   real(R8P),             intent(in)           :: xs(2)     !< Sample abscissae [px].
+   real(R8P),             intent(in)           :: yc        !< Row centre [px].
+   real(R8P),             intent(in)           :: font_size !< Font size [px].
+   real(R8P),             intent(in), optional :: half      !< Half height of a fill sample [px].
+   character(len=:), allocatable               :: sample    !< Color of the point sample.
+   type(style_object)                          :: edged     !< Style of the fill sample.
+   real(R8P)                                   :: h         !< Half height of a fill sample [px].
 
    if (series%key_blank) return
+   h = 0.35_R8P * font_size
+   if (present(half)) h = half
    if (series%style%fills()) then
       edged = series%style
       ! a script's filledcurves: its fill border around the sample, as gnuplot 6.0
       if (series%fill_edges > 0_I4P) edged%border = series%fill_border
-      call backend%polygon([xs(1), xs(2), xs(2), xs(1)], &
-                           [yc + 0.35_R8P * font_size, yc + 0.35_R8P * font_size, yc - 0.35_R8P * font_size, &
-                            yc - 0.35_R8P * font_size], edged%fill_color(), edged%density, &
-                           edged%stroke_color(), edged%linewidth)
+      call backend%polygon([xs(1), xs(2), xs(2), xs(1)], [yc + h, yc + h, yc - h, yc - h], edged%fill_color(), &
+                           edged%density, edged%stroke_color(), edged%linewidth)
       ! zerrorfill: its line across the fill, as gnuplot's key sample
       if (series%zerrorfill .and. allocated(series%style%color)) then
          if (trim(series%style%color) /= 'none') &
@@ -11585,6 +11653,28 @@ contains
    endif
    km(6) = km(4) * real(max(grid(2), 1_I4P) - 1_I4P, R8P) + (hchar + km(3)) + hchar * real(longest + 2_I4P, R8P)
    endsubroutine key3d_metrics
+
+   pure function map_key_entries(self, geo, key_px) result(s3)
+   !< gnuplot's 3D key entries of a map view (draw_key's `sample3d`): the key character (0.7 of the key font size), the
+   !< sample (4 characters and a tick), no first anchor (the texts place them), the text extent (the longest title and
+   !< a character).
+   class(axes_object), intent(in) :: self   !< Panel.
+   type(map_geometry), intent(in) :: geo    !< The map's geometry.
+   real(R8P),          intent(in) :: key_px !< Key font size [px].
+   real(R8P)                      :: s3(5)  !< Entries [px].
+   integer(I4P)                   :: longest !< Longest title [characters].
+   integer(I4P)                   :: s      !< Series counter.
+
+   longest = 0_I4P
+   do s = 1_I4P, size(self%series, kind=I4P)
+      if (allocated(self%series(s)%title)) longest = max(longest, len_trim(self%series(s)%title, kind=I4P))
+   enddo
+   s3(1) = real(int(key_px * 70.0_R8P, I8P), R8P) * 0.01_R8P
+   s3(2) = 4.0_R8P * s3(1) + geo%vtic
+   s3(3) = -huge(1.0_R8P)
+   s3(4) = 0.0_R8P
+   s3(5) = s3(1) * real(longest + 1_I4P, R8P)
+   endfunction map_key_entries
 
    pure subroutine key3d_origin(self, f, km, grid, xinkey, yinkey)
    !< gnuplot's do_3dkey_layout: the anchor of the first key entry (its sample's left, its row's top) [units] in the

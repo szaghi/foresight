@@ -1887,7 +1887,7 @@
 <text x="133.01" y="79.38" text-anchor="end">x y</text>
 </g>
 <g class="fs-key-entry" data-series="3">
-<polyline fill="none" stroke="#e8ecf0" stroke-width="2" points="139.01,93.18 175.01,93.18"/>
+<polyline fill="none" stroke="#e8ecf0" stroke-width="2" points="141.41,93.48 184.01,93.48"/>
 <text x="133.01" y="97.38" text-anchor="end">hull</text>
 </g>
 <g class="fs-colorbox">

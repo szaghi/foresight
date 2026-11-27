@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(290)                           !< Per-check outcome.
+logical                       :: test_passed(291)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -7931,6 +7931,35 @@ block
       svg = read_text('foresight_script_test_za.svg')
       test_passed(290) = index(svg, '>-5</text>') == 0 .and. index(svg, '>0</text>') == 0 .and. &
                         index(svg, '>1.8</text>') > 0
+   endif
+endblock
+
+
+! check 291: the key samples of a 3D view, gnuplot's graph3d (do_3dkey_layout): the line sample 4 characters and a tick
+! long (42.56 px at 12 pt), a character right of its text, at the row centre; the fill sample 9 px high; with `reverse
+! Left` the sample before the text; positions of gnuplot 6.0's svg
+block
+   character(len=:), allocatable :: svg  !< Page.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_script_test_k3.svg'"//nl// &
+                             "$B << EOD"//nl//"1 1 3"//nl//"2 1 5"//nl//"EOD"//nl// &
+                             "set xrange [0:3]; set yrange [0:3]; set zrange [0:6]"//nl// &
+                             "splot $B title 'l' with lines, $B title 'b' with boxes fs solid 0.5", iostat, iomsg)
+   test_passed(291) = iostat == 0_I4P
+   if (test_passed(291)) then
+      svg = read_text('foresight_script_test_k3.svg')
+      test_passed(291) = index(svg, 'points="514.27,45.01 556.83,45.01"') > 0 .and. &
+                        index(svg, 'd="M514.27,67.51 556.83,67.51 556.83,58.51 514.27,58.51Z"') > 0
+   endif
+   call interpreter%run_text("set output 'foresight_script_test_k3.svg'"//nl//"set key reverse Left"//nl// &
+                             "splot $B title 'pts' with points pt 7, $B title 'l' with lines", iostat, iomsg)
+   test_passed(291) = test_passed(291) .and. iostat == 0_I4P
+   if (test_passed(291)) then
+      svg = read_text('foresight_script_test_k3.svg')
+      test_passed(291) = index(svg, 'points="480.71,63.01 523.27,63.01"') > 0 .and. &
+                        index(svg, '<text x="531.66" y="48.91"') > 0
    endif
 endblock
 
