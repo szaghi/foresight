@@ -157,19 +157,25 @@ contains
    character(len=*), intent(in)  :: family !< CSS family.
    integer(I4P),     intent(out) :: index  !< FAMILY_SANS or FAMILY_SERIF.
    logical,          intent(out) :: known  !< The family is compiled in (not a fallback).
-   character(len=:), allocatable :: key    !< Lowercase family without blanks nor quotes.
+   character(len=len(family))    :: key    !< Lowercase family without blanks nor quotes (a fixed buffer: nvfortran
+                                           !< 26.9 miscompiles `key = key//achar(c)`, bug 25).
    integer                       :: k      !< Counter.
+   integer                       :: n      !< Characters kept.
    integer                       :: c      !< Character code.
 
    key = ''
+   n = 0
    do k = 1, len_trim(family)
       c = iachar(family(k:k))
       if (c >= iachar('A') .and. c <= iachar('Z')) c = c + 32
-      if (c /= iachar(' ') .and. c /= 39 .and. c /= iachar('"')) key = key//achar(c)
+      if (c /= iachar(' ') .and. c /= 39 .and. c /= iachar('"')) then
+         n = n + 1
+         key(n:n) = achar(c)
+      endif
    enddo
    index = FAMILY_SANS
    known = .true.
-   select case (key)
+   select case (key(1:n))
    case ('serif', 'latinmodernroman', 'latinmodern', 'lmroman', 'lmroman10', 'cmuserif', 'computermodern')
       index = FAMILY_SERIF
    case ('', 'sans', 'sans-serif', 'arial', 'helvetica', 'liberationsans', 'arimo')
