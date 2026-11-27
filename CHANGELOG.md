@@ -4,6 +4,53 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.19.1] — 2026-11-27
+### Added
+- **figure**: Set size and set origin inside a multiplot layout, as gnuplot 6.0
+
+- **script**: Binary images in 3D views and perpendicular=, as gnuplot 6.0
+
+- **viewer**: Turn 3D views with the mouse in the HTML page
+
+- **script**: Voxel grids and isosurfaces, as gnuplot 6.0
+
+- **font**: Liberation Sans and Latin Modern Roman compiled in, with their metrics
+
+- **layout**: Text placed with the fonts' metrics, gnuplot's title margin
+
+- **viewer**: Tick labels measured with the fonts' metrics
+
+- **pdf**: A PDF device
+
+- **pdf**: Fonts embedded in PDF and SVG
+
+- **pdf**: The pdfcairo terminal and the paper theme, as gnuplot 6.0
+
+- **pdf**: The cairolatex terminal, as gnuplot 6.0
+
+- **text**: A TeX-math subset laid out as LaTeX lays it out
+
+- **text**: Math labels on every device
+
+
+### Documentation
+- **paper**: An example LaTeX paper of foresight's figures, built in CI
+
+- **paper**: The example paper takes two cairolatex figures
+
+
+### Fixed
+- **view3d**: 3D key at screen and pm3d scan order of functions, as gnuplot 6.0
+
+- **font**: Family lookup and the font test without concatenated achar, for nvfortran
+
+- **pdf**: The PDF device and the glyph outlines under nvfortran -O2
+
+
+### Performance
+- **html**: Write a 3D view's scene in linear time
+
+
 ## [0.19.0] — 2026-11-27
 ### Added
 - **view3d**: Set view projection xz|yz, as gnuplot 6.0
