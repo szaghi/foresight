@@ -14,7 +14,7 @@ title: C6. Labels set by LaTeX
 where foresight would have drawn it. A paper includes it with `\input`:
 
 ```latex
-\usepackage{graphicx}          % in the preamble (and color, for colortext)
+\usepackage{graphicx,color}    % in the preamble: gnuplot's picture defines a color, \definecolor
 ...
 \begin{figure}
   \centering
@@ -22,6 +22,10 @@ where foresight would have drawn it. A paper includes it with `\input`:
   \caption{The response and its envelope.}
 \end{figure}
 ```
+
+[paper.pdf](/paper/paper.pdf) does, in its Figures 5 and 6 (this figure and the cookbook's
+[gain](/manual/cookbook#labels-set-by-latex)): the axis labels and the keys are the paper's Latin Modern, its math
+italic and Greek.
 
 ## A standalone document
 
@@ -53,3 +57,5 @@ size (`,10`) chooses its `size10.clo`.
 - Enhanced text (`{/Symbol a}`, `x^2` outside `$`) is not read: the terminal refuses `enhanced`.
 - `\input` reads `pc06.pdf` by the name written in the file, relative to the document: keep the two files together,
   or set `\graphicspath`.
+- The picture needs `color` as well as `graphicx`, whatever `blacktext`: gnuplot's macros define a color
+  (`\definecolor{tbcol}`), foresight's are gnuplot's.

@@ -1,11 +1,13 @@
 % The example paper of foresight's path C (docs/manual/paths/c-paper): four figures written by foresight, included
-% as they are, at their size. Built by scripts/build_paper.sh (Tectonic, or LuaLaTeX); its figures are the PDFs the
-% docs examples write (docs/public/examples).
+% as they are, at their size, and two LaTeX pictures (cairolatex) whose labels LaTeX sets. Built by
+% scripts/build_paper.sh (Tectonic, or LuaLaTeX); its figures are the files the docs examples write
+% (docs/public/examples).
 \documentclass[10pt,twocolumn]{article}
 \usepackage[a4paper,margin=1.6cm,columnsep=0.6cm]{geometry}
 \usepackage{lmodern}
 \usepackage[T1]{fontenc}
 \usepackage{graphicx}
+\usepackage{color}
 \usepackage{amsmath}
 \graphicspath{{../../public/examples/}}
 
@@ -58,8 +60,29 @@ damping ratios $\zeta$ (Figures~\ref{fig:double} and~\ref{fig:panels}); the phas
   \label{fig:panels}
 \end{figure*}
 
+\section{Labels set by \LaTeX{}}
+A figure's labels can also be set by \LaTeX{} itself, in the paper's fonts and with its math: foresight's
+\texttt{set terminal cairolatex} writes the drawing as a PDF and the labels as a \LaTeX{} picture, as gnuplot's
+cairolatex does, which the paper includes by \verb|\input|. In Figure~\ref{fig:latex-response} the axis labels
+$t/\tau$ and $x/x_0$ and the key are set in Latin Modern, as this text; in Figure~\ref{fig:latex-gain} the damping
+ratio $\zeta$ of each curve.
+
+\begin{figure}[t]
+  \centering
+  \input{../../public/examples/pc06.tex}
+  \caption{The response, its labels set by \LaTeX{}: \texttt{set terminal cairolatex pdf size single}.}
+  \label{fig:latex-response}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \input{../../public/examples/cb_latex.tex}
+  \caption{The gain $|H(i\omega)|$ for three damping ratios, on a logarithmic axis.}
+  \label{fig:latex-gain}
+\end{figure}
+
 \section{Conclusion}
-A figure made for its column needs nothing but \verb|\includegraphics|: no scaling, no converter, its fonts travel
-with it.
+A figure made for its column needs nothing but \verb|\includegraphics|, or \verb|\input| for one whose labels
+\LaTeX{} sets: no scaling, no converter, its fonts travel with it.
 
 \end{document}

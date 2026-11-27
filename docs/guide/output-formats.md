@@ -99,7 +99,7 @@ the PDF would draw it and includes the drawing. LaTeX sets the texts in the docu
 ```latex
 \begin{figure}
   \centering
-  \input{NAME.tex}   % \usepackage{graphicx} (and color for colortext) in the preamble
+  \input{NAME.tex}   % \usepackage{graphicx,color} in the preamble (gnuplot's macros define a color)
 \end{figure}
 ```
 

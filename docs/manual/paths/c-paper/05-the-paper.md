@@ -9,7 +9,7 @@ title: C5. The paper
 <<< @/examples/paper/paper.tex{latex}
 
 [paper.pdf](/paper/paper.pdf) is that source compiled: four figures of the previous chapters, two in a column, two
-across the page.
+across the page, and two figures whose labels LaTeX sets ([C6](06-labels-set-by-latex)), included by `\input`.
 
 ```console
 $ bash scripts/docs_examples.sh     # the figures, docs/public/examples/*.pdf

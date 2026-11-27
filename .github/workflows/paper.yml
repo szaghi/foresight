@@ -1,8 +1,9 @@
 name: Paper
 
 # The example paper of the docs' path C (docs/examples/paper/paper.tex), built with Tectonic from the figures the docs
-# examples committed (docs/public/examples/*.pdf): it compiles with no warning about its figures, and every font of
-# the paper is embedded (scripts/build_paper.sh). Not managed by fobis scaffold.
+# examples committed (docs/public/examples/*.pdf, and the LaTeX pictures *.tex of its cairolatex figures): it compiles
+# with no warning about its figures, and every font of the paper is embedded (scripts/build_paper.sh). Not managed by
+# fobis scaffold.
 on:
   push:
     branches: ["**"]
@@ -10,12 +11,14 @@ on:
     paths:
       - 'docs/examples/paper/**'
       - 'docs/public/examples/*.pdf'
+      - 'docs/public/examples/*.tex'
       - 'scripts/build_paper.sh'
       - '.github/workflows/paper.yml'
   pull_request:
     paths:
       - 'docs/examples/paper/**'
       - 'docs/public/examples/*.pdf'
+      - 'docs/public/examples/*.tex'
       - 'scripts/build_paper.sh'
   workflow_dispatch:
 
