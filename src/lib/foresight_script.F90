@@ -139,7 +139,7 @@ use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LE
                               LEVELS_INCREMENTAL
 use foresight_pm3d, only : pm3d_object, CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, &
                             CORNERS_MEDIAN, CORNERS_MIN, CORNERS_RMS
-use foresight_format, only : c_real, decimal_of, decimal_str, format_check, format_decimal, gnuplot_real, int_str, &
+use foresight_format, only : c_real, decimal_of, decimal_str, fixed, format_check, format_decimal, gnuplot_real, int_str, &
                              real_from_decimal
 use foresight_readout, only : readout_check
 use foresight_png, only : png_base64
@@ -496,7 +496,7 @@ contains
                                 '+CHI_SHAPES -LIBCERF -COMPLEX_FUNCS -WATCHPOINTS -EXTERNAL_FUNCTIONS')
    call self%symbols%set_string('GPVAL_ENCODING', self%encoding)
    call self%symbols%set_string('GPVAL_TERM', self%term_name)
-   call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html svg')
+   call self%symbols%set_string('GPVAL_TERMINALS', 'block dumb html pdf pdfcairo svg')
    call self%symbols%set_string('GPVAL_DEGREE_SIGN', achar(194)//achar(176))
    ! gnuplot's reserved voxel variables (scripts test exists("VoxelDistance") for voxel support)
    call self%symbols%set_value('VoxelDistance', 0.0_R8P, is_int=.false.)
@@ -12075,6 +12075,10 @@ contains
    integer(I4P)                                 :: width     !< Terminal width.
    integer(I4P)                                 :: height    !< Terminal height.
    integer(I4P)                                 :: seconds   !< Refresh period.
+   logical                                      :: pdf_term  !< `set terminal pdfcairo`: its size and font units.
+   real(R8P)                                    :: pdf_fontscale !< Its fontscale.
+   real(R8P)                                    :: pdf_font_pt   !< Its font size [pt], 0 for none given.
+   character(len=48)                            :: pdf_family    !< Its font family, blank for none given.
    integer(I4P)                                 :: rows      !< Multiplot rows.
    integer(I4P)                                 :: cols      !< Multiplot columns.
    logical                                      :: columns_first !< Multiplot `columnsfirst`.
@@ -12437,7 +12441,7 @@ contains
       call self%symbols%set_string('GPVAL_ENCODING', text)
    elseif (keyword(option, 'terminal', 2_I4P)) then
       if (size(tokens) < 2) then
-         call fail('set terminal: svg, html, dumb or block expected', iostat, iomsg)
+         call fail('set terminal: svg, html, pdfcairo, dumb or block expected', iostat, iomsg)
          return
       endif
       text = tokens(2)%text
@@ -12447,15 +12451,27 @@ contains
          if (.not. no_more(tokens, 3_I4P, iostat, iomsg)) return
          return
       endif
+      pdf_term = text == 'pdf' .or. text == 'pdfcairo'
+      pdf_fontscale = 0.5_R8P
+      pdf_font_pt = 0.0_R8P
+      pdf_family = ''
       select case (text)
       case ('svg', 'html')
+      case ('pdf', 'pdfcairo')
+         ! gnuplot 6.0's pdfcairo: 5 x 3 inches, "Sans,12" at fontscale 0.5 (drawn at 4/3 of its points, pango's 96 dpi:
+         ! 8 pt), lines of 0.5 pt, butt caps, color
+         text = 'pdfcairo'
+         call self%figure%set_page_size(5.0_R8P, 3.0_R8P, 'in')
+         call self%figure%set_font(',12', 0.5_R8P * 4.0_R8P / 3.0_R8P)
+         call self%figure%set_pdf(linewidth=0.5_R8P / 0.75_R8P, dashlength=1.0_R8P, cap='butt', mono=.false.)
       case ('dumb', 'block')
          ! gnuplot dumb and block default size, in characters
          self%figure%width = 79.0_R8P * DUMB_CELL(1) * self%figure%font_size
          self%figure%height = 24.0_R8P * DUMB_CELL(2) * self%figure%font_size
          call self%figure%set_text(charset=merge('dumb     ', 'quadrants', text == 'dumb'), colors='mono')
       case default
-         call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, dumb, block)', iostat, iomsg)
+         call fail('set terminal: unsupported terminal "'//text//'" (supported: svg, html, pdfcairo, pdf, dumb, '// &
+                   'block)', iostat, iomsg)
          return
       endselect
       self%term_name = text
@@ -12471,6 +12487,84 @@ contains
          elseif ((text == 'svg' .or. text == 'html') .and. is_word(tokens(i)%text, 'fontglyphs fontnames')) then
             ! the SVG files' texts from the glyphs or by name (the HTML pages keep theirs by name)
             call self%figure%set_fontglyphs(svg=tokens(i)%text == 'fontglyphs')
+         elseif (pdf_term .and. keyword(tokens(i)%text, 'size', 2_I4P)) then
+            ! lengths with their units (inches by default), or a paper's column: single 8.5 x 6 cm, double 17.8 x 8 cm
+            if (i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'single' .or. tokens(i + 1_I4P)%text == 'double') then
+                  i = i + 1_I4P
+                  if (tokens(i)%text == 'single') then
+                     call self%figure%set_page_size(8.5_R8P, 6.0_R8P, 'cm')
+                  else
+                     call self%figure%set_page_size(17.8_R8P, 8.0_R8P, 'cm')
+                  endif
+                  i = i + 1_I4P
+                  cycle
+               endif
+            endif
+            block
+               real(R8P) :: lengths(2) !< Width and height [px].
+
+               if (.not. next_length(tokens, i, lengths(1), iostat, iomsg)) return
+               i = i + 1_I4P
+               if (i > size(tokens, kind=I4P)) then
+                  call fail('set terminal: size W,H expected', iostat, iomsg)
+                  return
+               endif
+               if (tokens(i)%kind /= TOKEN_COMMA) then
+                  call fail('set terminal: size W,H expected', iostat, iomsg)
+                  return
+               endif
+               if (.not. next_length(tokens, i, lengths(2), iostat, iomsg)) return
+               if (.not. all(lengths > 0.0_R8P)) then
+                  call fail('set terminal: size must be positive', iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_page_size(lengths(1), lengths(2), 'px')
+            endblock
+         elseif (pdf_term .and. keyword(tokens(i)%text, 'fontscale', 5_I4P)) then
+            if (.not. next_real(tokens, i, pdf_fontscale, iostat, iomsg)) return
+         elseif (pdf_term .and. (keyword(tokens(i)%text, 'linewidth', 5_I4P) .or. tokens(i)%text == 'lw')) then
+            block
+               real(R8P) :: lw !< Line width factor.
+
+               if (.not. next_real(tokens, i, lw, iostat, iomsg)) return
+               ! on gnuplot's 0.5 pt lines (foresight's are 0.75 pt)
+               call self%figure%set_pdf(linewidth=lw * 0.5_R8P / 0.75_R8P)
+            endblock
+         elseif (pdf_term .and. (keyword(tokens(i)%text, 'dashlength', 5_I4P) .or. tokens(i)%text == 'dl')) then
+            block
+               real(R8P) :: dl !< Dash length factor.
+
+               if (.not. next_real(tokens, i, dl, iostat, iomsg)) return
+               call self%figure%set_pdf(dashlength=dl)
+            endblock
+         elseif (pdf_term .and. is_word(tokens(i)%text, 'rounded butt square')) then
+            call self%figure%set_pdf(cap=tokens(i)%text)
+         elseif (pdf_term .and. is_word(tokens(i)%text, 'mono monochrome color colour')) then
+            call self%figure%set_pdf(mono=tokens(i)%text(1:2) == 'mo')
+         elseif (pdf_term .and. keyword(tokens(i)%text, 'background', 4_I4P)) then
+            block
+               character(len=:), allocatable :: spec  !< Color spec.
+               character(len=:), allocatable :: color !< SVG color.
+               logical                       :: ok    !< A color.
+
+               i = i + 1_I4P
+               if (.not. self%string_expression(tokens, i, spec, iostat, iomsg)) then
+                  iomsg = 'set terminal: background: '//iomsg
+                  return
+               endif
+               call gnuplot_color(spec, color, ok)
+               if (.not. ok) then
+                  call fail('set terminal: background: not a color: "'//spec//'"', iostat, iomsg)
+                  return
+               endif
+               call self%figure%set_pdf(background=color)
+            endblock
+         elseif (pdf_term .and. tokens(i)%text == 'transparent') then
+            ! gnuplot's default: the page color stays the figure's
+            continue
+         elseif (pdf_term .and. is_word(tokens(i)%text, 'fontglyphs fontnames')) then
+            call self%figure%set_fontglyphs(pdf=tokens(i)%text == 'fontglyphs')
          elseif (keyword(tokens(i)%text, 'size', 2_I4P)) then
             if (.not. next_integer(tokens, i, width, iostat, iomsg)) return
             i = i + 1_I4P
@@ -12508,6 +12602,14 @@ contains
                call fail('set terminal: unknown theme "'//tokens(i)%text//'" (supported: '//THEMES//')', iostat, iomsg)
                return
             endif
+            ! `theme paper serif`: its texts in Latin Modern Roman
+            if (tokens(i)%text == 'paper' .and. i < size(tokens, kind=I4P)) then
+               if (tokens(i + 1_I4P)%text == 'serif') then
+                  call self%figure%set_theme(name='paper', serif=.true.)
+                  i = i + 2_I4P
+                  cycle
+               endif
+            endif
             call self%figure%set_theme(name=tokens(i)%text)
          elseif (tokens(i)%text == 'glow' .or. tokens(i)%text == 'noglow') then
             call self%figure%set_theme(glow=tokens(i)%text == 'glow')
@@ -12519,9 +12621,14 @@ contains
                   iomsg = 'set terminal: '//iomsg
                   return
                endif
-               ! the size and family of every text (gnuplot's terminal font)
-               if (font%size > 0.0_R8P) self%figure%font_size = font%size
-               self%figure%font_family = font%family
+               ! the size and family of every text (gnuplot's terminal font); pdfcairo's in points, with fontscale
+               if (pdf_term) then
+                  pdf_font_pt = font%size
+                  pdf_family = font%family
+               else
+                  if (font%size > 0.0_R8P) self%figure%font_size = font%size
+                  self%figure%font_family = font%family
+               endif
             endblock
          else
             call fail('set terminal: unsupported option "'//tokens(i)%text//'"', iostat, iomsg)
@@ -12529,12 +12636,22 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      ! pdfcairo's font: its size in points times fontscale and 4/3 (12 if none given; gnuplot's cairo terminals draw a
+      ! font of S points at 4/3 S), its family
+      if (pdf_term .and. (pdf_font_pt > 0.0_R8P .or. pdf_fontscale /= 0.5_R8P .or. len_trim(pdf_family) > 0)) then
+         if (.not. pdf_font_pt > 0.0_R8P) pdf_font_pt = 12.0_R8P
+         call self%figure%set_font(trim(pdf_family)//','//fixed(pdf_font_pt, 3_I4P), pdf_fontscale * 4.0_R8P / 3.0_R8P)
+      endif
       ! the terminal decides the format of the default output, never of one set explicitly
       if (.not. self%output_set) then
          if (text == 'dumb' .or. text == 'block') then
             self%output = '-'
+         elseif (self%output == '-' .and. pdf_term) then
+            self%output = 'foresight.pdf'
          elseif (self%output == '-') then
             self%output = 'foresight.'//text
+         elseif (pdf_term) then
+            self%output = change_extension(self%output, 'pdf')
          else
             self%output = change_extension(self%output, text)
          endif
@@ -20001,6 +20118,51 @@ contains
    endif
    if (.not. ok) call fail('a number was expected, found "'//word//'"', iostat, iomsg)
    endfunction next_real
+
+   function next_length(tokens, i, px, iostat, iomsg) result(ok)
+   !< Advance `i` to the next token, a length of gnuplot's cairo terminals: a number in inches, or followed by its unit
+   !< (`8.5cm`, `3in`, `240pt`, the unit joined or the next token), as pixels (96 to the inch).
+   type(token_object),            intent(in)    :: tokens(:) !< Tokens.
+   integer(I4P),                  intent(inout) :: i         !< Token counter.
+   real(R8P),                     intent(out)   :: px        !< Length [px].
+   integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
+   character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical                                      :: ok        !< Success.
+   character(len=:), allocatable                :: word      !< Token text.
+   character(len=:), allocatable                :: unit      !< Unit.
+   real(R8P)                                    :: value     !< Number.
+   integer(I4P)                                 :: k         !< End of the number.
+
+   px = 0.0_R8P
+   ok = next_word(tokens, i, word, iostat, iomsg)
+   if (.not. ok) return
+   k = verify(word, '0123456789.+-eE', kind=I4P) - 1_I4P
+   if (k < 0_I4P) k = len(word, kind=I4P)
+   ! an exponent letter of `cm`-less numbers is fine, the `e` of a unit never starts it
+   unit = word(k + 1_I4P:)
+   ok = to_number(word(1:k), value)
+   if (ok .and. len(unit) == 0 .and. i < size(tokens, kind=I4P)) then
+      if (is_word(tokens(i + 1_I4P)%text, 'cm in inch pt')) then
+         i = i + 1_I4P
+         unit = tokens(i)%text
+      endif
+   endif
+   if (.not. ok) then
+      call fail('a length was expected, found "'//word//'"', iostat, iomsg)
+      return
+   endif
+   select case (unit)
+   case ('', 'in', 'inch')
+      px = value * 96.0_R8P
+   case ('cm')
+      px = value * 96.0_R8P / 2.54_R8P
+   case ('pt')
+      px = value * 96.0_R8P / 72.0_R8P
+   case default
+      ok = .false.
+      call fail('a length unit cm, in or pt was expected, found "'//unit//'"', iostat, iomsg)
+   endselect
+   endfunction next_length
 
    function next_word(tokens, i, word, iostat, iomsg) result(ok)
    !< Advance `i` to the next token, which must be a bare word.

@@ -1,0 +1,5 @@
+$ foresight cb_paper.gp && ls cb_paper.*
+foresight: cb_paper.svg
+cb_paper.gp
+cb_paper.pdf
+cb_paper.svg

@@ -42,6 +42,9 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `clear()` | the replacement done by a new `plot` |
 | `save(file)` | `set output` + render |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
+| `set_page_size(width, height[, units])` | the page size in `px` (the default), `in`, `cm` or `pt` (96 px to the inch, as the PDF's 0.75 pt per pixel), as `set terminal pdfcairo size 8.5cm,6cm` |
+| `set_font(spec[, fontscale])` | the page font, gnuplot's `"family:Bold:Italic,size"`, the size in points times `fontscale`; `serif` for Latin Modern Roman |
+| `set_pdf([linewidth], [dashlength], [cap], [mono], [background])` | pdfcairo's line options on the PDF: widths and dashes scaled (foresight's lines are 0.75 pt), `cap` `butt`, `rounded` or `square`, `mono`, `background` the page color |
 | `set_fontglyphs([svg], [pdf])` | `set terminal svg fontglyphs\|fontnames`: the SVG files' texts drawn from the compiled-in glyphs (`svg=.true.`; by name by default), the PDF ones embedded (`pdf=.true.`, the default) or set in the 14 standard fonts by name (`pdf=.false.`); HTML pages keep their texts by name |
 | `set_enhanced([on])` | `set termoption enhanced` (`on=.false.`: `noenhanced`): the texts read as [enhanced text](gnuplot-subset#enhanced-text), `x^2`, `T_{n-1}`, `{/Symbol a}`; off by default in the library, on in the scripts |
 | `set_xrange([min], [max])`, `set_yrange(...)`, `set_y2range(...)`, `set_x2range(...)` | `set xrange [min:max]` |
@@ -68,7 +71,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_palette_gradient(positions, colors)` | `set palette defined (...)` / `set palette file 'f'` from arrays: `colors(:, k)` (red, green, blue, 0 to 1) at increasing `positions(k)`; `set_palette` words can follow (`'negative'`) |
 | `set_palette(words)` | `set palette viridis maxcolors 8`, `set palette defined (0 "blue", 1 "white", 2 "red")`, `set palette cubehelix cycles 1`, `set palette vik negative` (named palettes, see [Images and palettes](gnuplot-subset#images-and-palettes)) |
 | `set_cbrange([min], [max])`, `set_cblabel(label)`, `set_colorbox([on], [horizontal], [user], [origin], [size], [border], [invert])` | `set cbrange [0:1]`, `set cblabel`, `set colorbox horizontal`, `set colorbox user origin 0.8,0.2 size 0.05,0.6` / `unset colorbox` (`on=.false.`) |
-| `set_theme([name], [glow])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd`, `washi`, `night`; the default of a new figure is `FORESIGHT_THEME`, else `classic` |
+| `set_theme([name], [glow], [serif])` | `set terminal svg theme vfd noglow` (foresight extension): `classic`, `vfd`, `lcd`, `washi`, `night`, `paper` (a paper's figure: 8 pt texts, 0.75 pt lines, the Okabe-Ito colors; `serif=.true.` in Latin Modern Roman); the default of a new figure is `FORESIGHT_THEME`, else `classic` |
 | `set_paxis(n, [min], [max], [step], [start], [end], [tics], [label])` | `set paxis 2 range [0:100]`, `set paxis 2 tics 25`, `set paxis 1 label "speed"` |
 | `set_spiderplot([on])`, `set_style_spiderplot(words)` | `set spiderplot`, `set style spiderplot fs transparent solid 0.2 border lw 2` |
 | `set_style_boxplot(words)` | `set style boxplot nooutliers sorted fraction 0.95` |

@@ -66,7 +66,11 @@ metrics) fills the room exactly.
 
 ## PDF
 
-One page of the figure's size, 0.75 pt per pixel (96 px to the inch): a 600 x 480 px figure is 450 x 360 pt. The
+One page of the figure's size, 0.75 pt per pixel (96 px to the inch): a 600 x 480 px figure is 450 x 360 pt.
+`set terminal pdfcairo` (or `pdf`) takes gnuplot 6.0's options: a size in inches or with units (`8.5cm,6cm`, or
+`single` and `double` for a paper's column and page width), the font and `fontscale`, `linewidth`, `dashlength`,
+`rounded`, `mono`, `background`; see [the terminal](gnuplot-subset#set-unset-options) and
+[path C](/manual/paths/c-paper/03-sizes-and-the-paper-theme). The
 drawing is the SVG's, primitive by primitive: lines with their widths, dashes and joins; filled polygons with their
 opacity and gnuplot's fill patterns (tiling patterns of the SVG's 8 px tiles); point type markers, error bar caps and
 arrowheads at their pixel size; images as 8-bit RGB with an alpha mask; readouts; texts with gnuplot's enhanced markup.
@@ -141,7 +145,9 @@ data) with `image-rendering: pixelated`, so a pixel stays a sharp square at any 
 `set terminal ... theme vfd` (or `lcd`) recolors any output as a 1980s digital dashboard, `theme washi` (or `night`)
 in the light (or dark) colors of foresight's identity, `classic` back to gnuplot's: see
 [Themes and segmented fills](gnuplot-subset#themes-and-segmented-fills). SVG and HTML take the page, frame, grid and
-series colors and, for `vfd`, a glow; text takes the series colors only. `foresight --theme NAME` sets the theme of
+series colors and, for `vfd`, a glow; text takes the series colors only. `theme paper` makes a figure for a paper:
+gnuplot's white page and black frame, the Okabe-Ito colors (distinct for color-blind readers and in gray), 8 pt texts
+and 0.75 pt lines; `theme paper serif` sets the texts in Latin Modern Roman. `foresight --theme NAME` sets the theme of
 every plot of a run, unless the script sets its own.
 
 The environment variable `FORESIGHT_THEME` names the theme of every new figure, of the library as of the command line,

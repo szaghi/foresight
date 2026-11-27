@@ -27,7 +27,7 @@ npm run docs:api      # formal generate --mirror-sources --diagrams --project fo
 | `civil_time`, `strftime`, `strptime` | `foresight_time` | gnuplot's time conversions — see [Times](library#times) |
 | `rename_file`, `sleep_ms` | `foresight_sys` | atomic rename (`rename_file(old, new, [iostat])`: without `iostat` a failure stops) and sub-second sleep (libc) |
 | `file_fingerprint` | `foresight_fingerprint` | a cheap fingerprint of a file's content, to tell that it changed (the watch mode) |
-| `THEMES` | `foresight_theme` | the names of the output themes, blank separated: `classic vfd lcd washi night` |
+| `THEMES` | `foresight_theme` | the names of the output themes, blank separated: `classic vfd lcd washi night paper` |
 | `I4P`, `I8P`, `R4P`, `R8P` | PENF | kind parameters |
 
 The other modules are internal: their interfaces may change without notice.

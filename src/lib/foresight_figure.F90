@@ -31,7 +31,7 @@ use foresight_annotations, only : arrow_object, label_object, pixmap_object, pla
 use foresight_theme, only : theme_named, theme_object, THEMES
 use foresight_palette, only : palette_gradient, palette_words
 use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
-use foresight_font, only : font_object
+use foresight_font, only : font_object, font_of
 use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
                               LEVELS_INCREMENTAL
 use foresight_dgrid3d, only : grid_series, DGRID_BOX, DGRID_CAUCHY, DGRID_EXP, DGRID_GAUSS, DGRID_HANN, DGRID_QNORM, &
@@ -79,6 +79,11 @@ type :: figure_object
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
    type(font_object)              :: title_font               !< Multiplot title font (`set multiplot title ... font`).
    logical                        :: svg_glyphs = .false.     !< SVG texts drawn from the compiled-in glyphs.
+   real(R8P)                      :: pdf_line_scale = 1.0_R8P !< PDF line widths times this (`linewidth`).
+   real(R8P)                      :: pdf_dash_scale = 1.0_R8P !< PDF dash lengths times this (`dashlength`).
+   character(len=7)               :: pdf_cap = 'butt'         !< PDF line caps: `butt`, `rounded`, `square`.
+   logical                        :: pdf_mono = .false.       !< PDF monochrome (`mono`).
+   character(len=16)              :: page_color = 'white'     !< Page color (`background`), before the theme's map.
    logical                        :: pdf_glyphs = .true.      !< PDF texts in the compiled-in fonts, embedded.
    character(len=48)              :: font_family = ''         !< Page font family (`set terminal ... font "name,size"`),
                                                               !< empty for foresight's.
@@ -165,6 +170,9 @@ type :: figure_object
       procedure, pass(self) :: set_margin   !< Set a margin, `set lmargin`...
       procedure, pass(self) :: set_enhanced !< Enhanced text on or off.
       procedure, pass(self) :: set_fontglyphs !< Texts drawn from the compiled-in glyphs, or set by font names.
+      procedure, pass(self) :: set_page_size !< Page size in px, in, cm or pt (gnuplot's terminal `size`).
+      procedure, pass(self) :: set_font     !< Page font, gnuplot's "family,size" in points.
+      procedure, pass(self) :: set_pdf      !< PDF line widths, dashes, caps, monochrome, background.
       procedure, pass(self) :: set_border_style !< Border line: lc, lw, dt.
       procedure, pass(self) :: set_zeroaxis !< Zero axes.
       procedure, pass(self) :: set_key_style !< Key layout: reverse, Left, invert, opaque, ...
@@ -311,6 +319,13 @@ contains
    self%text_colors = fresh%text_colors
    self%theme = fresh%theme
    self%theme_chosen = .false.
+   self%svg_glyphs = fresh%svg_glyphs
+   self%pdf_glyphs = fresh%pdf_glyphs
+   self%pdf_line_scale = fresh%pdf_line_scale
+   self%pdf_dash_scale = fresh%pdf_dash_scale
+   self%pdf_cap = fresh%pdf_cap
+   self%pdf_mono = fresh%pdf_mono
+   self%page_color = fresh%page_color
    self%rows = fresh%rows
    self%cols = fresh%cols
    self%current = fresh%current
@@ -494,6 +509,10 @@ contains
    pdf%theme = self%theme
    svg%glyphs = self%svg_glyphs
    pdf%embed = self%pdf_glyphs
+   pdf%line_scale = self%pdf_line_scale
+   pdf%dash_scale = self%pdf_dash_scale
+   pdf%cap = self%pdf_cap
+   pdf%mono = self%pdf_mono
    select case (extension(file))
    case ('svg')
       call self%render(svg, file)
@@ -1700,7 +1719,7 @@ contains
 
    if (present(width) .neqv. present(height)) error stop 'foresight: set_size: width and height go together'
    if (present(width)) then
-      if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
+      if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_page_size: the size must be positive'
    endif
    if (present(ratio)) then
    endif
@@ -1712,20 +1731,30 @@ contains
    endassociate
    endsubroutine set_size
 
-   subroutine set_theme(self, name, glow)
+   subroutine set_theme(self, name, glow, serif)
    !< Output theme (a foresight extension): `name` `classic` (the default), `vfd` (a vacuum fluorescent display: black
    !< glass, emissive colors, glowing data), `lcd` (a backlit liquid crystal display), `washi` or `night` (foresight's
-   !< identity, light and dark: see foresight_theme); `glow` overrides the theme's
-   !< glow (on in `vfd`). Text output takes the theme colors of the series only (`ansi` colors).
-   class(figure_object), intent(inout)        :: self !< Figure.
-   character(len=*),     intent(in), optional :: name !< Theme name.
-   logical,              intent(in), optional :: glow !< Glowing data.
+   !< identity, light and dark: see foresight_theme), `paper` (a figure for a paper: 8 pt texts, the Okabe-Ito colors;
+   !< `serif` sets them in Latin Modern Roman); `glow` overrides the theme's glow (on in `vfd`). Text output takes the
+   !< theme colors of the series only (`ansi` colors).
+   class(figure_object), intent(inout)        :: self  !< Figure.
+   character(len=*),     intent(in), optional :: name  !< Theme name.
+   logical,              intent(in), optional :: glow  !< Glowing data.
+   logical,              intent(in), optional :: serif !< The paper theme's texts in Latin Modern Roman.
 
    if (present(name)) then
       if (index(' '//THEMES//' ', ' '//trim(name)//' ') == 0) &
          error stop 'foresight: set_theme: unknown theme "'//trim(name)//'" (supported: '//THEMES//')'
       self%theme = theme_named(name)
       self%theme_chosen = .true.
+      if (trim(name) == 'paper') then
+         ! 8 pt texts, lines of 0.75 pt (foresight's 1 px), ticks inward and no grid (gnuplot's defaults)
+         self%font_size = 8.0_R8P * 96.0_R8P / 72.0_R8P
+         self%pdf_line_scale = 1.0_R8P
+         if (present(serif)) then
+            if (serif) self%font_family = 'serif'
+         endif
+      endif
    endif
    if (present(glow)) self%theme%glow = glow
    endsubroutine set_theme
@@ -1822,6 +1851,74 @@ contains
    if (present(svg)) self%svg_glyphs = svg
    if (present(pdf)) self%pdf_glyphs = pdf
    endsubroutine set_fontglyphs
+
+   subroutine set_page_size(self, width, height, units)
+   !< The page `width` x `height` in `units`: `px` (the default), `in`, `cm` or `pt` (96 px to the inch, as a PDF page's
+   !< 0.75 pt per pixel), as gnuplot's `set terminal pdfcairo size 8.5cm,6cm`.
+   class(figure_object), intent(inout)        :: self   !< Figure.
+   real(R8P),            intent(in)           :: width  !< Width.
+   real(R8P),            intent(in)           :: height !< Height.
+   character(len=*),     intent(in), optional :: units  !< Units.
+   real(R8P)                                  :: px     !< Pixels per unit.
+
+   px = 1.0_R8P
+   if (present(units)) then
+      select case (trim(units))
+      case ('px', '')
+         px = 1.0_R8P
+      case ('in', 'inch')
+         px = 96.0_R8P
+      case ('cm')
+         px = 96.0_R8P / 2.54_R8P
+      case ('pt')
+         px = 96.0_R8P / 72.0_R8P
+      case default
+         error stop 'foresight: set_page_size: units px, in, cm or pt, not "'//trim(units)//'"'
+      endselect
+   endif
+   if (.not. (width > 0.0_R8P .and. height > 0.0_R8P)) error stop 'foresight: set_page_size: the size must be positive'
+   self%width = width * px
+   self%height = height * px
+   endsubroutine set_page_size
+
+   subroutine set_font(self, spec, fontscale)
+   !< The page font from gnuplot's spec `"family:Bold:Italic,size"` (foresight_font `font_of`), its size in points (as
+   !< gnuplot's cairo terminals), times `fontscale` (1 if absent): `set terminal pdfcairo font "Sans,12" fontscale 0.5`.
+   !< An absent size keeps the page's; the family (`serif` for Latin Modern) names the page's family.
+   class(figure_object), intent(inout)        :: self      !< Figure.
+   character(len=*),     intent(in)           :: spec      !< Font spec.
+   real(R8P),            intent(in), optional :: fontscale !< Size factor.
+   type(font_object)                          :: font      !< Font.
+   real(R8P)                                  :: scale     !< Size factor.
+
+   font = font_of(spec)
+   scale = 1.0_R8P
+   if (present(fontscale)) scale = fontscale
+   if (font%size > 0.0_R8P) self%font_size = font%size * scale * 96.0_R8P / 72.0_R8P
+   if (len_trim(font%family) > 0) self%font_family = font%family
+   endsubroutine set_font
+
+   subroutine set_pdf(self, linewidth, dashlength, cap, mono, background)
+   !< The PDF's lines, as gnuplot's pdfcairo terminal options: every width times `linewidth` (foresight's lines are 1 px,
+   !< 0.75 pt), every dash times `dashlength`, the caps `butt` (miter joins, the default), `rounded` (round caps and
+   !< joins) or `square`; `mono` lines and texts black, fills gray; `background` the page color (any device).
+   class(figure_object), intent(inout)        :: self       !< Figure.
+   real(R8P),            intent(in), optional :: linewidth  !< Line width factor.
+   real(R8P),            intent(in), optional :: dashlength !< Dash length factor.
+   character(len=*),     intent(in), optional :: cap        !< `butt`, `rounded` or `square`.
+   logical,              intent(in), optional :: mono       !< Monochrome.
+   character(len=*),     intent(in), optional :: background !< Page color.
+
+   if (present(linewidth)) self%pdf_line_scale = linewidth
+   if (present(dashlength)) self%pdf_dash_scale = dashlength
+   if (present(cap)) then
+      if (index(' butt rounded square ', ' '//trim(cap)//' ') == 0) &
+         error stop 'foresight: set_pdf: cap butt, rounded or square, not "'//trim(cap)//'"'
+      self%pdf_cap = cap
+   endif
+   if (present(mono)) self%pdf_mono = mono
+   if (present(background)) self%page_color = background
+   endsubroutine set_pdf
 
    subroutine set_margin(self, side, value, screen)
    !< Set a margin of the current panel, as gnuplot `set lmargin|rmargin|tmargin|bmargin`: `side` is `l`, `r`, `t` or
@@ -3015,7 +3112,7 @@ contains
    backend%page_family = self%font_family
    call backend%begin_page(file, self%width, self%height, self%font_size)
    page = [self%width, self%height]
-   call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', 'white', 0.0_R8P)
+   call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', trim(self%page_color), 0.0_R8P)
    top = 0.0_R8P
    layout_top = 0.0_R8P
    if (len(self%title) > 0) then

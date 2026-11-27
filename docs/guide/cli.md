@@ -14,7 +14,7 @@ options:
   -c, --call SCRIPT ARGS  run SCRIPT with ARGS as ARG1 ... ARG9 (ARGC their number), as gnuplot -c
   -e, --execute COMMANDS  run COMMANDS before SCRIPT (repeatable)
   -o, --output FILE       default output file (.html or .svg)
-  -t, --theme NAME        default output theme: classic vfd lcd washi night
+  -t, --theme NAME        default output theme: classic vfd lcd washi night paper
   -w, --watch [SECONDS]   re-run when SCRIPT or its data files change (default 1 s)
       --max-cycles N      stop watching after N polls
   -h, --help              show this help

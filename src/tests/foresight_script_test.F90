@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(298)                           !< Per-check outcome.
+logical                       :: test_passed(300)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -1398,7 +1398,7 @@ test_passed(90) = test_passed(90) .and. iostat == 0_I4P .and. interpreter%figure
                   interpreter%figure%theme%background == '#f3ede1'
 call interpreter%run_text('set terminal svg theme sepia', iostat, iomsg)
 test_passed(90) = test_passed(90) .and. iostat /= 0_I4P .and. &
-                  index(iomsg, 'unknown theme "sepia" (supported: classic vfd lcd washi night)') > 0
+                  index(iomsg, 'unknown theme "sepia" (supported: classic vfd lcd washi night paper)') > 0
 call interpreter%init(scratch)
 test_passed(90) = test_passed(90) .and. interpreter%figure%theme%is_classic()
 
@@ -8193,6 +8193,65 @@ block
    endif
    open(newunit=unit, file='foresight_script_test_pd.pdf')
    close(unit, status='delete')
+endblock
+
+! check 299: `set terminal pdfcairo` (and `pdf`), as gnuplot 6.0: 5 x 3 in, "Sans,12" at fontscale 0.5 drawn at 8 pt,
+! 0.5 pt lines; size with units (a 8.5cm,6cm MediaBox 240.945 x 170.079 pt), font and fontscale, linewidth, dashlength,
+! rounded, mono, background, fontnames; the default output .pdf; GPVAL_TERMINALS
+block
+   character(len=:), allocatable :: page !< File.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal pdfcairo", iostat, iomsg)
+   test_passed(299) = iostat == 0_I4P .and. abs(interpreter%figure%width - 480.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%height - 288.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%font_size - 32.0_R8P / 3.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%pdf_line_scale - 2.0_R8P / 3.0_R8P) < 1.0e-9_R8P .and. &
+                      interpreter%output(len(interpreter%output) - 3:) == '.pdf'
+   call interpreter%run_text("set terminal pdf size 8.5cm,6cm font 'serif,10' fontscale 0.75 linewidth 2 dl 1.5 "// &
+                             "rounded mono background '#eeeeee' fontnames"//nl// &
+                             "set output 'foresight_script_test_pc.pdf'"//nl//"plot x", iostat, iomsg)
+   test_passed(299) = test_passed(299) .and. iostat == 0_I4P .and. &
+                      abs(interpreter%figure%width - 8.5_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%font_size - 10.0_R8P * 0.75_R8P * 4.0_R8P / 3.0_R8P * 4.0_R8P / 3.0_R8P) < &
+                      1.0e-9_R8P .and. trim(interpreter%figure%font_family) == 'serif' .and. &
+                      abs(interpreter%figure%pdf_line_scale - 4.0_R8P / 3.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%pdf_dash_scale - 1.5_R8P) < 1.0e-9_R8P .and. &
+                      interpreter%figure%pdf_cap == 'rounded' .and. interpreter%figure%pdf_mono .and. &
+                      trim(interpreter%figure%page_color) == '#eeeeee' .and. .not. interpreter%figure%pdf_glyphs
+   if (test_passed(299)) then
+      page = read_text('foresight_script_test_pc.pdf')
+      test_passed(299) = index(page, '/MediaBox [0 0 240.945 170.079]') > 0 .and. index(page, ' 1 J 1 j') > 0 .and. &
+                         index(page, '/BaseFont /Times-Roman') > 0 .and. index(page, '0.933 0.933 0.933 rg') > 0
+   endif
+   call interpreter%run_text("set terminal pdfcairo size 3,2.5in"//nl//"set terminal pdfcairo size 4in,3", iostat, iomsg)
+   test_passed(299) = test_passed(299) .and. iostat == 0_I4P .and. abs(interpreter%figure%width - 384.0_R8P) < 1.0e-9_R8P
+   call interpreter%run_text("set terminal pdfcairo size 3furlongs,2", iostat, iomsg)
+   test_passed(299) = test_passed(299) .and. iostat /= 0_I4P .and. index(iomsg, 'unit cm, in or pt') > 0
+   ! a command foresight does not know when the terminal list lacks them
+   call interpreter%run_text("if (strstrt(GPVAL_TERMINALS, 'pdf pdfcairo') == 0) { no_such_command }", iostat, iomsg)
+   test_passed(299) = test_passed(299) .and. iostat == 0_I4P
+   open(newunit=unit, file='foresight_script_test_pc.pdf')
+   close(unit, status='delete')
+endblock
+
+! check 300: `theme paper [serif]` (8 pt texts, 0.75 pt lines, the Okabe-Ito colors, Latin Modern with serif) and the
+! paper column sizes `size single|double` (8.5 x 6 cm, 17.8 x 8 cm)
+block
+   call interpreter%init(scratch)
+   call interpreter%run_text("set terminal pdfcairo size single theme paper serif", iostat, iomsg)
+   test_passed(300) = iostat == 0_I4P .and. interpreter%figure%theme%name == 'paper' .and. &
+                      abs(interpreter%figure%font_size - 32.0_R8P / 3.0_R8P) < 1.0e-9_R8P .and. &
+                      trim(interpreter%figure%font_family) == 'serif' .and. &
+                      abs(interpreter%figure%pdf_line_scale - 1.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%width - 8.5_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%height - 6.0_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P .and. &
+                      interpreter%figure%theme%palette(1) == '#0072b2'
+   call interpreter%run_text("set terminal pdfcairo size double theme paper", iostat, iomsg)
+   test_passed(300) = test_passed(300) .and. iostat == 0_I4P .and. &
+                      abs(interpreter%figure%width - 17.8_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P .and. &
+                      abs(interpreter%figure%height - 8.0_R8P / 2.54_R8P * 96.0_R8P) < 1.0e-9_R8P
 endblock
 
 if (all(test_passed)) then

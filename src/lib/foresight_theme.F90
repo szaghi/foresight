@@ -1,6 +1,6 @@
-!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`).
+!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`, `paper`).
 module foresight_theme
-!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`).
+!< foresight_theme, output themes: the page colors of a figure (`classic`, `vfd`, `lcd`, `washi`, `night`, `paper`).
 !<
 !< A theme recolors the output, never the figure: the layout draws with gnuplot's colors (black frame and text, grey
 !< grid, white page, the linetype colors) and the devices map them through `map` as they write. `classic` maps nothing,
@@ -8,7 +8,8 @@ module foresight_theme
 !< printed in blue, glowing data); `lcd` a backlit liquid crystal display (pale green glass, dark segments). `washi`
 !< and `night` are the two faces of foresight's own identity, its documentation's light and dark modes: ink on warm
 !< paper with a crimson first series, and light text on a near-black red ground with a rose first series; every
-!< series color contrasts with its ground at least 3:1 (WCAG non-text contrast). Colors
+!< series color contrasts with its ground at least 3:1 (WCAG non-text contrast). `paper` is a figure for a paper: the
+!< classic page with the Okabe-Ito colors (the figure adds 8 pt texts, foresight_figure `set_theme`). Colors
 !< other than the frame, grid, page and palette ones (an `lc '#123456'` of the user) are kept. A new figure takes the
 !< theme of the environment variable `FORESIGHT_THEME` (an unknown name ignored) until one is set (foresight_figure).
 use penf, only : I4P, R8P
@@ -20,7 +21,7 @@ public :: theme_object
 public :: theme_named
 public :: THEMES
 
-character(len=*), parameter :: THEMES = 'classic vfd lcd washi night' !< Theme names.
+character(len=*), parameter :: THEMES = 'classic vfd lcd washi night paper' !< Theme names.
 
 type :: theme_object
    !< Output theme.
@@ -64,6 +65,10 @@ contains
       theme%frame = '#1d1b18'
       theme%grid = '#a69a85'
       theme%palette = ['#b3163f', '#1f5f8b', '#2e7d4f', '#b86a00', '#6b3fa0', '#0f7c80', '#8a5a2b', '#1d1b18']
+   case ('paper')
+      ! figures for a paper: a white page, black frame and text, the Okabe-Ito colors (the figure sets 8 pt texts)
+      theme%name = 'paper'
+      theme%palette = ['#0072b2', '#d55e00', '#009e73', '#cc79a7', '#e69f00', '#56b4e9', '#f0e442', '#000000']
    case ('night')
       theme%name = 'night'
       theme%background = '#130d0f'

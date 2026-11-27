@@ -1,0 +1,5 @@
+$ foresight pc03_paper.gp && ls pc03*.pdf
+foresight: pc03.svg
+pc03.pdf
+pc03_default.pdf
+pc03_units.pdf

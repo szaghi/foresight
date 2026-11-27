@@ -1,0 +1,23 @@
+# demo pages compared as pdfcairo (scripts/fidelity/pdfcairo.py): 20 2D pages of distinct demos close to gnuplot
+# in SVG; left out: the date-dependent ones, pixmap (no PDF image of a PNG file), utf8 (Cyrillic, Japanese,
+# Hebrew and emoji: beyond the compiled-in fonts, Latin, Greek and math)
+ellipse_p01
+violinplot_p03
+polar_p05
+map_projection_p03
+special_chars_p01
+custom_key_p01
+finance_p02
+unicode_p01
+dashtypes_p02
+jitter_p07
+windrose_p01
+boxplot_p01
+orbits_p02
+electron_p02
+spiderplot_p01
+concave_hull_p01
+polargrid_p03
+ellipses_style_p01
+fillstyle_p01
+prob_p29

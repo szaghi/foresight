@@ -1,0 +1,4 @@
+$ foresight pc04_panels.gp && ls pc04.*
+foresight: pc04.svg
+pc04.pdf
+pc04.svg

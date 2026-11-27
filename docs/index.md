@@ -446,6 +446,13 @@ foresight --watch residuals.gp                # re-render while the solver write
 
 :::
 
+### For a paper
+
+<div class="fs-gallery">
+  <Plot name="cb_paper" svg :width="321" :height="227" caption="a one-column figure (pdfcairo, theme paper)" />
+  <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern" />
+</div>
+
 ### From Fortran
 
 <div class="fs-gallery">

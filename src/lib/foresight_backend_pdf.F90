@@ -43,6 +43,10 @@ type, extends(backend_object) :: backend_pdf
    private
    logical, public :: embed = .true. !< Texts in the compiled-in fonts, embedded (Type 3, with their Unicode), else
                                       !< the standard fonts by name (`fontnames`: Helvetica, Times, Symbol).
+   real(R8P),         public :: line_scale = 1.0_R8P !< Every line width times this (gnuplot pdfcairo `linewidth`).
+   real(R8P),         public :: dash_scale = 1.0_R8P !< Every dash length times this (`dashlength`).
+   character(len=7),  public :: cap = 'butt'         !< Line caps and joins: `butt` (miter joins), `rounded`, `square`.
+   logical,           public :: mono = .false.       !< Monochrome: lines and texts black, fills gray (`mono`).
    character(len=:), allocatable :: file              !< Final output file.
    real(R8P)                     :: page(2) = 0.0_R8P !< Page width and height [px].
    real(R8P)                     :: area(4) = 0.0_R8P !< Current plot area: left, top, width, height [px].
@@ -998,9 +1002,17 @@ contains
       endif
    endif
    if (stroked) then
-      state = state//' '//self%color_op(stroke, .true.)//' '//num(line_width)//' w'
-      if (join == 1_I4P) state = state//' 1 j'
-      if (len(dasharray) > 0) state = state//' ['//dashes(dasharray)//'] 0 d'
+      state = state//' '//self%color_op(stroke, .true.)//' '//num(self%line_scale * line_width)//' w'
+      select case (trim(self%cap))
+      case ('rounded')
+         state = state//' 1 J 1 j'
+      case ('square')
+         state = state//' 2 J'
+         if (join == 1_I4P) state = state//' 1 j'
+      case default
+         if (join == 1_I4P) state = state//' 1 j'
+      endselect
+      if (len(dasharray) > 0) state = state//' ['//dashes(dasharray, self%dash_scale * self%line_scale)//'] 0 d'
    endif
    if (filled .and. stroked) then
       operator = 'B'
@@ -1030,6 +1042,14 @@ contains
       call named_color(trim(color), c, ok)
    endif
    if (.not. ok) c = 0_I4P
+   if (self%mono) then
+      ! gnuplot's mono: lines and texts black, fills (and white) by their gray
+      if (stroke .and. any(c < 250_I4P)) then
+         c = 0_I4P
+      else
+         c = nint(0.299_R8P * c(1) + 0.587_R8P * c(2) + 0.114_R8P * c(3), I4P)
+      endif
+   endif
    op = num(real(c(1), R8P) / 255.0_R8P)//' '//num(real(c(2), R8P) / 255.0_R8P)//' '// &
         num(real(c(3), R8P) / 255.0_R8P)//merge(' RG', ' rg', stroke)
    if (alpha < 255_I4P) op = op//' /'//self%alpha_state(real(alpha, R8P) / 255.0_R8P, stroke)//' gs'
@@ -1794,15 +1814,38 @@ contains
       endfunction quarter
    endfunction svg_path
 
-   pure function dashes(dasharray) result(list)
-   !< The PDF dash array of an SVG one (`4,2` -> `4 2`).
+   function dashes(dasharray, scale) result(list)
+   !< The PDF dash array of an SVG one (`4,2` -> `4 2`), its lengths times `scale` (1 leaves them as written).
    character(len=*), intent(in)  :: dasharray !< SVG dash array.
+   real(R8P),        intent(in)  :: scale     !< Length factor.
    character(len=:), allocatable :: list      !< PDF dash array.
+   character(len=len(dasharray)) :: work      !< Dash array, blanks for commas.
+   real(R8P)                     :: v         !< A length.
    integer(I4P)                  :: k         !< Counter.
+   integer(I4P)                  :: a         !< Start of a length.
+   integer(I4P)                  :: ios       !< Read status.
 
-   list = dasharray
-   do k = 1_I4P, len(list, kind=I4P)
-      if (list(k:k) == ',') list(k:k) = ' '
+   work = dasharray
+   do k = 1_I4P, len(work, kind=I4P)
+      if (work(k:k) == ',') work(k:k) = ' '
+   enddo
+   if (scale == 1.0_R8P) then
+      list = trim(work)
+      return
+   endif
+   list = ''
+   a = 1_I4P
+   do while (a <= len_trim(work))
+      do while (work(a:a) == ' ')
+         a = a + 1_I4P
+      enddo
+      k = index(work(a:)//' ', ' ', kind=I4P) + a - 2_I4P
+      read(work(a:k), *, iostat=ios) v
+      if (ios /= 0_I4P) v = 0.0_R8P
+      if (len(list) > 0) list = list//' '
+      list = list//num(scale * v)
+      a = k + 1_I4P
+      if (a > len_trim(work)) exit
    enddo
    endfunction dashes
 

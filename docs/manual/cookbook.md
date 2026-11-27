@@ -2136,6 +2136,28 @@ See [Readouts](/guide/gnuplot-subset#readouts).
 `block` draws with Unicode characters of 2 x 4 dots (`braille`), 2 x 3 (`sextants`), 2 x 2 (`quadrants`, the default)
 or 1 x 2 (`half`). Add `ansi` (or `ansi256`, `ansirgb`) to draw each series in its color, in `dumb` as well.
 
+## Figures for a paper
+
+### A figure for one column
+
+<<< @/examples/snippets/cb_paper-figure.gp{gnuplot}
+
+<Plot name="cb_paper" svg :width="321" :height="227" />
+
+`set terminal pdfcairo` writes a PDF with gnuplot's options; `size single` is a paper's column, 8.5 x 6 cm (`double`:
+17.8 x 8 cm), any size takes its units (`size 8.5cm,6cm`, `3in,2in`, `240pt,170pt`). `theme paper` sets 8 pt texts,
+0.75 pt lines and the Okabe-Ito colors; [cb_paper.pdf](/examples/cb_paper.pdf) is the figure as the paper takes it,
+its fonts embedded.
+
+### Two panels across the page, in Latin Modern
+
+<<< @/examples/snippets/cb_paper_double-figure.gp{gnuplot}
+
+<Plot name="cb_paper_double" svg :width="673" :height="302" />
+
+`theme paper serif` sets the texts in Latin Modern Roman, the font of a LaTeX paper; `size double` spans both columns
+([cb_paper_double.pdf](/examples/cb_paper_double.pdf)).
+
 ## From Fortran
 
 ### From Fortran: gaps in the data

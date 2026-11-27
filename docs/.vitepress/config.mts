@@ -29,6 +29,8 @@ const docs = [
     items: [
       { text: 'C1. A first PDF', link: '/manual/paths/c-paper/01-a-first-pdf' },
       { text: 'C2. Fonts that travel', link: '/manual/paths/c-paper/02-fonts-that-travel' },
+      { text: 'C3. Sizes and the paper theme', link: '/manual/paths/c-paper/03-sizes-and-the-paper-theme' },
+      { text: 'C4. Multi-panel figures', link: '/manual/paths/c-paper/04-multi-panel-figures' },
     ],
   },
   {
