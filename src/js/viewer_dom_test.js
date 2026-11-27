@@ -9,7 +9,8 @@
 // with the data, its labels hidden while zoomed; shapes.html, arrowheads and data labels redrawn by a zoom; x2.html,
 // second x axis ticks redrawn by a zoom; theme_night.html, overlays in the colors of a dark theme; time_axis.html,
 // time labels redrawn by a zoom; annotations.html, labels and arrows at data coordinates hidden while zoomed;
-// enhanced.html, tick labels with enhanced text markup redrawn as <tspan> elements by a zoom. The
+// enhanced.html, tick labels with enhanced text markup redrawn as <tspan> elements by a zoom; view3d_frame.html, a 3D
+// view turned by a left drag and back by u. The
 // page is parsed
 // by linkedom; the SVG
 // geometry the viewer asks for (bounding boxes, screen transforms) is stubbed, page pixels being
@@ -330,8 +331,25 @@ page = strip(path.join(__dirname, "..", "tests", "goldens", "view3d_frame.html")
 p = load("");
 var v3d = p.document.querySelector(".fs-axes"), v3dHome = v3d.innerHTML;
 fire(p.document.querySelector("svg"), "wheel", {deltaY: -100, clientX: 300, clientY: 200});
-check("a 3D view is static", v3d.hasAttribute("data-3d") && v3d.innerHTML === v3dHome && p.location.hash === "" &&
+check("a wheel leaves a 3D view as drawn", v3d.hasAttribute("data-3d") && v3d.innerHTML === v3dHome && p.location.hash === "" &&
   v3d.querySelectorAll(".fs-key-entry rect").length === 0);
+
+// a 3D view turned by the mouse (a left drag, gnuplot's 360 degrees a page width or height): its scene drawn in place
+// of the static drawing, its title and key kept; u back to the script's view, the page as drawn
+var v3svg = p.document.querySelector("svg"), v3title = Array.prototype.filter.call(v3d.children, function (c) {
+  return c.tagName.toLowerCase() === "text" && c.textContent === "sin(x) cos(y)";
+})[0];
+check("a 3D view carries its scene", JSON.parse(v3d.querySelector("metadata.fs-scene").textContent).v[0] === 60);
+fire(v3svg, "mousedown", {clientX: 5, clientY: 5});
+fire(p.window, "mousemove", {clientX: 65, clientY: 35});
+fire(p.window, "mouseup", {clientX: 65, clientY: 35});
+var v3layer = v3d.querySelector(".fs-scene-view");
+check("a left drag turns it", v3layer !== null && v3layer.querySelectorAll("polyline").length > 0 &&
+  v3d.querySelector(".fs-border").getAttribute("display") === "none");
+check("its title and key kept", v3title !== undefined && !v3title.hasAttribute("display") &&
+  v3d.querySelector(".fs-key-entry").getAttribute("display") !== "none");
+key("u");
+check("u: the script's view again", v3d.querySelector(".fs-scene-view") === null && v3d.innerHTML === v3dHome);
 
 console.log("Are all tests passed? " + (checks.every(Boolean) ? "T" : "F"));
 process.exit(checks.every(Boolean) ? 0 : 1);

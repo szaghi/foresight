@@ -26,9 +26,9 @@ gnuplot build with the right terminals, glue scripts in a second language. fores
 ## What it is not
 
 foresight is deliberately scoped. It does not aim at publication figures with LaTeX labels (use pgfplots or
-matplotlib), or 3D field visualisation (volumes, isosurfaces, interactive rotation: use ParaView through
-[VTKFortran](https://github.com/szaghi/VTKFortran)); its 3D views are gnuplot's `splot`, drawn as gnuplot draws them and
-static in the page. Anything outside the supported gnuplot subset is reported as an error naming the command, never
+matplotlib), or 3D field visualisation (volume rendering, large meshes: use ParaView through
+[VTKFortran](https://github.com/szaghi/VTKFortran)); its 3D views are gnuplot's `splot`, drawn as gnuplot draws them,
+an HTML page turning them with the mouse as a sketch. Anything outside the supported gnuplot subset is reported as an error naming the command, never
 silently ignored.
 
 ## Where to start

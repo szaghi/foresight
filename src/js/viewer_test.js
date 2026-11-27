@@ -1,5 +1,6 @@
 // Tests of the viewer tick rules: the same cases as src/tests/foresight_ticks_test.F90, which must
-// give identical results (the viewer regenerates foresight ticks after a zoom).
+// give identical results (the viewer regenerates foresight ticks after a zoom); then the 3D view
+// rotation (drag rule, projection, draw list).
 //
 // Usage: node src/js/viewer_test.js   (also `fobis rule --ex test-js`)
 "use strict";
@@ -228,6 +229,22 @@ check("tics placement", (function () {
   var t = viewer.readTics("axis rangelimited -1e0 3e0 * 1 *", "");
   return t.axis === true && t.range[0] === -1 && t.range[1] === 3 && t.mode === "fixed" && t.step === "1";
 }()));
+
+// 3D views turned by the mouse: gnuplot's drag (mouse.c: 360 degrees a page height for rot_x, against the page width
+// for rot_z, rounded, wrapped to [0, 360)) and the projection of foresight_view3d (the default view of a 600 x 400
+// page: the base corner (-1, -1, -1) of the box at foresight's static 85.95, 292.91)
+var dv = viewer.dragView([60, 30], 60, 30, 600, 400);
+check("3D drag", dv[0] === 33 && dv[1] === 354);
+dv = viewer.dragView([10, 10], 0, 100, 600, 400);
+check("3D drag wraps", dv[0] === 280 && dv[1] === 10);
+var pg = viewer.view3dPage([30000, 20000, 31339, 17713, 400],
+  viewer.view3dPoint(viewer.view3dMatrix(60, 30, 1, 0), [-1, -1, -1]));
+check("3D projection as foresight's", Math.abs(pg[0] - 85.95) < 0.01 && Math.abs(pg[1] - 292.91) < 0.01);
+var ops = viewer.sceneDrawList({v: [60, 30, 1, 0], f: [30000, 20000, 31339, 17713, 400],
+  l: [["black", 1, "", [-1, -1, -1, 1, -1, -1]]], q: [["#f00", "", [-1, -1, 1, 1, -1, 1, 1, 1, 1]]],
+  p: [["#00f", 2, [0, 0, 0]]], t: [["a", 0, 0, 1, "middle", ""]]}, 60, 30);
+check("3D draw list, farthest first, texts last", ops.length === 4 && ops[3].kind === "t" &&
+  ops.every(function (o, k) { return k === 0 || ops[k - 1].depth <= o.depth; }));
 
 var failed = checks.filter(function (c) { return !c.passed; });
 checks.forEach(function (c) { console.log((c.passed ? "  PASS  " : "  FAIL  ") + c.name); });

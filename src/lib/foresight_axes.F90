@@ -56,6 +56,7 @@ use foresight_annotations, only : arrow_object, draw_note_arrows => draw_arrows,
 use foresight_axis, only : axis_object, paxis_default
 use foresight_view3d, only : map_geometry, map_layout, view3d_frame, view3d_lin, view3d_object, view3d_page, &
                              view3d_setup, view3d_xyz
+use foresight_scene3d, only : scene3d_object
 use foresight_pm3d, only : contour_slices, contourfill_polygons, lit_color, masked, packed_hex, pm3d_object, &
                             pm3d_polygons
 use foresight_contour, only : contour_lines, contour_object
@@ -82,7 +83,7 @@ use foresight_style, only : default_color, fill_style, FILL_EMPTY, FILL_PATTERN,
 use foresight_ticks, only : labels_attribute, linear_ticks, merge_list, MINOR_DEFAULT, push, tic_item, tick_object, &
                             tics_object, TICS_AUTO, TICS_FIXED, &
                            TICS_NONE
-use penf, only : I4P, I8P, R8P
+use penf, only : I4P, I8P, R4P, R8P
 
 implicit none
 private
@@ -359,6 +360,8 @@ type :: axes_object
                                                          !< drawn through its view.
    type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
    type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
+   type(scene3d_object)             :: scene3d           !< Its scene, for an HTML page's mouse rotation.
+   logical                          :: scene_on = .false. !< The scene being recorded (view3d_scene).
    logical                          :: layout_own = .false. !< A panel of a multiplot layout in its own `origin`,
                                                            !< `size` box (gnuplot: they override the layout for it).
    real(R8P)                        :: box3d(4) = -1.0_R8P !< gnuplot's panel box (`set origin`, `set size`: left,
@@ -2822,6 +2825,142 @@ contains
    endif
    endfunction series_palette
 
+   subroutine view3d_scene(self, f)
+   !< The scene of a 3D view (foresight_scene3d), for the HTML viewer's mouse rotation: the base of the box and the z
+   !< axis, the major ticks' labels and the axis labels, then each series' lines (its scans and, on a grid, the
+   !< crossing curves; contours on the base at its height) and points. pm3d surfaces are added as they are colored
+   !< (scene_quads). A sketch of the view: the static page stays foresight's drawing of the script's view.
+   class(axes_object), intent(inout) :: self  !< Panel.
+   type(view3d_frame), intent(in)    :: f     !< The view.
+   real(R8P)                         :: xa(2), ya(2) !< The x and y ends (axis values).
+   real(R8P)                         :: zb, zf, zc   !< Base, floor and ceiling heights (axis values).
+   real(R8P)                         :: dy, dx   !< Label offsets off the box (axis values).
+   real(R8P), allocatable            :: zs(:)    !< A series' heights.
+   character(len=:), allocatable     :: color    !< A series' color.
+   integer(I4P)                      :: s, k, j  !< Counters.
+   integer(I4P)                      :: g, n     !< Grid scans, points per scan.
+
+   xa = merge(10.0_R8P**f%x, f%x, f%log(1))
+   ya = merge(10.0_R8P**f%y, f%y, f%log(2))
+   zb = merge(10.0_R8P**f%base_z, f%base_z, f%log(3))
+   zf = merge(10.0_R8P**f%floor_z, f%floor_z, f%log(3))
+   zc = merge(10.0_R8P**f%ceiling_z, f%ceiling_z, f%log(3))
+   associate(sc => self%scene3d)
+      ! the base of the box and the z axis
+      call sc%add_line(f, [xa(1), xa(2), xa(2), xa(1), xa(1)], [ya(1), ya(1), ya(2), ya(2), ya(1)], &
+                       [zb, zb, zb, zb, zb], 'black', 1.0_R8P, '')
+      call sc%add_line(f, [f%zaxis_xy(1), f%zaxis_xy(1)], [f%zaxis_xy(2), f%zaxis_xy(2)], [zf, zc], 'black', 1.0_R8P, '')
+      ! the major ticks' labels, off the box at the axes' places in the script's view
+      dy = 0.08_R8P * (ya(2) - ya(1))
+      dx = 0.08_R8P * (xa(2) - xa(1))
+      if (allocated(self%xaxis%ticks)) then
+         do k = 1_I4P, size(self%xaxis%ticks, kind=I4P)
+            if (.not. self%xaxis%ticks(k)%major) cycle
+            if (.not. allocated(self%xaxis%ticks(k)%label)) cycle
+            call sc%add_text(f, self%xaxis%ticks(k)%label, self%xaxis%ticks(k)%value, &
+                             f%xaxis_y - sign(dy, f%back_xy(2) - f%xaxis_y), zb, 'middle', '')
+         enddo
+      endif
+      if (allocated(self%yaxis%ticks)) then
+         do k = 1_I4P, size(self%yaxis%ticks, kind=I4P)
+            if (.not. self%yaxis%ticks(k)%major) cycle
+            if (.not. allocated(self%yaxis%ticks(k)%label)) cycle
+            call sc%add_text(f, self%yaxis%ticks(k)%label, f%yaxis_x - sign(dx, f%back_xy(1) - f%yaxis_x), &
+                             self%yaxis%ticks(k)%value, zb, 'middle', '')
+         enddo
+      endif
+      if (allocated(self%zaxis%ticks)) then
+         do k = 1_I4P, size(self%zaxis%ticks, kind=I4P)
+            if (.not. self%zaxis%ticks(k)%major) cycle
+            if (.not. allocated(self%zaxis%ticks(k)%label)) cycle
+            call sc%add_text(f, self%zaxis%ticks(k)%label, f%zaxis_xy(1) - sign(dx, f%back_xy(1) - f%zaxis_xy(1)), &
+                             f%zaxis_xy(2), self%zaxis%ticks(k)%value, 'end', '')
+         enddo
+      endif
+      ! the series: lines and points (pm3d surfaces apart)
+      do s = 1_I4P, size(self%series, kind=I4P)
+         associate(one => self%series(s))
+            if (.not. allocated(one%z)) cycle
+            if (size(one%z) /= size(one%x) .or. size(one%y) /= size(one%x)) cycle
+            if (one%style%with == WITH_PM3D) cycle
+            zs = one%z
+            if (one%contour_base) zs = zb
+            color = 'black'
+            if (allocated(one%style%color)) then
+               if (len(one%style%color) > 0) color = one%style%color
+            endif
+            if (one%style%draws_lines() .and. self%view3d%surface) then
+               if (allocated(one%scans)) then
+                  do k = 1_I4P, size(one%scans, 2, kind=I4P)
+                     associate(a => one%scans(1, k), b => one%scans(2, k))
+                        if (b > a) call sc%add_line(f, one%x(a:b), one%y(a:b), zs(a:b), color, one%style%linewidth, '')
+                     endassociate
+                  enddo
+                  ! a grid's crossing curves (gnuplot's iso-curves), scans of one length
+                  g = one%grid_scans
+                  if (g > 1_I4P) then
+                     n = one%scans(2, 1) - one%scans(1, 1) + 1_I4P
+                     if (all(one%scans(2, 1:g) - one%scans(1, 1:g) + 1_I4P == n)) then
+                        do j = 0_I4P, n - 1_I4P
+                           call sc%add_line(f, one%x(one%scans(1, 1:g) + j), one%y(one%scans(1, 1:g) + j), &
+                                            zs(one%scans(1, 1:g) + j), color, one%style%linewidth, '')
+                        enddo
+                     endif
+                  endif
+               else
+                  call sc%add_line(f, one%x, one%y, zs, color, one%style%linewidth, '')
+               endif
+            endif
+            if (one%style%draws_points() .and. self%view3d%surface) then
+               do k = 1_I4P, size(one%x, kind=I4P)
+                  call sc%add_point(f, one%x(k), one%y(k), zs(k), color, &
+                                    max(1.0_R8P, 0.5_R8P * one%style%point_diameter()))
+               enddo
+            endif
+         endassociate
+      enddo
+   endassociate
+   endsubroutine view3d_scene
+
+   subroutine scene_quads(self, s, f, p)
+   !< The pm3d quadrangles of the surface `s` at the surface (gnuplot's pm3d_plot `at s`), in their palette colors, added
+   !< to the scene of the view.
+   class(axes_object),   intent(inout) :: self !< Panel.
+   integer(I4P),         intent(in)    :: s    !< Surface.
+   type(view3d_frame),   intent(in)    :: f    !< The view.
+   type(palette_object), intent(in)    :: p    !< Effective palette.
+   real(R8P), allocatable              :: c(:) !< Color values.
+   real(R8P), allocatable              :: px(:), py(:), pz(:), pc(:) !< Polygons.
+   logical, allocatable                :: inrange(:) !< Points kept.
+   logical                             :: swap, back !< Scan order.
+   character(len=24)                   :: fill !< A quadrangle's color.
+   integer(I4P)                        :: r    !< Row.
+
+   if (index(self%pm3d%at, 's') == 0) return
+   associate(one => self%series(s))
+      if (one%grid_scans < 2_I4P) return
+      c = one%z
+      if (allocated(one%zvalues)) then
+         if (size(one%zvalues) == size(one%z)) c = one%zvalues
+      endif
+      inrange = ieee_is_finite(one%x) .and. ieee_is_finite(one%y) .and. ieee_is_finite(one%z)
+      call pm3d_scan_order(self%pm3d, one, f, swap, back)
+      call pm3d_polygons(one%x, one%y, one%z, c, one%scans, one%scan_sets, one%grid_scans, self%pm3d, inrange, px, py, &
+                         pc, rgb=one%zvalues_rgb, pz=pz, swap_scans=swap, reverse_points=back)
+      do r = 1_I4P, size(px, kind=I4P) - 4_I4P, 5_I4P
+         if (.not. ieee_is_finite(pc(r))) cycle
+         if (one%zvalues_rgb) then
+            fill = packed_hex(pc(r))
+         elseif (self%cbaxis%log .and. pc(r) <= 0.0_R8P) then
+            fill = hex_color(p%rgb(merge(0.0_R8P, 1.0_R8P, self%cbaxis%lo < self%cbaxis%hi)))
+         else
+            fill = hex_color(p%rgb(self%cbaxis%to_unit(pc(r))))
+         endif
+         call self%scene3d%add_poly(f, px(r:r + 3), py(r:r + 3), pz(r:r + 3), trim(fill), '')
+      enddo
+   endassociate
+   endsubroutine scene_quads
+
    subroutine view3d_pm3d_quads(self, f, p)
    !< The pm3d quadrangles of the pending surfaces of a 3D view (view3d_pm3d_marks), gnuplot's pm3d_plot: at the surface,
    !< the base and the top (`set pm3d at`, in its order), projected on the page; in gnuplot's order of the scans and of
@@ -2877,6 +3016,7 @@ contains
                                  depth, self%view3d%rot_x, self%view3d%rot_z, quads, q, lows=lows, highs=highs, &
                                  slice_colors=scol)
       else
+         if (self%scene_on) call scene_quads(self, s, f, series_palette(self, s, p))
          call pm3d_surface_quads(self%pm3d, self%xaxis, self%yaxis, self%zaxis, self%cbaxis, self%series(s), f, &
                                  series_palette(self, s, p), depth, self%view3d%rot_x, self%view3d%rot_z, quads, q)
       endif
@@ -4825,6 +4965,10 @@ contains
    f = view3d_setup(self%view3d, box, self%canvas, font_size, lines, xr3, yr3, zr3, logs3, &
                     self%xaxis%tics%mode /= TICS_NONE .or. self%yaxis%tics%mode /= TICS_NONE .or. &
                     iand(self%border, 15_I4P) /= 0_I4P, self%margin_user, self%margin_screen, side, below)
+   ! the scene of the view, for an HTML page's mouse rotation (the pm3d quadrangles added as they are colored)
+   self%scene_on = backend%wants_scene() .and. .not. self%view3d%map .and. self%view3d%projection == 0_I4P
+   self%scene3d = scene3d_object()
+   if (self%scene_on) call view3d_scene(self, f)
    ! the pm3d quadrangles of the pending surfaces, projected (gnuplot's pm3d_plot)
    if (any(self%series%pm3d_pending) .or. (self%pm3d%direction == 3_I4P .and. has_depth_objects(self))) &
       call view3d_pm3d_quads(self, f, pal3)
@@ -4913,6 +5057,18 @@ contains
    view = axes_view(area=area, x=[area(1), area(2)], y=[-area(4), -area(3)], font_size=font_size)
    view%three_d = .true.
    call backend%begin_axes(view)
+   if (self%scene_on) then
+      block
+         character(len=:), allocatable :: keep !< The title, kept while turning.
+
+         keep = ''
+         if (self%has_title()) keep = self%title
+         call backend%scene(self%scene3d%json(f, self%view3d%rot_x, self%view3d%rot_z, &
+                                              real(real(self%view3d%scale, R4P), R8P), self%view3d%azimuth, keep))
+      endblock
+      self%scene3d = scene3d_object()
+      self%scene_on = .false.
+   endif
    ! gnuplot's order: the objects behind, the back of the box, the back objects, labels and arrows, the series, the
    ! front of the box, the front objects, labels and arrows
    call annotate3d('behind')

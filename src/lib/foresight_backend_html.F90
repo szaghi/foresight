@@ -20,6 +20,8 @@ type, extends(backend_svg) :: backend_html
    contains
       procedure, pass(self) :: begin_page
       procedure, pass(self) :: end_page
+      procedure, pass(self) :: wants_scene !< 3D scenes written, for the viewer's mouse rotation.
+      procedure, pass(self) :: scene       !< A 3D view's scene, in the panel's metadata.
 endtype backend_html
 
 contains
@@ -48,6 +50,22 @@ contains
    call self%put('<body>')
    call self%open_svg(width, height, font_size, ' data-refresh="'//int_str(int(self%refresh, I8P))//'"')
    endsubroutine begin_page
+
+   pure function wants_scene(self) result(wants)
+   !< Whether the device writes the scene of a 3D view: yes, the viewer turns the view with the mouse.
+   class(backend_html), intent(in) :: self  !< Device.
+   logical                         :: wants !< Scenes written.
+
+   wants = .true.
+   endfunction wants_scene
+
+   subroutine scene(self, json)
+   !< The scene of a 3D view (foresight_scene3d's JSON) as the panel's `<metadata class="fs-scene">`.
+   class(backend_html), intent(inout) :: self !< Device.
+   character(len=*),    intent(in)    :: json !< Scene.
+
+   call self%put('<metadata class="fs-scene">'//xml_escape(json)//'</metadata>')
+   endsubroutine scene
 
    subroutine end_page(self)
    !< Close the SVG, append the viewer script, close the page and publish it atomically.

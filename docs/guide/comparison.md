@@ -22,7 +22,7 @@ none of them covers: pure Fortran, interactive pages that need nothing to view, 
 | 2D plot styles | every gnuplot 2D style (lines to spider plots, heatmaps, polar); pies, gauges, readouts | all | through gnuplot | through gnuplot | through matplotlib | many | many |
 | Smoothing, histograms | `smooth`, 11 filters; `bins` | `smooth`, 13 filters; `bins` | through gnuplot | through gnuplot | histograms | histograms | histograms |
 | Fitting | `fit`, gnuplot's Marquardt-Levenberg, in scripts and from Fortran | `fit` | through gnuplot | through gnuplot | no | no | no |
-| 3D, contours | `splot` in 3D views and the map view: meshes with hidden lines, pm3d surfaces (depth sorted, lit), contours, filled contours, gridded and masked surfaces, error bands, 3D bars, polygons, grid walls; static in the page (no mouse rotation) | yes | through gnuplot | through gnuplot | contours, 3D | contours, 3D axes | contours, 3D lines |
+| 3D, contours | `splot` in 3D views and the map view: meshes with hidden lines, pm3d surfaces (depth sorted, lit), contours, filled contours, gridded and masked surfaces, error bands, 3D bars, polygons, grid walls; turned by the mouse in the HTML page (a sketch of the plot while turned) | yes | through gnuplot | through gnuplot | contours, 3D | contours, 3D axes | contours, 3D lines |
 
 The rows on other projects summarise their documentation as of October 2026
 ([feedgnuplot](https://github.com/dkogan/feedgnuplot), [fplotlib](https://github.com/certik/fplotlib),

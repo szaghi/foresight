@@ -1361,11 +1361,118 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
     });
   }
 
+  // ---- 3D views: a 3D panel's scene re-projected by the mouse (mirror of foresight_view3d) ----
+
+  // gnuplot's trans_mat of a view (view3d_setup): rot_z, then rot_x, then half the scale, then
+  // the azimuth; row vectors, 4 x 4
+  function view3dMatrix(rotX, rotZ, scale, azimuth) {
+    function unit() { return [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]; }
+    function mul(a, b) {
+      var r = unit(), i, j, k;
+      for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+          r[i][j] = 0;
+          for (k = 0; k < 4; k++) r[i][j] += a[i][k] * b[k][j];
+        }
+      }
+      return r;
+    }
+    function rz(a) {
+      var c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), r = unit();
+      r[0][0] = c; r[0][1] = -s; r[1][0] = s; r[1][1] = c;
+      return r;
+    }
+    function rx(a) {
+      var c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), r = unit();
+      r[1][1] = c; r[1][2] = -s; r[2][1] = s; r[2][2] = c;
+      return r;
+    }
+    var m = mul(rz(rotZ), rx(rotX)), half = unit();
+    half[0][0] = half[1][1] = half[2][2] = scale / 2;
+    m = mul(m, half);
+    if (azimuth) m = mul(m, rz(azimuth));
+    return m;
+  }
+
+  // the view coordinates of the box point p (normalized, -1..1 over the box; view3d_xyz)
+  function view3dPoint(m, p) {
+    var r = [0, 0, 0, 0], i;
+    for (i = 0; i < 4; i++) r[i] = m[3][i] + p[0] * m[0][i] + p[1] * m[1][i] + p[2] * m[2][i];
+    if (r[3] === 0) r[3] = 1e-5;
+    return [r[0] / r[3], r[1] / r[3], r[2] / r[3]];
+  }
+
+  // the page position [px, y down] of the view point v in the frame f = [xmiddle, ymiddle,
+  // xscaler, yscaler, height] (terminal units, page height px; view3d_page)
+  function view3dPage(f, v) {
+    return [(v[0] * f[2] + f[0]) * 0.01, f[4] - (v[1] * f[3] + f[1]) * 0.01];
+  }
+
+  // the draw list of a scene at the view (rotX, rotZ): every segment, polygon, point and text
+  // projected, farthest first (the view z, nearest largest), as a painter draws them. A scene:
+  // {v: [rot_x, rot_z, scale, azimuth], f: frame, l: [[color, width, dash, [x, y, z, ...]]],
+  // q: [[fill, stroke, [x, y, z, ...]]], p: [[color, size, [x, y, z, ...]]],
+  // t: [[text, x, y, z, anchor, color]]}
+  function sceneDrawList(scene, rotX, rotZ) {
+    var m = view3dMatrix(rotX, rotZ, scene.v[2], scene.v[3]), ops = [];
+    function project(xyz, k) {
+      var v = view3dPoint(m, [xyz[k], xyz[k + 1], xyz[k + 2]]);
+      return {page: view3dPage(scene.f, v), z: v[2]};
+    }
+    (scene.l || []).forEach(function (line) {
+      var xyz = line[3], k, a, b;
+      for (k = 0; k + 5 < xyz.length; k += 3) {
+        a = project(xyz, k);
+        b = project(xyz, k + 3);
+        ops.push({kind: "l", depth: (a.z + b.z) / 2, color: line[0], width: line[1],
+          dash: line[2], points: [a.page, b.page]});
+      }
+    });
+    (scene.q || []).forEach(function (poly) {
+      var xyz = poly[2], pts = [], depth = 0, k, a;
+      for (k = 0; k + 2 < xyz.length; k += 3) {
+        a = project(xyz, k);
+        pts.push(a.page);
+        depth += a.z;
+      }
+      ops.push({kind: "q", depth: depth / pts.length, fill: poly[0], stroke: poly[1],
+        points: pts});
+    });
+    (scene.p || []).forEach(function (mark) {
+      var xyz = mark[2], k, a;
+      for (k = 0; k + 2 < xyz.length; k += 3) {
+        a = project(xyz, k);
+        ops.push({kind: "p", depth: a.z, color: mark[0], size: mark[1], points: [a.page]});
+      }
+    });
+    (scene.t || []).forEach(function (text) {
+      var a = project(text, 1);
+      // texts last: over the data, as the labels of the box
+      ops.push({kind: "t", depth: Infinity, text: text[0], anchor: text[4], color: text[5],
+        points: [a.page]});
+    });
+    ops.sort(function (a, b) { return a.depth - b.depth; });
+    return ops;
+  }
+
+  // gnuplot's drag rotation (mouse.c): rot_x follows the vertical motion, 360 degrees a page
+  // height (up: larger), rot_z the horizontal one against it, both rounded and wrapped to
+  // [0, 360)
+  function dragView(start, dx, dy, width, height) {
+    var rx = Math.floor(0.5 + ((start[0] - 360 * dy / height) % 360));
+    var rz = Math.floor(0.5 + ((start[1] - 360 * dx / width) % 360));
+    if (rx < 0) rx += 360;
+    if (rz < 0) rz += 360;
+    return [rx, rz];
+  }
+
   var core = {niceStep: niceStep, gnuplotStep: gnuplotStep,
     decimalStr: decimalStr, linearTicks: linearTicks,
     logTicks: logTicks, formatDecimal: formatDecimal, parseDecimal: parseDecimal,
     decimalOf: decimalOf, readTics: readTics, strftime: strftime, timeTicks: timeTicks,
-    hasMarkup: hasMarkup, enhancedRuns: enhancedRuns, runsSpans: runsSpans};
+    hasMarkup: hasMarkup, enhancedRuns: enhancedRuns, runsSpans: runsSpans,
+    view3dMatrix: view3dMatrix, view3dPoint: view3dPoint, view3dPage: view3dPage,
+    sceneDrawList: sceneDrawList, dragView: dragView};
   if (typeof module === "object" && module.exports) {
     module.exports = core;
     return;
@@ -2090,6 +2197,76 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
     });
   }
 
+  // ---- 3D views turned by the mouse: the panel's scene (its <metadata class="fs-scene">) drawn
+  // in place of the static drawing while the view differs from the script's ----
+
+  function View3D(group) {
+    var b = group.getBBox();
+    this.group = group;
+    this.scene = JSON.parse(group.querySelector("metadata.fs-scene").textContent);
+    this.home = [this.scene.v[0], this.scene.v[1]];
+    this.view = this.home.slice();
+    this.layer = null;
+    this.box = {left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height};
+  }
+
+  View3D.prototype.contains = function (p) {
+    return p.x >= this.box.left && p.x <= this.box.right && p.y >= this.box.top &&
+      p.y <= this.box.bottom;
+  };
+
+  // the children kept while turning: the title, the key and the color box (2D overlays)
+  View3D.prototype.kept = function (c) {
+    var keep = this.scene.keep || "", tag = c.tagName.toLowerCase();
+    if (c === this.layer || tag === "metadata") return true;
+    if (c.classList.contains("fs-key-entry") || c.classList.contains("fs-colorbox")) return true;
+    return tag === "text" && keep !== "" && c.textContent !== "" &&
+      keep.split("\n").indexOf(c.textContent) >= 0;
+  };
+
+  // the static drawing at the script's view, the scene's at any other
+  View3D.prototype.setView = function (view) {
+    var self = this, home = view[0] === this.home[0] && view[1] === this.home[1], layer;
+    this.view = view;
+    Array.prototype.forEach.call(this.group.children, function (c) {
+      if (self.kept(c)) return;
+      if (home) {
+        if (c.hasAttribute("data-scene-hidden")) {
+          c.removeAttribute("data-scene-hidden");
+          c.removeAttribute("display");
+        }
+      } else if (!c.hasAttribute("data-scene-hidden") && c.getAttribute("display") !== "none") {
+        c.setAttribute("data-scene-hidden", "1");
+        c.setAttribute("display", "none");
+      }
+    });
+    if (this.layer) this.layer.parentNode.removeChild(this.layer);
+    this.layer = null;
+    if (home) return;
+    layer = element(this.group, "g", {"class": "fs-scene-view"});
+    this.layer = layer;
+    sceneDrawList(this.scene, view[0], view[1]).forEach(function (op) {
+      var pts = op.points.map(function (q) { return fixed(q[0]) + "," + fixed(q[1]); }), a;
+      if (op.kind === "l") {
+        a = {points: pts.join(" "), fill: "none", stroke: op.color, "stroke-width": op.width,
+          "stroke-linecap": "round"};
+        if (op.dash) a["stroke-dasharray"] = op.dash;
+        element(layer, "polyline", a);
+      } else if (op.kind === "q") {
+        a = {points: pts.join(" "), fill: op.fill, stroke: op.stroke || op.fill,
+          "stroke-width": 0.5};
+        element(layer, "polygon", a);
+      } else if (op.kind === "p") {
+        element(layer, "circle", {cx: fixed(op.points[0][0]), cy: fixed(op.points[0][1]),
+          r: op.size, fill: op.color});
+      } else {
+        a = {x: fixed(op.points[0][0]), y: fixed(op.points[0][1]), "text-anchor": op.anchor};
+        if (op.color) a.fill = op.color;
+        element(layer, "text", a).textContent = op.text;
+      }
+    });
+  };
+
   // a key entry toggles its series: a transparent box over the entry takes the clicks
   function keyTargets(svg) {
     // the entries of the 2D panels (a 3D view's are static)
@@ -2106,15 +2283,22 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
     if (!svg || !svg.querySelector(".fs-axes")) return;
     if (svg.hasAttribute("data-frame")) FRAME_COLOR = svg.getAttribute("data-frame");
     if (svg.hasAttribute("data-grid-color")) GRID_COLOR = svg.getAttribute("data-grid-color");
+    var views = [], turned = null;
     svg.querySelectorAll(".fs-axes").forEach(function (group, k) {
-      // a 3D view stays as drawn (no zoom, no pan)
-      if (group.hasAttribute("data-3d")) return;
+      // a 3D view: no zoom nor pan; turned by the mouse when the page carries its scene
+      if (group.hasAttribute("data-3d")) {
+        if (group.querySelector("metadata.fs-scene")) views.push(new View3D(group));
+        return;
+      }
       panels.push(new Panel(svg, group, k));
     });
-    if (!panels.length) return;
-    linkPanels();
-    keyTargets(svg);
-    var panel = panels[0];
+    if (!panels.length && !views.length) return;
+    if (panels.length) {
+      linkPanels();
+      keyTargets(svg);
+    }
+    var panel = panels[0] || null;
+    var width = Number(svg.getAttribute("width"));
     var height = Number(svg.getAttribute("height"));
     var refresh = Number(svg.getAttribute("data-refresh") || 0);
     // overlays in the theme colors on a themed page: its frame color, its page color (first rect)
@@ -2139,8 +2323,15 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
       return null;
     }
 
+    // 3D view under the page point p, or null
+    function viewAt(p) {
+      for (var k = views.length - 1; k >= 0; k--) if (views[k].contains(p)) return views[k];
+      return null;
+    }
+
     function showReadout(p) {
       var c, hit = panelAt(p);
+      if (drag && drag.turn) return;
       if (!hit) { readout.textContent = ""; return; }
       panel = hit;
       c = panel.unitAt(p);
@@ -2160,8 +2351,15 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
       panel.zoomAt(p, evt.ctrlKey ? 1 : f, evt.shiftKey ? 1 : f);
     }, {passive: false});
     svg.addEventListener("mousedown", function (evt) {
-      var p = point(evt), entry = evt.target.closest(".fs-key-entry");
-      if (entry && evt.button === 0) {
+      var p = point(evt), entry = evt.target.closest(".fs-key-entry"), v3 = viewAt(p);
+      if (v3 && evt.button === 0 && !entry) {
+        // gnuplot's left drag on a 3D view: turn it
+        evt.preventDefault();
+        turned = v3;
+        drag = {button: 0, turn: v3, start: p, from: v3.view.slice()};
+        return;
+      }
+      if (entry && evt.button === 0 && panels.length) {
         evt.preventDefault();
         panels.filter(function (q) { return q.group.contains(entry); })[0]
           .toggleSeries(seriesOf(entry));
@@ -2176,6 +2374,12 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
       var p = point(evt), v, du, dv;
       showReadout(p);
       if (!drag) return;
+      if (drag.turn) {
+        v = dragView(drag.from, p.x - drag.start.x, p.y - drag.start.y, width, height);
+        if (v[0] !== drag.turn.view[0] || v[1] !== drag.turn.view[1]) drag.turn.setView(v);
+        readout.textContent = "view: " + v[0] + ", " + v[1] + "   (u: the script's view)";
+        return;
+      }
       if (drag.button === 0) {
         v = drag.view;
         du = (p.x - drag.start.x) / (panel.right - panel.left) * (v.u1 - v.u0);
@@ -2201,6 +2405,18 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
     });
     document.addEventListener("keydown", function (evt) {
       if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
+      if (evt.key === "u" && turned) {
+        turned.setView(turned.home.slice());
+        readout.textContent = "";
+        turned = null;
+        return;
+      }
+      if (!panel) {
+        if (evt.key === "h" || evt.key === "?") {
+          help.setAttribute("display", help.getAttribute("display") === "none" ? "inline" : "none");
+        }
+        return;
+      }
       if (evt.key === "u") panel.unzoom();
       else if (evt.key === "a") panel.autoscale();
       else if (evt.key === "g") panel.toggleGrid();
@@ -2231,8 +2447,9 @@ M0.941667,0.618195 M0.95,0.618535 M0.958333,0.61903 M0.966667,0.619658 M0.975,0.
   }
 
   function helpOverlay(svg) {
-    var lines = ["wheel: zoom (shift: x only, ctrl: y only)", "left drag: pan",
-      "right drag: zoom box", "u: undo zoom", "a: autoscale", "g: toggle grid",
+    var lines = ["wheel: zoom (shift: x only, ctrl: y only)", "left drag: pan (3D view: turn it)",
+      "right drag: zoom box", "u: undo zoom (3D view: the script's view)", "a: autoscale",
+      "g: toggle grid",
       "click a key entry: hide or show its series", "l: link or unlink the x zoom of the panels",
       "f: follow the end of the data (zoom first)", "h: toggle this help"];
     var group = element(svg, "g", {display: "none"});

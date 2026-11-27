@@ -100,6 +100,8 @@ type, abstract :: backend_object
       procedure(arrows_interface),          pass(self), deferred :: data_arrows     !< Arrows [unit square].
       procedure(label_interface),           pass(self), deferred :: data_label      !< Text at a point [unit square].
       procedure,                            pass(self)           :: rotates_text    !< Whether text can be rotated.
+      procedure,                            pass(self)           :: wants_scene     !< Whether 3D scenes are written.
+      procedure,                            pass(self)           :: scene           !< A 3D view's scene (JSON).
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
       procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
       procedure,                            pass(self)           :: pixmap         !< A PNG image [px].
@@ -327,6 +329,21 @@ contains
 
    rotates = .true.
    endfunction rotates_text
+
+   pure function wants_scene(self) result(wants)
+   !< Whether the device writes the scene of a 3D view (the HTML page, for the viewer's mouse rotation): no.
+   class(backend_object), intent(in) :: self  !< Device.
+   logical                           :: wants !< Scenes written.
+
+   wants = .false.
+   endfunction wants_scene
+
+   subroutine scene(self, json)
+   !< The scene of a 3D view (foresight_scene3d's JSON), in the open panel: nothing on a device without a viewer.
+   class(backend_object), intent(inout) :: self !< Device.
+   character(len=*),      intent(in)    :: json !< Scene.
+
+   endsubroutine scene
 
    subroutine hover(self, x, y, text, diameter)
    !< `text` shown on mouse-over of the point (`x`, `y`) [unit square], a disk of `diameter` [px] (gnuplot's

@@ -14,9 +14,9 @@ network, no external files — and works opened straight from the disk.
 | mouse wheel | zoom around the cursor |
 | shift + wheel | zoom x only |
 | ctrl + wheel | zoom y only |
-| left drag | pan |
+| left drag | pan; on a 3D view, turn it (see [below](#turning-a-3d-view)) |
 | right drag | zoom to the box |
-| `u` | undo the last box zoom or autoscale |
+| `u` | undo the last box zoom or autoscale; on a turned 3D view, back to the script's view |
 | `a` | autoscale: back to the original view |
 | `g` | toggle the grid |
 | click on a key entry | hide or show its series |
@@ -92,6 +92,22 @@ monitor.html#l=0&g=0&g1=0                     panels zoomed independently
 
 A reload restores the view, which is what makes live pages usable: when new data change the autoscaled range, the
 zoom still shows the same data window. Such a URL can be bookmarked or shared along with the file.
+
+## Turning a 3D view
+
+A 3D view (`splot`, not `set view map`) turns with a left drag, as gnuplot's interactive terminals: a vertical drag
+changes the rotation about x, 360 degrees a page height (up: larger), a horizontal one the rotation about z, 360
+degrees a page width (right: smaller), both whole degrees in [0, 360). The bottom left corner shows `view: X, Z`,
+the `set view X, Z` that draws it. `u` goes back to the script's view.
+
+The page carries the view's scene (a `<metadata class="fs-scene">` in the panel): the base of the box, the z axis, the
+tick labels, the lines and points of the series and the pm3d quadrangles in their colors, in the box's normalized
+coordinates. The viewer projects them as foresight does (gnuplot's transform; at the script's view they land on
+foresight's drawing within 0.01 px) and paints them farthest first. A turned view is a sketch of the plot: it has no
+hidden-line removal (`set hidden3d`), no contours on the base, no annotations, and its tick labels stay at their
+places of the script's view; the title, the key and the color box keep their places. The page itself, the SVG file
+and the text devices draw the script's view only. Map views (`set view map`) zoom as 2D panels do not: they stay as
+drawn.
 
 ## Limits
 
