@@ -73,6 +73,40 @@ renders (`docs/examples/anim/*.gp`, run once per frame with `foresight -c SCRIPT
 SVG by `scripts/svg_frames.sh`.
 Commit the regenerated files with the change: the CI runs the script and fails if any of them differs.
 
+## Fidelity to gnuplot
+
+foresight's identity is the gnuplot script: a layout change is judged against gnuplot 6.0 itself, on its own demos.
+`scripts/fidelity/` holds the harness:
+
+```bash
+bash scripts/fidelity/fetch.sh                      # once: gnuplot 6.0.0's demos, checked by SHA-256
+fobis build --mode foresight-gnu                    # the command line, bin/foresight
+bash scripts/fidelity/run.sh bin/foresight mine     # gnuplot's and foresight's pages, scored
+python3 scripts/fidelity/compare.py scripts/fidelity/baseline/scores.txt ~/.cache/foresight-fidelity/scores_mine.txt
+bash scripts/fidelity/corpus.sh bin/foresight mine --check   # which demos foresight draws
+```
+
+- `fetch.sh` downloads the gnuplot 6.0.0 release tarball (or takes `--tarball FILE`), checks its SHA-256 and prepares
+  the work directory, `~/.cache/foresight-fidelity` unless `FORESIGHT_FIDELITY` names another: the demos, the binary
+  files the demo Makefile makes (gnuplot's `bf_test`) and a copy of each listed demo (`demos.txt`) writing one
+  600x400 SVG page per `pause`.
+- `run.sh FORESIGHT TAG` renders every page with the system's `gnuplot` (6.0; once, kept in `gp/`) and with the given
+  binary (`fs_TAG/`, one private copy of the demos per job), then `score.py` rasterizes both pages with a headless
+  Chrome (Playwright's, or `FORESIGHT_CHROME`) and scores each pair.
+- A **score** is the mean absolute difference of the two pages as 120x80 grayscale images blurred by 2 px: 0 for the
+  same page, 1 for opposite ones. It measures where the ink is (a moved axis, a missing key, another range), not the
+  shapes of glyphs or the anti-aliasing. A page drawn by one program only scores 1 and is flagged `gp only` or
+  `fs only`. A page around 0.02 matches gnuplot's closely; above 0.1 something is missing or misplaced.
+- `compare.py BASE NEW` prints the totals over the pages both runs drew, the pages drawn or lost, and the pages worse
+  by more than 0.005 (`--worse`); it exits 1 on a lost or a worse page. A layout change lists the reason of every
+  worse page in its commit. `--tol 1e-4 --volatile scripts/fidelity/volatile.txt` checks a reproduction (the
+  volatile pages print the day they are rendered).
+- `corpus.sh FORESIGHT TAG` runs every demo of the directory as gnuplot would, its own terminal and outputs, and counts
+  the demos foresight draws (exit 0 and at least one page); `--check` fails when a demo drawn in
+  `baseline/corpus_*.txt` no longer is.
+- `baseline/` holds the scores and the corpus tables of the last accepted state. A change that improves them commits
+  the new files with the change.
+
 ## Commit style
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) so that `CHANGELOG.md` is generated automatically from the git log:

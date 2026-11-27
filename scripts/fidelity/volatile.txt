@@ -1,0 +1,6 @@
+# Pages whose gnuplot drawing depends on the day it is rendered: compare.py --tol leaves them out (--volatile).
+# page  reason
+poldat_p01.svg     set timestamp: today's date
+poldat_p02.svg     set timestamp: today's date
+solar_path_p01.svg the sun's path and the hours of light of today
+stringvar_p02.svg  time(0) printed

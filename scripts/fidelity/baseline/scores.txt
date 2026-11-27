@@ -1,0 +1,1078 @@
+1.0000 zsort_p03.svg fs only
+1.0000 zerror_p03.svg fs only
+1.0000 world_p05.svg fs only
+1.0000 world2_p03.svg fs only
+1.0000 windrose_p02.svg fs only
+1.0000 week_date_p01.svg fs only
+1.0000 watchpoints_p06.svg fs only
+1.0000 watchpoints_p05.svg gp only
+1.0000 watchpoints_p04.svg gp only
+1.0000 watchpoints_p03.svg gp only
+1.0000 watchpoints_p02.svg gp only
+1.0000 watchpoints_p01.svg gp only
+1.0000 watchmouse_p01.svg fs only
+1.0000 walls_p02.svg fs only
+1.0000 vplot_p03.svg fs only
+1.0000 voxel_p03.svg fs only
+1.0000 viridis_p02.svg fs only
+1.0000 viridis_p01.svg gp only
+1.0000 violinplot_p06.svg fs only
+1.0000 vector_p06.svg fs only
+1.0000 vector_p04.svg fs only
+1.0000 vector_p02.svg fs only
+1.0000 varcolor_p09.svg fs only
+1.0000 utf8_p02.svg fs only
+1.0000 using_p03.svg fs only
+1.0000 unicode_p02.svg fs only
+1.0000 uigamma_p03.svg fs only
+1.0000 ttics_p04.svg fs only
+1.0000 transparent_solids_p03.svg fs only
+1.0000 transparent_p05.svg fs only
+1.0000 timedat_p04.svg fs only
+1.0000 tics_p05.svg fs only
+1.0000 textrotate_p02.svg fs only
+1.0000 textcolor_p03.svg fs only
+1.0000 textbox_p02.svg fs only
+1.0000 synchrotron_p02.svg fs only
+1.0000 surface_explicit_p03.svg fs only
+1.0000 surface2_p10.svg fs only
+1.0000 surface1_p27.svg fs only
+1.0000 stringvar_p08.svg fs only
+1.0000 steps_p04.svg fs only
+1.0000 stats_p03.svg fs only
+1.0000 spotlight_p02.svg fs only
+1.0000 split_p01.svg fs only
+1.0000 spline_p07.svg fs only
+1.0000 spiderplot_p08.svg fs only
+1.0000 special_chars_p02.svg fs only
+1.0000 solar_path_p02.svg fs only
+1.0000 smooth_splines_p09.svg fs only
+1.0000 smooth_path_p03.svg fs only
+1.0000 smooth_p05.svg fs only
+1.0000 singulr_p21.svg fs only
+1.0000 simple_p09.svg fs only
+1.0000 short_vector_p02.svg fs only
+1.0000 sharpen_p02.svg fs only
+1.0000 sectors_p15.svg fs only
+1.0000 scatter_p09.svg fs only
+1.0000 sampling_p01.svg fs only
+1.0000 sampling2_p03.svg fs only
+1.0000 running_avg_p02.svg fs only
+1.0000 rugplot_p02.svg fs only
+1.0000 rotate_labels_p02.svg fs only
+1.0000 rgba_lines_p02.svg fs only
+1.0000 rgb_variable_p10.svg fs only
+1.0000 rectangle_p03.svg fs only
+1.0000 random_p06.svg fs only
+1.0000 rainbow_p03.svg fs only
+1.0000 pt_variable_p04.svg fs only
+1.0000 projection_p02.svg fs only
+1.0000 prob_p58.svg fs only
+1.0000 prob_p01.svg fs only
+1.0000 prob3_p04.svg fs only
+1.0000 prob2_p11.svg fs only
+1.0000 polygons_p08.svg fs only
+1.0000 polygon_border_p02.svg fs only
+1.0000 poldat_p05.svg fs only
+1.0000 polargrid_p05.svg fs only
+1.0000 polar_quadrants_p02.svg fs only
+1.0000 polar_p10.svg fs only
+1.0000 pointsize_p05.svg fs only
+1.0000 pm3dgamma_p02.svg fs only
+1.0000 pm3dcolors_p20.svg fs only
+1.0000 pm3dcolors_p10.svg gp only
+1.0000 pm3d_p41.svg fs only
+1.0000 pm3d_p13.svg gp only
+1.0000 pm3d_lighting_p03.svg fs only
+1.0000 pm3d_clip_p03.svg fs only
+1.0000 pixmap_p02.svg fs only
+1.0000 piecewise_p04.svg fs only
+1.0000 param_p09.svg fs only
+1.0000 parallel_p04.svg fs only
+1.0000 palette+alpha_p02.svg fs only
+1.0000 overflow_p01.svg fs only
+1.0000 orbits_p03.svg fs only
+1.0000 nonlinear6_p02.svg fs only
+1.0000 nonlinear5_p02.svg fs only
+1.0000 nonlinear4_p02.svg fs only
+1.0000 nonlinear3_p02.svg fs only
+1.0000 nonlinear2_p03.svg fs only
+1.0000 nonlinear1_p02.svg fs only
+1.0000 nokey_p02.svg fs only
+1.0000 named_var_p02.svg fs only
+1.0000 named_palettes_p05.svg fs only
+1.0000 mxtics_time_p03.svg fs only
+1.0000 multiplt_p02.svg fs only
+1.0000 multipalette_p02.svg fs only
+1.0000 multiaxis_p02.svg fs only
+1.0000 mousevariables_p02.svg fs only
+1.0000 monotonic_spline_p03.svg fs only
+1.0000 molecule_p02.svg fs only
+1.0000 mgr_p19.svg fs only
+1.0000 matrix_index_p02.svg fs only
+1.0000 matrix_every_p02.svg fs only
+1.0000 mask_pm3d_p04.svg fs only
+1.0000 mask_image_p05.svg fs only
+1.0000 margins_p02.svg fs only
+1.0000 map_projection_p04.svg fs only
+1.0000 macros_p04.svg fs only
+1.0000 macros_p03.svg fs only
+1.0000 logscale_clipping_p02.svg fs only
+1.0000 linkedaxes_p01.svg fs only
+1.0000 linked_autoscale_p06.svg fs only
+1.0000 lines_arrows_p06.svg fs only
+1.0000 layout_p07.svg fs only
+1.0000 label_stacked_histograms_p02.svg fs only
+1.0000 keyentry_p03.svg fs only
+1.0000 key_p07.svg fs only
+1.0000 kdensity2d_p04.svg fs only
+1.0000 jitter_p08.svg fs only
+1.0000 iterbugs_p02.svg fs only
+1.0000 iterate_p04.svg fs only
+1.0000 isosurface_p05.svg fs only
+1.0000 iris_p03.svg fs only
+1.0000 invigamma_p17.svg fs only
+1.0000 invigamma_p15.svg fs only
+1.0000 invibeta_p03.svg fs only
+1.0000 int64_p01.svg fs only
+1.0000 image_p10.svg fs only
+1.0000 imageNaN_p09.svg fs only
+1.0000 image2_p26.svg fs only
+1.0000 image2_p25.svg gp only
+1.0000 image2_p24.svg gp only
+1.0000 image2_p23.svg gp only
+1.0000 image2_p22.svg gp only
+1.0000 image2_p21.svg gp only
+1.0000 image2_p20.svg gp only
+1.0000 image2_p19.svg gp only
+1.0000 image2_p18.svg gp only
+1.0000 image2_p17.svg gp only
+1.0000 image2_p16.svg gp only
+1.0000 image2_p15.svg gp only
+1.0000 image2_p14.svg gp only
+1.0000 image2_p13.svg gp only
+1.0000 image2_p12.svg gp only
+1.0000 image2_p11.svg gp only
+1.0000 igamma_p03.svg fs only
+1.0000 ibeta_p03.svg fs only
+1.0000 hypertext_surface_p02.svg fs only
+1.0000 hypertext_p02.svg fs only
+1.0000 histograms_p09.svg fs only
+1.0000 histograms2_p05.svg fs only
+1.0000 histogram_colors_p02.svg fs only
+1.0000 histerror_p02.svg fs only
+1.0000 hidden_p08.svg fs only
+1.0000 hidden_compare_p02.svg fs only
+1.0000 hidden2_p04.svg fs only
+1.0000 heatmaps_p08.svg fs only
+1.0000 heatmap_points_p04.svg fs only
+1.0000 heatmap_4D_p02.svg fs only
+1.0000 gantt_p03.svg fs only
+1.0000 function_block_p02.svg fs only
+1.0000 fitmulti_p08.svg fs only
+1.0000 fitmulti_p07.svg fs only
+1.0000 fitmulti_p06.svg fs only
+1.0000 fitmulti_p05.svg fs only
+1.0000 fitmulti_p04.svg fs only
+1.0000 fitmulti_p03.svg fs only
+1.0000 fitmulti_p02.svg fs only
+1.0000 fitmulti_p01.svg fs only
+1.0000 fit_p27.svg fs only
+1.0000 finance_p16.svg fs only
+1.0000 finance_p01.svg fs only
+1.0000 fillstyle_p08.svg fs only
+1.0000 fillcrvs_p08.svg fs only
+1.0000 fillbetween_p05.svg fs only
+1.0000 fenceplot_p03.svg fs only
+1.0000 expint_p02.svg fs only
+1.0000 errorbars_p11.svg fs only
+1.0000 enhancedtext_p02.svg fs only
+1.0000 enhanced_utf8_p02.svg fs only
+1.0000 elliptic_p03.svg fs only
+1.0000 ellipses_style_p12.svg fs only
+1.0000 ellipse_p03.svg fs only
+1.0000 electron_p04.svg fs only
+1.0000 discrete_p04.svg fs only
+1.0000 dgrid3d_p16.svg fs only
+1.0000 datastrings_p07.svg fs only
+1.0000 dashtypes_p03.svg fs only
+1.0000 dashcolor_p04.svg fs only
+1.0000 custom_key_p03.svg fs only
+1.0000 custom_contours_p02.svg fs only
+1.0000 convex_hull_p04.svg fs only
+1.0000 controls_p02.svg fs only
+1.0000 contours_p24.svg fs only
+1.0000 contourfill_p05.svg fs only
+1.0000 concave_hull_p04.svg fs only
+1.0000 complex_trig_p12.svg fs only
+1.0000 columnhead_p02.svg fs only
+1.0000 colorwheel_p01.svg fs only
+1.0000 colorscheme_p02.svg fs only
+1.0000 clipobject_p04.svg fs only
+1.0000 clip_radial_p02.svg fs only
+1.0000 cities_p02.svg fs only
+1.0000 circles_p03.svg fs only
+1.0000 chi_shapes_p02.svg fs only
+1.0000 cerf_p01.svg fs only
+1.0000 candlesticks_p07.svg fs only
+1.0000 callargs_p01.svg fs only
+1.0000 break_continue_p01.svg fs only
+1.0000 boxplot_p06.svg fs only
+1.0000 boxes3d_p07.svg fs only
+1.0000 boxclusters_p02.svg fs only
+1.0000 borders_p02.svg fs only
+1.0000 bolditalic_p02.svg fs only
+1.0000 bivariat_p09.svg fs only
+1.0000 bins_p02.svg fs only
+1.0000 binary_p04.svg fs only
+1.0000 barchart_art_p02.svg fs only
+1.0000 barchart_art_p01.svg gp only
+1.0000 azimuth_p02.svg fs only
+1.0000 autoscale_p04.svg fs only
+1.0000 arrowstyle_p10.svg fs only
+1.0000 arrows_p03.svg fs only
+1.0000 array_p05.svg fs only
+1.0000 array_index_p01.svg fs only
+1.0000 armillary_p02.svg fs only
+1.0000 argb_hexdata_p03.svg fs only
+1.0000 approximate_p02.svg fs only
+1.0000 animate2_p02.svg fs only
+1.0000 airfoil_p05.svg fs only
+1.0000 Fresnel_p01.svg fs only
+1.0000 BesselJ_p02.svg fs only
+1.0000 3Dboxes_p02.svg fs only
+0.1500 image_p08.svg 
+0.1460 matrix_every_p01.svg 
+0.1452 parallel_p03.svg 
+0.1429 circles_p01.svg 
+0.1276 imageNaN_p01.svg 
+0.1228 image_p09.svg 
+0.1225 imageNaN_p08.svg 
+0.1186 imageNaN_p03.svg 
+0.1166 imageNaN_p02.svg 
+0.1092 histogram_colors_p01.svg 
+0.1068 fillcrvs_p01.svg 
+0.1048 histograms_p05.svg 
+0.1030 imageNaN_p07.svg 
+0.1008 fillcrvs_p03.svg 
+0.1008 nonlinear3_p01.svg 
+0.1007 histograms_p08.svg 
+0.1001 key_p01.svg 
+0.1000 key_p02.svg 
+0.0998 key_p06.svg 
+0.0983 colornames_p01.svg 
+0.0957 key_p05.svg 
+0.0952 key_p04.svg 
+0.0951 key_p03.svg 
+0.0950 layout_p05.svg 
+0.0945 varcolor_p04.svg 
+0.0934 histograms_p04.svg 
+0.0928 special_functions_p01.svg 
+0.0916 image_p07.svg 
+0.0910 image_p02.svg 
+0.0905 histograms_p02.svg 
+0.0889 varcolor_p03.svg 
+0.0880 animation_p01.svg 
+0.0874 image2_p05.svg 
+0.0872 zsort_p02.svg 
+0.0872 kdensity2d_p01.svg 
+0.0867 histograms_p03.svg 
+0.0849 datastrings_p04.svg 
+0.0836 histograms_p07.svg 
+0.0835 pt_variable_p03.svg 
+0.0830 datastrings_p02.svg 
+0.0828 steps_p03.svg 
+0.0814 histograms2_p01.svg 
+0.0800 polargrid_p01.svg 
+0.0779 datastrings_p03.svg 
+0.0776 datastrings_p05.svg 
+0.0758 circles_p02.svg 
+0.0753 histograms2_p03.svg 
+0.0750 pm3dcolors_p13.svg 
+0.0741 image_p03.svg 
+0.0740 multiplt_p01.svg 
+0.0740 fillcrvs_p05.svg 
+0.0730 argb_hexdata_p01.svg 
+0.0730 zsort_p01.svg 
+0.0727 pm3d_p14.svg 
+0.0726 image_p01.svg 
+0.0724 boxes3d_p05.svg 
+0.0720 histograms_p06.svg 
+0.0712 pm3dcolors_p19.svg 
+0.0711 fillcrvs_p07.svg 
+0.0697 iterate_p01.svg 
+0.0694 histograms2_p04.svg 
+0.0688 boxes3d_p06.svg 
+0.0686 matrix_index_p01.svg 
+0.0678 layout_p04.svg 
+0.0676 image_p04.svg 
+0.0667 parallel_p02.svg 
+0.0666 lines_arrows_p02.svg 
+0.0666 dashcolor_p02.svg 
+0.0658 ellipses_style_p06.svg 
+0.0656 stringvar_p05.svg 
+0.0653 boxclusters_p01.svg 
+0.0651 histograms2_p02.svg 
+0.0649 polargrid_p02.svg 
+0.0643 histograms_p01.svg 
+0.0642 probably_tux_p01.svg 
+0.0642 fillcrvs_p02.svg 
+0.0635 varcolor_p08.svg 
+0.0633 pm3dcolors_p15.svg 
+0.0628 iterate_p03.svg 
+0.0616 3Dboxes_p01.svg 
+0.0610 fillbetween_p03.svg 
+0.0609 map_projection_p01.svg 
+0.0605 arrowstyle_p05.svg 
+0.0594 varcolor_p02.svg 
+0.0593 fillbetween_p01.svg 
+0.0592 fillcrvs_p06.svg 
+0.0581 image_p06.svg 
+0.0577 boxes3d_p04.svg 
+0.0569 clipobject_p03.svg 
+0.0564 autoscale_p03.svg 
+0.0556 bins_p01.svg 
+0.0552 using_p01.svg 
+0.0552 image2_p01.svg 
+0.0550 linked_autoscale_p01.svg 
+0.0548 pm3dcolors_p17.svg 
+0.0547 label_stacked_histograms_p01.svg 
+0.0543 arrowstyle_p01.svg 
+0.0537 smooth_p01.svg 
+0.0537 varcolor_p07.svg 
+0.0535 custom_contours_p01.svg 
+0.0534 pm3dcolors_p12.svg 
+0.0530 linked_autoscale_p02.svg 
+0.0528 varcolor_p01.svg 
+0.0525 pm3dcolors_p18.svg 
+0.0525 pm3dcolors_p14.svg 
+0.0524 fillstyle_p07.svg 
+0.0523 molecule_p01.svg 
+0.0521 arrowstyle_p03.svg 
+0.0521 rgb_variable_p02.svg 
+0.0520 orbits_p01.svg 
+0.0520 lines_arrows_p05.svg 
+0.0517 parallel_p01.svg 
+0.0514 rainbow_p02.svg 
+0.0512 array_p01.svg 
+0.0510 rgb_variable_p01.svg 
+0.0507 layout_p01.svg 
+0.0505 clipobject_p01.svg 
+0.0498 fillbetween_p04.svg 
+0.0494 pt_variable_p01.svg 
+0.0494 rainbow_p01.svg 
+0.0489 lines_arrows_p03.svg 
+0.0488 lines_arrows_p04.svg 
+0.0480 finance_p14.svg 
+0.0474 dashcolor_p03.svg 
+0.0472 rectangle_p02.svg 
+0.0471 simple_p07.svg 
+0.0470 pm3dcolors_p16.svg 
+0.0469 arrowstyle_p09.svg 
+0.0466 argb_hexdata_p02.svg 
+0.0464 linked_autoscale_p03.svg 
+0.0463 igamma_p01.svg 
+0.0460 fillstyle_p04.svg 
+0.0460 varcolor_p06.svg 
+0.0459 heatmaps_p02.svg 
+0.0459 map_projection_p02.svg 
+0.0458 smooth_p04.svg 
+0.0455 varcolor_p05.svg 
+0.0451 animate2_p01.svg 
+0.0451 boxplot_p03.svg 
+0.0450 arrows_p02.svg 
+0.0448 world_p01.svg 
+0.0447 pm3d_p27.svg 
+0.0447 array_p04.svg 
+0.0447 enhanced_utf8_p01.svg 
+0.0446 heatmaps_p03.svg 
+0.0446 invigamma_p07.svg 
+0.0444 uigamma_p01.svg 
+0.0443 heatmaps_p06.svg 
+0.0442 smooth_path_p02.svg 
+0.0441 simple_p04.svg 
+0.0440 autoscale_p01.svg 
+0.0439 linked_autoscale_p04.svg 
+0.0438 autoscale_p02.svg 
+0.0437 smooth_p02.svg 
+0.0437 voxel_p02.svg 
+0.0436 nonlinear2_p02.svg 
+0.0432 candlesticks_p03.svg 
+0.0431 finance_p15.svg 
+0.0431 sectors_p02.svg 
+0.0430 invigamma_p03.svg 
+0.0430 piecewise_p02.svg 
+0.0430 bivariat_p08.svg 
+0.0430 imageNaN_p06.svg 
+0.0430 imageNaN_p04.svg 
+0.0428 fit_p05.svg 
+0.0426 sharpen_p01.svg 
+0.0425 sectors_p07.svg 
+0.0424 boxplot_p05.svg 
+0.0424 fillcrvs_p04.svg 
+0.0422 mask_pm3d_p01.svg 
+0.0418 using_p02.svg 
+0.0417 prob_p20.svg 
+0.0417 invigamma_p01.svg 
+0.0417 fit_p04.svg 
+0.0415 smooth_p03.svg 
+0.0414 keyentry_p01.svg 
+0.0414 fit_p06.svg 
+0.0412 pm3dcolors_p11.svg 
+0.0410 layout_p03.svg 
+0.0409 steps_p02.svg 
+0.0408 sectors_p08.svg 
+0.0406 invigamma_p12.svg 
+0.0404 running_avg_p01.svg 
+0.0404 fit_p03.svg 
+0.0404 image2_p02.svg 
+0.0403 arrowstyle_p04.svg 
+0.0402 fillbetween_p02.svg 
+0.0401 iterate_p02.svg 
+0.0401 invigamma_p09.svg 
+0.0401 multiaxis_p01.svg 
+0.0400 boxplot_p02.svg 
+0.0398 nonlinear2_p01.svg 
+0.0397 violinplot_p01.svg 
+0.0393 spiderplot_p07.svg 
+0.0391 stats_p02.svg 
+0.0391 invigamma_p08.svg 
+0.0390 invigamma_p02.svg 
+0.0390 arrowstyle_p07.svg 
+0.0390 clipobject_p02.svg 
+0.0389 ibeta_p01.svg 
+0.0388 map_projection_p03.svg 
+0.0387 timedat_p01.svg 
+0.0386 borders_p01.svg 
+0.0386 prob_p56.svg 
+0.0385 prob_p21.svg 
+0.0385 candlesticks_p04.svg 
+0.0385 gantt_p02.svg 
+0.0385 gantt_p01.svg 
+0.0385 smooth_splines_p04.svg 
+0.0384 invigamma_p04.svg 
+0.0383 image2_p07.svg 
+0.0381 heatmaps_p04.svg 
+0.0380 errorbars_p10.svg 
+0.0380 pt_variable_p02.svg 
+0.0380 mgr_p07.svg 
+0.0378 fit_p09.svg 
+0.0378 textbox_p01.svg 
+0.0378 invigamma_p05.svg 
+0.0377 lines_arrows_p01.svg 
+0.0377 mgr_p06.svg 
+0.0375 invigamma_p06.svg 
+0.0375 prob_p13.svg 
+0.0375 electron_p03.svg 
+0.0375 fit_p11.svg 
+0.0374 fit_p10.svg 
+0.0374 arrowstyle_p02.svg 
+0.0373 image2_p09.svg 
+0.0371 hidden2_p01.svg 
+0.0370 stats_p01.svg 
+0.0370 invigamma_p10.svg 
+0.0370 dashcolor_p01.svg 
+0.0370 invigamma_p14.svg 
+0.0369 bivariat_p07.svg 
+0.0369 arrowstyle_p06.svg 
+0.0368 invigamma_p13.svg 
+0.0368 finance_p13.svg 
+0.0368 random_p04.svg 
+0.0366 fit_p26.svg 
+0.0365 fit_p12.svg 
+0.0365 finance_p12.svg 
+0.0363 finance_p11.svg 
+0.0362 invigamma_p11.svg 
+0.0361 smooth_splines_p03.svg 
+0.0359 fit_p14.svg 
+0.0359 finance_p09.svg 
+0.0359 histerror_p01.svg 
+0.0359 prob_p50.svg 
+0.0358 monotonic_spline_p02.svg 
+0.0358 arrowstyle_p08.svg 
+0.0357 finance_p10.svg 
+0.0356 layout_p02.svg 
+0.0355 prob2_p08.svg 
+0.0354 fit_p13.svg 
+0.0353 sampling2_p01.svg 
+0.0351 rugplot_p01.svg 
+0.0350 expint_p01.svg 
+0.0349 custom_key_p02.svg 
+0.0348 nokey_p01.svg 
+0.0347 jitter_p02.svg 
+0.0347 ellipses_style_p11.svg 
+0.0345 prob2_p06.svg 
+0.0344 rectangle_p01.svg 
+0.0344 stringvar_p06.svg 
+0.0344 convex_hull_p03.svg 
+0.0344 transparent_p01.svg 
+0.0343 monotonic_spline_p01.svg 
+0.0342 mgr_p05.svg 
+0.0342 prob2_p03.svg 
+0.0341 prob_p51.svg 
+0.0341 named_var_p01.svg 
+0.0340 spline_p05.svg 
+0.0340 BesselJ_p01.svg 
+0.0339 spline_p06.svg 
+0.0339 prob2_p01.svg 
+0.0338 prob2_p05.svg 
+0.0338 prob2_p10.svg 
+0.0338 prob2_p07.svg 
+0.0337 prob2_p04.svg 
+0.0336 prob_p36.svg 
+0.0336 errorbars_p02.svg 
+0.0335 uigamma_p02.svg 
+0.0335 prob_p14.svg 
+0.0335 mgr_p11.svg 
+0.0334 jitter_p03.svg 
+0.0334 datastrings_p01.svg 
+0.0332 smooth_splines_p06.svg 
+0.0332 prob2_p02.svg 
+0.0330 polar_p09.svg 
+0.0330 fit_p24.svg 
+0.0329 smooth_splines_p05.svg 
+0.0329 prob_p15.svg 
+0.0329 iris_p02.svg 
+0.0328 elliptic_p01.svg 
+0.0328 mgr_p09.svg 
+0.0328 ellipses_style_p04.svg 
+0.0327 bivariat_p03.svg 
+0.0327 ellipses_style_p02.svg 
+0.0326 sectors_p06.svg 
+0.0326 textrotate_p01.svg 
+0.0326 stringvar_p04.svg 
+0.0325 array_p02.svg 
+0.0325 bivariat_p04.svg 
+0.0323 ellipses_style_p03.svg 
+0.0323 fit_p23.svg 
+0.0322 prob_p02.svg 
+0.0322 prob_p57.svg 
+0.0322 pm3d_p26.svg 
+0.0321 invigamma_p16.svg 
+0.0321 simple_p06.svg 
+0.0320 convex_hull_p01.svg 
+0.0320 bivariat_p01.svg 
+0.0320 prob_p40.svg 
+0.0320 fillstyle_p03.svg 
+0.0319 approximate_p01.svg 
+0.0318 array_p03.svg 
+0.0318 fit_p25.svg 
+0.0318 smooth_splines_p02.svg 
+0.0317 errorbars_p01.svg 
+0.0317 smooth_path_p01.svg 
+0.0317 smooth_splines_p01.svg 
+0.0317 mgr_p10.svg 
+0.0317 prob2_p09.svg 
+0.0316 spline_p04.svg 
+0.0315 datastrings_p06.svg 
+0.0315 mgr_p08.svg 
+0.0315 fit_p22.svg 
+0.0315 simple_p01.svg 
+0.0314 sectors_p05.svg 
+0.0314 short_vector_p01.svg 
+0.0313 prob_p12.svg 
+0.0313 param_p04.svg 
+0.0312 spline_p01.svg 
+0.0312 electron_p01.svg 
+0.0311 candlesticks_p06.svg 
+0.0310 timedat_p02.svg 
+0.0310 ellipses_style_p07.svg 
+0.0309 controls_p01.svg 
+0.0309 transparent_p02.svg 
+0.0309 prob_p41.svg 
+0.0309 bivariat_p02.svg 
+0.0307 linked_autoscale_p05.svg 
+0.0306 convex_hull_p02.svg 
+0.0306 hypertext_p01.svg 
+0.0305 mgr_p13.svg 
+0.0305 errorbars_p04.svg 
+0.0305 spline_p02.svg 
+0.0304 transparent_p04.svg 
+0.0304 sectors_p03.svg 
+0.0304 ellipses_style_p09.svg 
+0.0304 mgr_p16.svg 
+0.0303 orbits_p02.svg 
+0.0303 fillstyle_p02.svg 
+0.0303 candlesticks_p05.svg 
+0.0303 prob_p03.svg 
+0.0302 fit_p08.svg 
+0.0302 mgr_p12.svg 
+0.0302 pointsize_p01.svg 
+0.0302 errorbars_p03.svg 
+0.0302 prob_p07.svg 
+0.0301 mgr_p03.svg 
+0.0301 poldat_p01.svg 
+0.0301 tics_p03.svg 
+0.0300 ellipses_style_p05.svg 
+0.0300 fit_p15.svg 
+0.0300 mgr_p04.svg 
+0.0300 errorbars_p07.svg 
+0.0299 prob_p48.svg 
+0.0299 random_p05.svg 
+0.0298 simple_p08.svg 
+0.0297 steps_p01.svg 
+0.0297 mgr_p18.svg 
+0.0297 spline_p03.svg 
+0.0296 mgr_p17.svg 
+0.0295 fit_p16.svg 
+0.0295 imageNaN_p05.svg 
+0.0295 stringvar_p07.svg 
+0.0295 boxplot_p04.svg 
+0.0294 candlesticks_p01.svg 
+0.0294 jitter_p06.svg 
+0.0294 transparent_p03.svg 
+0.0293 isosurface_p02.svg 
+0.0293 prob_p35.svg 
+0.0292 errorbars_p09.svg 
+0.0292 sectors_p04.svg 
+0.0292 mgr_p01.svg 
+0.0292 enhancedtext_p01.svg 
+0.0292 candlesticks_p02.svg 
+0.0292 errorbars_p08.svg 
+0.0292 prob_p28.svg 
+0.0291 tics_p02.svg 
+0.0291 mousevariables_p01.svg 
+0.0290 jitter_p04.svg 
+0.0289 airfoil_p03.svg 
+0.0289 mgr_p02.svg 
+0.0287 prob3_p01.svg 
+0.0287 airfoil_p04.svg 
+0.0286 finance_p07.svg 
+0.0285 fit_p07.svg 
+0.0285 fit_p02.svg 
+0.0285 macros_p02.svg 
+0.0285 mgr_p15.svg 
+0.0284 macros_p01.svg 
+0.0284 finance_p08.svg 
+0.0283 prob_p06.svg 
+0.0283 prob_p37.svg 
+0.0283 prob_p49.svg 
+0.0281 airfoil_p02.svg 
+0.0281 prob_p45.svg 
+0.0280 ellipses_style_p08.svg 
+0.0280 prob_p42.svg 
+0.0278 simple_p05.svg 
+0.0277 errorbars_p06.svg 
+0.0277 airfoil_p01.svg 
+0.0276 prob_p16.svg 
+0.0276 columnhead_p01.svg 
+0.0275 prob_p54.svg 
+0.0274 prob_p08.svg 
+0.0274 prob_p09.svg 
+0.0274 mgr_p14.svg 
+0.0274 synchrotron_p01.svg 
+0.0273 prob_p19.svg 
+0.0273 bivariat_p06.svg 
+0.0272 fit_p01.svg 
+0.0271 prob_p27.svg 
+0.0271 prob_p39.svg 
+0.0271 random_p01.svg 
+0.0270 colorscheme_p01.svg 
+0.0270 simple_p02.svg 
+0.0270 invibeta_p02.svg 
+0.0269 prob_p43.svg 
+0.0269 pm3d_clip_p01.svg 
+0.0268 prob_p25.svg 
+0.0268 arrows_p01.svg 
+0.0267 prob_p17.svg 
+0.0266 prob_p24.svg 
+0.0266 errorbars_p05.svg 
+0.0266 prob3_p03.svg 
+0.0265 prob_p18.svg 
+0.0265 prob_p44.svg 
+0.0262 textcolor_p01.svg 
+0.0262 prob_p23.svg 
+0.0261 finance_p06.svg 
+0.0261 pointsize_p02.svg 
+0.0261 prob_p10.svg 
+0.0261 prob_p34.svg 
+0.0260 param_p06.svg 
+0.0260 vector_p05.svg 
+0.0259 ellipses_style_p01.svg 
+0.0259 prob_p26.svg 
+0.0259 prob_p11.svg 
+0.0258 prob_p52.svg 
+0.0256 prob_p46.svg 
+0.0255 polygon_border_p01.svg 
+0.0254 mxtics_time_p01.svg 
+0.0253 polar_quadrants_p01.svg 
+0.0252 fillstyle_p06.svg 
+0.0251 animate_p02.svg 
+0.0250 prob_p32.svg 
+0.0250 prob_p47.svg 
+0.0250 prob_p22.svg 
+0.0249 prob_p33.svg 
+0.0249 prob_p29.svg 
+0.0247 pm3d_p25.svg 
+0.0246 prob_p53.svg 
+0.0246 ellipses_style_p10.svg 
+0.0246 pm3d_p31.svg 
+0.0246 prob_p38.svg 
+0.0245 pm3d_p36.svg 
+0.0244 prob_p55.svg 
+0.0244 timedat_p03.svg 
+0.0242 pm3d_p35.svg 
+0.0242 clip_radial_p01.svg 
+0.0240 fillstyle_p05.svg 
+0.0239 fillstyle_p01.svg 
+0.0238 prob_p30.svg 
+0.0238 vector_p03.svg 
+0.0238 tics_p01.svg 
+0.0237 simple_p03.svg 
+0.0237 keyentry_p02.svg 
+0.0236 finance_p05.svg 
+0.0236 solar_path_p01.svg 
+0.0235 sectors_p12.svg 
+0.0234 spiderplot_p06.svg 
+0.0233 prob_p31.svg 
+0.0232 sectors_p09.svg 
+0.0231 hidden2_p03.svg 
+0.0229 prob3_p02.svg 
+0.0228 prob_p05.svg 
+0.0224 elliptic_p02.svg 
+0.0223 prob_p04.svg 
+0.0221 mxtics_time_p02.svg 
+0.0221 spiderplot_p05.svg 
+0.0220 ttics_p03.svg 
+0.0220 contours_p08.svg 
+0.0218 ttics_p02.svg 
+0.0217 transparent_solids_p01.svg 
+0.0215 violinplot_p05.svg 
+0.0215 rotate_labels_p01.svg 
+0.0214 electron_p02.svg 
+0.0213 pm3d_p30.svg 
+0.0212 pm3d_p29.svg 
+0.0212 polar_p08.svg 
+0.0212 fit_p21.svg 
+0.0210 jitter_p05.svg 
+0.0209 nonlinear1_p01.svg 
+0.0205 pm3d_p32.svg 
+0.0204 sectors_p13.svg 
+0.0203 pm3d_p28.svg 
+0.0202 bolditalic_p01.svg 
+0.0202 rgba_lines_p01.svg 
+0.0202 spiderplot_p03.svg 
+0.0201 poldat_p03.svg 
+0.0199 spiderplot_p04.svg 
+0.0199 palette+alpha_p01.svg 
+0.0197 nonlinear6_p01.svg 
+0.0196 sectors_p14.svg 
+0.0195 sectors_p01.svg 
+0.0194 image_p05.svg 
+0.0193 dgrid3d_p02.svg 
+0.0192 concave_hull_p03.svg 
+0.0192 jitter_p01.svg 
+0.0190 dgrid3d_p03.svg 
+0.0189 violinplot_p04.svg 
+0.0188 hidden2_p02.svg 
+0.0187 param_p03.svg 
+0.0184 param_p05.svg 
+0.0183 iris_p01.svg 
+0.0180 layout_p06.svg 
+0.0179 finance_p04.svg 
+0.0179 violinplot_p02.svg 
+0.0179 polar_p01.svg 
+0.0178 polargrid_p04.svg 
+0.0176 finance_p02.svg 
+0.0171 concave_hull_p02.svg 
+0.0170 finance_p03.svg 
+0.0169 poldat_p02.svg 
+0.0168 isosurface_p03.svg 
+0.0166 spiderplot_p02.svg 
+0.0166 sectors_p10.svg 
+0.0165 margins_p01.svg 
+0.0163 windrose_p01.svg 
+0.0163 ttics_p01.svg 
+0.0163 param_p01.svg 
+0.0159 param_p07.svg 
+0.0158 special_chars_p01.svg 
+0.0158 polar_p07.svg 
+0.0156 param_p02.svg 
+0.0156 ellipse_p02.svg 
+0.0153 piecewise_p01.svg 
+0.0148 concave_hull_p01.svg 
+0.0148 pointsize_p04.svg 
+0.0147 polargrid_p03.svg 
+0.0144 logscale_clipping_p01.svg 
+0.0142 transparent_solids_p02.svg 
+0.0140 poldat_p04.svg 
+0.0139 spiderplot_p01.svg 
+0.0139 fit_p18.svg 
+0.0138 fit_p19.svg 
+0.0137 fit_p20.svg 
+0.0132 pm3d_p33.svg 
+0.0132 fit_p17.svg 
+0.0130 pm3dcolors_p04.svg 
+0.0129 jitter_p07.svg 
+0.0128 polar_p04.svg 
+0.0127 pm3dcolors_p09.svg 
+0.0125 boxplot_p01.svg 
+0.0121 pm3dcolors_p03.svg 
+0.0116 unicode_p01.svg 
+0.0115 image2_p04.svg 
+0.0114 pm3dcolors_p05.svg 
+0.0114 pm3d_p37.svg 
+0.0114 mask_image_p01.svg 
+0.0112 vplot_p02.svg 
+0.0111 pm3dcolors_p08.svg 
+0.0109 pm3dcolors_p06.svg 
+0.0108 heatmaps_p07.svg 
+0.0107 polar_p03.svg 
+0.0105 pm3dcolors_p07.svg 
+0.0104 pm3dcolors_p02.svg 
+0.0102 ellipse_p01.svg 
+0.0102 pixmap_p01.svg 
+0.0100 surface1_p19.svg 
+0.0099 iterbugs_p01.svg 
+0.0098 chi_shapes_p01.svg 
+0.0096 tics_p04.svg 
+0.0095 contours_p20.svg 
+0.0095 contours_p07.svg 
+0.0094 heatmap_points_p03.svg 
+0.0093 pointsize_p03.svg 
+0.0092 surface2_p09.svg 
+0.0089 surface2_p06.svg 
+0.0089 image2_p08.svg 
+0.0089 dashtypes_p02.svg 
+0.0088 zerror_p01.svg 
+0.0086 image2_p06.svg 
+0.0086 contours_p06.svg 
+0.0085 heatmaps_p01.svg 
+0.0084 volatile_p01.svg 
+0.0083 pm3d_p34.svg 
+0.0082 rgb_variable_p06.svg 
+0.0081 world_p04.svg 
+0.0081 violinplot_p03.svg 
+0.0080 stringvar_p01.svg 
+0.0080 pm3d_p22.svg 
+0.0079 sectors_p11.svg 
+0.0077 surface1_p26.svg 
+0.0077 world2_p02.svg 
+0.0075 utf8_p01.svg 
+0.0075 polar_p06.svg 
+0.0073 pm3d_p18.svg 
+0.0072 custom_key_p01.svg 
+0.0071 polar_p05.svg 
+0.0071 vplot_p01.svg 
+0.0071 polar_p02.svg 
+0.0070 isosurface_p04.svg 
+0.0069 smooth_splines_p08.svg 
+0.0068 rgb_variable_p03.svg 
+0.0067 contours_p03.svg 
+0.0067 pm3d_p38.svg 
+0.0063 pm3d_p04.svg 
+0.0062 scatter_p06.svg 
+0.0059 stringvar_p02.svg 
+0.0059 pm3d_p21.svg 
+0.0058 random_p03.svg 
+0.0057 mask_image_p02.svg 
+0.0057 pm3d_p16.svg 
+0.0057 pm3d_p15.svg 
+0.0056 stringvar_p03.svg 
+0.0055 dgrid3d_p13.svg 
+0.0054 surface2_p08.svg 
+0.0054 pm3d_p19.svg 
+0.0052 pm3d_p20.svg 
+0.0052 dgrid3d_p10.svg 
+0.0052 dgrid3d_p09.svg 
+0.0052 dgrid3d_p12.svg 
+0.0052 dgrid3d_p14.svg 
+0.0052 surface2_p07.svg 
+0.0052 contours_p22.svg 
+0.0051 image2_p03.svg 
+0.0051 dgrid3d_p08.svg 
+0.0051 dgrid3d_p11.svg 
+0.0050 image2_p10.svg 
+0.0050 dgrid3d_p15.svg 
+0.0050 binary_p03.svg 
+0.0049 projection_p01.svg 
+0.0049 dgrid3d_p07.svg 
+0.0048 binary_p02.svg 
+0.0048 dgrid3d_p06.svg 
+0.0047 dgrid3d_p04.svg 
+0.0047 pm3d_p05.svg 
+0.0046 invibeta_p01.svg 
+0.0046 dgrid3d_p05.svg 
+0.0046 armillary_p01.svg 
+0.0045 surface1_p17.svg 
+0.0044 sampling2_p02.svg 
+0.0043 smooth_splines_p07.svg 
+0.0043 random_p02.svg 
+0.0043 surface2_p05.svg 
+0.0042 nonlinear5_p01.svg 
+0.0042 surface2_p04.svg 
+0.0041 contourfill_p04.svg 
+0.0041 world2_p01.svg 
+0.0040 surface2_p03.svg 
+0.0040 piecewise_p03.svg 
+0.0040 singulr_p17.svg 
+0.0039 surface2_p02.svg 
+0.0038 surface2_p01.svg 
+0.0037 pm3d_p23.svg 
+0.0037 binary_p01.svg 
+0.0037 singulr_p10.svg 
+0.0037 cities_p01.svg 
+0.0036 hidden_compare_p01.svg 
+0.0036 singulr_p12.svg 
+0.0036 singulr_p11.svg 
+0.0036 pm3d_lighting_p01.svg 
+0.0035 singulr_p09.svg 
+0.0034 voxel_p01.svg 
+0.0034 vector_p01.svg 
+0.0033 hypertext_surface_p01.svg 
+0.0032 contours_p21.svg 
+0.0031 fenceplot_p01.svg 
+0.0030 pm3d_p24.svg 
+0.0030 hidden_p07.svg 
+0.0030 scatter_p05.svg 
+0.0030 surface1_p18.svg 
+0.0030 hidden_p05.svg 
+0.0029 polygons_p02.svg 
+0.0028 contourfill_p02.svg 
+0.0028 singulr_p02.svg 
+0.0028 singulr_p18.svg 
+0.0028 singulr_p20.svg 
+0.0027 singulr_p01.svg 
+0.0027 hidden_p01.svg 
+0.0026 rgb_variable_p05.svg 
+0.0025 boxes3d_p02.svg 
+0.0025 singulr_p04.svg 
+0.0025 hidden_p03.svg 
+0.0025 boxes3d_p01.svg 
+0.0025 singulr_p07.svg 
+0.0025 contourfill_p03.svg 
+0.0025 singulr_p03.svg 
+0.0025 textcolor_p02.svg 
+0.0024 function_block_p01.svg 
+0.0024 surface_explicit_p02.svg 
+0.0024 dashtypes_p01.svg 
+0.0024 hidden_p04.svg 
+0.0024 singulr_p08.svg 
+0.0023 singulr_p05.svg 
+0.0023 boxes3d_p03.svg 
+0.0023 nonlinear4_p01.svg 
+0.0023 singulr_p16.svg 
+0.0023 hidden_p02.svg 
+0.0022 rgb_variable_p09.svg 
+0.0022 singulr_p06.svg 
+0.0021 singulr_p15.svg 
+0.0021 complex_trig_p11.svg 
+0.0020 contourfill_p01.svg 
+0.0020 mask_image_p04.svg 
+0.0019 polygons_p07.svg 
+0.0018 hidden_p06.svg 
+0.0018 mask_image_p03.svg 
+0.0018 spotlight_p01.svg 
+0.0018 complex_trig_p01.svg 
+0.0018 complex_trig_p09.svg 
+0.0018 complex_trig_p05.svg 
+0.0018 complex_trig_p10.svg 
+0.0018 complex_trig_p06.svg 
+0.0018 complex_trig_p04.svg 
+0.0018 complex_trig_p02.svg 
+0.0018 complex_trig_p07.svg 
+0.0018 complex_trig_p08.svg 
+0.0018 scatter_p01.svg 
+0.0018 world_p03.svg 
+0.0018 complex_trig_p03.svg 
+0.0018 pm3d_clip_p02.svg 
+0.0018 scatter_p04.svg 
+0.0018 scatter_p03.svg 
+0.0018 scatter_p02.svg 
+0.0018 ibeta_p02.svg 
+0.0016 singulr_p13.svg 
+0.0015 singulr_p14.svg 
+0.0015 contours_p05.svg 
+0.0015 polygons_p01.svg 
+0.0014 surface1_p23.svg 
+0.0014 isosurface_p01.svg 
+0.0014 animate_p01.svg 
+0.0014 contours_p19.svg 
+0.0013 contours_p23.svg 
+0.0013 polygons_p06.svg 
+0.0013 heatmap_points_p02.svg 
+0.0013 heatmaps_p05.svg 
+0.0013 param_p08.svg 
+0.0012 pm3d_p03.svg 
+0.0012 pm3d_p02.svg 
+0.0011 heatmap_points_p01.svg 
+0.0010 heatmap_4D_p01.svg 
+0.0010 polygons_p03.svg 
+0.0010 rgb_variable_p04.svg 
+0.0009 named_palettes_p04.svg 
+0.0007 pm3d_p10.svg 
+0.0007 polygons_p05.svg 
+0.0006 discrete_p01.svg 
+0.0006 surface1_p01.svg 
+0.0006 polygons_p04.svg 
+0.0006 surface_explicit_p01.svg 
+0.0004 dgrid3d_p01.svg 
+0.0004 azimuth_p01.svg 
+0.0003 surface1_p24.svg 
+0.0003 pm3d_p40.svg 
+0.0003 mask_pm3d_p02.svg 
+0.0002 discrete_p02.svg 
+0.0002 fenceplot_p02.svg 
+0.0002 multipalette_p01.svg 
+0.0002 mask_pm3d_p03.svg 
+0.0002 surface1_p10.svg 
+0.0002 pm3dcolors_p01.svg 
+0.0002 named_palettes_p03.svg 
+0.0002 surface1_p16.svg 
+0.0002 named_palettes_p02.svg 
+0.0002 surface1_p22.svg 
+0.0002 surface1_p20.svg 
+0.0002 surface1_p21.svg 
+0.0002 pm3d_p17.svg 
+0.0002 surface1_p25.svg 
+0.0002 world_p02.svg 
+0.0002 kdensity2d_p02.svg 
+0.0002 pm3d_p08.svg 
+0.0002 kdensity2d_p03.svg 
+0.0001 pm3d_p11.svg 
+0.0001 surface1_p07.svg 
+0.0001 surface1_p08.svg 
+0.0001 surface1_p05.svg 
+0.0001 surface1_p02.svg 
+0.0001 surface1_p04.svg 
+0.0001 pm3d_p12.svg 
+0.0001 pm3d_p07.svg 
+0.0001 surface1_p03.svg 
+0.0001 surface1_p06.svg 
+0.0001 pm3d_p06.svg 
+0.0001 pm3d_p09.svg 
+0.0001 pm3dgamma_p01.svg 
+0.0001 pm3d_p39.svg 
+0.0001 pm3d_p01.svg 
+0.0001 surface1_p09.svg 
+0.0001 contours_p10.svg 
+0.0001 pm3d_lighting_p02.svg 
+0.0000 contours_p09.svg 
+0.0000 walls_p01.svg 
+0.0000 contours_p17.svg 
+0.0000 contours_p02.svg 
+0.0000 surface1_p14.svg 
+0.0000 surface1_p13.svg 
+0.0000 discrete_p03.svg 
+0.0000 contours_p13.svg 
+0.0000 scatter_p08.svg 
+0.0000 contours_p16.svg 
+0.0000 contours_p12.svg 
+0.0000 contours_p01.svg 
+0.0000 surface1_p11.svg 
+0.0000 igamma_p02.svg 
+0.0000 surface1_p15.svg 
+0.0000 surface1_p12.svg 
+0.0000 scatter_p07.svg 
+0.0000 contours_p11.svg 
+0.0000 contours_p04.svg 
+0.0000 contours_p15.svg 
+0.0000 contours_p18.svg 
+0.0000 contours_p14.svg 
+0.0000 named_palettes_p01.svg 
+0.0000 singulr_p19.svg 
+0.0000 zerror_p02.svg 
+0.0000 rgb_variable_p08.svg 
+0.0000 rgb_variable_p07.svg 
+0.0000 charset_p01.svg 
+0.0000 bivariat_p05.svg 
