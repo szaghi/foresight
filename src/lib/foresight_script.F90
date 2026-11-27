@@ -14,7 +14,8 @@ module foresight_script
 !<   `set terminal block [half|quadrants|sextants|braille] [size COLS,ROWS] [mono|ansi|ansi256|ansirgb]` (text drawn
 !<   with Unicode block or Braille characters);
 !< - `set|unset multiplot [layout ROWS,COLS] [title "t"]`: each `plot` fills the next panel, settings carry over;
-!<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions);
+!<   without layout each panel lies in its `set origin X,Y` / `set size W,H` box (page fractions); in a layout they
+!<   give the next panel its own box, as gnuplot;
 !< - `set xtics|ytics|y2tics|x2tics [auto|STEP|START,STEP[,END]] [mirror|nomirror]` (y2 and x2 ticks are off until
 !<   set), `unset xtics|ytics|y2tics|x2tics`, `set format [AXES] ["fmt"]`, `unset format`,
 !<   `set key [on|off] [left|right|center] [top|bottom|center] [box|nobox] [autotitle [columnhead]|noautotitle]`,
@@ -15473,10 +15474,6 @@ contains
       real(R8P)                       :: pair(2)   !< Values.
 
       tokens = words
-      if (self%figure%layout) then
-         call fail('set '//option//': not supported with a multiplot layout', iostat, iomsg)
-         return
-      endif
       pair = default
       if (size(tokens) > 1) then
          if (size(tokens) /= 4 .or. tokens(2)%kind /= TOKEN_WORD .or. tokens(3)%kind /= TOKEN_COMMA .or. &

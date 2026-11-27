@@ -359,6 +359,8 @@ type :: axes_object
                                                          !< drawn through its view.
    type(axis_object)                :: zaxis             !< Height axis of a 3D panel: `zrange`, `ztics`, `zlabel`.
    type(view3d_object)              :: view3d            !< View of a 3D panel: `set view`, `set xyplane`.
+   logical                          :: layout_own = .false. !< A panel of a multiplot layout in its own `origin`,
+                                                           !< `size` box (gnuplot: they override the layout for it).
    real(R8P)                        :: box3d(4) = -1.0_R8P !< gnuplot's panel box (`set origin`, `set size`: left,
                                                            !< bottom, width, height [page fractions]) where a 3D view
                                                            !< lies; negative: the rendering box.

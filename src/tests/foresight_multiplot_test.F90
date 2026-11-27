@@ -101,10 +101,19 @@ call interpreter%run_text("set terminal svg size 600,400; set output 'foresight_
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(8) = iostat == 0_I4P .and. check('inset.svg', 'foresight_multiplot_test_inset.svg')
 
-! origin and size: not with a layout, positive sizes, restored by the bare commands
+! origin and size: in a layout they give the next panel its own box, as gnuplot (the layout places the one after);
+! positive sizes, restored by the bare commands
 call interpreter%init('x.svg')
-call interpreter%run_text("set multiplot layout 1,2"//new_line('a')//"set origin 0.1,0.1", iostat, iomsg)
-test_passed(9) = iostat /= 0_I4P .and. index(iomsg, 'set origin: not supported with a multiplot layout') > 0
+call interpreter%run_text("set multiplot layout 1,3"//new_line('a')//"plot x"//new_line('a')// &
+                          "set origin 0.44,0.18; set size 0.47,0.72"//new_line('a')//"plot x**2"//new_line('a')// &
+                          "set key left"//new_line('a')//"plot x**3", iostat, iomsg)
+associate(panels => interpreter%figure%panels)
+   test_passed(9) = iostat == 0_I4P .and. size(panels) == 3
+   if (test_passed(9)) test_passed(9) = .not. panels(1)%layout_own .and. panels(2)%layout_own .and. &
+                                        .not. panels(3)%layout_own .and. &
+                                        all(abs(panels(2)%origin - [0.44_R8P, 0.18_R8P]) < 1.0e-12_R8P) .and. &
+                                        all(abs(panels(2)%size - [0.47_R8P, 0.72_R8P]) < 1.0e-12_R8P)
+endassociate
 call interpreter%init('x.svg')
 call interpreter%run_text("set size 0,1", iostat, iomsg)
 test_passed(10) = iostat /= 0_I4P .and. index(iomsg, 'the size must be positive') > 0

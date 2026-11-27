@@ -155,8 +155,8 @@ that did what it says.
 | **te**rminal `dumb` [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output, 79 x 24 by default, on the standard output; the series in ANSI colors, see [Output Formats](output-formats#text) | — |
 | **te**rminal `block` [`half`\|`quadrants`\|`sextants`\|`braille`] [**si**ze `COLS,ROWS`] [`mono`\|`ansi`\|`ansi256`\|`ansirgb`] | text output drawn with Unicode block or Braille characters, 2 x 2 dots per character by default (`quadrants`), see [Output Formats](output-formats#block-characters) | — |
 | **multi**plot [**lay**out `R,C`] [**row**sfirst\|**col**umnsfirst] [**down**wards\|**up**wards] [**t**itle `"text"` [`font F`]] [**mar**gins [`screen`\|`char`] `L,R,B,T`] [**spa**cing [`screen`\|`char`] `X[,Y]`] | grid of panels, or panels in their `origin`/`size` boxes without layout, see [below](#multiplot) | back to one panel |
-| **or**igin [`X,Y`] | bottom left corner of the plot, page fractions (default `0,0`); not with a layout | — |
-| **si**ze [**sq**uare\|**nosq**uare\|**ra**tio `R`\|**nora**tio] [`W,H`] | plot size, page fractions (default `1,1`; not with a layout); `square`, `ratio R` (> 0): the plot area height over width; `ratio -R`: the length of a y unit R times that of an x unit (`ratio -1`: a circle stays round, as gnuplot) | — |
+| **or**igin [`X,Y`] | bottom left corner of the plot, page fractions (default `0,0`); in a multiplot layout, the next panel only, then the layout resumes (as gnuplot) | — |
+| **si**ze [**sq**uare\|**nosq**uare\|**ra**tio `R`\|**nora**tio] [`W,H`] | plot size, page fractions (default `1,1`; in a multiplot layout, the next panel only, as gnuplot); `square`, `ratio R` (> 0): the plot area height over width; `ratio -R`: the length of a y unit R times that of an x unit (`ratio -1`: a circle stays round, as gnuplot) | — |
 
 ## `plot` items
 

@@ -339,6 +339,11 @@ contains
       call push(self%panels, settings)
    elseif (self%current >= size(self%panels, kind=I4P)) then
       error stop 'foresight: next_panel: the multiplot layout is full'
+   else
+      ! the layout places the next panel again (gnuplot's multiplot_next)
+      settings%layout_own = .false.
+      settings%origin = [0.0_R8P, 0.0_R8P]
+      settings%size = [1.0_R8P, 1.0_R8P]
    endif
    self%current = self%current + 1_I4P
    self%panels(self%current) = settings
@@ -1508,18 +1513,41 @@ contains
 
    subroutine set_origin(self, x, y)
    !< Bottom left corner of the plot as page fractions, as gnuplot `set origin x,y`: for a single plot and the panels
-   !< of a manual multiplot (not with a layout).
+   !< of a multiplot; in a layout the panel leaves its cell for its own box (its size the cell's unless set), as
+   !< gnuplot, until the next panel.
    class(figure_object), intent(inout) :: self !< Figure.
    real(R8P),            intent(in)    :: x    !< Left side, page width fraction.
    real(R8P),            intent(in)    :: y    !< Bottom side, page height fraction.
 
-   if (self%layout) error stop 'foresight: set_origin: not with a multiplot layout'
    call self%ensure_panels
+   call own_box(self)
    ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
    associate(panel => self%panels(self%current))
       panel%origin = [x, y]
    endassociate
    endsubroutine set_origin
+
+   subroutine own_box(self)
+   !< The current panel of a multiplot layout leaves its grid cell for its own `origin`, `size` box (gnuplot's set
+   !< origin, set size override the layout until the next plot), starting from its cell (page fractions from the bottom
+   !< left, below no title band).
+   class(figure_object), intent(inout) :: self !< Figure.
+   integer(I4P)                        :: rc(2) !< Row and column of the cell, from 0.
+
+   if (.not. self%layout) return
+   associate(panel => self%panels(self%current))
+      if (panel%layout_own) return
+      if (self%columns_first) then
+         rc = [modulo(self%current - 1_I4P, self%rows), (self%current - 1_I4P) / self%rows]
+      else
+         rc = [(self%current - 1_I4P) / self%cols, modulo(self%current - 1_I4P, self%cols)]
+      endif
+      if (self%upwards) rc(1) = self%rows - 1_I4P - rc(1)
+      panel%origin = [real(rc(2), R8P) / real(self%cols, R8P), 1.0_R8P - real(rc(1) + 1_I4P, R8P) / real(self%rows, R8P)]
+      panel%size = [1.0_R8P / real(self%cols, R8P), 1.0_R8P / real(self%rows, R8P)]
+      panel%layout_own = .true.
+   endassociate
+   endsubroutine own_box
 
    subroutine set_text(self, charset, colors)
    !< Text output (`.txt`, `-`): `charset` `dumb` (default), drawing with characters, or the gnuplot `block` character
@@ -1650,8 +1678,9 @@ contains
    endsubroutine set_rtics
 
    subroutine set_size(self, width, height, ratio)
-   !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a manual
-   !< multiplot (not with a layout). `ratio` > 0 fixes the plot area height over width (gnuplot `set size ratio R`,
+   !< Size of the plot as page fractions, as gnuplot `set size w,h`: for a single plot and the panels of a multiplot; in
+   !< a layout the panel leaves its cell for its own box (at the cell's origin unless set), as gnuplot, until the next
+   !< panel. `ratio` > 0 fixes the plot area height over width (gnuplot `set size ratio R`,
    !< `square` is 1), 0 frees it (`noratio`); a negative ratio -R makes a y unit R times an x unit long (gnuplot
    !< `set size ratio -1`: equal units, the plot area shrunk to the ranges).
    class(figure_object), intent(inout)        :: self   !< Figure.
@@ -1661,12 +1690,12 @@ contains
 
    if (present(width) .neqv. present(height)) error stop 'foresight: set_size: width and height go together'
    if (present(width)) then
-      if (self%layout) error stop 'foresight: set_size: not with a multiplot layout'
       if (width <= 0.0_R8P .or. height <= 0.0_R8P) error stop 'foresight: set_size: the size must be positive'
    endif
    if (present(ratio)) then
    endif
    call self%ensure_panels
+   if (present(width)) call own_box(self)
    associate(panel => self%panels(self%current))
       if (present(width)) panel%size = [width, height]
       if (present(ratio)) panel%ratio = ratio
@@ -3013,7 +3042,7 @@ contains
             ! a vertical key taller than the panel wraps into columns, as gnuplot
             panel%gnuplot_key = .true.
          endif
-         if (self%layout) then
+         if (self%layout .and. .not. panel%layout_own) then
             ! the grid cell of panel p: row by row (or column by column), from the top row (or the bottom one)
             if (self%columns_first) then
                rc = [modulo(p - 1_I4P, self%rows), (p - 1_I4P) / self%rows]
@@ -3079,8 +3108,9 @@ contains
       real(R8P)                :: cx     !< Character width [page fraction].
       real(R8P)                :: cy     !< Character height [page fraction].
 
-      cx = 0.6_R8P * self%font_size / self%width
-      cy = self%font_size / self%height
+      ! gnuplot's svg character cell, 0.7 by 1.5 of the font size
+      cx = 0.7_R8P * self%font_size / self%width
+      cy = 1.5_R8P * self%font_size / self%height
       e = self%layout_margins
       if (self%layout_chars(1)) e(1) = e(1) * cx
       if (self%layout_chars(2)) e(2) = 1.0_R8P - e(2) * cx

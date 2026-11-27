@@ -55,7 +55,7 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `unset_xtics()`, `unset_ytics()`, `unset_y2tics()`, `unset_x2tics()` | `unset xtics` |
 | `set_format(format, [axes])` | `set format y "%.1e"`, `set format cb "%.2f"`, on a time axis `set format x "%d %b"`; an empty format restores the default; all axes when absent |
 | `set_multiplot([rows], [cols], [title])`, `next_panel()`, `unset_multiplot()` | `set multiplot [layout]` |
-| `set_origin(x, y)`, `set_size([width, height], [ratio])` | `set origin`, `set size`: page fractions, not with a layout; `ratio=1._R8P`: `set size square` (0: `noratio`) |
+| `set_origin(x, y)`, `set_size([width, height], [ratio])` | `set origin`, `set size`: page fractions; in a layout, they place the next panel only (as gnuplot); `ratio=1._R8P`: `set size square` (0: `noratio`) |
 | `set_polar([on])`, `set_angles(unit)`, `set_theta([origin], [clockwise])` | `set polar`, `set angles degrees`, `set theta top clockwise` ([Polar plots](gnuplot-subset#polar-plots)): `plot(theta, r)` |
 | `set_rrange([min], [max])`, `set_trange([min], [max])` | `set rrange [1:*]`, `set trange` |
 | `set_rtics([step], [start], [end], [on])`, `set_ttics([step], [start], [format], [on])`, `set_raxis([on])` | `set rtics`, `set ttics 0,30 format "%g"`, `set raxis`; `on=.false.`: `unset ...` |
