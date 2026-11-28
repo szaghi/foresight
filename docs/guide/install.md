@@ -17,7 +17,7 @@ After installing, [check the install](#check-the-install) and [use the library](
 
 | | Needed | Notes |
 |---|---|---|
-| **Fortran compiler** | Fortran 2018 | Tested in CI: gfortran 16.2, nvfortran 26.9, Intel ifx 2026.2. nvfortran 26.9 miscompiles some valid Fortran; foresight works around what it meets ([#3](https://github.com/szaghi/foresight/issues/3)). |
+| **Fortran compiler** | Fortran 2018: gfortran 16.2+, nvfortran 26.9+, Intel ifx 2026.2+ | The versions the CI builds and tests, debug and optimised, on every push; older ones are not tested and may fail (modern Fortran, compiler bugs fixed since). nvfortran 26.9 miscompiles some valid Fortran; foresight works around what it meets ([#3](https://github.com/szaghi/foresight/issues/3)). |
 | **Operating system** | Linux, or another POSIX system | Tested in CI on Linux. foresight calls three POSIX functions through `bind(C)`: `rename`, `nanosleep`, `popen`. macOS is POSIX but not tested in CI. |
 | **Windows** | through [WSL 2](https://learn.microsoft.com/windows/wsl/) | WSL runs Linux, and foresight with it. Native Windows (MSVC or MinGW toolchains) is not supported: `nanosleep` and `popen` are not standard there. A page or PDF written in WSL opens in any Windows browser or viewer. |
 | **Build system** | one of [FoBiS](https://github.com/szaghi/FoBiS) 3.8+ or [fpm](https://fpm.fortran-lang.org) | The one-line installer installs FoBiS itself when it is missing (in a private environment, with Python 3.11+). No CMake or make build is shipped. |

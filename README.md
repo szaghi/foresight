@@ -44,7 +44,7 @@
 <td><b>📝 Reports</b><br><sub><code>save(file, info=meta)</code> returns what a document needs: the size, an alternative text from the titles and labels, the caption (<code>set caption</code>); <code>set table ... markdown</code> writes Markdown tables; a program writes its Markdown or LaTeX report around them. <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/01-a-figure-in-a-report">Path F</a> · <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/report/report">A run report</a></sub></td>
 </tr>
 <tr>
-<td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 18 test programs, 190 golden files compared byte for byte, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
+<td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran 16.2+, nvfortran 26.9+ and ifx 2026.2+, debug and optimised, on every push; 19 test programs, 190 golden files compared byte for byte, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
 </tr>
 </table>
 </div>
@@ -79,7 +79,7 @@ git clone https://github.com/szaghi/foresight && cd foresight
 fobis fetch                                                   # PENF, BeFoR64, FACE, StringiFor, into src/third_party/
 fobis build --mode foresight-gnu                              # the command line tool: bin/foresight
 fobis build --mode foresight-static-gnu                       # the library: lib/libforesight.a, modules in lib/mod
-fobis build --mode tests-gnu && bash scripts/run_tests.sh     # the 18 test programs, golden files included
+fobis build --mode tests-gnu && bash scripts/run_tests.sh     # the 19 test programs, golden files included
 ```
 
 or the one-line installer, the latest release into `~/.local`, usable through pkg-config:

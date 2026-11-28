@@ -56,7 +56,7 @@ images (PNG, GIF) or EPS, or when its compilers (gfortran, flang, LFortran) are 
 Choose **foresight** when the figures already are, or should be, gnuplot scripts (the same script on the cluster, in
 the terminal, in the browser and in the paper); when the paper is LaTeX and its labels should be set by LaTeX
 (`cairolatex`); when the run must be watched while it writes its logs; or when the figure should be an interactive
-page; foresight builds with gfortran, nvfortran and ifx.
+page; foresight builds with gfortran 16.2+, nvfortran 26.9+ and ifx 2026.2+.
 
 ## Layout compared with gnuplot
 
