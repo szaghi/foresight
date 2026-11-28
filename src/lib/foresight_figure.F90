@@ -3343,8 +3343,10 @@ contains
    backend%text_size = self%font_size
    backend%page_family = self%font_family
    call backend%begin_page(file, self%width, self%height, self%font_size)
-   page = [self%width, self%height]
-   call backend%rect(0.0_R8P, 0.0_R8P, self%width, self%height, 'none', trim(self%page_color), 0.0_R8P)
+   ! the canvas the layout fills: the page, less the strip a cairo terminal leaves at the right and at the top (the
+   ! device draws 1 pt down: the page's color painted from the page's top)
+   page = [self%width, self%height] - backend%canvas_inset()
+   call backend%rect(0.0_R8P, -backend%canvas_inset(), self%width, self%height, 'none', trim(self%page_color), 0.0_R8P)
    top = 0.0_R8P
    layout_top = 0.0_R8P
    if (len(self%title) > 0) then
@@ -3367,7 +3369,7 @@ contains
                e = a + e - 2_I4P
             endif
             backend%font = self%title_font
-            if (e >= a) call backend%text(0.5_R8P * self%width, PAD + size + real(line, R8P) * LINE_HEIGHT * size, &
+            if (e >= a) call backend%text(0.5_R8P * page(1), PAD + size + real(line, R8P) * LINE_HEIGHT * size, &
                                           self%title(a:e), 'middle')
             backend%font = font_object()
             line = line + 1_I4P
@@ -3381,7 +3383,7 @@ contains
          if (.not. backend%row_height() > 0.0_R8P) layout_top = real(line, R8P) * 1.5_R8P * size
       endblock
    endif
-   cell = [self%width / real(self%cols, R8P), (self%height - layout_top) / real(self%rows, R8P)]
+   cell = [page(1) / real(self%cols, R8P), (page(2) - layout_top) / real(self%rows, R8P)]
    do p = 1_I4P, size(self%panels, kind=I4P)
       ! associate alias: see the gfortran 16 -fcheck=bounds workaround in clear
       associate(panel => self%panels(p))
@@ -3417,7 +3419,7 @@ contains
                band = 0.0_R8P
                if (len(self%title) > 0) band = real(1_I4P + count([(self%title(e:e) == new_line('a'), &
                                                      e = 1_I4P, len(self%title, kind=I4P))]), R8P) * 1.5_R8P * &
-                                                     self%title_font%size_px(self%font_size) / self%height
+                                                     self%title_font%size_px(self%font_size) / page(2)
                panel%box3d = [real(rc(2), R8P) / real(self%cols, R8P), &
                               (1.0_R8P - real(rc(1) + 1_I4P, R8P) / real(self%rows, R8P)) * (1.0_R8P - band), &
                               1.0_R8P / real(self%cols, R8P), (1.0_R8P - band) / real(self%rows, R8P)]
@@ -3445,9 +3447,9 @@ contains
          else
             panel%box3d = [panel%origin(1), panel%origin(2), panel%size(1), panel%size(2)]
             ! fractions from the bottom left of the page below the multiplot title, as gnuplot
-            call panel%render(backend, panel%origin(1) * self%width, &
-                              top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (self%height - top), &
-                              panel%size(1) * self%width, panel%size(2) * (self%height - top), self%font_size, &
+            call panel%render(backend, panel%origin(1) * page(1), &
+                              top + (1.0_R8P - panel%origin(2) - panel%size(2)) * (page(2) - top), &
+                              panel%size(1) * page(1), panel%size(2) * (page(2) - top), self%font_size, &
                               canvas=page)
          endif
       endassociate
@@ -3465,10 +3467,12 @@ contains
       real(R8P)                :: h      !< Plot area height.
       real(R8P)                :: cx     !< Character width [page fraction].
       real(R8P)                :: cy     !< Character height [page fraction].
+      real(R8P)                :: c(5)   !< The device's character cell [px].
 
-      ! gnuplot's svg character cell, 0.7 by 1.5 of the font size
-      cx = 0.7_R8P * self%font_size / self%width
-      cy = 1.5_R8P * self%font_size / self%height
+      ! the device's character cell (gnuplot's terminal's)
+      c = backend%char_cell(self%font_size)
+      cx = c(2) / page(1)
+      cy = c(1) / page(2)
       e = self%layout_margins
       if (self%layout_chars(1)) e(1) = e(1) * cx
       if (self%layout_chars(2)) e(2) = 1.0_R8P - e(2) * cx

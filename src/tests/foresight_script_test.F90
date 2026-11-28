@@ -2668,14 +2668,14 @@ call interpreter%run_text('set key enhanced', iostat, iomsg)
 test_passed(124) = test_passed(124) .and. iostat == 0_I4P .and. .not. interpreter%figure%panels(1)%key_plain
 
 ! set lmargin|rmargin|tmargin|bmargin [at screen] N, set margins L,R,B,T, unset: the border where they say (gnuplot's svg
-! characters, 0.7 font sizes wide and 1.5 high: 84 and 54 px at 12 pt, as gnuplot; screen fractions from the bottom left)
+! characters, gnuplot's svg h_char and v_char: 83.9 and 54 px at 12 pt, as gnuplot; screen fractions from the bottom left)
 call interpreter%init(scratch)
 call interpreter%run_text('set term svg size 400,300; set output "foresight_script_test_margins.svg"'//new_line('a')// &
                           'set lmargin 10; set rmargin at screen 0.9; set tmargin 3; set bmargin at screen 0.2'// &
                           new_line('a')//'plot [0:10] x notitle', iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(125) = iostat == 0_I4P .and. file_has('foresight_script_test_margins.svg', &
-                   '<rect x="84" y="54" width="276" height="186" fill="none" stroke="black"')
+                   '<rect x="83.9" y="54" width="276.1" height="186" fill="none" stroke="black"')
 call interpreter%run_text('set margins 1, 2, at screen 0.1, 4', iostat, iomsg)
 associate(panel => interpreter%figure%panels(1))
    test_passed(125) = test_passed(125) .and. iostat == 0_I4P .and. &
@@ -3007,7 +3007,7 @@ call interpreter%run_text('set term svg size 500,300; set output "foresight_scri
                           'set timestamp "stamp %Y" offset 1,0 tc "red"; plot x', iostat, iomsg)
 if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
 test_passed(140) = iostat == 0_I4P .and. file_has('foresight_script_test_stamp.svg', 'fill="#ff0000">stamp 20') .and. &
-                   file_has('foresight_script_test_stamp.svg', 'data-area="33.34 490 16 254"')
+                   file_has('foresight_script_test_stamp.svg', 'data-area="38.32 474.83 18 246"')
 call interpreter%run_text('set timestamp top rotate; replot', iostat, iomsg)
 test_passed(140) = test_passed(140) .and. iostat == 0_I4P .and. interpreter%figure%panels(1)%stamp_top .and. &
                    interpreter%figure%panels(1)%stamp_rotate .and. &
@@ -7042,13 +7042,13 @@ block
    test_passed(271) = test_passed(271) .and. iostat == 0_I4P
    if (test_passed(271)) then
       svg = read_text('foresight_script_test_cb.svg')
-      test_passed(271) = index(svg, 'x="570.2" y="174.5" text-anchor="middle" transform="rotate(-90 570.2 174.5)" '// &
+      test_passed(271) = index(svg, 'x="570.2" y="173" text-anchor="middle" transform="rotate(-90 570.2 173)" '// &
                                    'fill="#ff0000">Phase') > 0
    endif
    call interpreter%run_text("set cblabel norotate offset 0,0 tc def; replot", iostat, iomsg)
    test_passed(271) = test_passed(271) .and. iostat == 0_I4P
    if (test_passed(271)) test_passed(271) = index(read_text('foresight_script_test_cb.svg'), &
-                                                'x="583.1" y="196.4" text-anchor="middle">Phase') > 0
+                                                'x="583.1" y="194.9" text-anchor="middle">Phase') > 0
    call interpreter%run_text("set dummy u,v; set table 'foresight_script_test.dat'; "// &
                              "splot [x=0:1] [y=0:2] x*y; unset table", iostat, iomsg)
    test_passed(271) = test_passed(271) .and. iostat == 0_I4P
@@ -7967,9 +7967,9 @@ block
 endblock
 
 
-! check 292: gnuplot's svg character cell (0.7 by 1.5 of the font size): `set title offset 4,-1` moves the title 33.6 px
-! right, `set xlabel offset 3,2` 25.2 (gnuplot 6.0: 33.56, 25.17; the heights move the margins too), and a label with a
-! point has its text 4.5 px right (gnuplot's pointsize * h_tic / 2)
+! check 292: gnuplot's svg character cell (h_char 8.39 px at 12 px, truncated to its 1/100 px): `set title offset 4,-1`
+! moves the title 33.56 px right, `set xlabel offset 3,2` 25.17, as gnuplot 6.0 (the heights move the margins too),
+! and a label with a point has its text 4.5 px right (gnuplot's pointsize * h_tic / 2)
 block
    character(len=:), allocatable :: svg  !< Page.
    character(len=1), parameter   :: nl = new_line('a') !< New line.
@@ -7995,7 +7995,7 @@ block
       t1 = anchor_of(svg, 'T')
       x1 = anchor_of(svg, 'X')
       p1 = anchor_of(svg, 'P')
-      test_passed(292) = abs(t1(1) - t0(1) - 33.6_R8P) < 0.011_R8P .and. abs(x1(1) - x0(1) - 25.2_R8P) < 0.011_R8P .and. &
+      test_passed(292) = abs(t1(1) - t0(1) - 33.56_R8P) < 0.011_R8P .and. abs(x1(1) - x0(1) - 25.17_R8P) < 0.011_R8P .and. &
                         abs(p1(1) - p0(1) - 4.5_R8P) < 0.011_R8P
    endif
 endblock

@@ -132,6 +132,7 @@ type, extends(backend_object) :: backend_pdf
       procedure, pass(self) :: data_label
       procedure, pass(self) :: front_area !< The front layer of the plot area: its clip again, after the overlays.
       procedure, pass(self) :: char_cell  !< gnuplot's character cell: its cairo terminals'.
+      procedure, pass(self) :: canvas_inset !< The cairo terminals' canvas: 1 pt less than the page.
       ! private helpers
       procedure, pass(self), private :: emit         !< Write to a destination buffer.
       procedure, pass(self), private :: text_face    !< Face of the texts written now.
@@ -189,9 +190,9 @@ contains
    if (allocated(self%alphas)) deallocate(self%alphas)
    if (allocated(self%strokes)) deallocate(self%strokes)
    allocate(self%object_at(16), self%images(16), self%patterns(16), self%alphas(16), self%strokes(16))
-   ! pixels: 0.75 pt each, y downward from the top left corner
-   call self%emit(CONTENT, num(PT_PER_PX)//' 0 0 '//num(-PT_PER_PX)//' 0 '//num(PT_PER_PX * height)//' cm'// &
-                  new_line('a'))
+   ! pixels: 0.75 pt each, y downward from the top left corner of the canvas, 1 pt below the page's (canvas_inset)
+   call self%emit(CONTENT, num(PT_PER_PX)//' 0 0 '//num(-PT_PER_PX)//' 0 '//num(PT_PER_PX * (height - self%canvas_inset()))// &
+                  ' cm'//new_line('a'))
    endsubroutine begin_page
 
    subroutine end_page(self)
@@ -872,6 +873,15 @@ contains
    shown_now = self%hidden == 0_I4P
    endfunction visible
 
+   pure function canvas_inset(self) result(inset)
+   !< gnuplot's cairo terminals (cairo.trm: `term->xmax = (device_xmax - 1) * oversampling`) lay the plot out on a
+   !< canvas 1 pt narrower and lower than the page, its top 1 pt below the page's: 1 pt [px].
+   class(backend_pdf), intent(in) :: self  !< Device.
+   real(R8P)                      :: inset !< Strip [px].
+
+   inset = 1.0_R8P / PT_PER_PX
+   endfunction canvas_inset
+
    pure function char_cell(self, font_size) result(c)
    !< gnuplot's character cell of its cairo terminals (pdfcairo, cairolatex) at a font of `font_size` px [px], the
    !< page's family (gp_cairo_set_termvar, cairo.trm), in the terminal's units of 1/200 pt: `v_char` the height of a line
@@ -1155,7 +1165,8 @@ contains
    endif
    line = line//'      '//BS//'put('// &
           int_str(nint(20.0_R8P * PT_PER_PX * (x + 0.35_R8P * base * sin(a)), I8P))//','// &
-          int_str(nint(20.0_R8P * PT_PER_PX * (self%page(2) - y + 0.35_R8P * base * cos(a)), I8P))//'){'//box//'}%'//NL
+          int_str(nint(20.0_R8P * PT_PER_PX * (self%page(2) - self%canvas_inset() - y + 0.35_R8P * base * cos(a)), I8P))// &
+          '){'//box//'}%'//NL
    if (self%front) then
       call add_text(self%front_bytes, self%front_used, (line))
    else
@@ -1411,11 +1422,12 @@ contains
       call move_alloc(grown, self%patterns)
    endif
    self%npatterns = self%npatterns + 1_I4P
-   ! pattern space is the page's default space: the tile in pixels, y downward from the top left corner
+   ! pattern space is the page's default space: the tile in pixels, y downward from the top left corner of the canvas
    self%patterns(self%npatterns) = self%add_object('<< /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 '// &
                                                    '/BBox [0 0 8 8] /XStep 8 /YStep 8 /Resources << >> /Matrix ['// &
                                                    num(PT_PER_PX)//' 0 0 '//num(-PT_PER_PX)//' 0 '// &
-                                                   num(PT_PER_PX * self%page(2))//'] /Length '// &
+                                                   num(PT_PER_PX * (self%page(2) - self%canvas_inset()))// &
+                                                   '] /Length '// &
                                                    int_str(int(len(tile), I8P))//' >>', text_bytes(tile))
    self%pattern_last = self%npatterns
    self%pattern_key = key

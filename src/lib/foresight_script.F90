@@ -311,6 +311,9 @@ type :: script_object
    logical                         :: minus_sign = .false.     !< `set minussign`: no effect with the default encoding.
    logical                         :: micro = .false.          !< `set micro`: no effect with the default encoding.
    character(len=:), allocatable   :: term_name                !< The terminal: GPVAL_TERM.
+   real(R8P)                       :: element_scale = 1.0_R8P  !< px of a text element's font size (`set title font
+                                                               !< ",18"`): 1 (svg), its points times fontscale drawn at
+                                                               !< 4/3 (gnuplot's cairo terminals).
    integer(I4P), public            :: exit_status = 0_I4P      !< `exit status N`: the status the run ends with.
    character(len=:), allocatable   :: dummy                    !< `set dummy NAME`: the functions' variable, empty for
                                                                !< gnuplot's (x, t in polar mode).
@@ -1363,15 +1366,16 @@ contains
    ok = .true.
    endfunction string_expression
 
-   function font_spec(self, tokens, i, font, iostat, iomsg) result(ok)
+   function font_spec(self, tokens, i, font, iostat, iomsg, terminal) result(ok)
    !< The font after the `font` word at token `i` (gnuplot `font "family:Bold:Italic,size"`, a string expression),
-   !< `i` left on its last token.
+   !< `i` left on its last token; a text element's size in px (`element_scale`), the `terminal`'s as given.
    class(script_object),          intent(in)    :: self      !< Interpreter.
    type(token_object),            intent(in)    :: tokens(:) !< Tokens.
    integer(I4P),                  intent(inout) :: i         !< The `font` word in, the spec's last token out.
    type(font_object),             intent(out)   :: font      !< Font.
    integer(I4P),                  intent(out)   :: iostat    !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg     !< Error message.
+   logical,             intent(in), optional    :: terminal  !< The terminal's font.
    logical                                      :: ok        !< Success.
    character(len=:), allocatable                :: text      !< Spec.
 
@@ -1390,6 +1394,7 @@ contains
       return
    endif
    font = font_of(text)
+   if (.not. present(terminal)) font%size = font%size * self%element_scale
    ! a family foresight has no font for: measured with the sans face, as the docs say (once per family and run)
    if (len_trim(font%family) > 0) then
       block
@@ -12793,7 +12798,7 @@ contains
             block
                type(font_object) :: font !< Page font.
 
-               if (.not. font_spec(self, tokens, i, font, iostat, iomsg)) then
+               if (.not. font_spec(self, tokens, i, font, iostat, iomsg, terminal=.true.)) then
                   iomsg = 'set terminal: '//iomsg
                   return
                endif
@@ -12812,6 +12817,8 @@ contains
          endif
          i = i + 1_I4P
       enddo
+      ! the elements' fonts (`set title font ",18"`): points times fontscale and 4/3, as the terminal's, in px
+      self%element_scale = merge(pdf_fontscale * 16.0_R8P / 9.0_R8P, 1.0_R8P, pdf_term)
       ! pdfcairo's font: its size in points times fontscale and 4/3 (12 if none given; gnuplot's cairo terminals draw a
       ! font of S points at 4/3 S), its family
       if (pdf_term .and. (pdf_font_pt > 0.0_R8P .or. pdf_fontscale /= pdf_scale0 .or. len_trim(pdf_family) > 0)) then
@@ -12914,7 +12921,7 @@ contains
             block
                type(font_object) :: font !< Page font.
 
-               if (.not. font_spec(self, tokens, i, font, iostat, iomsg)) then
+               if (.not. font_spec(self, tokens, i, font, iostat, iomsg, terminal=.true.)) then
                   iomsg = 'set terminal: '//iomsg
                   return
                endif

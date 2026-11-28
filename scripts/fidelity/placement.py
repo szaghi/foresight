@@ -19,6 +19,8 @@ Options:
   --term T          only this terminal: svg or cairolatex (repeatable)
   --write FILE      write the table to FILE (scripts/fidelity/baseline/placement.txt is the committed one)
   --explain         attribute each offset to a width or a placement rule (see explain())
+  --kinds K,K       only these kinds of text (title, xlabel, ylabel, x2label, y2label, xtic, ytic, x2tic, y2tic,
+                    key, keytitle, label)
   --check           exit 1 when a text not driven by a width is off by more than LIMIT (0.5 px, 0.1 bp), or a
                     width-driven one by more than LIMIT beyond its width difference
 
@@ -51,6 +53,10 @@ FONTCONF = """<?xml version="1.0"?>
     <test name="family"><string>Sans</string></test>
     <edit name="family" mode="prepend" binding="strong"><string>Liberation Sans</string></edit>
   </match>
+  <match target="pattern">
+    <test name="family"><string>sans-serif</string></test>
+    <edit name="family" mode="prepend" binding="strong"><string>Liberation Sans</string></edit>
+  </match>
 </fontconfig>
 """
 
@@ -64,6 +70,7 @@ class Text:
     y: float
     anchor: str
     angle: float
+    raw: str = ""
 
 
 @dataclass
@@ -77,13 +84,20 @@ class Row:
     dx: float
     dy: float
     note: str
+    gx: float = 0.0
+    gy: float = 0.0
+    raw: str = ""
+
+
+def raw(text: str) -> str:
+    """The characters of a text as gnuplot counts them: without markup and math delimiters, its spaces kept."""
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text).replace("\\strut{}", "").replace("$", "")
 
 
 def clean(text: str) -> str:
     """The content of a text without markup, math delimiters and spaces at its ends."""
-    text = re.sub(r"<[^>]+>", "", text)
-    text = html.unescape(text).replace("\\strut{}", "").replace("$", "")
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", raw(text)).strip()
 
 
 def svg_texts(path: str, gnuplot: bool) -> list[Text]:
@@ -96,7 +110,7 @@ def svg_texts(path: str, gnuplot: bool) -> list[Text]:
                              r"<text[^>]*>(.*?)</text>", s, re.S):
             anchor = re.search(r'text-anchor="(\w+)"', m.group(4))
             out.append(Text(clean(m.group(5)), float(m.group(1)), float(m.group(2)),
-                            anchor.group(1) if anchor else "start", -float(m.group(3) or 0.0)))
+                            anchor.group(1) if anchor else "start", -float(m.group(3) or 0.0), raw(m.group(5))))
         return [t for t in out if t.text]
     for m in re.finditer(r"<text([^>]*)>(.*?)</text>", s, re.S):
         a = m.group(1)
@@ -131,7 +145,7 @@ def tex_texts(path: str) -> list[Text]:
         body = re.sub(r"\}+%?\s*$", "", box.group(3))
         anchor = {"l": "start", "r": "end"}.get(box.group(2) or "c", "middle")
         out.append(Text(clean(body), int(m.group(1)) / 20.0, top - int(m.group(2)) / 20.0, anchor,
-                        float(rot.group(1)) if rot else 0.0))
+                        float(rot.group(1)) if rot else 0.0, raw(body)))
     return [t for t in out if t.text]
 
 
@@ -180,9 +194,12 @@ def tick_kind(t: Text, term: str, border: tuple[float, ...]) -> str:
     """The axis of a tick label, from where it stands against the plot area."""
     width, height = (600.0, 400.0) if term == "svg" else (360.0, 216.0)
     left, right, top, bottom = border[0] * width, border[1] * width, (1 - border[3]) * height, (1 - border[2]) * height
-    if t.x < left - 1.0 and top - 1.0 <= t.y <= bottom + 1.0:
+    if round(t.angle) % 180:  # rotated tick labels: x ones (y ones are not rotated in the probes)
+        return "xtic" if t.y > (top + bottom) / 2 else "x2tic"
+    slack = 0.06 * height  # a label centred on the corner tick hangs below the border by its baseline drop
+    if t.x < left - 1.0 and top - slack <= t.y <= bottom + slack:
         return "ytic"
-    if t.x > right + 1.0 and top - 1.0 <= t.y <= bottom + 1.0:
+    if t.x > right + 1.0 and top - slack <= t.y <= bottom + slack:
         return "y2tic"
     return "xtic" if t.y > bottom else "x2tic"
 
@@ -253,7 +270,7 @@ def measure(foresight: str, probes: list[str], terms: list[str]) -> tuple[list[R
                     kind = kinds.get(g.text) or tick_kind(g, term, margins(probe))
                     note = "" if (g.anchor, round(g.angle) % 360) == (f.anchor, round(f.angle) % 360) else \
                         f"anchor/angle {g.anchor} {g.angle:g} vs {f.anchor} {f.angle:g}"
-                    rows.append(Row(name, term, g.text, kind, f.x - g.x, f.y - g.y, note))
+                    rows.append(Row(name, term, g.text, kind, f.x - g.x, f.y - g.y, note, g.x, g.y, g.raw))
                 lonely += [f"{name} {term}: {t.text!r} gnuplot only" for t in only_gp]
                 lonely += [f"{name} {term}: {t.text!r} foresight only" for t in only_fs]
     return rows, lonely
@@ -272,6 +289,7 @@ def main() -> None:
     """Parse the options, measure, report."""
     args = sys.argv[1:]
     foresight, names, terms, write, explain_, check = os.path.join(ROOT, "bin", "foresight"), [], [], None, False, False
+    kinds: list[str] = []
     while args:
         a = args.pop(0)
         if a == "--foresight":
@@ -286,6 +304,8 @@ def main() -> None:
             explain_ = True
         elif a == "--check":
             check = True
+        elif a == "--kinds":
+            kinds = args.pop(0).split(",")
         else:
             sys.exit(f"placement.py: unknown option {a} (see the docstring)")
     if not shutil.which("gnuplot"):
@@ -306,7 +326,7 @@ def main() -> None:
     if explain_ or check:
         from placement_rules import explain
 
-        failed |= explain(rows, foresight, check)
+        failed |= explain(rows, foresight, check, kinds)
     print(f"placement: {len(rows)} texts matched in {len(probes)} probes, {len(lonely)} unmatched")
     sys.exit(1 if failed else 0)
 

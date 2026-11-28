@@ -193,6 +193,32 @@ type :: pm3d_queue
    integer(I4P)                    :: nv = 0_I4P    !< Corners.
 endtype pm3d_queue
 
+type :: boundary_object
+   !< gnuplot 6.0's boundary of a 2D panel on a vector device (boundary.c): the terminal's character cell and the room
+   !< of each text around the plot area [px]. Widths are measured (foresight's metrics), where gnuplot counts characters.
+   real(R8P) :: v = 0.0_R8P                  !< v_char.
+   real(R8P) :: h = 0.0_R8P                  !< h_char.
+   real(R8P) :: vtic = 0.0_R8P               !< v_tic: the x ticks' length.
+   real(R8P) :: htic = 0.0_R8P               !< h_tic: the y ticks' length.
+   real(R8P) :: xtic_height = 0.0_R8P        !< Outward x ticks.
+   real(R8P) :: xtic_textheight = 0.0_R8P    !< x tick labels, with a line of gap.
+   real(R8P) :: x2tic_height = 0.0_R8P       !< Outward x2 ticks.
+   real(R8P) :: x2tic_textheight = 0.0_R8P   !< x2 tick labels.
+   real(R8P) :: ytic_width = 0.0_R8P         !< Outward y ticks.
+   real(R8P) :: ytic_textwidth = 0.0_R8P     !< y tick labels, with two characters of gap.
+   real(R8P) :: y2tic_width = 0.0_R8P        !< Outward y2 ticks.
+   real(R8P) :: y2tic_textwidth = 0.0_R8P    !< y2 tick labels.
+   real(R8P) :: xlabel_textheight = 0.0_R8P  !< x label, less its offset up.
+   real(R8P) :: x2label_textheight = 0.0_R8P !< x2 label.
+   real(R8P) :: x2label_yoffset = 0.0_R8P    !< x2 label's offset up.
+   real(R8P) :: ylabel_textwidth = 0.0_R8P   !< y label (rotated: its lines).
+   real(R8P) :: y2label_textwidth = 0.0_R8P  !< y2 label.
+   real(R8P) :: title_textheight = 0.0_R8P   !< Room above the plot for the title: a line of gap and its lines.
+   real(R8P) :: title_v = 0.0_R8P            !< v_char of the title's font.
+   logical   :: xticmode = .false.           !< x ticks set.
+   logical   :: y2ticmode = .false.          !< y2 ticks set.
+endtype boundary_object
+
 type :: axes_object
    !< Plot panel.
    type(axis_object)                :: xaxis          !< Horizontal axis.
@@ -2243,7 +2269,14 @@ contains
    real(R8P)                            :: base      !< Line of the ticks: the border, or the zero axis [px].
    real(R8P)                            :: span(2)   !< Ends of a border side limited to the data range [px].
    logical                              :: limited   !< A border side limited to the data range.
+   logical                              :: gnuplot_rules !< Texts at gnuplot's places (a vector device, no map view).
+   type(boundary_object)                :: b         !< gnuplot's boundary.
+   real(R8P)                            :: chv(2)    !< A character's width and height [px] (offset units).
+   real(R8P)                            :: lx, ly    !< An axis label's first line centre [px].
+   real(R8P)                            :: lpx       !< Its font size [px].
 
+   gnuplot_rules = .not. (backend%row_height() > 0.0_R8P .or. (self%three_d .and. self%view3d%map))
+   chv = [CHAR_WIDTH * font_size, CHAR_HEIGHT * font_size]
    angle = 0.0_R8P
    if (backend%rotates_text()) angle = self%xaxis%tics%rotate
    shift = out_shift(self%xaxis%tics)
@@ -2442,6 +2475,70 @@ contains
          enddo
          call backend%end_group
       endif
+      if (gnuplot_rules) then
+         ! gnuplot 6.0's places (boundary.c, draw_titles): each text's first line centred where gnuplot centres it, in
+         ! the device's character cell, the baseline 0.35 of its font size lower; further lines a v_char of its font
+         ! apart (down, or right for the rotated y labels)
+         b = panel_boundary(self, backend, font_size)
+         chv = [b%h, b%v]
+         if (self%x2axis%has_label()) then
+            ly = top - b%x2label_textheight
+            if (b%x2label_textheight + b%x2label_yoffset >= 0.0_R8P) ly = ly - 1.5_R8P * b%x2tic_textheight - &
+                                                                           b%x2tic_height
+            lpx = element_px(backend, self%label_font(4), font_size)
+            backend%literal = self%label_plain(4)
+            call axis_text(0.5_R8P * (left + right), ly + 0.35_R8P * lpx, self%x2axis%label, 4_I4P, 0.0_R8P, &
+                           [0.0_R8P, line_v(lpx)])
+         endif
+         if (self%xaxis%has_label()) then
+            ly = bottom + b%xtic_height + b%xtic_textheight + 0.5_R8P * b%v
+            if (.not. b%xticmode) ly = ly + 0.5_R8P * b%v
+            lpx = element_px(backend, self%label_font(1), font_size)
+            backend%literal = self%label_plain(1)
+            call axis_text(0.5_R8P * (left + right), ly + 0.35_R8P * lpx, self%xaxis%label, 1_I4P, 0.0_R8P, &
+                           [0.0_R8P, line_v(lpx)])
+         endif
+         if (self%yaxis%has_label()) then
+            ! gnuplot's "much argued" quarter character to the right
+            lx = left - b%ytic_width - b%ytic_textwidth - 0.5_R8P * b%ylabel_textwidth + 0.25_R8P * b%h
+            lpx = element_px(backend, self%label_font(2), font_size)
+            backend%literal = self%label_plain(2)
+            call axis_text(lx + 0.35_R8P * lpx, 0.5_R8P * (top + bottom), self%yaxis%label, 2_I4P, -90.0_R8P, &
+                           [line_v(lpx), 0.0_R8P])
+         endif
+         if (self%y2axis%has_label()) then
+            lx = right + b%y2tic_width + b%y2tic_textwidth + 0.5_R8P * b%y2label_textwidth
+            lpx = element_px(backend, self%label_font(3), font_size)
+            backend%literal = self%label_plain(3)
+            call axis_text(lx + 0.35_R8P * lpx, 0.5_R8P * (top + bottom), self%y2axis%label, 3_I4P, -90.0_R8P, &
+                           [line_v(lpx), 0.0_R8P])
+         endif
+         backend%literal = .false.
+         if (self%has_title()) then
+            ! its lines and half a v_char above the plot, above the x2 tick labels, label and outward ticks unless an
+            ! offset brings it down into the plot
+            title_px = element_px(backend, self%title_font, font_size)
+            title_y = top - (real(self%title_rows(), R8P) * b%title_v + 0.5_R8P * b%v)
+            if (real(self%title_rows(), R8P) + self%title_offset(2) > 0.0_R8P) then
+               title_y = title_y - b%x2tic_textheight - b%x2tic_height
+               if (self%x2axis%has_label()) title_y = title_y - b%x2label_textheight
+            endif
+            backend%literal = self%title_plain
+            backend%boxed = self%title_boxed
+            backend%font = self%title_font
+            block
+               real(R8P) :: shift_px(2) !< Title shift [px, y down].
+
+               shift_px = offset_px(self%title_offset, self%title_offset_system, [right - left, bottom - top], &
+                                    self%canvas, font_size, chv)
+               call text_rows(backend, 0.5_R8P * (left + right) + shift_px(1), title_y + 0.35_R8P * title_px + &
+                              shift_px(2), self%title, trim(self%title_anchor), b%title_v, trim(self%title_color))
+            endblock
+            backend%literal = .false.
+            backend%boxed = .false.
+            backend%font = font_object()
+         endif
+      else
       if (self%x2axis%has_label()) then
          label_y = top - self%x2_room(font_size) + (LINE_HEIGHT - 0.25_R8P) * font_size
          ! on a text device, the row right above the x2 tick labels, as gnuplot's dumb terminal (the pixel gap could
@@ -2525,21 +2622,55 @@ contains
          backend%boxed = .false.
          backend%font = font_object()
       endif
+      endif
    endassociate
    contains
-      subroutine axis_text(x, y, string, k, angle)
+      subroutine axis_text(x, y, string, k, angle, step)
       !< Axis label `k` (1 x, 2 y, 3 y2, 4 x2) at (`x`, `y`) [px], rotated by `angle` (0 for none), shifted by its
-      !< `set xlabel offset X,Y` [characters, y up] and in its `tc` color.
-      real(R8P),        intent(in) :: x      !< Abscissa [px].
-      real(R8P),        intent(in) :: y      !< Ordinate [px].
-      character(len=*), intent(in) :: string !< Label.
+      !< `set xlabel offset X,Y` [characters, y up] and in its `tc` color; with `step`, a line per new line in it, each
+      !< `step` [px] from the one before.
+      real(R8P),        intent(in)           :: x       !< Abscissa [px].
+      real(R8P),        intent(in)           :: y       !< Ordinate [px].
+      character(len=*), intent(in)           :: string  !< Label.
+      integer(I4P),     intent(in)           :: k       !< Label: 1 x, 2 y, 3 y2, 4 x2.
+      real(R8P),        intent(in)           :: angle   !< Rotation [degrees], 0 for none.
+      real(R8P),        intent(in), optional :: step(2) !< From a line to the next [px].
+      real(R8P)                              :: px      !< Shifted abscissa [px].
+      real(R8P)                              :: py      !< Shifted ordinate [px].
+      integer(I4P)                           :: a, e    !< A line's first and last characters.
+      integer(I4P)                           :: line    !< Line counter.
+
+      px = x + self%label_offset(1, k) * chv(1)
+      py = y - self%label_offset(2, k) * chv(2)
+      if (present(step) .and. index(string, new_line('a')) > 0) then
+         a = 1_I4P
+         line = 0_I4P
+         do
+            e = index(string(a:), new_line('a'), kind=I4P)
+            if (e == 0_I4P) then
+               e = len(string, kind=I4P)
+            else
+               e = a + e - 2_I4P
+            endif
+            if (e >= a) call axis_line(px + real(line, R8P) * step(1), py + real(line, R8P) * step(2), string(a:e), &
+                                       k, angle)
+            line = line + 1_I4P
+            a = e + 2_I4P
+            if (a > len(string, kind=I4P)) exit
+         enddo
+      else
+         call axis_line(px, py, string, k, angle)
+      endif
+      endsubroutine axis_text
+
+      subroutine axis_line(px, py, string, k, angle)
+      !< A line of the axis label `k` at (`px`, `py`) [px], rotated by `angle`, in its font, box and color.
+      real(R8P),        intent(in) :: px     !< Abscissa [px].
+      real(R8P),        intent(in) :: py     !< Ordinate [px].
+      character(len=*), intent(in) :: string !< Text.
       integer(I4P),     intent(in) :: k      !< Label: 1 x, 2 y, 3 y2, 4 x2.
       real(R8P),        intent(in) :: angle  !< Rotation [degrees], 0 for none.
-      real(R8P)                    :: px     !< Shifted abscissa [px].
-      real(R8P)                    :: py     !< Shifted ordinate [px].
 
-      px = x + self%label_offset(1, k) * CHAR_WIDTH * font_size
-      py = y - self%label_offset(2, k) * CHAR_HEIGHT * font_size
       backend%boxed = btest(self%label_boxed, k - 1_I4P)
       backend%font = self%label_font(k)
       if (len_trim(self%label_color(k)) > 0) then
@@ -2555,7 +2686,17 @@ contains
       endif
       backend%boxed = .false.
       backend%font = font_object()
-      endsubroutine axis_text
+      endsubroutine axis_line
+
+      function line_v(size) result(v)
+      !< v_char of the device at a font of `size` [px]: a label's line step.
+      real(R8P), intent(in) :: size !< Font size [px].
+      real(R8P)             :: v    !< v_char [px].
+      real(R8P)             :: c(5) !< Cell.
+
+      c = backend%char_cell(size)
+      v = c(1)
+      endfunction line_v
 
       pure function horizontal_span(axis) result(ends)
       !< Abscissae of the data range of `axis` on the plot area, clipped to it [px].
@@ -10324,6 +10465,126 @@ contains
    if (allocated(self%title)) has = len(self%title) > 0
    endfunction has_title
 
+   pure function panel_boundary(self, backend, font_size) result(b)
+   !< gnuplot 6.0's boundary of the panel on a vector device (boundary.c `boundary`): the device's character cell
+   !< (`char_cell`, the terminal's v_char, h_char, v_tic, h_tic) and the room of the ticks, tick labels, axis labels and
+   !< title around the plot area. gnuplot counts the characters of the widest tick label times h_char: here it is
+   !< measured (#5 D7).
+   class(axes_object),    intent(in) :: self      !< Panel.
+   class(backend_object), intent(in) :: backend   !< Output device.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   type(boundary_object)             :: b         !< Boundary.
+   real(R8P)                         :: c(5)      !< A character cell.
+   real(R8P)                         :: proj      !< Depth below their anchor of rotated x labels per unit width.
+   integer(I4P)                      :: n         !< Lines.
+
+   c = backend%char_cell(font_size)
+   b%v = c(1)
+   b%h = c(2)
+   b%vtic = c(3)
+   b%htic = c(4)
+   ! the x ticks out of the border, their labels a line below them and a line of gap (rotated: their depth, the label
+   ! left justified rising from below the tick unless right justified), a histogram group's titles a line more
+   b%xticmode = ticks_set(self%xaxis)
+   if (b%xticmode .and. self%xaxis%tics%out) b%xtic_height = b%vtic * self%xaxis%tics%scale(1)
+   if (b%xticmode .and. .not. on_zero(self%xaxis%tics, self%yaxis)) then
+      b%xtic_textheight = b%v * real(label_rows(self%xaxis%ticks) + 1_I4P, R8P)
+      if (self%xaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+         proj = -sin(self%xaxis%tics%rotate * PI_R8 / 180.0_R8P)
+         if (self%xaxis%tics%anchor() == 'end') proj = -proj
+         if (proj > 0.0_R8P) b%xtic_textheight = widest_label(self%xaxis) * proj + b%v
+      endif
+      b%xtic_textheight = b%xtic_textheight + b%v * real(self%group_rows(), R8P)
+   endif
+   ! the x label: its lines (one more for enhanced text with sub- or superscripts) and 0.2 of one for the descenders,
+   ! less its offset up; half a line more without x ticks
+   if (self%xaxis%has_label()) then
+      n = text_lines(self%xaxis%label)
+      if (backend%enhanced .and. .not. self%label_plain(1) .and. scan(self%xaxis%label, '_^') > 0) n = n + 1_I4P
+      b%xlabel_textheight = (real(n, R8P) + 0.2_R8P) * b%v - self%label_offset(2, 1) * b%v
+      if (.not. b%xticmode) b%xlabel_textheight = b%xlabel_textheight + 0.5_R8P * b%v
+   endif
+   ! the x2 ticks, their labels (rotated: their rise) and the x2 label in its font
+   if (self%x2_active .and. ticks_set(self%x2axis)) then
+      if (self%x2axis%tics%out) b%x2tic_height = b%vtic * self%x2axis%tics%scale(1)
+      b%x2tic_textheight = b%v * real(label_rows(self%x2axis%ticks), R8P) + self%x2_rise
+   endif
+   if (self%x2axis%has_label()) then
+      c = backend%char_cell(element_px(backend, self%label_font(4), font_size))
+      b%x2label_textheight = real(text_lines(self%x2axis%label), R8P) * c(1)
+      b%x2label_yoffset = self%label_offset(2, 4) * b%v
+   endif
+   ! the title: a line of gap, its lines in its font unless an offset brings it down into the plot
+   if (self%has_title()) then
+      c = backend%char_cell(element_px(backend, self%title_font, font_size))
+      b%title_v = c(1)
+      b%title_textheight = b%v
+      if (real(self%title_rows(), R8P) + self%title_offset(2) > 0.0_R8P) &
+         b%title_textheight = b%title_textheight + real(self%title_rows(), R8P) * b%title_v
+   endif
+   ! the y ticks, their labels (two characters of gap; rotated: their lines and two more) or, without them, two
+   ! characters before the y label; the y label, rotated: its lines
+   if (ticks_set(self%yaxis) .and. self%yaxis%tics%out) b%ytic_width = b%htic * self%yaxis%tics%scale(1)
+   if (ticks_set(self%yaxis) .and. .not. on_zero(self%yaxis%tics, self%xaxis)) then
+      if (self%yaxis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+         b%ytic_textwidth = b%v * real(label_rows(self%yaxis%ticks) + 2_I4P, R8P)
+      else
+         b%ytic_textwidth = widest_label(self%yaxis) + 2.0_R8P * b%h
+      endif
+   elseif (self%yaxis%has_label()) then
+      b%ytic_textwidth = 2.0_R8P * b%h
+   endif
+   if (self%yaxis%has_label()) b%ylabel_textwidth = merge(real(text_lines(self%yaxis%label), R8P) * b%v, &
+                                                          3.0_R8P * b%h, backend%rotates_text())
+   ! the y2 ticks, labels and label, as the y ones; half a line more for the label without y2 ticks
+   b%y2ticmode = self%y2_active .and. ticks_set(self%y2axis)
+   if (b%y2ticmode) then
+      if (self%y2axis%tics%out) b%y2tic_width = b%htic * self%y2axis%tics%scale(1)
+      if (self%y2axis%tics%rotate /= 0.0_R8P .and. backend%rotates_text()) then
+         b%y2tic_textwidth = b%v * real(label_rows(self%y2axis%ticks) + 2_I4P, R8P)
+      else
+         b%y2tic_textwidth = widest_label(self%y2axis) + 2.0_R8P * b%h
+      endif
+   endif
+   if (self%y2axis%has_label()) then
+      b%y2label_textwidth = merge(real(text_lines(self%y2axis%label), R8P) * b%v, 3.0_R8P * b%h, &
+                                  backend%rotates_text())
+      if (.not. b%y2ticmode .and. backend%rotates_text()) b%y2label_textwidth = b%y2label_textwidth + 0.5_R8P * b%v
+   endif
+   contains
+      pure function ticks_set(axis) result(set)
+      !< Whether the axis has ticks (gnuplot's ticmode).
+      type(axis_object), intent(in) :: axis !< Axis.
+      logical                       :: set  !< Ticks set.
+
+      set = .false.
+      if (axis%tics%mode == TICS_NONE .or. .not. allocated(axis%ticks)) return
+      set = size(axis%ticks) > 0
+      endfunction ticks_set
+
+      pure function widest_label(axis) result(widest)
+      !< Width of the widest major tick label of `axis` [px], measured by the device.
+      type(axis_object), intent(in) :: axis   !< Axis.
+      real(R8P)                     :: widest !< Width [px].
+      integer(I4P)                  :: k      !< Tick counter.
+
+      widest = 0.0_R8P
+      do k = 1_I4P, size(axis%ticks, kind=I4P)
+         if (axis%ticks(k)%major) widest = max(widest, backend%text_width(axis%ticks(k)%label, axis%ticks(k)%sup, &
+                                                                          font_size))
+      enddo
+      endfunction widest_label
+   endfunction panel_boundary
+
+   pure function text_lines(string) result(n)
+   !< Lines of a text: one more per new line in it (gnuplot's "\n").
+   character(len=*), intent(in) :: string !< Text.
+   integer(I4P)                  :: n      !< Lines.
+   integer(I4P)                  :: k      !< Character counter.
+
+   n = 1_I4P + count([(string(k:k) == new_line('a'), k = 1_I4P, len(string, kind=I4P))])
+   endfunction text_lines
+
    pure function place_plot_area(self, backend, x0, y0, width, height, font_size, above) result(area)
    !< Plot area left by the margins that tick labels, axis labels, title and a key `above` need, measured by the device.
    class(axes_object),    intent(in) :: self       !< Panel.
@@ -10336,6 +10597,8 @@ contains
    real(R8P),          intent(in) :: above      !< Room for a key between the title and the plot [px].
    real(R8P)                      :: area(4)    !< Plot area: left, right, top, bottom [px].
    real(R8P)                      :: margins(4) !< Left, right, top, bottom margins [px].
+   type(boundary_object)          :: b          !< gnuplot's boundary (a vector device).
+   real(R8P)                      :: chw, chh   !< A character's width and height [px] (`set lmargin` units).
    real(R8P)                      :: y2_margin  !< Right margin the second y axis needs [px].
    real(R8P)                      :: extent(3)  !< Rotated x labels: depth, left and right reach [px].
    logical                        :: rotated    !< The x tick labels are drawn rotated.
@@ -10454,19 +10717,56 @@ contains
          margins(4) = margins(4) + LINE_HEIGHT * font_size
       endif
    endif
+   chw = CHAR_WIDTH * font_size
+   chh = CHAR_HEIGHT * font_size
+   if (.not. (backend%row_height() > 0.0_R8P .or. self%polar)) then
+      ! a vector device: gnuplot 6.0's auto margins (boundary.c), in its terminal's character cell
+      b = panel_boundary(self, backend, font_size)
+      chw = b%h
+      chh = b%v
+      ! left: the y label (or a rotated timestamp), the outward ticks and the tick labels, at least 2 h_char; half one more
+      margins(1) = b%ylabel_textwidth
+      if (self%stamp .and. self%stamp_rotate) margins(1) = max(margins(1), 2.5_R8P * b%h)
+      margins(1) = max(margins(1) + b%ytic_width + b%ytic_textwidth, 2.0_R8P * b%h) + 0.5_R8P * b%h
+      ! right: 2 h_char, the y2 ticks, tick labels and label, one more h_char; the color box; listed x tick labels
+      ! sticking out of the right border
+      margins(2) = 3.0_R8P * b%h + b%y2tic_width + b%y2tic_textwidth + b%y2label_textwidth
+      if (self%colorbox .and. self%has_image(palette=.true.) .and. .not. (self%cbox%user .or. self%cbox%horizontal)) &
+         margins(2) = margins(2) + self%colorbox_width(backend, font_size)
+      if (self%xaxis%tics%has_list() .and. .not. rotated) then
+         do t = 1_I4P, size(self%xaxis%ticks, kind=I4P)
+            if (.not. self%xaxis%ticks(t)%major) cycle
+            if (self%xaxis%to_unit(self%xaxis%ticks(t)%value) < 1.0_R8P - 1.0e-9_R8P) cycle
+            margins(2) = max(margins(2), b%h + 0.5_R8P * backend%text_width(self%xaxis%ticks(t)%label, &
+                                                                             self%xaxis%ticks(t)%sup, font_size))
+         enddo
+      endif
+      ! top: the title, the x2 label above, a timestamp at the top, the x2 tick labels, a line, the outward x2 ticks;
+      ! a key above
+      margins(3) = b%title_textheight
+      if (b%x2label_textheight + b%x2label_yoffset > 0.0_R8P) margins(3) = margins(3) + b%x2label_textheight
+      if (self%stamp .and. self%stamp_top .and. .not. self%stamp_rotate) margins(3) = max(margins(3), b%v)
+      margins(3) = margins(3) + b%x2tic_textheight + b%v + b%x2tic_height + above
+      ! bottom: the outward ticks, the tick labels, the x label, a timestamp; a horizontal color box; at least 2 h_char
+      margins(4) = b%xtic_height + b%xtic_textheight + max(0.0_R8P, b%xlabel_textheight)
+      if (self%stamp .and. .not. self%stamp_top .and. .not. self%stamp_rotate) margins(4) = margins(4) + b%v
+      if (self%colorbox .and. self%has_image(palette=.true.) .and. self%cbox%horizontal .and. .not. self%cbox%user) &
+         margins(4) = margins(4) + self%colorbox_height(font_size)
+      if (.not. margins(4) > 0.0_R8P) margins(4) = 2.0_R8P * b%h
+   endif
    area = [x0 + margins(1), x0 + width - margins(2), y0 + margins(3), y0 + height - margins(4)]
    ! margins set: characters from the panel box, or the border at a fraction of the page (gnuplot `at screen`, from the
    ! bottom left)
    if (self%margin_user(1) >= 0.0_R8P) area(1) = merge(self%margin_user(1) * self%canvas(1), &
-                                                       x0 + self%margin_user(1) * CHAR_WIDTH * font_size, &
+                                                       x0 + self%margin_user(1) * chw, &
                                                        self%margin_screen(1))
    if (self%margin_user(2) >= 0.0_R8P) area(2) = merge(self%margin_user(2) * self%canvas(1), &
-                                                       x0 + width - self%margin_user(2) * CHAR_WIDTH * font_size, &
+                                                       x0 + width - self%margin_user(2) * chw, &
                                                        self%margin_screen(2))
    if (self%margin_user(3) >= 0.0_R8P) area(3) = merge((1.0_R8P - self%margin_user(3)) * self%canvas(2), &
-                                                       y0 + self%margin_user(3) * CHAR_HEIGHT * font_size, self%margin_screen(3))
+                                                       y0 + self%margin_user(3) * chh, self%margin_screen(3))
    if (self%margin_user(4) >= 0.0_R8P) area(4) = merge((1.0_R8P - self%margin_user(4)) * self%canvas(2), &
-                                                       y0 + height - self%margin_user(4) * CHAR_HEIGHT * font_size, &
+                                                       y0 + height - self%margin_user(4) * chh, &
                                                        self%margin_screen(4))
    if (self%ratio > 0.0_R8P) then
       call fit_ratio(area, self%ratio)
@@ -11588,7 +11888,7 @@ contains
    yes = axis%tics%rangelimited .and. axis%has_data
    endfunction limits
 
-   pure function offset_px(offset, systems, plot, canvas, font_size) result(d)
+   pure function offset_px(offset, systems, plot, canvas, font_size, cell) result(d)
    !< A text offset on the page [px, x right, y down] (gnuplot's map_position_r): each coordinate in its system,
    !< `character` (0.6 of the font size wide, the font size high), `graph` (fractions of the `plot` width and height
    !< [px]) or `screen` (fractions of the `canvas`); y upward as given.
@@ -11597,6 +11897,8 @@ contains
    real(R8P),        intent(in) :: plot(2)    !< Plot area width and height [px].
    real(R8P),        intent(in) :: canvas(2)  !< Page width and height [px].
    real(R8P),        intent(in) :: font_size  !< Font size [px].
+   real(R8P), intent(in), optional :: cell(2) !< A character's width and height [px], the device's (else 0.7 and 1.5
+                                              !< font sizes, gnuplot's svg).
    real(R8P)                    :: d(2)       !< Shift [px].
    real(R8P)                    :: unit(2)    !< Unit of each coordinate [px].
    integer(I4P)                 :: k          !< Coordinate.
@@ -11609,6 +11911,7 @@ contains
          unit(k) = canvas(k)
       case default
          unit(k) = merge(CHAR_WIDTH, CHAR_HEIGHT, k == 1_I4P) * font_size
+         if (present(cell)) unit(k) = cell(k)
       endselect
    enddo
    d = [offset(1) * unit(1), -offset(2) * unit(2)]

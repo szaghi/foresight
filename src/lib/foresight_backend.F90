@@ -105,6 +105,7 @@ type, abstract :: backend_object
       procedure,                            pass(self)           :: scene           !< A 3D view's scene (JSON).
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
       procedure,                            pass(self)           :: char_cell      !< gnuplot's character cell.
+      procedure,                            pass(self)           :: canvas_inset   !< Page left off the canvas.
       procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
       procedure,                            pass(self)           :: pixmap         !< A PNG image [px].
       procedure,                            pass(self)           :: front_area     !< Open or close the front layer of
@@ -380,6 +381,15 @@ contains
 
    separate = .false.
    endsubroutine front_area
+
+   pure function canvas_inset(self) result(inset)
+   !< The strip of the page [px] the terminal the device stands for leaves out of its canvas, at the right and at the
+   !< top: none (gnuplot's svg canvas is the page).
+   class(backend_object), intent(in) :: self  !< Device.
+   real(R8P)                         :: inset !< Strip [px].
+
+   inset = 0.0_R8P
+   endfunction canvas_inset
 
    pure function char_cell(self, font_size) result(c)
    !< gnuplot's character cell of the terminal the device stands for, at a font of `font_size` px [px]: `v_char`,
