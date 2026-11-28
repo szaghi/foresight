@@ -8,7 +8,7 @@ hero:
     light: /logo.svg
     dark: /logo-dark.svg
     alt: FORESIGHT, Fuji plotted on two axes with the sun ahead of its slope
-  tagline: Plot from your solver or from a gnuplot script, and open the result in any browser — zoom, pan, live reload while the job runs. No Python, no gnuplot, nothing but a Fortran compiler.
+  tagline: Plot from your solver or from a gnuplot script — open the result in any browser, watch it live while the job runs, put it in your paper as PDF or as a LaTeX picture. No Python, no gnuplot, nothing but a Fortran compiler.
   actions:
     - theme: brand
       text: Learning paths
@@ -45,6 +45,15 @@ features:
     details: foresight --watch re-renders while a running job appends to its logs; the page reloads itself and keeps your zoom, or follows the newest data. Over ssh, the text terminal redraws in place, in characters or Braille dots.
     link: /manual/paths/b-monitoring/02-watching-the-run
     linkText: Watch a run
+  - icon:
+      light: /icons/paper.svg
+      dark: /icons/paper-dark.svg
+      width: 44
+      height: 44
+    title: Papers and reports
+    details: PDF with embedded fonts and exact metrics, gnuplot's pdfcairo sizes and a paper theme; cairolatex pictures whose labels the paper's LaTeX sets; TeX math in labels, set as LaTeX sets it; reports with alternative texts, captions and Markdown tables.
+    link: /manual/paths/c-paper/01-a-first-pdf
+    linkText: Figures for a paper
   - icon:
       light: /icons/gnuplot.svg
       dark: /icons/gnuplot-dark.svg
@@ -105,7 +114,7 @@ features:
       width: 44
       height: 44
     title: Pure Fortran
-    details: Fortran 2018 and two libc calls. Interactive HTML, static SVG and text, from one FoBiS build; the browser is the only viewer you need.
+    details: Fortran 2018 and two libc calls. Interactive HTML, SVG, PDF, LaTeX pictures and text, from one FoBiS build; the browser is the only viewer you need.
     link: /guide/install
     linkText: Install
 ---
@@ -159,6 +168,20 @@ fobis build --mode foresight-static-gnu       # the library, lib/libforesight.a
 fobis build --mode foresight-gnu              # the command line, bin/foresight
 foresight --watch residuals.gp                # re-render while the solver writes run.dat
 ```
+
+## For papers and reports
+
+<p class="fs-lead">The same scripts write the figures of the paper: PDF at the size of a journal's column, its fonts
+embedded, math set as LaTeX sets it, or a LaTeX picture whose labels the paper itself sets
+(<a href="./paper/paper.pdf">an example paper</a>, built by the CI). A program writes its report around them, with
+alternative texts, captions and Markdown tables (<a href="./manual/paths/f-reports/report/report">a run report</a>).</p>
+
+<div class="fs-gallery">
+  <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern (path C)" />
+  <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels (path C)" />
+  <Plot name="pd04" svg :width="600" :height="420" caption="a lit surface of a field (path D)" />
+  <Plot name="pf01" svg :width="600" :height="320" caption="a figure and its caption for a report (path F)" />
+</div>
 
 ## Gallery
 
@@ -452,6 +475,12 @@ foresight --watch residuals.gp                # re-render while the solver write
   <Plot name="cb_paper" svg :width="321" :height="227" caption="a one-column figure (pdfcairo, theme paper)" />
   <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern" />
   <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels, set as LaTeX sets it" />
+</div>
+
+### Reports
+
+<div class="fs-gallery">
+  <Plot name="pf01" svg :width="600" :height="320" caption="a figure's alternative text and caption (save info)" />
 </div>
 
 ### From Fortran

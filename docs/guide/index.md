@@ -5,10 +5,12 @@ title: About foresight
 # About foresight
 
 **foresight** (FORtran Easy Svg Interactive Gnuplot-like Html Tool) is a Fortran library and command line tool for the
-small graphical work that surrounds scientific computing: convergence histories, monitored quantities of a running job,
-quick looks at output files, benchmark charts. It renders gnuplot's 2D plot styles (curves, bars, box plots, heatmaps,
-vector fields, polar and spider plots) and dashboard charts (readouts, gauges, pies) to self-contained interactive
-HTML pages, static SVG, or text, and needs nothing but a Fortran compiler.
+graphical work that surrounds scientific computing, from the first look at a run to the figures of its paper:
+convergence histories, monitored quantities of a running job, quick looks at output files, benchmark charts, and the
+figures and tables of papers and reports. It renders gnuplot's plot styles (curves, bars, box plots, heatmaps, vector
+fields, polar and spider plots, `splot`'s 3D views) and dashboard charts (readouts, gauges, pies) to self-contained
+interactive HTML pages, SVG, PDF with embedded fonts, LaTeX pictures (gnuplot's `cairolatex`) and text, and needs
+nothing but a Fortran compiler.
 
 ## Why
 
@@ -23,13 +25,28 @@ gnuplot build with the right terminals, glue scripts in a second language. fores
 - **the command language is gnuplot's**: a subset, interpreted by the library, so existing habits and many existing
   scripts carry over.
 
+## Papers and reports
+
+A figure goes into a paper or a report with no post-processing:
+
+- **PDF** written by foresight itself, gnuplot's `pdfcairo` syntax and sizes, the fonts embedded (Liberation Sans,
+  Latin Modern Roman) and measured with their exact metrics on every device, a `paper` theme for a journal's column
+  ([path C](/manual/paths/c-paper/01-a-first-pdf));
+- **LaTeX labels**: gnuplot's `cairolatex`, the drawing as a PDF and every text a `\put` the paper's LaTeX sets
+  ([C6](/manual/paths/c-paper/06-labels-set-by-latex));
+- **TeX math in labels** (`$\frac{t}{\tau}$`), set as LaTeX sets it in Latin Modern Math, in every format, the HTML
+  page and the terminal included ([C7](/manual/paths/c-paper/07-math-in-labels));
+- **Reports**: `save` returns what a document needs (the size, an alternative text, the caption), and tables are written
+  as Markdown ([path F](/manual/paths/f-reports/01-a-figure-in-a-report)).
+
 ## What it is not
 
-foresight is deliberately scoped. It does not aim at publication figures with LaTeX labels (use pgfplots or
-matplotlib), or 3D field visualisation (volume rendering, large meshes: use ParaView through
+foresight is deliberately scoped. It is not a typesetter: display math, matrices and line breaking in labels are
+LaTeX's (through `cairolatex`), a report's layout is its renderer's. It writes no raster images (PNG) and no EPS, has
+no journal presets and no CMYK. It is not 3D field visualisation (volume rendering, large meshes: use ParaView through
 [VTKFortran](https://github.com/szaghi/VTKFortran)); its 3D views are gnuplot's `splot`, drawn as gnuplot draws them,
-an HTML page turning them with the mouse as a sketch. Anything outside the supported gnuplot subset is reported as an error naming the command, never
-silently ignored.
+an HTML page turning them with the mouse as a sketch. Anything outside the supported gnuplot subset is reported as an
+error naming the command, never silently ignored.
 
 ## Where to start
 

@@ -6,13 +6,14 @@
   <img src="docs/public/logo.svg" alt="FORESIGHT: Fuji plotted on two axes, the sun ahead" width="320">
 </picture>
 
-#### *gnuplot-like plots from pure Fortran: interactive HTML, SVG and text*
+#### *gnuplot-like plots from pure Fortran: interactive HTML, SVG, PDF, LaTeX pictures and text*
 
 ### **FOR**tran **E**asy **S**vg **I**nteractive **G**nuplot-like **H**tml **T**ool
 
 > A library and a command line tool that draw what gnuplot draws, from your solver or from a gnuplot script: one
-> self-contained page per plot, zoomable in the browser, re-rendered live while the run writes its logs. No dependency
-> beyond a Fortran compiler.
+> self-contained page per plot, zoomable in the browser, re-rendered live while the run writes its logs; and the
+> figures of the paper, PDF with embedded fonts or LaTeX pictures, TeX math in their labels. No dependency beyond a
+> Fortran compiler.
 
 [![Version](https://img.shields.io/github/v/release/szaghi/foresight?label=version)](https://github.com/szaghi/foresight/releases)
 [![CI](https://github.com/szaghi/foresight/actions/workflows/ci.yml/badge.svg)](https://github.com/szaghi/foresight/actions/workflows/ci.yml)
@@ -39,12 +40,16 @@
 <td><b>🎌 Themes, light and dark</b><br><sub><code>washi</code> and <code>night</code>, ink on warm paper and light on a near-black ground, the colors of the documentation (its figures follow its light and dark modes); <code>vfd</code> and <code>lcd</code>, the dashboards of 1980s cars, with seven-segment readouts, gauges and segmented bars. <code>foresight --theme</code> or <code>FORESIGHT_THEME</code> picks the default. <a href="https://szaghi.github.io/foresight/guide/gnuplot/styles#themes-and-segmented-fills">Themes</a></sub></td>
 </tr>
 <tr>
+<td><b>📄 Figures for papers</b><br><sub>PDF written by foresight itself, gnuplot's <code>pdfcairo</code> syntax and sizes (<code>size single</code>, a journal's column), the fonts embedded (Liberation Sans, Latin Modern Roman) with their exact metrics on every device; <code>cairolatex</code> pictures whose labels the paper's LaTeX sets; TeX math in labels (<code>$\frac{t}{\tau}$</code>), set as LaTeX sets it, in every format. <a href="https://szaghi.github.io/foresight/manual/paths/c-paper/01-a-first-pdf">Path C</a> · <a href="https://szaghi.github.io/foresight/paper/paper.pdf">Example paper</a></sub></td>
+<td><b>📝 Reports</b><br><sub><code>save(file, info=meta)</code> returns what a document needs: the size, an alternative text from the titles and labels, the caption (<code>set caption</code>); <code>set table ... markdown</code> writes Markdown tables; a program writes its Markdown or LaTeX report around them. <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/01-a-figure-in-a-report">Path F</a> · <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/report/report">A run report</a></sub></td>
+</tr>
+<tr>
 <td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 15 test programs, 154 byte-exact golden files, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
 </tr>
 </table>
 </div>
 
-**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [tutorial](https://szaghi.github.io/foresight/manual/paths/a-first-steps/01-a-first-plot) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
+**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [learning paths](https://szaghi.github.io/foresight/manual/) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
 
 <picture>
   <source media="(prefers-color-scheme: dark)"  srcset="docs/public/examples/cb_multiplot-dark.svg">
@@ -63,7 +68,7 @@ git clone https://github.com/szaghi/foresight && cd foresight
 fobis fetch                                                   # PENF, BeFoR64, FACE, StringiFor, into src/third_party/
 fobis build --mode foresight-gnu                              # the command line tool: bin/foresight
 fobis build --mode foresight-static-gnu                       # the library: lib/libforesight.a, modules in lib/mod
-fobis build --mode tests-gnu && bash scripts/run_tests.sh     # the 11 test programs, golden files included
+fobis build --mode tests-gnu && bash scripts/run_tests.sh     # the 18 test programs, golden files included
 ```
 
 or the one-line installer, the latest release into `~/.local`, usable through pkg-config:
@@ -103,7 +108,7 @@ t = [(0.1_R8P * i, i = 0, 100)]
 call fig%set_title('Damped oscillation')
 call fig%plot(t, exp(-0.3_R8P * t) * cos(2.0_R8P * t), title='u(t)')
 call fig%plot(t, exp(-0.3_R8P * t), title='envelope', dt=2_I4P)
-call fig%save('quickstart.html')   ! interactive page; .svg static, .txt text
+call fig%save('quickstart.html')   ! interactive page; .svg static, .pdf for a paper, .txt text
 ```
 
 or from the shell, with a gnuplot script:
@@ -115,9 +120,10 @@ foresight --watch -e "set terminal dumb" residuals.gp   # the same, as text in t
 foresight -t night -o residuals.svg residuals.gp        # an SVG in the dark theme
 ```
 
-The [tutorial](https://szaghi.github.io/foresight/manual/paths/a-first-steps/01-a-first-plot) goes from a first plot to a live
-dashboard of a running solver; the [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) lists every
-command, option and style, and where foresight departs from gnuplot.
+The [learning paths](https://szaghi.github.io/foresight/manual/) start from a first plot (path A) and go on by job:
+watching a simulation, figures for a paper, fields and 3D, coming from gnuplot, reports. The
+[gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) lists every command, option and style, by
+topic, and where foresight departs from gnuplot.
 
 ## Authors
 
