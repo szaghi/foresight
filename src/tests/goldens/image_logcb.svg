@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="420" height="300" viewBox="0 0 420 300" font-family="Arial,Helvetica,sans-serif" font-size="12">
 <rect x="0" y="0" width="420" height="300" fill="white" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="41.65 319.48 18 264" data-x="-5e-1 2.5e0" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12">
+<g class="fs-axes" data-area="41.65 319.48 18 264" data-x="-5e-1 2.5e0" data-y="-5e-1 1.5e0" data-log="0 0" data-grid="0" data-font-size="12" data-cell="18 8.39 9 9">
 <g class="fs-grid" display="none">
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="41.65,264 41.65,18"/>
 <polyline fill="none" stroke="#a0a0a0" stroke-width="0.5" stroke-dasharray="2,3" points="87.96,264 87.96,18"/>
@@ -23,44 +23,44 @@
 </svg>
 <rect x="41.65" y="18" width="277.82" height="246" fill="none" stroke="black" stroke-width="1"/>
 <g class="fs-xticks">
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,264 41.65,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,18 41.65,24"/>
-<text x="41.65" y="282" text-anchor="middle">-0.5</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="87.96,264 87.96,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="87.96,18 87.96,24"/>
-<text x="87.96" y="282" text-anchor="middle">0</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="134.26,264 134.26,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="134.26,18 134.26,24"/>
-<text x="134.26" y="282" text-anchor="middle">0.5</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="180.56,264 180.56,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="180.56,18 180.56,24"/>
-<text x="180.56" y="282" text-anchor="middle">1</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="226.87,264 226.87,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="226.87,18 226.87,24"/>
-<text x="226.87" y="282" text-anchor="middle">1.5</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="273.17,264 273.17,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="273.17,18 273.17,24"/>
-<text x="273.17" y="282" text-anchor="middle">2</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,264 319.48,258"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,18 319.48,24"/>
-<text x="319.48" y="282" text-anchor="middle">2.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,264 41.65,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,18 41.65,27"/>
+<text x="41.65" y="286.2" text-anchor="middle">-0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="87.96,264 87.96,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="87.96,18 87.96,27"/>
+<text x="87.96" y="286.2" text-anchor="middle">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="134.26,264 134.26,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="134.26,18 134.26,27"/>
+<text x="134.26" y="286.2" text-anchor="middle">0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="180.56,264 180.56,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="180.56,18 180.56,27"/>
+<text x="180.56" y="286.2" text-anchor="middle">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="226.87,264 226.87,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="226.87,18 226.87,27"/>
+<text x="226.87" y="286.2" text-anchor="middle">1.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="273.17,264 273.17,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="273.17,18 273.17,27"/>
+<text x="273.17" y="286.2" text-anchor="middle">2</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,264 319.48,255"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,18 319.48,27"/>
+<text x="319.48" y="286.2" text-anchor="middle">2.5</text>
 </g>
 <g class="fs-yticks">
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,264 47.65,264"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,264 313.48,264"/>
-<text x="35.65" y="268.2" text-anchor="end">-0.5</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,202.5 47.65,202.5"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,202.5 313.48,202.5"/>
-<text x="35.65" y="206.7" text-anchor="end">0</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,141 47.65,141"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,141 313.48,141"/>
-<text x="35.65" y="145.2" text-anchor="end">0.5</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,79.5 47.65,79.5"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,79.5 313.48,79.5"/>
-<text x="35.65" y="83.7" text-anchor="end">1</text>
-<polyline fill="none" stroke="black" stroke-width="1" points="41.65,18 47.65,18"/>
-<polyline fill="none" stroke="black" stroke-width="1" points="319.48,18 313.48,18"/>
-<text x="35.65" y="22.2" text-anchor="end">1.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,264 50.65,264"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,264 310.48,264"/>
+<text x="33.26" y="268.2" text-anchor="end">-0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,202.5 50.65,202.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,202.5 310.48,202.5"/>
+<text x="33.26" y="206.7" text-anchor="end">0</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,141 50.65,141"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,141 310.48,141"/>
+<text x="33.26" y="145.2" text-anchor="end">0.5</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,79.5 50.65,79.5"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,79.5 310.48,79.5"/>
+<text x="33.26" y="83.7" text-anchor="end">1</text>
+<polyline fill="none" stroke="black" stroke-width="1" points="41.65,18 50.65,18"/>
+<polyline fill="none" stroke="black" stroke-width="1" points="319.48,18 310.48,18"/>
+<text x="33.26" y="22.2" text-anchor="end">1.5</text>
 </g>
 <g class="fs-colorbox">
 <image x="340.65" y="18" width="18" height="246" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAFC0lEQVR4AQEABf/6AP////8A/v7+/wD9/f3/AP39/f8A/Pz8/wD7+/v/APv7+/8A+vr6/wD5+fn/APn5+f8A+Pj4/wD39/f/APf39/8A9vb2/wD19fX/APX19f8A9PT0/wDz8/P/APPz8/8A8vLy/wDx8fH/APHx8f8A8PDw/wDv7+//AO7u7v8A7u7u/wDt7e3/AOzs7P8A7Ozs/wDr6+v/AOrq6v8A6urq/wDp6en/AOjo6P8A6Ojo/wDn5+f/AObm5v8A5eXl/wDl5eX/AOTk5P8A4+Pj/wDj4+P/AOLi4v8A4eHh/wDh4eH/AODg4P8A39/f/wDe3t7/AN7e3v8A3d3d/wDc3Nz/ANzc3P8A29vb/wDa2tr/ANnZ2f8A2dnZ/wDY2Nj/ANfX1/8A1tbW/wDW1tb/ANXV1f8A1NTU/wDU1NT/ANPT0/8A0tLS/wDR0dH/ANHR0f8A0NDQ/wDPz8//AM7Ozv8Azs7O/wDNzc3/AMzMzP8Ay8vL/wDLy8v/AMrKyv8AycnJ/wDJycn/AMjIyP8Ax8fH/wDGxsb/AMbGxv8AxcXF/wDExMT/AMPDw/8AwsLC/wDCwsL/AMHBwf8AwMDA/wC/v7//AL+/v/8Avr6+/wC9vb3/ALy8vP8AvLy8/wC7u7v/ALq6uv8Aubm5/wC4uLj/ALi4uP8At7e3/wC2trb/ALW1tf8AtbW1/wC0tLT/ALOzs/8AsrKy/wCxsbH/ALGxsf8AsLCw/wCvr6//AK6urv8Ara2t/wCtra3/AKysrP8Aq6ur/wCqqqr/AKmpqf8AqKio/wCoqKj/AKenp/8Apqam/wClpaX/AKSkpP8ApKSk/wCjo6P/AKKiov8AoaGh/wCgoKD/AJ+fn/8An5+f/wCenp7/AJ2dnf8AnJyc/wCbm5v/AJqamv8AmZmZ/wCZmZn/AJiYmP8Al5eX/wCWlpb/AJWVlf8AlJSU/wCTk5P/AJOTk/8AkpKS/wCRkZH/AJCQkP8Aj4+P/wCOjo7/AI2Njf8AjIyM/wCLi4v/AIuLi/8AioqK/wCJiYn/AIiIiP8Ah4eH/wCGhob/AIWFhf8AhISE/wCDg4P/AIKCgv8AgYGB/wCAgID/AH9/f/8Af39//wB+fn7/AH19ff8AfHx8/wB7e3v/AHp6ev8AeXl5/wB4eHj/AHd3d/8AdnZ2/wB1dXX/AHR0dP8Ac3Nz/wBycnL/AHFxcf8AcHBw/wBvb2//AG5ubv8AbW1t/wBsbGz/AGtra/8Aampq/wBpaWn/AGhoaP8AZ2dn/wBmZmb/AGVlZf8AZGRk/wBjY2P/AGFhYf8AYGBg/wBfX1//AF5eXv8AXV1d/wBcXFz/AFtbW/8AWlpa/wBZWVn/AFhYWP8AVlZW/wBVVVX/AFRUVP8AU1NT/wBSUlL/AFFRUf8AT09P/wBOTk7/AE1NTf8ATExM/wBLS0v/AElJSf8ASEhI/wBHR0f/AEZGRv8ARERE/wBDQ0P/AEJCQv8AQEBA/wA/Pz//AD4+Pv8APDw8/wA7Ozv/ADo6Ov8AODg4/wA3Nzf/ADU1Nf8ANDQ0/wAyMjL/ADExMf8ALy8v/wAuLi7/ACwsLP8AKysr/wApKSn/ACcnJ/8AJiYm/wAkJCT/ACIiIv8AICAg/wAeHh7/ABwcHP8AGhoa/wAYGBj/ABYWFv8AFBQU/wARERH/AA8PD/8ADAwM/wAICAj/AAQEBP/fS8oo2izP/wAAAABJRU5ErkJggg=="/>

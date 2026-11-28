@@ -167,6 +167,9 @@ contains
       extra = extra//attribute('data-x2tics', view%x2tics)//attribute('data-x2format', view%x2format)// &
               attribute('data-x2time', view%x2time)
    endif
+   ! gnuplot's character cell: the viewer's ticks and tick labels at the places of the page's
+   if (view%cell(1) > 0.0_R8P) extra = extra//' data-cell="'//px(view%cell(1))//' '//px(view%cell(2))//' '// &
+                                       px(view%cell(3))//' '//px(view%cell(4))//'"'
    call self%put('<g class="fs-axes" data-area="'//px(view%area(1))//' '//px(view%area(2))//' '//px(view%area(3))// &
                  ' '//px(view%area(4))//'" data-x="'//real_str(view%x(1))//' '//real_str(view%x(2))// &
                  '" data-y="'//real_str(view%y(1))//' '//real_str(view%y(2))//'"'//y2//' data-log="'//logs// &

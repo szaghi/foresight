@@ -1,7 +1,7 @@
 $ foresight cb_latex.gp && grep -F '\put' cb_latex.tex | tail -n 5
 foresight: cb_latex.tex
       \put(172,2005){\rotatebox{90.00}{\makebox(0,0){\strut{}$|H(i\omega)|$}}}%
-      \put(3737,2985){\makebox(0,0)[r]{\strut{}$\zeta = 0.1$}}%
-      \put(3737,2765){\makebox(0,0)[r]{\strut{}$\zeta = 0.3$}}%
-      \put(3737,2545){\makebox(0,0)[r]{\strut{}$\zeta = 0.7$}}%
+      \put(3741,3008){\makebox(0,0)[r]{\strut{}$\zeta = 0.1$}}%
+      \put(3741,2811){\makebox(0,0)[r]{\strut{}$\zeta = 0.3$}}%
+      \put(3741,2615){\makebox(0,0)[r]{\strut{}$\zeta = 0.7$}}%
     \put(0,0){\includegraphics[width={240.94bp},height={170.08bp}]{cb_latex}}%

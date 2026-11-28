@@ -122,8 +122,13 @@ python3 scripts/fidelity/placement.py --probe p05_key_rows --term svg
 - The texts are matched by content, and each pair's offset is printed, foresight's position less gnuplot's: in px for
   svg (the baseline anchor), in bp for cairolatex (the `\put` point), positive downward.
 - gnuplot's cairo terminals measure their font through fontconfig. The probe aliases `Sans` to Liberation Sans, the
-  font foresight lays texts out with, unless the probe says `#! fonts: system`. `#! font: N` sets the terminal font
-  size, `#! margins: L R B T` the border.
+  font foresight lays texts out with, unless the probe says `#! fonts: system`; `pdfcairo.py` and `cairolatex.py`
+  (the PDF and LaTeX pages of the demos) run gnuplot with the same alias, so their scores do not depend on the
+  machine's `Sans`. `#! font: N` sets the terminal font size, `#! margins: L R B T` the border.
+- `--explain` prints, for each text, gnuplot's rule (boundary.c, axis.c: `placement_rules.py`, which reads gnuplot's own
+  character cell) and how far gnuplot's position is from it; `--check` fails when a text is off gnuplot's by more than
+  0.5 px (svg) or 0.1 bp (cairolatex), or, where gnuplot counts characters for a width (the y labels beside the tick
+  labels, a left key), by more than that beyond the width difference; `--kinds title,xlabel,...` limits both.
 - A text found in one output only is an error (exit 1). `baseline/placement.txt` holds the last accepted table.
 
 ## Commit style

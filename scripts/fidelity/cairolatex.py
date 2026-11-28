@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """cairolatex.py FORESIGHT TAG [-j N]: foresight's cairolatex figures against gnuplot 6.0's own (issue #5 step 3.1).
 
-For each demo page of cairolatex_pages.txt (`<demo>_pNN`): the demo copied as pdfcairo.py copies it, but with
-`set terminal cairolatex pdf standalone` (one LaTeX file and its graphics per `pause`), run by gnuplot (into
-$W/tex_gp, once) and by FORESIGHT (into $W/tex_TAG), each LaTeX file compiled by LuaLaTeX (the texts set by LaTeX in
-both), both PDFs rasterized by pdftoppm at 96 dpi and scored as pdfcairo.py scores them. Writes $W/cairolatex_TAG.txt,
-worst first; exits 1 when a page scores 0.03 or more, is missing or does not compile.
+For each demo page of cairolatex_pages.txt (`<demo>_pNN`): the demo copied as pdfcairo.py copies it, but with `set
+terminal cairolatex pdf standalone` (one LaTeX file and its graphics per `pause`), run by gnuplot (into $W/tex_gp_lib,
+once, "Sans" aliased to Liberation Sans as pdfcairo.py does) and by FORESIGHT (into $W/tex_TAG), each LaTeX file
+compiled by LuaLaTeX (the texts set by LaTeX in both), both PDFs rasterized by pdftoppm at 96 dpi and scored as
+pdfcairo.py scores them. Writes $W/cairolatex_TAG.txt, worst first; exits 1 when a page scores 0.03 or more, is missing
+or does not compile.
 
 $W is $FORESIGHT_FIDELITY (default ~/.cache/foresight-fidelity), prepared by fetch.sh.
 """
@@ -19,7 +20,7 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-from pdfcairo import LIMIT, W, paged_copy, score
+from pdfcairo import LIMIT, W, paged_copy, program_env, score
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TERM = "cairolatex pdf standalone"
@@ -32,7 +33,7 @@ def render(program: list[str], demo: str, out: str) -> None:
         shutil.copytree(os.path.join(W, "demo"), job)
         script = paged_copy(demo, job, TERM, "tex")
         subprocess.run(program + ["-c", script, out], cwd=job, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=120, check=False)
+                       stderr=subprocess.DEVNULL, timeout=120, check=False, env=program_env(program, tmp))
 
 
 def compile_tex(tex: str) -> str | None:
@@ -52,7 +53,7 @@ def main() -> None:
     with open(os.path.join(HERE, "cairolatex_pages.txt")) as f:
         pages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     demos = sorted({p.rsplit("_p", 1)[0] for p in pages})
-    gp, fs = os.path.join(W, "tex_gp"), os.path.join(W, "tex_" + tag)
+    gp, fs = os.path.join(W, "tex_gp_lib"), os.path.join(W, "tex_" + tag)
     os.makedirs(gp, exist_ok=True)
     os.makedirs(fs, exist_ok=True)
     with ThreadPoolExecutor(jobs) as pool:

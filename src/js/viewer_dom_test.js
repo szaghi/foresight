@@ -253,6 +253,24 @@ check("a zoom redraws the x2 ticks for the x window", box(0)[2] < 1 && x2ticks.i
   x2labels().length > 0);
 key("a");
 check("autoscale restores the x2 ticks", x2ticks.innerHTML === x2Home);
+// the page's character cell: a zoom redraws the tick labels at the page's places (gnuplot's), each
+// axis' labels on the same line as the page wrote them
+(function () {
+  function lines(cls, attr) {
+    return Array.prototype.map.call(panel(0).querySelectorAll("." + cls + " text"), function (t) {
+      return t.getAttribute(attr);
+    }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join("|");
+  }
+  var home = [lines("fs-xticks", "y"), lines("fs-yticks", "x"), lines("fs-x2ticks", "y")];
+  wheel(0);
+  var zoomed = [lines("fs-xticks", "y"), lines("fs-yticks", "x"), lines("fs-x2ticks", "y")];
+  check("a page with gnuplot's cell (data-cell): zoomed tick labels on the page's lines",
+    panel(0).hasAttribute("data-cell") && home.every(function (h, i) {
+      return h.split("|").length === 1 && h !== "" &&
+        zoomed[i].split("|").every(function (z) { return Math.abs(Number(z) - Number(h)) < 0.01; });
+    }));
+  key("a");
+})();
 
 // a dark theme: the help box on the page color, the readout and the zoom box in the frame color, never black on black
 page = strip(path.join(__dirname, "..", "tests", "goldens", "theme_night.html"));

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """pdfcairo.py FORESIGHT TAG [-j N]: foresight's pdfcairo pages against gnuplot 6.0's own (issue #5 step 2.3).
 
-For each demo page of pdfcairo_pages.txt (`<demo>_pNN`): the demo copied as fetch.sh's paged copies are, but with
-`set terminal pdfcairo` (gnuplot's defaults: 5 x 3 in, "Sans,12" at fontscale 0.5, 0.5 pt lines) and one PDF page per
-`pause`, run by gnuplot (into $W/pdf_gp, once) and by FORESIGHT (into $W/pdf_TAG), each demo in a private copy of
-$W/demo. Both PDFs are rasterized by pdftoppm at 96 dpi (one rasterizer for both) and scored as score.py scores the
-SVG pages (the mean absolute difference of the blurred 120x80 grayscale pages). Writes $W/pdfcairo_TAG.txt, worst
-first; exits 1 when a page scores 0.03 or more (or is missing).
+For each demo page of pdfcairo_pages.txt (`<demo>_pNN`): the demo copied as fetch.sh's paged copies are, but with `set
+terminal pdfcairo` (gnuplot's defaults: 5 x 3 in, "Sans,12" at fontscale 0.5, 0.5 pt lines) and one PDF page per
+`pause`, run by gnuplot (into $W/pdf_gp_lib, once, "Sans" aliased to Liberation Sans: program_env) and by FORESIGHT
+(into $W/pdf_TAG), each demo in a private copy of $W/demo. Both PDFs are rasterized by pdftoppm at 96 dpi (one
+rasterizer for both) and scored as score.py scores the SVG pages (the mean absolute difference of the blurred 120x80
+grayscale pages). Writes $W/pdfcairo_TAG.txt, worst first; exits 1 when a page scores 0.03 or more (or is missing).
 
 $W is $FORESIGHT_FIDELITY (default ~/.cache/foresight-fidelity), prepared by fetch.sh.
 """
@@ -52,6 +52,21 @@ def paged_copy(demo: str, demodir: str, term: str = "pdfcairo", ext: str = "pdf"
     return name
 
 
+def program_env(program: list[str], tmp: str) -> dict[str, str]:
+    """The environment of `program`: gnuplot's cairo terminals measure and draw "Sans" as Liberation Sans (a fontconfig
+    alias, placement.py's), the font foresight lays out with and embeds; the system's "Sans" differs from machine to
+    machine (Noto Sans, DejaVu Sans) and with it gnuplot's character cell."""
+    env = dict(os.environ)
+    if os.path.basename(program[0]) == "gnuplot":
+        from placement import FONTCONF
+
+        conf = os.path.join(tmp, "fonts.conf")
+        with open(conf, "w") as f:
+            f.write(FONTCONF)
+        env["FONTCONFIG_FILE"] = conf
+    return env
+
+
 def render(program: list[str], demo: str, out: str) -> None:
     """Run `program` on the pdfcairo copy of `demo` in a private copy of the demo directory, pages into `out`."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -59,7 +74,7 @@ def render(program: list[str], demo: str, out: str) -> None:
         shutil.copytree(os.path.join(W, "demo"), job)
         script = paged_copy(demo, job)
         subprocess.run(program + ["-c", script, out], cwd=job, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=120, check=False)
+                       stderr=subprocess.DEVNULL, timeout=120, check=False, env=program_env(program, tmp))
 
 
 def score(a: str, b: str) -> float:
@@ -81,7 +96,7 @@ def main() -> None:
     with open(os.path.join(HERE, "pdfcairo_pages.txt")) as f:
         pages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     demos = sorted({p.rsplit("_p", 1)[0] for p in pages})
-    gp, fs = os.path.join(W, "pdf_gp"), os.path.join(W, "pdf_" + tag)
+    gp, fs = os.path.join(W, "pdf_gp_lib"), os.path.join(W, "pdf_" + tag)
     os.makedirs(gp, exist_ok=True)
     os.makedirs(fs, exist_ok=True)
     with ThreadPoolExecutor(jobs) as pool:

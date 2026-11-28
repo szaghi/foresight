@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="480" height="420" viewBox="0 0 480 420" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#1d1b18" data-theme="washi" data-frame="#1d1b18" data-grid-color="#a69a85">
 <rect x="0" y="0" width="480" height="420" fill="#f3ede1" stroke="none" stroke-width="0"/>
-<g class="fs-axes" data-area="49 437 16 404" data-x="-9e1 9e1" data-y="-9e1 9e1" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h" data-grid-style="black 5e-1 ">
+<g class="fs-axes" data-area="49 437 16 404" data-x="-9e1 9e1" data-y="-9e1 9e1" data-log="0 0" data-grid="1" data-font-size="12" data-xtics="none" data-ytics="none" data-xformat="%h" data-yformat="%h" data-cell="18 8.39 9 9" data-grid-style="black 5e-1 ">
 <g class="fs-grid">
 </g>
 <svg class="fs-plot" x="49" y="16" width="388" height="388" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="hidden">
@@ -139,8 +139,8 @@
 <text x="243" y="228" text-anchor="middle">90</text>
 </g>
 <g class="fs-key-entry" data-series="1">
-<polyline fill="none" stroke="#b3163f" stroke-width="2" points="391,390.5 427,390.5"/>
-<text x="385" y="394.7" text-anchor="end">sun elevation</text>
+<polyline fill="none" stroke="#b3163f" stroke-width="2" points="377.66,386 420.22,386"/>
+<text x="369.27" y="390.2" text-anchor="end">sun elevation</text>
 </g>
 </g>
 </svg>

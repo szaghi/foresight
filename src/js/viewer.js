@@ -1535,7 +1535,7 @@
   // a tick label; new lines in it are further lines below with `lines` (the x axis), else blanks;
   // enhanced text at `markup` [px] font size, as it is with 0; moved by the offset of the axis
   // `tics` (characters 0.6 by 1 `fs` [px], y up) and in their color (mirror of tick_label)
-  function label(parent, x, y, tick, anchor, rotate, lines, markup, tics, fs) {
+  function label(parent, x, y, tick, anchor, rotate, lines, markup, tics, fs, step) {
     if (tics && tics.offset) {
       x += tics.offset[0] * 0.6 * fs;
       y -= tics.offset[1] * fs;
@@ -1557,7 +1557,7 @@
     if (!lines || rotate) parts = [parts.join(" ")];
     styledText(node, parts[0], markup);
     parts.slice(1).forEach(function (part) {
-      styledText(element(node, "tspan", {x: x, dy: "1.25em"}), part, markup);
+      styledText(element(node, "tspan", {x: x, dy: step || "1.25em"}), part, markup);
     });
     if (tick.sup) {
       element(node, "tspan", {dy: "-0.45em", "font-size": "0.75em"}).textContent = tick.sup;
@@ -1607,6 +1607,10 @@
     // ticks mirrored on the opposite border: x, y, y2 (absent: gnuplot defaults)
     this.mirror = (mirror ? numbers(mirror) : [1, 1, 0]).map(function (m) { return m === 1; });
     this.fontSize = Number(group.getAttribute("data-font-size"));
+    // gnuplot's character cell (v_char, h_char, v_tic, h_tic [px]): the page places the ticks
+    // and their labels as gnuplot does; absent, foresight's own places (mirror of draw_frame)
+    this.cell = group.hasAttribute("data-cell") ?
+      numbers(group.getAttribute("data-cell")) : null;
     // tick labels read as enhanced text (gnuplot's markup), unless an axis says noenhanced
     this.enhanced = group.getAttribute("data-enhanced") === "1";
     this.grid = group.getAttribute("data-grid") === "1";
@@ -1928,14 +1932,14 @@
 
   // regenerate ticks, tick labels and grid for the current view (mirror of draw_frame/draw_grid)
   Panel.prototype.drawTicks = function () {
-    var self = this, v = this.view, fs = this.fontSize;
+    var self = this, v = this.view, fs = this.fontSize, cell = this.cell;
     var w = this.right - this.left, h = this.bottom - this.top;
     clear(this.gridGroup);
     clear(this.xticks);
     clear(this.yticks);
     var xt = this.x.tics || {}, yt = this.y.tics || {}, angle = xt.rotate || 0;
     var rad = angle * Math.PI / 180;
-    var xs = xt.out ? -1 : 1, shift = xt.out ? tickLength(xt, true) : 0;
+    var xs = xt.out ? -1 : 1, shift = xt.out ? tickLength(xt, true, cell, 2) : 0;
     // the line of the ticks: the border, or the zero axis of the other coordinate (on_zero)
     var xbase = zeroLine(xt, this.y, v.v0, v.v1, this.bottom, -h);
     var ybase = zeroLine(yt, this.x, v.u0, v.u1, this.left, w);
@@ -1943,7 +1947,7 @@
     if (ybase === null) ybase = this.left;
     this.x.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
-      var length = tickLength(xt, t.major);
+      var length = tickLength(xt, t.major, cell, 2);
       if (p < self.left - 0.5 || p > self.right + 0.5 || !inRange(xt, t.value)) return;
       line(self.xticks, p, xbase, p, xbase - xs * length, FRAME_COLOR, 1);
       if (self.mirror[0] && xbase === self.bottom) {
@@ -1955,9 +1959,15 @@
       }
       // rotated: the glyph band centred on the tick (mirror of rotated_anchor)
       if (angle) {
-        label(self.xticks, p + 0.35 * fs * Math.sin(rad),
-          xbase + shift + GAP + 0.35 * fs * (1 + Math.cos(rad)), t, xt.anchor, angle, false,
-          self.markup(xt), xt, fs);
+        label(self.xticks, p + 0.35 * fs * Math.sin(rad), xbase + shift +
+          (cell ? cell[1] : GAP + 0.35 * fs) + 0.35 * fs * Math.cos(rad), t, xt.anchor, angle,
+          false, self.markup(xt), xt, fs);
+      } else if (cell) {
+        // gnuplot's: centred a v_char below the outward ticks (on the axis, a tick length below
+        // it), lines a v_char apart
+        label(self.xticks, p, xbase + (xbase === self.bottom ? shift : tickLength(xt, true, cell,
+          2)) + cell[0] + 0.35 * tickSize(xt, fs), t, "middle", 0, true, self.markup(xt), xt, fs,
+          "1.5em");
       } else {
         label(self.xticks, p, xbase + shift + GAP + fs, t, "middle", 0, true,
           self.markup(xt), xt, fs);
@@ -1967,7 +1977,7 @@
     });
     this.y.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
-      var length = tickLength(yt, t.major);
+      var length = tickLength(yt, t.major, cell, 3);
       if (p < self.top - 0.5 || p > self.bottom + 0.5 || !inRange(yt, t.value)) return;
       var ys = yt.out ? -1 : 1;
       line(self.yticks, ybase, p, ybase + ys * length, p, FRAME_COLOR, 1);
@@ -1978,7 +1988,8 @@
         if (!self.polarGrid) gridLine(self, self.left, p, self.right, p, "my");
         return;
       }
-      label(self.yticks, ybase - GAP - (yt.out ? tickLength(yt, true) : 0), p + 0.35 * fs, t,
+      label(self.yticks, ybase - (cell ? cell[1] : GAP) -
+        (yt.out ? tickLength(yt, true, cell, 3) : 0), p + 0.35 * fs, t,
         "end", 0, false, self.markup(yt), yt, fs);
       if (self.polarGrid) return;
       gridLine(self, self.left, p, self.right, p, t.major ? "y" : "my");
@@ -1989,14 +2000,15 @@
     this.y2.ticks(v.v0, v.v1, h).forEach(function (t) {
       var p = self.bottom - (self.y2.toUnit(t.value) - v.v0) / (v.v1 - v.v0) * h;
       var y2t = self.y2.tics || {}, s2 = y2t.out ? -1 : 1;
-      var length = tickLength(y2t, t.major);
+      var length = tickLength(y2t, t.major, cell, 3);
       if (p < self.top - 0.5 || p > self.bottom + 0.5 || !inRange(y2t, t.value)) return;
       line(self.y2ticks, self.right, p, self.right - s2 * length, p, FRAME_COLOR, 1);
       if (self.mirror[2]) {
         line(self.y2ticks, self.left, p, self.left + s2 * length, p, FRAME_COLOR, 1);
       }
       if (t.major) {
-        label(self.y2ticks, self.right + GAP + (y2t.out ? tickLength(y2t, true) : 0), p + 0.35 * fs,
+        label(self.y2ticks, self.right + (cell ? cell[1] : GAP) +
+          (y2t.out ? tickLength(y2t, true, cell, 3) : 0), p + 0.35 * fs,
           t, "start", 0, false, self.markup(y2t), y2t, fs);
         gridLine(self, self.left, p, self.right, p, "y2");
       }
@@ -2032,27 +2044,35 @@
     return v >= tics.range[0] - tol && v <= tics.range[1] + tol;
   }
 
-  function tickLength(tics, major) {
+  // with the page's cell, its v_tic (k = 2, the x axes) or h_tic (k = 3, the y axes)
+  function tickLength(tics, major, cell, k) {
     var scale = tics.scale || [1, 0.5];
-    return TICK_MAJOR * (major ? scale[0] : scale[1]);
+    return (cell ? cell[k] : TICK_MAJOR) * (major ? scale[0] : scale[1]);
+  }
+
+  // the font size of an axis' tick labels [px], the page's `fs` unless set
+  function tickSize(tics, fs) {
+    return tics && tics.font && tics.font.size > 0 ? tics.font.size : fs;
   }
 
   // second x axis ticks above the top border (mirror of the x2 part of draw_frame)
   Panel.prototype.drawX2Ticks = function () {
     var self = this, v = this.view, fs = this.fontSize, w = this.right - this.left;
+    var cell = this.cell;
     if (!this.x2ticks) return;
     clear(this.x2ticks);
     var x2t = this.x2.tics || {}, s2 = x2t.out ? -1 : 1;
     this.x2.ticks(v.u0, v.u1, w).forEach(function (t) {
       var p = self.left + (self.x2.toUnit(t.value) - v.u0) / (v.u1 - v.u0) * w;
-      var length = tickLength(x2t, t.major);
+      var length = tickLength(x2t, t.major, cell, 2);
       if (p < self.left - 0.5 || p > self.right + 0.5 || !inRange(x2t, t.value)) return;
       line(self.x2ticks, p, self.top, p, self.top + s2 * length, FRAME_COLOR, 1);
       if (self.x2mirror) {
         line(self.x2ticks, p, self.bottom, p, self.bottom - s2 * length, FRAME_COLOR, 1);
       }
       if (t.major) {
-        label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true) : 0) - GAP - 0.25 * fs,
+        label(self.x2ticks, p, self.top - (x2t.out ? tickLength(x2t, true, cell, 2) : 0) -
+          (cell ? cell[0] - 0.35 * tickSize(x2t, fs) : GAP + 0.25 * fs),
           t, "middle", 0, false, self.markup(x2t), x2t, fs);
         gridLine(self, p, self.bottom, p, self.top, "x2");
       }

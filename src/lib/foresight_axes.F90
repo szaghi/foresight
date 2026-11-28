@@ -510,12 +510,13 @@ endtype axes_object
 
 contains
    pure function tick_length(tics, major) result(length)
-   !< Length of a major or minor tick of an axis [px]: the major length times the axis' scale (gnuplot `set tics scale`).
+   !< Length of a major or minor tick of an axis [px]: the major length (the device's v_tic or h_tic, `tics%length`)
+   !< times the axis' scale (gnuplot `set tics scale`).
    type(tics_object), intent(in) :: tics   !< Axis tick settings.
    logical,           intent(in) :: major  !< A major tick.
    real(R8P)                     :: length !< Length.
 
-   length = TICK_MAJOR * merge(tics%scale(1), tics%scale(2), major)
+   length = tics%length * merge(tics%scale(1), tics%scale(2), major)
    endfunction tick_length
 
    pure function out_shift(tics) result(shift)
@@ -1522,6 +1523,18 @@ contains
 
    self%canvas = [x0 + width, y0 + height]
    if (present(canvas)) self%canvas = canvas
+   ! the ticks: gnuplot's terminal's v_tic (x axes) and h_tic (y axes) on a vector device, foresight's on a text one
+   block
+      real(R8P) :: c(5) !< Character cell [px].
+
+      c = [0.0_R8P, 0.0_R8P, TICK_MAJOR, TICK_MAJOR, 0.0_R8P]
+      if (.not. (backend%row_height() > 0.0_R8P .or. (self%three_d .and. self%view3d%map))) &
+         c = backend%char_cell(font_size)
+      self%xaxis%tics%length = c(3)
+      self%x2axis%tics%length = c(3)
+      self%yaxis%tics%length = c(4)
+      self%y2axis%tics%length = c(4)
+   endblock
    ! gnuplot's `clear` in a multiplot: the panel's box in the page color, over the panels drawn before
    if (self%cleared) call backend%rect(x0, y0, width, height, 'none', backend%theme%background, 0.0_R8P)
    if (.not. allocated(self%series)) allocate(self%series(0))
@@ -1604,17 +1617,37 @@ contains
    call self%key_layout(backend, element_px(backend, self%key_font, font_size), width - 2.0_R8P * PAD, grid, key, &
                         tall=height - 2.0_R8P * PAD - real(self%title_rows() + 3_I4P, R8P) * LINE_HEIGHT * font_size)
    if (self%key .and. grid(1) > 0_I4P) then
-      select case (self%key_place())
-      case ('left')
-         box(1) = x0 + PAD + key(1)
-         box(3) = width - PAD - key(1)
-      case ('right')
-         box(3) = width - PAD - key(1)
-      case ('bottom')
-         box(4) = height - PAD - key(2)
-      case ('top')
-         above = key(2) + GAP
-      endselect
+      if (key_gnuplot(self, backend)) then
+         ! gnuplot's (do_key_layout): the margin takes the key's width or height; on the left a h_char before it
+         block
+            real(R8P) :: c(5) !< The key's character cell [px].
+
+            c = backend%char_cell(element_px(backend, self%key_font, font_size))
+            select case (self%key_place())
+            case ('left')
+               box(1) = x0 + c(2) + key(1)
+               box(3) = width - c(2) - key(1)
+            case ('right')
+               box(3) = width - c(2) - key(1)
+            case ('bottom')
+               box(4) = height - key(2)
+            case ('top')
+               above = key(2)
+            endselect
+         endblock
+      else
+         select case (self%key_place())
+         case ('left')
+            box(1) = x0 + PAD + key(1)
+            box(3) = width - PAD - key(1)
+         case ('right')
+            box(3) = width - PAD - key(1)
+         case ('bottom')
+            box(4) = height - PAD - key(2)
+         case ('top')
+            above = key(2) + GAP
+         endselect
+      endif
    endif
    if (self%polar) raw = self%series
    if (map) then
@@ -1659,6 +1692,14 @@ contains
 
    view = axes_view(area=area, x=[self%xaxis%lo, self%xaxis%hi], y=[self%yaxis%lo, self%yaxis%hi], &
                     xlog=self%xaxis%log, ylog=self%yaxis%log, grid=self%grid, font_size=font_size)
+   if (.not. (backend%row_height() > 0.0_R8P .or. map)) then
+      block
+         real(R8P) :: c(5) !< Character cell [px].
+
+         c = backend%char_cell(font_size)
+         view%cell = c(1:4)
+      endblock
+   endif
    view%xtics = self%xaxis%tics%attribute(self%xaxis%lo, self%xaxis%hi)
    if (self%xaxis%labelled()) view%xtics = labels_attribute(self%xaxis%labels)
    view%ytics = self%yaxis%tics%attribute(self%yaxis%lo, self%yaxis%hi)
@@ -1912,18 +1953,23 @@ contains
    endsubroutine render
 
    ! private procedures
-   pure subroutine rotated_anchor(p, base, angle, font_size, x, y)
+   pure subroutine rotated_anchor(p, base, angle, font_size, x, y, band)
    !< Anchor of an x tick label rotated by `angle` [deg, counterclockwise] at the tick abscissa `p` [px], hanging from
-   !< `base` [px]: its glyph band centred on the tick, GAP below the base as an upright label, as gnuplot places them.
-   real(R8P), intent(in)  :: p         !< Tick abscissa [px].
-   real(R8P), intent(in)  :: base      !< Ordinate the labels hang from [px].
-   real(R8P), intent(in)  :: angle     !< Label angle [deg].
-   real(R8P), intent(in)  :: font_size !< Font size [px].
-   real(R8P), intent(out) :: x         !< Anchor abscissa [px].
-   real(R8P), intent(out) :: y         !< Anchor ordinate [px].
+   !< `base` [px]: its glyph band centred on the tick, `band` below the base (gnuplot: h_char), else GAP below it as an
+   !< upright label.
+   real(R8P), intent(in)           :: p         !< Tick abscissa [px].
+   real(R8P), intent(in)           :: base      !< Ordinate the labels hang from [px].
+   real(R8P), intent(in)           :: angle     !< Label angle [deg].
+   real(R8P), intent(in)           :: font_size !< Font size [px].
+   real(R8P), intent(out)          :: x         !< Anchor abscissa [px].
+   real(R8P), intent(out)          :: y         !< Anchor ordinate [px].
+   real(R8P), intent(in), optional :: band      !< The glyph band's centre below the base [px].
+   real(R8P)                       :: g         !< Gap used [px].
 
+   g = GAP + 0.35_R8P * font_size
+   if (present(band)) g = band
    x = p + 0.35_R8P * font_size * sin(angle * PI_R8 / 180.0_R8P)
-   y = base + GAP + 0.35_R8P * font_size * (1.0_R8P + cos(angle * PI_R8 / 180.0_R8P))
+   y = base + g + 0.35_R8P * font_size * cos(angle * PI_R8 / 180.0_R8P)
    endsubroutine rotated_anchor
 
    pure subroutine y_rotated_anchor(tics, base, p, second, font_size, x, y, anchor)
@@ -2277,6 +2323,7 @@ contains
 
    gnuplot_rules = .not. (backend%row_height() > 0.0_R8P .or. (self%three_d .and. self%view3d%map))
    chv = [CHAR_WIDTH * font_size, CHAR_HEIGHT * font_size]
+   if (gnuplot_rules) b = panel_boundary(self, backend, font_size)
    angle = 0.0_R8P
    if (backend%rotates_text()) angle = self%xaxis%tics%rotate
    shift = out_shift(self%xaxis%tics)
@@ -2333,7 +2380,12 @@ contains
          endif
          if (.not. self%xaxis%ticks(t)%major) cycle
          if (angle /= 0.0_R8P) then
-            call rotated_anchor(p, base + shift, angle, font_size, ax, ay)
+            if (gnuplot_rules) then
+               ! gnuplot: the glyph band's centre h_char below the ticks (boundary.c xtic_y)
+               call rotated_anchor(p, base + shift, angle, font_size, ax, ay, band=b%h)
+            else
+               call rotated_anchor(p, base + shift, angle, font_size, ax, ay)
+            endif
             call tick_label(backend, self%xaxis%tics, font_size, ax, ay, self%xaxis%ticks(t)%label, &
                             trim(self%xaxis%tics%anchor()), self%xaxis%ticks(t)%sup, -angle)
          elseif (self%xaxis%tics%out) then
@@ -2345,9 +2397,14 @@ contains
                text = self%xaxis%ticks(t)%label
                raised = self%xaxis%ticks(t)%sup
                if (backend%tex) call tex_tick(self%xaxis%tics, text, raised)
-               call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
-                               label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
-                               self%xaxis%tics%color)
+               if (gnuplot_rules) then
+                  call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), xtic_baseline() + &
+                                  label_dy(self%xaxis%tics, font_size), text, raised, xtic_step(), self%xaxis%tics%color)
+               else
+                  call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + shift + GAP + font_size + &
+                                  label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
+                                  self%xaxis%tics%color)
+               endif
             endblock
             backend%font = font_object()
          else
@@ -2359,9 +2416,14 @@ contains
                text = self%xaxis%ticks(t)%label
                raised = self%xaxis%ticks(t)%sup
                if (backend%tex) call tex_tick(self%xaxis%tics, text, raised)
-               call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
-                               label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
-                               self%xaxis%tics%color)
+               if (gnuplot_rules) then
+                  call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), xtic_baseline() + &
+                                  label_dy(self%xaxis%tics, font_size), text, raised, xtic_step(), self%xaxis%tics%color)
+               else
+                  call lines_text(backend, p + label_dx(self%xaxis%tics, font_size), base + GAP + font_size + &
+                                  label_dy(self%xaxis%tics, font_size), text, raised, LINE_HEIGHT * font_size, &
+                                  self%xaxis%tics%color)
+               endif
             endblock
             backend%font = font_object()
          endif
@@ -2407,9 +2469,10 @@ contains
             call tick_label(backend, self%yaxis%tics, font_size, ax, ay, self%yaxis%ticks(t)%label, trim(text_anchor), &
                             self%yaxis%ticks(t)%sup, -self%yaxis%tics%rotate)
          else
-            call tick_label(backend, self%yaxis%tics, font_size, base - GAP - out_shift(self%yaxis%tics), &
-                            p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', self%yaxis%ticks(t)%sup, &
-                            0.0_R8P)
+            ! gnuplot: right-justified h_char left of the outward ticks, centred on the tick
+            call tick_label(backend, self%yaxis%tics, font_size, base - merge(b%h, GAP, gnuplot_rules) - &
+                            out_shift(self%yaxis%tics), p + 0.35_R8P * font_size, self%yaxis%ticks(t)%label, 'end', &
+                            self%yaxis%ticks(t)%sup, 0.0_R8P)
          endif
       enddo
       call backend%end_group
@@ -2435,9 +2498,9 @@ contains
                call tick_label(backend, self%y2axis%tics, font_size, ax, ay, self%y2axis%ticks(t)%label, &
                                trim(text_anchor), self%y2axis%ticks(t)%sup, -self%y2axis%tics%rotate)
             else
-               call tick_label(backend, self%y2axis%tics, font_size, right + GAP + out_shift(self%y2axis%tics), &
-                               p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, 'start', self%y2axis%ticks(t)%sup, &
-                               0.0_R8P)
+               call tick_label(backend, self%y2axis%tics, font_size, right + merge(b%h, GAP, gnuplot_rules) + &
+                               out_shift(self%y2axis%tics), p + 0.35_R8P * font_size, self%y2axis%ticks(t)%label, &
+                               'start', self%y2axis%ticks(t)%sup, 0.0_R8P)
             endif
          enddo
          call backend%end_group
@@ -2468,9 +2531,16 @@ contains
                                top - out_shift(self%x2axis%tics) - GAP - rise(1), self%x2axis%ticks(t)%label, &
                                trim(self%x2axis%tics%anchor()), self%x2axis%ticks(t)%sup, -self%x2axis%tics%rotate)
             else
-               call tick_label(backend, self%x2axis%tics, font_size, p, &
-                               top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size, &
-                               self%x2axis%ticks(t)%label, 'middle', self%x2axis%ticks(t)%sup, 0.0_R8P)
+               if (gnuplot_rules) then
+                  ! gnuplot: centred a v_char above the outward ticks (boundary.c x2tic_y)
+                  call tick_label(backend, self%x2axis%tics, font_size, p, top - out_shift(self%x2axis%tics) - b%v + &
+                                  0.35_R8P * element_px(backend, self%x2axis%tics%font, font_size), &
+                                  self%x2axis%ticks(t)%label, 'middle', self%x2axis%ticks(t)%sup, 0.0_R8P)
+               else
+                  call tick_label(backend, self%x2axis%tics, font_size, p, &
+                                  top - out_shift(self%x2axis%tics) - GAP - 0.25_R8P * font_size, &
+                                  self%x2axis%ticks(t)%label, 'middle', self%x2axis%ticks(t)%sup, 0.0_R8P)
+               endif
             endif
          enddo
          call backend%end_group
@@ -2687,6 +2757,27 @@ contains
       backend%boxed = .false.
       backend%font = font_object()
       endsubroutine axis_line
+
+      function xtic_baseline() result(y)
+      !< Baseline of the first line of the x tick labels, gnuplot's (boundary.c xtic_y): centred a v_char below the
+      !< outward ticks, on the x axis a tick length and a v_char below it.
+      real(R8P) :: y   !< Baseline [px].
+      real(R8P) :: tpx !< Font size of the labels [px].
+
+      tpx = element_px(backend, self%xaxis%tics%font, font_size)
+      if (base == area(4)) then
+         y = area(4) + shift + b%v + 0.35_R8P * tpx
+      else
+         y = base + tick_length(self%xaxis%tics, .true.) + b%v + 0.35_R8P * tpx
+      endif
+      endfunction xtic_baseline
+
+      function xtic_step() result(step)
+      !< From a line of the x tick labels to the next: a v_char of their font.
+      real(R8P) :: step !< Step [px].
+
+      step = line_v(element_px(backend, self%xaxis%tics%font, font_size))
+      endfunction xtic_step
 
       function line_v(size) result(v)
       !< v_char of the device at a font of `size` [px]: a label's line step.
@@ -6300,11 +6391,25 @@ contains
    integer(I4P)                         :: s         !< Series counter.
    real(R8P)                            :: tx        !< Title abscissa [px].
    character(len=5)                     :: anchor    !< Title anchor.
+   logical                              :: gk        !< gnuplot's 2D key (key_gnuplot).
+   real(R8P)                            :: c(5)      !< Character cell [px] (gnuplot's key).
+   real(R8P)                            :: krow      !< Key entry height [px] (gnuplot's key).
+   real(R8P)                            :: ksample   !< Sample length [px] (gnuplot's key).
+   real(R8P)                            :: kchar(2)  !< A character's width and height [px] (offsets).
 
    ! the key's texts in its font (`set key font`), its rows and widths by its size (key_layout)
    backend%font = self%key_font
+   gk = key_gnuplot(self, backend) .and. .not. (present(origin) .or. present(sample3d))
+   kchar = [CHAR_WIDTH * font_size, CHAR_HEIGHT * font_size]
+   if (gk) then
+      c = backend%char_cell(font_size)
+      krow = key_entry_gnuplot(self, c)
+      ksample = key_sample_gnuplot(self, c)
+      kchar = c(2:1:-1)
+   endif
    associate(width => extent(1), height => extent(2))
       entry = (width + GAP) / real(grid(2), R8P)
+      if (gk) entry = width / real(grid(2), R8P)
       if (present(origin)) then
          left = origin(1)
          top = origin(2)
@@ -6314,11 +6419,11 @@ contains
       else
       select case (self%key_place())
       case ('left', 'right')
-         ! beside the plot, aligned with its border
+         ! beside the plot, aligned with its border; gnuplot's a h_char from the page's side
          if (self%key_place() == 'left') then
-            left = box(1) + PAD
+            left = box(1) + merge(c(2), PAD, gk)
          else
-            left = box(3) - PAD - width
+            left = box(3) - merge(c(2), PAD, gk) - width
          endif
          select case (trim(self%key_v))
          case ('bottom')
@@ -6338,7 +6443,10 @@ contains
          case default
             left = 0.5_R8P * (area(1) + area(2) - width)
          endselect
-         if (self%key_place() == 'top') then
+         ! gnuplot's a v_tic from the page's top or bottom
+         if (gk) then
+            top = merge(box(2) + c(3), box(4) - c(3) - height, self%key_place() == 'top')
+         elseif (self%key_place() == 'top') then
             top = area(3) - self%x2_room(font_size) - GAP - height
          else
             top = box(4) - PAD - height
@@ -6346,19 +6454,20 @@ contains
       case default
          select case (trim(self%key_h))
          case ('left')
-            left = area(1) + PAD
+            left = area(1) + merge(c(2), PAD, gk)
          case ('center')
             left = 0.5_R8P * (area(1) + area(2) - width)
          case default
-            left = area(2) - PAD - width
+            left = area(2) - merge(c(2), PAD, gk) - width
          endselect
+         ! gnuplot: a v_tic in from the border, a h_char from the side
          select case (trim(self%key_v))
          case ('bottom')
-            top = area(4) - GAP - height
+            top = area(4) - merge(c(3), GAP, gk) - height
          case ('center')
             top = 0.5_R8P * (area(3) + area(4) - height)
          case default
-            top = area(3) + GAP
+            top = area(3) + merge(c(3), GAP, gk)
          endselect
       endselect
       endif
@@ -6369,7 +6478,7 @@ contains
       case (2_I4P)
          left = left + self%key_offset(1) * (area(2) - area(1))
       case default
-         left = left + self%key_offset(1) * CHAR_WIDTH * font_size
+         left = left + self%key_offset(1) * kchar(1)
       endselect
       select case (self%key_offset_unit(2))
       case (1_I4P)
@@ -6377,10 +6486,16 @@ contains
       case (2_I4P)
          top = top - self%key_offset(2) * (area(4) - area(3))
       case default
-         top = top - self%key_offset(2) * CHAR_HEIGHT * font_size
+         top = top - self%key_offset(2) * kchar(2)
       endselect
-      if (self%key_opaque) call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, &
-                                             'none', WINDOW_FILL, 1.0_R8P)
+      if (self%key_opaque) then
+         if (gk) then
+            call backend%rect(left, top, width, height, 'none', WINDOW_FILL, 1.0_R8P)
+         else
+            call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, 'none', WINDOW_FILL, &
+                              1.0_R8P)
+         endif
+      endif
       if (self%key_box) then
          ! gnuplot `set key box lc lw dt`
          block
@@ -6389,7 +6504,14 @@ contains
 
             bcolor = FRAME_COLOR
             if (len_trim(self%key_box_lc) > 0) bcolor = trim(self%key_box_lc)
-            if (self%key_box_dt == 1_I4P) then
+            if (gk) then
+               ! gnuplot's: the key's bounds
+               bline%dashtype = self%key_box_dt
+               bline%linewidth = self%key_box_lw
+               call backend%polyline([left, left + width, left + width, left, left], &
+                                     [top, top, top + height, top + height, top], bcolor, self%key_box_lw, &
+                                     bline%dasharray())
+            elseif (self%key_box_dt == 1_I4P) then
                call backend%rect(left - GAP, top - 0.5_R8P * GAP, width + 2.0_R8P * GAP, height + GAP, bcolor, 'none', &
                                  self%key_box_lw)
             else
@@ -6405,6 +6527,31 @@ contains
       if (allocated(self%key_title)) then
          if (len(self%key_title) > 0) then
             backend%literal = self%key_plain
+            if (gk) then
+               ! gnuplot's: a line, its middle half a v_char under the key's top; a h_char in from a side, or centred
+               select case (trim(self%key_title_anchor))
+               case ('start')
+                  call backend%text(left + c(2), top + 0.5_R8P * c(1) + 0.35_R8P * font_size, self%key_title, 'start')
+               case ('end')
+                  call backend%text(left + width - c(2), top + 0.5_R8P * c(1) + 0.35_R8P * font_size, self%key_title, &
+                                    'end')
+               case default
+                  call backend%text(left + 0.5_R8P * width, top + 0.5_R8P * c(1) + 0.35_R8P * font_size, &
+                                    self%key_title, 'middle')
+               endselect
+               backend%literal = .false.
+               top = top + c(1)
+               ! a boxed key: a line under its title
+               if (self%key_box) then
+                  block
+                     character(len=:), allocatable :: bcolor !< Box color.
+
+                     bcolor = FRAME_COLOR
+                     if (len_trim(self%key_box_lc) > 0) bcolor = trim(self%key_box_lc)
+                     call backend%polyline([left, left + width], [top, top], bcolor, self%key_box_lw, '')
+                  endblock
+               endif
+            else
             ! gnuplot `set key title "T" left|center|right`: at the left of the key, its middle or its right
             select case (trim(self%key_title_anchor))
             case ('start')
@@ -6427,6 +6574,7 @@ contains
                   call backend%polyline([left - GAP, left + width + GAP], [top + 0.1_R8P * font_size, &
                                         top + 0.1_R8P * font_size], bcolor, self%key_box_lw, '')
                endblock
+            endif
             endif
          endif
       endif
@@ -6542,6 +6690,24 @@ contains
          rows = grid(3)
       endif
       if (self%key_invert) row = rows - 1_I4P - row
+      if (gk) then
+         ! gnuplot's (do_key_sample): the sample from the entry's anchor xl, the title right-justified a h_char before
+         ! it (`Left`: from the column's left), or with `reverse` the sample before xl and the title a h_char after it
+         ! (right-justified at its column's end)
+         yc = top + (real(row, R8P) + 0.5_R8P) * krow
+         associate(h => c(2), widest => entry - ksample - 3.0_R8P * c(2) - self%key_extra * c(2))
+            if (self%key_reverse) then
+               xs = [cell(1) + h, cell(1) + h + ksample]
+               tx = merge(xs(2) + h, xs(2) + h + widest + self%key_extra * h, self%key_left)
+            else
+               xs = [cell(1) + 2.0_R8P * h + widest + self%key_extra * h, &
+                     cell(1) + 2.0_R8P * h + widest + self%key_extra * h + ksample]
+               tx = merge(cell(1) + h, xs(1) - h, self%key_left)
+            endif
+         endassociate
+         anchor = merge('start', 'end  ', self%key_left)
+         return
+      endif
       yc = top + (real(row, R8P) + 0.5_R8P) * self%key_spacing * LINE_HEIGHT * font_size
       cell(2) = cell(1) + entry - GAP
       if (self%key_reverse) then
@@ -6587,6 +6753,26 @@ contains
             ay = area(4) - self%yaxis%to_unit(self%key_xy(2)) * (area(4) - area(3))
          endif
       endselect
+      if (gk) then
+         ! gnuplot's (do_key_bounds): the key's bounds at the position, by its justification
+         select case (trim(self%key_h))
+         case ('left')
+            left = ax
+         case ('center')
+            left = ax - 0.5_R8P * extent(1)
+         case default
+            left = ax - extent(1)
+         endselect
+         select case (trim(self%key_v))
+         case ('bottom')
+            top = ay - extent(2)
+         case ('center')
+            top = ay - 0.5_R8P * extent(2)
+         case default
+            top = ay
+         endselect
+         return
+      endif
       select case (trim(self%key_h))
       case ('left')
          left = ax + GAP
@@ -6956,6 +7142,8 @@ contains
    real(R8P)                          :: entry     !< Entry width, spacing included [px].
    integer(I4P)                       :: s         !< Series counter.
    integer(I4P)                       :: k         !< Row counter.
+   real(R8P)                          :: c(5)      !< Character cell [px] (gnuplot's key).
+   real(R8P)                          :: row       !< Key entry height [px] (gnuplot's key).
 
    grid = [0_I4P, 1_I4P, 0_I4P]
    entry = 0.0_R8P
@@ -6974,6 +7162,37 @@ contains
             entry = max(entry, backend%text_width(trim(self%series(s)%texts(k)), '', font_size))
          enddo
       endif
+   endif
+   if (key_gnuplot(self, backend)) then
+      ! gnuplot's key (boundary.c do_key_layout) in the device's character cell: a column is the widest title, a
+      ! character, the `width` characters, the sample and a character; rows a key entry high. The titles measured, a
+      ! character more pads them (gnuplot's estimate of a title, its characters times h_char, mostly exceeds it)
+      c = backend%char_cell(font_size)
+      entry = entry + 2.0_R8P * c(2) + self%key_extra * c(2) + key_sample_gnuplot(self, c) + c(2)
+      row = key_entry_gnuplot(self, c)
+      if (self%key_columns > 0_I4P .and. grid(1) > 0_I4P) then
+         grid(2) = min(grid(1), self%key_columns)
+      elseif (self%key_horizontal .and. grid(1) > 0_I4P) then
+         grid(2) = max(1_I4P, min(grid(1), int(room / entry, I4P)))
+         if (self%key_maxcols > 0_I4P) grid(2) = min(grid(2), self%key_maxcols)
+      elseif (self%key_maxrows > 0_I4P .and. grid(1) > self%key_maxrows) then
+         grid(2) = (grid(1) + self%key_maxrows - 1_I4P) / self%key_maxrows
+      elseif (self%gnuplot_key .and. present(tall) .and. grid(1) > 0_I4P) then
+         k = max(1_I4P, int(tall / row, I4P))
+         if (grid(1) > k) grid(2) = (grid(1) + k - 1_I4P) / k
+      endif
+      grid(3) = (grid(1) + grid(2) - 1_I4P) / grid(2)
+      extent = [real(grid(2), R8P) * entry, real(grid(3), R8P) * row + self%key_height * row]
+      ! a title: a line above the entries; a key narrower than it widens its columns (title, 2 characters, less the
+      ! sample's characters)
+      if (allocated(self%key_title)) then
+         if (len(self%key_title) > 0) then
+            extent(2) = extent(2) + c(1)
+            extent(1) = max(extent(1), backend%text_width(self%key_title, '', font_size) + &
+                                       (2.0_R8P - key_samplen(self)) * c(2))
+         endif
+      endif
+      return
    endif
    ! one font size of slack: vector devices only estimate text widths, and wide glyphs (m, w) exceed the estimate
    entry = entry + font_size + GAP + self%key_sample(font_size) + GAP + self%key_extra * CHAR_WIDTH * font_size
@@ -7003,6 +7222,43 @@ contains
       endif
    endif
    endsubroutine key_layout
+
+   pure function key_gnuplot(self, backend) result(yes)
+   !< Whether the key is gnuplot's 2D one in the device's character cell (do_key_layout, do_key_bounds): a vector
+   !< device, a 2D panel (3D and map views have gnuplot's graph3d key, text devices their rows).
+   class(axes_object),    intent(in) :: self    !< Panel.
+   class(backend_object), intent(in) :: backend !< Output device.
+   logical                           :: yes     !< gnuplot's 2D key.
+
+   yes = .not. (backend%row_height() > 0.0_R8P .or. self%three_d)
+   endfunction key_gnuplot
+
+   pure function key_samplen(self) result(n)
+   !< The sample's length in characters, gnuplot's `samplen` (4 by default).
+   class(axes_object), intent(in) :: self !< Panel.
+   real(R8P)                      :: n    !< Characters.
+
+   n = 4.0_R8P
+   if (self%key_samplen >= 0.0_R8P) n = self%key_samplen
+   endfunction key_samplen
+
+   pure function key_sample_gnuplot(self, c) result(length)
+   !< gnuplot's key sample: `samplen` h_char and a h_tic [px] (do_key_layout key_sample_width).
+   class(axes_object), intent(in) :: self   !< Panel.
+   real(R8P),          intent(in) :: c(5)   !< Character cell [px].
+   real(R8P)                      :: length !< Length [px].
+
+   length = key_samplen(self) * c(2) + c(4)
+   endfunction key_sample_gnuplot
+
+   pure function key_entry_gnuplot(self, c) result(height)
+   !< gnuplot's key entry height: the larger of 1.25 v_tic and v_char, times the key `spacing` [px].
+   class(axes_object), intent(in) :: self   !< Panel.
+   real(R8P),          intent(in) :: c(5)   !< Character cell [px].
+   real(R8P)                      :: height !< Height [px].
+
+   height = max(1.25_R8P * c(3), c(1)) * self%key_spacing
+   endfunction key_entry_gnuplot
 
    pure function key_sample(self, font_size) result(length)
    !< Length of a key sample [px]: `samplen` character widths (and a major tick length with `gnuplot_key`, gnuplot's

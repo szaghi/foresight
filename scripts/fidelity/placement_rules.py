@@ -20,7 +20,9 @@ Coordinates are the page's, y down, in px (svg) or bp (cairolatex). The rules, g
   ytic        right end at L - ytic_width - H, centred on the tick
   x2tic       centre at T - x2tic_height - V;   y2tic   left end at R + y2tic_width + H
   key         inside the border, v_tic below its top or above its bottom; rows of max(1.25 v_tic, V) spacing; the
-              titles right-justified H left of the sample, which is 4 H + h_tic long and ends 2 H from the key's right
+              titles right-justified H left of the sample, which is 4 H + h_tic long and ends 2 H from the key's right;
+              a left key's columns are its measured widest title and a H of padding (foresight) or its characters times
+              H (gnuplot): the width difference plus H
   keytitle    centred over the key (or H in from a side), its first line V / 2 under the key's top
 with xtic_height = v_tic scale (ticks out), xtic_textheight = (lines + 1) V, ytic_textwidth = (widest + 2) H; V, H,
 v_tic, h_tic the terminal's (placement's svg cell: 1.5 and 0.7 font sizes, ticks half V; cairo: Liberation Sans' line,
@@ -206,7 +208,8 @@ def predict(r: Row, s: dict, probe: str, gp_texts: dict) -> tuple[str, float | N
         longest = max(len(t) for t in titles)
         entry = max(1.25 * VT, V)
         # a key title takes one line; cairolatex: gnuplot's estimate_strlen leaves the height unset for LaTeX
-        # terminals and do_key_layout reads it uninitialized (0 in this build: the rows start at the top): a gnuplot defect, not modelled
+        # terminals and do_key_layout reads it uninitialized (0 in this build: the rows start at the top): a gnuplot
+        # defect, modelled to attribute gnuplot's positions, not followed by foresight
         defect = r.term == "cairolatex" and bool(s["key_title"])
         title_h = (0.0 if defect else V) if s["key_title"] else 0.0
         sample = 4 * H + HT
@@ -217,13 +220,13 @@ def predict(r: Row, s: dict, probe: str, gp_texts: dict) -> tuple[str, float | N
         if r.kind == "keytitle":
             return ("DEFECT (gnuplot: the title's height uninitialized, 0 here) " if defect else "") + \
                 "keytitle: centred, V/2 under the key's top", left + width / 2, top + title_h / 2 + c["D"], \
-                width_difference(titles, H, size, r.term) / 2 if s["key_left"] else 0.0, 0.0
+                (width_difference(titles, H, size, r.term) + H) / 2 if s["key_left"] else 0.0, 0.0
         row = titles.index(r.text)
         y = top + title_h + entry / 2 + row * entry + c["D"]
         x = left + H * longest
         return ("DEFECT (gnuplot: the key title's height uninitialized, 0 here) " if defect else "") + \
             "key: rows max(1.25 VT, V); text H left of a 4H + HT sample", x, y, \
-            width_difference(titles, H, size, r.term) if s["key_left"] else 0.0, 0.0
+            (width_difference(titles, H, size, r.term) + H) if s["key_left"] else 0.0, 0.0
     return "label: at its data position (the baseline drop only)", None, None, 0.0, 0.0
 
 
@@ -248,8 +251,8 @@ def width_difference(texts: list[str], h: float, size: float, term: str) -> floa
 
 
 def explain(rows: list[Row], foresight: str, check: bool, kinds: list[str] | None = None) -> bool:
-    """Print each text's rule, gnuplot's residual against it and foresight's offset (the `kinds` only, if given); True on
-    a failure."""
+    """Print each text's rule, gnuplot's residual against it and foresight's offset (the `kinds` only, if given);
+    True on a failure."""
     failed = False
     by = {}
     for r in rows:

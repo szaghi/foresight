@@ -2,10 +2,11 @@
 """placement.py [options]: where foresight puts each 2D text, against gnuplot 6.0, with equal plot areas (issue #6).
 
 Each probe of scripts/fidelity/placement/*.gp is run by gnuplot and by foresight through two terminals, `svg size
-600,400` and `cairolatex pdf input size 5in,3in`, with the same fixed screen margins (MARGINS, or the probe's), so both programs draw
-the same plot area and every difference left is a text placement rule. The texts of both outputs are matched by their
-content (the nearest one when a content repeats) and each pair's offset is reported, foresight's position less
-gnuplot's: svg in px (the baseline anchor of the <text>), cairolatex in bp (the \\put point), dy positive downward.
+600,400` and `cairolatex pdf input size 5in,3in`, with the same fixed screen margins (MARGINS, or the probe's), so both
+programs draw the same plot area and every difference left is a text placement rule. The texts of both outputs are
+matched by their content (the nearest one when a content repeats) and each pair's offset is reported, foresight's
+position less gnuplot's: svg in px (the baseline anchor of the <text>), cairolatex in bp (the \\put point), dy positive
+downward.
 
 A probe's first lines may hold options:
   #! font: N        the terminal font size (default: the terminal's own, 12 for svg and 11 for cairolatex)
@@ -214,7 +215,8 @@ def run(program: list[str], probe: str, term: str, out: str, env: dict[str, str]
         wrap = os.path.join(tmp, "wrap.gp")
         with open(wrap, "w") as f:
             m = margins(probe)
-            f.write(f"set terminal {spec}\nset output '{out}'\nset lmargin at screen {m[0]}; set rmargin at screen {m[1]}; "
+            f.write(f"set terminal {spec}\nset output '{out}'\n"
+                    f"set lmargin at screen {m[0]}; set rmargin at screen {m[1]}; "
                     f"set bmargin at screen {m[2]}; set tmargin at screen {m[3]}\nload '{probe}'\nset output\n")
         subprocess.run(program + [wrap], cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, timeout=60, check=False, env=env)
@@ -259,7 +261,8 @@ def measure(foresight: str, probes: list[str], terms: list[str]) -> tuple[list[R
                 run(["gnuplot"], probe, term, gp_out, env)
                 run([foresight], probe, term, fs_out, None)
                 if not (os.path.exists(gp_out) and os.path.exists(fs_out)):
-                    lonely.append(f"{name} {term}: no output from {'gnuplot' if not os.path.exists(gp_out) else 'foresight'}")
+                    who = "gnuplot" if not os.path.exists(gp_out) else "foresight"
+                    lonely.append(f"{name} {term}: no output from {who}")
                     continue
                 if term == "svg":
                     gp, fs = svg_texts(gp_out, True), svg_texts(fs_out, False)

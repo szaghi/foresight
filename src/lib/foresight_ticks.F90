@@ -108,6 +108,8 @@ type :: tics_object
    character(len=6)              :: justify = ''      !< Label justification of rotated labels: `left`, `right`,
                                                       !< `center`, or blank for gnuplot's (`right` for `rotate`).
    logical                       :: out = .false.     !< Ticks outward, gnuplot `out`.
+   real(R8P)                     :: length = 6.0_R8P  !< Major tick length [px]: on a vector device the terminal's
+                                                       !< v_tic (x axes) or h_tic (y axes), set at each render.
    real(R8P)                     :: scale(2) = [1.0_R8P, 0.5_R8P] !< Major and minor tick lengths, in major lengths
                                                       !< (gnuplot `scale MAJOR,MINOR`; 0 draws no tick).
    type(tic_item), allocatable   :: list(:)          !< Explicit list, gnuplot `set xtics ("label" pos level, ...)`.

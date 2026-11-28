@@ -35,6 +35,8 @@ type :: axes_view
    logical   :: grid      = .false.  !< Grid shown.
    logical   :: markup    = .false.  !< Tick labels with enhanced text markup, drawn again by the viewer as such.
    real(R8P) :: font_size = 12.0_R8P !< Font size [px].
+   real(R8P) :: cell(4)   = 0.0_R8P  !< gnuplot's v_char, h_char, v_tic, h_tic [px], where the tick labels go; 0 for
+                                     !< foresight's places (a text device, a map view).
    character(len=:), allocatable :: xtics   !< x tick positions for the viewer (`tics_object%attribute`), empty for auto.
    character(len=:), allocatable :: ytics   !< y tick positions for the viewer, empty for auto.
    character(len=:), allocatable :: xformat !< x tick label format, empty for the default.
