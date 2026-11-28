@@ -6,7 +6,8 @@ module foresight_script
 !<
 !< - `NAME = expression` (a user variable, its value now), `NAME(P1, ...) = expression` (a user function, see
 !<   foresight_expression); expressions take them everywhere, range ends included (`set xrange [0:2*pi]`);
-!< - `set|unset title|xlabel|ylabel|y2label|x2label ["text"]`, `set xrange|yrange|y2range|x2range [min:max]` (`*` or
+!< - `set|unset title|xlabel|ylabel|y2label|x2label ["text"]`, `set|unset caption ["text"]` (foresight: the caption a
+!<   document gives the figure, not drawn), `set xrange|yrange|y2range|x2range [min:max]` (`*` or
 !<   empty autoscales an end), `set|unset logscale [AXES]` (AXES concatenates x, y, y2, x2, cb, e.g. `xy2`; all when
 !<   absent),
 !<   `set|unset grid`, `set|unset key`, `set output "file"`, `set terminal svg|html [size W,H] [refresh SECONDS]`;
@@ -10400,6 +10401,8 @@ contains
    endif
    self%function_style = 'lines'
    self%autotitle = 'file'
+   ! foresight's caption, a plot setting
+   call self%figure%set_caption('')
    if (allocated(self%line_styles)) deallocate(self%line_styles)
    allocate(self%line_styles(0))
    self%separator = ''
@@ -12119,6 +12122,10 @@ contains
    endif
    if (keyword(option, 'title', 3_I4P)) then
       call title_option
+   elseif (option == 'caption') then
+      ! foresight's `set caption "text"`: the figure's caption for a document (`save`'s info), not drawn
+      if (.not. self%string_argument(tokens, text, iostat, iomsg)) return
+      call self%figure%set_caption(text)
    elseif (keyword(option, 'xlabel', 2_I4P)) then
       if (.not. axis_label(1_I4P)) return
       call self%figure%set_xlabel(text)
@@ -18355,6 +18362,8 @@ contains
       self%advance_pending = .false.
    elseif (keyword(option, 'title', 3_I4P)) then
       call self%figure%set_title('')
+   elseif (option == 'caption') then
+      call self%figure%set_caption('')
    elseif (keyword(option, 'xlabel', 2_I4P)) then
       call self%figure%set_xlabel('')
    elseif (keyword(option, 'ylabel', 2_I4P)) then

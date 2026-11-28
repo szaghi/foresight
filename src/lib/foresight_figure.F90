@@ -34,6 +34,8 @@ use foresight_ticks, only : MINOR_AUTO, tic_item, tics_object, TICS_NONE
 use foresight_font, only : font_object, font_of
 use foresight_contour, only : CONTOUR_BSPLINE, CONTOUR_CUBIC, CONTOUR_LINEAR, LEVELS_AUTO, LEVELS_DISCRETE, &
                               LEVELS_INCREMENTAL
+use foresight_enhanced, only : markup_plain
+use foresight_math, only : has_math
 use foresight_dgrid3d, only : grid_series, DGRID_BOX, DGRID_CAUCHY, DGRID_EXP, DGRID_GAUSS, DGRID_HANN, DGRID_QNORM, &
                               DGRID_SPLINES
 use foresight_pm3d, only : CORNERS_C1, CORNERS_GEOMEAN, CORNERS_HARMEAN, CORNERS_MAX, CORNERS_MEAN, CORNERS_MEDIAN, &
@@ -42,7 +44,23 @@ use penf, only : I4P, R8P
 
 implicit none
 private
+public :: figure_info
 public :: figure_object
+
+type :: figure_info
+   !< What a document needs of a saved figure (`fig%save(file, info=meta)`): the files, the format, the size and the
+   !< texts of a figure environment or a Markdown image.
+   character(len=:), allocatable :: file     !< The file written (`NAME.tex` for a LaTeX picture).
+   character(len=:), allocatable :: graphics !< The graphics a LaTeX picture includes (`NAME.pdf` or `NAME-inc.pdf`),
+                                             !< empty for the other formats.
+   character(len=:), allocatable :: format   !< `svg`, `html`, `pdf`, `tex` or `txt`.
+   real(R8P)                     :: width_px  = 0.0_R8P !< Width [px], 0 for text.
+   real(R8P)                     :: height_px = 0.0_R8P !< Height [px], 0 for text.
+   real(R8P)                     :: width_cm  = 0.0_R8P !< Width [cm] at 96 px to the inch (a PDF's page), 0 for text.
+   real(R8P)                     :: height_cm = 0.0_R8P !< Height [cm] at 96 px to the inch, 0 for text.
+   character(len=:), allocatable :: alt      !< Alternative text from the titles, the axis labels and the key titles.
+   character(len=:), allocatable :: caption  !< Caption (`set caption`), empty for none.
+endtype figure_info
 
 real(R8P), parameter :: PAD         = 10.0_R8P !< Outer padding [px].
 real(R8P), parameter :: GAP         = 6.0_R8P  !< Gap below the multiplot title [px].
@@ -77,6 +95,8 @@ type :: figure_object
                                                               !< `upwards`), else from the top.
    logical                        :: manual       = .false.   !< Manual multiplot: panels added on demand.
    character(len=:), allocatable  :: title                    !< Multiplot title, empty for none.
+   character(len=:), allocatable  :: caption                  !< Caption for the document (`set caption`, a foresight
+                                                              !< extension), not drawn: `save`'s `info` returns it.
    type(font_object)              :: title_font               !< Multiplot title font (`set multiplot title ... font`).
    logical                        :: svg_glyphs = .false.     !< SVG texts drawn from the compiled-in glyphs.
    real(R8P)                      :: pdf_line_scale = 1.0_R8P !< PDF line widths times this (`linewidth`).
@@ -126,10 +146,13 @@ type :: figure_object
       procedure, pass(self) :: set_zrange      !< gnuplot `set zrange`.
       procedure, pass(self) :: set_ztics       !< gnuplot `set ztics`.
       procedure, pass(self) :: save            !< Render to a file; the format follows the extension.
+      procedure, pass(self) :: information     !< What a document needs of the figure saved to a file.
+      procedure, pass(self) :: alt_text        !< The figure's alternative text.
       procedure, pass(self) :: set_angles      !< gnuplot `set angles`.
       procedure, pass(self) :: set_border      !< gnuplot `set border` / `unset border`.
       procedure, pass(self) :: set_errorbars   !< gnuplot `set errorbars`.
       procedure, pass(self) :: set_boxwidth    !< gnuplot `set boxwidth`.
+      procedure, pass(self) :: set_caption     !< The caption a document gives the figure (a foresight extension).
       procedure, pass(self) :: set_cblabel     !< gnuplot `set cblabel`.
       procedure, pass(self) :: set_cbrange     !< gnuplot `set cbrange`.
       procedure, pass(self) :: set_colorbox    !< gnuplot `set colorbox` / `unset colorbox`.
@@ -343,6 +366,7 @@ contains
    self%layout = fresh%layout
    self%manual = fresh%manual
    self%title = ''
+   self%caption = ''
    self%title_font = fresh%title_font
    if (allocated(self%panels)) deallocate(self%panels)
    call self%ensure_panels
@@ -501,18 +525,21 @@ contains
    if (present(labels_axis)) self%panels(self%current)%series(last)%label_axis = labels_axis
    endsubroutine plot
 
-   subroutine save(self, file)
+   subroutine save(self, file, info)
    !< Render the figure to `file`; the format follows the name: `.svg` static, `.html` interactive, `.pdf` PDF, `.tex`
    !< a LaTeX picture whose texts LaTeX sets (gnuplot's cairolatex: `NAME.tex` and its graphics `NAME.pdf`, or
    !< `NAME-inc.pdf` for a standalone document, see `set_cairolatex`), `.txt` text (the gnuplot `dumb` or `block`
-   !< terminal, see `set_text`), `-` text on standard output.
-   class(figure_object), intent(inout) :: self   !< Figure.
-   character(len=*),     intent(in)    :: file   !< Output file.
-   type(backend_svg)                   :: svg    !< SVG device.
-   type(backend_html)                  :: html   !< HTML device.
-   type(backend_pdf)                   :: pdf    !< PDF device.
+   !< terminal, see `set_text`), `-` text on standard output. `info` returns what a document needs: the files, the
+   !< format, the size, an alternative text and the caption (`figure_info`).
+   class(figure_object), intent(inout)         :: self   !< Figure.
+   character(len=*),     intent(in)            :: file   !< Output file.
+   type(figure_info),    intent(out), optional :: info   !< The figure's information.
+   type(backend_svg)                           :: svg    !< SVG device.
+   type(backend_html)                          :: html   !< HTML device.
+   type(backend_pdf)                           :: pdf    !< PDF device.
 
    call self%ensure_panels
+   if (present(info)) info = self%information(file)
    if (file == '-') then
       call text(self%clear_screen)
       return
@@ -588,6 +615,153 @@ contains
       endif
       endsubroutine text
    endsubroutine save
+
+   function information(self, file) result(info)
+   !< What a document needs of the figure saved to `file` (see `save`): the files, the format, the size in px and in cm
+   !< (96 px to the inch, the PDF page's), the alternative text and the caption.
+   class(figure_object), intent(in) :: self !< Figure.
+   character(len=*),     intent(in) :: file !< Output file, its extension the format (`-` text).
+   type(figure_info)                :: info !< The information.
+   integer(I4P)                     :: dot  !< Position of the extension's dot.
+
+   info%file = file
+   info%graphics = ''
+   info%format = extension(file)
+   if (file == '-') info%format = 'txt'
+   if (info%format == 'htm') info%format = 'html'
+   if (info%format == 'tex') then
+      dot = index(file, '.', back=.true.)
+      if (dot > 1_I4P) then
+         info%graphics = file(:dot - 1_I4P)
+      else
+         info%graphics = file
+      endif
+      if (self%tex_standalone) info%graphics = info%graphics//'-inc'
+      info%graphics = info%graphics//'.pdf'
+   endif
+   if (info%format /= 'txt') then
+      info%width_px = self%width
+      info%height_px = self%height
+      info%width_cm = self%width / 96.0_R8P * 2.54_R8P
+      info%height_cm = self%height / 96.0_R8P * 2.54_R8P
+   endif
+   info%alt = self%alt_text()
+   info%caption = ''
+   if (allocated(self%caption)) info%caption = self%caption
+   endfunction information
+
+   function alt_text(self) result(alt)
+   !< The figure's alternative text, for readers who cannot see it: the multiplot title, then of each panel its title,
+   !< the label of each axis that has one and the key titles, as sentences (`Plot: T. x axis: L. Series: a, b.`);
+   !< gnuplot's enhanced markup dropped (a text with TeX math kept as written). A figure with none of these texts is `Plot.`.
+   class(figure_object), intent(in) :: self  !< Figure.
+   character(len=:), allocatable    :: alt   !< Alternative text.
+   character(len=:), allocatable    :: part  !< A panel's text.
+   character(len=:), allocatable    :: names !< Key titles.
+   integer(I4P)                     :: n     !< Panels.
+   integer(I4P)                     :: p     !< Panel counter.
+   integer(I4P)                     :: k     !< Series counter.
+
+   alt = ''
+   if (allocated(self%title)) then
+      if (len_trim(self%title) > 0) alt = 'Figure: '//sentence(self%title)//' '
+   endif
+   n = 0_I4P
+   if (allocated(self%panels)) n = size(self%panels, kind=I4P)
+   do p = 1_I4P, n
+      associate(panel => self%panels(p))
+         if (panel%three_d) then
+            part = 'Surface plot'
+         else
+            part = 'Plot'
+         endif
+         if (n > 1_I4P) part = 'Panel '//trim(str_int(p))//', '//to_lower_first(part)
+         if (allocated(panel%title)) then
+            if (len_trim(panel%title) > 0) part = part//': '//sentence(panel%title)
+         endif
+         if (part(len(part):len(part)) /= '.') part = part//'.'
+         call axis_part(panel%xaxis, 'x')
+         call axis_part(panel%x2axis, 'x2')
+         call axis_part(panel%yaxis, 'y')
+         call axis_part(panel%y2axis, 'y2')
+         if (panel%three_d) call axis_part(panel%zaxis, 'z')
+         call axis_part(panel%cbaxis, 'Color')
+         names = ''
+         if (allocated(panel%series)) then
+            do k = 1_I4P, size(panel%series, kind=I4P)
+               if (.not. allocated(panel%series(k)%title)) cycle
+               if (len_trim(panel%series(k)%title) == 0) cycle
+               if (len(names) > 0) names = names//', '
+               names = names//plain(panel%series(k)%title)
+            enddo
+         endif
+         if (len(names) > 0) part = part//' Series: '//sentence(names)
+      endassociate
+      alt = alt//part//' '
+   enddo
+   alt = trim(alt)
+   if (len(alt) == 0) alt = 'Plot.'
+   contains
+      subroutine axis_part(axis, name)
+      !< Add an axis's label to the panel's text.
+      type(axis_object), intent(in) :: axis !< Axis.
+      character(len=*),  intent(in) :: name !< Axis name.
+
+      if (.not. allocated(axis%label)) return
+      if (len_trim(axis%label) == 0) return
+      part = part//' '//name//' axis: '//sentence(axis%label)
+      endsubroutine axis_part
+
+      function plain(text) result(out)
+      !< `text` without gnuplot's enhanced markup when the figure reads it, its blanks trimmed.
+      character(len=*), intent(in)  :: text !< Text.
+      character(len=:), allocatable :: out  !< Plain text.
+
+      if (self%enhanced .and. .not. has_math(text)) then
+         out = trim(adjustl(markup_plain(text)))
+      else
+         out = trim(adjustl(text))
+      endif
+      endfunction plain
+
+      function sentence(text) result(out)
+      !< `text` plain and ending with a full stop.
+      character(len=*), intent(in)  :: text !< Text.
+      character(len=:), allocatable :: out  !< Sentence.
+
+      out = plain(text)
+      if (len(out) == 0) return
+      if (scan(out(len(out):len(out)), '.!?') == 0) out = out//'.'
+      endfunction sentence
+
+      function to_lower_first(text) result(out)
+      !< `text` with its first letter in lower case.
+      character(len=*), intent(in)  :: text !< Text.
+      character(len=:), allocatable :: out  !< Text.
+
+      out = text
+      if (len(out) > 0) then
+         if (out(1:1) >= 'A' .and. out(1:1) <= 'Z') out(1:1) = achar(iachar(out(1:1)) + 32)
+      endif
+      endfunction to_lower_first
+
+      function str_int(i) result(out)
+      !< An integer as text.
+      integer(I4P), intent(in) :: i   !< Integer.
+      character(len=12)        :: out !< Text.
+
+      write(out, '(I0)') i
+      endfunction str_int
+   endfunction alt_text
+
+   subroutine set_caption(self, caption)
+   !< The caption a document gives the figure, empty for none (a foresight extension, script `set caption "..."`): not
+   !< drawn, `save`'s `info` returns it for the document's figure environment or image.
+   class(figure_object), intent(inout) :: self    !< Figure.
+   character(len=*),     intent(in)    :: caption !< Caption.
+
+   self%caption = caption
+   endsubroutine set_caption
 
    subroutine set_cblabel(self, label)
    !< Color box label, as gnuplot `set cblabel`; empty for none.

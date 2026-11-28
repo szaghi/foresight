@@ -40,7 +40,8 @@ A fresh `figure_object` needs no initialisation. `init` resets it to the gnuplot
 | `set_hidden3d([on], [offset])` | `set hidden3d`, `set hidden3d offset 2`, `unset hidden3d` (`on=.false.`) |
 | `set_zrange([min], [max])`, `set_zlabel(label)`, `set_ztics([step], [start], [end], [positions], [labels], [minor], [add])` | `set zrange`, `set zlabel`, `set ztics` of the 3D plots |
 | `clear()` | the replacement done by a new `plot` |
-| `save(file)` | `set output` + render |
+| `save(file[, info])` | `set output` + render; `info` returns what a document needs ([below](#what-a-document-needs)) |
+| `set_caption(caption)` | `set caption "..."` (a foresight extension): the caption a document gives the figure, not drawn |
 | `set_title(title)`, `set_xlabel(label)`, `set_ylabel(label)`, `set_y2label(label)`, `set_x2label(label)` | `set title`, `set xlabel`, `set ylabel`, `set y2label`, `set x2label` |
 | `set_page_size(width, height[, units])` | the page size in `px` (the default), `in`, `cm` or `pt` (96 px to the inch, as the PDF's 0.75 pt per pixel), as `set terminal pdfcairo size 8.5cm,6cm` |
 | `set_font(spec[, fontscale])` | the page font, gnuplot's `"family:Bold:Italic,size"`, the size in points times `fontscale`; `serif` for Latin Modern Roman |
@@ -173,8 +174,35 @@ call fig%plot(it, res)
 
 ### Output
 
-`save` picks the format from the file name: `.svg` static vector, `.html`/`.htm` interactive page, `.txt` text, `-`
-text on the standard output. See [Output Formats](output-formats).
+`save` picks the format from the file name: `.svg` static vector, `.html`/`.htm` interactive page, `.pdf` PDF, `.tex`
+a LaTeX picture (cairolatex), `.txt` text, `-` text on the standard output. See [Output Formats](output-formats).
+
+### What a document needs
+
+`save(file, info=meta)` also returns a `figure_info`: what a report or a paper writes around the figure.
+
+```fortran
+use foresight, only : figure_info, figure_object
+type(figure_object) :: fig
+type(figure_info)   :: meta
+
+call fig%set_caption('Residuals of the run.')
+call fig%save('residuals.svg', info=meta)
+print '(A)', '!['//meta%alt//']('//meta%file//')'
+print '(A)', '*'//meta%caption//'*'
+```
+
+| Field | Value |
+|---|---|
+| `file` | the file written (`NAME.tex` for a LaTeX picture) |
+| `graphics` | the PDF a LaTeX picture includes (`NAME.pdf`, `NAME-inc.pdf` when standalone), empty otherwise |
+| `format` | `svg`, `html`, `pdf`, `tex` or `txt` |
+| `width_px`, `height_px` | the page size [px]; 0 for text |
+| `width_cm`, `height_cm` | the page size [cm] at 96 px to the inch, the PDF's page; 0 for text |
+| `alt` | an alternative text: the multiplot title, then each panel's title, axis labels and key titles, as sentences (`Plot: Residual history. x axis: iteration. y axis: residual. Series: rho, u.`); enhanced markup dropped, TeX math kept; `Plot.` when the figure has none of these texts |
+| `caption` | `set_caption`'s text (`set caption "..."` in scripts), empty if unset |
+
+The caption is not drawn: it belongs to the document (a LaTeX `\caption`, the text under a Markdown image).
 
 ## Scripts from Fortran
 

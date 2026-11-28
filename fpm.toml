@@ -83,3 +83,8 @@ main = "foresight_sys_test.F90"
 name = "foresight_ticks_test"
 source-dir = "src/tests"
 main = "foresight_ticks_test.F90"
+
+[[test]]
+name = "foresight_info_test"
+source-dir = "src/tests"
+main = "foresight_info_test.F90"
