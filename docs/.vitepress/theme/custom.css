@@ -43,6 +43,12 @@
   --vp-home-hero-name-background: none;
   --vp-home-hero-image-background-image: none;
   --vp-home-hero-image-filter: none;
+  /* the three paths of the About infographic (indigo, matcha, ochre), a shadow and a pale ink for lines */
+  --fs-path-1: #2f5487;
+  --fs-path-2: #44692a;
+  --fs-path-3: #8a5c12;
+  --fs-shade: #1d1b1814;
+  --fs-ink-3: #8a8378;
 }
 
 .dark {
@@ -79,6 +85,12 @@
   --foresight-focus: #ff7092;
   --vp-home-hero-name-color: #e8ecf0;
   --vp-code-block-bg: #0e090b;
+  /* the three paths of the About infographic, a shadow and a pale ink for lines */
+  --fs-path-1: #7ea6e0;
+  --fs-path-2: #9bc46e;
+  --fs-path-3: #e0b25a;
+  --fs-shade: #00000059;
+  --fs-ink-3: #6f7782;
 }
 
 /* names in the display face, tracked wide */

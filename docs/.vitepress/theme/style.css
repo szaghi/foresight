@@ -190,9 +190,32 @@ html:not(.dark) .fs-only-dark {
   display: none;
 }
 .fs-infographic {
-  margin: 1rem 0 2rem;
+  margin: 1.5rem 0 2rem;
+  overflow-x: auto;
 }
 .fs-infographic svg {
+  display: block;
   width: 100%;
+  min-width: 640px;
   height: auto;
 }
+.fs-infographic .card { fill: var(--vp-c-bg-elv); stroke: var(--vp-c-divider); }
+.fs-infographic .soft { fill: var(--vp-c-bg-soft); }
+.fs-infographic .paper { fill: var(--vp-c-bg); }
+.fs-infographic .shade { fill: var(--fs-shade); }
+.fs-infographic .axis { stroke: var(--fs-ink-3); fill: none; }
+.fs-infographic .dot { fill: var(--fs-ink-3); }
+.fs-infographic .t-display { font-family: var(--foresight-font-display); font-weight: 800; fill: var(--vp-c-text-1); }
+.fs-infographic .t-head { font-family: var(--vp-font-family-base); font-weight: 600; fill: var(--vp-c-text-1); }
+.fs-infographic .t-body { font-family: var(--vp-font-family-base); fill: var(--vp-c-text-2); }
+.fs-infographic .t-mono { font-family: var(--vp-font-family-mono); fill: var(--vp-c-text-2); }
+.fs-infographic .t-cap { font-family: var(--vp-font-family-mono); fill: var(--vp-c-text-2); letter-spacing: .08em; }
+.fs-infographic .p1 { fill: var(--fs-path-1); }
+.fs-infographic .p2 { fill: var(--fs-path-2); }
+.fs-infographic .p3 { fill: var(--fs-path-3); }
+.fs-infographic .p1-s { stroke: var(--fs-path-1); fill: none; }
+.fs-infographic .p2-s { stroke: var(--fs-path-2); fill: none; }
+.fs-infographic .p3-s { stroke: var(--fs-path-3); fill: none; }
+.fs-infographic .pulse { animation: fs-pulse 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes fs-pulse { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(2.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fs-infographic .pulse { animation: none; } }
