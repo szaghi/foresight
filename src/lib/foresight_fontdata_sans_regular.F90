@@ -16,15 +16,17 @@ implicit none
 private
 
 public :: SANS_REGULAR_UPM, SANS_REGULAR_ASCENT, SANS_REGULAR_DESCENT, SANS_REGULAR_CAP_HEIGHT, &
-          SANS_REGULAR_X_HEIGHT, SANS_REGULAR_CODES, SANS_REGULAR_ADVANCE, SANS_REGULAR_KERN_KEY, &
-          SANS_REGULAR_KERN_VALUE, SANS_REGULAR_PATH_START, SANS_REGULAR_POINT_START, SANS_REGULAR_OPS, &
-          SANS_REGULAR_POINTS
+          SANS_REGULAR_X_HEIGHT, SANS_REGULAR_LINE_ASCENT, SANS_REGULAR_LINE_DESCENT, SANS_REGULAR_CODES, &
+          SANS_REGULAR_ADVANCE, SANS_REGULAR_KERN_KEY, SANS_REGULAR_KERN_VALUE, SANS_REGULAR_PATH_START, &
+          SANS_REGULAR_POINT_START, SANS_REGULAR_OPS, SANS_REGULAR_POINTS
 
 integer(I4P), parameter :: SANS_REGULAR_UPM = 2048 !< Font units to the em.
 integer(I4P), parameter :: SANS_REGULAR_ASCENT = 1491 !< Typographic ascender.
 integer(I4P), parameter :: SANS_REGULAR_DESCENT = -431 !< Typographic descender (negative).
 integer(I4P), parameter :: SANS_REGULAR_CAP_HEIGHT = 1409 !< Capital height.
 integer(I4P), parameter :: SANS_REGULAR_X_HEIGHT = 1082 !< x height.
+integer(I4P), parameter :: SANS_REGULAR_LINE_ASCENT = 1854 !< Line ascender (hhea).
+integer(I4P), parameter :: SANS_REGULAR_LINE_DESCENT = -434 !< Line descender (hhea, negative).
 ! Code points, sorted.
 integer(I4P), parameter :: SANS_REGULAR_CODES(429) = [ &
    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, &

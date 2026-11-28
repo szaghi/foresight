@@ -16,14 +16,17 @@ implicit none
 private
 
 public :: SANS_BOLD_UPM, SANS_BOLD_ASCENT, SANS_BOLD_DESCENT, SANS_BOLD_CAP_HEIGHT, SANS_BOLD_X_HEIGHT, &
-          SANS_BOLD_CODES, SANS_BOLD_ADVANCE, SANS_BOLD_KERN_KEY, SANS_BOLD_KERN_VALUE, SANS_BOLD_PATH_START, &
-          SANS_BOLD_POINT_START, SANS_BOLD_OPS, SANS_BOLD_POINTS
+          SANS_BOLD_LINE_ASCENT, SANS_BOLD_LINE_DESCENT, SANS_BOLD_CODES, SANS_BOLD_ADVANCE, &
+          SANS_BOLD_KERN_KEY, SANS_BOLD_KERN_VALUE, SANS_BOLD_PATH_START, SANS_BOLD_POINT_START, SANS_BOLD_OPS, &
+          SANS_BOLD_POINTS
 
 integer(I4P), parameter :: SANS_BOLD_UPM = 2048 !< Font units to the em.
 integer(I4P), parameter :: SANS_BOLD_ASCENT = 1491 !< Typographic ascender.
 integer(I4P), parameter :: SANS_BOLD_DESCENT = -431 !< Typographic descender (negative).
 integer(I4P), parameter :: SANS_BOLD_CAP_HEIGHT = 1409 !< Capital height.
 integer(I4P), parameter :: SANS_BOLD_X_HEIGHT = 1082 !< x height.
+integer(I4P), parameter :: SANS_BOLD_LINE_ASCENT = 1854 !< Line ascender (hhea).
+integer(I4P), parameter :: SANS_BOLD_LINE_DESCENT = -434 !< Line descender (hhea, negative).
 ! Code points, sorted.
 integer(I4P), parameter :: SANS_BOLD_CODES(429) = [ &
    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, &

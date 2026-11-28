@@ -17,15 +17,17 @@ implicit none
 private
 
 public :: SERIF_REGULAR_UPM, SERIF_REGULAR_ASCENT, SERIF_REGULAR_DESCENT, SERIF_REGULAR_CAP_HEIGHT, &
-          SERIF_REGULAR_X_HEIGHT, SERIF_REGULAR_CODES, SERIF_REGULAR_ADVANCE, SERIF_REGULAR_KERN_KEY, &
-          SERIF_REGULAR_KERN_VALUE, SERIF_REGULAR_PATH_START, SERIF_REGULAR_POINT_START, SERIF_REGULAR_OPS, &
-          SERIF_REGULAR_POINTS
+          SERIF_REGULAR_X_HEIGHT, SERIF_REGULAR_LINE_ASCENT, SERIF_REGULAR_LINE_DESCENT, SERIF_REGULAR_CODES, &
+          SERIF_REGULAR_ADVANCE, SERIF_REGULAR_KERN_KEY, SERIF_REGULAR_KERN_VALUE, SERIF_REGULAR_PATH_START, &
+          SERIF_REGULAR_POINT_START, SERIF_REGULAR_OPS, SERIF_REGULAR_POINTS
 
 integer(I4P), parameter :: SERIF_REGULAR_UPM = 1000 !< Font units to the em.
 integer(I4P), parameter :: SERIF_REGULAR_ASCENT = 806 !< Typographic ascender.
 integer(I4P), parameter :: SERIF_REGULAR_DESCENT = -194 !< Typographic descender (negative).
 integer(I4P), parameter :: SERIF_REGULAR_CAP_HEIGHT = 683 !< Capital height.
 integer(I4P), parameter :: SERIF_REGULAR_X_HEIGHT = 431 !< x height.
+integer(I4P), parameter :: SERIF_REGULAR_LINE_ASCENT = 1127 !< Line ascender (hhea).
+integer(I4P), parameter :: SERIF_REGULAR_LINE_DESCENT = -290 !< Line descender (hhea, negative).
 ! Code points, sorted.
 integer(I4P), parameter :: SERIF_REGULAR_CODES(486) = [ &
    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, &

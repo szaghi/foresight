@@ -16,7 +16,8 @@ use foresight_backend_svg, only : marker_line, marker_path, segment_path, DIGIT_
                                   SLANT
 use foresight_enhanced, only : enhanced_run, enhanced_runs, has_markup, markup_width, run_face, shown
 use foresight_font, only : face_of, font_object, text_advance
-use foresight_fontdata, only : face_ascent, face_descent, face_upm, glyph_advance, glyph_index, glyph_kern, glyph_outline
+use foresight_fontdata, only : face_ascent, face_descent, face_line_ascent, face_line_descent, face_upm, glyph_advance, &
+                              glyph_index, glyph_kern, glyph_outline
 use foresight_format, only : fixed, int_str, latin1_utf8
 use foresight_palette, only : named_color
 use foresight_style, only : pattern_parts
@@ -130,6 +131,7 @@ type, extends(backend_object) :: backend_pdf
       procedure, pass(self) :: data_arrows
       procedure, pass(self) :: data_label
       procedure, pass(self) :: front_area !< The front layer of the plot area: its clip again, after the overlays.
+      procedure, pass(self) :: char_cell  !< gnuplot's character cell: its cairo terminals'.
       ! private helpers
       procedure, pass(self), private :: emit         !< Write to a destination buffer.
       procedure, pass(self), private :: text_face    !< Face of the texts written now.
@@ -869,6 +871,38 @@ contains
 
    shown_now = self%hidden == 0_I4P
    endfunction visible
+
+   pure function char_cell(self, font_size) result(c)
+   !< gnuplot's character cell of its cairo terminals (pdfcairo, cairolatex) at a font of `font_size` px [px], the
+   !< page's family (gp_cairo_set_termvar, cairo.trm), in the terminal's units of 1/200 pt: `v_char` the height of a line
+   !< (the face's hhea ascender and descender) rounded up, less a unit; `h_char` the width of "0123456789" (each advance
+   !< rounded to a unit, as pango's hinted metrics) over 10, rounded up; the ticks `v_char` / 2.5. The baseline is half
+   !< the nominal font size (3/4 of the drawn one: pango draws at 96 dpi) below the centre.
+   class(backend_pdf), intent(in) :: self      !< Device.
+   real(R8P),          intent(in) :: font_size !< Font size [px].
+   real(R8P)                      :: c(5)      !< v_char, h_char, v_tic, h_tic, centre to baseline [px].
+   real(R8P), parameter           :: UNITS = 200.0_R8P * PT_PER_PX !< Terminal units to the px.
+   type(font_object)              :: font      !< The page's font.
+   integer(I4P)                   :: face      !< Its face.
+   real(R8P)                      :: em        !< Font size [units].
+   integer(I8P)                   :: v         !< v_char [units].
+   integer(I8P)                   :: digits    !< Width of the ten digits [units].
+   integer(I4P)                   :: k         !< Digit counter.
+
+   font%family = self%page_family
+   face = face_of(font)
+   em = font_size * UNITS / real(face_upm(face), R8P)
+   v = ceiling(real(face_line_ascent(face) - face_line_descent(face), R8P) * em, I8P) - 1_I8P
+   digits = 0_I8P
+   do k = 0_I4P, 9_I4P
+      digits = digits + nint(real(glyph_advance(face, glyph_index(face, 48_I4P + k)), R8P) * em, I8P)
+   enddo
+   c(1) = real(v, R8P) / UNITS
+   c(2) = real(ceiling(real(digits, R8P) / 10.0_R8P, I8P), R8P) / UNITS
+   c(3) = real(int(real(v, R8P) / 2.5_R8P, I8P), R8P) / UNITS
+   c(4) = c(3)
+   c(5) = 0.375_R8P * font_size
+   endfunction char_cell
 
    pure function text_face(self) result(face)
    !< The compiled-in face (1-8) of the texts written now: `self%font`, its family the page's when unset.

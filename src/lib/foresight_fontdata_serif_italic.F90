@@ -17,15 +17,17 @@ implicit none
 private
 
 public :: SERIF_ITALIC_UPM, SERIF_ITALIC_ASCENT, SERIF_ITALIC_DESCENT, SERIF_ITALIC_CAP_HEIGHT, &
-          SERIF_ITALIC_X_HEIGHT, SERIF_ITALIC_CODES, SERIF_ITALIC_ADVANCE, SERIF_ITALIC_KERN_KEY, &
-          SERIF_ITALIC_KERN_VALUE, SERIF_ITALIC_PATH_START, SERIF_ITALIC_POINT_START, SERIF_ITALIC_OPS, &
-          SERIF_ITALIC_POINTS
+          SERIF_ITALIC_X_HEIGHT, SERIF_ITALIC_LINE_ASCENT, SERIF_ITALIC_LINE_DESCENT, SERIF_ITALIC_CODES, &
+          SERIF_ITALIC_ADVANCE, SERIF_ITALIC_KERN_KEY, SERIF_ITALIC_KERN_VALUE, SERIF_ITALIC_PATH_START, &
+          SERIF_ITALIC_POINT_START, SERIF_ITALIC_OPS, SERIF_ITALIC_POINTS
 
 integer(I4P), parameter :: SERIF_ITALIC_UPM = 1000 !< Font units to the em.
 integer(I4P), parameter :: SERIF_ITALIC_ASCENT = 806 !< Typographic ascender.
 integer(I4P), parameter :: SERIF_ITALIC_DESCENT = -194 !< Typographic descender (negative).
 integer(I4P), parameter :: SERIF_ITALIC_CAP_HEIGHT = 683 !< Capital height.
 integer(I4P), parameter :: SERIF_ITALIC_X_HEIGHT = 431 !< x height.
+integer(I4P), parameter :: SERIF_ITALIC_LINE_ASCENT = 1125 !< Line ascender (hhea).
+integer(I4P), parameter :: SERIF_ITALIC_LINE_DESCENT = -290 !< Line descender (hhea, negative).
 ! Code points, sorted.
 integer(I4P), parameter :: SERIF_ITALIC_CODES(486) = [ &
    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, &

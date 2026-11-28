@@ -17,14 +17,17 @@ implicit none
 private
 
 public :: SERIF_BOLD_UPM, SERIF_BOLD_ASCENT, SERIF_BOLD_DESCENT, SERIF_BOLD_CAP_HEIGHT, SERIF_BOLD_X_HEIGHT, &
-          SERIF_BOLD_CODES, SERIF_BOLD_ADVANCE, SERIF_BOLD_KERN_KEY, SERIF_BOLD_KERN_VALUE, &
-          SERIF_BOLD_PATH_START, SERIF_BOLD_POINT_START, SERIF_BOLD_OPS, SERIF_BOLD_POINTS
+          SERIF_BOLD_LINE_ASCENT, SERIF_BOLD_LINE_DESCENT, SERIF_BOLD_CODES, SERIF_BOLD_ADVANCE, &
+          SERIF_BOLD_KERN_KEY, SERIF_BOLD_KERN_VALUE, SERIF_BOLD_PATH_START, SERIF_BOLD_POINT_START, &
+          SERIF_BOLD_OPS, SERIF_BOLD_POINTS
 
 integer(I4P), parameter :: SERIF_BOLD_UPM = 1000 !< Font units to the em.
 integer(I4P), parameter :: SERIF_BOLD_ASCENT = 806 !< Typographic ascender.
 integer(I4P), parameter :: SERIF_BOLD_DESCENT = -194 !< Typographic descender (negative).
 integer(I4P), parameter :: SERIF_BOLD_CAP_HEIGHT = 686 !< Capital height.
 integer(I4P), parameter :: SERIF_BOLD_X_HEIGHT = 444 !< x height.
+integer(I4P), parameter :: SERIF_BOLD_LINE_ASCENT = 1133 !< Line ascender (hhea).
+integer(I4P), parameter :: SERIF_BOLD_LINE_DESCENT = -295 !< Line descender (hhea, negative).
 ! Code points, sorted.
 integer(I4P), parameter :: SERIF_BOLD_CODES(486) = [ &
    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, &

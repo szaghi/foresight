@@ -11,7 +11,7 @@ use penf, only : I4P
 implicit none
 private
 public :: FACES
-public :: face_upm, face_ascent, face_descent, face_cap_height, face_x_height
+public :: face_upm, face_ascent, face_descent, face_cap_height, face_x_height, face_line_ascent, face_line_descent
 public :: glyph_index, glyph_advance, glyph_kern, glyph_outline
 
 integer(I4P), parameter :: FACES = 8_I4P !< Compiled-in faces.
@@ -46,6 +46,18 @@ interface
    integer(I4P), intent(in) :: face  !< Face, 1 to FACES.
    integer(I4P)             :: value !< Font units.
    endfunction face_x_height
+
+   pure module function face_line_ascent(face) result(value)
+   !< Line ascender of `face` (hhea): with the line descender, the height of a line as pango measures it.
+   integer(I4P), intent(in) :: face  !< Face, 1 to FACES.
+   integer(I4P)             :: value !< Font units.
+   endfunction face_line_ascent
+
+   pure module function face_line_descent(face) result(value)
+   !< Line descender of `face` (hhea, negative).
+   integer(I4P), intent(in) :: face  !< Face, 1 to FACES.
+   integer(I4P)             :: value !< Font units.
+   endfunction face_line_descent
 
    pure module function glyph_index(face, code) result(index)
    !< The glyph index of the code point `code` in `face` (0 if absent).

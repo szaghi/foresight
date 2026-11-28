@@ -11,7 +11,7 @@ module foresight_backend
 !< redrawable decorations (grid, ticks) by named `begin_group`/`end_group`: an interactive device regenerates them after
 !< a zoom, a static one just writes them.
 use foresight_font, only : font_object
-use penf, only : I4P, R8P
+use penf, only : I4P, I8P, R8P
 use foresight_theme, only : theme_object
 
 implicit none
@@ -104,6 +104,7 @@ type, abstract :: backend_object
       procedure,                            pass(self)           :: wants_scene     !< Whether 3D scenes are written.
       procedure,                            pass(self)           :: scene           !< A 3D view's scene (JSON).
       procedure,                            pass(self)           :: row_height     !< Text row height, 0 if none.
+      procedure,                            pass(self)           :: char_cell      !< gnuplot's character cell.
       procedure,                            pass(self)           :: hover          !< Text on mouse-over of a point.
       procedure,                            pass(self)           :: pixmap         !< A PNG image [px].
       procedure,                            pass(self)           :: front_area     !< Open or close the front layer of
@@ -379,6 +380,25 @@ contains
 
    separate = .false.
    endsubroutine front_area
+
+   pure function char_cell(self, font_size) result(c)
+   !< gnuplot's character cell of the terminal the device stands for, at a font of `font_size` px [px]: `v_char`,
+   !< `h_char`, `v_tic`, `h_tic` (gnuplot's boundary.c lays texts out in them) and the drop from a text's centre, the
+   !< point gnuplot places, to its baseline. This one is gnuplot 6.0's svg terminal (svg.trm): ascent 0.9, descent 0.25
+   !< and leading 0.35 font sizes make `v_char`, 0.7 font sizes `h_char`, the ticks half `v_char`, each truncated to
+   !< the terminal's 1/100 px; the baseline is (ascent - descent) / 2 below the centre.
+   class(backend_object), intent(in) :: self      !< Device.
+   real(R8P),             intent(in) :: font_size !< Font size [px].
+   real(R8P)                         :: c(5)      !< v_char, h_char, v_tic, h_tic, centre to baseline [px].
+   integer(I8P)                      :: v         !< v_char [1/100 px].
+
+   v = int(font_size * 0.90_R8P * 100.0_R8P + font_size * 0.25_R8P * 100.0_R8P + font_size * 0.35_R8P * 100.0_R8P, I8P)
+   c(1) = real(v, R8P) / 100.0_R8P
+   c(2) = real(int(font_size * 0.70_R8P * 100.0_R8P, I8P), R8P) / 100.0_R8P
+   c(3) = real(v / 2_I8P, R8P) / 100.0_R8P
+   c(4) = c(3)
+   c(5) = 0.5_R8P * (0.90_R8P - 0.25_R8P) * font_size
+   endfunction char_cell
 
    pure function row_height(self) result(height)
    !< Height of a text row of the device [px]: 0 on vector devices, where text sits anywhere.

@@ -137,6 +137,8 @@ class Face:
     descent: int
     cap_height: int
     x_height: int
+    line_ascent: int = 0  # hhea: the line pango (gnuplot's cairo terminals) measures
+    line_descent: int = 0
     codes: list[int] = field(default_factory=list)
     advance: list[int] = field(default_factory=list)
     path_start: list[int] = field(default_factory=list)  # 1-based into ops, n + 1 entries
@@ -244,7 +246,7 @@ def build_face(
     upm = font["head"].unitsPerEm
     os2 = font["OS/2"]
     face = Face(name, upm, os2.sTypoAscender, os2.sTypoDescender, getattr(os2, "sCapHeight", 0) or 0,
-                getattr(os2, "sxHeight", 0) or 0)
+                getattr(os2, "sxHeight", 0) or 0, font["hhea"].ascent, font["hhea"].descent)
     face.sources = [f"{os.path.basename(path)} (sha256 {sha(path)}, {font['name'].getDebugName(5)})"]
     cmap, mcmap = font.getBestCmap(), math.getBestCmap()
     gs, mgs = font.getGlyphSet(), math.getGlyphSet()
@@ -360,7 +362,7 @@ def face_module(face: Face) -> str:
     lines += wrap_comment(notice)
     lines += ["use penf, only : I4P", "", "implicit none", "private", ""]
     p = face.name.upper()
-    names = ["UPM", "ASCENT", "DESCENT", "CAP_HEIGHT", "X_HEIGHT", "CODES", "ADVANCE", "KERN_KEY", "KERN_VALUE",
+    names = ["UPM", "ASCENT", "DESCENT", "CAP_HEIGHT", "X_HEIGHT", "LINE_ASCENT", "LINE_DESCENT", "CODES", "ADVANCE", "KERN_KEY", "KERN_VALUE",
              "PATH_START", "POINT_START", "OPS", "POINTS"]
     rows = wrap_values([f"{p}_{n}" for n in names], 100)
     for i, row in enumerate(rows):
@@ -372,6 +374,8 @@ def face_module(face: Face) -> str:
     lines.append(f"integer(I4P), parameter :: {p}_DESCENT = {face.descent} !< Typographic descender (negative).")
     lines.append(f"integer(I4P), parameter :: {p}_CAP_HEIGHT = {face.cap_height} !< Capital height.")
     lines.append(f"integer(I4P), parameter :: {p}_X_HEIGHT = {face.x_height} !< x height.")
+    lines.append(f"integer(I4P), parameter :: {p}_LINE_ASCENT = {face.line_ascent} !< Line ascender (hhea).")
+    lines.append(f"integer(I4P), parameter :: {p}_LINE_DESCENT = {face.line_descent} !< Line descender (hhea, negative).")
     lines += fortran_array(f"{p}_CODES", "I4P", face.codes, "Code points, sorted.")
     lines += fortran_array(f"{p}_ADVANCE", "I4P", face.advance, "Advance widths.")
     lines += fortran_array(f"{p}_KERN_KEY", "I4P", [a * 65536 + b for a, b in keys], "Kerning pairs, sorted.")
@@ -408,6 +412,9 @@ def lookup_module(faces: list[Face]) -> tuple[str, str]:
     metric("face_descent", "DESCENT", "Typographic descender of `face` (negative).")
     metric("face_cap_height", "CAP_HEIGHT", "Capital height of `face`.")
     metric("face_x_height", "X_HEIGHT", "x height of `face`.")
+    metric("face_line_ascent", "LINE_ASCENT", "Line ascender of `face` (hhea): with the line descender, the height of "
+           "a line as pango measures it.")
+    metric("face_line_descent", "LINE_DESCENT", "Line descender of `face` (hhea, negative).")
 
     def dispatch(fn: str, args: str, decl: list[str], call: str, default: str, doc: str, result: str) -> None:
         body = ["select case (face)"]
@@ -482,7 +489,8 @@ def lookup_module(faces: list[Face]) -> tuple[str, str]:
         "user of the face data modules."
     )
     mod += ["use penf, only : I4P", "", "implicit none", "private", "public :: FACES",
-            "public :: face_upm, face_ascent, face_descent, face_cap_height, face_x_height",
+            "public :: face_upm, face_ascent, face_descent, face_cap_height, face_x_height, face_line_ascent, "
+            "face_line_descent",
             "public :: glyph_index, glyph_advance, glyph_kern, glyph_outline", "",
             f"integer(I4P), parameter :: FACES = {n}_I4P !< Compiled-in faces.", "", "interface"]
     for kind, name, args, result, doc, decl, _, _ in procs:
@@ -497,7 +505,8 @@ def lookup_module(faces: list[Face]) -> tuple[str, str]:
     sub = [f"!< {shead}", "submodule (foresight_fontdata) foresight_fontdata_lookup", f"!< {shead}"]
     for f in faces:
         p = f.name.upper()
-        rows = wrap_values([f"{p}_{x}" for x in ("UPM", "ASCENT", "DESCENT", "CAP_HEIGHT", "X_HEIGHT", "CODES",
+        rows = wrap_values([f"{p}_{x}" for x in ("UPM", "ASCENT", "DESCENT", "CAP_HEIGHT", "X_HEIGHT", "LINE_ASCENT",
+                                                 "LINE_DESCENT", "CODES",
                                                  "ADVANCE", "KERN_KEY", "KERN_VALUE", "PATH_START", "POINT_START",
                                                  "OPS", "POINTS")], 100)
         sub.append(f"use foresight_fontdata_{f.name}, only : &")
