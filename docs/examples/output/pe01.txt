@@ -1,0 +1,2 @@
+$ foresight pe01_both.gp
+foresight: pe01.svg

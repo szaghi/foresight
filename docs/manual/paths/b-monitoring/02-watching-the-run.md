@@ -78,4 +78,4 @@ enddo
 - A log rewritten from the start (not appended) is read again whole: fine, but a long log costs a long read each time.
 
 Reference: [Live Monitoring](/guide/monitoring), [Interactive Viewer](/guide/viewer),
-[Command Line](/guide/cli#watch-mode). Next: path C, [figures for a paper](../c-paper/01-a-first-pdf).
+[Command Line](/guide/cli#watch-mode). Next: [B3. Readouts](./03-readouts).

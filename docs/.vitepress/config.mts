@@ -34,6 +34,9 @@ const docs = [
     items: [
       { text: 'B1. A dashboard',          link: '/manual/paths/b-monitoring/01-a-dashboard' },
       { text: 'B2. Watching the run',     link: '/manual/paths/b-monitoring/02-watching-the-run' },
+      { text: 'B3. Readouts',             link: '/manual/paths/b-monitoring/03-readouts' },
+      { text: 'B4. In the terminal',      link: '/manual/paths/b-monitoring/04-in-the-terminal' },
+      { text: 'B5. Numbers on the plot',  link: '/manual/paths/b-monitoring/05-numbers-on-the-plot' },
     ],
   },
   {
@@ -47,6 +50,30 @@ const docs = [
       { text: 'C5. The paper', link: '/manual/paths/c-paper/05-the-paper' },
       { text: 'C6. Labels set by LaTeX', link: '/manual/paths/c-paper/06-labels-set-by-latex' },
       { text: 'C7. Math in labels', link: '/manual/paths/c-paper/07-math-in-labels' },
+    ],
+  },
+  {
+    text: 'Path D: fields and 3D',
+    collapsed: true,
+    items: [
+      { text: 'D1. A field as an image',         link: '/manual/paths/d-fields-3d/01-a-field-as-an-image' },
+      { text: 'D2. Contours',                    link: '/manual/paths/d-fields-3d/02-contours' },
+      { text: 'D3. A surface',                   link: '/manual/paths/d-fields-3d/03-a-surface' },
+      { text: 'D4. Colored and lit surfaces',    link: '/manual/paths/d-fields-3d/04-pm3d' },
+      { text: 'D5. Vector fields',               link: '/manual/paths/d-fields-3d/05-vectors' },
+      { text: 'D6. Voxels and isosurfaces',      link: '/manual/paths/d-fields-3d/06-voxels' },
+      { text: 'D7. Turning views',               link: '/manual/paths/d-fields-3d/07-turning-views' },
+    ],
+  },
+  {
+    text: 'Path E: from gnuplot',
+    collapsed: true,
+    items: [
+      { text: 'E1. Running a script',            link: '/manual/paths/e-gnuplot/01-running-a-script' },
+      { text: 'E2. Terminals and outputs',       link: '/manual/paths/e-gnuplot/02-terminals' },
+      { text: 'E3. What foresight adds',         link: '/manual/paths/e-gnuplot/03-extensions' },
+      { text: 'E4. What foresight does not do',  link: '/manual/paths/e-gnuplot/04-not-supported' },
+      { text: 'E5. Checking against gnuplot',    link: '/manual/paths/e-gnuplot/05-checking' },
     ],
   },
   {

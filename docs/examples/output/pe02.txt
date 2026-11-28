@@ -1,0 +1,7 @@
+$ foresight pe02_terminals.gp && ls pe02*
+foresight: pe02.txt
+pe02.html
+pe02.pdf
+pe02.svg
+pe02.txt
+pe02_terminals.gp

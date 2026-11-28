@@ -8,6 +8,7 @@ foresight interprets a subset of the gnuplot command language, documented here b
 error naming the command and its line (`script.gp:12: unsupported command "history"`), never silently ignored: a script
 that runs is a script that did what it says. The commands that act on gnuplot's interactive windows only (`bind`,
 `set mouse`, `vclear`, `test`, `set term push`) are accepted and do nothing, as with gnuplot's file terminals.
+[Path E](/manual/paths/e-gnuplot/01-running-a-script) is the guide for gnuplot users.
 
 ## Syntax
 
@@ -40,9 +41,7 @@ that runs is a script that did what it says. The commands that act on gnuplot's 
 
 ## Not supported
 
-3D views other than the [map view](/guide/gnuplot/3d#_3d-plots) (`splot` with `set view ROT_X,ROT_Z`),
-`fit` beyond [its subset](/guide/gnuplot/commands#fit), log bases other than 10; `set rlabel`,
-the `rtics` placement options; in `set xtics`, positions and a list together
+`fit` beyond [its subset](/guide/gnuplot/commands#fit), log bases other than 10; the `rtics` placement options; in `set xtics`, positions and a list together
 (`set xtics 0,1 ("a" 2)`), `rotate` of the color box labels, `out` of the color box ticks, `axis` of the
 x2 and y2 ticks; the complex forms of the special functions (gnuplot's `Ai`, `BesselJ`, ...) and those of libcerf
 (`VP`, `erfi`, `FresnelC`, ...);

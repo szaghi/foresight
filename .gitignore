@@ -53,3 +53,6 @@ docs/api/
 /build/
 # test outputs written in the run directory, kept there when a check fails (deleted when all pass)
 /foresight_*
+
+# Python bytecode of the scripts
+__pycache__/

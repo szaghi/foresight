@@ -43,7 +43,8 @@ A gnuplot script plots it:
 ## Try this
 
 - `foresight residuals.gp -o residuals.txt`: the same plot as text.
-- `gnuplot residuals.gp` (with a `set terminal svg` line): the same script runs in gnuplot.
+- `gnuplot residuals.gp` (with a `set terminal svg` line): the same script runs in gnuplot;
+  [path E](../e-gnuplot/01-running-a-script) has the differences.
 - `plot 'run.dat' index 0 u 1:2`: the restart's first block only, after making its blank line two.
 
 ## Pitfalls

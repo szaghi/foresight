@@ -1,0 +1,3 @@
+$ foresight pe04_unsupported.gp; echo "returned $?"
+foresight: pe04_unsupported.gp:6: unsupported option "set loadpath"
+returned 1
