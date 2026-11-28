@@ -21,10 +21,12 @@ page worse than before by more than 0.005 without a listed reason.
 
 - The demos are gnuplot's test of itself: hundreds of pages exercising its commands. A page drawn by both is compared
   where it matters, the pixels, not the file.
-- The score is low but not zero by design: foresight measures texts with real font metrics where gnuplot's layout
-  estimates them, and some margins differ by a few points
+- The score is low but not zero by design: foresight places texts by gnuplot's rules in its terminal's character
+  cell, but measures them with real font metrics where gnuplot's layout estimates their widths
   ([layout compared with gnuplot](/guide/comparison#layout-compared-with-gnuplot)).
 - `scripts/fidelity/pdfcairo.py` and `cairolatex.py` compare the PDF and LaTeX terminals the same way.
+- `scripts/fidelity/placement.py` measures where each text stands, with the plot area fixed: titles, labels, tick
+  labels and key rows against gnuplot's, in px and bp, each attributed to gnuplot's rule (`--explain`).
 
 ## Try this
 

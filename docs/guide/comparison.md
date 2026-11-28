@@ -61,16 +61,33 @@ page; foresight builds with gfortran, nvfortran and ifx.
 ## Layout compared with gnuplot
 
 foresight lays a gnuplot script's page out as gnuplot 6.0 does, and measures how close it gets on gnuplot's own demos
-(`scripts/fidelity/`, see [Contributing](contributing#fidelity-to-gnuplot)). The differences left by design:
+(`scripts/fidelity/`, see [Contributing](contributing#fidelity-to-gnuplot)).
+
+On svg, html, pdf and cairolatex, a 2D panel takes gnuplot's boundary (`boundary.c`) in the character cell of the
+terminal the device stands for (`v_char`, `h_char`, `v_tic`, `h_tic`: svg's 1.5 and 0.7 font sizes, the cairo
+terminals' line height and digit width of the font): the auto margins, the ticks' lengths, and the places of the
+title, the axis labels, the tick labels and the key's rows. With the same plot area (`set lmargin at screen ...`),
+every 2D text is within 0.5 px (svg) and 0.1 bp (cairolatex) of gnuplot's, but for the widths below;
+`scripts/fidelity/placement.py` checks it on its probes. The differences left by design:
 
 - **Text widths.** foresight measures every text with the metrics of its compiled-in fonts (advance widths and
-  kerning, see [Fonts](output-formats#fonts)); gnuplot's layout estimates a text as its number of characters times a
-  character width. Where labels are narrow (`-1`, `1.5`, `σ`), foresight's margins and key boxes are narrower than
-  gnuplot's and the plot area wider.
-- **Titles.** A panel's title takes gnuplot's room above the plot (a character height, its lines, a character height),
-  as do the cells of a multiplot layout under a multiplot title. Panels placed by `set origin` and `set size` under a
-  multiplot title start below foresight's title band, not over it as gnuplot draws them.
-- **Text devices** keep foresight's rows of character cells for titles and labels.
+  kerning, see [Fonts](output-formats#fonts)); gnuplot's layout estimates a text as its number of characters times
+  `h_char`. Where gnuplot counts characters, foresight measures: the room of the y tick labels (so the y label's
+  place and the left margin), the y2 ones, rotated x tick labels below the plot, and a key's column. Where labels are
+  narrow (`-1`, `1.5`, `σ`), foresight's margins and key boxes are narrower than gnuplot's and the plot area wider. A
+  key's titles are padded by a character (gnuplot's estimate mostly exceeds a measured title).
+- **Baselines.** foresight puts a text's baseline 0.35 font sizes below its centre, gnuplot's svg terminal 0.325:
+  0.3 px at 12 px. On cairolatex the `\put` point is the centre itself, exactly gnuplot's.
+- **gnuplot's own defect.** In cairolatex gnuplot reads the height of a key's title from an uninitialized variable
+  (`estimate_strlen` sets no height for LaTeX terminals): in the build measured, its key rows start at the key's top,
+  the title over the first. foresight leaves a line to the title.
+- **Fonts.** gnuplot's cairo terminals measure the machine's `Sans` (Noto Sans, DejaVu Sans...), foresight Liberation
+  Sans, the font it embeds; the cell, and with it the margins, differ by the fonts' line heights. The fidelity scripts
+  run gnuplot with `Sans` aliased to Liberation Sans.
+- **Multiplot titles.** The cells of a multiplot layout lie under a multiplot title as gnuplot's; panels placed by
+  `set origin` and `set size` under one start below foresight's title band, not over it as gnuplot draws them.
+- **Text devices** keep foresight's rows of character cells for titles, labels and keys; 3D views and map views keep
+  gnuplot's graph3d layout, polar plots foresight's.
 
 ## When to use something else
 

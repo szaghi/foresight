@@ -79,8 +79,10 @@ the figure.
   (`'run\_1'`); automatic titles are escaped for you.
 - Tick numbers are written in math (`$-0.5$`), as gnuplot's.
 - Keep `NAME.tex` and `NAME.pdf` together, or set `\graphicspath`.
-- Positions are foresight's layout, not gnuplot's to the point: margins and text placement differ by a few points
-  (issue [#6](https://github.com/szaghi/foresight/issues/6) plans gnuplot's placement).
+- Positions are gnuplot's: with the same plot area every `\put` is within 0.1 bp of gnuplot's own, except where
+  gnuplot counts characters for a width (the y label beside the tick labels, a key's column:
+  [layout compared with gnuplot](comparison#layout-compared-with-gnuplot)). gnuplot measures the machine's `Sans`,
+  foresight Liberation Sans: margins follow the fonts' line heights.
 
 ## See also
 

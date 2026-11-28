@@ -77,7 +77,8 @@ unset tics                              # no ticks on any axis (z and cb too)
 `set tics` sets the options of every axis at once, as gnuplot: `mirror`/`nomirror`, `in`/`out`, `scale MAJOR[,MINOR]`
 (`scale default`: 1, 0.5), `axis`/`border`, `rangelimited`, and the label options below; bare, it turns the x and y
 ticks on; `unset tics` turns them all off; `set ticscale` is the old form of the scale. The scale multiplies the tick
-lengths (6 px major, foresight's; gnuplot's svg draws 9), `MINOR` half `MAJOR` when absent, `scale 0` draws no ticks
+lengths (gnuplot's `v_tic` on the x axes, `h_tic` on the y ones: 9 px at 12 px in an SVG; 6 px on a text device),
+`MINOR` half `MAJOR` when absent, `scale 0` draws no ticks
 and keeps the labels; each axis takes it too (`set xtics scale 2`). `set tics front|back` puts the grid over the data or behind it (gnuplot's one layer of grid and ticks), `set tics INCR` the step of every axis (which axes show ticks unchanged). Not supported in `set tics`:
 `rotate`.
 
@@ -287,10 +288,12 @@ unless given) and `title "text"` puts a row over the entries (centred, or `left`
 and `right` after the text: at the left side of the key or the right end of the samples); `default` restores
 them all. The samples are gnuplot 6.0's: a line, points, a filled box (its fill border around it when the fill style
 has one), an arrow for `vectors` and `arrows`, none for `labels` (their point with `labels point`) and for a
-`keyentry` without a style. In a script `samplen L` is L characters plus a tick length (gnuplot's `samplen * h_char +
-h_tic`), a boxed key draws a line under its title, and a vertical key taller than the panel wraps into columns, filled
-top down, as gnuplot. A character is gnuplot's svg cell, 0.7 font sizes wide and 1.5 high (the 2D key's sample
-length `samplen` keeps 0.6 font sizes a character: foresight's 2D key is its own). `font` the key's [font](/guide/gnuplot/text#fonts) (its
+`keyentry` without a style. The key is gnuplot's (`do_key_layout`) in the device's character cell (svg: 0.7 font
+sizes wide, 1.5 high): rows `max(1.25 v_tic, v_char)` apart times `spacing`, samples `samplen` characters and a tick
+length long (4 by default), a column the widest title, two characters, the `width` ones, the sample and a character;
+inside the plot a tick length from the top or bottom border and a character from the side, in a margin a tick length
+or a character from the page's edge; a boxed key draws a line under its title; a vertical key taller than the panel
+wraps into columns, filled top down, as gnuplot. Text devices keep their rows. `font` the key's [font](/guide/gnuplot/text#fonts) (its
 rows and widths by its size); `noenhanced` writes the key's texts as they are, not as [enhanced text](/guide/gnuplot/text#enhanced-text).
 
 ```gnuplot
