@@ -1,7 +1,7 @@
 #run pd06 foresight pd06_voxels.gp
 # region voxels
 # a 3D scalar field on a voxel grid: filled around a helix, then the surface where it reaches a level
-set terminal svg size 600,420 theme paper
+set terminal svg size 600,420
 set output 'pd06.svg'
 set vgrid $helix size 25
 set vxrange [-2:2]; set vyrange [-2:2]; set vzrange [0:11]

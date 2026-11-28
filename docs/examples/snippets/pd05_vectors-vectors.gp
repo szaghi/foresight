@@ -1,5 +1,5 @@
 # a velocity field (flow.dat: x y u v) as arrows, the cylinder drawn as an object
-set terminal svg size 600,420 theme paper
+set terminal svg size 600,420
 set output 'pd05.svg'
 set size ratio -1
 set xrange [-3.5:3.5]; set yrange [-2.6:2.6]

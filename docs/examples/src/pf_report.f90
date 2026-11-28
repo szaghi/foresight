@@ -28,7 +28,7 @@ write(md, '(A)') '# Run report', '', &
 !region script-figure
 ! a figure drawn by a script: its caption set there, its information from the figure the script built
 call gp%init('report/residuals.svg')
-call gp%run_text("set terminal svg size 600,340 theme paper"//nl// &
+call gp%run_text("set terminal svg size 600,340"//nl// &
                  "set logscale y; set format y '10^{%L}'"//nl// &
                  "set xlabel 'iteration'; set ylabel 'residual'; set title 'Convergence'"//nl// &
                  "set caption 'The three residuals fall by five decades or more; the restart at iteration 60 does not "// &
@@ -43,7 +43,6 @@ call add_figure(meta)
 !region library-figure
 ! a figure of the library: the drag coefficient and its error bars
 call fig%init(width=600_I4P, height=340_I4P)
-call fig%set_theme('paper')
 call fig%set_enhanced
 call fig%set_title('Drag coefficient')
 call fig%set_xlabel('iteration')
@@ -57,7 +56,6 @@ call add_figure(meta)
 
 ! a figure of the last iterations, from the same arrays
 call fig%init(width=600_I4P, height=300_I4P)
-call fig%set_theme('paper')
 call fig%set_enhanced
 call fig%set_xlabel('continuity residual')
 call fig%set_ylabel('c_d')

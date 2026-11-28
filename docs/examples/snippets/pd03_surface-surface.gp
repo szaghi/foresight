@@ -1,5 +1,5 @@
 # the same field as a surface: a mesh of its grid lines, hidden lines removed
-set terminal svg size 600,420 theme paper
+set terminal svg size 600,420
 set output 'pd03.svg'
 set view 55, 35
 set hidden3d

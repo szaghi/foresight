@@ -1,6 +1,5 @@
 ! a figure of the library: the drag coefficient and its error bars
 call fig%init(width=600_I4P, height=340_I4P)
-call fig%set_theme('paper')
 call fig%set_enhanced
 call fig%set_title('Drag coefficient')
 call fig%set_xlabel('iteration')

@@ -96,12 +96,42 @@
 
 .fs-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.25rem;
 }
 
+/* a card fills its grid cell: the image centred in it, the captions of a row on one line */
 .fs-gallery .fs-plot {
   margin: 0;
+  width: 100%;
+  max-width: none !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-gallery .fs-plot-canvas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* the landing page: two cards a row, centred under the section titles */
+.fs-home .fs-gallery {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.fs-home h3 {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+@media (max-width: 720px) {
+  .fs-home .fs-gallery {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* the About page: its hero, the three uses and the infographic */

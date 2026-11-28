@@ -1,5 +1,5 @@
 # the field's levels: filled contours under contour lines, in the map view
-set terminal svg size 600,420 theme paper
+set terminal svg size 600,420
 set output 'pd02.svg'
 set view map
 set size ratio -1

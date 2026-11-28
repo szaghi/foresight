@@ -180,10 +180,10 @@ embedded, math set as LaTeX sets it, or a LaTeX picture whose labels the paper i
 alternative texts, captions and Markdown tables (<a href="./manual/paths/f-reports/report/report">a run report</a>).</p>
 
 <div class="fs-gallery">
-  <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern (path C)" />
-  <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels (path C)" />
+  <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels, set as LaTeX sets it (path C)" />
   <Plot name="pd04" svg :width="600" :height="420" caption="a lit surface of a field (path D)" />
   <Plot name="pf01" svg :width="600" :height="320" caption="a figure and its caption for a report (path F)" />
+  <Plot name="pf02" svg :width="600" :height="320" caption="a mesh study, its table in Markdown (path F)" />
 </div>
 
 ## Gallery

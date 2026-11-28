@@ -14,7 +14,7 @@ set samples 4
 plot [1e3:1e6] 3.1*x**(-2.0/3) title 'model error' with lines
 unset table
 # endregion plot-table
-set terminal svg size 600,320 theme paper
+set terminal svg size 600,320
 set output 'pf02.svg'
 set format y '10^{%L}'
 set logscale xy

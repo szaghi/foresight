@@ -2,7 +2,7 @@
 # region numbers
 # the numbers of the run on its plot: the converged mean of the last 20 iterations, the restart marked
 stats 'run.dat' using ($1 > 100 ? $5 : 1/0) nooutput
-set terminal svg size 640,380 theme paper
+set terminal svg size 640,380
 set output 'pb05.svg'
 set title sprintf('c_d = %.4f ± %.4f (the last 20 iterations, shaded)', STATS_mean, STATS_stddev)
 set xlabel 'iteration'; set ylabel 'c_d'

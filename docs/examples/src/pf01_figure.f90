@@ -10,7 +10,6 @@ integer(I4P)        :: k       !< Counter.
 
 t = [(0.2_R8P * k, k = 1, 50)]
 call fig%init(width=600_I4P, height=320_I4P)
-call fig%set_theme('paper')
 call fig%set_title('Decay')
 call fig%set_xlabel('time [s]')
 call fig%set_ylabel('amplitude')

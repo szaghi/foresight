@@ -1,5 +1,5 @@
 # a field on a grid (field.dat: x y phi, a block per row) as an image, its values through a palette
-set terminal svg size 600,420 theme paper
+set terminal svg size 600,420
 set output 'pd01.svg'
 set title 'A damped wave'
 set xlabel 'x'; set ylabel 'y'; set cblabel '{/Symbol f}'

@@ -2,7 +2,7 @@
 # region both
 # one script for gnuplot and foresight: the terminal chosen by what the program has
 if (strstrt(GPVAL_TERMINALS, 'html') > 0) {
-   set terminal svg size 600,360 theme paper    # foresight: html, svg, pdfcairo, cairolatex, dumb, block
+   set terminal svg size 600,360    # foresight: html, svg, pdfcairo, cairolatex, dumb, block
    set output 'pe01.svg'
 } else {
    set terminal pngcairo size 600,360           # gnuplot
