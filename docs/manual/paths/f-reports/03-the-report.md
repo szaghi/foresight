@@ -12,7 +12,7 @@ texts and numbered captions, a table of statistics and a table of the history.
 <<< @/examples/output/pf_report-head.txt{console}
 
 The page it writes is [the run report](./report/report): open it to see the result as VitePress renders it. The
-program reads the logs of the tutorial's solver; its parts are below, the whole of it in
+program reads the logs of path A's solver; its parts are below, the whole of it in
 [pf_report.f90](https://github.com/szaghi/foresight/blob/master/docs/examples/src/pf_report.f90).
 
 A figure drawn by a script, its caption set there:

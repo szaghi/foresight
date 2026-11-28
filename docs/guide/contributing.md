@@ -55,7 +55,7 @@ is welcome. The project follows a KISS (Keep It Simple and Stupid) philosophy.
 
 ## Documentation examples
 
-Every snippet, output and plot of the tutorial and the cookbook comes from the sources in `docs/examples/src`: Fortran
+Every snippet, output and plot of the learning paths and the cookbook comes from the sources in `docs/examples/src`: Fortran
 programs and gnuplot scripts with marker comments (`!run ID COMMAND` or `#run ID COMMAND` for a run shown in the
 pages, `!region NAME` ... `!endregion NAME` or `# region NAME` ... `# endregion NAME` for a part included on its own).
 

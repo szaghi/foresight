@@ -69,7 +69,7 @@ plot 'run.dat' u 1 w readout format '%6.0f' t 'ITER', '' u 2 w readout format '%
 
 The glass is fixed by the format, so the digits never jump between two reloads; a log not written yet shows dashes.
 In the terminal the digits are drawn with characters, so the cockpit works over ssh too. See
-[Readouts](gnuplot-subset#readouts) and the [cookbook](/manual/cookbook#seven-segment-readouts).
+[Readouts](/guide/gnuplot/styles#readouts) and the [cookbook](/manual/cookbook#seven-segment-readouts).
 
 ## A loop in the script
 
@@ -87,7 +87,7 @@ Each plot rewrites the page whole (written to a temporary file, then renamed), t
 Stop the loop with Ctrl-C. `reread`, the older idiom, is an error: gnuplot 6.0 rejects it as deprecated. `--watch`
 does more for the same job: it re-runs the script only when a data file or the script changes, survives a failing
 cycle, and needs no loop in the script. See [Shell commands, reset and
-pause](gnuplot-subset#shell-commands-reset-and-pause) and the [cookbook](/manual/cookbook#a-plot-that-follows-a-run).
+pause](/guide/gnuplot/commands#shell-commands-reset-and-pause) and the [cookbook](/manual/cookbook#a-plot-that-follows-a-run).
 
 ## Robustness
 

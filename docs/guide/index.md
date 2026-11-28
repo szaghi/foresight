@@ -34,7 +34,7 @@ silently ignored.
 ## Where to start
 
 1. [Install](install) the library and the command line.
-2. Follow the [tutorial](/manual/): one solver run, from a first plot to a live dashboard.
+2. Follow a [learning path](/manual/): path A from a first plot to scripts, then the one of your job.
 3. Look up a task in the [cookbook](/manual/cookbook), a command or method in the [reference](features).
 
 Releases and their changes are in the [changelog](changelog).

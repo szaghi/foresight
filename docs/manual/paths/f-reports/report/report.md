@@ -1,6 +1,6 @@
 # Run report
 
-The pretend flow solver of the tutorial: 120 iterations, a restart at iteration 60. This page, its figures and its tables were written by `pf_report.f90`.
+The pretend flow solver of path A: 120 iterations, a restart at iteration 60. This page, its figures and its tables were written by `pf_report.f90`.
 
 ![Plot: Convergence. x axis: iteration. y axis: residual. Series: continuity, momentum, energy.](residuals.svg)
 

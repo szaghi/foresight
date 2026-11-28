@@ -20,7 +20,7 @@ call read_log
 call execute_command_line('mkdir -p report')
 open(newunit=md, file=page, status='replace', action='write')
 write(md, '(A)') '# Run report', '', &
-                 'The pretend flow solver of the tutorial: 120 iterations, a restart at iteration 60. This page, its '// &
+                 'The pretend flow solver of path A: 120 iterations, a restart at iteration 60. This page, its '// &
                  'figures and its tables were written by `pf_report.f90`.', ''
 
 ! a figure drawn by a script: its caption set there, its information from the figure the script built

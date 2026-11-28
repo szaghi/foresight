@@ -56,7 +56,7 @@ iteration,residual,cd                  <- a header of words: no numbers, the row
 Every separator ends a cell, so two in a row leave an empty one; separators inside double quotes do not count.
 Comments, blocks and datasets work as above. A header row is skipped as a row of no numbers (still counted by column
 0, as gnuplot counts every row) until an item uses the headers: `using 1:"residual"`, `title columnhead` or `set key autotitle columnhead` make the first row
-of each dataset a header, no longer a point (see [Column headers](gnuplot-subset#column-headers)).
+of each dataset a header, no longer a point (see [Column headers](/guide/gnuplot/data#column-headers)).
 
 ## Missing data and comments
 
@@ -89,13 +89,13 @@ plot 'raw.bin' binary skip=64 record=1000 endian=big format='%float' using 1
 
 | Form | Read as |
 |---|---|
-| `binary` alone, `binary matrix` | gnuplot's matrix binary: float32 values, the first the number N of columns, then the N x of the columns, then rows of their y and N values, to the end of the file; read as a `nonuniform matrix` ([3D plots](gnuplot-subset#3d-plots)) (a splot lists its rows last first, as gnuplot's) |
+| `binary` alone, `binary matrix` | gnuplot's matrix binary: float32 values, the first the number N of columns, then the N x of the columns, then rows of their y and N values, to the end of the file; read as a `nonuniform matrix` ([3D plots](/guide/gnuplot/3d#_3d-plots)) (a splot lists its rows last first, as gnuplot's) |
 | `format='%type...'` | records of the format's fields, to the end of the file: `%char`, `%uchar`, `%short`, `%ushort`, `%int`, `%uint`, `%long`, `%ulong`, `%float`, `%double` and the sized `%int8` ... `%uint64`, `%float32`, `%float64` (and gnuplot's short names: `%f`, `%lf`, `%d`, `%i`, `%u`, `%c`, `%byte`, `%word`, ...); `%*type` reads a field and drops it; a single specifier is every field's, as many as the `using` reads (floats without a format) |
 | `record=N` | N records; `record=N1:N2:...` the records one after the other, one curve (gnuplot's) |
 | `skip=N` | N header bytes skipped |
 | `endian=little\|big\|default\|swap` | the byte order (`default` the machine's, little; `swap` the other one) |
-| `array=(W,H)` | a W x H data array, its pixel coordinates generated (`array=W`: x alone, `using 1` the y): [Images and palettes](gnuplot-subset#images-and-palettes) |
-| `perpendicular=(PX,PY,PZ)` | splot: the image turned out of the xy plane, its normal along the vector (gnuplot's): [Images and palettes](gnuplot-subset#images-and-palettes) |
+| `array=(W,H)` | a W x H data array, its pixel coordinates generated (`array=W`: x alone, `using 1` the y): [Images and palettes](/guide/gnuplot/3d#images-and-palettes) |
+| `perpendicular=(PX,PY,PZ)` | splot: the image turned out of the xy plane, its normal along the vector (gnuplot's): [Images and palettes](/guide/gnuplot/3d#images-and-palettes) |
 
 The records read as the columns of a text file: `using 1:2` takes the first two fields, `using 1` puts them against the
 record number (column 0), expressions and `every` work as on text. `set table` writes them as gnuplot does.

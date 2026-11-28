@@ -25,7 +25,7 @@ network, no external files — and works opened straight from the disk.
 | `h` or `?` | show or hide the help |
 
 The cursor coordinates, in data values, show at the bottom left while the pointer is over a plot (with the y2 and x2
-values when the panel has those axes; a date and time on a [time axis](gnuplot-subset#time-data)). Shortcuts are
+values when the panel has those axes; a date and time on a [time axis](/guide/gnuplot/data#time-data)). Shortcuts are
 ignored while Ctrl, Meta or Alt is held, and the right-click menu is replaced by the box zoom. The wheel zoom and the
 drag pan are not recorded for `u` (box zooms and `a` are). A reload waits while a drag is in progress. In a multiplot the mouse acts on the panel under the pointer, keys on the last
 panel hovered.
@@ -66,13 +66,14 @@ regenerated:
 - **error bar caps**, **point type markers** (`pt`), **arrowheads** of `vectors` and `arrows`, and the texts of `with
   labels`, kept at their pixel size in separate overlays;
 - what does not follow the data is hidden while zoomed and shown again by `a`: the r and theta labels of a polar
-  panel, the titles of histogram groups (`newhistogram`), and the [labels and arrows](gnuplot-subset#labels-arrows-and-objects)
+  panel, the titles of histogram groups (`newhistogram`), and the [labels and arrows](/guide/gnuplot/text#labels-arrows-and-objects)
   placed at axis values (objects at axis values are data geometry and zoom with it); readouts and gauges are left
   alone.
+Here as an image; written as an HTML page (`set terminal html` and `set output 'cb_annotations.html'` in the recipe) the wheel
+zooms about the pointer, a right drag zooms on a box, `a` goes back.
+pointer, a right drag zooms on a box, `a` goes back.
 
-Try it on this page: the wheel zooms about the pointer, a right drag zooms on a box, `a` goes back.
-
-<Plot name="cb_annotations" :width="640" :height="400" />
+<Plot name="cb_annotations" svg :width="640" :height="400" />
 
 The animation below shows what the viewer regenerates: the same data at narrower and narrower x windows, each frame
 rendered by foresight with the ticks the viewer computes (exact decimals at every scale).

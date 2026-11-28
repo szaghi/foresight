@@ -32,7 +32,7 @@ The output's extension picks the format: `set output 'pc01.pdf'` in a script, `c
 
 - Add `set key bottom left box` and compare the two outputs.
 - Write the same figure from Fortran: `call fig%save('residual.pdf')` after the `plot` calls of
-  [the first chapter](../../tutorial/01-first-plot).
+  [A1](../a-first-steps/01-a-first-plot).
 
 ## Pitfalls
 

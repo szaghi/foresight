@@ -32,11 +32,11 @@
 </tr>
 <tr>
 <td><b>📊 Every 2-D style</b><br><sub>Lines, steps, impulses, error bars; boxes, histograms (clustered, error bars, row and column stacks, groups), box plots, candlesticks; filled curves and patterns; vectors, ellipses, polygons, labels; <code>smooth</code> splines (monotone too), Bézier, kernel density, <code>bins</code>; colors per point (<code>lc variable</code>, <code>lc palette</code>); polar plots, wind roses, parallel axes and spider plots; heatmaps with gnuplot's palettes and named perceptual ones. <a href="https://szaghi.github.io/foresight/manual/cookbook">Cookbook</a></sub></td>
-<td><b>🗻 3D views, as gnuplot draws them</b><br><sub><code>splot</code> of functions, grids and scattered data: meshes with <code>set hidden3d</code>, <code>set view</code> and the map view, contours on the base or the surface, pm3d surfaces depth sorted and lit (<code>set pm3d lighting</code>), filled contours (<code>with contourfill</code>), error bands (<code>zerrorfill</code>), 3D bars (<code>set boxdepth</code>), polygons and grid walls, the side projections (<code>set view projection xz|yz</code>), gnuplot's binary files; each checked polygon by polygon against gnuplot 6.0, and each drawn from Fortran too. <a href="https://szaghi.github.io/foresight/guide/gnuplot-subset#3d-views">3D views</a> · <a href="https://szaghi.github.io/foresight/manual/cookbook#a-colored-surface-in-3d">Cookbook</a></sub></td>
+<td><b>🗻 3D views, as gnuplot draws them</b><br><sub><code>splot</code> of functions, grids and scattered data: meshes with <code>set hidden3d</code>, <code>set view</code> and the map view, contours on the base or the surface, pm3d surfaces depth sorted and lit (<code>set pm3d lighting</code>), filled contours (<code>with contourfill</code>), error bands (<code>zerrorfill</code>), 3D bars (<code>set boxdepth</code>), polygons and grid walls, the side projections (<code>set view projection xz|yz</code>), gnuplot's binary files; each checked polygon by polygon against gnuplot 6.0, and each drawn from Fortran too. <a href="https://szaghi.github.io/foresight/guide/gnuplot/3d#_3d-views">3D views</a> · <a href="https://szaghi.github.io/foresight/manual/cookbook#a-colored-surface-in-3d">Cookbook</a></sub></td>
 </tr>
 <tr>
-<td><b>🛰️ Live monitoring</b><br><sub><code>foresight --watch</code> re-renders while a job appends to its logs: the page reloads keeping your zoom, or following the newest data; in the terminal the text plot is redrawn in place, over plain ssh. <a href="https://szaghi.github.io/foresight/guide/monitoring">Live monitoring</a> · <a href="https://szaghi.github.io/foresight/manual/tutorial/08-live">Tutorial</a></sub></td>
-<td><b>🎌 Themes, light and dark</b><br><sub><code>washi</code> and <code>night</code>, ink on warm paper and light on a near-black ground, the colors of the documentation (its figures follow its light and dark modes); <code>vfd</code> and <code>lcd</code>, the dashboards of 1980s cars, with seven-segment readouts, gauges and segmented bars. <code>foresight --theme</code> or <code>FORESIGHT_THEME</code> picks the default. <a href="https://szaghi.github.io/foresight/guide/gnuplot-subset#themes-and-segmented-fills">Themes</a></sub></td>
+<td><b>🛰️ Live monitoring</b><br><sub><code>foresight --watch</code> re-renders while a job appends to its logs: the page reloads keeping your zoom, or following the newest data; in the terminal the text plot is redrawn in place, over plain ssh. <a href="https://szaghi.github.io/foresight/guide/monitoring">Live monitoring</a> · <a href="https://szaghi.github.io/foresight/manual/paths/b-monitoring/02-watching-the-run">Tutorial</a></sub></td>
+<td><b>🎌 Themes, light and dark</b><br><sub><code>washi</code> and <code>night</code>, ink on warm paper and light on a near-black ground, the colors of the documentation (its figures follow its light and dark modes); <code>vfd</code> and <code>lcd</code>, the dashboards of 1980s cars, with seven-segment readouts, gauges and segmented bars. <code>foresight --theme</code> or <code>FORESIGHT_THEME</code> picks the default. <a href="https://szaghi.github.io/foresight/guide/gnuplot/styles#themes-and-segmented-fills">Themes</a></sub></td>
 </tr>
 <tr>
 <td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 15 test programs, 154 byte-exact golden files, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
@@ -44,7 +44,7 @@
 </table>
 </div>
 
-**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [tutorial](https://szaghi.github.io/foresight/manual/tutorial/01-first-plot) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
+**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [tutorial](https://szaghi.github.io/foresight/manual/paths/a-first-steps/01-a-first-plot) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
 
 <picture>
   <source media="(prefers-color-scheme: dark)"  srcset="docs/public/examples/cb_multiplot-dark.svg">
@@ -115,7 +115,7 @@ foresight --watch -e "set terminal dumb" residuals.gp   # the same, as text in t
 foresight -t night -o residuals.svg residuals.gp        # an SVG in the dark theme
 ```
 
-The [tutorial](https://szaghi.github.io/foresight/manual/tutorial/01-first-plot) goes from a first plot to a live
+The [tutorial](https://szaghi.github.io/foresight/manual/paths/a-first-steps/01-a-first-plot) goes from a first plot to a live
 dashboard of a running solver; the [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) lists every
 command, option and style, and where foresight departs from gnuplot.
 

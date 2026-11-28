@@ -11,8 +11,8 @@ hero:
   tagline: Plot from your solver or from a gnuplot script, and open the result in any browser — zoom, pan, live reload while the job runs. No Python, no gnuplot, nothing but a Fortran compiler.
   actions:
     - theme: brand
-      text: Tutorial
-      link: /manual/tutorial/01-first-plot
+      text: Learning paths
+      link: /manual/
     - theme: alt
       text: Cookbook
       link: /manual/cookbook
@@ -43,7 +43,7 @@ features:
       height: 44
     title: Live monitoring
     details: foresight --watch re-renders while a running job appends to its logs; the page reloads itself and keeps your zoom, or follows the newest data. Over ssh, the text terminal redraws in place, in characters or Braille dots.
-    link: /manual/tutorial/08-live
+    link: /manual/paths/b-monitoring/02-watching-the-run
     linkText: Watch a run
   - icon:
       light: /icons/gnuplot.svg
@@ -70,7 +70,7 @@ features:
       height: 44
     title: 3D views
     details: splot as gnuplot draws it, checked polygon by polygon — meshes with hidden lines, contours, pm3d surfaces depth sorted and lit, filled contours, error bands, 3D bars, polygons and grid walls, or the map view seen from above.
-    link: /guide/gnuplot-subset#3d-views
+    link: /guide/gnuplot/3d#_3d-views
     linkText: 3D views
   - icon:
       light: /icons/dashboards.svg
@@ -79,7 +79,7 @@ features:
       height: 44
     title: 1980s dashboards
     details: Seven-segment readouts, sweep gauges, radars and roses, pies and donuts, segmented bars, in the vacuum-fluorescent or liquid-crystal colors of an old car dashboard — a cockpit for a running job.
-    link: /guide/gnuplot-subset#themes-and-segmented-fills
+    link: /guide/gnuplot/styles#themes-and-segmented-fills
     linkText: Themes
   - icon:
       light: /icons/cli.svg
@@ -138,7 +138,7 @@ const authors = [
 ## One run, one page
 
 <p class="fs-lead">This is a foresight page, live: zoom with the wheel, drag to pan, press <kbd>a</kbd> to come back. The
-<a href="./manual/tutorial/07-dashboard">dashboard</a> of the tutorial run, written by a ten-line gnuplot script.</p>
+<a href="./manual/paths/b-monitoring/01-a-dashboard">dashboard</a> of the solver run of path A, written by a ten-line gnuplot script.</p>
 
 <Plot name="ch7" :width="900" :height="440" />
 

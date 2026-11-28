@@ -1,10 +1,11 @@
 ---
-title: 8. Watching the run
+title: B2. Watching the run
 ---
 
-# 8. Watching the run
+# B2. Watching the run
 
-The case foresight was built for: the job runs for hours, appending to its log, and you want to watch it converge.
+**Goal:** the job runs for hours, appending to its log: watch it converge, in a browser or over ssh, without touching
+the job.
 
 ## In a browser
 
@@ -40,7 +41,7 @@ The text terminal draws the plot with characters:
 
 `foresight --watch dumb.gp` clears the screen and redraws in place at each change: no browser, no X forwarding, no port
 to open. For smoother curves, `set terminal block braille` draws with Braille dots, 2 x 4 per character, and `ansi`
-colors the series: see the [cookbook](../cookbook#unicode-text-in-the-terminal).
+colors the series: see the [cookbook](../../cookbook#unicode-text-in-the-terminal).
 
 ## From the solver itself
 
@@ -58,10 +59,23 @@ do it = 1, max_it
 enddo
 ```
 
-::: tip What you learned
-Live monitoring in a browser or a terminal, from a script or from the solver; following the newest data, hiding a
-series. Reference: [Live Monitoring](/guide/monitoring), [Interactive Viewer](/guide/viewer),
-[Command Line](/guide/cli#watch-mode).
-:::
+## Why it works
 
-That is the tour. The [Cookbook](../cookbook) has one recipe per task; the [Reference](/guide/features) the rest.
+- The page keeps its view in its URL as data values: a reload of a rewritten page shows the same iterations, or follows
+  the end of the data with `f`.
+- `--watch` re-runs the script only when a file it read changed (its size and a hash of its content; modification
+  times are not used), so an idle job costs a few reads per period.
+- Every output is written to a temporary file and renamed: a browser or a terminal never reads half a page.
+
+## Try this
+
+- `foresight --watch 5 monitor.gp -o monitor.txt`: the same watch as text, for a terminal multiplexer pane.
+- Run two watches on two scripts of the same log: a dashboard in the browser, a compact text view over ssh.
+
+## Pitfalls
+
+- A job that buffers its output shows nothing until the buffer fills: `flush(unit)` after each line.
+- A log rewritten from the start (not appended) is read again whole: fine, but a long log costs a long read each time.
+
+Reference: [Live Monitoring](/guide/monitoring), [Interactive Viewer](/guide/viewer),
+[Command Line](/guide/cli#watch-mode). Next: path C, [figures for a paper](../c-paper/01-a-first-pdf).

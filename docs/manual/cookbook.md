@@ -5,7 +5,7 @@ title: Cookbook
 # Cookbook
 
 One task per recipe: the script (or program), and the plot it writes. The scripts read the logs of the
-[tutorial](./index) solver, `run.dat` and `run.csv`, and a few small files; run any of them with `foresight SCRIPT`.
+[path A](./paths/a-first-steps/04-scripts) solver, `run.dat` and `run.csv`, and a few small files; run any of them with `foresight SCRIPT`.
 Every plot here is regenerated from its recipe by `scripts/docs_examples.sh` and checked by the CI.
 
 [[toc]]
@@ -92,7 +92,7 @@ dropping one. See [Binary files](/guide/data-files#binary-files).
 
 `strcol(1)` is the text of column 1: joined with a formatted number on a second line it names each bar (`xtic`), in
 `sprintf` it builds the label of each bar (`with labels`), compared with `eq` it keeps one solver. See
-[String columns](/guide/gnuplot-subset#string-columns).
+[String columns](/guide/gnuplot/data#string-columns).
 
 ### Data inside the script
 
@@ -101,7 +101,7 @@ dropping one. See [Binary files](/guide/data-files#binary-files).
 <Plot name="cb_datablock" svg :width="560" :height="320" />
 
 A datablock keeps the data in the script itself: `plot`, `fit` and `stats` read `$CONV` as a file. See
-[Datablocks and scripts](/guide/gnuplot-subset#datablocks-and-scripts).
+[Datablocks and scripts](/guide/gnuplot/scripting#datablocks-and-scripts).
 
 ### Data after the plot command
 
@@ -110,7 +110,7 @@ A datablock keeps the data in the script itself: `plot`, `fit` and `stats` read 
 <Plot name="cb_inline_data" svg :width="560" :height="320" />
 
 `'-'` reads the data from the lines after the statement, gnuplot's inline data: up to a line starting with `e`, one
-block per `'-'` item, in order. See [Datablocks and scripts](/guide/gnuplot-subset#datablocks-and-scripts).
+block per `'-'` item, in order. See [Datablocks and scripts](/guide/gnuplot/scripting#datablocks-and-scripts).
 
 ### A script with arguments
 
@@ -130,7 +130,7 @@ names. From the shell, `foresight -c panel.gp 2 continuity` does the same.
 <Plot name="cb_arrays" svg :width="560" :height="320" />
 
 An array is filled in a loop, `|T|` its size; `plot T` and `stats T` read the index and the value of each element as
-a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot-subset#arrays).
+a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot/scripting#arrays).
 
 ### Array slices
 
@@ -139,7 +139,7 @@ a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot-subset#
 <Plot name="cb_slices" svg :width="560" :height="320" />
 
 `M[3*q - 2:3*q]` is the array of a quarter's months, a copy assigned to `S`; `M[1:3]` and `M[10:]` print as arrays and
-`|S|` is a slice's size. See [Slices](/guide/gnuplot-subset#slices).
+`|S|` is a slice's size. See [Slices](/guide/gnuplot/scripting#slices).
 
 ### Shell commands and reset
 
@@ -149,7 +149,7 @@ a file, `T[$1]` indexes it by a data column. See [Arrays](/guide/gnuplot-subset#
 
 `system('...')` and a command between backquotes give the output of a shell command (the run's host, the lines of the
 log); `reset` puts the settings back to their defaults for the next panel. See
-[Shell commands, reset and pause](/guide/gnuplot-subset#shell-commands-reset-and-pause).
+[Shell commands, reset and pause](/guide/gnuplot/commands#shell-commands-reset-and-pause).
 
 ### A plot that follows a run
 
@@ -169,7 +169,7 @@ does the same without a loop, see [Monitoring](/guide/monitoring)).
 
 `set table $SMOOTH` makes the plot write its points into the datablock, in gnuplot's table layout, instead of drawing
 them; plotted afterwards they are the spline itself, a marker every 10 points (`pi 10`). See
-[Tables](/guide/gnuplot-subset#tables).
+[Tables](/guide/gnuplot/data#tables).
 
 ### Rows as text
 
@@ -181,7 +181,7 @@ them; plotted afterwards they are the spline itself, a marker every 10 points (`
 
 `with table if $2 > 1.6` writes the rows of the slow steps, as text, into the datablock: the `using` fields, each after
 a blank, tab separated. Plotted over the whole run, they mark the steps that wrote a file. See
-[With table](/guide/gnuplot-subset#with-table).
+[With table](/guide/gnuplot/data#with-table).
 
 ### Values printed into a datablock
 
@@ -190,7 +190,7 @@ a blank, tab separated. Plotted over the whole run, they mark the steps that wro
 <Plot name="cb_print_datablock" svg :width="560" :height="320" />
 
 `set print $ERR` sends the lines printed in the loop to a datablock, which then plots as data: a table computed by the
-script itself. See [Print](/guide/gnuplot-subset#print).
+script itself. See [Print](/guide/gnuplot/commands#print).
 
 ### Random numbers
 
@@ -200,7 +200,7 @@ script itself. See [Print](/guide/gnuplot-subset#print).
 
 `rand(7)` seeds gnuplot's generator, `rand(0)` draws the next number: the walks are the ones gnuplot draws from the
 same seed. `exists("steps")` lets a caller set the length first. See
-[Expressions in using](/guide/gnuplot-subset#expressions-in-using).
+[Expressions in using](/guide/gnuplot/data#expressions-in-using).
 
 ## Axes, ticks and key
 
@@ -224,7 +224,7 @@ same seed. `exists("steps")` lets a caller set the length first. See
 <Plot name="cb_autoscale_limits" svg :width="560" :height="320" />
 
 `lb<*` and `*<ub` keep an autoscaled end within limits: the y range spans at least -1 to 1, the x range autoscales
-within 0 to 12 whatever the data. See [Grid, zero axes and border](/guide/gnuplot-subset#grid-zero-axes-and-border).
+within 0 to 12 whatever the data. See [Grid, zero axes and border](/guide/gnuplot/axes#grid-zero-axes-and-border).
 
 ### Tick steps and label formats
 
@@ -241,7 +241,7 @@ On a log axis the step is a factor: `set ytics 10` puts a tick every decade.
 <Plot name="cb_format_none" svg :width="560" :height="320" />
 
 `set format y ""` keeps the ticks and drops their labels (and their margin); a format without a conversion writes its
-text at every tick. See [Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+text at every tick. See [Ticks and label formats](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### Powers of ten and unit prefixes
 
@@ -250,7 +250,7 @@ text at every tick. See [Ticks and label formats](/guide/gnuplot-subset#ticks-an
 <Plot name="cb_format_powers" svg :width="560" :height="320" />
 
 gnuplot's `%T` is the power of ten of a value, as a superscript with enhanced text; `%s` its mantissa to a power of
-1000 and `%c` the SI prefix of that power. See [Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+1000 and `%c` the SI prefix of that power. See [Ticks and label formats](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### Ticks on the axes, a range frame
 
@@ -260,7 +260,7 @@ gnuplot's `%T` is the power of ten of a value, as a superscript with enhanced te
 
 `set xtics axis` draws the ticks on y = 0, `set ytics axis` on x = 0, their labels taking no margin; `rangelimited`
 keeps the ticks and the border side within the data. See
-[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+[Ticks and label formats](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### Room around the data, the date of the plot
 
@@ -269,8 +269,8 @@ keeps the ticks and the border side within the data. See
 <Plot name="cb_offsets" svg :width="560" :height="320" />
 
 `set offsets` moves the autoscaled ends out before the extension to the ticks; `set timestamp` writes the date (here
-the documentation's fixed SOURCE_DATE_EPOCH). See [Offsets](/guide/gnuplot-subset#offsets) and
-[Margins](/guide/gnuplot-subset#margins).
+the documentation's fixed SOURCE_DATE_EPOCH). See [Offsets](/guide/gnuplot/axes#offsets) and
+[Margins](/guide/gnuplot/axes#margins).
 
 ### Named ticks and extra ticks
 
@@ -288,7 +288,7 @@ An explicit list replaces the ticks: names at chosen positions, `""` with level 
 <Plot name="cb_rug" svg :width="560" :height="360" />
 
 An empty tic label is still a tick: `xtic("")` and `ytic("")` mark every row on both axes, a rug plot. See
-[Text labels on any axis](/guide/gnuplot-subset#text-labels-on-any-axis).
+[Text labels on any axis](/guide/gnuplot/axes#text-labels-on-any-axis).
 
 ### Names on the y axis
 
@@ -298,7 +298,7 @@ An empty tic label is still a tick: `xtic("")` and `ytic("")` mark every row on 
 
 `ytic(5)` names the y ticks with column 5 at the ordinates (the point numbers here), as `xtic` does the x ones;
 `x2tic` and `y2tic` need `set x2tics` and `set y2tics`. See
-[Text labels on any axis](/guide/gnuplot-subset#text-labels-on-any-axis).
+[Text labels on any axis](/guide/gnuplot/axes#text-labels-on-any-axis).
 
 ### Minor ticks
 
@@ -325,7 +325,7 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 
 `set ytics rotate` turns long y labels to read upward, centred on their ticks, so the left margin stays narrow;
 `rotate by 45` turns them by an angle, right-justified (on y2, left-justified), as gnuplot places them. See
-[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+[Ticks and label formats](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### A time axis
 
@@ -335,7 +335,7 @@ ticks away from the plot; `nomirror` leaves the opposite border bare.
 
 `set xdata time` reads the x field with the `timefmt`: the time spans two columns, so the residual is column 4. The
 ticks fall on whole time units, the labels invented from the range as gnuplot's (`%H:%M:%S` within a day at minute
-steps), or written by `set format x`; range ends are times. See [Time data](/guide/gnuplot-subset#time-data).
+steps), or written by `set format x`; range ends are times. See [Time data](/guide/gnuplot/data#time-data).
 
 ### Geographic tick labels
 
@@ -345,7 +345,7 @@ steps), or written by `set format x`; range ends are times. See [Time data](/gui
 
 `set xtics geographic` writes the tick labels in degrees, minutes and seconds by the format: `%D` the whole degrees,
 `%E` E or W and `%N` N or S in place of the sign, as gnuplot's gstrdms. See
-[Geographic tick labels](/guide/gnuplot-subset#geographic-tick-labels).
+[Geographic tick labels](/guide/gnuplot/axes#geographic-tick-labels).
 
 ### Minor ticks in time units
 
@@ -365,7 +365,7 @@ step; `time 1 months` marks the first of every month.
 `weekdate_iso(year, week [, day])` gives the time of an ISO 8601 week date (weeks from Monday, week 1 the one of the
 first Thursday: 2021-W01 starts on 4 January), `weekdate_cdc` the CDC epidemiological one (from Sunday), and
 `tm_week(t, 0|1)` the week of a time, as gnuplot 6.0; `tm_mday`, `tm_mon` and the other `tm_*` give its fields. See
-[Time data](/guide/gnuplot-subset#time-data).
+[Time data](/guide/gnuplot/data#time-data).
 
 ### Two y axes
 
@@ -391,7 +391,7 @@ two scales agree. Without a set `x2range`, items on x2 autoscale it on their own
 
 `set nonlinear x via f(x) inverse g(x)` places the axis linearly in f: here f leaves out 100 to 500, a broken axis.
 Its automatic ticks sit at the hidden axis' ticks, a step or a list in the axis' own values. See
-[Ticks and label formats](/guide/gnuplot-subset#ticks-and-label-formats).
+[Ticks and label formats](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### A top axis linked to the bottom one
 
@@ -401,7 +401,7 @@ Its automatic ticks sit at the hidden axis' ticks, a step or a list in the axis'
 
 `set link x2 via F(x) inverse G(x)` maps the bottom axis onto the top one: wavenumber = 10⁴ / wavelength. As gnuplot
 6.0, the top ticks sit at the bottom axis' automatic ticks, labelled by their mapped values. See
-[Second x axis](/guide/gnuplot-subset#second-x-axis).
+[Second x axis](/guide/gnuplot/axes#second-x-axis).
 
 ### Rotated labels on top
 
@@ -410,7 +410,7 @@ Its automatic ticks sit at the hidden axis' ticks, a step or a list in the axis'
 <Plot name="cb_x2_rotate" svg :width="560" :height="340" />
 
 Named x2 ticks read the frequency axis as periods; `rotate by 45` turns them from their tick, away from the plot,
-and the top margin grows to fit them. See [Ticks](/guide/gnuplot-subset#ticks-and-label-formats).
+and the top margin grows to fit them. See [Ticks](/guide/gnuplot/axes#ticks-and-label-formats).
 
 ### The key below the plot
 
@@ -428,7 +428,7 @@ and the top margin grows to fit them. See [Ticks](/guide/gnuplot-subset#ticks-an
 
 `at` puts the key where the data leave room: `left top` aligns its top left corner on the point, in data coordinates
 by default, `graph` or `screen` fractions otherwise. `lmargin`, `rmargin`, `tmargin` and `bmargin` put it in a margin
-instead. See [Key](/guide/gnuplot-subset#key).
+instead. See [Key](/guide/gnuplot/axes#key).
 
 ### No key
 
@@ -446,7 +446,7 @@ instead. See [Key](/guide/gnuplot-subset#key).
 <Plot name="cb_title_at" svg :width="560" :height="320" />
 
 `title ... at end` writes each title after the last point of its curve, with or without the key (`at beginning`
-before the first one; `at X,Y` a key entry at a screen position). See [Key](/guide/gnuplot-subset#key).
+before the first one; `at X,Y` a key entry at a screen position). See [Key](/guide/gnuplot/axes#key).
 
 ### A key in its own layout
 
@@ -455,7 +455,7 @@ before the first one; `at X,Y` a key entry at a screen position). See [Key](/gui
 <Plot name="cb_key_layout" svg :width="560" :height="320" />
 
 `reverse` puts the samples first and `Left` justifies the titles, `invert` lists the last run first, `opaque` paints the
-key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot-subset#key).
+key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot/axes#key).
 
 ### A key in columns
 
@@ -464,7 +464,7 @@ key over the curves passing under it, `title` names it. See [Key](/guide/gnuplot
 <Plot name="cb_key_columns" svg :width="560" :height="320" />
 
 `maxrows 3` starts a column every 3 entries, `tc variable` writes each title in its series' color, `lt 4 lw 1.5` styles
-the box. See [Key](/guide/gnuplot-subset#key).
+the box. See [Key](/guide/gnuplot/axes#key).
 
 
 ### Key entries of their own
@@ -474,7 +474,7 @@ the box. See [Key](/guide/gnuplot-subset#key).
 <Plot name="cb_keyentry" svg :width="560" :height="320" />
 
 `keyentry` adds a key entry with no data, here the samples of a boxplot and of error bars; `set style data
-filledcurves y=0` gives the data items their fill to y = 0. See [Key](/guide/gnuplot-subset#key).
+filledcurves y=0` gives the data items their fill to y = 0. See [Key](/guide/gnuplot/axes#key).
 
 ### Key samples of vectors, fills and labels
 
@@ -484,7 +484,7 @@ filledcurves y=0` gives the data items their fill to y = 0. See [Key](/guide/gnu
 
 The key samples are gnuplot 6.0's: an arrow for vectors, a filled box with the fill style's border, none for a
 `keyentry` of labels; `set key title "..." left` puts the title at the left of the key. See
-[Key](/guide/gnuplot-subset#key).
+[Key](/guide/gnuplot/axes#key).
 
 ### Key columns, label offsets, a title on the right
 
@@ -494,7 +494,7 @@ The key samples are gnuplot 6.0's: an arrow for vectors, a filled box with the f
 
 `set key columns N` lays the key out in N columns; `set ylabel "..." offset X,Y tc COLOR` moves (in characters) and
 colors a label; `set title "..." right` justifies the title about its centre, as gnuplot. See
-[Key](/guide/gnuplot-subset#key) and [Titles and labels](/guide/gnuplot-subset#set-unset-options).
+[Key](/guide/gnuplot/axes#key) and [Titles and labels](/guide/gnuplot/commands#set-unset-options).
 
 ### Enhanced text: sub and superscripts, Greek letters
 
@@ -504,7 +504,7 @@ colors a label; `set title "..." right` justifies the title about its centre, as
 
 gnuplot's markup, on by default: `_0` and `^{...}` sub and superscripts, `{/Symbol t}` a Greek τ, `{/:Bold ...}` and
 `{/:Italic ...}`, also in the tick labels of a list. `noenhanced` writes a file name with its underscores as it is;
-the automatic titles stay as they are. See [Enhanced text](/guide/gnuplot-subset#enhanced-text).
+the automatic titles stay as they are. See [Enhanced text](/guide/gnuplot/text#enhanced-text).
 
 ### Grid lines, zero axes and border
 
@@ -514,7 +514,7 @@ the automatic titles stay as they are. See [Enhanced text](/guide/gnuplot-subset
 
 Grid lines at the major and minor ticks in their own style, the lines at x = 0 and y = 0, the left and bottom sides of
 the border only, outward ticks longer than the default, x ends at the data (`set autoscale xfix`). See
-[Grid, zero axes and border](/guide/gnuplot-subset#grid-zero-axes-and-border).
+[Grid, zero axes and border](/guide/gnuplot/axes#grid-zero-axes-and-border).
 
 ### One unit as long on both axes
 
@@ -523,7 +523,7 @@ the border only, outward ticks longer than the default, x ends at the data (`set
 <Plot name="cb_size_square" svg :width="560" :height="360" />
 
 `set size ratio -1` makes a unit of y as long as a unit of x, whatever the ranges: the circle stays round. `ratio -R`
-makes a y unit R times an x unit. See [`set` options](/guide/gnuplot-subset#set-unset-options).
+makes a y unit R times an x unit. See [`set` options](/guide/gnuplot/commands#set-unset-options).
 
 ### A grid of panels
 
@@ -538,7 +538,7 @@ makes a y unit R times an x unit. See [`set` options](/guide/gnuplot-subset#set-
 <Plot name="cb_margins" svg :width="560" :height="360" />
 
 The same left and right borders at screen fractions line up the two panels, although the log labels of the first are
-wider. See [Margins](/guide/gnuplot-subset#margins).
+wider. See [Margins](/guide/gnuplot/axes#margins).
 
 ### Panels column by column
 
@@ -547,7 +547,7 @@ wider. See [Margins](/guide/gnuplot-subset#margins).
 <Plot name="cb_multiplot_order" svg :width="560" :height="360" />
 
 `set multiplot layout R,C columnsfirst upwards` fills the grid column by column from the bottom row (`rowsfirst` and
-`downwards` are the defaults). See [Multiplot](/guide/gnuplot-subset#multiplot).
+`downwards` are the defaults). See [Multiplot](/guide/gnuplot/axes#multiplot).
 
 
 
@@ -559,7 +559,7 @@ wider. See [Margins](/guide/gnuplot-subset#margins).
 
 In a multiplot, `clear` paints the box of the next plot (`set origin`, `set size`) with the page color, so the inset
 is not crossed by the curve below, as gnuplot. `keyentry "text"` adds a key entry whose sample is the text itself, a
-header for the entries after it. See [Multiplot](/guide/gnuplot-subset#multiplot).
+header for the entries after it. See [Multiplot](/guide/gnuplot/axes#multiplot).
 
 ### Panels with margins and spacing
 
@@ -569,7 +569,7 @@ header for the entries after it. See [Multiplot](/guide/gnuplot-subset#multiplot
 
 `margins L,R,B,T` puts the plot areas of the layout in that box of the page (screen fractions, or characters after
 `char`), `spacing X,Y` apart: the plot areas line up whatever the tick labels. See
-[Multiplot](/guide/gnuplot-subset#multiplot).
+[Multiplot](/guide/gnuplot/axes#multiplot).
 
 ## Lines, points and error bars
 
@@ -580,7 +580,7 @@ header for the entries after it. See [Multiplot](/guide/gnuplot-subset#multiplot
 <Plot name="cb_special_functions" svg :width="720" :height="480" />
 
 gnuplot's Bessel, gamma, error, normal, Lambert W and Airy functions, by its own algorithms: the values are gnuplot's.
-Γ is undefined at the poles, a gap. See [Special functions](/guide/gnuplot-subset#special-functions).
+Γ is undefined at the poles, a gap. See [Special functions](/guide/gnuplot/scripting#special-functions).
 
 
 ### Complex numbers
@@ -591,7 +591,7 @@ gnuplot's Bessel, gamma, error, normal, Lambert W and Airy functions, by its own
 
 Values are complex, as gnuplot's: `I` is `{0,1}` (or write `{0,1}`), `abs` and `arg` give the gain and the phase of
 a transfer function; a plotted value with an imaginary part is undefined. See
-[Expressions](/guide/gnuplot-subset#expressions-in-using).
+[Expressions](/guide/gnuplot/data#expressions-in-using).
 
 
 ### A complex function over the plane
@@ -603,7 +603,7 @@ a transfer function; a plotted value with an imaginary part is undefined. See
 `atanh` of a complex argument, as gnuplot 6.0 computes it (its branch cuts along the real axis beyond -1 and 1): the
 `'++'` pseudo-file samples the plane, `x` and `y` its variables, each point colored by `hsv2rgb` of the phase and the
 magnitude (`lc rgb variable`). `asin`, `acos`, `atan`, `asinh`, `acosh` and `tanh` take complex arguments too. See
-[Expressions](/guide/gnuplot-subset#expressions-in-using).
+[Expressions](/guide/gnuplot/data#expressions-in-using).
 ### Labels and arrows in a loop
 
 <<< @/examples/snippets/cb_set_for.gp{gnuplot}
@@ -611,7 +611,7 @@ magnitude (`lc rgb variable`). `asin`, `acos`, `atan`, `asinh`, `acosh` and `tan
 <Plot name="cb_set_for" svg :width="560" :height="320" />
 
 `set for [i=1:5]` runs the `set` command once per value, `unset for` removes in a loop. See
-[Iteration](/guide/gnuplot-subset#iteration).
+[Iteration](/guide/gnuplot/plot-items#iteration).
 
 ### User variables and functions
 
@@ -620,7 +620,7 @@ magnitude (`lc rgb variable`). `asin`, `acos`, `atan`, `asinh`, `acosh` and `tan
 <Plot name="cb_user_functions" svg :width="560" :height="320" />
 
 `name = value` and `name(t) = expression` as in gnuplot: the functions read the variables when the plot is drawn,
-and the range ends take expressions. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+and the range ends take expressions. See [User variables and functions](/guide/gnuplot/scripting#user-variables-and-functions).
 
 ### A family of curves from arrays
 
@@ -629,7 +629,7 @@ and the range ends take expressions. See [User variables and functions](/guide/g
 <Plot name="cb_iterated_defs" svg :width="560" :height="320" />
 
 Definitions written before an iterated item are run on each pass: `for [i = 1:4] k = shape[i], l = 1.0/rate[i],
-weibull(x, k, l)`. See [Iteration](/guide/gnuplot-subset#iteration).
+weibull(x, k, l)`. See [Iteration](/guide/gnuplot/plot-items#iteration).
 
 ### Names as in the formulas
 
@@ -638,7 +638,7 @@ weibull(x, k, l)`. See [Iteration](/guide/gnuplot-subset#iteration).
 <Plot name="cb_greek_names" svg :width="560" :height="320" />
 
 Names may hold UTF-8 letters, as gnuplot: `ω`, `ζ`, `τ` in variables, functions and their dummies. See
-[User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+[User variables and functions](/guide/gnuplot/scripting#user-variables-and-functions).
 
 
 ### Latin-1 strings and symbols
@@ -649,7 +649,7 @@ Names may hold UTF-8 letters, as gnuplot: `ω`, `ζ`, `τ` in variables, functio
 
 `"\260"` is an octal byte, as gnuplot; with `set encoding iso_8859_1` the bytes read as Latin-1 (°, é), the
 Symbol font's upper half as its symbols (`\362` the integral, `\245` infinity), and `\U+hhhh` a code point in
-enhanced text. See [Strings](/guide/gnuplot-subset#strings).
+enhanced text. See [Strings](/guide/gnuplot/scripting#strings).
 
 ### Sums and assignments in a plot
 
@@ -659,7 +659,7 @@ enhanced text. See [Strings](/guide/gnuplot-subset#strings).
 
 `sum [k=a:b] term` adds the term for each k (integers stay integers); a plot item may be an assignment, done in its
 turn, so each `square(x)` is drawn with the `n` set before it. See
-[Expressions](/guide/gnuplot-subset#functions) and [Plot items](/guide/gnuplot-subset#plot-items).
+[Expressions](/guide/gnuplot/scripting#functions) and [Plot items](/guide/gnuplot/plot-items#plot-items).
 
 
 ### Assignments inside expressions
@@ -670,7 +670,7 @@ turn, so each `square(x)` is drawn with the `n` set before it. See
 
 `name = value` is an operator and `(a, b)` evaluates both, the last the value, as gnuplot: an expression of a
 `using` field runs on each row, so `s` sums along the file and `shift5` keeps the last five values in `b1` ...
-`b5`. See [Expressions](/guide/gnuplot-subset#expressions-in-using).
+`b5`. See [Expressions](/guide/gnuplot/data#expressions-in-using).
 
 ### Array elements assigned in an expression
 
@@ -680,7 +680,7 @@ turn, so each `square(x)` is drawn with the `n` set before it. See
 
 `A[i] = value` is an expression too: a `stats` or `plot` over a file stores each row in an element (`$0` counts
 the rows from 0), and an expression that assigns elements of an array reads them as they are when it runs. See
-[Arrays](/guide/gnuplot-subset#arrays).
+[Arrays](/guide/gnuplot/scripting#arrays).
 
 ### Recursive functions
 
@@ -689,7 +689,7 @@ the rows from 0), and an expression that assigns elements of an array reads them
 <Plot name="cb_recursion" svg :width="560" :height="320" />
 
 The Chebyshev polynomials by their three-term recurrence: `T(n, x)` calls itself, as gnuplot 6.0 allows, 251 calls
-deep at most. See [User variables and functions](/guide/gnuplot-subset#user-variables-and-functions).
+deep at most. See [User variables and functions](/guide/gnuplot/scripting#user-variables-and-functions).
 
 ### Function blocks
 
@@ -698,7 +698,7 @@ deep at most. See [User variables and functions](/guide/gnuplot-subset#user-vari
 <Plot name="cb_function_blocks" svg :width="560" :height="320" />
 
 A function block runs script lines when called: Newton's iterations in a loop, a `local` start, a `return` from inside
-the loop; `$cbrt(x)` is then plotted like any function. See [Function blocks](/guide/gnuplot-subset#function-blocks).
+the loop; `$cbrt(x)` is then plotted like any function. See [Function blocks](/guide/gnuplot/scripting#function-blocks).
 
 ### Bit flags
 
@@ -708,7 +708,7 @@ the loop; `$cbrt(x)` is then plotted like any function. See [Function blocks](/g
 
 A status column packs flags as bits: `int($3) & 2` keeps the restarts, `int($3) & 4` the steps that wrote a file (a
 column is real, `int` makes it an integer for the bitwise operators). See
-[Expressions in using](/guide/gnuplot-subset#expressions-in-using).
+[Expressions in using](/guide/gnuplot/data#expressions-in-using).
 
 ### Line styles and point types
 
@@ -725,7 +725,7 @@ column is real, `int` makes it an integer for the bitwise operators). See
 <Plot name="cb_linetype" svg :width="560" :height="320" />
 
 `set linetype N` redefines a linetype for every plot after it (`reset` keeps it); `set pointsize` sets the size of the
-points without their own. See [Styles](/guide/gnuplot-subset#styles).
+points without their own. See [Styles](/guide/gnuplot/styles#styles).
 
 ### Point and dash types
 
@@ -745,7 +745,7 @@ gives the point its place, `plot for` repeats it.
 
 `pointinterval -N` (`pi -N`) marks every N-th point and blanks the line under the marker; `pi N` only marks.
 `lt -1` is solid black, whatever the dash type of the item's own linetype. See
-[`plot` items](/guide/gnuplot-subset#plot-items).
+[`plot` items](/guide/gnuplot/plot-items#plot-items).
 
 ### Characters as points
 
@@ -754,7 +754,7 @@ gives the point its place, `plot for` repeats it.
 <Plot name="cb_char_points" svg :width="560" :height="320" />
 
 `pt "c"` draws a character as the point, in the item's `tc` color; `pi N` marks every N-th point, `pn N` about N
-evenly spread. See [Point types](/guide/gnuplot-subset#point-types).
+evenly spread. See [Point types](/guide/gnuplot/styles#point-types).
 
 ### Dash patterns of your own
 
@@ -764,7 +764,7 @@ evenly spread. See [Point types](/guide/gnuplot-subset#point-types).
 
 `dt "string"` draws gnuplot's custom patterns: `.` a dot, `-` a dash, `_` a long dash, a blank a longer gap; `dt
 (solid, empty, ...)` gives the lengths; both scale with the line width. `lc bgnd`, `lt nodraw` and `lt -1` are the
-background, nothing and black. See [Line properties](/guide/gnuplot-subset#styles).
+background, nothing and black. See [Line properties](/guide/gnuplot/styles#styles).
 
 ### A color per point
 
@@ -774,7 +774,7 @@ background, nothing and black. See [Line properties](/guide/gnuplot-subset#style
 
 `lc variable` reads the color of each point from the last `using` column, a linetype number; a segment takes the color
 of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (`0xRRGGBB`). See
-[Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+[Colors per point](/guide/gnuplot/styles#colors-per-point-and-from-the-palette).
 
 ### A type, size and color per point
 
@@ -784,7 +784,7 @@ of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (
 
 `pt variable` reads each point's type from a column, after the sizes of `ps variable` and before the colors of
 `lc rgb variable`: `using x:y:size:type:color`. The key sample of such an item is a dot, as gnuplot's. See
-[Point types](/guide/gnuplot-subset#point-types).
+[Point types](/guide/gnuplot/styles#point-types).
 
 ### High values on top
 
@@ -793,7 +793,7 @@ of its end point, as in gnuplot. `lc rgb variable` reads 24-bit colors instead (
 <Plot name="cb_zsort" svg :width="560" :height="320" />
 
 `zsort` draws the points of a curve in the order of their z (the third column), the highest last, so dense clouds
-show their extremes, as gnuplot 6.0. See [`plot` items](/guide/gnuplot-subset#plot-items).
+show their extremes, as gnuplot 6.0. See [`plot` items](/guide/gnuplot/plot-items#plot-items).
 
 ### Colors from the palette
 
@@ -803,7 +803,7 @@ show their extremes, as gnuplot 6.0. See [`plot` items](/guide/gnuplot-subset#pl
 
 `lc palette z` colors each point by the last `using` column through the palette: here the iteration, so the path of
 the run reads from dark to light, and the color box gives the scale. `lc palette frac F` takes one color of the
-palette for a whole item. See [Colors per point](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+palette for a whole item. See [Colors per point](/guide/gnuplot/styles#colors-per-point-and-from-the-palette).
 
 ### Color sequences
 
@@ -813,7 +813,7 @@ palette for a whole item. See [Colors per point](/guide/gnuplot-subset#colors-pe
 
 `set colorsequence default|podo|classic` picks gnuplot's linetype colors; foresight's `set colorsequence batlowS 6`
 takes the first colors of a categorical order of the Scientific colour maps, the most distinct first. See
-[Styles](/guide/gnuplot-subset#styles).
+[Styles](/guide/gnuplot/styles#styles).
 
 ### Error bars
 
@@ -830,7 +830,7 @@ takes the first colors of a categorical order of the Scientific colour maps, the
 <Plot name="cb_errorbar_caps" svg :width="760" :height="280" />
 
 `set errorbars 3` makes the caps three times the default, `lc` and `lw` draw the bars in their own line, `small`
-drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
+drops the caps. See [Error bar caps](/guide/gnuplot/plot-items#error-bar-caps).
 
 ### Error bars on both axes
 
@@ -847,7 +847,7 @@ drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 <Plot name="cb_errorlines" svg :width="560" :height="320" />
 
 `yerrorlines` and `xyerrorlines` are `linespoints` with the error bars of the matching `errorbars` style and the same
-`using` layouts. See [Lines, steps and impulses](/guide/gnuplot-subset#lines-steps-and-impulses).
+`using` layouts. See [Lines, steps and impulses](/guide/gnuplot/styles#lines-steps-and-impulses).
 
 ### Steps
 
@@ -866,7 +866,7 @@ drops the caps. See [Error bar caps](/guide/gnuplot-subset#error-bar-caps).
 <Plot name="cb_fillsteps" svg :width="560" :height="320" />
 
 `with fillsteps` fills the area under the steps down to y = 0 in the fill style, as gnuplot. See
-[Lines, steps and impulses](/guide/gnuplot-subset#lines-steps-and-impulses).
+[Lines, steps and impulses](/guide/gnuplot/styles#lines-steps-and-impulses).
 
 ### A spectrum: impulses and dots
 
@@ -892,7 +892,7 @@ Without data, functions are sampled over [-10:10], or the `xrange`; `set samples
 
 `sharpen` finds the extrema of a function that fall between its samples (a golden section search where the curve
 turns) and adds them: the minima of `abs(sqrt(sin(x)))` reach 0, while the plain samples stop short. See
-[Functions](/guide/gnuplot-subset#functions).
+[Functions](/guide/gnuplot/scripting#functions).
 
 ### Parametric curves
 
@@ -901,7 +901,7 @@ turns) and adds them: the minima of `abs(sqrt(sin(x)))` reach 0, while the plain
 <Plot name="cb_parametric" svg :width="560" :height="360" />
 
 `set parametric` reads each function item as a pair x(t), y(t), sampled over `trange`. See
-[Parametric plots](/guide/gnuplot-subset#parametric-plots).
+[Parametric plots](/guide/gnuplot/plot-items#parametric-plots).
 
 
 ### Sampled pseudo-files
@@ -912,7 +912,7 @@ turns) and adds them: the minima of `abs(sqrt(sin(x)))` reach 0, while the plain
 
 The pseudo-file `'+'` samples a variable as its column 1, here `t` over the item's own range by `pi/20`; `'++'` is
 a grid of `u` and `v` (`set samples`, `set isosamples` points over `urange`, `vrange`), the columns of a vector field
-colored by its length. See [Sampled pseudo-files](/guide/gnuplot-subset#sampled-pseudo-files-and).
+colored by its length. See [Sampled pseudo-files](/guide/gnuplot/scripting#sampled-pseudo-files-and).
 
 ### Asymptotes and clipping
 
@@ -921,7 +921,7 @@ colored by its length. See [Sampled pseudo-files](/guide/gnuplot-subset#sampled-
 <Plot name="cb_clip" svg :width="560" :height="320" />
 
 As gnuplot, a segment with both ends out of the plot is not drawn: no line down the asymptotes; `set clip two` draws
-it. See [Clipping](/guide/gnuplot-subset#clipping).
+it. See [Clipping](/guide/gnuplot/plot-items#clipping).
 
 ### A range for one plot
 
@@ -992,7 +992,7 @@ slope `p` is the observed order of accuracy of a scheme. From Fortran, `call fit
 
 Pearson's data with York's weights, a classic test of straight line fits: `yerrors` weighs each point by its y error,
 `xyerrors` by its effective error, the y error combined with the x error times the slope of the model (Orear's
-effective variance, gnuplot's). See [Fit](/guide/gnuplot-subset#fit).
+effective variance, gnuplot's). See [Fit](/guide/gnuplot/commands#fit).
 ### A fit of two variables
 
 <<< @/examples/snippets/cb_fit_surface.gp{gnuplot}
@@ -1002,7 +1002,7 @@ effective variance, gnuplot's). See [Fit](/guide/gnuplot-subset#fit).
 <Plot name="cb_fit_surface" svg :width="560" :height="320" />
 
 `fit` takes a function of `x` and `y`: `using x:y:z:s`, the last column the errors (here 1, unweighted). The fitted
-plane is drawn at each y as a line. See [Fit](/guide/gnuplot-subset#fit).
+plane is drawn at each y as a line. See [Fit](/guide/gnuplot/commands#fit).
 
 ### Histogram and distribution
 
@@ -1013,7 +1013,7 @@ plane is drawn at each y as a line. See [Fit](/guide/gnuplot-subset#fit).
 `smooth frequency` sums the y of the points of equal x: binned x and y = 1 count the points per bin (`bins` does the
 binning itself: [a histogram of a sample](#a-histogram-of-a-sample)). `smooth cnormal`
 accumulates them over the sorted x, divided by the total: the fraction of iterations below each value. `smooth unique`
-averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
+averages repeated x instead. See [Smoothing](/guide/gnuplot/data#smoothing).
 
 ### Block averages and running totals
 
@@ -1023,7 +1023,7 @@ averages repeated x instead. See [Smoothing](/guide/gnuplot-subset#smoothing).
 
 `smooth unique` merges the points of equal x into their mean: an x rounded to blocks of 25 steps gives the mean wall
 time of each block. `smooth cumulative` adds the y up to each x: the elapsed time of the run. See
-[Smoothing](/guide/gnuplot-subset#smoothing).
+[Smoothing](/guide/gnuplot/data#smoothing).
 
 ### Splines and densities
 
@@ -1042,7 +1042,7 @@ narrower to show more detail.
 <Plot name="cb_smooth_path" svg :width="560" :height="360" />
 
 `smooth path` fits each set of points (apart at blank lines) in its order, not sorted on x: a closed set wraps
-around, and `with filledcurves closed` closes every set. See [Smoothing](/guide/gnuplot-subset#smoothing).
+around, and `with filledcurves closed` closes every set. See [Smoothing](/guide/gnuplot/data#smoothing).
 
 
 ### Hulls around scattered points
@@ -1054,7 +1054,7 @@ around, and `with filledcurves closed` closes every set. See [Smoothing](/guide/
 `convexhull` keeps the points of the bounding convex polygon, clockwise and closed; `concavehull` a chi-shape that
 follows the hollows (its length from the variable `chi_length`, else `set chi_shape fraction` of the longest edge);
 `expand D` pushes the hull out by D, and `smooth path` rounds it. As gnuplot 6.0, point for point. See
-[Smoothing](/guide/gnuplot-subset#smoothing).
+[Smoothing](/guide/gnuplot/data#smoothing).
 
 ### A monotone interpolation
 
@@ -1064,7 +1064,7 @@ follows the hollows (its length from the variable `chi_length`, else `set chi_sh
 
 The natural spline (`csplines`) swings above and below each plateau of the time step; the monotone spline of
 Fritsch and Carlson (`mcsplines`) passes through the same points and never beyond them: a step stays a step, a
-positive quantity stays positive. See [Smoothing](/guide/gnuplot-subset#smoothing).
+positive quantity stays positive. See [Smoothing](/guide/gnuplot/data#smoothing).
 
 ## Bars and statistics
 
@@ -1075,7 +1075,7 @@ positive quantity stays positive. See [Smoothing](/guide/gnuplot-subset#smoothin
 <Plot name="cb_boxes" svg :width="560" :height="320" />
 
 Boxes stand on y = 0 and the autoscale reaches 0 and the box edges, unlike gnuplot: bar lengths are proportional to
-the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+the values. See [Boxes and filled curves](/guide/gnuplot/styles#boxes-and-filled-curves).
 
 
 ### A histogram of a sample
@@ -1086,7 +1086,7 @@ the values. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled
 
 `bins` counts the values of one column in bins of equal width: here 0.02 s, as few bins as cover the data. Boxes
 touch, and the autoscale reaches the outer bin edges and 0. The kernel density of the same column, each point weighted
-by the bin width, lands on the same scale. See [Bins](/guide/gnuplot-subset#bins).
+by the bin width, lands on the same scale. See [Bins](/guide/gnuplot/data#bins).
 ### Grouped bars with category labels
 
 <<< @/examples/snippets/cb_histograms.gp{gnuplot}
@@ -1102,7 +1102,7 @@ by the bin width, lands on the same scale. See [Bins](/guide/gnuplot-subset#bins
 <Plot name="cb_rowstacked" svg :width="560" :height="320" />
 
 `rowstacked` piles the items of a row on one bar; `set boxwidth 0.6` leaves room between the stacks. See
-[Histograms](/guide/gnuplot-subset#histograms).
+[Histograms](/guide/gnuplot/styles#histograms).
 
 ### Bars with error bars
 
@@ -1111,7 +1111,7 @@ by the bin width, lands on the same scale. See [Bins](/guide/gnuplot-subset#bins
 <Plot name="cb_boxerrorbars" svg :width="560" :height="320" />
 
 `boxerrorbars` is `boxes` with the y error bars: `x:y:ydelta`, `x:y:ydelta:width` or `x:y:ylow:yhigh:width`; `xtic(4)`
-names the bars. See [Box, finance and boxplot styles](/guide/gnuplot-subset#box-finance-and-boxplot-styles).
+names the bars. See [Box, finance and boxplot styles](/guide/gnuplot/styles#box-finance-and-boxplot-styles).
 
 ### Groups of bars
 
@@ -1146,7 +1146,7 @@ by the column headers (`title columnhead`).
 
 Column-stacked histograms take `lc variable`: each row in the linetype a function of its category gives; the
 stacks are named by their titles and `keyentry` builds the key. See
-[Histograms](/guide/gnuplot-subset#histograms).
+[Histograms](/guide/gnuplot/styles#histograms).
 
 ### Clustered bars with error bars
 
@@ -1185,7 +1185,7 @@ as a line with an open tick on the left and a close tick on the right.
 
 `lc variable` takes the linetype of each candle from the last `using` column: here 2 (green) when the price closes
 up, 7 (red) when down. It also colors histograms, boxxyerror rectangles, filled curves and polygons. See
-[Colors](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+[Colors](/guide/gnuplot/styles#colors-per-point-and-from-the-palette).
 
 ### A swarm of points
 
@@ -1194,7 +1194,7 @@ up, 7 (red) when down. It also colors histograms, boxxyerror rectangles, filled 
 <Plot name="cb_jitter" svg :width="560" :height="320" />
 
 `set jitter` moves the points that would overlap aside, alternately left and right: a bee swarm. The values are
-drawn with gnuplot's `invnorm(rand(0))`. See [Point types](/guide/gnuplot-subset#point-types).
+drawn with gnuplot's `invnorm(rand(0))`. See [Point types](/guide/gnuplot/styles#point-types).
 
 ### Box plots by category
 
@@ -1225,7 +1225,7 @@ the x axis. `set style boxplot` sets the whisker range, outliers, sorting.
 
 A band `x:y1:y2` of filledcurves takes the curve filters: `smooth csplines` smooths both curves on the same samples.
 The format string after `using` reads the fields by scanf conversions, as gnuplot. See
-[Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+[Boxes and filled curves](/guide/gnuplot/styles#boxes-and-filled-curves).
 
 ### A transparent fill color
 
@@ -1234,7 +1234,7 @@ The format string after `using` reads the fields by scanf conversions, as gnuplo
 <Plot name="cb_fill_color" svg :width="560" :height="320" />
 
 `fc` is the fill's own color, here gnuplot's `#AARRGGBB` with an alpha channel, read from a string variable after
-`rgb`; the line keeps `lc`. See [Plot items](/guide/gnuplot-subset#plot-items).
+`rgb`; the line keeps `lc`. See [Plot items](/guide/gnuplot/plot-items#plot-items).
 
 ### Fill above and below a line
 
@@ -1253,7 +1253,7 @@ it splits a line.
 <Plot name="cb_fill_zero" svg :width="560" :height="320" />
 
 `above` and `below` without `y=V` fill against y = 0, as gnuplot; next to an axis word (`above x1`) they are
-ignored. See [Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+ignored. See [Boxes and filled curves](/guide/gnuplot/styles#boxes-and-filled-curves).
 
 ### Rectangles
 
@@ -1270,7 +1270,7 @@ domain decomposition.
 
 <Plot name="cb_circles" svg :width="560" :height="320" />
 
-The third column is the radius, in x units. See [Circles, pies and donuts](/guide/gnuplot-subset#circles-pies-and-donuts).
+The third column is the radius, in x units. See [Circles, pies and donuts](/guide/gnuplot/styles#circles-pies-and-donuts).
 
 ### A vector field with labelled probes
 
@@ -1280,7 +1280,7 @@ The third column is the radius, in x units. See [Circles, pies and donuts](/guid
 
 `vectors` draws an arrow from `x:y` by `xdelta:ydelta` (`head`, `heads`, `nohead`, `backhead`, `filled`); `labels`
 writes the text of a column at each point, here with its point and an offset. See
-[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors). In the
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors). In the
 HTML page the heads and the labels keep their size while the zoom moves them with the data.
 
 
@@ -1292,7 +1292,7 @@ HTML page the heads and the labels keep their size while the zoom moves them wit
 
 `with vectors as N` takes the heads, the fill, the head size and the color of `set style arrow N`; `size L,A` (x
 axis values, or `screen`, `graph`, `character`) and `filled` set them on the item. See
-[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors).
 
 ### A style per arrow
 
@@ -1302,7 +1302,7 @@ axis values, or `screen`, `graph`, `character`) and `filled` set them on the ite
 
 `arrowstyle variable` (`as variable`) takes the number of an arrow style from the column after the vector's:
 each arrow its heads, fill, width and color. See
-[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors).
 
 ### A Gantt chart
 
@@ -1312,7 +1312,7 @@ each arrow its heads, fill, width and color. See
 
 Each task is a vector from its start to its end, without a head, thick; `ytic(1)` names its row. The blanks around the
 colons of `using` are read as gnuplot does, and `title ... at graph X, Y` places a key entry in the plot area. See
-[Vectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+[Vectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors).
 
 ### Arrows by length and angle
 
@@ -1354,7 +1354,7 @@ regions, outlines.
 <Plot name="cb_fill_borders" svg :width="560" :height="320" />
 
 `y1` fills across to the left border, `y2` to the right one, `x=5` to the vertical line x = 5, as gnuplot 6.0. See
-[Boxes and filled curves](/guide/gnuplot-subset#boxes-and-filled-curves).
+[Boxes and filled curves](/guide/gnuplot/styles#boxes-and-filled-curves).
 
 ### Functions filled
 
@@ -1364,7 +1364,7 @@ regions, outlines.
 
 A function takes `with filledcurves` (to a level `y=V`, closed, `x1`, ...) and `with boxes` as data does, its samples
 filled; a range before an item, `[0:4] 0.6*x`, samples that function alone over it. See
-[Filled curves](/guide/gnuplot-subset#boxes-and-filled-curves) and [Plot items](/guide/gnuplot-subset#plot-items).
+[Filled curves](/guide/gnuplot/styles#boxes-and-filled-curves) and [Plot items](/guide/gnuplot/plot-items#plot-items).
 
 ### A color per shape
 
@@ -1373,7 +1373,7 @@ filled; a range before an item, `[0:4] 0.6*x`, samples that function alone over 
 <Plot name="cb_lc_shapes" svg :width="560" :height="320" />
 
 `lc variable` colors each box, circle or ellipse by the last `using` column, a linetype number (`lc rgb variable`: a
-24-bit color). See [Colors](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+24-bit color). See [Colors](/guide/gnuplot/styles#colors-per-point-and-from-the-palette).
 
 ### Labels, arrows and objects
 
@@ -1383,7 +1383,7 @@ filled; a range before an item, `[0:4] 0.6*x`, samples that function alone over 
 
 Positions mix data (`first`), plot area (`graph`) and page (`screen`) coordinates; the band in `graph` y covers the
 whole height behind the grid, the polygon is in front of the curve. In the HTML page the objects zoom with the data.
-See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+See [Labels, arrows and objects](/guide/gnuplot/text#labels-arrows-and-objects).
 
 ### Images from PNG files
 
@@ -1394,7 +1394,7 @@ See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects
 `set pixmap N 'file.png'` puts a PNG image on the page, as gnuplot 6.0: `at` its lower left corner (its centre with
 `center`), in any coordinates; `width` (or `height`) sets one side, the other by the image's aspect; `size W,H` both,
 none its own pixels. The SVG holds the file itself. See
-[Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+[Labels, arrows and objects](/guide/gnuplot/text#labels-arrows-and-objects).
 
 
 ### Fonts per text
@@ -1405,7 +1405,7 @@ none its own pixels. The SVG holds the file itself. See
 
 Each text takes gnuplot's `font "family:Bold:Italic,size"`: the title larger, the axis labels italic and bold, the
 tick labels smaller, the key and the label in a serif family. As gnuplot, only the title (and the x2 label, the key)
-take room by their size. See [Fonts](/guide/gnuplot-subset#fonts).
+take room by their size. See [Fonts](/guide/gnuplot/text#fonts).
 
 ### Boxed labels
 
@@ -1414,7 +1414,7 @@ take room by their size. See [Fonts](/guide/gnuplot-subset#fonts).
 <Plot name="cb_boxed_labels" svg :width="560" :height="320" />
 
 `with labels boxed` writes each text on the background, over the line, when the text box style is opaque or has a
-border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnuplot/text#labels-arrows-and-objects).
 
 
 
@@ -1426,7 +1426,7 @@ border, as gnuplot's svg terminal. See [Labels, arrows and objects](/guide/gnupl
 
 `with labels hypertext` shows each text only on mouse-over of its point (hover the dots), as gnuplot's svg; `ps
 variable` sizes each point from a column. See
-[Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+[Labels, arrows and objects](/guide/gnuplot/text#labels-arrows-and-objects).
 
 ### Labels turned and colored by columns
 
@@ -1435,7 +1435,7 @@ variable` sizes each point from a column. See
 <Plot name="cb_label_rotate" svg :width="560" :height="360" />
 
 `with labels rotate variable` turns each label by the fourth column, `tc variable` colors it by the last one. See
-[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors).
 
 ### Labels with tic labels
 
@@ -1445,7 +1445,7 @@ variable` sizes each point from a column. See
 
 `with labels` takes `xticlabels()` (and `yticlabels()`) besides its text column: the text at the point, the
 names under the axis. `%.3S` rounds the milliseconds, as gnuplot. See
-[Time data](/guide/gnuplot-subset#time-data).
+[Time data](/guide/gnuplot/data#time-data).
 
 ### Arrow styles and dashed objects
 
@@ -1476,7 +1476,7 @@ stands X cells from the left and Y up from the bottom of the page.
 
 `sparse matrix=(4,4) origin=(1,1)` bins the given points into a 4 by 4 grid, each in its nearest cell, the cells
 without a point left empty: here a distance matrix given as its upper triangle. See
-[plot items](/guide/gnuplot-subset#plot-items).
+[plot items](/guide/gnuplot/plot-items#plot-items).
 
 ### A table with named rows and columns
 
@@ -1485,7 +1485,7 @@ without a point left empty: here a distance matrix given as its upper triangle. 
 <Plot name="cb_matrix_headers" svg :width="560" :height="360" />
 
 `matrix rowheaders columnheaders` reads a CSV table as gnuplot does: its first row names the columns, the first cell
-of each row names it, and the names become the tick labels. See [plot items](/guide/gnuplot-subset#plot-items).
+of each row names it, and the names become the tick labels. See [plot items](/guide/gnuplot/plot-items#plot-items).
 ### A matrix file
 
 <<< @/examples/snippets/cb_matrix.gp{gnuplot}
@@ -1493,7 +1493,7 @@ of each row names it, and the names become the tick labels. See [plot items](/gu
 <Plot name="cb_matrix" svg :width="560" :height="400" />
 
 `matrix` reads the values as they lie in the file: columns along x, rows along y. `maxcolors 10` quantizes the
-palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+palette. See [Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 
 ### A matrix with its coordinates
@@ -1504,7 +1504,7 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 `nonuniform matrix` reads the x of the columns in the first row and the y of the rows in the first column; `index
 "fine"` picks the dataset after the comment line `# fine`. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### Statistics of a matrix
 
@@ -1514,7 +1514,7 @@ palette. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
 
 `stats ... matrix` gives the statistics of the values with the size of the matrix (`STATS_size_x`, `_y`) and the
 places of its extremes; `every` keeps columns (points) and rows (blocks) of a matrix, for `stats` and for the image.
-See [Stats](/guide/gnuplot-subset#stats).
+See [Stats](/guide/gnuplot/commands#stats).
 
 ### Palettes
 
@@ -1523,7 +1523,7 @@ See [Stats](/guide/gnuplot-subset#stats).
 <Plot name="cb_palettes" svg :width="760" :height="560" />
 
 `set palette gray`, `rgbformulae R,G,B` (any of gnuplot's 37), `defined (v color, ...)`, `cubehelix [start S]
-[cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[cycles C] [saturation S]`, `viridis`, with `negative` and `maxcolors N`. See [Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### A palette in hue, saturation and value
 
@@ -1532,7 +1532,7 @@ See [Stats](/guide/gnuplot-subset#stats).
 <Plot name="cb_palette_hsv" svg :width="560" :height="360" />
 
 `set palette model HSV` reads the palette's three components as hue (0 to 1), saturation and value; `defined (v h s
-v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-palettes).
+v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot/3d#images-and-palettes).
 
 
 ### A palette of functions
@@ -1542,7 +1542,7 @@ v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-
 <Plot name="cb_palette_functions" svg :width="560" :height="320" />
 
 `set palette functions R, G, B` gives the three components as expressions of `gray`, here hue, saturation and value
-(`model HSV`). See [Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+(`model HSV`). See [Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### A log color axis
 
@@ -1552,7 +1552,7 @@ v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-
 
 `set logscale cb` maps the values on a log scale, for residuals spanning decades; `set cbtics`, `set format cb` and
 `unset cbtics` set the labels of the color box as those of the x and y axes. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### Color box placement
 
@@ -1562,7 +1562,7 @@ v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-
 
 `set colorbox horizontal` lays the box below the plot; `user origin X,Y size W,H` puts it anywhere on the page
 (fractions from the bottom left), `invert` turns a vertical box upside down, `noborder` drops its frame. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### A palette from a file
 
@@ -1572,7 +1572,7 @@ v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-
 
 `set palette file 'terrain.dat'` reads a gradient as gnuplot: `gray r g b` rows (here sea below 0.5, land above), or
 `r g b` rows evenly spaced; `using`, `index` and `every` work as in `plot`. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### Named palettes
 
@@ -1583,7 +1583,7 @@ v, ...)` takes them as numbers. See [Palettes](/guide/gnuplot-subset#images-and-
 A foresight extension: `set palette NAME`, one of Crameri's *Scientific colour maps*, matplotlib's `magma`,
 `inferno`, `plasma`, `viridis`, `cividis`, or Moreland's `black_body`, in any case. Pick the type for the data: sequential for a magnitude, diverging about a
 meaningful centre (a symmetric `cbrange`), multi-sequential for two regimes either side of a value, cyclic for an
-angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot-subset#named-palettes) for every name.
+angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot/3d#named-palettes) for every name.
 
 
 ### Images from binary files
@@ -1594,7 +1594,7 @@ angle (`cbrange [-180:180]`, the ends meet). See [Named palettes](/guide/gnuplot
 
 `binary array=(W,H) format='%uchar'` reads raw bytes, a pixel after the other, as gnuplot: `flipy` puts the first
 scan line on top, `dx`, `dy` and `origin` place and scale the pixels. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### Rotated images
 
@@ -1604,7 +1604,7 @@ scan line on top, `dx`, `dy` and `origin` place and scale the pixels. See
 
 `center=(X,Y)` places a binary image by its centre and `rotation=A` turns it about that centre (`90d`, `0.5pi` or
 radians), as gnuplot: a right angle keeps the pixels a grid, any other one draws each pixel as a small polygon. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### Colors as numbers
 
@@ -1613,7 +1613,7 @@ radians), as gnuplot: a right angle keeps the pixels a grid, any other one draws
 <Plot name="cb_rgb_numbers" svg :width="560" :height="360" />
 
 `lc rgb N` takes a number, 0xRRGGBB (0xAARRGGBB with a transparency): here an expression per entry; a key taller
-than the page wraps into columns, as gnuplot. See [Key](/guide/gnuplot-subset#key).
+than the page wraps into columns, as gnuplot. See [Key](/guide/gnuplot/axes#key).
 
 ### Named colormaps
 
@@ -1623,7 +1623,7 @@ than the page wraps into columns, as gnuplot. See [Key](/guide/gnuplot-subset#ke
 
 `set colormap new NAME` saves the current palette, `lc palette NAME` colors an item's z column by it (over its own
 range with `set colormap NAME range [a:b]`). See [Colors per point and from the
-palette](/guide/gnuplot-subset#colors-per-point-and-from-the-palette).
+palette](/guide/gnuplot/styles#colors-per-point-and-from-the-palette).
 
 ### An RGB image
 
@@ -1645,7 +1645,7 @@ for fractions), without palette nor color box.
 `splot` of a function of x and y draws it as a mesh of iso-curves (`set isosamples`) in gnuplot's default view,
 `set view 60, 30`: the box, its base plane below the z range (`set xyplane relative 0.5`), the x and y ticks along
 the front of the base, the z ticks at its left corner, the key at the top right, as gnuplot 6.0 places them. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### One surface, two views
 
@@ -1655,7 +1655,7 @@ the front of the base, the z ticks at its left corner, the key at the top right,
 
 `set view ROT_X, ROT_Z, SCALE, SCALE_Z` turns the box (rot_x about the horizontal, then rot_z about the vertical) and
 scales it, the z axis apart; `set xyplane at 0` puts the base plane at z = 0, `set border 4095` draws the whole box.
-See [3D views](/guide/gnuplot-subset#3d-views).
+See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### A surface and its side projections
 
@@ -1666,7 +1666,7 @@ See [3D views](/guide/gnuplot-subset#3d-views).
 `set view projection xz` and `set view projection yz` show the surface on the xz and yz planes seen edge-on, as
 gnuplot 6.0 draws them: x (or y) vertical and z horizontal, the plane's border, the ticks on its four sides, the base
 plane at the bottom of the z range; `set view projection xy` is the map view, and `set view 60, 30` turns the box
-again. See [3D views](/guide/gnuplot-subset#3d-views).
+again. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Arrows and labels in 3D
 
@@ -1676,7 +1676,7 @@ again. See [3D views](/guide/gnuplot-subset#3d-views).
 
 `set arrow` and `set label` take a third coordinate in a 3D view: x, y, z axis values projected as the data (`graph`
 ones fractions of the three axes, `screen` ones as they are), here the axes drawn as arrows from the origin;
-`set ztics axis` puts the z ticks on the z axis through x = y = 0. See [3D views](/guide/gnuplot-subset#3d-views).
+`set ztics axis` puts the z ticks on the z axis through x = y = 0. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Points on a sphere
 
@@ -1686,7 +1686,7 @@ ones fractions of the three axes, `screen` ones as they are), here the axes draw
 
 `set mapping spherical` reads splot's data as longitude, latitude and radius (1 when there are two columns), in the
 `set angles` unit, as gnuplot: the `'++'` grid of longitudes and latitudes is a sphere, the cities its labelled
-points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot-subset#3d-views).
+points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Hidden lines
 
@@ -1696,7 +1696,7 @@ points; `set view equal xyz` keeps it round. See [3D views](/guide/gnuplot-subse
 
 `set hidden3d` draws the surface opaque, painted from the farthest quadrangle to the nearest; the side seen from below
 takes the next linetype, so the Moebius strip shows its single side in two colors where it twists. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Smoothed profiles in 3D
 
@@ -1706,7 +1706,7 @@ takes the next linetype, so the Moebius strip shows its single side in two color
 
 `smooth acsplines` in `splot` smooths each scan of the data in 3D: here each profile lies in a plane of constant depth,
 so it is splined as value of position, weighted by the fourth `using` field, as gnuplot's 3D splines. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### A field seen from above
 
@@ -1716,7 +1716,7 @@ so it is splined as value of position, weighted by the fourth `using` field, as 
 
 `splot` plots points with a height; `set view map` looks at them from above, as a 2D plot laid out as gnuplot's 3D
 map (its plot area, ticks and color box), `lc palette` coloring each point by its z. The `using` fields are `plot`'s
-with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
+with the z third. See [3D plots](/guide/gnuplot/3d#_3d-plots).
 
 ### A function as a colored map
 
@@ -1726,7 +1726,7 @@ with the z third. See [3D plots](/guide/gnuplot-subset#3d-plots).
 
 `with pm3d` draws a surface as quadrangles colored by the palette, gnuplot's pm3d: seen from above it is a heatmap of
 the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`set pm3d interpolate 2,2`). See
-[3D plots](/guide/gnuplot-subset#3d-plots).
+[3D plots](/guide/gnuplot/3d#_3d-plots).
 
 ### A map in RGB colors
 
@@ -1736,7 +1736,7 @@ the function's grid (`set samples`, `set isosamples`), each cell split 2 by 2 (`
 
 `lc rgb variable` (or `fc rgb variable`) colors each quadrangle of a pm3d surface by the fourth `using` field, a packed
 color 0xRRGGBB (0xAARRGGBB with a transparency): a quadrangle takes the mean of its corners channel by channel, as
-gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plots](/guide/gnuplot-subset#3d-plots).
+gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plots](/guide/gnuplot/3d#_3d-plots).
 
 ### Colors from the palette
 
@@ -1746,7 +1746,7 @@ gnuplot. `set pm3d border` outlines the quadrangles, here in white. See [3D plot
 
 `palette(z)` is the 24-bit color of z in the current palette over `cbrange`, as gnuplot 6.0: added to a transparency
 in the top byte (0x80000000, half) it colors the points through `lc rgb variable`. See
-[Images and palettes](/guide/gnuplot-subset#images-and-palettes).
+[Images and palettes](/guide/gnuplot/3d#images-and-palettes).
 
 ### A colored surface in 3D
 
@@ -1756,7 +1756,7 @@ in the top byte (0x80000000, half) it colors the points through `lc rgb variable
 
 `with pm3d` in a 3D view draws the surface as colored quadrangles, gnuplot's pm3d_plot: `set pm3d at bs` puts them on
 the base plane, a map of the heights, and at the surface, in that order; the color box stands beside the plot. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### A lit surface
 
@@ -1767,7 +1767,7 @@ the base plane, a map of the heights, and at the surface, in that order; the col
 `set pm3d lighting` shades the quadrangles of a surface as gnuplot does: `primary` the share of the light fixed with
 respect to the viewer, `specular` its highlights, `spec2` a red spotlight on the faces turned away (`set pm3d
 spotlight` moves and colors it). A fill color (`fc`) is lit as the palette colors are. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### A surface filled between its levels
 
@@ -1777,7 +1777,7 @@ spotlight` moves and colors it). A fill color (`fc`) is lit as the palette color
 
 `with contourfill` draws the pm3d surface in slices of z, each in the palette color of its middle: `set contourfill
 ztics` slices it at the z ticks (`cbtics` at the color box's, `auto N` in N equal slices). In a map view
-(`set view map`) it is a filled contour map. See [3D views](/guide/gnuplot-subset#3d-views).
+(`set view map`) it is a filled contour map. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Error bands in 3D
 
@@ -1786,7 +1786,7 @@ ztics` slices it at the z ticks (`cbtics` at the color box's, `auto N` in N equa
 <Plot name="cb_view3d_zerrorfill" svg :width="560" :height="400" />
 
 `with zerrorfill` draws each curve with a band from its low to its high z ends, in its fill color, and the line through
-z in its line color; the items are plotted back to front. See [3D views](/guide/gnuplot-subset#3d-views).
+z in its line color; the items are plotted back to front. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Grid walls
 
@@ -1795,7 +1795,7 @@ z in its line color; the items are plotted back to front. See [3D views](/guide/
 <Plot name="cb_view3d_walls" svg :width="560" :height="400" />
 
 `set wall` fills the planes of the graph box (x0, y0, z0, x1, y1) half transparent and borders them in black; each is
-drawn behind the plot or over it as it faces. See [3D views](/guide/gnuplot-subset#3d-views).
+drawn behind the plot or over it as it faces. See [3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Bars in 3D
 
@@ -1805,7 +1805,7 @@ drawn behind the plot or over it as it faces. See [3D views](/guide/gnuplot-subs
 
 `splot ... with boxes` draws a bar at each point, `set boxdepth` gives it a depth along y; with `set pm3d depthorder
 base` the faces of every bar are drawn from the farthest, and `set pm3d lighting` shades them. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### An isosurface of a voxel grid
 
@@ -1816,7 +1816,7 @@ base` the faces of every bar are drawn from the farthest, and `set pm3d lighting
 `set vgrid` makes a grid of N x N x N values, `vfill` adds a density around each data point (here 10 within 0.9 of
 the points of a helix), and `with isosurface level L` draws the surface where the values cross L, by marching cubes
 as gnuplot 6.0; `with points above L` would draw the grid points themselves. See
-[Voxel grids](/guide/gnuplot-subset#voxel-grids).
+[Voxel grids](/guide/gnuplot/3d#voxel-grids).
 
 ### Solids from polygons
 
@@ -1826,7 +1826,7 @@ as gnuplot 6.0; `with points above L` would draw the grid points themselves. See
 
 `splot ... with polygons` draws a polygon per block of the data; with `set pm3d depthorder` they are drawn from the
 farthest, and `set pm3d lighting` shades each face. `set object N polygon ... depthorder` joins the same sort. See
-[3D views](/guide/gnuplot-subset#3d-views).
+[3D views](/guide/gnuplot/3d#_3d-views).
 
 ### Contours in a 3D view
 
@@ -1836,7 +1836,7 @@ farthest, and `set pm3d lighting` shades each face. `set object N polygon ... de
 
 `set contour base` draws the contour lines of the surface on the base plane of the 3D view, each level in its own
 linetype; the same function `with labels` writes the values on the lines, boxed, from the third point every thirty
-(`set cntrlabel start 3 interval 30`), as gnuplot. See [Contours](/guide/gnuplot-subset#contours).
+(`set cntrlabel start 3 interval 30`), as gnuplot. See [Contours](/guide/gnuplot/3d#contours).
 
 ### Labels in palette colors
 
@@ -1846,7 +1846,7 @@ linetype; the same function `with labels` writes the values on the lines, boxed,
 
 `tc palette z` colors a label by its own height through the palette, `tc palette cb V` by a value, `tc palette frac F`
 by a fraction of the palette. With no item colored by the palette, the color axis spans the heights of the surface,
-as gnuplot: the labels then read as a legend of the heights. See [Labels, arrows and objects](/guide/gnuplot-subset#labels-arrows-and-objects).
+as gnuplot: the labels then read as a legend of the heights. See [Labels, arrows and objects](/guide/gnuplot/text#labels-arrows-and-objects).
 
 ### Contour lines over a map
 
@@ -1856,7 +1856,7 @@ as gnuplot: the labels then read as a legend of the heights. See [Labels, arrows
 
 `set contour` traces the levels of the surface (gnuplot's contour.c), each in a linetype of its own with a key entry
 for its value; `set pm3d at b` with `unset surface` draws the colored map without the surface's own lines. See
-[Contours](/guide/gnuplot-subset#contours).
+[Contours](/guide/gnuplot/3d#contours).
 
 ### A density map of scattered points
 
@@ -1866,7 +1866,7 @@ for its value; `set pm3d at b` with `unset surface` draws the colored map withou
 
 `set dgrid3d ... gauss kdensity` grids the points on a 60 by 60 grid with a Gaussian kernel, each node the sum of the
 points' weights: a density map, drawn with pm3d; `nogrid` keeps the points of the second item as they are. See
-[Gridded and masked surfaces](/guide/gnuplot-subset#gridded-and-masked-surfaces).
+[Gridded and masked surfaces](/guide/gnuplot/3d#gridded-and-masked-surfaces).
 
 ### A surface masked to its data
 
@@ -1876,7 +1876,7 @@ points' weights: a density map, drawn with pm3d; `nogrid` keeps the points of th
 
 A grid from scattered points (`set dgrid3d`) covers their bounding box, beyond the data. Their convex hull, tabulated
 into `$HULL`, becomes a mask (`with mask`): the pm3d item with the `mask` option is drawn only inside it. See
-[Gridded and masked surfaces](/guide/gnuplot-subset#gridded-and-masked-surfaces).
+[Gridded and masked surfaces](/guide/gnuplot/3d#gridded-and-masked-surfaces).
 
 ## Polar and radial charts
 
@@ -1887,7 +1887,7 @@ into `$HULL`, becomes a mask (`with mask`): the pm3d item with the `mask` option
 <Plot name="cb_polar" svg :width="520" :height="400" />
 
 A probe's directivity against a cardioid model, theta in degrees, in gnuplot's round idiom: square plot, polar border
-and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot/axes#polar-plots).
 
 
 ### A reversed r axis
@@ -1897,7 +1897,7 @@ and grid, theta labels, no x and y ticks. See [Polar plots](/guide/gnuplot-subse
 <Plot name="cb_reversed_r" svg :width="480" :height="420" />
 
 `set rrange [90:0]` puts 90 at the pole and 0 on the rim: an elevation, the horizon outside. The grid takes its line
-style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot/axes#polar-plots).
 
 
 ### A labelled radial axis and clipped curves
@@ -1908,7 +1908,7 @@ style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot-subset#po
 
 `set rlabel` names the radial axis, over its middle; a curve leaving the r range is cut at the rim, where
 `title ... at beginning|end left|right` puts its name. `set ttics add` places named angles alone. See
-[Polar plots](/guide/gnuplot-subset#polar-plots).
+[Polar plots](/guide/gnuplot/axes#polar-plots).
 
 ### A surface on a polar grid
 
@@ -1918,7 +1918,7 @@ style, `lt -1 lw 0.5` black and thin. See [Polar plots](/guide/gnuplot-subset#po
 
 `set polar grid T,R gauss scale S` and `with surface` weigh scattered theta:r:z points onto a polar grid of T x R
 cells, each drawn in the palette color of its value (qnorm, gauss, cauchy, exp or box weights, `kdensity` for
-sums), as gnuplot 6.0's polar gridded surfaces. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+sums), as gnuplot 6.0's polar gridded surfaces. See [Polar plots](/guide/gnuplot/axes#polar-plots).
 
 ### Named angles on a polar plot
 
@@ -1928,7 +1928,7 @@ sums), as gnuplot 6.0's polar gridded surfaces. See [Polar plots](/guide/gnuplot
 
 `set ttics add` names angles (here in radians, with Unicode), `set mttics` adds minor ticks on the polar border and
 `set grid r polar 45` draws the rings of the r ticks and spokes every 45 degrees. See
-[Polar plots](/guide/gnuplot-subset#polar-plots).
+[Polar plots](/guide/gnuplot/axes#polar-plots).
 
 
 ### A band outside a circle
@@ -1938,7 +1938,7 @@ sums), as gnuplot 6.0's polar gridded surfaces. See [Polar plots](/guide/gnuplot
 <Plot name="cb_polar_fill" svg :width="480" :height="420" />
 
 `filledcurves above r=2.5` fills the band between the curve and the circle of radius 2.5 where the curve is outside
-it (`below`: inside). See [Polar plots](/guide/gnuplot-subset#polar-plots).
+it (`below`: inside). See [Polar plots](/guide/gnuplot/axes#polar-plots).
 
 ### A log r axis
 
@@ -1947,7 +1947,7 @@ it (`below`: inside). See [Polar plots](/guide/gnuplot-subset#polar-plots).
 <Plot name="cb_polar_log" svg :width="480" :height="420" />
 
 `set logscale r` spaces the decades evenly from the pole at the `rrange` start; `impulses` go from the pole and
-`set ttics rotate` turns the theta labels along their angle. See [Polar plots](/guide/gnuplot-subset#polar-plots).
+`set ttics rotate` turns the theta labels along their angle. See [Polar plots](/guide/gnuplot/axes#polar-plots).
 
 ### Polar error bars
 
@@ -1956,7 +1956,7 @@ it (`below`: inside). See [Polar plots](/guide/gnuplot-subset#polar-plots).
 <Plot name="cb_polar_errorbars" svg :width="560" :height="360" />
 
 On a polar plot `yerrorbars` draw each bar along the radius, from r - dr to r + dr, its caps across it. See
-[Polar plots](/guide/gnuplot-subset#polar-plots).
+[Polar plots](/guide/gnuplot/axes#polar-plots).
 
 ### A level in decibels
 
@@ -1987,7 +1987,7 @@ the upper half only, and leaves out the data beyond it too, as gnuplot.
 Each (theta, r) cell of a polar grid is one annular sector, filled from the palette by a value: the last `using`
 column with `fc palette` (or `lc palette z`; `lc rgb variable` takes packed colors, `hsv2rgb(h, s, v)` makes them),
 on cartesian axes kept round by `set size ratio -1`. See
-[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot-subset#vectors-ellipses-polygons-labels-and-sectors).
+[Vectors, ellipses, polygons, labels and sectors](/guide/gnuplot/styles#vectors-ellipses-polygons-labels-and-sectors).
 ### A radar and a rose
 
 <<< @/examples/snippets/cb_radar.gp{gnuplot}
@@ -2015,7 +2015,7 @@ draws the web at the ticks of the first axis. foresight's `with radar` is the tr
 
 `newspiderplot` starts a new set of items whose polygons share the axes of the first set; `keyentry with
 spiderplot` names a set in the key. A set takes the color and width of its first item. See [Parallel axes and
-spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
+spider plots](/guide/gnuplot/styles#parallel-axes-and-spider-plots).
 
 ### Parallel axes
 
@@ -2024,7 +2024,7 @@ spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
 <Plot name="cb_parallel" svg :width="560" :height="320" />
 
 `parallelaxes`: each item is an axis (a column), each row a line across them; `set paxis N range` and `set paxis N tics`
-scale and tick each axis. See [Parallel axes and spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
+scale and tick each axis. See [Parallel axes and spider plots](/guide/gnuplot/styles#parallel-axes-and-spider-plots).
 
 ### Parallel axes with their own ranges
 
@@ -2034,7 +2034,7 @@ scale and tick each axis. See [Parallel axes and spider plots](/guide/gnuplot-su
 
 Each axis has a range (`[350:100]` runs downwards) and ticks of its own; `lc variable` on the first item reads a
 second field, here a group number, the color of every line. See
-[Parallel axes and spider plots](/guide/gnuplot-subset#parallel-axes-and-spider-plots).
+[Parallel axes and spider plots](/guide/gnuplot/styles#parallel-axes-and-spider-plots).
 
 ### A pie and a donut
 
@@ -2055,7 +2055,7 @@ second field, here a group number, the color of every line. See
 <Plot name="cb_gauges" svg :width="600" :height="240" />
 
 Each gauge shows the last value of its column over a fixed `range`, lit in cells; with `--watch` the needle-less
-gauges follow the run. See [Gauges, radars and roses](/guide/gnuplot-subset#gauges-radars-and-roses).
+gauges follow the run. See [Gauges, radars and roses](/guide/gnuplot/styles#gauges-radars-and-roses).
 
 ## Dashboards of the 1980s
 
@@ -2067,7 +2067,7 @@ gauges follow the run. See [Gauges, radars and roses](/guide/gnuplot-subset#gaug
 
 `theme vfd` turns the page into a vacuum fluorescent display; `theme lcd` into a backlit LCD. `segments 10` cuts the
 bars into cells over the y range, the unlit ones drawn faintly. See
-[Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
+[Themes and segmented fills](/guide/gnuplot/styles#themes-and-segmented-fills).
 
 ### A liquid-crystal dashboard
 
@@ -2076,7 +2076,7 @@ bars into cells over the y range, the unlit ones drawn faintly. See
 <Plot name="cb_lcd" svg :width="640" :height="300" />
 
 `theme lcd`: the pale green glass and dark segments of a backlit LCD, here with a segmented gauge and segmented bars.
-See [Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
+See [Themes and segmented fills](/guide/gnuplot/styles#themes-and-segmented-fills).
 
 ### Light and dark pages
 
@@ -2093,7 +2093,7 @@ foresight -t night -o dark.svg cb_identity.gp    # light text on a near-black gr
 
 These are the colors of this site: its figures follow the light and dark switch at the top of the page. A script that
 sets its own theme (`set terminal svg theme vfd`) keeps it. See
-[Themes and segmented fills](/guide/gnuplot-subset#themes-and-segmented-fills).
+[Themes and segmented fills](/guide/gnuplot/styles#themes-and-segmented-fills).
 
 ### A heatmap of lit levels
 
@@ -2111,7 +2111,7 @@ An image in the `vfd` theme: the palette mapped to the glow of the display.
 
 A foresight extension: the last finite value of each item in seven-segment digits, its glass fixed by the field width
 of `format`. A panel of readouts alone fills itself with digits; over a curve they lie in a window, placed as the key.
-See [Readouts](/guide/gnuplot-subset#readouts).
+See [Readouts](/guide/gnuplot/styles#readouts).
 
 <<< @/examples/snippets/cb_readout_dumb.gp{gnuplot}
 

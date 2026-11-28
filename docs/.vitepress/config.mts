@@ -11,21 +11,34 @@ const docs = [
     ],
   },
   {
-    text: 'Tutorial',
+    text: 'Learning paths',
     items: [
-      { text: 'Overview',                        link: '/manual/' },
-      { text: '1. A first plot',                 link: '/manual/tutorial/01-first-plot' },
-      { text: '2. Styles and the key',           link: '/manual/tutorial/02-styles' },
-      { text: '3. Axes',                         link: '/manual/tutorial/03-axes' },
-      { text: '4. From the log, with a script',  link: '/manual/tutorial/04-scripts' },
-      { text: '5. CSV and expressions',          link: '/manual/tutorial/05-data' },
-      { text: '6. Two axes and a model',         link: '/manual/tutorial/06-two-axes' },
-      { text: '7. A dashboard',                  link: '/manual/tutorial/07-dashboard' },
-      { text: '8. Watching the run',             link: '/manual/tutorial/08-live' },
+      { text: 'Overview', link: '/manual/' },
+    ],
+  },
+  {
+    text: 'Path A: first steps',
+    collapsed: false,
+    items: [
+      { text: 'A1. A first plot',                 link: '/manual/paths/a-first-steps/01-a-first-plot' },
+      { text: 'A2. Styles and the key',           link: '/manual/paths/a-first-steps/02-styles' },
+      { text: 'A3. Axes',                         link: '/manual/paths/a-first-steps/03-axes' },
+      { text: 'A4. From the log, with a script',  link: '/manual/paths/a-first-steps/04-scripts' },
+      { text: 'A5. CSV and expressions',          link: '/manual/paths/a-first-steps/05-data' },
+      { text: 'A6. Two axes and a model',         link: '/manual/paths/a-first-steps/06-two-axes' },
+    ],
+  },
+  {
+    text: 'Path B: watching a simulation',
+    collapsed: true,
+    items: [
+      { text: 'B1. A dashboard',          link: '/manual/paths/b-monitoring/01-a-dashboard' },
+      { text: 'B2. Watching the run',     link: '/manual/paths/b-monitoring/02-watching-the-run' },
     ],
   },
   {
     text: 'Path C: figures for a paper',
+    collapsed: true,
     items: [
       { text: 'C1. A first PDF', link: '/manual/paths/c-paper/01-a-first-pdf' },
       { text: 'C2. Fonts that travel', link: '/manual/paths/c-paper/02-fonts-that-travel' },
@@ -38,6 +51,7 @@ const docs = [
   },
   {
     text: 'Path F: reports',
+    collapsed: true,
     items: [
       { text: 'F1. A figure in a report', link: '/manual/paths/f-reports/01-a-figure-in-a-report' },
       { text: 'F2. Tables', link: '/manual/paths/f-reports/02-tables' },
@@ -58,7 +72,21 @@ const docs = [
       { text: 'Feature map',        link: '/guide/features' },
       { text: 'Fortran Library',    link: '/guide/library' },
       { text: 'Command Line',       link: '/guide/cli' },
-      { text: 'gnuplot Subset',     link: '/guide/gnuplot-subset' },
+      {
+        text: 'gnuplot Subset',
+        link: '/guide/gnuplot-subset',
+        collapsed: true,
+        items: [
+          { text: 'Commands and settings',   link: '/guide/gnuplot/commands' },
+          { text: 'Plot items',              link: '/guide/gnuplot/plot-items' },
+          { text: 'Data',                    link: '/guide/gnuplot/data' },
+          { text: 'Styles',                  link: '/guide/gnuplot/styles' },
+          { text: 'Axes, ticks and layout',  link: '/guide/gnuplot/axes' },
+          { text: 'Text and fonts',          link: '/guide/gnuplot/text' },
+          { text: 'Images, palettes and 3D', link: '/guide/gnuplot/3d' },
+          { text: 'Scripting',               link: '/guide/gnuplot/scripting' },
+        ],
+      },
       { text: 'Data Files',         link: '/guide/data-files' },
       { text: 'Interactive Viewer', link: '/guide/viewer' },
       { text: 'Live Monitoring',    link: '/guide/monitoring' },
@@ -112,12 +140,12 @@ export default withMermaid({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install)?$' },
-      { text: 'Tutorial', link: '/manual/tutorial/01-first-plot', activeMatch: '^/manual/(index|tutorial/)' },
+      { text: 'Learning paths', link: '/manual/', activeMatch: '^/manual/(index|paths/)?$|^/manual/paths/' },
       { text: 'Cookbook', link: '/manual/cookbook', activeMatch: '^/manual/cookbook' },
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|library|cli|gnuplot-subset|data-files|viewer|monitoring|output-formats|architecture)',
+        activeMatch: '^/guide/(features|library|cli|gnuplot-subset|gnuplot/|data-files|viewer|monitoring|output-formats|architecture)',
       },
       { text: 'API', link: '/api/' },
       {

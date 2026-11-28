@@ -58,7 +58,7 @@ without editing the script, or to plot without a script at all.
 `-c SCRIPT ARG1 ...` runs the script with arguments, as `gnuplot -c`: inside it `ARG1` ... `ARG9` hold them as strings
 (empty beyond the last), the array `ARGV` too, `ARGC` their number and `ARG0` the script name; the rest of the command
 line is the arguments, at most 9. Without `-c`, `ARGC` is 0. A script calls another one with arguments by `call` (see
-[Datablocks and scripts](gnuplot-subset#datablocks-and-scripts)).
+[Datablocks and scripts](/guide/gnuplot/scripting#datablocks-and-scripts)).
 
 ```bash
 foresight -c panel.gp cd 3          # ARG1 = "cd", ARG2 = "3"
