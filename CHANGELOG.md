@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.20.0] — 2026-11-28
+### Added
+- **figure**: Save returns the figure's information
+
+- **script**: Markdown tables from set table and with table
+
+
+### Documentation
+- Learning paths and the reference by topic
+
+- Paths for monitoring, fields and 3D, and gnuplot users
+
+- Foresight for papers and reports
+
+
 ## [0.19.1] — 2026-11-27
 ### Added
 - **figure**: Set size and set origin inside a multiplot layout, as gnuplot 6.0
