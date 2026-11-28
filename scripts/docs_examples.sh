@@ -11,6 +11,9 @@
 #   docs/examples/anim/        animation scripts, run once per frame (see below)
 #   docs/examples/snippets/    generated: each source without the markers, and <source>-<region>.<ext>, dedented
 #   docs/examples/output/      generated: <ID>.txt, "$ COMMAND" then its output (standard output and error)
+#   docs/manual/paths/f-reports/report/
+#                              generated: the report pf_report.f90 writes (report/ of the run directory, washi pass), a
+#                              page of the site with its figures
 #   docs/public/examples/      generated: every plot the runs write (.svg, .html, .pdf, .tex), served as /examples/<file> and
 #                              embedded live by the pages, twice: <name>.<ext> in the washi theme and <name>-dark.<ext>
 #                              in the night one (FORESIGHT_THEME, the light and dark modes of the site; a source that
@@ -42,6 +45,8 @@ mkdir -p "$root/build"
 rm -rf -- "$build"
 mkdir -p "$build/bin" "$run_dir" "$dark_dir" "$ex/snippets" "$ex/output" "$public"
 rm -f -- "$ex"/snippets/* "$ex"/output/*.txt "$public"/*.svg "$public"/*.html "$public"/*.txt "$public"/*.pdf "$public"/*.tex
+report=$root/docs/manual/paths/f-reports/report
+rm -rf -- "$report"
 
 # snippets: the whole source and each region, without the markers, dedented
 markers='^ *(!run |!region |!endregion |#run |# region |# endregion )'
@@ -141,6 +146,8 @@ for f in "$dark_dir"/*.svg "$dark_dir"/*.html; do
   [ -e "$f" ] || continue
   b=$(basename "$f"); cp "$f" "$public/${b%.*}-dark.${b##*.}"
 done
+# the report of path F, a page of the site
+if [ -d "$run_dir/report" ]; then mkdir -p "$report" && cp -R "$run_dir/report/." "$report/"; fi
 if grep -l 'exit status' "$ex"/output/*.txt "$build"/output-dark/*.txt; then
   echo "docs_examples: a run failed (see above)" >&2; exit 1
 fi

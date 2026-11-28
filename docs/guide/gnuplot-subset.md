@@ -63,7 +63,7 @@ that did what it says.
 | **caption** `"text"` | foresight: the caption a document gives the figure (the [library's `save` info](library#what-a-document-needs)); not drawn; `unset caption` or `reset` clears it | no caption |
 | `fit` [*options*] | [fit](#fit) report and stopping options; bare, the defaults | — |
 | **pr**int [`"file"` [`append`] \| `"-"` \| `$NAME` [`append`]] | where [print](#print) writes: a file or a datablock (emptied unless `append`), `-` the standard output; bare, the standard error | the standard error |
-| **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table) | plots drawn again |
+| **tab**le [`"file"`\|`$NAME`] [`append`] [`separator` `whitespace`\|`tab`\|`comma`\|`"c"`] [`markdown`] | plots write their points as [text](#tables) to the file, the datablock or the standard output, drawing nothing; the separator of [`with table`](#with-table); `markdown` (foresight) [Markdown tables](#markdown-tables) | plots drawn again |
 | **errorb**ars (**bar**s) [`small`\|`large`\|`fullwidth`\|`SIZE`] [`front`\|`back`] [`lc C`] [`lw W`] | the cap length of the [error bars](#error-bar-caps) and boxplot whiskers (`small` none, `large`, the default, 1), their line | no caps |
 | **xl**abel / **yl**abel / **y2l**abel / **x2l**abel `"text"` [`offset X[,Y]`] [`font F`] [`tc COLOR`] [`rotate` ...\|`norotate`] [`noenhanced`] [`boxed`] | axis label (`y2` on the right, `x2` on the top), shifted by `offset` characters (x right, y up; a third, 3D, offset read and ignored; the x label's y offset narrows or widens the bottom margin, the x2 label's the top one, as gnuplot), in its `tc` color and [font](#fonts) (the x2 label's size grows the top margin, the others only their text, as gnuplot); `rotate` (`by A`, `parallel`) turns the labels of [3D views](#3d-views) only, 2D ones keep gnuplot's default (the y label vertical); `left`/`center`/`right` read and ignored; `noenhanced`: as it is, not as [enhanced text](#enhanced-text); `boxed` on the background; options without a text (`set xlabel offset 0,1.5 boxed`) keep the label, as gnuplot | no label |
 | **xr**ange / **yr**ange / **y2r**ange / **x2r**ange [`[min:max]`] [`noextend`\|`extend`] [`reverse`\|`noreverse`] [`nowriteback`] | axis range; `*` autoscales an end, an empty end keeps it as it is (fixed or autoscaled: `set xrange [2:5]; set xrange [:10]` is [2:10], as gnuplot 6.0) (`lb<*<ub` within limits, see [below](#grid-zero-axes-and-border)), `[]` or no range keeps both; `min > max` reverses; `reverse` reverses an axis with an autoscaled end (an explicit range is left as it is, as gnuplot); `noextend` keeps autoscaled ends at the data | autoscale |
@@ -659,6 +659,31 @@ and the separator one before it, gnuplot's layout (`a , 1 , 2`). `with table if 
 condition holds; `index`, `every` and the column header names apply; blank lines and comments are not written and no
 row is left out for a bad cell. A function with table writes nothing (gnuplot's warning), and without `set table` it
 is gnuplot's error, `'with table' requires a previous 'set table'`.
+
+### Markdown tables
+
+```gnuplot
+set table 'runs.md' markdown                 # every table of the plots below a Markdown pipe table
+set datafile columnheaders
+plot 'runs.dat' using (strcol(1)):"error":(sprintf('%.1f s', $4)) with table
+unset table
+```
+
+```markdown
+| case | error | (sprintf('%.1f s', $4)) |
+| --- | --: | --- |
+| coarse | 0.012 | 0.5 s |
+```
+
+A foresight extension for reports: `set table ... markdown` (until the next `set table`) or `with table markdown` (one
+item) writes the tables as Markdown pipe tables (GitHub's, which VitePress, pandoc and GitLab render). The header of a
+`with table` is the column names of the header row (`set datafile columnheaders`, `columnheader`, a named column) for
+the fields that read a column whole (`2`, `"error"`, `strcol(1)`, `$3`), the field as written for the others
+(`($3*1e3)`), the column number without `using`; numbers are right aligned, a `|` in a cell escaped, a blank line ends
+the table. A plot's table (`set table` with another style) is a table per series, its title a paragraph before it, the
+columns of gnuplot's text table without `type`, numbers in the axis formats (`set format y '%.3f'`), the breaks of a
+curve left out. `splot` tables stay text: `markdown` refuses them. [F2. Tables](../manual/paths/f-reports/02-tables)
+and [F3. The report](../manual/paths/f-reports/03-the-report) use them in a report.
 
 ## Time data
 

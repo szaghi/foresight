@@ -1,0 +1,5 @@
+$ pf_report && ls report
+drag.svg
+drag_residual.svg
+report.md
+residuals.svg

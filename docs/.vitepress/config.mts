@@ -37,6 +37,16 @@ const docs = [
     ],
   },
   {
+    text: 'Path F: reports',
+    items: [
+      { text: 'F1. A figure in a report', link: '/manual/paths/f-reports/01-a-figure-in-a-report' },
+      { text: 'F2. Tables', link: '/manual/paths/f-reports/02-tables' },
+      { text: 'F3. The report', link: '/manual/paths/f-reports/03-the-report' },
+      { text: 'F4. Print and web', link: '/manual/paths/f-reports/04-print-and-web' },
+      { text: 'F5. LaTeX reports', link: '/manual/paths/f-reports/05-latex-reports' },
+    ],
+  },
+  {
     text: 'Recipes',
     items: [
       { text: 'Cookbook', link: '/manual/cookbook' },

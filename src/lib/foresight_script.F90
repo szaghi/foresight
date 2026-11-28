@@ -99,7 +99,8 @@ module foresight_script
 !<   `call` and `foresight -c`);
 !< - `system("command")` (its standard output, run when the expression is compiled), `system "command"`, `` `command` ``
 !<   substitution outside single quotes; `reset [session|errors|bind]` (see `reset_command`); `set table ["file"|$NAME]
-!<   [append]`, `unset table` (plots write their points as text, see `write_table`); `pause SECONDS|-1|mouse
+!<   [append] [markdown]`, `unset table` (plots write their points as text, Markdown tables with `markdown`, see
+!<   `write_table`); `pause SECONDS|-1|mouse
 !<   ["message"]` (see `pause_command`); `reread` is an error, deprecated in gnuplot 6.0;
 !< - a function of `x` as a plot item, `plot sin(x)/x title "sinc"` (same options, styles lines, points or linespoints,
 !<   `set style function`, `lines` by default): sampled at `set samples` points (100) over the x range before its
@@ -300,6 +301,8 @@ type :: script_object
    character(len=:), allocatable   :: table_file               !< Where: a file, a datablock (`$NAME`), '-' the
                                                                !< standard output.
    character(len=1)                :: table_sep = achar(9)     !< `set table separator`, of `plot with table`.
+   logical                         :: table_markdown = .false. !< `set table ... markdown` (foresight): Markdown pipe
+                                                               !< tables.
    integer(I4P)                    :: block_depth = 0_I4P      !< Function blocks running.
    logical                         :: returned = .false.       !< `return EXPR` gave the running block a value.
    type(value_object)              :: return_value             !< That value.
@@ -459,6 +462,7 @@ contains
    self%table = .false.
    self%table_file = ''
    self%table_sep = achar(9)
+   self%table_markdown = .false.
    self%block_depth = 0_I4P
    self%returned = .false.
    if (allocated(self%locals)) deallocate(self%locals)
@@ -5017,6 +5021,7 @@ contains
    logical                                      :: auto_title !< The item's title is the automatic one (literal).
    logical                                      :: plain_item !< `noenhanced`: the item's title as it is.
    logical                                      :: has_table_if !< A `with table` condition given.
+   logical                                      :: table_md  !< `with table markdown` (foresight).
    integer(I4P)                                 :: nranges   !< Inline ranges read.
    real(R8P)                                    :: uv_inline(2, 2) !< Parametric splot's inline [u] [v] ranges.
    logical                                      :: uv_given(2, 2)  !< Their ends given.
@@ -5509,6 +5514,7 @@ contains
       cfill = .false.
       zerr = .false.
       has_table_if = .false.
+      table_md = .false.
       has_title = .false.
       auto_title = .false.
       plain_item = .false.
@@ -5715,6 +5721,13 @@ contains
                if (.not. self%table) then
                   call fail("plot: 'with table' requires a previous 'set table'", iostat, iomsg)
                   return
+               endif
+               ! `markdown` (foresight): a Markdown pipe table
+               if (i < size(tokens, kind=I4P)) then
+                  if (tokens(i + 1_I4P)%kind == TOKEN_WORD .and. tokens(i + 1_I4P)%text == 'markdown') then
+                     table_md = .true.
+                     i = i + 1_I4P
+                  endif
                endif
                ! if CONDITION, up to the end of the item: the rows written
                if (i < size(tokens, kind=I4P)) then
@@ -7964,18 +7977,28 @@ contains
       character(len=:), allocatable        :: old      !< Datablock before.
       logical                              :: found    !< Datablock found.
       integer(I4P)                         :: unit     !< File unit.
+      logical                              :: markdown !< A Markdown table.
+      logical                              :: header   !< The first row of each dataset is a header.
+      character(len=:), allocatable        :: heads(:) !< The `using` fields as written, a Markdown table's header.
 
       if (allocated(fields)) then
          used = fields
       else
          allocate(used(0))
       endif
+      markdown = table_md .or. self%table_markdown
+      call split_using(spec, heads)
+      ! the header row as gnuplot reads one; a Markdown table also takes it from `columnheader` and `set datafile
+      ! columnheaders` (its column names)
+      header = any(used%name_count() > 0_I4P)
+      if (markdown) header = header .or. title_column >= 0_I4P .or. self%autotitle == 'columnhead' .or. &
+                             self%column_headers .or. head_skipped
       if (has_table_if) then
-         call data%table_lines(used, set_index, every, any(used%name_count() > 0_I4P), self%table_sep, &
-                               is_datablock(self%table_file), lines, condition=table_if)
+         call data%table_lines(used, set_index, every, header, self%table_sep, is_datablock(self%table_file), lines, &
+                               condition=table_if, markdown=markdown, titles=heads)
       else
-         call data%table_lines(used, set_index, every, any(used%name_count() > 0_I4P), self%table_sep, &
-                               is_datablock(self%table_file), lines)
+         call data%table_lines(used, set_index, every, header, self%table_sep, is_datablock(self%table_file), lines, &
+                               markdown=markdown, titles=heads)
       endif
       if (is_datablock(self%table_file)) then
          call self%symbols%string_of(self%table_file, old, found)
@@ -10449,7 +10472,9 @@ contains
    !< Curve K of N, M points`, its title, the column names) whose rows are the values in the axis formats (`set
    !< format`, `% h` by default) and a flag, `i` in range, `o` outside a fixed range, `u` undefined; the columns: `x y
    !< type`, with `ylow yhigh` (y error bars), `xlow xhigh` (x error bars, boxes), both (xy error bars), `y1 y2`
-   !< (filled curves between two curves) or `x y label` (labels).
+   !< (filled curves between two curves) or `x y label` (labels). With `set table ... markdown` (foresight) each series of
+   !< a 2D plot is a Markdown pipe table instead: its title a paragraph before it, the same columns without `type`
+   !< (undefined points as `NaN`, the breaks of a curve left out), the numbers in the axis formats, right aligned.
    class(script_object),          intent(inout) :: self   !< Interpreter.
    integer(I4P),                  intent(out)   :: iostat !< 0 on success.
    character(len=:), allocatable, intent(out)   :: iomsg  !< Error message.
@@ -10472,6 +10497,8 @@ contains
    integer(I4P)                                 :: j      !< Scan counter.
    integer(I4P)                                 :: q      !< Scan.
    integer(I4P)                                 :: curve  !< Iso-curve number within its surface.
+   character(len=1)                             :: sp     !< Field separator of a row: a blank, a Markdown table's
+                                                          !< unit separator (its fields may hold blanks).
 
    iostat = 0_I4P
    iomsg = ''
@@ -10479,6 +10506,12 @@ contains
    associate(panel => self%figure%panels(self%figure%current))
       n = 0_I4P
       if (allocated(panel%series)) n = size(panel%series, kind=I4P)
+      sp = ' '
+      if (self%table_markdown) sp = achar(31)
+      if (panel%three_d .and. self%table_markdown) then
+         call fail('set table markdown: 2D plots and with table only, not splot', iostat, iomsg)
+         return
+      endif
       if (panel%three_d) then
          ! splot, as gnuplot 6.0 tabulates it: a surface per dataset of each item (`# Surface K of N surfaces`, the item
          ! title on its first), its grid scans (the data ones last first, gnuplot's order) as `# IsoCurve J, M points`,
@@ -10583,39 +10616,65 @@ contains
                names = 'x y type'
                if (series%style%with == WITH_FILLEDCURVES .and. allocated(series%ylow)) names = 'x y1 y2 type'
             endselect
-            if (k > 1_I4P) text = text//new_line('a')//new_line('a')
-            text = text//'# Curve '//int_str(int(k - 1_I4P, I8P))//' of '//int_str(int(n, I8P))//', '// &
-                   int_str(int(size(series%x), I8P))//' points'//new_line('a')//'# Curve title: "'// &
-                   series%title//'"'//new_line('a')//'# '//names//new_line('a')
+            if (self%table_markdown) then
+               ! a Markdown table: the title a paragraph, the header the names but `type`, numbers right aligned
+               if (len_trim(series%title) > 0) text = text//trim(series%title)//new_line('a')//new_line('a')
+               block
+                  character(len=:), allocatable :: rest !< Names left.
+                  character(len=:), allocatable :: rule !< Delimiter row.
+                  integer(I4P)                  :: b    !< Blank position.
+
+                  rest = names(1:len(names) - 5)
+                  row = ''
+                  rule = ''
+                  do while (len(rest) > 0)
+                     b = index(rest, ' ')
+                     if (b == 0_I4P) b = len(rest, kind=I4P) + 1_I4P
+                     row = row//'| '//rest(1:b - 1_I4P)//' '
+                     if (rest(1:b - 1_I4P) == 'label') then
+                        rule = rule//'| --- '
+                     else
+                        rule = rule//'| --: '
+                     endif
+                     rest = rest(min(b + 1_I4P, len(rest, kind=I4P) + 1_I4P):)
+                  enddo
+                  text = text//row//'|'//new_line('a')//rule//'|'//new_line('a')
+               endblock
+            else
+               if (k > 1_I4P) text = text//new_line('a')//new_line('a')
+               text = text//'# Curve '//int_str(int(k - 1_I4P, I8P))//' of '//int_str(int(n, I8P))//', '// &
+                      int_str(int(size(series%x), I8P))//' points'//new_line('a')//'# Curve title: "'// &
+                      series%title//'"'//new_line('a')//'# '//names//new_line('a')
+            endif
             do p = 1_I4P, size(series%x, kind=I4P)
                ! a break between the blocks of a curve (x and y undefined): a blank line, as gnuplot's
                if (names /= 'x y label type' .and. ieee_is_nan(series%x(p)) .and. ieee_is_nan(series%y(p))) then
-                  text = text//new_line('a')
+                  if (.not. self%table_markdown) text = text//new_line('a')
                   cycle
                endif
-               row = number(series%x(p), xfmt)//' '//number(series%y(p), yfmt)
+               row = number(series%x(p), xfmt)//sp//number(series%y(p), yfmt)
                ! a histogram: its own values, not the stacked tops (gnuplot)
                if (series%style%with == WITH_HISTOGRAMS .and. allocated(series%values)) then
                   if (p <= size(series%values, kind=I4P)) &
-                     row = number(series%x(p), xfmt)//' '//number(series%values(p), yfmt)
+                     row = number(series%x(p), xfmt)//sp//number(series%values(p), yfmt)
                endif
                select case (names)
                case ('x y label type')
-                  row = row//' "'//trim(series%texts(p))//'"'
+                  row = row//sp//quoted(trim(series%texts(p)))
                case ('x y ylow yhigh type')
-                  row = row//' '//number(series%ylow(p), yfmt)//' '//number(series%yhigh(p), yfmt)
+                  row = row//sp//number(series%ylow(p), yfmt)//sp//number(series%yhigh(p), yfmt)
                case ('x y xlow xhigh type')
                   if (allocated(series%xlow) .and. series%style%with /= WITH_BOXES) then
-                     row = row//' '//number(series%xlow(p), xfmt)//' '//number(series%xhigh(p), xfmt)
+                     row = row//sp//number(series%xlow(p), xfmt)//sp//number(series%xhigh(p), xfmt)
                   else
                      ! boxes: the abscissa twice, as gnuplot 6.0 tabulates them
-                     row = row//' '//number(series%x(p), xfmt)//' '//number(series%x(p), xfmt)
+                     row = row//sp//number(series%x(p), xfmt)//sp//number(series%x(p), xfmt)
                   endif
                case ('x y xlow xhigh ylow yhigh type')
-                  row = row//' '//number(series%xlow(p), xfmt)//' '//number(series%xhigh(p), xfmt)//' '// &
-                        number(series%ylow(p), yfmt)//' '//number(series%yhigh(p), yfmt)
+                  row = row//sp//number(series%xlow(p), xfmt)//sp//number(series%xhigh(p), xfmt)//sp// &
+                        number(series%ylow(p), yfmt)//sp//number(series%yhigh(p), yfmt)
                case ('x y1 y2 type')
-                  row = row//' '//number(series%ylow(p), yfmt)
+                  row = row//sp//number(series%ylow(p), yfmt)
                endselect
                if (names /= 'x y label type') then
                   flag = 'i'
@@ -10634,15 +10693,17 @@ contains
                         flag = 'o'
                      endif
                   endif
-                  row = row//'  '//flag
+                  if (.not. self%table_markdown) row = row//'  '//flag
                endif
+               if (self%table_markdown) row = markdown_row(row)
                text = text//row//new_line('a')
             enddo
+            if (self%table_markdown) text = text//new_line('a')
          endassociate
       enddo
    endassociate
-   ! a blank line before and after the plot, two between its curves
-   if (n > 0_I4P) text = new_line('a')//text//new_line('a')
+   ! a blank line before and after the plot, two between its curves (a Markdown table ends with one)
+   if (n > 0_I4P .and. .not. self%table_markdown) text = new_line('a')//text//new_line('a')
    if (is_datablock(self%table_file)) then
       call self%symbols%string_of(self%table_file, old, found)
       call self%symbols%set_string(self%table_file, old//text)
@@ -10661,6 +10722,50 @@ contains
       close(unit)
    endif
    contains
+      pure function markdown_row(fields) result(md)
+      !< A row's fields, separated by `sp`, as a Markdown table row: trimmed, `|` escaped.
+      character(len=*), intent(in)  :: fields !< Fields separated by `sp`.
+      character(len=:), allocatable :: md     !< Markdown row.
+      integer(I4P)                  :: from   !< First character of a field.
+      integer(I4P)                  :: c      !< Character counter.
+
+      md = ''
+      from = 1_I4P
+      do c = 1_I4P, len(fields, kind=I4P) + 1_I4P
+         if (c <= len(fields, kind=I4P)) then
+            if (fields(c:c) /= sp) cycle
+         endif
+         md = md//'| '//escaped(trim(adjustl(fields(from:c - 1_I4P))))//' '
+         from = c + 1_I4P
+      enddo
+      md = md//'|'
+      endfunction markdown_row
+
+      pure function escaped(t) result(e)
+      !< `t` with its `|` escaped.
+      character(len=*), intent(in)  :: t !< Text.
+      character(len=:), allocatable :: e !< Escaped text.
+      integer(I4P)                  :: c !< Character counter.
+
+      e = ''
+      do c = 1_I4P, len(t, kind=I4P)
+         if (t(c:c) == '|') e = e//achar(92)
+         e = e//t(c:c)
+      enddo
+      endfunction escaped
+
+      pure function quoted(t) result(q)
+      !< A label's text: quoted as gnuplot writes it, as it is in a Markdown table.
+      character(len=*), intent(in)  :: t !< Text.
+      character(len=:), allocatable :: q !< Field.
+
+      if (sp == ' ') then
+         q = '"'//t//'"'
+      else
+         q = t
+      endif
+      endfunction quoted
+
       pure function axis_format(format, time) result(f)
       !< The table format of an axis: its `set format`, `% h` if none or a time format.
       character(len=:), allocatable, intent(in) :: format !< Axis label format.
@@ -13606,9 +13711,10 @@ contains
       endsubroutine errorbars_option
 
       subroutine table_option
-      !< `set table ["file" | $NAME] [append] [separator whitespace|tab|comma|"c"]`: plots write their points to the
-      !< file (emptied unless `append`), to the datablock (likewise), or bare to the standard output; nothing is drawn
-      !< until `unset table`. The separator, of `plot with table` only, stays until changed (gnuplot: tab).
+      !< `set table ["file" | $NAME] [append] [separator whitespace|tab|comma|"c"] [markdown]`: plots write their points
+      !< to the file (emptied unless `append`), to the datablock (likewise), or bare to the standard output; nothing is
+      !< drawn until `unset table`. The separator, of `plot with table` only, stays until changed (gnuplot: tab).
+      !< `markdown` (foresight) writes the tables as Markdown pipe tables, until the next `set table`.
       character(len=:), allocatable :: name   !< File or datablock name.
       integer(I4P)                  :: unit   !< File unit.
       integer(I4P)                  :: k      !< Last token of the name.
@@ -13617,10 +13723,17 @@ contains
       integer(I4P)                  :: n      !< Tokens before the separator.
 
       n = size(tokens, kind=I4P)
-      do k = 2_I4P, size(tokens, kind=I4P)
+      self%table_markdown = .false.
+      if (n > 1_I4P) then
+         if (tokens(n)%kind == TOKEN_WORD .and. tokens(n)%text == 'markdown') then
+            self%table_markdown = .true.
+            n = n - 1_I4P
+         endif
+      endif
+      do k = 2_I4P, n
          if (tokens(k)%kind /= TOKEN_WORD .or. .not. keyword(tokens(k)%text, 'separator', 3_I4P)) cycle
-         if (k /= size(tokens, kind=I4P) - 1_I4P) then
-            call fail('set table: separator whitespace|tab|comma|"c" expected, last', iostat, iomsg)
+         if (k /= n - 1_I4P) then
+            call fail('set table: separator whitespace|tab|comma|"c" expected, last (before markdown)', iostat, iomsg)
             return
          endif
          if (tokens(k + 1_I4P)%kind == TOKEN_STRING .and. len(tokens(k + 1_I4P)%text) > 0) then
@@ -13650,7 +13763,7 @@ contains
       append = .false.
       if (k == n - 1_I4P) append = keyword(tokens(k + 1_I4P)%text, 'append', 3_I4P)
       if ((k < n .and. .not. append) .or. k < n - 1_I4P) then
-         call fail('set table: "file" or $NAME [append] [separator S] expected', iostat, iomsg)
+         call fail('set table: "file" or $NAME [append] [separator S] [markdown] expected', iostat, iomsg)
          return
       endif
       if (len(name) == 0) name = '-'
@@ -20299,6 +20412,64 @@ contains
    ok = size(tokens, kind=I4P) < from
    if (.not. ok) call fail('"'//tokens(1)%text//'": unsupported sub-option "'//tokens(from)%text//'"', iostat, iomsg)
    endfunction no_more
+
+   pure subroutine split_using(spec, fields)
+   !< The fields of a `using` specification as written, split at the colons outside parentheses, brackets and quotes
+   !< (`1:($2*2):"name"` gives `1`, `($2*2)`, `"name"`); none for an empty one.
+   character(len=*),              intent(in)  :: spec      !< `using` specification.
+   character(len=:), allocatable, intent(out) :: fields(:) !< Fields.
+   integer(I4P)                                :: depth     !< Parenthesis depth.
+   integer(I4P)                                :: n         !< Fields.
+   integer(I4P)                                :: k         !< Character counter.
+   integer(I4P)                                :: pass      !< 1 counts, 2 fills.
+   integer(I4P)                                :: from      !< First character of the field.
+   integer(I4P)                                :: longest   !< Longest field.
+   character(len=1)                            :: quote     !< Open quote, blank if none.
+
+   longest = 0_I4P
+   n = 0_I4P
+   if (len_trim(spec) == 0) then
+      allocate(character(len=0) :: fields(0))
+      return
+   endif
+   do pass = 1_I4P, 2_I4P
+      if (pass == 2_I4P) allocate(character(len=longest) :: fields(n))
+      n = 0_I4P
+      depth = 0_I4P
+      quote = ' '
+      from = 1_I4P
+      do k = 1_I4P, len_trim(spec, kind=I4P) + 1_I4P
+         if (k <= len_trim(spec, kind=I4P)) then
+            if (quote /= ' ') then
+               if (spec(k:k) == quote) quote = ' '
+               cycle
+            endif
+            select case (spec(k:k))
+            case ('"', "'")
+               quote = spec(k:k)
+               cycle
+            case ('(', '[')
+               depth = depth + 1_I4P
+               cycle
+            case (')', ']')
+               depth = depth - 1_I4P
+               cycle
+            case (':')
+               if (depth > 0_I4P) cycle
+            case default
+               cycle
+            endselect
+         endif
+         n = n + 1_I4P
+         if (pass == 1_I4P) then
+            longest = max(longest, k - from)
+         else
+            fields(n) = trim(adjustl(spec(from:k - 1_I4P)))
+         endif
+         from = k + 1_I4P
+      enddo
+   enddo
+   endsubroutine split_using
 
    subroutine parse_using(spec, fields, iostat, iomsg, degrees, symbols, sampled)
    !< `using` specification: 1 to 6 colon separated fields, each a column number (0 is the point number) or a

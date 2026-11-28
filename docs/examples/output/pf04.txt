@@ -1,0 +1,4 @@
+$ pf04_print && cat pf04_print.md
+![Plot. x axis: x. y axis: J0(x). Series: J0, J1.](pf04.pdf){width=8.50cm}
+
+*Bessel functions of the first kind.*

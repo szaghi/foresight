@@ -1,0 +1,18 @@
+$ foresight pf02_tables.gp && cat pf02_runs.md pf02_fit.md
+foresight: pf02.svg
+| case | cells | error | time |
+| --- | --: | --: | --: |
+| coarse | 1000 | 0.032 | 0.4 |
+| medium | 8000 | 0.0081 | 2.9 |
+| fine | 64000 | 0.002 | 23.5 |
+| finest | 512000 | 0.00051 | 190.2 |
+
+model error
+
+| x | y |
+| --: | --: |
+| 1000 | 3.10e-02 |
+| 334000 | 6.44e-04 |
+| 667000 | 4.06e-04 |
+| 1e+06 | 3.10e-04 |
+

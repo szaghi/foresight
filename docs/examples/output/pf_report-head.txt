@@ -1,0 +1,17 @@
+$ head -n 16 report/report.md
+# Run report
+
+The pretend flow solver of the tutorial: 120 iterations, a restart at iteration 60. This page, its figures and its tables were written by `pf_report.f90`.
+
+![Plot: Convergence. x axis: iteration. y axis: residual. Series: continuity, momentum, energy.](residuals.svg)
+
+*Figure 1. The three residuals fall by five decades or more; the restart at iteration 60 does not disturb them.*
+
+![Plot: Drag coefficient. x axis: iteration. y axis: cd. Series: cd.](drag.svg)
+
+*Figure 2. The drag coefficient settles at 0.30; its error bars shrink as one over the square root of the iteration.*
+
+![Plot. x axis: continuity residual. y axis: cd. Series: after the restart.](drag_residual.svg)
+
+*Figure 3. The drag coefficient against the continuity residual after the restart: it closes in on 0.30 as the residual falls.*
+

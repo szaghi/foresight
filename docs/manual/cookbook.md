@@ -2179,6 +2179,28 @@ A text's `$...$` runs are TeX math, set as LaTeX sets them in Latin Modern Math:
 the paper's fonts, its math included. The texts are LaTeX source (`'$\zeta = 0.1$'`), the tick numbers math; see
 [C6. Labels set by LaTeX](/manual/paths/c-paper/06-labels-set-by-latex).
 
+## Reports
+
+### A Markdown table
+
+<<< @/examples/snippets/cb_markdown_table-table.gp{gnuplot}
+
+<<< @/examples/output/cb_markdown_table.txt{console}
+
+`set table ... markdown` (or `with table markdown` for one item) writes Markdown pipe tables, the header from the
+column names, numbers right aligned: a report's table from the data of its figure. See
+[F2. Tables](/manual/paths/f-reports/02-tables).
+
+### A figure's alternative text and caption
+
+<<< @/examples/snippets/pf01_figure.f90{fortran}
+
+<<< @/examples/output/pf01.txt{console}
+
+`save(file, info=meta)` returns what a report writes around the figure: its file, format, size in px and cm, an
+alternative text from its titles and labels, the caption `set_caption` gave it. See
+[F1. A figure in a report](/manual/paths/f-reports/01-a-figure-in-a-report) and [F3. The report](/manual/paths/f-reports/03-the-report).
+
 ## From Fortran
 
 ### From Fortran: gaps in the data

@@ -1,0 +1,9 @@
+$ foresight cb_markdown_table.gp && cat cb_markdown_table.md
+foresight: cb_markdown_table.html
+| case | cells | error |
+| --- | --: | --: |
+| coarse | 1000 | 0.032 |
+| medium | 8000 | 0.0081 |
+| fine | 64000 | 0.002 |
+| finest | 512000 | 0.00051 |
+

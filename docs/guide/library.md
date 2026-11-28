@@ -203,6 +203,7 @@ print '(A)', '*'//meta%caption//'*'
 | `caption` | `set_caption`'s text (`set caption "..."` in scripts), empty if unset |
 
 The caption is not drawn: it belongs to the document (a LaTeX `\caption`, the text under a Markdown image).
+[Path F](../manual/paths/f-reports/01-a-figure-in-a-report) writes reports with it.
 
 ## Scripts from Fortran
 

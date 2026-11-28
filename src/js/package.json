@@ -1,11 +1,12 @@
 {
   "name": "foresight-viewer-tests",
   "private": true,
-  "description": "Tests of the foresight viewer: tick rules (node only) and DOM behaviour (linkedom)",
+  "description": "Tests of the foresight viewer: tick rules (node only) and DOM behaviour (linkedom); Markdown tables parsed back (markdown-it)",
   "scripts": {
-    "test": "node viewer_test.js && node viewer_dom_test.js"
+    "test": "node viewer_test.js && node viewer_dom_test.js && node markdown_tables_test.js"
   },
   "devDependencies": {
-    "linkedom": "0.18.5"
+    "linkedom": "0.18.5",
+    "markdown-it": "14.1.0"
   }
 }

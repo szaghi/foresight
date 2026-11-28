@@ -1,0 +1,10 @@
+$ pf01_figure
+file:    pf01.svg
+format:  svg
+size:    600.0 x 320.0 px, 15.88 x 8.47 cm
+alt:     Plot: Decay. x axis: time [s]. y axis: amplitude. Series: measured, envelope.
+caption: A damped oscillation and its envelope, exp(-t/3).
+
+![Plot: Decay. x axis: time [s]. y axis: amplitude. Series: measured, envelope.](pf01.svg)
+
+*Figure 1. A damped oscillation and its envelope, exp(-t/3).*

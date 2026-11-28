@@ -674,12 +674,15 @@ contains
       endfunction in_loop
    endsubroutine table
 
-   subroutine table_lines(self, fields, index, every, header, separator, block, text, condition)
+   subroutine table_lines(self, fields, index, every, header, separator, block, text, condition, markdown, titles)
    !< gnuplot's `plot ... with table`: a line per row of dataset `index` (all if negative) selected by `every`, headers
    !< skipped (`header`), with `condition` true if given (`if COND`), the `using` `fields` each a string as it is, a
    !< number as `%g`, `nan` if undefined; no `fields`, the leading numeric cells of the row. As gnuplot, each field is
    !< written after a blank and joined by `separator`, for a datablock (`block`) a string field without the blank and the
    !< separator after one. Blank lines and comments are not written, no row is left out for a bad cell.
+   !< With `markdown` (foresight's `with table markdown`) the rows are a Markdown pipe table: its header the column
+   !< names of the header row (`header`) for the plain column fields, else the field as written (`titles`), else the
+   !< column number; numbers right aligned (the first row's), `|` escaped, a blank line after the table.
    class(datafile_object),  intent(in)           :: self      !< Data.
    type(expression_object), intent(in)           :: fields(:) !< `using` fields, none for the leading numeric cells.
    integer(I4P),            intent(in)           :: index     !< Dataset, 0-based; negative for all.
@@ -689,6 +692,14 @@ contains
    logical,                 intent(in)           :: block     !< Written to a datablock.
    character(len=:), allocatable, intent(out)    :: text      !< Lines, each ended by a new line.
    type(expression_object), intent(in), optional :: condition !< `if` condition.
+   logical,                 intent(in), optional :: markdown  !< A Markdown pipe table.
+   character(len=*),        intent(in), optional :: titles(:) !< The fields as written, a Markdown header.
+   logical                       :: md                        !< A Markdown table.
+   integer(I4P)                  :: rows                      !< Rows written.
+   integer(I4P)                  :: col                       !< A field's data column.
+   character(len=:), allocatable :: head                      !< Markdown header row.
+   character(len=:), allocatable :: rule                      !< Markdown delimiter row.
+   character(len=:), allocatable :: title                     !< A column's title.
    type(expression_object)       :: resolved(size(fields))    !< Fields on the header of the current dataset.
    type(expression_object)       :: test                      !< Condition on that header.
    type(expression_object)       :: plain                     !< A plain column, the default fields.
@@ -708,6 +719,9 @@ contains
    real(R8P)                     :: v                         !< Condition value.
 
    text = ''
+   md = .false.
+   if (present(markdown)) md = markdown
+   rows = 0_I4P
    resolved = fields
    if (present(condition)) test = condition
    allocate(none(0))
@@ -763,6 +777,8 @@ contains
             enddo
          endif
          line = ''
+         head = ''
+         rule = ''
          do f = 1_I4P, n
             if (size(fields) == 0) then
                call plain%set_column(f)
@@ -780,6 +796,36 @@ contains
             else
                call resolved(f)%table_cell(row, picked, cell, is_string, heads=heads, place=place)
             endif
+            if (md) then
+               line = line//'| '//pipe_escaped(trim(adjustl(cell)))//' '
+               if (rows == 0_I4P) then
+                  ! the header: the column's name, else the field as written, else the column number
+                  if (size(fields) == 0) then
+                     col = f
+                  else
+                     col = resolved(f)%plain_column()
+                     ! a column read as text or by name: `strcol(N)`, `column("name")`, `$N`
+                     if (col < 1_I4P .and. present(titles) .and. allocated(names)) then
+                        if (f <= size(titles, kind=I4P)) col = column_of(titles(f), names)
+                     endif
+                  endif
+                  title = ''
+                  if (allocated(names) .and. col >= 1_I4P) then
+                     if (col <= size(names, kind=I4P)) title = trim(names(col))
+                  endif
+                  if (len(title) == 0 .and. present(titles) .and. size(fields) > 0) then
+                     if (f <= size(titles, kind=I4P)) title = trim(titles(f))
+                  endif
+                  if (len(title) == 0) title = int_text(f)
+                  head = head//'| '//pipe_escaped(title)//' '
+                  if (is_string) then
+                     rule = rule//'| --- '
+                  else
+                     rule = rule//'| --: '
+                  endif
+               endif
+               cycle
+            endif
             if (f > 1_I4P) then
                if (block) line = line//' '
                line = line//separator
@@ -791,9 +837,89 @@ contains
             endif
          enddo
       endassociate
+      if (md) then
+         if (rows == 0_I4P) text = text//head//'|'//new_line('a')//rule//'|'//new_line('a')
+         line = line//'|'
+      endif
+      rows = rows + 1_I4P
       text = text//line//new_line('a')
    enddo
+   if (md .and. rows > 0_I4P) text = text//new_line('a')
    contains
+      pure function pipe_escaped(t) result(e)
+      !< `t` with its `|` escaped, a Markdown table cell.
+      character(len=*), intent(in)  :: t !< Text.
+      character(len=:), allocatable :: e !< Escaped text.
+      integer(I4P)                  :: c !< Character counter.
+
+      e = ''
+      do c = 1_I4P, len(t, kind=I4P)
+         if (t(c:c) == '|') then
+            e = e//achar(92)//'|'
+         else
+            e = e//t(c:c)
+         endif
+      enddo
+      endfunction pipe_escaped
+
+      pure function column_of(field, heads) result(c)
+      !< The data column a `using` field reads whole (`$N`, `strcol(N)`, `stringcolumn(N)`, `column(N)`, with N a number
+      !< or a quoted header name), 0 otherwise.
+      character(len=*), intent(in) :: field    !< Field as written.
+      character(len=*), intent(in) :: heads(:) !< Header names.
+      integer(I4P)                 :: c        !< Column, 0 if none.
+      character(len=:), allocatable :: t       !< The field without blanks and outer parentheses.
+      character(len=:), allocatable :: arg     !< The function's argument.
+      integer(I4P)                 :: k        !< Counter.
+      integer(I4P)                 :: ios      !< Read status.
+
+      c = 0_I4P
+      t = ''
+      do k = 1_I4P, len(field, kind=I4P)
+         if (field(k:k) /= ' ') t = t//field(k:k)
+      enddo
+      do while (len(t) > 2)
+         if (t(1:1) /= '(' .or. t(len(t):len(t)) /= ')') exit
+         t = t(2:len(t) - 1)
+      enddo
+      arg = ''
+      if (len(t) > 1) then
+         if (t(1:1) == '$') arg = t(2:)
+      endif
+      if (len(arg) == 0) then
+         ! (`index` is table_lines' dataset here)
+         if (t(len(t):len(t)) == ')') then
+            if (t(1:min(len(t), 7)) == 'strcol(') arg = t(8:len(t) - 1)
+            if (t(1:min(len(t), 13)) == 'stringcolumn(') arg = t(14:len(t) - 1)
+            if (t(1:min(len(t), 7)) == 'column(') arg = t(8:len(t) - 1)
+         endif
+      endif
+      if (len(arg) == 0) return
+      if (len(arg) > 2 .and. (arg(1:1) == '"' .or. arg(1:1) == "'")) then
+         if (arg(len(arg):len(arg)) /= arg(1:1)) return
+         do k = 1_I4P, size(heads, kind=I4P)
+            if (trim(heads(k)) == arg(2:len(arg) - 1)) then
+               c = k
+               return
+            endif
+         enddo
+         return
+      endif
+      if (verify(arg, '0123456789') /= 0) return
+      read(arg, *, iostat=ios) c
+      if (ios /= 0) c = 0_I4P
+      endfunction column_of
+
+      pure function int_text(i) result(t)
+      !< `i` as text.
+      integer(I4P), intent(in)      :: i   !< Integer.
+      character(len=:), allocatable :: t   !< Text.
+      character(len=12)             :: buf !< Buffer.
+
+      write(buf, '(I0)') i
+      t = trim(buf)
+      endfunction int_text
+
       pure function in_loop(k, first, increment, last) result(yes)
       !< Whether `k` is visited by the loop `first, last, increment` (no end if `last` is negative).
       integer(I4P), intent(in) :: k         !< Number.

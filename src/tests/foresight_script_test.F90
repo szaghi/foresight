@@ -42,7 +42,7 @@ integer(I8P)                  :: start_count                               !< Cl
 integer(I8P)                  :: end_count                                 !< Clock at its end.
 integer(I8P)                  :: count_rate                                !< Clock ticks per second.
 integer(I4P)                  :: i                                         !< Counter.
-logical                       :: test_passed(302)                           !< Per-check outcome.
+logical                       :: test_passed(303)                           !< Per-check outcome.
 real(R8P)                     :: xmin                                      !< Data extent start.
 real(R8P)                     :: xmax                                      !< Data extent end.
 real(R8P)                     :: ymin(2)                                   !< Data extent bottoms.
@@ -8312,6 +8312,7 @@ endblock
 
 ! check 302 in a procedure of its own, as the golden test's later checks (the main program is large)
 call check_math_labels
+call check_markdown_tables
 
 if (all(test_passed)) then
    open(newunit=unit, file=output)
@@ -8699,6 +8700,52 @@ contains
       at = at + e
    enddo
    endfunction quads
+
+   subroutine check_markdown_tables
+   !< Check 303: Markdown pipe tables (`set table ... markdown`, `with table markdown`), byte for byte the goldens
+   !< `table_markdown_1..4.md` (src/js/markdown_tables_test.js parses them back with markdown-it): a plot's series with
+   !< the y format, the `using` fields as headers, the header names (`set datafile columnheaders`) with a `|` escaped,
+   !< labels with the x format.
+   character(len=1), parameter   :: nl = new_line('a') !< New line.
+   character(len=*), parameter   :: dat = 'foresight_script_test_md.dat' !< Data file.
+   character(len=:), allocatable :: iomsg  !< Error message.
+   integer(I4P)                  :: iostat !< Error status.
+   integer(I4P)                  :: unit   !< File unit.
+   integer(I4P)                  :: k      !< Table counter.
+   character(len=1)              :: digit  !< Table number.
+
+   open(newunit=unit, file=dat, action='write', status='replace')
+   write(unit, '(A)') 'case mesh error time', 'coarse 32 1.2e-2 0.5', 'medium 64 3.1e-3 2.1', 'fine 128 7.9e-4 9.8'
+   close(unit)
+   call interpreter%init(scratch)
+   call interpreter%run_text("set table 'foresight_script_test_md1.md' markdown"//nl//"set samples 3"//nl// &
+                             "set format y '%.3f'"//nl// &
+                             "plot [0:1] x**2 title 'x squared' with lines, 1-x notitle with lines"//nl// &
+                             "unset table"//nl//"set format y"//nl// &
+                             "set table 'foresight_script_test_md2.md'"//nl// &
+                             "plot '"//dat//"' using 2:($3*1e3) every ::1 with table markdown"//nl// &
+                             "unset table"//nl//"set datafile columnheaders"//nl// &
+                             "set table 'foresight_script_test_md3.md' markdown"//nl// &
+                             "plot '"//dat//"' using (strcol(1)):""error"":(sprintf('%d|%d', $2, 2*$2)) with table"// &
+                             nl//"unset table"//nl// &
+                             "set table 'foresight_script_test_md4.md' markdown"//nl//"set format x '%.0f K'"//nl// &
+                             "plot '"//dat//"' using 2:3:1 title 'Runs' with labels"//nl//"unset table", iostat, iomsg)
+   if (iostat /= 0_I4P) write(error_unit, '(A)') iomsg
+   test_passed(303) = iostat == 0_I4P
+   do k = 1_I4P, 4_I4P
+      write(digit, '(I1)') k
+      if (test_passed(303)) test_passed(303) = read_text('foresight_script_test_md'//digit//'.md') == &
+                                               read_text('src/tests/goldens/table_markdown_'//digit//'.md')
+      if (.not. test_passed(303)) then
+         write(error_unit, '(A)') 'check 303: table '//digit//' differs from its golden'
+         exit
+      endif
+   enddo
+   ! splot tables stay gnuplot's text
+   call interpreter%run_text("set table 'foresight_script_test_md5.md' markdown"//nl//"splot x*y", iostat, iomsg)
+   test_passed(303) = test_passed(303) .and. iostat /= 0_I4P
+   call interpreter%run_text("unset table", iostat, iomsg)
+   endsubroutine check_markdown_tables
 
    function read_text(file) result(text)
    !< Whole content of `file`.
