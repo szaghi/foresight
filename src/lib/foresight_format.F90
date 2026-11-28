@@ -47,6 +47,7 @@ public :: xml_escape
 integer(I8P), parameter :: LIMB = 1000000000_I8P !< Base of the exact decimal digits.
 real(R8P), parameter :: PI = 3.141592653589793_R8P !< C's M_PI (gnuplot's `%P`).
 real(R8P), parameter :: FIXED_CLAMP = 1.0e11_R8P !< Magnitude clamp keeping `v * 10**ndec` inside I8P for `ndec <= 7`.
+real(R8P), parameter :: FIXED_TIE   = 1.0e-6_R8P !< A scaled value this close to a half rounds away from zero (`fixed`).
 
 contains
    subroutine real_from_decimal(text, value, ok)
@@ -131,12 +132,16 @@ contains
    !< Value rounded to `ndec <= 7` decimals, trailing zeros stripped; `-0` prints as `0`.
    !<
    !< Magnitudes are clamped to 1e11: callers format pixel and unit-square coordinates only, where larger values lie far
-   !< outside any clip region. `v` must not be NaN.
+   !< outside any clip region. `v` must not be NaN. A value on a half (109.865 to 2 decimals) is computed a last bit
+   !< above it by one compiler and below by another (fused multiply-adds): within FIXED_TIE of the half (in units of the
+   !< last decimal) it rounds away from zero on every compiler, so that the files are the same.
    real(R8P),    intent(in)      :: v    !< Value.
    integer(I4P), intent(in)      :: ndec !< Number of decimals.
    character(len=:), allocatable :: str  !< Decimal string.
+   real(R8P)                     :: x    !< Value in units of the last decimal.
 
-   str = decimal_str(nint(max(-FIXED_CLAMP, min(FIXED_CLAMP, v)) * 10.0_R8P**ndec, I8P), ndec)
+   x = max(-FIXED_CLAMP, min(FIXED_CLAMP, v)) * 10.0_R8P**ndec
+   str = decimal_str(nint(x + sign(FIXED_TIE, x), I8P), ndec)
    endfunction fixed
 
    pure function real_str(v) result(str)
