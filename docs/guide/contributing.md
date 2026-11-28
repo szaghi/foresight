@@ -107,6 +107,25 @@ bash scripts/fidelity/corpus.sh bin/foresight mine --check   # which demos fores
 - `baseline/` holds the scores and the corpus tables of the last accepted state. A change that improves them commits
   the new files with the change.
 
+### Text placement
+
+A page score sees a text that moved by a few pixels only faintly. `placement.py` measures where each 2D text stands:
+
+```bash
+python3 scripts/fidelity/placement.py                   # every probe, svg and cairolatex
+python3 scripts/fidelity/placement.py --probe p05_key_rows --term svg
+```
+
+- Each probe of `scripts/fidelity/placement/` is a gnuplot script run by both programs through `svg size 600,400`
+  and `cairolatex pdf input size 5in,3in`, with the border at fixed fractions of the canvas (`set lmargin at
+  screen ...`): the plot area is the same, so what differs is where the texts go.
+- The texts are matched by content, and each pair's offset is printed, foresight's position less gnuplot's: in px for
+  svg (the baseline anchor), in bp for cairolatex (the `\put` point), positive downward.
+- gnuplot's cairo terminals measure their font through fontconfig. The probe aliases `Sans` to Liberation Sans, the
+  font foresight lays texts out with, unless the probe says `#! fonts: system`. `#! font: N` sets the terminal font
+  size, `#! margins: L R B T` the border.
+- A text found in one output only is an error (exit 1). `baseline/placement.txt` holds the last accepted table.
+
 ## Commit style
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) so that `CHANGELOG.md` is generated automatically from the git log:
