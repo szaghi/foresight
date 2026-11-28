@@ -1,0 +1,3 @@
+$ qs_library
+wrote qs_library.pdf, 20.1 x 10.1 cm
+its alternative text: Figure: A damped oscillator. Panel 1, plot: displacement. x axis: time [s]. y axis: u [mm]. Series: u(t), envelope, samples. Panel 2, plot: envelope, on a log axis. x axis: time [s]. y axis: |u| [mm]. Series: 4 e-0.3 t.

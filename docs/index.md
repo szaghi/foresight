@@ -14,6 +14,9 @@ hero:
       text: Learning paths
       link: /manual/
     - theme: alt
+      text: Gallery
+      link: /guide/gallery
+    - theme: alt
       text: Cookbook
       link: /manual/cookbook
     - theme: alt
@@ -185,261 +188,62 @@ alternative texts, captions and Markdown tables (<a href="./manual/paths/f-repor
 
 ## Gallery
 
-<p class="fs-lead">Every image here is an actual foresight output, regenerated from the
-<a href="./manual/cookbook">cookbook</a> recipes and checked by the CI.</p>
+<p class="fs-lead">A few of the plots foresight draws, two per kind; the <a href="./guide/gallery">gallery</a> has all of them, by category, each with its recipe in the <a href="./manual/cookbook">cookbook</a>.</p>
 
 ### Data and columns
 
 <div class="fs-gallery">
-  <Plot name="cb_columns" svg :width="560" :height="320" caption="two columns of a file" />
-  <Plot name="cb_single_column" svg :width="560" :height="320" caption="a single column" />
-  <Plot name="cb_every" svg :width="560" :height="320" caption="one point every N" />
-  <Plot name="cb_index" svg :width="560" :height="320" caption="one dataset of a file" />
-  <Plot name="cb_expression" svg :width="560" :height="320" caption="scaled and shifted columns" />
-  <Plot name="cb_filter" svg :width="560" :height="320" caption="only some points" />
-  <Plot name="cb_csv_header" svg :width="560" :height="320" caption="CSV with a header row" />
-  <Plot name="cb_missing" svg :width="560" :height="320" caption="missing data" />
-  <Plot name="cb_binary_log" svg :width="560" :height="400" caption="a binary log (binary format)" />
   <Plot name="cb_strcol" svg :width="560" :height="320" caption="names and labels from text columns (strcol)" />
-  <Plot name="cb_datablock" svg :width="560" :height="320" caption="data inside the script (datablock)" />
   <Plot name="cb_call" svg :width="760" :height="300" caption="a script called with arguments" />
-  <Plot name="cb_arrays" svg :width="560" :height="320" caption="arrays" />
-  <Plot name="cb_slices" svg :width="560" :height="320" caption="array slices" />
-  <Plot name="cb_runtime" svg :width="760" :height="300" caption="shell commands and reset" />
-  <Plot name="cb_live_loop" svg :width="560" :height="320" caption="a plot that follows a run (pause)" />
-  <Plot name="cb_table" svg :width="560" :height="320" caption="a table of a plot (set table)" />
-  <Plot name="cb_with_table" svg :width="560" :height="320" caption="rows as text (with table)" />
-  <Plot name="cb_print_datablock" svg :width="560" :height="320" caption="values printed into a datablock" />
-  <Plot name="cb_random" svg :width="560" :height="320" caption="random numbers" />
 </div>
 
 ### Axes, ticks and key
 
 <div class="fs-gallery">
-  <Plot name="cb_logscale" svg :width="560" :height="320" caption="a log axis with exponent labels" />
-  <Plot name="cb_reversed" svg :width="560" :height="320" caption="a reversed axis" />
-  <Plot name="cb_ticks" svg :width="560" :height="320" caption="tick steps and label formats" />
-  <Plot name="cb_format_powers" svg :width="560" :height="320" caption="powers of ten and unit prefixes" />
-  <Plot name="cb_tics_axis" svg :width="640" :height="300" caption="ticks on the axes, a range frame" />
-  <Plot name="cb_offsets" svg :width="560" :height="320" caption="room around the data, the date of the plot" />
-  <Plot name="cb_tics_list" svg :width="560" :height="320" caption="named and added ticks" />
-  <Plot name="cb_ytic" svg :width="560" :height="320" caption="names on the y axis (ytic)" />
-  <Plot name="cb_mtics" svg :width="560" :height="320" caption="minor ticks" />
-  <Plot name="cb_tics_rotate" svg :width="560" :height="320" caption="rotated labels, outward ticks" />
-  <Plot name="cb_ytics_rotate" svg :width="560" :height="320" caption="rotated y labels" />
-  <Plot name="cb_time" svg :width="640" :height="480" caption="a time axis (set xdata time)" />
-  <Plot name="cb_time_minor" svg :width="640" :height="260" caption="minor ticks in time units" />
-  <Plot name="cb_geographic" svg :width="560" :height="400" caption="geographic tick labels" />
-  <Plot name="cb_weekdates" svg :width="640" :height="300" caption="ISO 8601 week dates" />
-  <Plot name="cb_y2" svg :width="560" :height="320" caption="two y axes" />
-  <Plot name="cb_x2" svg :width="560" :height="320" caption="two x axes" />
-  <Plot name="cb_x2_rotate" svg :width="560" :height="340" caption="rotated labels on top" />
-  <Plot name="cb_key" svg :width="560" :height="320" caption="the key below the plot" />
-  <Plot name="cb_key_at" svg :width="560" :height="320" caption="the key at a position (set key at)" />
-  <Plot name="cb_no_key" svg :width="560" :height="320" caption="no key" />
-  <Plot name="cb_key_layout" svg :width="560" :height="320" caption="a key in its own layout" />
-  <Plot name="cb_key_columns" svg :width="560" :height="320" caption="a key in columns" />
-  <Plot name="cb_key_options" svg :width="560" :height="320" caption="key columns, label offsets, a title on the right" />
-  <Plot name="cb_enhanced" svg :width="560" :height="340" caption="enhanced text: sub and superscripts, Greek letters" />
-  <Plot name="cb_grid_zero" svg :width="560" :height="320" caption="grid lines, zero axes and border" />
   <Plot name="cb_multiplot" svg :width="560" :height="420" caption="a grid of panels" />
-  <Plot name="cb_margins" svg :width="560" :height="360" caption="panels lined up (margins)" />
-  <Plot name="cb_multiplot_order" svg :width="560" :height="360" caption="panels column by column (columnsfirst upwards)" />
-  <Plot name="cb_multiplot_margins" svg :width="560" :height="400" caption="panels with margins and spacing" />
-  <Plot name="cb_inset_clear" svg :width="560" :height="400" caption="an inset on a cleared box (clear)" />
+  <Plot name="cb_time" svg :width="640" :height="480" caption="a time axis (set xdata time)" />
 </div>
 
 ### Lines, points and error bars
 
 <div class="fs-gallery">
-  <Plot name="cb_special_functions" svg :width="720" :height="480" caption="special functions" />
-  <Plot name="cb_complex" svg :width="560" :height="320" caption="complex numbers" />
   <Plot name="cb_complex_phase" svg :width="560" :height="460" caption="a complex function over the plane" />
-  <Plot name="cb_set_for" svg :width="560" :height="320" caption="labels and arrows in a loop (set for)" />
-  <Plot name="cb_user_functions" svg :width="560" :height="320" caption="user variables and functions" />
-  <Plot name="cb_sums" svg :width="560" :height="320" caption="sums, and assignments in a plot" />
-  <Plot name="cb_running_mean" svg :width="560" :height="320" caption="assignments inside expressions" />
-  <Plot name="cb_recursion" svg :width="560" :height="320" caption="recursive functions" />
-  <Plot name="cb_function_blocks" svg :width="560" :height="320" caption="function blocks" />
-  <Plot name="cb_bitwise" svg :width="560" :height="320" caption="bit flags" />
-  <Plot name="cb_styles" svg :width="560" :height="320" caption="line styles and point types" />
-  <Plot name="cb_linetype" svg :width="560" :height="320" caption="linetypes of your own" />
-  <Plot name="cb_point_types" svg :width="640" :height="300" caption="point and dash types" />
-  <Plot name="cb_dashes" svg :width="560" :height="320" caption="dash patterns of your own" />
-  <Plot name="cb_lc_variable" svg :width="560" :height="320" caption="a color per point (lc variable)" />
-  <Plot name="cb_pt_variable" svg :width="560" :height="360" caption="a type, size and color per point" />
-  <Plot name="cb_lc_styles" svg :width="560" :height="320" caption="candles colored by a column" />
-  <Plot name="cb_lc_palette" svg :width="560" :height="320" caption="colors from the palette (lc palette)" />
-  <Plot name="cb_colorsequence" svg :width="760" :height="320" caption="color sequences" />
-  <Plot name="cb_errorbars" svg :width="560" :height="320" caption="error bars" />
-  <Plot name="cb_errorbar_caps" svg :width="760" :height="280" caption="error bar caps (set errorbars)" />
-  <Plot name="cb_xyerrorbars" svg :width="560" :height="320" caption="error bars on a log axis" />
-  <Plot name="cb_errorlines" svg :width="560" :height="320" caption="error lines" />
-  <Plot name="cb_steps" svg :width="560" :height="320" caption="steps, fsteps, histeps" />
-  <Plot name="cb_fillsteps" svg :width="560" :height="320" caption="filled steps (fillsteps)" />
-  <Plot name="cb_sampled" svg :width="560" :height="400" caption="sampled pseudo-files ('+', '++')" />
-  <Plot name="cb_vector_heads" svg :width="560" :height="360" caption="arrow styles on vectors" />
-  <Plot name="cb_title_at" svg :width="560" :height="320" caption="titles at the curves" />
-  <Plot name="cb_char_points" svg :width="560" :height="320" caption="characters as points" />
-  <Plot name="cb_autoscale_limits" svg :width="560" :height="320" caption="limits of the autoscale" />
-  <Plot name="cb_label_rotate" svg :width="560" :height="360" caption="labels turned by a column" />
-  <Plot name="cb_polar_fill" svg :width="480" :height="420" caption="a polar band (filledcurves r=)" />
-  <Plot name="cb_polar_log" svg :width="480" :height="420" caption="a log r axis" />
-  <Plot name="cb_nonuniform" svg :width="560" :height="360" caption="a nonuniform matrix" />
-  <Plot name="cb_keyentry" svg :width="560" :height="320" caption="key entries of their own" />
-  <Plot name="cb_array_assign" svg :width="560" :height="320" caption="array elements assigned in an expression" />
-  <Plot name="cb_arrowstyle_var" svg :width="560" :height="360" caption="a style per arrow" />
-  <Plot name="cb_fill_zero" svg :width="560" :height="320" caption="fill above and below zero" />
-  <Plot name="cb_rug" svg :width="560" :height="360" caption="a rug of ticks" />
-  <Plot name="cb_sharpen" svg :width="560" :height="320" caption="sharp extrema (sharpen)" />
-  <Plot name="cb_spider_groups" svg :width="560" :height="420" caption="two sets of spider polygons" />
-  <Plot name="cb_polar_errorbars" svg :width="560" :height="360" caption="polar error bars" />
-  <Plot name="cb_named_colormaps" svg :width="560" :height="360" caption="named colormaps" />
-  <Plot name="cb_smooth_path" svg :width="560" :height="360" caption="a spline along a path" />
-  <Plot name="cb_stats_matrix" svg :width="560" :height="320" caption="statistics of a matrix" />
-  <Plot name="cb_inline_data" svg :width="560" :height="320" caption="data after the plot command" />
-  <Plot name="cb_format_none" svg :width="560" :height="320" caption="ticks without labels" />
-  <Plot name="cb_linked_axes" svg :width="560" :height="360" caption="a top axis linked to the bottom one" />
-  <Plot name="cb_key_samples" svg :width="560" :height="320" caption="key samples of vectors and fills" />
-  <Plot name="cb_size_square" svg :width="560" :height="360" caption="one unit as long on both axes" />
-  <Plot name="cb_fit_surface" svg :width="560" :height="320" caption="a fit of two variables" />
-  <Plot name="cb_smooth_band" svg :width="560" :height="320" caption="a smoothed band" />
-  <Plot name="cb_gantt" svg :width="560" :height="320" caption="a Gantt chart" />
-  <Plot name="cb_paxis_ranges" svg :width="560" :height="360" caption="parallel axes with their own ranges" />
-  <Plot name="cb_nonlinear_axis" svg :width="560" :height="320" caption="a broken axis" />
-  <Plot name="cb_reversed_r" svg :width="480" :height="420" caption="a reversed r axis" />
-  <Plot name="cb_greek_names" svg :width="560" :height="320" caption="names as in the formulas" />
-  <Plot name="cb_labels_tics" svg :width="560" :height="320" caption="labels with tic labels" />
-  <Plot name="cb_interrupted_lines" svg :width="560" :height="320" caption="interrupted lines" />
-  <Plot name="cb_hist_colors" svg :width="560" :height="320" caption="stacks colored by category" />
-  <Plot name="cb_rgb_numbers" svg :width="560" :height="360" caption="colors as numbers" />
-  <Plot name="cb_hulls" svg :width="560" :height="360" caption="hulls around points" />
-  <Plot name="cb_rlabel" svg :width="480" :height="420" caption="a labelled radial axis" />
-  <Plot name="cb_polar_surface" svg :width="520" :height="420" caption="a surface on a polar grid" />
-  <Plot name="cb_binary" svg :width="560" :height="320" caption="images from binary files" />
-  <Plot name="cb_binary_rotate" svg :width="560" :height="360" caption="rotated images" />
-  <Plot name="cb_latin1" svg :width="560" :height="320" caption="Latin-1 strings and symbols" />
-  <Plot name="cb_hypertext" svg :width="560" :height="320" caption="hypertext on points" />
-  <Plot name="cb_zsort" svg :width="560" :height="320" caption="high values on top" />
-  <Plot name="cb_iterated_defs" svg :width="560" :height="320" caption="a family of curves from arrays" />
-  <Plot name="cb_impulses" svg :width="560" :height="320" caption="impulses and dots" />
-  <Plot name="cb_function" svg :width="560" :height="320" caption="functions of x" />
-  <Plot name="cb_parametric" svg :width="560" :height="360" caption="parametric curves" />
-  <Plot name="cb_clip" svg :width="560" :height="320" caption="asymptotes and clipping" />
-  <Plot name="cb_inline_range" svg :width="560" :height="320" caption="inline ranges" />
-  <Plot name="cb_model" svg :width="560" :height="320" caption="data and a model function" />
-  <Plot name="cb_plot_for" svg :width="560" :height="320" caption="one line per column" />
-  <Plot name="cb_stats" svg :width="560" :height="320" caption="statistics of a run" />
-  <Plot name="cb_fit" svg :width="560" :height="320" caption="a fitted model" />
-  <Plot name="cb_fit_xyerrors" svg :width="560" :height="360" caption="a fit with errors in x and y" />
-  <Plot name="cb_smooth" svg :width="560" :height="320" caption="histogram and distribution (smooth)" />
-  <Plot name="cb_unique" svg :width="760" :height="320" caption="block averages and running totals (smooth)" />
-  <Plot name="cb_splines" svg :width="760" :height="320" caption="splines and densities" />
-  <Plot name="cb_mcsplines" svg :width="560" :height="320" caption="a monotone interpolation (mcsplines)" />
+  <Plot name="cb_special_functions" svg :width="720" :height="480" caption="special functions" />
 </div>
 
 ### Bars and statistics
 
 <div class="fs-gallery">
-  <Plot name="cb_boxes" svg :width="560" :height="320" caption="a bar chart" />
-  <Plot name="cb_bins" svg :width="560" :height="320" caption="a histogram of a sample (bins)" />
-  <Plot name="cb_histograms" svg :width="560" :height="320" caption="grouped bars with category labels" />
-  <Plot name="cb_rowstacked" svg :width="560" :height="320" caption="stacked bars" />
-  <Plot name="cb_boxerrorbars" svg :width="560" :height="320" caption="bars with error bars" />
-  <Plot name="cb_hist_groups" svg :width="560" :height="320" caption="groups of bars (newhistogram)" />
-  <Plot name="cb_hist_titles" svg :width="560" :height="320" caption="group titles" />
-  <Plot name="cb_hist_columns" svg :width="560" :height="320" caption="one stack per column (columnstacked)" />
-  <Plot name="cb_hist_errorbars" svg :width="560" :height="320" caption="clustered bars with error bars" />
-  <Plot name="cb_patterns" svg :width="560" :height="320" caption="pattern fills" />
-  <Plot name="cb_candlesticks" svg :width="560" :height="320" caption="candlesticks and finance bars" />
-  <Plot name="cb_jitter" svg :width="560" :height="320" caption="a swarm of points (set jitter)" />
   <Plot name="cb_boxplot" svg :width="560" :height="320" caption="box plots by category" />
+  <Plot name="cb_candlesticks" svg :width="560" :height="320" caption="candlesticks and finance bars" />
 </div>
 
 ### Areas and shapes
 
 <div class="fs-gallery">
-  <Plot name="cb_filledcurves" svg :width="560" :height="320" caption="a band around a curve" />
-  <Plot name="cb_fill_color" svg :width="560" :height="320" caption="a transparent fill color (fc)" />
-  <Plot name="cb_fill_above" svg :width="560" :height="320" caption="fill above and below a line" />
-  <Plot name="cb_boxxyerror" svg :width="560" :height="320" caption="rectangles" />
-  <Plot name="cb_circles" svg :width="560" :height="320" caption="a bubble chart" />
   <Plot name="cb_vectors" svg :width="560" :height="400" caption="a vector field with labels" />
-  <Plot name="cb_arrows" svg :width="560" :height="320" caption="arrows by length and angle" />
   <Plot name="cb_ellipses" svg :width="560" :height="320" caption="uncertainty ellipses" />
-  <Plot name="cb_polygons" svg :width="560" :height="320" caption="polygons" />
-  <Plot name="cb_area" svg :width="560" :height="320" caption="the area under a curve (filledcurves x1, closed)" />
-  <Plot name="cb_fill_borders" svg :width="560" :height="320" caption="fills to the borders (y1, y2, x=V)" />
-  <Plot name="cb_function_fills" svg :width="560" :height="320" caption="functions filled" />
-  <Plot name="cb_lc_shapes" svg :width="560" :height="320" caption="a color per shape (lc variable)" />
-  <Plot name="cb_annotations" svg :width="640" :height="400" caption="labels, arrows and objects" />
-  <Plot name="cb_pixmap" svg :width="560" :height="320" caption="images from PNG files" />
-  <Plot name="cb_fonts" svg :width="560" :height="320" caption="a font per text" />
-  <Plot name="cb_boxed_labels" svg :width="560" :height="320" caption="boxed labels" />
-  <Plot name="cb_arrow_styles" svg :width="560" :height="360" caption="arrow styles, dashed objects" />
 </div>
 
 ### Heatmaps and images
 
 <div class="fs-gallery">
   <Plot name="cb_image" svg :width="560" :height="400" caption="a heatmap with its color box" />
-  <Plot name="cb_sparse_matrix" svg :width="520" :height="400" caption="a heat map of sparse data" />
-  <Plot name="cb_matrix_headers" svg :width="560" :height="360" caption="a table with named rows and columns" />
-  <Plot name="cb_matrix" svg :width="560" :height="400" caption="a matrix file" />
-  <Plot name="cb_palettes" svg :width="760" :height="560" caption="palettes" />
-  <Plot name="cb_palette_hsv" svg :width="560" :height="360" caption="a palette in hue, saturation and value" />
-  <Plot name="cb_palette_functions" svg :width="560" :height="320" caption="a palette of functions" />
-  <Plot name="cb_logcb" svg :width="560" :height="400" caption="a log color axis" />
-  <Plot name="cb_colorbox" svg :width="760" :height="320" caption="color box placement" />
-  <Plot name="cb_palette_file" svg :width="560" :height="400" caption="a palette from a file" />
   <Plot name="cb_colormaps" svg :width="760" :height="560" caption="named palettes: sequential, diverging, multi-sequential, cyclic" />
-  <Plot name="cb_rgbimage" svg :width="560" :height="400" caption="an RGB image" />
 </div>
 
 ### 3D plots
 
 <div class="fs-gallery">
-  <Plot name="cb_view3d_surface" svg :width="560" :height="400" caption="a surface in 3D" />
-  <Plot name="cb_view3d_views" svg :width="760" :height="400" caption="one surface, two views (set view)" />
-  <Plot name="cb_view3d_projection" svg :width="900" :height="340" caption="side projections (set view projection)" />
-  <Plot name="cb_view3d_arrows" svg :width="560" :height="400" caption="arrows and labels in 3D" />
-  <Plot name="cb_view3d_sphere" svg :width="560" :height="420" caption="points on a sphere (set mapping)" />
-  <Plot name="cb_view3d_hidden" svg :width="560" :height="400" caption="hidden lines (set hidden3d)" />
-  <Plot name="cb_view3d_label_colors" svg :width="560" :height="400" caption="labels in palette colors" />
-  <Plot name="cb_view3d_contours" svg :width="560" :height="400" caption="contours and their values in 3D" />
-  <Plot name="cb_view3d_pm3d" svg :width="560" :height="400" caption="a colored surface in 3D (pm3d)" />
   <Plot name="cb_view3d_lighting" svg :width="560" :height="400" caption="a lit surface (pm3d lighting)" />
-  <Plot name="cb_view3d_contourfill" svg :width="560" :height="400" caption="a surface filled between its levels" />
-  <Plot name="cb_view3d_zerrorfill" svg :width="560" :height="400" caption="error bands in 3D (zerrorfill)" />
-  <Plot name="cb_view3d_walls" svg :width="560" :height="400" caption="grid walls" />
-  <Plot name="cb_view3d_boxes" svg :width="560" :height="400" caption="bars in 3D (boxes, boxdepth)" />
-  <Plot name="cb_view3d_polygons" svg :width="560" :height="400" caption="a solid from its faces (polygons)" />
   <Plot name="cb_view3d_isosurface" svg :width="560" :height="400" caption="an isosurface of a voxel grid" />
-  <Plot name="cb_view3d_smooth" svg :width="560" :height="400" caption="smoothed profiles in 3D" />
-  <Plot name="cb_map_points" svg :width="560" :height="400" caption="a field seen from above (set view map)" />
-  <Plot name="cb_map_pm3d" svg :width="560" :height="400" caption="a function as a colored map (pm3d)" />
-  <Plot name="cb_pm3d_rgb" svg :width="560" :height="400" caption="a map in RGB colors (lc rgb variable)" />
-  <Plot name="cb_palette_function" svg :width="560" :height="400" caption="colors from the palette (palette(z))" />
-  <Plot name="cb_map_contour" svg :width="560" :height="400" caption="contour lines over a map" />
-  <Plot name="cb_map_dgrid3d" svg :width="560" :height="400" caption="a density map of scattered points (dgrid3d)" />
-  <Plot name="cb_map_mask" svg :width="560" :height="400" caption="a surface masked to its data (with mask)" />
 </div>
 
 ### Polar and radial charts
 
 <div class="fs-gallery">
-  <Plot name="cb_polar" svg :width="520" :height="400" caption="a polar plot" />
-  <Plot name="cb_polar_labels" svg :width="480" :height="420" caption="named angles on a polar plot" />
-  <Plot name="cb_polar_db" svg :width="520" :height="400" caption="a polar level in decibels (rrange, trange)" />
   <Plot name="cb_windrose" svg :width="520" :height="420" caption="a wind rose of sectors" />
-  <Plot name="cb_sectors_heatmap" svg :width="560" :height="400" caption="a polar heat map of sectors" />
-  <Plot name="cb_radar" svg :width="480" :height="320" caption="a radar" />
-  <Plot name="cb_rose" svg :width="480" :height="320" caption="a rose" />
   <Plot name="cb_spider" svg :width="560" :height="400" caption="a spider plot" />
-  <Plot name="cb_parallel" svg :width="560" :height="320" caption="parallel axes" />
-  <Plot name="cb_pie" svg :width="480" :height="320" caption="a pie" />
-  <Plot name="cb_donut_vfd" svg :width="480" :height="320" caption="a glowing donut" />
-  <Plot name="cb_gauges" svg :width="600" :height="240" caption="sweep gauges" />
 </div>
 
 ### Dashboards of the 1980s
@@ -447,49 +251,9 @@ alternative texts, captions and Markdown tables (<a href="./manual/paths/f-repor
 <div class="fs-gallery">
   <Plot name="cb_vfd" svg :width="640" :height="440" caption="a vacuum-fluorescent run monitor" />
   <Plot name="cb_lcd" svg :width="640" :height="300" caption="a liquid-crystal dashboard" />
-  <Plot name="cb_identity" svg :width="560" :height="320" caption="light and dark: washi and night" />
-  <Plot name="cb_image_vfd" svg :width="560" :height="400" caption="a heatmap of lit levels" />
-  <Plot name="cb_readout" svg :width="560" :height="420" caption="seven-segment readouts over a curve" />
 </div>
 
-### Text terminals
-
-<p class="fs-lead">The same scripts over ssh: characters, Unicode blocks or Braille dots, in ANSI colors, redrawn in place by
-<code>--watch</code>.</p>
-
-::: code-group
-
-<<< @/examples/output/cb_block.txt{text} [block characters]
-
-<<< @/examples/output/cb_readout_dumb.txt{text} [readouts in dumb]
-
-<<< @/examples/output/cb_dumb.txt{text} [dumb]
-
-<<< @/examples/output/cb_loops.txt{text} [a printed summary]
-
-:::
-
-### For a paper
-
-<div class="fs-gallery">
-  <Plot name="cb_paper" svg :width="321" :height="227" caption="a one-column figure (pdfcairo, theme paper)" />
-  <Plot name="cb_paper_double" svg :width="673" :height="302" caption="two panels across the page, in Latin Modern" />
-  <Plot name="cb_math" svg :width="560" :height="320" caption="TeX math in the labels, set as LaTeX sets it" />
-</div>
-
-### Reports
-
-<div class="fs-gallery">
-  <Plot name="pf01" svg :width="600" :height="320" caption="a figure's alternative text and caption (save info)" />
-</div>
-
-### From Fortran
-
-<div class="fs-gallery">
-  <Plot name="cb_gaps" svg :width="560" :height="320" caption="gaps in the data, from Fortran" />
-  <Plot name="cb_fortran_tools" svg :width="760" :height="320" caption="fit, stats, a time axis and annotations, from Fortran" />
-  <Plot name="cb_script" svg :width="560" :height="320" caption="gnuplot commands, from Fortran" />
-</div>
+<p class="fs-lead"><a href="./guide/gallery">The whole gallery →</a></p>
 
 ## Authors
 
@@ -517,6 +281,11 @@ Crameri (MIT, <a href="https://doi.org/10.5281/zenodo.1243862">doi:10.5281/zenod
 inferno, plasma and viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Battelle Memorial
 Institute's licence), and Kenneth Moreland's black_body (CC0); their notices are in
 <code>src/lib/foresight_colormaps.F90</code>.</p>
+
+<p class="fs-lead">The compiled-in fonts keep their own licenses, not foresight's: Liberation Sans (SIL Open Font
+License 1.1) and Latin Modern Roman and Math (GUST Font License); see
+<a href="https://github.com/szaghi/foresight/blob/master/LICENSES/README.md">LICENSES/README.md</a>. The documents
+foresight writes with them (SVG, PDF) are not covered by the font licenses.</p>
 
 <p class="fs-lead">© <a href="https://github.com/szaghi">Stefano Zaghi</a></p>
 

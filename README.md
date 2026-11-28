@@ -44,18 +44,29 @@
 <td><b>📝 Reports</b><br><sub><code>save(file, info=meta)</code> returns what a document needs: the size, an alternative text from the titles and labels, the caption (<code>set caption</code>); <code>set table ... markdown</code> writes Markdown tables; a program writes its Markdown or LaTeX report around them. <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/01-a-figure-in-a-report">Path F</a> · <a href="https://szaghi.github.io/foresight/manual/paths/f-reports/report/report">A run report</a></sub></td>
 </tr>
 <tr>
-<td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 15 test programs, 154 byte-exact golden files, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
+<td colspan="2"><b>🧰 Pure Fortran, three compilers</b><br><sub>Fortran 2018 plus libc <code>rename</code>, <code>nanosleep</code> and <code>popen</code>: no Python, no gnuplot, no graphics library. gfortran, nvfortran and ifx, debug and optimised, on every push; 18 test programs, 190 golden files compared byte for byte, tick labels built from integers (<code>0.3</code>, never <code>0.30000000000000004</code>); built with FoBiS or fpm. <a href="https://szaghi.github.io/foresight/guide/install">Installation</a> · <a href="https://szaghi.github.io/foresight/guide/contributing">Contributing</a></sub></td>
 </tr>
 </table>
 </div>
 
-**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [learning paths](https://szaghi.github.io/foresight/manual/) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
+**[Full documentation](https://szaghi.github.io/foresight/)**: [start](https://szaghi.github.io/foresight/guide/) · [installation](https://szaghi.github.io/foresight/guide/install) · [gallery](https://szaghi.github.io/foresight/guide/gallery) · [learning paths](https://szaghi.github.io/foresight/manual/) · [cookbook](https://szaghi.github.io/foresight/manual/cookbook) · [reference](https://szaghi.github.io/foresight/guide/features) · [gnuplot subset](https://szaghi.github.io/foresight/guide/gnuplot-subset) · [API](https://szaghi.github.io/foresight/guide/api-reference)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)"  srcset="docs/public/examples/cb_multiplot-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/public/examples/cb_multiplot.svg">
-  <img src="docs/public/examples/cb_multiplot.svg" alt="Two panels of a run: a residual and the drag coefficient">
-</picture>
+<table>
+<tr>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#_3d-plots"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_view3d_lighting-dark.svg"><img src="docs/public/examples/cb_view3d_lighting.svg" alt="A lit pm3d surface in a 3D view" width="100%"></picture></a><br><sub><b>3D plots</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#heatmaps-and-images"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_image-dark.svg"><img src="docs/public/examples/cb_image.svg" alt="A heatmap of a field with its color box" width="100%"></picture></a><br><sub><b>Heatmaps and images</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#polar-and-radial-charts"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_windrose-dark.svg"><img src="docs/public/examples/cb_windrose.svg" alt="A wind rose of sectors" width="100%"></picture></a><br><sub><b>Polar and radial charts</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#dashboards-of-the-1980s"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_vfd-dark.svg"><img src="docs/public/examples/cb_vfd.svg" alt="A run monitor in the vacuum-fluorescent theme" width="100%"></picture></a><br><sub><b>Dashboards of the 1980s</b></sub></td>
+</tr>
+<tr>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#papers-and-reports"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_math-dark.svg"><img src="docs/public/examples/cb_math.svg" alt="Axis labels and key titles in TeX math" width="100%"></picture></a><br><sub><b>Papers and reports</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#functions-fits-and-statistics"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_complex_phase-dark.svg"><img src="docs/public/examples/cb_complex_phase.svg" alt="A complex function colored by its phase" width="100%"></picture></a><br><sub><b>Functions and fits</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#bars-and-box-plots"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_boxplot-dark.svg"><img src="docs/public/examples/cb_boxplot.svg" alt="Box plots by category" width="100%"></picture></a><br><sub><b>Bars and box plots</b></sub></td>
+<td align="center" width="25%"><a href="https://szaghi.github.io/foresight/guide/gallery#areas-and-shapes"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/public/examples/cb_vectors-dark.svg"><img src="docs/public/examples/cb_vectors.svg" alt="A velocity field around a cylinder" width="100%"></picture></a><br><sub><b>Areas and shapes</b></sub></td>
+</tr>
+</table>
+
+<sub>Every image is a foresight output, regenerated by the CI; the <a href="https://szaghi.github.io/foresight/guide/gallery">gallery</a> has all of them, by category, the <a href="https://szaghi.github.io/foresight/manual/cookbook">cookbook</a> their scripts.</sub>
 
 </div>
 
@@ -139,7 +150,7 @@ Contributions are welcome: see the [Contributing](https://szaghi.github.io/fores
 
 ## License
 
-foresight is available under your choice of license:
+foresight is available under your choice of license.
 
 | License | SPDX | File |
 |---|---|---|
@@ -154,6 +165,7 @@ viridis (CC0), cividis by Nuñez, Anderton and Renslow (matplotlib's licence, Ba
 and Kenneth Moreland's black_body (CC0); their notices are in `src/lib/foresight_colormaps.F90`.
 
 The compiled-in fonts keep their own licenses, not foresight's: Liberation Sans (SIL Open Font License 1.1) and Latin
-Modern Roman and Math (GUST Font License); see [LICENSES/README.md](LICENSES/README.md).
+Modern Roman and Math (GUST Font License); see [LICENSES/README.md](LICENSES/README.md). The documents foresight
+writes with them (SVG, PDF) are not covered by the font licenses.
 
 © [Stefano Zaghi](https://github.com/szaghi)

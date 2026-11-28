@@ -8,6 +8,16 @@ const docs = [
     items: [
       { text: 'About',        link: '/guide/' },
       { text: 'Installation', link: '/guide/install' },
+      { text: 'Gallery',      link: '/guide/gallery' },
+      { text: 'License',      link: '/guide/license' },
+    ],
+  },
+  {
+    text: 'Fonts, LaTeX and math',
+    items: [
+      { text: 'Fonts',                   link: '/guide/fonts' },
+      { text: 'TeX math in labels',      link: '/guide/math' },
+      { text: 'LaTeX labels (cairolatex)', link: '/guide/latex' },
     ],
   },
   {
@@ -166,7 +176,8 @@ export default withMermaid({
     siteTitle: 'FORESIGHT',
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install)?$' },
+      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install|license|fonts|math|latex)?$' },
+      { text: 'Gallery', link: '/guide/gallery', activeMatch: '^/guide/gallery' },
       { text: 'Learning paths', link: '/manual/', activeMatch: '^/manual/(index|paths/)?$|^/manual/paths/' },
       { text: 'Cookbook', link: '/manual/cookbook', activeMatch: '^/manual/cookbook' },
       {
@@ -210,8 +221,8 @@ export default withMermaid({
     outline: [2, 3],
 
     footer: {
-      message: 'Released under the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GPL v3</a>, BSD 2-Clause, BSD 3-Clause or MIT License.',
-      copyright: 'Copyright © 2026 Stefano Zaghi',
+      message: 'foresight is available under your choice of license: GPL-3.0-or-later, BSD-2-Clause, BSD-3-Clause or MIT (<a href="/foresight/guide/license">License</a>).',
+      copyright: '© <a href="https://github.com/szaghi">Stefano Zaghi</a>',
     },
   },
 

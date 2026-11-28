@@ -103,3 +103,66 @@
 .fs-gallery .fs-plot {
   margin: 0;
 }
+
+/* the About page: its hero, the three uses and the infographic */
+.fs-about-hero {
+  text-align: center;
+  margin: 1rem 0 2rem;
+}
+.fs-about-hero .fs-about-name {
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  background: linear-gradient(120deg, var(--vp-c-brand-1), var(--vp-c-brand-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fs-about-hero .fs-about-tagline {
+  font-size: 1.2rem;
+  color: var(--vp-c-text-2);
+  margin: 0.6rem auto 0;
+  max-width: 640px;
+}
+.fs-uses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+.fs-use {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+  background: var(--vp-c-bg-soft);
+}
+.fs-use img {
+  width: 40px;
+  height: 40px;
+  margin: 0 0 0.4rem;
+}
+.fs-use h3 {
+  margin: 0 0 0.4rem !important;
+  font-size: 1.05rem;
+}
+.fs-use p {
+  margin: 0 0 0.5rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--vp-c-text-2);
+}
+.fs-use a {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+html.dark .fs-only-light,
+html:not(.dark) .fs-only-dark {
+  display: none;
+}
+.fs-infographic {
+  margin: 1rem 0 2rem;
+}
+.fs-infographic svg {
+  width: 100%;
+  height: auto;
+}
