@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.21.0] — 2026-11-28
+### Changed
+- **backend**: Gnuplot's character cell per device
+
+
+### Documentation
+- Start here with a gallery, a license page and fonts, LaTeX, math
+
+- **landing**: Figures in the site's palette, gallery cards aligned
+
+- Text placement as gnuplot's
+
+- The compiler versions foresight supports
+
+
+### Fixed
+- **axes**: Titles and axis labels at gnuplot's places
+
+- **format**: A half rounds the same on every compiler
+
+- **axes**: Tick labels and key rows at gnuplot's places
+
+
 ## [0.20.0] — 2026-11-28
 ### Added
 - **figure**: Save returns the figure's information
